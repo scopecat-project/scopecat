@@ -147,8 +147,28 @@ head and quarantined session, including across restart.
 Address normalization covers declared TCP endpoints and serial ports. Additional
 addresses for one physical instrument must be declared explicitly; registration
 does not perform hardware discovery or infer identity from model names. The
-runtime still obtains its driver catalog from its startup backend. Controlled
-installation replacement and same-service practice scopes remain to be built.
+runtime starts with its configured backend. Its internal replacement operation
+now validates registered connection options, reserves all affected devices before
+disconnecting any, and publishes new device revisions together with the execution
+backend. Requests retaining the old endpoint are rejected after publication. A busy
+device rejects the update without disconnecting idle peers; failed connection
+retirement retains the old revisions and durable attention. A subprocess test
+switches source versions and reconnects without restarting the application.
+
+`lab.devices.update_driver_source(path)` now captures a project source snapshot
+and publishes its selection in the same transaction as the device revisions.
+`lab.devices.driver_source()` inspects that selection. Restart and current-format
+backup/restore use the retained bytes even when the development directory moves.
+An invalid candidate leaves the previous worker and selection in place. Replaying
+the same request returns its retained result without recapturing today's files.
+This updates the driver worker only. Author publication independently captures
+shared scientific and compiler code, and prepared tasks retain their own revision;
+it does not replace resident drivers. The **Devices and drivers → Installed drivers**
+panel also exposes source selection and explicit updates. It refreshes device and
+driver metadata after an attempt; an uncertain transport result is retried with
+the same operation identity, without automatically initiating another update.
+Controlled installation replacement is
+separate from source selection and still requires its own qualification.
 Global setup selection and overlapping combined-configuration editors have been
 removed. Every run supplies an exact setup independently of its configuration
 data and scientific provenance; see [configuration ownership](configuration-ownership.md).

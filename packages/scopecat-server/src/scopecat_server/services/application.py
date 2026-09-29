@@ -39,6 +39,7 @@ from .automation import AutomationService
 from .config import ConfigService
 from .data_cleanup import DataCleanupService
 from .devices import DeviceService
+from .driver_sources import DriverSourceService
 from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
 from .leases import OwnershipLeaseSupervisor
@@ -87,6 +88,9 @@ class DaemonApplication:
         self.project_id = project_id
         self.deployment_id = deployment_id
         self._project_store = project_store
+        self.driver_sources = DriverSourceService(
+            self.project_root, project_store, devices, instruments
+        )
         self.author_workspaces = AuthorWorkspaceServices(
             self.project_root, project_store
         )

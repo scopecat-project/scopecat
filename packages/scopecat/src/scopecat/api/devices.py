@@ -1,6 +1,7 @@
 """Device maintenance shared with the workbench; listing never connects hardware."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import uuid4
 
 from scopecat.api.instruments import InstrumentSessionHandle
@@ -18,6 +19,7 @@ from scopecat.records.device import (
     DriverImplementationRef,
     RegisteredDevice,
 )
+from scopecat.records.driver_source import DriverSourceSelection, DriverSourceUpdate
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +41,30 @@ class LabDeviceOperations:
             actor=self.operator,
             setup=setup.ref,
             instrument_ids=(device_id,),
+        )
+
+    def driver_source(self) -> DriverSourceSelection | None:
+        """Inspect the selected source without reading the development directory."""
+        return self.client.driver_source()
+
+    def update_driver_source(
+        self,
+        source_root: str | Path,
+        *,
+        operation_id: str | None = None,
+    ) -> DriverSourceSelection:
+        """Capture local source and switch drivers once affected devices are idle."""
+        current = self.driver_source()
+        previous = None if current is None else current.request.operation_id
+        if current is not None and current.request.operation_id == operation_id:
+            previous = current.request.expected_previous
+        return self.client.update_driver_source(
+            DriverSourceUpdate(
+                operation_id=operation_id or uuid4().hex,
+                source_root=str(Path(source_root).expanduser().resolve()),
+                expected_previous=previous,
+                actor=self.operator,
+            )
         )
 
     def test_connection(self, device: DeviceView) -> InstrumentDriverProbeReceipt:

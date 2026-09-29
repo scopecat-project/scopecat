@@ -271,6 +271,11 @@ from scopecat.records.content import (
 )
 from scopecat.records.costs import RunMeasuredCosts
 from scopecat.records.device import RegisteredDevice
+from scopecat.records.driver_source import (
+    DriverSourceSelection,
+    DriverSourceState,
+    DriverSourceUpdate,
+)
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
     ExperimentPlanRevision,
@@ -1147,6 +1152,18 @@ class DaemonClient:
 
     def save_device(self, command: DeviceSaveCommand) -> DeviceView:
         return self._post_model(f"{_API_PREFIX}/devices", command, DeviceView)
+
+    def driver_source(self) -> DriverSourceSelection | None:
+        return self._get_model(
+            f"{_API_PREFIX}/devices/driver-source", DriverSourceState
+        ).active
+
+    def update_driver_source(
+        self, command: DriverSourceUpdate
+    ) -> DriverSourceSelection:
+        return self._post_model(
+            f"{_API_PREFIX}/devices/driver-source", command, DriverSourceSelection
+        )
 
     def rename_device(
         self, device_id: str, command: DeviceRenameCommand

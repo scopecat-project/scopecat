@@ -294,12 +294,12 @@ def test_list_mode_target_owns_only_real_time_members() -> None:
         for binding in target.output_bindings
     )
     drive_ifs = {
-        binding.signal.qubit.value: binding.intermediate_frequency_hz
+        binding.signal.owner.value: binding.intermediate_frequency_hz
         for binding in target.output_bindings
         if isinstance(binding.signal, DriveSignal)
     }
     drive_lo_groups = {
-        binding.signal.qubit.value: binding.lo_group_id
+        binding.signal.owner.value: binding.lo_group_id
         for binding in target.output_bindings
         if isinstance(binding.signal, DriveSignal)
     }

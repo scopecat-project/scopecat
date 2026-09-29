@@ -71,7 +71,7 @@ def test_revision_captures_helper_analysis_and_keeps_previous_objects(
     )
 
 
-def test_maintenance_change_is_rejected_before_author_validation(
+def test_shared_source_refresh_preserves_old_revisions_across_service_restart(
     tmp_path: Path,
 ) -> None:
     from scopecat.project_sources import require_environment
@@ -88,18 +88,30 @@ def test_maintenance_change_is_rejected_before_author_validation(
         SQLiteDatabase(tmp_path / "control.sqlite3"), tmp_path / "objects"
     )
     store.bootstrap()
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "INSERT INTO author_workspaces VALUES ('test-source', 'Source')"
+        )
+    service = AuthorRevisionService(tmp_path, store, workspace_id="test-source")
     try:
-        service = AuthorRevisionService(tmp_path, store, workspace_id="test-source")
         assert service.baseline is not None
+        first = service.refresh(expected_generation=0)
+        assert first.active is not None
+        original = service.get(first.active)
         with pytest.raises(ValueError, match="recorded Python"):
             require_environment(
                 service.baseline.manifest.model_copy(update={"python": "0.0"})
             )
         driver.write_text("driver = 2\n")
-        with pytest.raises(ValueError, match="maintained composition changed"):
-            service.refresh(expected_generation=0)
-        assert service.repository.state().active is None
+        second = service.refresh(expected_generation=1)
+        assert second.active != first.active
+        assert service.get(first.active) == original
+        service.close()
+        service = AuthorRevisionService(tmp_path, store, workspace_id="test-source")
+        assert service.get(first.active) == original
+        assert service.state().active == second.active
     finally:
+        service.close()
         store.close()
 
 
@@ -116,7 +128,10 @@ def test_analysis_module_must_resolve_inside_configured_author_root(
     analysis.write_text("# permitted local analysis\n")
     project = load_project(tmp_path / "scopecat.toml")
     assert author_module_path(project, "authors.analysis") == analysis
-    with pytest.raises(ValueError, match="configured author refresh root"):
+    shared = tmp_path / "src/shared_analysis.py"
+    shared.write_text("# shared scientific analysis\n")
+    assert author_module_path(project, "shared_analysis") == shared
+    with pytest.raises(ValueError, match="configured source root"):
         author_module_path(project, "os")
     with pytest.raises(ValueError, match="qualified Python module"):
         author_module_path(project, "../outside")

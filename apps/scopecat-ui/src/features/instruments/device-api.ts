@@ -5,6 +5,13 @@ export type DeviceView = components["schemas"]["DeviceView"];
 export type DeviceConnection = components["schemas"]["DeviceConnection"];
 export type DeviceSaveCommand = components["schemas"]["DeviceSaveCommand"];
 export type DriverImplementation = components["schemas"]["DriverImplementationRef"];
+export type DriverSourceUpdate = components["schemas"]["DriverSourceUpdate"];
+export function getDriverSource(signal?: AbortSignal) {
+  return apiData(apiClient.GET("/api/v1/devices/driver-source", { signal }));
+}
+export function updateDriverSource(body: DriverSourceUpdate) {
+  return apiData(apiClient.POST("/api/v1/devices/driver-source", { body }));
+}
 export function getDevices(signal?: AbortSignal) {
   return apiData(apiClient.GET("/api/v1/devices", { signal }));
 }

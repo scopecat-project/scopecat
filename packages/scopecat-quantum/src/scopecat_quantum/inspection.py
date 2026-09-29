@@ -308,11 +308,7 @@ def _logical_layer_index(
                 "flat_top_window",
                 (node.operation,),
             )
-            owner = (
-                node.signal.owner
-                if isinstance(node.signal, FluxSignal)
-                else node.signal.qubit
-            )
+            owner = node.signal.owner
             entity_ids = (owner.value,)
             facts = tuple(
                 CompiledInspectionFact(name, str(value))
@@ -567,7 +563,7 @@ def _scheduled_event_identity(
         entity_ids = (signal.owner.value,)
         signal_label = f"flux({signal.owner.value})"
     else:
-        entity_ids = (signal.qubit.value,)
+        entity_ids = (signal.owner.value,)
         signal_kind = (
             "drive"
             if isinstance(signal, DriveSignal)
@@ -575,7 +571,7 @@ def _scheduled_event_identity(
             if isinstance(signal, ReadoutSignal)
             else "acquire"
         )
-        signal_label = f"{signal_kind}({signal.qubit.value})"
+        signal_label = f"{signal_kind}({signal.owner.value})"
     if isinstance(instruction, Play):
         kind = "play"
     elif isinstance(instruction, Acquire):

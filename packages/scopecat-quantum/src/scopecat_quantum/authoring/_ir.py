@@ -20,6 +20,7 @@ from scopecat_quantum._ids import (
     CouplerId,
     PulseProgramId,
     QubitId,
+    ReadoutLineId,
 )
 from scopecat_quantum.acquisitions import (
     AcquisitionKind,
@@ -66,6 +67,17 @@ class Coupler:
     def id(self) -> str:
         """Return the logical coupler port identity."""
 
+        return self.ir_id.value
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class ReadoutLine:
+    """A stimulus/acquisition path whose sample association may be unknown."""
+
+    ir_id: ReadoutLineId
+
+    @property
+    def id(self) -> str:
         return self.ir_id.value
 
 
@@ -181,7 +193,7 @@ class MeasurementResult:
     """One typed result produced by logical measurement or pulse acquisition."""
 
     _id: str
-    _qubit: Qubit
+    _owner: Qubit | ReadoutLine
     contract: QuantumResultContract
     _entity_set: QubitSet | None = None
 
@@ -192,10 +204,10 @@ class MeasurementResult:
         return self._id
 
     @property
-    def qubit(self) -> Qubit:
-        """Return the logical qubit measured for this result."""
+    def owner(self) -> Qubit | ReadoutLine:
+        """Return the qubit or readout path that produced this result."""
 
-        return self._qubit
+        return self._owner
 
     @property
     def entity_set(self) -> QubitSet | None:
@@ -307,7 +319,9 @@ type FragmentFunction = Callable[..., QuantumFragment]
 type PulseTemplateFunction = Callable[..., QuantumFragment]
 
 
-type ElementBindings = Mapping[QubitId | CouplerId, QubitId | CouplerId]
+type ElementBindings = Mapping[
+    QubitId | CouplerId | ReadoutLineId, QubitId | CouplerId | ReadoutLineId
+]
 
 
 _SHOTS_INPUT_ID = "__shots__"
@@ -322,7 +336,7 @@ _RESERVED_RESULT_IDS = frozenset({"count", "index"})
 type RepeatCount = int | ProgramInput
 
 
-type PulseElement = Qubit | Coupler
+type PulseElement = Qubit | Coupler | ReadoutLine
 
 
 type QubitInput = Annotated[

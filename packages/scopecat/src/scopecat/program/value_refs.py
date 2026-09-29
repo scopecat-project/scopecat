@@ -197,7 +197,16 @@ class ValueRef[T = object]:
     def __sub__(self, other: object) -> ValueRef:
         return _binary_value(self, other, "-")
 
-    def __rsub__(self, other: object) -> ValueRef[object]:
+    @overload
+    def __rsub__(
+        self: ValueRef[Quantity],
+        other: Quantity,
+    ) -> ValueRef[Quantity]: ...
+
+    @overload
+    def __rsub__(self, other: object) -> ValueRef[object]: ...
+
+    def __rsub__(self, other: object) -> ValueRef:
         return _binary_value(other, self, "-")
 
     @overload

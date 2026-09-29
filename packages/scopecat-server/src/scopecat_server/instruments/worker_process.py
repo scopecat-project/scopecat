@@ -9,6 +9,10 @@ from typing import cast
 
 from scopecat_server._startup_diagnostics import begin, finish, stage
 
+type _WorkerMain = Callable[
+    [object, str, str, tuple[tuple[str, str], ...], str | None], None
+]
+
 
 def run_instrument_worker(
     connection: object,
@@ -16,6 +20,7 @@ def run_instrument_worker(
     instrument_backend_spec: str,
     generation: str,
     installed_packages: tuple[tuple[str, str], ...] = (),
+    code_root: str | None = None,
 ) -> None:
     """Load the driver RPC runtime only after the spawned process is ready."""
 
@@ -30,11 +35,15 @@ def run_instrument_worker(
             worker = import_module("scopecat_server.instruments.worker")
             stage("RPC runtime imported")
             worker_main = cast(
-                "Callable[[object, str, str, tuple[tuple[str, str], ...]], None]",
+                "_WorkerMain",
                 worker._instrument_worker_main,
             )
             worker_main(
-                connection, project_root, instrument_backend_spec, installed_packages
+                connection,
+                project_root,
+                instrument_backend_spec,
+                installed_packages,
+                code_root,
             )
     finally:
         finish()

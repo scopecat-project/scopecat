@@ -18,6 +18,7 @@ from scopecat_quantum.authoring import (
     Gate,
     QuantumFragment,
     Qubit,
+    ReadoutLine,
     coupler,
     materialize_pulse_recipe_body,
     qubit,
@@ -269,7 +270,8 @@ class MeasurementRecipeBinding[ParametersT]:
         )
         if (
             len(positional) != 1
-            or get_type_hints(self.build).get(positional[0].name) is not Qubit
+            or get_type_hints(self.build).get(positional[0].name)
+            not in (Qubit, Qubit | ReadoutLine)
             or any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters)
         ):
             raise TypeError(

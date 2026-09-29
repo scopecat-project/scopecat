@@ -126,7 +126,6 @@ The maintainer registers the author package in the workspace manifest:
 [authors]
 modules = ["my_lab.authored"]
 source_roots = ["src"]
-refresh_roots = ["src/my_lab/authored"]
 ```
 
 The installed laboratory adapter supplies execution capabilities. Ordinary author

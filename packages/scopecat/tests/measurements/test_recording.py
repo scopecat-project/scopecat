@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast, override
 
+import numpy as np
 import pytest
 from scopecat_testkit.execution_fakes import FakeMeasurementDatasetRepository
 from scopecat_testkit.measurement_arrow_fixture import (
@@ -61,6 +62,56 @@ def _projected(*, run_id: str = "recording-run") -> ProjectedMeasurementDataset:
     return project_measurement_records(
         projection, assembled, run_id=run_id, points=scenario.points
     )
+
+
+def test_complex_arrow_roundtrip_preserves_signed_zero_and_content_identity() -> None:
+    values = np.asarray(
+        [
+            complex(real, imag)
+            for real, imag in ((0.0, -0.0), (-0.0, 0.0), (-0.0, -0.0), (1.0, -0.0))
+        ]
+    )
+    schema = MeasurementDatasetSchema(
+        dataset_id="raw",
+        point_domain=MeasurementPointCloudPointDomain(columns=()),
+        dimensions=(
+            MeasurementDimension(id="point", kind="point", size=1),
+            MeasurementDimension(id="shot", kind="shot", size=4),
+        ),
+        variables=(
+            MeasurementVariable(
+                id="iq",
+                role="observable",
+                dtype="complex128",
+                unit="ratio",
+                dims=("point", "shot"),
+            ),
+        ),
+    )
+    append = MeasurementDatasetAppend(
+        run_id="signed-zero",
+        header_content_hash="sha256:header",
+        acquisition_start=0,
+        records=(
+            MeasurementRecord(
+                run_id="signed-zero",
+                point_index=0,
+                coordinates={},
+                observables={
+                    "iq": MeasurementArray.create(
+                        dtype="complex128", unit="ratio", values=values
+                    )
+                },
+            ),
+        ),
+    )
+    restored = decode_measurement_append(
+        encode_measurement_append(append, schema), schema
+    )
+    assert restored.content_hash == append.content_hash
+    iq = restored.records[0].observables["iq"]
+    assert isinstance(iq, MeasurementArray)
+    assert iq.values.tobytes() == values.tobytes()
 
 
 def _seal(

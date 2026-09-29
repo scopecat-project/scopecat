@@ -22,7 +22,6 @@ from scopecat.project import load_project, open_project
 from scopecat.project_sources import (
     capture_sources,
     require_environment,
-    require_shared_composition,
 )
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 
@@ -57,10 +56,8 @@ def register_author_workspace(
             for path in sorted(candidates):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 locks.enter_context(FileLock(path, timeout=0))
-            baseline = capture_sources(owner)
             candidate = capture_sources(project)
             require_environment(candidate.manifest)
-            require_shared_composition(owner, project, baseline, candidate)
             location = project.root / RUNTIME_BINDING_NAME
             if location.exists() and (
                 project.runtime_binding.data_root != binding.data_root

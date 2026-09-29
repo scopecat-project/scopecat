@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import sys
 import time
 from collections.abc import Iterator
@@ -18,6 +19,7 @@ import httpx2
 import psutil
 import pytest
 from fastapi.testclient import TestClient
+from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.lab import LabClient
 from scopecat.authoring import (
     ExperimentContext,
@@ -35,7 +37,9 @@ from scopecat.daemon.views import DaemonHealth
 from scopecat.daemon.wire import InstrumentSessionOpenCommand
 from scopecat.kernel.state import PayloadRef, StateValue
 from scopecat.program.products import product_axis
+from scopecat.project import load_project
 from scopecat.records.config import ConfigProfileSnapshot, instrument_bindings
+from scopecat.records.driver_source import DriverSourceSelection
 from scopecat.records.instrument import state_member_target
 from scopecat.records.measurement import (
     InstrumentAcquisitionEvidence,
@@ -68,13 +72,254 @@ from scopecat_server.instruments.backend import (
 )
 from scopecat_server.instruments.worker import SubprocessInstrumentBackendEndpoint
 from scopecat_server.runtime import LocalDaemonRuntime
+from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.driver_sources import DriverSourceRepository
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "instrument_worker_project"
 _BACKEND = "worker_fixture.backend:create_backend"
 
 _GAIN = InterfaceRef("tests.control/v1").property("gain")
+
+
+def test_source_worker_loads_snapshot_but_keeps_runtime_settings_root(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    source = tmp_path / "source"
+    shutil.copytree(_FIXTURE, source)
+    backend = source / "src/worker_fixture/backend.py"
+    backend.write_text(
+        backend.read_text()
+        .replace(
+            'provider_id = "tests.spawned_provider"',
+            'provider_id = "tests.source_revision"',
+        )
+        .replace(
+            "def create_backend(project_root: Path) -> InstrumentBackend:",
+            "def create_backend(project_root: Path) -> InstrumentBackend:\n"
+            '    (project_root / "factory-root.txt").write_text(str(project_root))',
+        )
+    )
+    endpoint = SubprocessInstrumentBackendEndpoint(runtime, _BACKEND, code_root=source)
+    try:
+        assert endpoint.provider_id == "tests.source_revision"
+        assert (runtime / "factory-root.txt").read_text() == str(runtime)
+        assert not (source / "factory-root.txt").exists()
+        # A later edit does not alter the code or identity in this worker.
+        identity = endpoint.artifact_hash
+        backend.write_text(
+            backend.read_text().replace("tests.source_revision", "tests.next")
+        )
+        assert endpoint.provider_id == "tests.source_revision"
+        assert endpoint.artifact_hash == identity
+        replacement = SubprocessInstrumentBackendEndpoint(
+            runtime, _BACKEND, code_root=source
+        )
+        try:
+            assert replacement.provider_id == "tests.next"
+            assert replacement.artifact_hash != identity
+        finally:
+            replacement.shutdown()
+    finally:
+        endpoint.shutdown()
+
+
+def test_running_application_switches_source_worker_and_reconnects(
+    tmp_path: Path,
+) -> None:
+    project = _copy_project(tmp_path)
+    source = tmp_path / "replacement-source"
+    shutil.copytree(_FIXTURE, source)
+    backend = source / "src/worker_fixture/backend.py"
+    backend.write_text(
+        backend.read_text().replace(
+            'implementation_version = "v1"', 'implementation_version = "v2"'
+        )
+    )
+    previous = SubprocessInstrumentBackendEndpoint(project, _BACKEND)
+    with LocalDaemonRuntime(
+        project, bootstrap_config=load_config(), instrument_endpoint=previous
+    ) as runtime:
+        instruments = runtime.application.instruments
+        first = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                operation_id="before-source-update",
+                actor="author",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        instruments.close_session(first.session_id)
+        replacement = SubprocessInstrumentBackendEndpoint(
+            project, _BACKEND, code_root=source
+        )
+        old_process = psutil.Process(previous.worker_pid)
+        new_process = psutil.Process(replacement.worker_pid)
+        assert previous.artifact_hash != replacement.artifact_hash
+        runtime.application.devices.replace_backend(
+            replacement, instruments, actor="author"
+        )
+        assert not old_process.is_running()
+        assert new_process.is_running()
+        assert runtime.application.health().status == "ok"
+        second = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                operation_id="after-source-update",
+                actor="author",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        instruments.close_session(second.session_id)
+        [description] = instruments.resolve_instrument_contracts(
+            load_config()
+        ).instruments
+        assert description.implementation_version == "v2"
+        assert "disconnect:source-0" in (project / "driver-events.log").read_text()
+        assert not (source / "driver-events.log").exists()
+    assert not new_process.is_running()
+
+
+def _driver_source(root: Path) -> Path:
+    source = root / "driver-development"
+    shutil.copytree(_FIXTURE, source)
+    (source / "scopecat.toml").write_text(
+        '[lab]\ninstrument_backend = "worker_fixture.backend:create_backend"\n'
+        '[authors]\nsource_roots = ["src"]\nrefresh_roots = ["src"]\n'
+        "dependencies = []\n"
+    )
+    backend = source / "src/worker_fixture/backend.py"
+    backend.write_text(
+        backend.read_text()
+        .replace(
+            "from __future__ import annotations",
+            "from __future__ import annotations\n"
+            "from calibration_shared import VERSION",
+        )
+        .replace('implementation_version = "v1"', "implementation_version = VERSION")
+    )
+    (source / "src/calibration_shared.py").write_text('VERSION = "v2"\n')
+    return source
+
+
+def test_driver_source_api_survives_source_removal_restart_and_backup(
+    tmp_path: Path,
+) -> None:
+    project = _copy_project(tmp_path)
+    (project / "scopecat.toml").write_text("[lab]\n")
+    source = _driver_source(tmp_path)
+    with (
+        LocalDaemonRuntime(
+            project, bootstrap_config=load_config(), instrument_backend_spec=_BACKEND
+        ) as runtime,
+        TestClient(runtime.app()) as transport,
+        _http_daemon_client(transport) as client,
+    ):
+        devices = LabDeviceOperations(client, "author")
+        assert devices.driver_source() is None
+        selected = devices.update_driver_source(source, operation_id="source-update")
+        assert devices.driver_source() == selected
+        # Shared source outside the provider package is part of driver identity.
+        first = selected
+        (source / "src/calibration_shared.py").write_text('VERSION = "v3"\n')
+        selected = devices.update_driver_source(source, operation_id="shared-update")
+        assert selected.artifact_hash != first.artifact_hash
+        heads = tuple(view.device.head for view in devices.list())
+        source.rename(tmp_path / "moved-source")
+        # Retry consults the retained operation before touching the source tree.
+        assert (
+            devices.update_driver_source(source, operation_id="shared-update")
+            == selected
+        )
+        assert tuple(view.device.head for view in devices.list()) == heads
+    with LocalDaemonRuntime(project) as reopened:
+        assert reopened.application.driver_sources.current() == selected
+        endpoint = reopened.application.devices.endpoint
+        assert endpoint is not None and endpoint.artifact_hash == selected.artifact_hash
+        instruments = reopened.application.instruments
+        session = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                setup=reopened.application.setup.resolve("initial").ref,
+                instrument_ids=("source-0",),
+                actor="author",
+                operation_id="reopened",
+            )
+        )
+        instruments.close_session(session.session_id)
+        [description] = instruments.resolve_instrument_contracts(
+            load_config()
+        ).instruments
+        assert description.implementation_version == "v3"
+    create_snapshot(load_project(project / "scopecat.toml"), tmp_path / "backup")
+    restore_snapshot(tmp_path / "backup", tmp_path / "restored")
+    with LocalDaemonRuntime(tmp_path / "restored") as restored:
+        assert restored.application.driver_sources.current() == selected
+        assert (
+            tuple(view.device.head for view in restored.application.devices.list())
+            == heads
+        )
+        [description] = restored.application.instruments.resolve_instrument_contracts(
+            load_config()
+        ).instruments
+        assert description.implementation_version == "v3"
+
+
+@pytest.mark.parametrize("failure", ["syntax", "publication"])
+def test_driver_source_failure_keeps_the_old_worker_and_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    project = _copy_project(tmp_path)
+    source = _driver_source(tmp_path)
+    with (
+        LocalDaemonRuntime(
+            project, bootstrap_config=load_config(), instrument_backend_spec=_BACKEND
+        ) as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        previous = runtime.application.devices.endpoint
+        heads = tuple(view.device.head for view in runtime.application.devices.list())
+        if failure == "syntax":
+            (source / "src/worker_fixture/backend.py").write_text(
+                "this is invalid python !!!"
+            )
+        else:
+            original = DriverSourceRepository.publish
+
+            def fail_publication(
+                repository: DriverSourceRepository,
+                connection: sqlite3.Connection,
+                selection: DriverSourceSelection,
+                bundle_digest: str,
+            ) -> None:
+                original(repository, connection, selection, bundle_digest)
+                raise ValueError("publication interrupted")
+
+            monkeypatch.setattr(DriverSourceRepository, "publish", fail_publication)
+        response = transport.post(
+            "/api/v1/devices/driver-source",
+            json={
+                "operation_id": "failed-update",
+                "source_root": str(source),
+                "actor": "author",
+                "expected_previous": None,
+            },
+        )
+        assert response.status_code == 409, response.text
+        assert runtime.application.driver_sources.current() is None
+        assert runtime.application.devices.endpoint is previous
+        assert previous is not None and previous.healthy
+        assert (
+            tuple(view.device.head for view in runtime.application.devices.list())
+            == heads
+        )
+        assert (
+            runtime.application.driver_sources.repository.get("failed-update") is None
+        )
 
 
 def _gain_read_request() -> BackendReadRequest:

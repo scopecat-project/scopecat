@@ -462,9 +462,9 @@ def _merge_keyed_table(
         selected = dict(base_row)
         for column in non_key_columns:
             changed = tuple(
-                row[column]
+                row.get(column)
                 for row in edits
-                if not _atoms_equal(row[column], base_row[column])
+                if not _atoms_equal(row.get(column), base_row.get(column))
             )
             if not changed:
                 continue
@@ -484,12 +484,16 @@ def _merge_keyed_table(
                     details={
                         "primary_key": _key_details(base_row, table_type),
                         "column_id": column,
-                        "base": _atom_wire(base_row[column]),
+                        "base": _atom_wire(base_row.get(column)),
                         "changes": [_atom_wire(item) for item in changed],
                         "change_kind": "representation" if equivalent else "physical",
                     },
                 )
-            selected[column] = _canonical_atom(changed)
+            value = _canonical_atom(changed)
+            if value is None:
+                selected.pop(column, None)
+            else:
+                selected[column] = value
         merged_rows.append(_ordered_row(selected, columns=columns))
 
     inserted_keys: set[tuple[tuple[object, ...], ...]] = set()
@@ -588,15 +592,17 @@ def _rows_equal(
     *,
     columns: tuple[str, ...],
 ) -> bool:
-    return all(_atoms_equal(left[column], right[column]) for column in columns)
+    return all(_atoms_equal(left.get(column), right.get(column)) for column in columns)
 
 
-def _all_representations_equal(values: tuple[ParameterAtomValue, ...]) -> bool:
+def _all_representations_equal(values: tuple[ParameterAtomValue | None, ...]) -> bool:
     first = values[0]
     return all(_atoms_equal(first, item) for item in values[1:])
 
 
-def _canonical_atom(values: tuple[ParameterAtomValue, ...]) -> ParameterAtomValue:
+def _canonical_atom(
+    values: tuple[ParameterAtomValue | None, ...],
+) -> ParameterAtomValue | None:
     return min(values, key=_atom_sort_token)
 
 
@@ -604,18 +610,20 @@ def _canonical_model[ModelT: BaseModel](values: tuple[ModelT, ...]) -> ModelT:
     return min(values, key=lambda item: canonical_json(item.model_dump(mode="json")))
 
 
-def _atom_wire(value: ParameterAtomValue) -> object:
+def _atom_wire(value: ParameterAtomValue | None) -> object:
     return value.model_dump(mode="json") if isinstance(value, BaseModel) else value
 
 
-def _atoms_equal(left: ParameterAtomValue, right: ParameterAtomValue) -> bool:
+def _atoms_equal(
+    left: ParameterAtomValue | None, right: ParameterAtomValue | None
+) -> bool:
     # Physical equivalence does not erase an explicitly proposed representation.
     if isinstance(left, Quantity) or isinstance(right, Quantity):
         return left == right
     return scalar_values_equal(left, right)
 
 
-def _atom_sort_token(value: ParameterAtomValue) -> str:
+def _atom_sort_token(value: ParameterAtomValue | None) -> str:
     return canonical_json(_atom_wire(value))
 
 
@@ -639,7 +647,7 @@ def _ordered_row(
     *,
     columns: tuple[str, ...],
 ) -> dict[str, ParameterAtomValue]:
-    return {column: row[column] for column in columns}
+    return {column: row[column] for column in columns if column in row}
 
 
 def _key_details(

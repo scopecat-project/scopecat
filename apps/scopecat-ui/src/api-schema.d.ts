@@ -450,6 +450,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/driver-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Driver Source */
+        get: operations["driver_source_api_v1_devices_driver_source_get"];
+        put?: never;
+        /** Update Driver Source */
+        post: operations["update_driver_source_api_v1_devices_driver_source_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices/drivers": {
         parameters: {
             query?: never;
@@ -4872,6 +4890,29 @@ export interface components {
              * @enum {string}
              */
             kind: "driver_managed";
+        };
+        /** DriverSourceSelection */
+        DriverSourceSelection: {
+            artifact_hash: components["schemas"]["Sha256ContentHash"];
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            /** Factory */
+            factory: string;
+            request: components["schemas"]["DriverSourceUpdate"];
+        };
+        /** DriverSourceState */
+        DriverSourceState: {
+            active?: components["schemas"]["DriverSourceSelection"] | null;
+        };
+        /** DriverSourceUpdate */
+        DriverSourceUpdate: {
+            /** Actor */
+            actor: string;
+            /** Expected Previous */
+            expected_previous?: string | null;
+            /** Operation Id */
+            operation_id: string;
+            /** Source Root */
+            source_root: string;
         };
         /** DriverSpec */
         DriverSpec: {
@@ -11819,6 +11860,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegisteredDevice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    driver_source_api_v1_devices_driver_source_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverSourceState"];
+                };
+            };
+        };
+    };
+    update_driver_source_api_v1_devices_driver_source_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverSourceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverSourceSelection"];
                 };
             };
             /** @description Validation Error */

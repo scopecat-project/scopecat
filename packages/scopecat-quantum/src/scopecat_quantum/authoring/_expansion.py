@@ -23,6 +23,7 @@ from ._ir import (
     Qubit,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
     _ConditionalFragment,
     _ExpandedFragment,
     _FlatTopWindowFragment,
@@ -124,7 +125,7 @@ def _evaluate_fragment_call(
         call.definition.parameters,
         strict=True,
     ):
-        if isinstance(formal, Qubit | Coupler):
+        if isinstance(formal, Qubit | Coupler | ReadoutLine):
             resolved[name] = actual
             continue
         if isinstance(formal, QubitSet | CouplerSet | QubitPairSet):
@@ -170,7 +171,7 @@ def _validate_expanded_fragment(
     allowed_elements = {
         (type(value), value.id)
         for _name, value in call.arguments
-        if isinstance(value, Qubit | Coupler)
+        if isinstance(value, Qubit | Coupler | ReadoutLine)
     }
     foreign_elements = {
         (type(value), value.id) for value in facts.element_uses

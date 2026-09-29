@@ -29,6 +29,7 @@ from scopecat.automation import (
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.wire import RunSubmission, SampleCreateCommand, SampleReviseCommand
+from scopecat.records.config import InstrumentRegistry, RoutingGraph
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevisionDraft, SampleSelector
 from scopecat.records.setup import SetupRevisionRef
@@ -516,15 +517,53 @@ def test_release_and_attention_transitions_invalidate_lease(
     assert quarantined.step.state == "attention_required"
 
 
+@pytest.mark.parametrize("run_owned", [False, True])
 def test_analysis_verifies_exact_durable_judgment_and_survives_restart(
     tmp_path: Path,
+    run_owned: bool,
 ) -> None:
     from scopecat.daemon.wire import (
         AnalysisSaveCommand,
         InterpretationAnalysisInputPayload,
     )
 
-    with LocalDaemonRuntime(tmp_path) as runtime:
+    config = load_config()
+    config.system.instrument_registry = InstrumentRegistry(instruments=[])
+    config.system.routing = RoutingGraph(routes=[])
+    config.system.domain_target = None
+    run_id: str | None = None
+
+    def save(runtime: LocalDaemonRuntime, command: AnalysisSaveCommand):
+        if run_id is not None:
+            return runtime.application.runs.save_run_analysis(run_id, command)
+        return runtime.application.analyses.save(command)
+
+    with LocalDaemonRuntime(tmp_path, bootstrap_config=config) as runtime:
+        if run_owned:
+            admission = runtime.application.submit_run(
+                RunSubmission(
+                    execution_setup=runtime.application.setup.resolve("initial").ref,
+                    scientific_binding=bind_scientific_evidence(
+                        catalog_id="test",
+                        config=config,
+                        samples=(),
+                        sample_revisions={},
+                    ),
+                    submission_id="judgment-source",
+                    config=config,
+                    request=RunRequest(experiment_id="scratch"),
+                    plan=RunPlanSummary(
+                        experiment_id="scratch",
+                        experiment_kind="scratch",
+                        point_plan_fingerprint="a" * 64,
+                        measurement_contract_fingerprint="b" * 64,
+                        point_count=1,
+                        initial_point_count=1,
+                        point_limit=1,
+                    ),
+                )
+            )
+            run_id = admission.run_id
         service = runtime.application.automation
         submitted = _submit(service)
         acquired = service.acquire_lease(
@@ -596,7 +635,7 @@ def test_analysis_verifies_exact_durable_judgment_and_survives_restart(
             analysis_key="decision-proof",
             inputs=(input_ref,),
         )
-        saved = runtime.application.analyses.save(command)
+        saved = save(runtime, command)
         assert saved.inputs == (input_ref,)
         for field, value in (
             ("request_hash", _OTHER_STEP_HASH),
@@ -613,13 +652,14 @@ def test_analysis_verifies_exact_durable_judgment_and_survives_restart(
                 }
             )
             with pytest.raises(BackendConflict, match="successful judgment"):
-                runtime.application.analyses.save(
+                save(
+                    runtime,
                     command.model_copy(
                         update={"inputs": (forged,), "analysis_key": f"forged-{field}"}
-                    )
+                    ),
                 )
     with LocalDaemonRuntime(tmp_path) as reopened:
-        assert reopened.application.analyses.save(command) == saved
+        assert save(reopened, command) == saved
 
 
 def test_request_key_filter_preserves_definition_collisions_and_pagination(

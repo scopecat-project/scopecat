@@ -26,6 +26,7 @@ from scopecat_quantum._ids import (
     PulseProgramId,
     QuantumProgramId,
     QubitId,
+    ReadoutLineId,
 )
 from scopecat_quantum.acquisitions import (
     INTEGRATED_IQ_RESULT,
@@ -101,6 +102,7 @@ from ._ir import (
     QubitPair,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
     RepeatCount,
     _ConditionalFragment,
     _DelayFragment,
@@ -128,6 +130,11 @@ def qubit(id: str) -> Qubit:
     """Declare one logical qubit handle."""
 
     return Qubit(ir_id=QubitId(id))
+
+
+def readout_line(id: str) -> ReadoutLine:
+    """Declare a readout path without assigning it to a qubit."""
+    return ReadoutLine(ir_id=ReadoutLineId(id))
 
 
 def coupler(id: str) -> Coupler:
@@ -238,14 +245,14 @@ def measure(
         raise ValueError(msg)
     result_handle = MeasurementResult(
         _id=result,
-        _qubit=qubit,
+        _owner=qubit,
         contract=contract,
     )
     return Measurement(result=result_handle)
 
 
 def acquire(
-    qubit: Qubit,
+    qubit: Qubit | ReadoutLine,
     /,
     *,
     duration: QuantumQuantity,
@@ -260,7 +267,7 @@ def acquire(
         raise ValueError(msg)
     result_handle = MeasurementResult(
         _id=result,
-        _qubit=qubit,
+        _owner=qubit,
         contract=contract,
     )
     return Acquisition(
@@ -276,14 +283,14 @@ def drive(qubit: Qubit, /) -> DriveSignal:
     return DriveSignal(qubit.ir_id)
 
 
-def flux(element: PulseElement, /) -> FluxSignal:
+def flux(element: Qubit | Coupler, /) -> FluxSignal:
     """Select the logical flux signal for one authored qubit or coupler."""
 
-    return FluxSignal(_element_ir_id(element))
+    return FluxSignal(element.ir_id)
 
 
-def readout(qubit: Qubit, /) -> ReadoutSignal:
-    """Select the logical readout-stimulus signal for one authored qubit."""
+def readout(qubit: Qubit | ReadoutLine, /) -> ReadoutSignal:
+    """Select the readout stimulus for a qubit or an unassigned readout path."""
 
     return ReadoutSignal(qubit.ir_id)
 

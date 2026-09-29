@@ -53,6 +53,42 @@ READOUT_Q1 = ReadoutSignal(Q1)
 IDENTITY_IQ = IqMatrix(ii=1.0, iq=0.0, qi=0.0, qq=1.0)
 
 
+def test_zero_duration_constant_preserves_scan_reference_without_output_or_delay() -> (
+    None
+):
+    program = schedule(
+        PulseProgram(
+            PulseProgramId("zero-reference"),
+            Sequence(
+                (
+                    Play(
+                        PulseEventId("empty-drive"),
+                        DRIVE_Q0,
+                        Constant(Quantity(0, "ns"), Quantity(0.8, "arb")),
+                    ),
+                    Play(
+                        PulseEventId("readout"),
+                        READOUT_Q0,
+                        Constant(Quantity(8, "ns"), Quantity(0.2, "arb")),
+                    ),
+                )
+            ),
+        )
+    )
+    plan = plan_sampled_waveforms(
+        program,
+        bindings=(
+            SampledOutputBinding(DRIVE_Q0, 0, 1, 0, IDENTITY_IQ),
+            SampledOutputBinding(READOUT_Q0, 2, 3, 0, IDENTITY_IQ),
+        ),
+        grid=SampleGrid(1_000_000_000),
+    )
+    rendered = Float64ReferenceRenderer().render(plan)
+    np.testing.assert_array_equal(rendered.buffers[0], np.zeros(8))
+    np.testing.assert_allclose(rendered.buffers[2], np.full(8, 0.2))
+    assert program.duration_seconds == Decimal("8e-9")
+
+
 def _binding(signal: DriveSignal | ReadoutSignal) -> SampledOutputBinding:
     return SampledOutputBinding(
         signal=signal,

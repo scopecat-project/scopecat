@@ -20,6 +20,7 @@ from scopecat_quantum._ids import (
     PulseEventId,
     PulseProgramId,
     QubitId,
+    ReadoutLineId,
 )
 from scopecat_quantum.acquisitions import (
     QuantumResultContract,
@@ -188,7 +189,7 @@ def materialize_pulse_recipe_body(
             msg = "measurement pulse recipes must acquire exactly one result"
             raise ValueError(msg)
         result = facts.results[0]
-        if result.qubit.ir_id != qubit_id:
+        if result.owner.ir_id != qubit_id:
             msg = "measurement pulse recipe result must belong to its mapped qubit"
             raise ValueError(msg)
         if result.contract != result_contract:
@@ -238,7 +239,9 @@ def bind(
         for input_handle in _summarize_fragment(declaration.body).repeat_inputs
     }
     concrete_bindings: dict[str, object] = {}
-    element_bindings: dict[QubitId | CouplerId, QubitId | CouplerId] = {}
+    element_bindings: dict[
+        QubitId | CouplerId | ReadoutLineId, QubitId | CouplerId | ReadoutLineId
+    ] = {}
     for element in declaration.elements:
         value_type = program_port_type(element)
         try:
@@ -252,11 +255,7 @@ def bind(
         if not isinstance(selected, EntityRef):
             raise AssertionError("entity program ports normalize to EntityRef")
         concrete_bindings[element.id] = selected
-        element_bindings[element.ir_id] = (
-            QubitId(selected.id)
-            if isinstance(element, Qubit)
-            else CouplerId(selected.id)
-        )
+        element_bindings[element.ir_id] = type(element.ir_id)(selected.id)
     for entity_set in declaration.entity_sets:
         selected = selected_bindings[entity_set.id]
         if isinstance(entity_set, QubitSet):
@@ -326,9 +325,10 @@ def _bind_circuit_operation(
             ),
         )
     result = fragment.result
+    assert isinstance(result.owner, Qubit)
     return Measure(
         id=CircuitOperationId(_operation_id(path, "measure")),
-        qubit=_bound_qubit_id(result.qubit, element_bindings),
+        qubit=_bound_qubit_id(result.owner, element_bindings),
         acquisition_slot_id=result.acquisition_slot_id.prefixed(*acquisition_scope),
         contract=_bind_result_contract(result.contract, bindings),
     )

@@ -4,6 +4,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx2
 import pytest
 from filelock import FileLock
 from scopecat.application import LabApplication
@@ -36,8 +37,14 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
         )
     )
     source = second.root / "src/scopecat_lab/authored/signal.py"
+    shared = second.root / "src/scopecat_lab/shared_response.py"
+    shared.write_text("SCALE = 2.0\n")
     source.write_text(
-        source.read_text().replace("return scale /", "return 2.0 * scale /")
+        source.read_text().replace(
+            "return scale /",
+            "from scopecat_lab.shared_response import SCALE\n"
+            "    return SCALE * scale /",
+        )
     )
     (source.parent / "alternate.py").write_text(
         source.read_text().replace('id="signal"', 'id="alternate"')
@@ -55,6 +62,7 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
         ):
             initial_a = a.state()
             initial_b = b.state()
+            driver_versions = a.devices.drivers()
             assert initial_a.active != initial_b.active
             assert b.workspace_id == registered.id
             assert {item.id for item in b.catalog().entries} == {"signal"}
@@ -82,11 +90,9 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             assert one.request.metadata["author_workspace"] == author_workspace_id(
                 first.root
             )
-            source.write_text(
-                source.read_text().replace(
-                    "return 2.0 * scale /", "return 3.0 * scale /"
-                )
-            )
+            # A shared scientific module outside refresh_roots belongs to the
+            # complete task snapshot too. It must not require an app restart.
+            shared.write_text("SCALE = 3.0\n")
             manifest.write_text(
                 manifest.read_text().replace(
                     'modules = ["scopecat_lab.authored.signal"]',
@@ -94,6 +100,7 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
                 )
             )
             refreshed_b = b.refresh_authors(expected_generation=initial_b.generation)
+            assert a.devices.drivers() == driver_versions
             assert {item.id for item in b.catalog().entries} == {
                 "signal",
                 "alternate",
@@ -147,6 +154,59 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             )
     finally:
         stop_project(restored)
+
+
+def test_compiler_factory_edit_does_not_replace_a_prepared_tasks_code(
+    tmp_path: Path,
+) -> None:
+    project = initialize_project(tmp_path / "compiler-source")
+    manifest = project.root / "scopecat.toml"
+    manifest.write_text(
+        manifest.read_text()
+        + ('\n[lab.capabilities]\nexperiment_system="scopecat_lab.compiler:build"\n')
+    )
+    compiler = project.root / "src/scopecat_lab/compiler.py"
+    implementation = (
+        "from scopecat.planning.system import ExperimentSystem\n"
+        "def build(config, catalog):\n"
+        "    return ExperimentSystem(instrument_catalog=catalog)\n"
+    )
+    compiler.write_text(implementation)
+    register_author_workspace(project.root, project.root)
+    start_project(project, timeout=60)
+    try:
+        with (
+            LabApplication().connect(resolve_daemon_endpoint(project.root)) as lab,
+            project.authoring() as author,
+        ):
+            imported = lab.setup.import_template(
+                lab.setup.templates()[0], name="compiler-parameters"
+            )
+            author.use(selection=imported.selection)
+            initial = author.state()
+            pending = author.prepare("signal")
+            compiler.write_text(
+                implementation.replace(
+                    "return ExperimentSystem(instrument_catalog=catalog)",
+                    'raise ValueError("new compiler needs correction")',
+                )
+            )
+            changed = author.refresh_authors(expected_generation=initial.generation)
+            assert changed.active != initial.active
+            with pytest.raises(
+                httpx2.HTTPStatusError, match="new compiler needs correction"
+            ):
+                author.prepare("signal")
+            # The request was prepared before the edit and retains that factory.
+            result = pending.run().wait(timeout=60).result()
+            assert tuple(result.measurements()["result"].require_values()) == (1.0,)
+            assert pending.request.code_revision == initial.active
+            compiler.write_text(implementation)
+            author.refresh_authors(expected_generation=changed.generation)
+            fixed = author.prepare("signal").run().wait(timeout=60).result()
+            assert tuple(fixed.measurements()["result"].require_values()) == (1.0,)
+    finally:
+        stop_project(project)
 
 
 def test_registration_locks_candidate_and_rebinding_revokes_old_location(

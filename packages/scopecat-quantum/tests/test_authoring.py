@@ -42,7 +42,7 @@ def test_symbolic_repeat_and_measurement_declare_typed_ports() -> None:
     assert x_count.value_type == sc.ScalarType(sc.IntType())
     assert tuple(declaration.results) == (raw_iq,)
     assert raw_iq.id == "raw_iq"
-    assert raw_iq.qubit.id == "q0"
+    assert raw_iq.owner.id == "q0"
     assert raw_iq.acquisition_kind is AcquisitionKind.INTEGRATED_IQ
     assert raw_iq.acquisition_slot_id == AcquisitionSlotId("raw_iq")
     assert isinstance(bound.verified.program.body, Sequence)

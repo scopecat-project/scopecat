@@ -43,7 +43,7 @@ def test_installed_sources_are_retained_and_local_edits_remain_refreshable(
     require_environment(original)
     assert author_module_path(project, "lab_methods.rabi") == method
     assert author_module_path(project, "user_experiments.rabi") == wrapper
-    with pytest.raises(ValueError, match="configured author refresh root"):
+    with pytest.raises(ValueError, match="configured source root"):
         author_module_path(project, "os")
     wrapper.write_text("from lab_methods.rabi import value\nvalue += 1\n")
     updated = capture_sources(project).manifest

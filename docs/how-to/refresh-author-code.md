@@ -1,8 +1,8 @@
 # Refresh experiments, helpers and analysis
 
-The reference project keeps refreshable experiments in `reference_lab_authors`,
-separate from its driver package `reference_lab`. Keep this boundary in your own
-project: refreshing experiments should not change the installed driver's identity.
+The reference project keeps experiments in `reference_lab_authors` and drivers in
+`reference_lab`. Both can be ordinary source code. Author refresh selects code for
+new tasks; changing the resident device driver uses a separate idle-device update.
 
 For Notebook/IPython work, use `session = sc.notebook()` once. Saved edits are
 selected for new experiment requests, both normal import styles work, and new
@@ -73,11 +73,11 @@ binding operation for recovery; it is not a required first-load step. Removed
 keywords fail when constructing a new request, so update calling cells and editor
 type errors when changing the signature or result dataclass.
 
-Only project-local modules under `refresh_roots` are replaced. Imports use
+Project-local modules under `source_roots` are replaced. Imports use
 checksum-verified archived bytes, including adjacent helpers and resources;
 subsequent unsaved or saved workspace edits cannot leak into that import. Installed
-packages, maintained composition and arbitrary Notebook state are not reloaded.
-Restart the Notebook after updating these dependencies. Do not run concurrent
+packages and arbitrary Notebook state are not reloaded. Restart the Notebook after
+updating installed dependencies. Do not run concurrent
 project imports while rebinding. Local Python calls that dynamically import a
 module follow Python's current import table; use `authors.prepare(request)` for
 revision-owned execution, rather than treating old Notebook objects as isolated
@@ -173,34 +173,30 @@ The maintainer configures these paths once in `scopecat.toml`:
 [authors]
 modules = ["reference_lab_authors.authored"]
 source_roots = ["src", "config"]
-refresh_roots = [
-  "src/reference_lab_authors/authored",
-  "src/reference_lab_authors/frequency_amplitude.py",
-  "src/reference_lab_authors/temperature_diagnostic.py",
-]
 ```
 
 `source_roots` archives the complete local dependency tree, including helper,
-analysis and local resource files. `refresh_roots` identifies the subset ordinary
-authors may change without restarting. `modules` selects discoverable experiment modules or packages using the existing
+analysis and local resource files. No separate refresh-directory declaration is
+needed. `modules` selects discoverable experiment modules or packages using the existing
 decorators and controls. It composes with standard modules provided by
 `lab.capabilities.author_modules` or the installed adapter. Use `authors.modules`
 for author-owned selection: adding or changing this list can be refreshed, and
-registered author folders may choose different lists while sharing the maintained
-laboratory composition. Keep the selected local modules inside refresh roots.
+registered author folders may choose different lists and compiler code while
+sharing the application. Keep selected local modules inside source roots.
 The exact selection is retained in each revision, so old plans and runs keep their
 original catalog. Custom `lab.application` factories cannot be combined with
 `authors.modules`; use declarative capabilities for this composition.
 A project without `[authors]` retains its existing initial-load behavior and has
 no refresh button.
 
-Files outside the refresh roots form the maintained composition identity.
-Manifest settings other than `authors.modules` remain maintained; changing source
-boundaries, package ownership or dependencies still requires maintenance.
-Formatting and comments do not change the manifest maintenance identity.
-Compiler, driver, bootstrap, dependency declaration or other maintained source
-changes require a matching maintainer restart; they cannot be smuggled into an
-author refresh. All local Python dependencies must belong to declared source
+Refresh rereads the manifest and captures all declared roots, including shared
+scientific helpers and compiler code. Each prepared task retains its exact
+snapshot. A compiler error during preparation can be corrected and refreshed
+without restarting the application; already prepared tasks keep their old code.
+This does not switch the resident driver worker. For driver edits, finish device
+sessions and use **Devices and drivers → Installed drivers → Update from source**,
+or `lab.devices.update_driver_source(path)`. Installed dependency changes still
+require a qualified environment update. All local Python dependencies must belong to declared source
 roots. Symlinks, environments and caches are excluded. Arbitrary external source
 installs, runtime-generated imports and live patches are outside the recovery
 contract.
@@ -298,7 +294,6 @@ A workspace can combine captured local experiments with maintained wheel package
 ```toml
 [authors]
 source_roots = ["src"]
-refresh_roots = ["src/user_experiments"]
 
 [authors.packages]
 lab_methods = "scopecat-lab-methods"
@@ -307,7 +302,7 @@ lab_methods = "scopecat-lab-methods"
 The keys are top-level Python module names; the values are installed distribution
 names. The application still explicitly registers discovery, for example
 `LabApplication(author_modules=("lab_methods.experiments", "user_experiments"))`.
-Analysis selection accepts modules in these declared packages or local refresh
+Analysis selection accepts modules in these declared packages or local source
 roots. A package declaration does not automatically discover every experiment.
 Use different top-level names for installed and local code to avoid shadowing.
 
@@ -335,7 +330,6 @@ Maintainers can select execution dependencies separately from notebook tooling:
 ```toml
 [authors]
 source_roots = ["src"]
-refresh_roots = ["src/user_experiments"]
 dependencies = ["scopecat-instruments", "scipy", "my-analysis[fit]"]
 
 [authors.packages]

@@ -285,6 +285,11 @@ from scopecat.records.data_cleanup import (
     DataCleanupSelection,
 )
 from scopecat.records.device import RegisteredDevice
+from scopecat.records.driver_source import (
+    DriverSourceSelection,
+    DriverSourceState,
+    DriverSourceUpdate,
+)
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
     ExperimentPlanRevision,
@@ -403,6 +408,7 @@ from ..command_payloads import (
     session_payload_scope,
 )
 from ..errors import BackendConflict, BackendNotFound
+from ..instruments.backend import InstrumentBackendError
 from ..services.application import DaemonApplication
 
 _API_PREFIX = "/api/v1"
@@ -1074,6 +1080,17 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 for driver in endpoint.driver_catalog.drivers
             )
         )
+
+    @app.get(f"{_API_PREFIX}/devices/driver-source")
+    def driver_source() -> DriverSourceState:
+        return DriverSourceState(active=application.driver_sources.current())
+
+    @app.post(f"{_API_PREFIX}/devices/driver-source")
+    def update_driver_source(command: DriverSourceUpdate) -> DriverSourceSelection:
+        try:
+            return application.driver_sources.update(command)
+        except (ValueError, OSError, InstrumentBackendError) as error:
+            raise BackendConflict(str(error)) from error
 
     @app.post(f"{_API_PREFIX}/devices")
     def save_device(command: DeviceSaveCommand) -> DeviceView:

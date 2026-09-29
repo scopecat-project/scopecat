@@ -49,6 +49,7 @@ from ._construction import (
     pulse_template,
     qubit,
     readout,
+    readout_line,
     recipe_scope,
     repeat,
     scalar_input,
@@ -102,6 +103,7 @@ from ._ir import (
     QubitPair,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
     RepeatCount,
 )
 from ._programs import (
@@ -163,6 +165,7 @@ __all__ = [
     "QubitPairSet",
     "QubitSelectionIntent",
     "QubitSet",
+    "ReadoutLine",
     "RepeatCount",
     "SingleQubitGate",
     "TwoQubitGate",
@@ -195,6 +198,7 @@ __all__ = [
     "qubit",
     "raw_trace_result",
     "readout",
+    "readout_line",
     "recipe_parameter",
     "recipe_scope",
     "repeat",

@@ -49,7 +49,7 @@ public typed `comparison-request` fact to the existing atomic analysis save.
 Source actions validate the exact run, analysis and publication hash before
 loading project code. They retain the original model, parameters and selections;
 editing the current form cannot change what an old candidate or review means.
-Configure `[authors].refresh_roots` to include the editable fit/helper module.
+Configure `[authors].source_roots` to include the editable fit/helper module.
 **Refresh author code** validates and retains the source revision before another
 inspection. Inspection returns its actual `AuthorRevisionRef`; fitting requires
 that reference, which is saved in the request fact. Reopening a source action

@@ -1273,7 +1273,11 @@ def _decode_array_values(
         complex_values = cast("pa.StructArray", selected)
         real = complex_values.field("real").to_numpy(zero_copy_only=False)
         imag = complex_values.field("imag").to_numpy(zero_copy_only=False)
-        values = np.asarray(real + 1j * imag, dtype=np.complex128)
+        # Arithmetic reconstruction can erase signed zero components, changing
+        # the retained measurement identity. Copy the components without math.
+        values = np.empty(real.shape, dtype=np.complex128)
+        values.real = real
+        values.imag = imag
     else:
         fill_value: str | bool | int
         if dtype == "string":

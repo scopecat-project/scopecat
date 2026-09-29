@@ -72,10 +72,10 @@ def author_module_path(project: Project, module_name: str) -> Path:
         ):
             if path.is_file() and any(
                 path.relative_to(code_root).is_relative_to(root)
-                for root in project.refresh_roots
+                for root in project.source_roots
             ):
                 return path
-    raise ValueError("module must belong to a configured author refresh root")
+    raise ValueError("module must belong to a configured source root")
 
 
 def validate(

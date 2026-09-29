@@ -15,7 +15,6 @@ instrument_backend = "scopecat_lab.backend:create_backend"
 modules = ["scopecat_lab.authored"]
 dependencies = ["scopecat-instruments"]
 source_roots = ["src"]
-refresh_roots = ["src/scopecat_lab/authored"]
 """,
     "src/scopecat_lab/__init__.py": '''\
 """User-owned composition for this Scopecat project."""
@@ -383,7 +382,7 @@ def write_author_scaffold(root: Path) -> None:
     }
     selected["scopecat.toml"] = (
         '[authors]\nmodules = ["scopecat_lab.authored"]\ndependencies = []\n'
-        'source_roots = ["src"]\nrefresh_roots = ["src"]\n'
+        'source_roots = ["src"]\n'
     )
     selected["src/scopecat_lab/configuration.py"] = '''\
 """Explicit analytic setup; no device connections or physical calibration claims."""

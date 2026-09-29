@@ -301,6 +301,8 @@ def prepare_analysis(
     executions: Sequence[AnalysisExecution],
     outputs: Sequence[AnalysisOutput],
     parameter_proposals: Sequence[ParameterChangeProposal],
+    validate_interpretation: Callable[[AnalysisInterpretationReference], None]
+    | None = None,
 ) -> PreparedAnalysis:
     """Prepare analysis content for publication in a caller-owned unit."""
 
@@ -312,6 +314,7 @@ def prepare_analysis(
         services=services,
         run_id=run_id,
         inputs=inputs,
+        validate_interpretation=validate_interpretation,
     )
     analysis_views = _prepare_analysis_views(
         outputs, inputs=inputs, services=services, repository=None
@@ -493,28 +496,16 @@ def prepare_project_analysis(
     _validate_analysis_execution_outputs(executions, outputs)
     for index, item in enumerate(inputs):
         if isinstance(item, InterpretationAnalysisInput):
-            if (
-                not isinstance(subject, ProjectAnalysisSubject)
-                or validate_interpretation is None
-            ):
+            if not isinstance(subject, ProjectAnalysisSubject):
                 _raise_analysis_problem(
                     "analysis_interpretation_unsupported",
                     "interpretation inputs require a project procedure authority",
                     "inputs",
                     index,
                 )
-            if (
-                item.target != item.source.step_key
-                or item.content_hash != item.source.response_hash
-                or item.codec != "scopecat.interpretation-response.v1"
-            ):
-                _raise_analysis_problem(
-                    "analysis_input_content_mismatch",
-                    "interpretation input identity does not match its source",
-                    "inputs",
-                    index,
-                )
-            validate_interpretation(item.source)
+            _validate_interpretation_input(
+                item, index=index, validate=validate_interpretation
+            )
     _validate_project_analysis_inputs(
         services=services,
         repository=repository,
@@ -776,15 +767,25 @@ def _validate_measurement_analysis_input(
 def _load_published_analysis_output(
     *,
     services: ProjectStateServices,
-    repository: AnalysisRepository,
+    repository: AnalysisRepository | None,
     input_ref: PublishedAnalysisOutputInput,
     index: int,
+    primary_run_id: str | None = None,
 ) -> AnalysisRecordOutput | None:
     source = input_ref.source
     if isinstance(source.subject, RunAnalysisSubject):
         run_id = source.subject.run_id
-        snapshot = services.runs.read_snapshot(run_id)
-        _require_completed_project_input_run(snapshot.status, index=index)
+        if run_id != primary_run_id:
+            snapshot = services.runs.read_snapshot(run_id)
+            if primary_run_id is None:
+                _require_completed_project_input_run(snapshot.status, index=index)
+            elif snapshot.status != "completed":
+                _raise_analysis_problem(
+                    "analysis_secondary_run_incomplete",
+                    "secondary analysis inputs must belong to completed runs",
+                    "inputs",
+                    index,
+                )
         try:
             analysis_entry = services.runs.read_content(
                 run_id,
@@ -814,6 +815,13 @@ def _load_published_analysis_output(
             AnalysisRecord,
         )
     else:
+        if repository is None:
+            _raise_analysis_problem(
+                "analysis_input_source_unknown",
+                "run analysis inputs must identify an existing run analysis",
+                "inputs",
+                index,
+            )
         publication = repository.read_publication(
             source.analysis_record_id,
             subject=source.subject,
@@ -891,11 +899,40 @@ def _validate_published_analysis_output_input(
         )
 
 
+def _validate_interpretation_input(
+    item: InterpretationAnalysisInput,
+    *,
+    index: int,
+    validate: Callable[[AnalysisInterpretationReference], None] | None,
+) -> None:
+    if validate is None:
+        _raise_analysis_problem(
+            "analysis_interpretation_unsupported",
+            "interpretation inputs require a project procedure authority",
+            "inputs",
+            index,
+        )
+    if (
+        item.target != item.source.step_key
+        or item.content_hash != item.source.response_hash
+        or item.codec != "scopecat.interpretation-response.v1"
+    ):
+        _raise_analysis_problem(
+            "analysis_input_content_mismatch",
+            "interpretation input identity does not match its source",
+            "inputs",
+            index,
+        )
+    validate(item.source)
+
+
 def _validate_analysis_inputs(
     *,
     services: ProjectStateServices,
     run_id: str,
     inputs: Sequence[AnalysisInput],
+    validate_interpretation: Callable[[AnalysisInterpretationReference], None]
+    | None = None,
 ) -> None:
     storage = services.runs
     measurement_inputs = tuple(
@@ -911,12 +948,10 @@ def _validate_analysis_inputs(
         )
     for index, input_ref in enumerate(inputs):
         if isinstance(input_ref, InterpretationAnalysisInput):
-            _raise_analysis_problem(
-                "analysis_interpretation_unsupported",
-                "interpretation inputs require project analysis",
-                "inputs",
-                index,
+            _validate_interpretation_input(
+                input_ref, index=index, validate=validate_interpretation
             )
+            continue
         if isinstance(input_ref, ConfigurationAnalysisInput):
             if input_ref.run_id != run_id:
                 _raise_analysis_problem(
@@ -943,51 +978,12 @@ def _validate_analysis_inputs(
                 index=index,
             )
             continue
-        source = input_ref.source
-        if not isinstance(source.subject, RunAnalysisSubject) or (
-            source.subject.run_id != run_id
-        ):
-            _raise_analysis_problem(
-                "analysis_input_source_unknown",
-                "analysis input must identify an earlier analysis on this run",
-                "inputs",
-                index,
-            )
-        try:
-            source_entry = storage.read_content(
-                run_id,
-                role="record",
-                content_id=source.analysis_record_id,
-            )
-        except NotFound:
-            _raise_analysis_problem(
-                "analysis_input_source_unknown",
-                "analysis input must identify an earlier analysis on this run",
-                "inputs",
-                index,
-            )
-        if source_entry.kind != "analysis":
-            _raise_analysis_problem(
-                "analysis_input_source_unknown",
-                "analysis input must identify an earlier analysis on this run",
-                "inputs",
-                index,
-            )
-        source_record = storage.read_model(
-            run_id,
-            record_content_ref(
-                record_id=source.analysis_record_id,
-                kind="analysis",
-            ),
-            AnalysisRecord,
-        )
-        source_output = next(
-            (
-                output
-                for output in source_record.outputs
-                if output.id == source.output_id
-            ),
-            None,
+        source_output = _load_published_analysis_output(
+            services=services,
+            repository=None,
+            input_ref=input_ref,
+            index=index,
+            primary_run_id=run_id,
         )
         _validate_published_analysis_output_input(
             input_ref=input_ref,

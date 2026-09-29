@@ -64,7 +64,7 @@ def test_init_creates_runnable_python_project_and_does_not_overwrite(
     )
     assert project.instrument_backend_spec == "scopecat_lab.backend:create_backend"
     assert project.source_roots == ("src",)
-    assert project.refresh_roots == ("src/scopecat_lab/authored",)
+    assert project.refresh_roots == ("src",)
     assert project.dependencies == ("scopecat-instruments",)
     assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == (
         "results/\n.scopecat/\n"

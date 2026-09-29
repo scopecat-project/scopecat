@@ -18,6 +18,7 @@ import type { ConfigEntryView } from "../../api-contract";
 import {
   getDevices,
   getDeviceDrivers,
+  getDriverSource,
   prepareDeviceAccess,
   saveDevice,
   testDeviceConnection,
@@ -28,6 +29,8 @@ import {
 vi.mock("./device-api", () => ({
   getDevices: vi.fn(),
   getDeviceDrivers: vi.fn(),
+  getDriverSource: vi.fn(),
+  updateDriverSource: vi.fn(),
   prepareDeviceAccess: vi.fn(),
   saveDevice: vi.fn(),
   testDeviceConnection: vi.fn(),
@@ -69,6 +72,7 @@ vi.mock("./instrument-api", async (importOriginal) => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getDriverSource).mockResolvedValue({ active: null });
   mockInventory({
     setup: { revision_id: "lab-default", content_hash: "sha256:active" },
     problems: [],

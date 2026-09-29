@@ -967,6 +967,35 @@ def test_retirement_rejects_an_owned_actor_without_aborting_it() -> None:
     assert drivers[0].disconnect_count == 1
 
 
+def test_group_retirement_checks_all_owners_before_disconnecting() -> None:
+    registry = InstrumentActorRegistry()
+    drivers: list[_TrackingDriver] = []
+    endpoint = _endpoint(drivers)
+    keys = tuple(_exclusivity_key(name) for name in ("source-0", "source-1"))
+    owners = [
+        registry.acquire(
+            key,
+            f"source-{index}",
+            binding=_binding(),
+            owner=_owner(f"session-{index}"),
+            endpoint=endpoint,
+            connect=endpoint,
+        )
+        for index, key in enumerate(keys)
+    ]
+    owners[0].release()
+    with registry.begin_retirement(keys) as retirement:
+        with pytest.raises(InstrumentActorConflict, match="owned instrument"):
+            retirement.retire_idle()
+        assert all(driver.disconnect_count == 0 for driver in drivers)
+        assert all(registry.has_actor(key) for key in keys)
+        owners[1].release()
+        retirement.retire_idle()
+        assert all(driver.disconnect_count == 1 for driver in drivers)
+        assert not any(registry.has_actor(key) for key in keys)
+    registry.shutdown()
+
+
 def test_retirement_catches_an_acquire_after_its_slow_connect() -> None:
     registry = InstrumentActorRegistry()
     drivers: list[_TrackingDriver] = []
@@ -1049,6 +1078,56 @@ def test_retirement_disconnect_failure_leaves_a_terminal_actor() -> None:
         )
     assert len(drivers) == 1
     assert drivers[0].disconnect_count == 1
+    registry.shutdown()
+
+
+def test_backend_replacement_rejects_requests_with_the_previous_endpoint() -> None:
+    registry = InstrumentActorRegistry()
+    drivers: list[_TrackingDriver] = []
+    previous = _endpoint(drivers)
+    replacement = _endpoint(drivers)
+
+    def acquire(endpoint: InstrumentBackendEndpoint) -> OwnedInstrument:
+        return registry.acquire(
+            _exclusivity_key("source-0"),
+            "source-0",
+            binding=_binding(),
+            owner=_owner("session"),
+            endpoint=endpoint,
+            connect=replacement,
+        )
+
+    with (
+        registry.replace_backend(replacement),
+        pytest.raises(InstrumentActorConflict, match="being replaced"),
+    ):
+        acquire(replacement)
+    # A request can have captured the old endpoint before entering the registry.
+    with pytest.raises(InstrumentActorConflict, match="has been replaced"):
+        acquire(previous)
+    assert drivers == []
+    acquire(replacement).release()
+    registry.shutdown()
+
+
+def test_failed_backend_replacement_keeps_the_previous_endpoint_eligible() -> None:
+    registry = InstrumentActorRegistry()
+    drivers: list[_TrackingDriver] = []
+    previous = _endpoint(drivers)
+    with (
+        pytest.raises(ValueError, match="publication failed"),
+        registry.replace_backend(previous),
+    ):
+        raise ValueError("publication failed")
+    owned = registry.acquire(
+        _exclusivity_key("source-0"),
+        "source-0",
+        binding=_binding(),
+        owner=_owner("session"),
+        endpoint=previous,
+        connect=previous,
+    )
+    owned.release()
     registry.shutdown()
 
 

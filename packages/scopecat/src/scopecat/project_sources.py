@@ -238,21 +238,3 @@ def materialize_sources(bundle: AuthorRevisionBundle, directory: Path) -> Path:
         return target
     finally:
         shutil.rmtree(staged, ignore_errors=True)
-
-
-def require_shared_composition(
-    owner: SourceProject,
-    source: SourceProject,
-    baseline: AuthorRevisionBundle,
-    candidate: AuthorRevisionBundle,
-) -> None:
-    """Compare shared laboratory ownership separately from author-local maintenance."""
-    if source.author_only:
-        if source.lab_adapter != owner.lab_adapter or any(
-            candidate.manifest.installed_authors.get(module)
-            != baseline.manifest.installed_authors[module]
-            for module, _ in owner.adapter_packages
-        ):
-            raise ValueError("Author workspace uses a different laboratory adapter")
-    elif candidate.manifest.maintenance_hash != baseline.manifest.maintenance_hash:
-        raise ValueError("Author workspaces must use the same maintained composition")

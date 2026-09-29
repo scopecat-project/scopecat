@@ -56,7 +56,6 @@ author_modules = ["scopecat_lab.authored"]
 
 [authors]
 source_roots = ["src"]
-refresh_roots = ["src/scopecat_lab/authored"]
 ```
 
 Bootstrap and backend factories use `MODULE:CALLABLE` syntax. Capability symbols
@@ -118,12 +117,12 @@ data space and deployment; a URL alone does not select another codebase.
 
 Within the current format, store identity persists independently of paths; runs, parameters and
 source hashes are retained. Original code execution still requires its recorded
-environment and maintained composition. Retaining data does not promise execution
+environment and retained source snapshot. Retaining data does not promise execution
 of arbitrary old code in a new runtime. This is local execution, not an independent
 remote client/server environment.
 
-The current schema is **75**, a development format rather than a compatibility
-baseline. [Backup and restore](../how-to/backup-and-restore.md) supports that current
+The current schema is a development format rather than a compatibility
+baseline. [Backup and restore](../how-to/backup-and-restore.md) supports the current
 format only. Earlier formats are rejected without mutation; use fresh state for
 new development and keep original files separately. See the
 [data compatibility policy](../development/data-compatibility.md).
@@ -131,8 +130,8 @@ new development and keep original files separately. See the
 ## Register another author workspace
 
 Use this when two codebases should publish and execute against the same local
-service and scientific records. Their maintained composition and Python environment
-must match; authored experiments may differ and use the same Python package names.
+service and scientific records. They use the same Python environment; experiments,
+shared helpers and compiler source may differ and use the same Python package names.
 Register from the service's installed environment while both deployments are stopped:
 
 ```shell

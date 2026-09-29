@@ -52,18 +52,14 @@ from scopecat_quantum.pulse_implementations import (
 )
 from scopecat_quantum.pulses import (
     Acquire,
-    AcquireSignal,
     AcquisitionSlot,
     CosineFlatTop,
-    DriveSignal,
-    FluxSignal,
     LogicalSignal,
     Play,
     PlaySignal,
     PulseInstruction,
     PulseProgram,
     PulseValidationError,
-    ReadoutSignal,
     TimeShift,
     iter_pulse_leaves,
     pulse_leaf_owners,
@@ -334,9 +330,7 @@ class QuantumProgramWorkload:
 
 
 def _window_qubits(node: FlatTopWindow) -> tuple[QubitId, ...]:
-    owner = (
-        node.signal.owner if isinstance(node.signal, FluxSignal) else node.signal.qubit
-    )
+    owner = node.signal.owner
     return (owner,) if isinstance(owner, QubitId) else ()
 
 
@@ -544,15 +538,6 @@ def _substitute_pulse_template(
     target: QubitId,
 ) -> PulseProgram:
     def substitute_signal(signal: LogicalSignal) -> LogicalSignal:
-        if isinstance(signal, DriveSignal | ReadoutSignal | AcquireSignal):
-            return replace(
-                signal,
-                qubit=_substitute_qubit(
-                    signal.qubit,
-                    source=source,
-                    target=target,
-                ),
-            )
         if isinstance(signal.owner, QubitId):
             return replace(
                 signal,
@@ -673,15 +658,9 @@ def _substitute_quantum_node(
         )
     if isinstance(node, FlatTopWindow):
         signal = node.signal
-        if isinstance(signal, FluxSignal):
-            signal = replace(
-                signal, owner=target if signal.owner == source else signal.owner
-            )
-        else:
-            signal = replace(
-                signal,
-                qubit=_substitute_qubit(signal.qubit, source=source, target=target),
-            )
+        signal = replace(
+            signal, owner=target if signal.owner == source else signal.owner
+        )
         return replace(
             node,
             id=_scoped_operation_id(node.id, scope),

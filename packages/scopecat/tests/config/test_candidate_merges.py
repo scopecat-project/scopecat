@@ -9,6 +9,10 @@ from scopecat.config.candidate_merges import (
     merge_common_base_parameter_proposals,
     merge_parameter_deltas,
 )
+from scopecat.config.candidates import (
+    CandidateConfig,
+    resolve_candidate_config_from_snapshot,
+)
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.parameter_updates import update_parameter_rows
 from scopecat.kernel.entity import EntityRef
@@ -46,6 +50,7 @@ def test_parameter_composition_needs_no_setup_or_complete_calibration() -> None:
             columns=(
                 TableColumn("qubit", Scalar(String())),
                 TableColumn("beta", Scalar(Float())),
+                TableColumn("unmeasured_width", Scalar(Float())),
             ),
             primary_key=("qubit",),
         ),
@@ -118,6 +123,53 @@ def test_parameter_composition_needs_no_setup_or_complete_calibration() -> None:
     with pytest.raises(Conflict) as error:
         merge_parameter_deltas(((stale,),), base=base, snapshot_id="stale")
     assert error.value.problems[0].code == "parameter_merge.delta_base_mismatch"
+
+
+def test_proposal_can_fill_one_unknown_cell_and_resolve_partial_candidate() -> None:
+    base = _base_config().model_copy(
+        update={
+            "parameter_snapshot": ParameterSnapshot(
+                id="unknown",
+                values=(TableParameterValue(id="qubits", rows=({"qubit": "q0"},)),),
+            )
+        }
+    )
+    proposal = parameter_change_proposal_from_updates(
+        source_run_id="exploration",
+        source_config=base,
+        analysis_title="First estimate",
+        analysis_record_id="readout",
+        proposal_id="estimate",
+        updates=(
+            update_parameter_rows("qubits", key={"qubit": "q0"}, values={"beta": 0.2}),
+        ),
+        reason="one measured field",
+        confidence=None,
+    )
+    resolved = resolve_candidate_config_from_snapshot(
+        CandidateConfig(proposal), source_config=base
+    )
+    assert _required_table(resolved, "qubits").rows == ({"qubit": "q0", "beta": 0.2},)
+    assert resolved.parameter_snapshot.get("threshold") is None
+    assert _required_table(base, "qubits").rows == ({"qubit": "q0"},)
+    assert proposal.deltas[0].cells is not None
+    assert proposal.deltas[0].cells[0].before is None
+    assert proposal.deltas[0].cells[0].after == 0.2
+    with pytest.raises(ValueError, match="finite"):
+        parameter_change_proposal_from_updates(
+            source_run_id="exploration",
+            source_config=base,
+            analysis_title="Invalid",
+            analysis_record_id="bad",
+            proposal_id="bad",
+            updates=(
+                update_parameter_rows(
+                    "qubits", key={"qubit": "q0"}, values={"beta": float("nan")}
+                ),
+            ),
+            reason="invalid measured field",
+            confidence=None,
+        )
 
 
 def test_common_base_keyed_table_merge_is_cell_aware_and_order_independent() -> None:
