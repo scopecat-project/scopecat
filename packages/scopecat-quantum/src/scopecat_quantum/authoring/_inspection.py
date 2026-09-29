@@ -51,6 +51,7 @@ from ._ir import (
     Qubit,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
     _ConditionalFragment,
     _DelayFragment,
     _ExpandedFragment,
@@ -111,6 +112,8 @@ def describe(program: _InspectableProgram, /) -> str:
     for port in program.ports:
         if isinstance(port, Qubit):
             value_type = "qubit"
+        elif isinstance(port, ReadoutLine):
+            value_type = "readout-line"
         elif isinstance(port, QubitSet):
             value_type = "qubit-set"
         elif isinstance(port, CouplerSet):
@@ -178,12 +181,12 @@ def _inspection_node(fragment: QuantumFragment) -> _InspectionNode:
     if isinstance(fragment, Measurement):
         result = fragment.result
         return _InspectionNode(
-            f"measure {result.qubit.id} -> {result.id}"
+            f"measure {result.owner.id} -> {result.id}"
             f"{_inspection_result_shape(result)}"
         )
     if isinstance(fragment, Acquisition):
         return _InspectionNode(
-            f"acquire {fragment.result.qubit.id} "
+            f"acquire {fragment.result.owner.id} "
             f"duration={_inspection_value(fragment.duration)} -> {fragment.result.id}"
             f"{_inspection_result_shape(fragment.result)}"
         )
@@ -310,11 +313,11 @@ def _inspection_gate_call(fragment: _GateFragment) -> str:
 
 def _inspection_signal(signal: LogicalSignal) -> str:
     if isinstance(signal, DriveSignal):
-        return f"drive({signal.qubit.value})"
+        return f"drive({signal.owner.value})"
     if isinstance(signal, ReadoutSignal):
-        return f"readout({signal.qubit.value})"
+        return f"readout({signal.owner.value})"
     if isinstance(signal, AcquireSignal):
-        return f"acquire({signal.qubit.value})"
+        return f"acquire({signal.owner.value})"
     return f"flux({signal.owner.value})"
 
 
@@ -436,7 +439,7 @@ def _describe_result(result: ProgramResult) -> str:
     )
     return (
         f"{result.acquisition_kind.value} {contract.dtype}{unit} "
-        f"on {result.qubit.id}; axes={axes}"
+        f"on {result.owner.id}; axes={axes}"
     )
 
 

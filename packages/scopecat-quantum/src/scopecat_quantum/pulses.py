@@ -24,6 +24,7 @@ from scopecat_quantum._ids import (
     PulseEventId,
     PulseProgramId,
     QubitId,
+    ReadoutLineId,
 )
 from scopecat_quantum.acquisitions import (
     QuantumResultContract,
@@ -34,21 +35,21 @@ from scopecat_quantum.acquisitions import (
 class DriveSignal:
     """Logical microwave-drive signal for a qubit."""
 
-    qubit: QubitId
+    owner: QubitId
 
 
 @dataclass(frozen=True, slots=True)
 class ReadoutSignal:
-    """Logical readout-stimulus signal for a qubit."""
+    """Readout stimulus for an identified qubit or an unassigned readout path."""
 
-    qubit: QubitId
+    owner: QubitId | ReadoutLineId
 
 
 @dataclass(frozen=True, slots=True)
 class AcquireSignal:
-    """Logical acquisition signal for a qubit."""
+    """Acquisition for an identified qubit or an unassigned readout path."""
 
-    qubit: QubitId
+    owner: QubitId | ReadoutLineId
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,15 +269,12 @@ def iter_pulse_leaves(instruction: PulseInstruction) -> Iterator[PulseLeaf]:
 
 def pulse_leaf_owners(
     instruction: PulseInstruction,
-) -> tuple[QubitId | CouplerId, ...]:
+) -> tuple[QubitId | CouplerId | ReadoutLineId, ...]:
     """Return logical signal owners without exposing authoring internals."""
 
-    owners: list[QubitId | CouplerId] = []
+    owners: list[QubitId | CouplerId | ReadoutLineId] = []
     for leaf in iter_pulse_leaves(instruction):
-        owners.extend(
-            signal.owner if isinstance(signal, FluxSignal) else signal.qubit
-            for signal in _leaf_signals(leaf)
-        )
+        owners.extend(signal.owner for signal in _leaf_signals(leaf))
     return tuple(owners)
 
 
@@ -848,12 +846,20 @@ def _normalized_envelope(
 
 def _signal_key(signal: LogicalSignal) -> tuple[str, str, str]:
     match signal:
-        case DriveSignal(qubit=qubit):
+        case DriveSignal(owner=qubit):
             return ("drive", "qubit", qubit.value)
-        case ReadoutSignal(qubit=qubit):
-            return ("readout", "qubit", qubit.value)
-        case AcquireSignal(qubit=qubit):
-            return ("acquire", "qubit", qubit.value)
+        case ReadoutSignal(owner=owner):
+            return (
+                "readout",
+                "qubit" if isinstance(owner, QubitId) else "readout_line",
+                owner.value,
+            )
+        case AcquireSignal(owner=owner):
+            return (
+                "acquire",
+                "qubit" if isinstance(owner, QubitId) else "readout_line",
+                owner.value,
+            )
         case FluxSignal(owner=owner):
             owner_kind = "qubit" if isinstance(owner, QubitId) else "coupler"
             return ("flux", owner_kind, owner.value)

@@ -46,6 +46,7 @@ from scopecat.program.value_types import ValueType
 from scopecat_quantum._ids import (
     CouplerId,
     QubitId,
+    ReadoutLineId,
 )
 from scopecat_quantum.acquisitions import AcquisitionKind
 from scopecat_quantum.gates import (
@@ -78,6 +79,7 @@ from ._ir import (
     QubitPair,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
     RepeatCount,
     _ConditionalFragment,
     _DelayFragment,
@@ -102,7 +104,7 @@ from ._ir import (
 )
 
 
-def _element_ir_id(value: PulseElement) -> QubitId | CouplerId:
+def _element_ir_id(value: PulseElement) -> QubitId | CouplerId | ReadoutLineId:
     return value.ir_id
 
 
@@ -157,6 +159,8 @@ def program_port_type(
 
     if isinstance(value, Qubit):
         return ScalarType(EntityType(entity_kind="logical_qubit"))
+    if isinstance(value, ReadoutLine):
+        return ScalarType(EntityType(entity_kind="readout_line"))
     if isinstance(value, Coupler):
         return ScalarType(EntityType(entity_kind="logical_coupler"))
     if isinstance(value, QubitSet | CouplerSet | QubitPairSet):
@@ -319,6 +323,8 @@ def _program_function_argument(
 ) -> ProgramPort:
     if annotation is Qubit:
         return Qubit(ir_id=QubitId(name))
+    if annotation is ReadoutLine:
+        return ReadoutLine(ir_id=ReadoutLineId(name))
     if annotation is Coupler:
         return Coupler(ir_id=CouplerId(name))
     if annotation is QubitSet:
@@ -448,7 +454,7 @@ class _FragmentFacts:
     """One structural summary shared by quantum authoring closure checks."""
 
     pulse_only: bool = False
-    pulse_owners: tuple[QubitId | CouplerId, ...] = ()
+    pulse_owners: tuple[QubitId | CouplerId | ReadoutLineId, ...] = ()
     element_uses: tuple[PulseElement, ...] = ()
     entity_sets: tuple[EntitySetPort, ...] = ()
     inputs: tuple[ProgramInput, ...] = ()
@@ -545,7 +551,7 @@ def _summarize_entity_set_fragment(
 ) -> _FragmentFacts:
     operation = _summarize_fragment(fragment.operation)
     if isinstance(fragment, _ParallelEachFragment):
-        items: tuple[Qubit | Coupler, ...] = (fragment.entity_set.item,)
+        items: tuple[Qubit | Coupler | ReadoutLine, ...] = (fragment.entity_set.item,)
         results = tuple(
             replace(result, _entity_set=fragment.entity_set)
             for result in operation.results
@@ -591,7 +597,7 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
             element_uses=tuple(
                 value
                 for _name, value in fragment.arguments
-                if isinstance(value, Qubit | Coupler)
+                if isinstance(value, Qubit | Coupler | ReadoutLine)
             ),
             inputs=tuple(
                 input_handle
@@ -631,7 +637,7 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
         )
     if isinstance(fragment, Measurement):
         return _FragmentFacts(
-            element_uses=(fragment.result.qubit,),
+            element_uses=(fragment.result.owner,),
             inputs=_result_dimension_inputs(fragment.result),
             results=(fragment.result,),
         )
@@ -639,7 +645,7 @@ def _summarize_fragment(fragment: QuantumFragment) -> _FragmentFacts:
         return _FragmentFacts(
             pulse_only=True,
             pulse_owners=(_signal_owner(fragment.signal),),
-            element_uses=(fragment.result.qubit,),
+            element_uses=(fragment.result.owner,),
             inputs=(
                 *expression_inputs(fragment.duration),
                 *_result_dimension_inputs(fragment.result),
@@ -1049,16 +1055,18 @@ def _result_dimension_inputs(result: ProgramResult) -> tuple[ProgramInput, ...]:
     )
 
 
-def _signal_owner(signal: LogicalSignal) -> QubitId | CouplerId:
+def _signal_owner(signal: LogicalSignal) -> QubitId | CouplerId | ReadoutLineId:
     if isinstance(signal, FluxSignal):
         return signal.owner
-    return signal.qubit
+    return signal.owner
 
 
 def _signal_element(signal: LogicalSignal) -> PulseElement:
     owner = _signal_owner(signal)
     if isinstance(owner, CouplerId):
         return Coupler(owner)
+    if isinstance(owner, ReadoutLineId):
+        return ReadoutLine(owner)
     return Qubit(owner)
 
 

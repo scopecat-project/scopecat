@@ -76,6 +76,7 @@ from ._ir import (
     QuantumFragment,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
 )
 from ._selection import (
     CouplerSelectionIntent,
@@ -215,34 +216,39 @@ class QuantumProgramCall:
         )
 
     def entity_results(self) -> PerEntity[ProductRef]:
-        """Return one result per concrete qubit for entity-axis recording.
+        """Return one result per concrete owner for entity-axis recording.
 
         This is the common parallel-readout view. Programs that emit multiple
-        results for one qubit must keep their named result structure instead.
+        results for one owner must keep their named result structure instead.
         """
 
         arguments = dict(self.arguments)
         selected: list[tuple[EntityRef, ProductRef]] = []
         for result in self.program.results:
-            bound_qubit = arguments[result.qubit.id]
+            kind = (
+                "readout_line"
+                if isinstance(result.owner, ReadoutLine)
+                else "logical_qubit"
+            )
+            bound_qubit = arguments[result.owner.id]
             if isinstance(bound_qubit, EntityRef):
                 entity = EntityRef(
                     id=bound_qubit.id,
-                    kind=bound_qubit.kind or "logical_qubit",
+                    kind=bound_qubit.kind or kind,
                     metadata=bound_qubit.metadata,
                 )
             elif isinstance(bound_qubit, str):
-                entity = EntityRef(id=bound_qubit, kind="logical_qubit")
+                entity = EntityRef(id=bound_qubit, kind=kind)
             else:
                 raise TypeError(
-                    "entity_results requires concrete string or EntityRef qubit inputs"
+                    "entity_results requires concrete string or EntityRef owner inputs"
                 )
             selected.append((entity, self.results[result.id]))
         if len({(entity.kind, entity.id) for entity, _product in selected}) != len(
             selected
         ):
             raise ValueError(
-                "entity_results requires exactly one program result per qubit"
+                "entity_results requires exactly one program result per owner"
             )
         return PerEntity(selected)
 

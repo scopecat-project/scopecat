@@ -14,6 +14,7 @@ from scopecat_quantum._ids import (
     AcquisitionSlotId,
     PulseEventId,
     PulseProgramId,
+    QubitId,
     TargetArtifactId,
     TargetCompileEntryId,
     TargetCompilerId,
@@ -59,10 +60,11 @@ def signal_key(
     """Return a canonical hardware-independent key for one logical signal."""
 
     if isinstance(signal, DriveSignal):
-        return ("drive", "qubit", signal.qubit.value)
+        return ("drive", "qubit", signal.owner.value)
+    owner_kind = "qubit" if isinstance(signal.owner, QubitId) else "readout_line"
     if isinstance(signal, ReadoutSignal):
-        return ("readout", "qubit", signal.qubit.value)
-    return ("acquire", "qubit", signal.qubit.value)
+        return ("readout", owner_kind, signal.owner.value)
+    return ("acquire", owner_kind, signal.owner.value)
 
 
 @dataclass(frozen=True, slots=True)

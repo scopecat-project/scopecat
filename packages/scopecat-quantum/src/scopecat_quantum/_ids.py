@@ -49,6 +49,11 @@ class QubitId(_NominalId):
 
 
 @dataclass(frozen=True, slots=True)
+class ReadoutLineId(_NominalId):
+    """Readout path identity, independent of any identified sample object."""
+
+
+@dataclass(frozen=True, slots=True)
 class CouplerId(_NominalId):
     """Logical coupler identity, independent of physical wiring."""
 

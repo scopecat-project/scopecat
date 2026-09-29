@@ -18,6 +18,7 @@ from scopecat_quantum._ids import (
     CouplerId,
     PulseProgramId,
     QubitId,
+    ReadoutLineId,
 )
 from scopecat_quantum.gates import (
     GateDefinition,
@@ -65,6 +66,7 @@ from ._ir import (
     Qubit,
     QubitPairSet,
     QubitSet,
+    ReadoutLine,
     RepeatCount,
     _DelayFragment,
     _FlatTopWindowFragment,
@@ -108,7 +110,7 @@ class _QuantumFunctionContract:
         return tuple(
             parameter
             for parameter in self.parameters
-            if isinstance(parameter, Qubit | Coupler)
+            if isinstance(parameter, Qubit | Coupler | ReadoutLine)
         )
 
     @property
@@ -537,7 +539,7 @@ def _validate_fragment_call_arguments(
         definition.parameters,
         strict=True,
     ):
-        if isinstance(formal, Qubit | Coupler):
+        if isinstance(formal, Qubit | Coupler | ReadoutLine):
             if type(actual) is not type(formal):
                 msg = (
                     f"quantum fragment {definition.id!r} port {name!r} requires "
@@ -547,7 +549,7 @@ def _validate_fragment_call_arguments(
             continue
         if isinstance(formal, QubitSet | CouplerSet | QubitPairSet):
             raise TypeError("quantum fragments cannot declare entity-set ports")
-        if isinstance(actual, Qubit | Coupler):
+        if isinstance(actual, Qubit | Coupler | ReadoutLine):
             msg = f"quantum fragment {definition.id!r} port {name!r} requires a value"
             raise TypeError(msg)
         if isinstance(actual, QuantityExpression):
@@ -582,7 +584,7 @@ def _instantiate_bound_pulse_template(
     inputs: dict[str, _PulseTemplateArgument] = {}
     for formal in template.parameters:
         actual = cast("object", bound.arguments[formal.id])
-        if isinstance(formal, Qubit | Coupler):
+        if isinstance(formal, Qubit | Coupler | ReadoutLine):
             elements.append(cast("PulseElement", actual))
         else:
             inputs[formal.id] = cast("_PulseTemplateArgument", actual)
@@ -657,7 +659,9 @@ def _instantiate_pulse_template(
 def _substitute_pulse_fragment(
     fragment: QuantumFragment,
     *,
-    element_bindings: Mapping[QubitId | CouplerId, QubitId | CouplerId],
+    element_bindings: Mapping[
+        QubitId | CouplerId | ReadoutLineId, QubitId | CouplerId | ReadoutLineId
+    ],
     input_bindings: Mapping[
         ProgramInput, Quantity | int | float | ProgramInput | QuantityExpression
     ],
@@ -845,19 +849,23 @@ def _substitute_template_value(
 
 def _substitute_signal(
     signal: LogicalSignal,
-    bindings: Mapping[QubitId | CouplerId, QubitId | CouplerId],
+    bindings: Mapping[
+        QubitId | CouplerId | ReadoutLineId, QubitId | CouplerId | ReadoutLineId
+    ],
 ) -> LogicalSignal:
     if isinstance(signal, DriveSignal):
-        owner = bindings.get(signal.qubit, signal.qubit)
+        owner = bindings.get(signal.owner, signal.owner)
         assert isinstance(owner, QubitId)
         return DriveSignal(owner)
     if isinstance(signal, ReadoutSignal):
-        owner = bindings.get(signal.qubit, signal.qubit)
-        assert isinstance(owner, QubitId)
+        owner = bindings.get(signal.owner, signal.owner)
+        assert isinstance(owner, QubitId | ReadoutLineId)
         return ReadoutSignal(owner)
     if isinstance(signal, AcquireSignal):
-        owner = bindings.get(signal.qubit, signal.qubit)
-        assert isinstance(owner, QubitId)
+        owner = bindings.get(signal.owner, signal.owner)
+        assert isinstance(owner, QubitId | ReadoutLineId)
         return AcquireSignal(owner)
     owner = signal.owner
-    return FluxSignal(bindings.get(owner, owner))
+    bound = bindings.get(owner, owner)
+    assert isinstance(bound, QubitId | CouplerId)
+    return FluxSignal(bound)

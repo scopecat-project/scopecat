@@ -43,7 +43,7 @@ class QuantumParameterReads:
             qubits = (
                 operation.qubits
                 if isinstance(operation, _GateFragment)
-                else (operation.result.qubit,)
+                else (operation.result.owner,)
             )
             operands = tuple(inputs.get(qubit.id) for qubit in qubits)
             if not all(isinstance(value, EntityRef | str) for value in operands):

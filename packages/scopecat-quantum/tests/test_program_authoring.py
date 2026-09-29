@@ -133,7 +133,7 @@ def test_end_aligned_width_preserves_entity_timing_under_permutation(
             output_id=PulseProgramId("wide-pulses"),
         )
         return {
-            cast("DriveSignal", e.instruction.signal).qubit.value: (
+            cast("DriveSignal", e.instruction.signal).owner.value: (
                 e.start_seconds,
                 e.duration_seconds,
             )
@@ -652,7 +652,7 @@ def test_explicit_acquire_composes_with_readout_play_and_keeps_public_slot() -> 
     scheduled = schedule(pulses)
 
     assert tuple(declaration.results) == (capture.result,)
-    assert capture.result.qubit is q0
+    assert capture.result.owner is q0
     assert capture.result.acquisition_slot_id == AcquisitionSlotId("iq_shots")
     assert pulses.acquisition_slots[0].id == capture.result.acquisition_slot_id
     assert scheduled.duration_seconds == Decimal("1.2e-8")
