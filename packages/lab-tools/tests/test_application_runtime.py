@@ -30,7 +30,9 @@ def test_foreground_source_development_owns_and_stops_its_application(tmp_path):
         ):
             raise RuntimeError("developer failure")
     assert inspect_daemon(open_project(home / "runtime")).state == "stopped"
+    assert not (home / "authors/scopecat.runtime.toml").exists()
     assert inspect_daemon(open_project(tmp_path / "another/runtime")).state == "stopped"
+    assert not (tmp_path / "another/authors/scopecat.runtime.toml").exists()
 
 
 @pytest.fixture

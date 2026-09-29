@@ -205,6 +205,30 @@ def _driver_source(root: Path) -> Path:
     return source
 
 
+def test_first_driver_source_can_be_added_to_a_running_empty_application(
+    tmp_path: Path,
+) -> None:
+    project = _copy_project(tmp_path)
+    (project / "scopecat.toml").write_text("[lab]\n")
+    source = _driver_source(tmp_path)
+    with (
+        LocalDaemonRuntime(project) as runtime,
+        TestClient(runtime.app()) as transport,
+        _http_daemon_client(transport) as client,
+    ):
+        assert runtime.application.devices.endpoint is None
+        devices = LabDeviceOperations(client, "maintainer")
+        selected = devices.update_driver_source(source)
+        assert devices.driver_source() == selected
+        assert runtime.application.devices.endpoint is not None
+        assert devices.list() == ()
+    source.rename(tmp_path / "moved-source")
+    with LocalDaemonRuntime(project) as reopened:
+        assert reopened.application.driver_sources.current() == selected
+        endpoint = reopened.application.devices.endpoint
+        assert endpoint is not None and endpoint.artifact_hash == selected.artifact_hash
+
+
 def test_driver_source_api_survives_source_removal_restart_and_backup(
     tmp_path: Path,
 ) -> None:

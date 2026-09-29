@@ -25,7 +25,7 @@ dev = [
   "ruff>=0.16.0",
   { include-group = "delivery" },
 ]
-delivery = ["scopecat-lab-tools[kernel,desktop,dev]", "uv_build>=0.12.3,<0.13"]
+delivery = ["scopecat-lab-tools[kernel,desktop]", "uv_build>=0.12.3,<0.13"]
 delivery-build = ["pip>=25", "setuptools>=80", "wheel>=0.45"]
 delivery-notebook = ["scopecat-lab-tools[notebook]", { include-group = "delivery" }]
 docs = [
@@ -423,6 +423,7 @@ fast_paths = [
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/tests",
   "packages/lab-tools/tests/test_test_tiers.py",
+  "packages/lab-tools/tests/test_preview.py",
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [

@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING, Protocol, cast
 import psutil
 from filelock import FileLock
 
+from scopecat.application import LabApplication
 from scopecat.project import open_project
+from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
 from scopecat_server.scaffold import write_author_scaffold
@@ -32,7 +34,6 @@ class Arguments(Protocol):
     source: Path | None
     preview: Path | None
     workspace: Path | None
-    composition: Path | None
 
 
 @contextmanager
@@ -40,11 +41,8 @@ def development_session(
     home: Path,
     *,
     workspace: Path | None = None,
-    composition: Path | None = None,
     static_dir: Path | None = None,
 ) -> Generator[DaemonEndpointRecord]:
-    import tomlkit
-
     home = home.resolve()
     home.mkdir(parents=True, exist_ok=True)
     with FileLock(home / "development.lock", timeout=0):
@@ -62,24 +60,29 @@ def development_session(
             raise ValueError(
                 "Stop the existing development application before restarting"
             )
-        document = tomlkit.document()
-        document["lab"] = (
-            tomlkit.parse(composition.read_text(encoding="utf-8"))["lab"]
-            if composition
-            else tomlkit.table()
-        )
-        document["authors"] = {"dependencies": []}
-        manifest.write_text(tomlkit.dumps(document), encoding="utf-8")
+        manifest.write_text("[lab]\n[authors]\ndependencies = []\n", encoding="utf-8")
         source = workspace.resolve() if workspace else home / "authors"
         if workspace is None and not source.exists():
             write_author_scaffold(source)
+        binding = source / RUNTIME_BINDING_NAME
+        existing_binding = binding.exists()
         register_author_workspace(root, source)
+        selected_binding = binding.read_bytes()
         project = open_project(root)
         try:
             record = start_project(project, static_dir=static_dir)
+            if open_project(source).instrument_backend_spec is not None:
+                with LabApplication().connect(record.base_url) as lab:
+                    lab.devices.update_driver_source(str(source))
             yield record
         finally:
             stop_project(project)
+            if (
+                not existing_binding
+                and binding.exists()
+                and binding.read_bytes() == selected_binding
+            ):
+                binding.unlink()
 
 
 def main() -> None:
@@ -89,7 +92,6 @@ def main() -> None:
     frontend.add_argument("--source", type=Path, help="Public checkout for Vite HMR")
     frontend.add_argument("--preview", type=Path, help="Fixed public preview pin")
     parser.add_argument("--workspace", type=Path)
-    parser.add_argument("--composition", type=Path)
     args = cast("Arguments", cast("object", parser.parse_args()))
     gui = None
     if args.preview:
@@ -109,7 +111,6 @@ def main() -> None:
         with development_session(
             args.home,
             workspace=args.workspace,
-            composition=args.composition,
             static_dir=gui,
         ) as record:
             print(

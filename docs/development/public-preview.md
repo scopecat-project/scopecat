@@ -45,8 +45,11 @@ uv run --group delivery python -m lab_tools.dev --source .
 This starts a backend and Vite in the foreground, prints URLs and never opens a
 browser. Ctrl-C stops both. Data stays in `.scopecat-dev`; `--home` selects another
 development directory. It does not create a release, desktop entry or installation
-selection. Use `--workspace` and `--composition` to select laboratory author source
-and its `[lab]` declaration. Device connection remains explicit.
+selection. Use `--workspace` to register laboratory author source. When its
+manifest declares a driver factory, the launcher selects it through the normal
+driver source update API before yielding the application. Device connection
+remains explicit. Source registration bindings created by the launcher are
+removed after successful shutdown; an existing binding is retained.
 
 Consumers can run against the pinned preview GUI with `--preview`, or explicitly
 overlay a public checkout's editable packages for framework work. Overlay all
