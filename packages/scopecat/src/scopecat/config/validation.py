@@ -189,9 +189,14 @@ def validate_parameter_representation(
 
     Execution resolution still converts quantities to the catalog units. Candidate
     editing must not turn that transient conversion into unrelated stored edits.
+    Unmeasured cells remain absent; only execution of a consuming expression
+    requires them to be known.
     """
     normalized = coerce_stored_parameter_value(
-        definition, stored, path=("parameter_snapshot", "values", definition.id)
+        definition,
+        stored,
+        path=("parameter_snapshot", "values", definition.id),
+        allow_missing=True,
     )
     if isinstance(stored, ScalarParameterValue):
         return stored if isinstance(stored.value, QuantityValue) else normalized

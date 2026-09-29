@@ -193,3 +193,13 @@ the measured interval, request a corrected answer at a new stable interpretation
 step, retaining the original answer. Do not silently clamp it or manufacture a
 fit. A project analysis can consume the answer with `context.interpretation(ref, schema=...)`
 to preserve its source and operator alongside the original measurements.
+
+A run analysis can also consume `context.interpretation()` and propose the selected
+value against that run's exact parameters. The server checks the saved judgment's
+request and response identities for both run and project analyses. Include the
+measurement and interpretation references in the procedure analysis inputs.
+Unknown cells in an existing parameter row may remain unknown while a candidate
+fills the measured fields. Candidate composition preserves those absent cells;
+only an experiment that consumes an unknown field must wait for its calibration.
+This permits readout exploration before a drive or classifier exists, without
+inventing initial values. Acceptance and independent verification remain separate.

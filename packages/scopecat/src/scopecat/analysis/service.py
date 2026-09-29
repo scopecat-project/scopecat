@@ -301,6 +301,8 @@ def prepare_analysis(
     executions: Sequence[AnalysisExecution],
     outputs: Sequence[AnalysisOutput],
     parameter_proposals: Sequence[ParameterChangeProposal],
+    validate_interpretation: Callable[[AnalysisInterpretationReference], None]
+    | None = None,
 ) -> PreparedAnalysis:
     """Prepare analysis content for publication in a caller-owned unit."""
 
@@ -312,6 +314,7 @@ def prepare_analysis(
         services=services,
         run_id=run_id,
         inputs=inputs,
+        validate_interpretation=validate_interpretation,
     )
     analysis_views = _prepare_analysis_views(
         outputs, inputs=inputs, services=services, repository=None
@@ -493,28 +496,16 @@ def prepare_project_analysis(
     _validate_analysis_execution_outputs(executions, outputs)
     for index, item in enumerate(inputs):
         if isinstance(item, InterpretationAnalysisInput):
-            if (
-                not isinstance(subject, ProjectAnalysisSubject)
-                or validate_interpretation is None
-            ):
+            if not isinstance(subject, ProjectAnalysisSubject):
                 _raise_analysis_problem(
                     "analysis_interpretation_unsupported",
                     "interpretation inputs require a project procedure authority",
                     "inputs",
                     index,
                 )
-            if (
-                item.target != item.source.step_key
-                or item.content_hash != item.source.response_hash
-                or item.codec != "scopecat.interpretation-response.v1"
-            ):
-                _raise_analysis_problem(
-                    "analysis_input_content_mismatch",
-                    "interpretation input identity does not match its source",
-                    "inputs",
-                    index,
-                )
-            validate_interpretation(item.source)
+            _validate_interpretation_input(
+                item, index=index, validate=validate_interpretation
+            )
     _validate_project_analysis_inputs(
         services=services,
         repository=repository,
@@ -891,11 +882,40 @@ def _validate_published_analysis_output_input(
         )
 
 
+def _validate_interpretation_input(
+    item: InterpretationAnalysisInput,
+    *,
+    index: int,
+    validate: Callable[[AnalysisInterpretationReference], None] | None,
+) -> None:
+    if validate is None:
+        _raise_analysis_problem(
+            "analysis_interpretation_unsupported",
+            "interpretation inputs require a project procedure authority",
+            "inputs",
+            index,
+        )
+    if (
+        item.target != item.source.step_key
+        or item.content_hash != item.source.response_hash
+        or item.codec != "scopecat.interpretation-response.v1"
+    ):
+        _raise_analysis_problem(
+            "analysis_input_content_mismatch",
+            "interpretation input identity does not match its source",
+            "inputs",
+            index,
+        )
+    validate(item.source)
+
+
 def _validate_analysis_inputs(
     *,
     services: ProjectStateServices,
     run_id: str,
     inputs: Sequence[AnalysisInput],
+    validate_interpretation: Callable[[AnalysisInterpretationReference], None]
+    | None = None,
 ) -> None:
     storage = services.runs
     measurement_inputs = tuple(
@@ -911,12 +931,10 @@ def _validate_analysis_inputs(
         )
     for index, input_ref in enumerate(inputs):
         if isinstance(input_ref, InterpretationAnalysisInput):
-            _raise_analysis_problem(
-                "analysis_interpretation_unsupported",
-                "interpretation inputs require project analysis",
-                "inputs",
-                index,
+            _validate_interpretation_input(
+                input_ref, index=index, validate=validate_interpretation
             )
+            continue
         if isinstance(input_ref, ConfigurationAnalysisInput):
             if input_ref.run_id != run_id:
                 _raise_analysis_problem(

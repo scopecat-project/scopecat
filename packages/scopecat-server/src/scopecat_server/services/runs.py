@@ -672,6 +672,8 @@ class RunService:
     ) -> AnalysisSaveReceipt:
         from scopecat.analysis.service import prepare_analysis
 
+        from .interpretation_evidence import validate_interpretation
+
         inputs = tuple(analysis_input_from_payload(item) for item in command.inputs)
         outputs = tuple(analysis_output_from_payload(item) for item in command.outputs)
         proposals = tuple(
@@ -690,6 +692,9 @@ class RunService:
                 executions=command.executions,
                 outputs=outputs,
                 parameter_proposals=proposals,
+                validate_interpretation=lambda source: validate_interpretation(
+                    self._control, source
+                ),
             )
             if prepared.publication is None:
                 return AnalysisSaveReceipt(

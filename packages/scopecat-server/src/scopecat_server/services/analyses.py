@@ -9,7 +9,6 @@ from threading import Lock
 from typing import cast
 
 from pydantic import JsonValue
-from scopecat.automation.models import InterpretationOutputRef
 from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_snapshot,
@@ -58,11 +57,11 @@ from scopecat.runs.refs import (
 from scopecat_server.storage.sqlite.analysis_repository import (
     SQLiteAnalysisRepository,
 )
-from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 from ..errors import BackendConflict, BackendNotFound
+from .interpretation_evidence import validate_interpretation
 from .runs import analysis_input_from_payload, analysis_output_from_payload
 from .samples import SampleService
 
@@ -239,20 +238,7 @@ class AnalysisService:
         return self._save(command)
 
     def _validate_interpretation(self, source: AnalysisInterpretationReference) -> None:
-        store = SQLiteAutomationStore(self._control.sqlite)
-        with self._control.sqlite.read_connection() as connection:
-            step = store.latest_step_attempt_in_transaction(
-                connection, source.procedure_run_id, source.step_key
-            )
-        if (
-            step is None
-            or step.state != "succeeded"
-            or not isinstance(step.output, InterpretationOutputRef)
-            or step.output.analysis_reference != source
-        ):
-            raise BackendConflict(
-                "analysis interpretation must match an existing successful judgment"
-            )
+        validate_interpretation(self._control, source)
 
     def _save(self, command: AnalysisSaveCommand) -> AnalysisSaveReceipt:
         from scopecat.analysis.service import (

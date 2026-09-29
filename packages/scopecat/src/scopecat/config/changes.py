@@ -99,6 +99,7 @@ def parameter_change_proposal_from_updates(
     problems = validate_parameter_snapshot(
         source_config.parameter_catalog,
         candidate,
+        allow_missing=True,
     )
     if problems:
         raise CheckFailed(problems)

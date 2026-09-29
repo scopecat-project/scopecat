@@ -182,6 +182,7 @@ def _build_candidate_config_snapshot(
     problems = validate_parameter_snapshot(
         config.parameter_catalog,
         parameter_snapshot,
+        allow_missing=True,
     )
     if problems:
         raise CheckFailed(problems)
