@@ -1,6 +1,7 @@
 """Reject stale GUI and invalid deliveries before touching a user environment."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -339,7 +340,8 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     ]
     script = (home / "Scopecat.command").read_text(encoding="utf-8")
     assert shlex.quote("./" + Path(calls[0][0]).relative_to(home).as_posix()) in script
-    assert (home / "Scopecat.command").stat().st_mode & 0o111
+    if os.name != "nt":
+        assert (home / "Scopecat.command").stat().st_mode & 0o111
     assert (home / "Notebook.command").stat().st_mode & 0o111
     assert 'notebook "$@"' in (home / "Notebook.command").read_text()
     assert not (home / "Manage.command").exists()

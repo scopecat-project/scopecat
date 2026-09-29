@@ -1,6 +1,7 @@
 """Native entries carry paths as data and do not run the desktop while installing."""
 
 import json
+import os
 import plistlib
 import shlex
 import sys
@@ -26,7 +27,8 @@ def test_mac_bundle_uses_selected_python_without_terminal(tmp_path, monkeypatch)
         "--action",
         "desktop",
     ]
-    assert executable.stat().st_mode & 0o111
+    if os.name != "nt":
+        assert executable.stat().st_mode & 0o111
     with (app / "Contents/Info.plist").open("rb") as stream:
         assert plistlib.load(stream)["CFBundleExecutable"] == "Scopecat"
 
