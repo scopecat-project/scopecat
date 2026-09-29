@@ -39,7 +39,7 @@ print("PASS: retained runtime and author Python survive removal of native app")
 """
 
 
-def verify(app: Path, home: Path) -> None:
+def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     app = app.resolve()
     home = home.resolve()
     if home.exists():
@@ -69,6 +69,48 @@ def verify(app: Path, home: Path) -> None:
         env=environment,
         check=True,
     )
+    if installer is not None:
+        if sys.platform == "win32":
+            installed = home / "Installed Scopecat"
+            _ = subprocess.run(  # noqa: S603 - explicit acceptance-only installer
+                [
+                    str(installer.resolve()),
+                    "/VERYSILENT",
+                    "/SUPPRESSMSGBOXES",
+                    "/NORESTART",
+                    f"/DIR={installed}",
+                ],
+                check=True,
+            )
+            _ = subprocess.run(  # noqa: S603 - installed native entry, still headless
+                [str(installed / "Scopecat.exe"), *command[1:]],
+                env=environment,
+                check=True,
+            )
+            _ = subprocess.run(  # noqa: S603 - installer-owned uninstaller on CI
+                [
+                    str(installed / "unins000.exe"),
+                    "/VERYSILENT",
+                    "/SUPPRESSMSGBOXES",
+                    "/NORESTART",
+                ],
+                check=True,
+            )
+            assert not (installed / "Scopecat.exe").exists()
+            _ = subprocess.run(  # noqa: S603 - retained data after native uninstall
+                [str(python), "-I", "-c", RUNTIME_CHECK, str(home)],
+                env=environment,
+                check=True,
+            )
+            print(
+                "PASS: Windows setup, installed entry and uninstall "
+                "preserve user environments"
+            )
+        else:
+            _ = subprocess.run(  # noqa: S603 - read-only image integrity check
+                ["/usr/bin/hdiutil", "verify", str(installer.resolve())],
+                check=True,
+            )
     print(
         "PASS: native relocation, empty PATH, repeat startup, "
         "immutable app and clean stop"
@@ -76,4 +118,8 @@ def verify(app: Path, home: Path) -> None:
 
 
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]), Path(sys.argv[2]))
+    verify(
+        Path(sys.argv[1]),
+        Path(sys.argv[2]),
+        Path(sys.argv[3]) if len(sys.argv) > 3 else None,
+    )
