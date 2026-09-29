@@ -403,7 +403,7 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         ".read_text(encoding='utf-8'))\n"
         "python = Path(selection['python'])\n"
         "args = sys.argv[1:]\n"
-        "entries = {'teach': 'lab_tools.sandbox', "
+        "entries = {'teach': 'lab_tools.practice', "
         "'notebook': 'lab_tools.author_notebook'}\n"
         "module = entries.get(args[0], 'lab_tools.application') "
         "if args else 'lab_tools.application'\n"

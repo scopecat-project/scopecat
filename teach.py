@@ -37,24 +37,34 @@ def main() -> None:
     )
     parsed, remaining = parser.parse_known_args()
     args = cast("Arguments", cast("object", parsed))
-    # Explicitly use the checkout's environment, even from an activated old sandbox.
+    # Practice uses the installed application's existing runtime and data.
+    if args.mode == "source":
+        run(
+            [
+                "uv",
+                "run",
+                "--locked",
+                "--only-group",
+                "delivery",
+                "python",
+                "-m",
+                "lab_tools.practice",
+                "--home",
+                str(args.home),
+                *remaining,
+            ]
+        )
+        return
     os.environ.pop("VIRTUAL_ENV", None)
-    os.environ["UV_PROJECT_ENVIRONMENT"] = (
-        str(ROOT / "results/source-runtime")
-        if args.mode == "source"
-        else str(ROOT / ".venv")
-    )
+    os.environ["UV_PROJECT_ENVIRONMENT"] = str(ROOT / ".venv")
     print("准备维护运行环境...", flush=True)
     run(
         [
             "uv",
             "sync",
             "--locked",
-            *(
-                ["--only-group", "delivery", "--no-editable"]
-                if args.mode == "source"
-                else ["--group", "delivery"]
-            ),
+            "--group",
+            "delivery",
             "--inexact",
             "--reinstall-package",
             "scopecat-lab-tools",
@@ -66,76 +76,59 @@ def main() -> None:
             "scopecat-lab-teaching",
         ]
     )
-    if args.mode == "source":
+    if remaining:
+        parser.error(f"release 不接受专题参数: {' '.join(remaining)}")
+    from datetime import datetime
+    from uuid import uuid4
+
+    destination = (
+        ROOT
+        / "results/releases"
+        / (
+            datetime.now(UTC).strftime("%Y%m%d-%H%M%S-")
+            + sys.platform
+            + "-"
+            + uuid4().hex[:8]
+        )
+    )
+    print("构建固定交付 (需要干净源码和 Node/pnpm)...", flush=True)
+    run(
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "python",
+            "-m",
+            "lab_tools.delivery",
+            "--release",
+            str(destination),
+        ]
+    )
+    print("空缓存离线验收课程与应用内练习...", flush=True)
+    run(
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "python",
+            "scripts/verify_teaching_delivery.py",
+            str(destination),
+            str(ROOT / "results/validation" / destination.name),
+        ]
+    )
+    if args.install:
         run(
             [
                 "uv",
                 "run",
                 "--no-sync",
                 "python",
-                "-m",
-                "lab_tools.sandbox",
-                "--source",
-                str(ROOT),
+                str(destination / "install.py"),
                 "--home",
                 str(args.home),
-                *remaining,
             ]
         )
-    else:
-        if remaining:
-            parser.error(f"release 不接受专题参数: {' '.join(remaining)}")
-        from datetime import datetime
-        from uuid import uuid4
-
-        destination = (
-            ROOT
-            / "results/releases"
-            / (
-                datetime.now(UTC).strftime("%Y%m%d-%H%M%S-")
-                + sys.platform
-                + "-"
-                + uuid4().hex[:8]
-            )
-        )
-        print("构建固定交付 (需要干净源码和 Node/pnpm)...", flush=True)
-        run(
-            [
-                "uv",
-                "run",
-                "--no-sync",
-                "python",
-                "-m",
-                "lab_tools.delivery",
-                "--release",
-                str(destination),
-            ]
-        )
-        print("空缓存离线验收完整课程与专题沙盒...", flush=True)
-        run(
-            [
-                "uv",
-                "run",
-                "--no-sync",
-                "python",
-                "scripts/verify_teaching_delivery.py",
-                str(destination),
-                str(ROOT / "results/validation" / destination.name),
-            ]
-        )
-        if args.install:
-            run(
-                [
-                    "uv",
-                    "run",
-                    "--no-sync",
-                    "python",
-                    str(destination / "install.py"),
-                    "--home",
-                    str(args.home),
-                ]
-            )
-        print(f"已构建并验证交付: {destination}")
+    print(f"已构建并验证交付: {destination}")
 
 
 if __name__ == "__main__":

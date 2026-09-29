@@ -700,6 +700,11 @@ class RunService:
                 )
             publication = self._runs.prepare_analysis_publication(prepared.publication)
             with self._control.write_transaction() as connection:
+                from scopecat_server.storage.sqlite.data_cleanup import (
+                    require_retained_references,
+                )
+
+                require_retained_references(connection, command.model_dump_json())
                 created = self._runs.publish_prepared_analysis_in_transaction(
                     connection,
                     publication,

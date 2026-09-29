@@ -25,6 +25,7 @@ from scopecat_server.storage.sqlite.project_store import (
     SchemaVersionError,
     SQLiteProjectStore,
 )
+from scopecat_server.storage.sqlite.resource_objects import put_resource_object
 
 
 def _project(root: Path) -> Project:
@@ -36,7 +37,9 @@ def _project(root: Path) -> Project:
         SQLiteDatabase(state / "control.sqlite3"), state / "objects"
     )
     store.bootstrap()
-    content = store.objects.put(b"measurement content")
+    content = put_resource_object(
+        store.sqlite, store.objects, "run", "r1", b"measurement content"
+    )
     with store.sqlite.write_transaction() as connection:
         connection.execute(
             "INSERT INTO runs(run_id, created_at, config_content_hash) "
@@ -87,7 +90,9 @@ def test_cli_roundtrip_retains_source_objects_and_versions_without_runtime_recor
         "scopecat.toml",
         "application.py",
         ".scopecat/control.sqlite3",
-        ".scopecat/objects/"
+        ".scopecat/objects/resources/run/"
+        + hashlib.sha256(b"r1").hexdigest()
+        + "/"
         + hashlib.sha256(b"measurement content").hexdigest()[:2]
         + "/"
         + hashlib.sha256(b"measurement content").hexdigest()[2:],

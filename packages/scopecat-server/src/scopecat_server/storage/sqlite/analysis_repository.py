@@ -46,6 +46,10 @@ from scopecat_server.storage.sqlite.object_store import (
     ObjectStoreError,
     StoredObject,
 )
+from scopecat_server.storage.sqlite.resource_objects import (
+    put_resource_object,
+    resource_objects,
+)
 
 _SAFE_RECORD_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _PROJECT_SUBJECT = ProjectAnalysisSubject()
@@ -218,11 +222,31 @@ class SQLiteAnalysisRepository:
             for write in publication.models:
                 _validate_identity(record_id, write.ref)
                 prepared.append(
-                    (write.ref, self.objects.put(_encode_model(write.value)))
+                    (
+                        write.ref,
+                        put_resource_object(
+                            self.sqlite,
+                            self.objects,
+                            "analysis",
+                            record_id,
+                            _encode_model(write.value),
+                        ),
+                    )
                 )
             for write in publication.bytes:
                 _validate_identity(record_id, write.ref)
-                prepared.append((write.ref, self.objects.put(write.content)))
+                prepared.append(
+                    (
+                        write.ref,
+                        put_resource_object(
+                            self.sqlite,
+                            self.objects,
+                            "analysis",
+                            record_id,
+                            write.content,
+                        ),
+                    )
+                )
             return PreparedAnalysisPublication(
                 publication=publication,
                 refs=tuple(prepared),
@@ -247,6 +271,9 @@ class SQLiteAnalysisRepository:
 
         publication = prepared.publication
         record_id = publication.record.id
+        from .data_cleanup import require_retained_resource
+
+        require_retained_resource(connection, "analysis", record_id)
         try:
             publication_sequence, created = insert_publication(connection, publication)
             if not created:
@@ -320,7 +347,9 @@ class SQLiteAnalysisRepository:
                 )
             if row is None:
                 raise _invalid_ref(record_id, ref)
-            return self.objects.read(cast("str", row["digest"]))
+            return resource_objects(
+                self.sqlite, self.objects, "analysis", record_id
+            ).read(cast("str", row["digest"]))
         except DataIntegrityError:
             raise
         except (ObjectNotFoundError, ObjectCorruptError) as error:

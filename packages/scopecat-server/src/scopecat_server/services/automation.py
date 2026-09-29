@@ -85,6 +85,7 @@ from scopecat.records.scientific_binding import (
 )
 
 from scopecat_server.services.manual_previews import ManualPreviewService
+from scopecat_server.services.practice_admission import procedure_scope
 from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
     AutomationNotFound,
@@ -107,6 +108,7 @@ from scopecat_server.storage.sqlite.manual_preview import (
     ManualPreviewChanged,
     ManualPreviewRepository,
 )
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
@@ -159,6 +161,10 @@ class AutomationService:
 
     def worker_state(self, procedure_id: str) -> str:
         with self._store.sqlite.read_connection() as connection:
+            owners = PracticeOwnership(connection)
+            owner = owners.owner("procedure", procedure_id)
+            if owner is not None and owners.get(owner).state != "active":
+                return "closed"
             run = self._store.read_run_in_transaction(connection, procedure_id)
             if (
                 run.state == "ready"
@@ -598,6 +604,9 @@ class AutomationService:
     ) -> ProcedureRun:
         """Admit a run while participating in a caller-owned SQLite transaction."""
 
+        scope = procedure_scope(connection, expected_configuration)
+        if scope is not None and samples:
+            raise AutomationConflict("Practice cannot use physical sample bindings")
         if not request_key.strip():
             raise ValueError("procedure request key must be non-empty")
         selected_intent = dict(intent)
@@ -730,6 +739,10 @@ class AutomationService:
             updated_at=now,
         )
         self._store.insert_run_in_transaction(connection, run)
+        if scope is not None:
+            PracticeOwnership(connection).claim(
+                scope, "procedure", run.procedure_run_id
+            )
         return run
 
     def _require_plan_request(
@@ -847,6 +860,9 @@ class AutomationService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            _ = PracticeOwnership(connection).require_shared(
+                ("procedure", procedure_run_id)
+            )
             run = self._store.read_run_in_transaction(connection, procedure_run_id)
             current_lease = self._store.read_lease_in_transaction(
                 connection,

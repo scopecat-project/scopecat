@@ -37,12 +37,14 @@ from .analyses import AnalysisService
 from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
 from .config import ConfigService
+from .data_cleanup import DataCleanupService
 from .devices import DeviceService
 from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
 from .leases import OwnershipLeaseSupervisor
 from .manual_previews import ManualPreviewService
 from .point_plans import RunPointPlanService
+from .practice import PracticeService
 from .procedure_schedules import ProcedureScheduleService
 from .reviews import ReviewService
 from .runs import RunService
@@ -116,6 +118,8 @@ class DaemonApplication:
         self.payloads = payloads
         self.reviews = reviews
         self.automation = automation
+        self.data_cleanup = DataCleanupService(project_store)
+        self.practice = PracticeService(project_store, automation, self.data_cleanup)
         self.calibration_checks = CalibrationCheckQueries(
             project_store.sqlite,
             SQLiteRunRepository(project_store.sqlite, project_store.objects.root),

@@ -278,6 +278,12 @@ from scopecat.records.calibration_policy import (
 from scopecat.records.comparison import ComparisonRequest
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.costs import RunMeasuredCosts
+from scopecat.records.data_cleanup import (
+    DataCleanupCommand,
+    DataCleanupOperation,
+    DataCleanupPreview,
+    DataCleanupSelection,
+)
 from scopecat.records.device import RegisteredDevice
 from scopecat.records.experiment_plan import (
     ExperimentPlanList,
@@ -302,6 +308,12 @@ from scopecat.records.measurement_recording import MeasurementDatasetReceipt
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.practice import (
+    PracticeCatalog,
+    PracticeClearCommand,
+    PracticeCreateCommand,
+    PracticeScope,
+)
 from scopecat.records.record_collection import (
     RecordCollection,
     RecordCollectionEdit,
@@ -462,6 +474,81 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
+
+    @app.post("/api/v1/data-cleanup/preview")
+    def preview_data_cleanup(selection: DataCleanupSelection) -> DataCleanupPreview:
+        return application.data_cleanup.preview(selection)
+
+    @app.post("/api/v1/data-cleanup")
+    def execute_data_cleanup(command: DataCleanupCommand) -> DataCleanupOperation:
+        try:
+            return application.data_cleanup.execute(
+                command, settle=project_workers.finish_closed
+            )
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.get("/api/v1/data-cleanup")
+    def data_cleanup_operations() -> tuple[DataCleanupOperation, ...]:
+        return application.data_cleanup.operations()
+
+    @app.post("/api/v1/data-cleanup/{operation_id}/resume")
+    def resume_data_cleanup(operation_id: str) -> DataCleanupOperation:
+        try:
+            return application.data_cleanup.resume(
+                operation_id, settle=project_workers.finish_closed
+            )
+        except KeyError as error:
+            raise HTTPException(404, "Cleanup operation not found") from error
+
+    @app.get("/api/v1/practice")
+    def practice_catalog() -> PracticeCatalog:
+        return application.practice.catalog()
+
+    @app.get("/api/v1/practice/{scope_id}")
+    def practice_scope(scope_id: str) -> PracticeScope:
+        try:
+            return application.practice.get(scope_id)
+        except KeyError as error:
+            raise HTTPException(404, "Practice not found") from error
+
+    @app.post("/api/v1/practice")
+    def create_practice(command: PracticeCreateCommand) -> PracticeScope:
+        scope = application.practice.create(command)
+        if (
+            scope.state == "active"
+            and scope.procedure_id is not None
+            and project_workers.snapshot(scope.procedure_id).management == "unmanaged"
+        ):
+            project_workers.dispatch(scope.procedure_id)
+        return scope
+
+    @app.post("/api/v1/practice/{scope_id}/clear")
+    def clear_practice(scope_id: str, command: PracticeClearCommand) -> PracticeScope:
+        try:
+            return application.practice.clear(
+                scope_id, command, retire=project_workers.retire_software
+            )
+        except KeyError as error:
+            raise HTTPException(404, "Practice not found") from error
+        except (ValueError, RuntimeError, OSError) as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.get("/api/v1/practice/{scope_id}/files")
+    def export_practice(scope_id: str) -> Response:
+        try:
+            content = application.practice.export_files(scope_id)
+        except KeyError as error:
+            raise HTTPException(404, "Practice not found") from error
+        except (ValueError, OSError) as error:
+            raise HTTPException(409, str(error)) from error
+        return Response(
+            content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="Scopecat-practice.zip"'
+            },
+        )
 
     @app.get(f"{_API_PREFIX}/experiment-plans")
     def list_experiment_plans(plan_id: str | None = None) -> ExperimentPlanList:
@@ -1971,7 +2058,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.step_key,
             command.attempt,
         )
-        return application.automation.wait_step_input(command)
+        receipt = application.automation.wait_step_input(command)
+        if receipt.run.state == "waiting_for_input":
+            project_workers.pause_for_input(procedure_run_id)
+        return receipt
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/attempts/{{attempt}}/resources/wait"

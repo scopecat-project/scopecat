@@ -34,6 +34,8 @@ import {
   TimelineCard,
 } from "./RunDetailSections";
 
+import { ClearData } from "../history/DataCleanup";
+
 export function RunDetail({
   run,
   events,
@@ -123,6 +125,7 @@ export function RunDetail({
     <>
       <ComparisonLink runId={run.runId} />
       <RunPlanOrigin runId={run.runId} />
+      <ClearData key={run.runId} runs={[run.runId]} />
       <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
       <header
         className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-[17px] max-[680px]:block"

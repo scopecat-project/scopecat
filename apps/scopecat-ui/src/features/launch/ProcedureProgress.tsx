@@ -1,4 +1,5 @@
 import { PlanOrigin } from "./PlanOrigin";
+import { ClearData } from "../history/DataCleanup";
 import { ProcedureWorkerLog } from "./ProcedureWorkerLog";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
@@ -77,6 +78,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
     <section className="border rounded p-4 space-y-3">
       <h3 className="font-semibold">Procedure progress</h3>
       <PlanOrigin reference={run?.plan_ref} />
+      {run?.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
       <p>{run?.definition.id ?? procedureId}</p>
       <a className="underline" href={`?procedure=${encodeURIComponent(procedureId)}#launch`}>
         Reopen this procedure
@@ -92,7 +94,9 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
             {view.dispatch.worker_running
               ? "Worker process active"
               : view.dispatch.management === "paused"
-                ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
+                ? view.dispatch.failure
+                  ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
+                  : "Waiting for your explicit Continue action. Recorded decisions do not automatically run the next step."
                 : view.dispatch.management === "active"
                   ? "Managed by the console; ready work can continue when a worker is available."
                   : "No console worker is assigned to this admitted procedure."}

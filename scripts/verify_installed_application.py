@@ -5,11 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import time
 from pathlib import Path
 
 import httpx2
 
 from lab_tools.application_runtime import ApplicationRuntime
+from scopecat.automation import ProcedureRun
+from scopecat.records.practice import PracticeScope
 from scopecat_server.scaffold import write_author_scaffold  # noqa: TID251
 
 
@@ -44,8 +47,41 @@ def verify(home: Path, destination: Path, gui: Path) -> None:
             assert runs.status_code == 200
             assert runs.json()["items"] == []
 
+    def check_practice() -> None:
+        record = runtime.start()
+        with httpx2.Client(
+            base_url=record.base_url, trust_env=False, timeout=30
+        ) as client:
+            response = client.post(
+                "/api/v1/practice", json={"request_key": "installed-practice"}
+            )
+            response.raise_for_status()
+            scope = PracticeScope.model_validate(response.json())
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                task = ProcedureRun.model_validate(
+                    client.get(f"/api/v1/procedures/{scope.procedure_id}").json()
+                )
+                if task.state == "waiting_for_input":
+                    break
+                assert task.state not in {"closed", "attention_required"}, task
+                time.sleep(0.1)
+            else:
+                raise AssertionError("Practice did not reach manual input")
+            note = Path(scope.directory) / "my-notes.txt"
+            note.write_text("Keep this observation", encoding="utf-8")
+            cleared = client.post(
+                f"/api/v1/practice/{scope.id}/clear", json={"files": "preserve"}
+            )
+            cleared.raise_for_status()
+            assert cleared.json()["state"] == "cleared", cleared.text
+            assert note.read_text(encoding="utf-8") == "Keep this observation"
+            assert runtime.start() == record
+            assert client.get("/api/v1/runs").json()["items"] == []
+
     try:
         check_workbench()
+        check_practice()
         runtime.stop()
         assert runtime.status().state == "stopped"
         runtime.select(runtime.qualify(selected.python, selected.static_dir))
@@ -69,6 +105,7 @@ def verify(home: Path, destination: Path, gui: Path) -> None:
                     "requalification_preserves_files_and_identity": "passed",
                     "application_reopen": "passed",
                     "one_runtime_without_manager": "passed",
+                    "same_service_practice_and_owned_cleanup": "passed",
                 },
                 ensure_ascii=False,
                 indent=2,

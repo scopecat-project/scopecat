@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DataCleanupHistory } from "./DataCleanup";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
@@ -132,8 +133,9 @@ export function ResearchHistory({
     projects.error ?? samples.error ?? members.error ?? runs.error ?? save.error ?? associate.error;
   const pending = daemonUnavailable || save.isPending || associate.isPending;
   return (
-    <section className="space-y-4 p-4" aria-label="Research history">
-      <h2 className="text-lg font-semibold">Research history</h2>
+    <section className="space-y-4 p-4" aria-label="Data">
+      <h2 className="text-lg font-semibold">Data</h2>
+      <DataCleanupHistory />
       <p className="text-sm text-text-dim">
         Organize retained evidence across projects. Associations do not move data or change
         parameter selections. Open a run to inspect original measurements and separately saved

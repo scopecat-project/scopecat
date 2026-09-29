@@ -145,8 +145,8 @@ mode, proposal IDs, verification scope and policy in that intent **before**
 starting the task. Supply the exact sample selectors needed by the final procedure.
 Do not look up a newer branch head or setup to repair a conflict during replay.
 
-For a runnable starting point, open **后台标定与最终发布** (`task-calibration`) in
-[tutorial sandboxes](../tutorials/teaching-sandboxes.md). Its source contains the
+The **后台标定与最终发布** (`task-calibration`) independent course example under
+`packages/lab-teaching/src/lab_teaching/course_material` contains the
 fit stages, task creation and final verification/publication procedure. The three
 requests show acceptance, scientific rejection and a concurrent branch conflict.
 

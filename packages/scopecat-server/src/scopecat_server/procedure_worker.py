@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 def main() -> None:
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         cast("TextIOWrapper", stream).reconfigure(encoding="utf-8")
+    if sys.stdin.readline() != "registered\n":
+        raise SystemExit("Worker was not registered by its application")
     root, procedure_id = Path(sys.argv[1]).resolve(), sys.argv[2]
     record_timing("procedure_worker_entry", procedure_id=procedure_id)
     from pydantic import ValidationError

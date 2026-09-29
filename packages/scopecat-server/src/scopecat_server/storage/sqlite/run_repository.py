@@ -641,7 +641,11 @@ class SQLiteRunRepository:
         _validate_identity(run_id, ref)
         try:
             content = _encode_model(model) + b"\n"
-            stored = self.objects.put(content)
+            from .resource_objects import put_resource_object
+
+            stored = put_resource_object(
+                self.sqlite, self.objects, "run", run_id, content
+            )
         except ObjectStoreError as error:
             raise _storage_failure(run_id=run_id, ref=ref) from error
         except (PydanticSerializationError, TypeError, ValueError) as error:
@@ -658,7 +662,11 @@ class SQLiteRunRepository:
     ) -> _PreparedRef:
         _validate_identity(run_id, ref)
         try:
-            stored = self.objects.put(content)
+            from .resource_objects import put_resource_object
+
+            stored = put_resource_object(
+                self.sqlite, self.objects, "run", run_id, content
+            )
         except ObjectStoreError as error:
             raise _storage_failure(run_id=run_id, ref=ref) from error
         return _PreparedRef(ref=ref, object=stored, replace=replace)
@@ -669,6 +677,9 @@ class SQLiteRunRepository:
         run_id: str,
         prepared: Iterable[_PreparedRef],
     ) -> None:
+        from .data_cleanup import require_retained_resource
+
+        require_retained_resource(connection, "run", run_id)
         for item in prepared:
             if item.replace:
                 connection.execute(
@@ -928,12 +939,27 @@ class SQLiteRunRepository:
     def _read_object(self, digest: str, *, run_id: str, ref: str) -> bytes:
         try:
             if ref.startswith("data/measurement_dataset/") and "/chunks/" in ref:
-                return self.objects.read_cached(digest)
-            return self.objects.read(digest)
+                from .resource_objects import resource_objects
+
+                return self.objects.read_cached(
+                    digest,
+                    source=resource_objects(self.sqlite, self.objects, "run", run_id),
+                )
+            from .resource_objects import resource_objects
+
+            return resource_objects(self.sqlite, self.objects, "run", run_id).read(
+                digest
+            )
         except (ObjectNotFoundError, ObjectCorruptError) as error:
             raise _invalid_ref(run_id, ref) from error
         except ObjectStoreError as error:
             raise _storage_failure(run_id=run_id, ref=ref) from error
+
+    def store_object(self, run_id: str, content: bytes) -> StoredObject:
+        """Prepare bytes in the run owner's namespace under its write fence."""
+        from .resource_objects import put_resource_object
+
+        return put_resource_object(self.sqlite, self.objects, "run", run_id, content)
 
     @contextmanager
     def _transaction(self) -> Generator[sqlite3.Connection]:

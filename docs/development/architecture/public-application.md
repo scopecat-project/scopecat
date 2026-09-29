@@ -51,8 +51,11 @@ requires stopped process ownership, updates source interpreter bindings under th
 same start fence, and retains an interrupted selection for explicit retry. This is
 the application maintenance boundary: software/settings actions live in the
 workbench, and the separate manager and per-directory service registry are removed.
-Teaching commands now execute directly; same-service practice cleanup remains the
-next batch and must pass before claiming the complete pre-hardware journey below.
+Help now starts an owned software practice in this service. Ordinary selected data
+and practice use the same preview, retained-reference protection, durable cleanup
+receipt and physical-file reclamation. Practice adds software-only admission and
+an explicit choice to preserve or discard edited files. The former per-lesson
+environment launcher and directory-cleanup command are removed.
 
 ## Installation and everyday use
 
@@ -114,7 +117,34 @@ must queue or fail with a useful explanation before hardware side effects. Switc
 incompatible runtime/device state requires quiescence and explicit preparation;
 serializing submissions alone does not establish equivalent physical state.
 
-## Tutorials and their cleanup
+## Data lifecycle and tutorial cleanup
+
+Data cleanup is an application capability for ordinary work as well as tutorials.
+Practice ownership supplies a convenient selection and a software-only execution
+policy; it must not own a second deletion engine. Neither an executable setup nor
+a research association implies ownership of all referenced scientific records.
+
+The common cleanup flow previews exact records, related tasks, retained scientific
+dependencies and reclaimable files. Hiding a record does not reclaim storage;
+exporting or backing it up does not implicitly authorize deletion. A saved analysis,
+adopted calibration or published parameter revision must not silently lose its
+evidence when a source measurement is selected. Explain the retaining dependency
+and require an explicit, scientifically valid selection instead of cascading to it.
+
+Execution rechecks that preview, fences new writes/references, settles affected
+tasks and persists cleanup progress for retry. Ordinary hardware work follows its
+normal cancellation and device-release protocol; the software worker termination
+policy of a practice is not permission to terminate hardware workers. Shared
+content is reclaimed only after both retained references and in-flight publications
+are accounted for. Report record removal and file reclamation separately when one
+has completed and the other needs retry. Independent work stays usable.
+
+Expose ordinary cleanup beside selected data, with storage usage and unfinished
+operations in Data; Help offers the same operation preselected to one practice.
+The delivery gate includes ordinary unreferenced-data cleanup, explanation of
+retained calibration/analysis evidence, interrupted cleanup recovery and isolation
+from unrelated drafts and measurements. This is a target contract, not a claim
+that extracting a common SQL deletion function completes data lifecycle support.
 
 Help opens a prepared task in the same workbench and application service. Each
 practice scope owns its parameter/record namespace, tasks and worker lifecycle.

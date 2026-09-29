@@ -295,6 +295,12 @@ from scopecat.records.measurement_recording import (
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.practice import (
+    PracticeCatalog,
+    PracticeClearCommand,
+    PracticeCreateCommand,
+    PracticeScope,
+)
 from scopecat.records.record_collection import (
     RecordCollection,
     RecordCollectionEdit,
@@ -1001,6 +1007,28 @@ class DaemonClient:
     def configuration_templates(self) -> ConfigurationTemplateList:
         return self._get_model(
             f"{_API_PREFIX}/setup/templates", ConfigurationTemplateList
+        )
+
+    def practices(self) -> PracticeCatalog:
+        return self._get_model(f"{_API_PREFIX}/practice", PracticeCatalog)
+
+    def practice(self, scope_id: str) -> PracticeScope:
+        return self._get_model(
+            f"{_API_PREFIX}/practice/{quote(scope_id, safe='')}", PracticeScope
+        )
+
+    def create_practice(self, command: PracticeCreateCommand) -> PracticeScope:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/practice", command, PracticeScope
+        )
+
+    def clear_practice(
+        self, scope_id: str, command: PracticeClearCommand
+    ) -> PracticeScope:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/practice/{quote(scope_id, safe='')}/clear",
+            command,
+            PracticeScope,
         )
 
     def import_configuration_template(

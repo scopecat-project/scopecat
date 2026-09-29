@@ -35,7 +35,9 @@ class SQLiteSetupRepository:
         rows = cast(
             "list[sqlite3.Row]",
             self._connection.execute(
-                "SELECT record_json FROM setup_definitions ORDER BY rowid DESC"
+                "SELECT record_json FROM setup_definitions d WHERE NOT EXISTS "
+                "(SELECT 1 FROM practice_resources p WHERE p.kind='setup_definition' "
+                "AND p.resource_id=d.definition_id) ORDER BY d.rowid DESC"
             ).fetchall(),
         )
         definitions = (
@@ -110,7 +112,9 @@ class SQLiteSetupRepository:
         rows = cast(
             "list[sqlite3.Row]",
             self._connection.execute(
-                "SELECT record_json FROM setup_revisions ORDER BY rowid DESC"
+                "SELECT record_json FROM setup_revisions s WHERE NOT EXISTS "
+                "(SELECT 1 FROM practice_resources p WHERE p.kind='setup' "
+                "AND p.resource_id=s.revision_id) ORDER BY s.rowid DESC"
             ).fetchall(),
         )
         return tuple(

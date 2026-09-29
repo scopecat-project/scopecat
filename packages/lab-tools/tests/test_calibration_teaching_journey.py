@@ -55,7 +55,7 @@ try:
                 continue
             source = "".join(cell["source"])
             if "sc.notebook()" in source:
-                # Wrong-interpreter protection is exercised by test_sandboxes.
+                # Runtime binding protection has separate application tests.
                 continue
             exec(compile(source, str(notebook), "exec"), namespace)
             if "request_id = request.id" in source or "task_ids =" in source:

@@ -80,6 +80,16 @@ def run_project_procedure(root: Path, procedure_id: str) -> None:
     # loading any author revision; the runtime root need not be an author source.
     with DaemonClient(resolve_daemon_endpoint(root)) as client:
         stored = client.get_procedure(procedure_id)
+        from scopecat_server.practice_lesson import application as practice_application
+        from scopecat_server.practice_lesson import manual_peaks
+
+        if stored.definition == manual_peaks.ref:
+            scope = client.practice(str(stored.intent["scope_id"]))
+            if scope.state != "active" or scope.procedure_id != procedure_id:
+                raise ValueError("Practice is not active or does not own this task")
+            with practice_application().connect(resolve_daemon_endpoint(root)) as lab:
+                run_procedure(lab, procedure_id)
+            return
         plan_code = (
             client.experiment_plan(stored.plan_ref).definition.code_revision
             if stored.plan_ref is not None

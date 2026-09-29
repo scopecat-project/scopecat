@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable
@@ -17,6 +18,8 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Literal, cast
 
+import psutil
+from pydantic import BaseModel
 from scopecat.daemon.procedure_views import (
     ProcedureDispatchView,
     ProcedureWorkerFailure,
@@ -30,6 +33,16 @@ _LOG = logging.getLogger(__name__)
 
 class ProcedureDispatchError(RuntimeError):
     """One admitted procedure could not reach its worker."""
+
+
+class WorkerProcess(BaseModel):
+    pid: int
+    created: float
+
+
+def capture_worker_process(pid: int) -> WorkerProcess:
+    process = psutil.Process(pid)
+    return WorkerProcess(pid=process.pid, created=process.create_time())
 
 
 class ProjectProcedureWorkers:
@@ -186,6 +199,60 @@ class ProjectProcedureWorkers:
                 self._save()
             # The worker loop scans once per tick, not once per queued task stage.
 
+    def pause_for_input(self, procedure_id: str) -> None:
+        """Recording a judgment must not implicitly dispatch the next step."""
+        with self._lock:
+            managed = self._load()
+            if procedure_id in managed:
+                managed[procedure_id] = "paused"
+                self._save()
+
+    def retire_software(self, procedure_id: str) -> None:
+        """Join an explicitly fenced software task, including after daemon restart.
+
+        The caller must establish that the task belongs to a software-only
+        practice. Normal experiment shutdown never uses this operation.
+        """
+        self._finish(procedure_id, terminate=True)
+
+    def finish_closed(self, procedure_id: str) -> None:
+        """Join already-closed ordinary work without terminating its process."""
+        self._finish(procedure_id, terminate=False)
+
+    def _finish(self, procedure_id: str, *, terminate: bool) -> None:
+        with self._lock:
+            managed = self._load()
+            managed[procedure_id] = "paused"
+            self._save()
+            directory = self._worker_dir(procedure_id)
+            receipt = directory / "process.json"
+            if receipt.exists():
+                identity = WorkerProcess.model_validate_json(receipt.read_text())
+                try:
+                    process = psutil.Process(identity.pid)
+                    if process.create_time() == identity.created:
+                        if terminate:
+                            process.terminate()
+                        try:
+                            process.wait(timeout=3)
+                        except psutil.TimeoutExpired:
+                            if not terminate:
+                                raise RuntimeError(
+                                    "The closed task's worker is still exiting; "
+                                    "retry cleanup"
+                                ) from None
+                            process.kill()
+                            process.wait(timeout=3)
+                except psutil.NoSuchProcess:
+                    pass
+            child = self._children.pop(procedure_id, None)
+            if child is not None:
+                child.wait(timeout=3)
+            if directory.exists():
+                shutil.rmtree(directory)
+            managed.pop(procedure_id, None)
+            self._save()
+
     def _tick(self) -> dict[str, Exception]:
         managed = self._load()
         errors: dict[str, Exception] = {}
@@ -245,8 +312,26 @@ class ProjectProcedureWorkers:
                     str(root),
                     procedure_id,
                 ],
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=log,
                 stderr=log,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
+        try:
+            receipt = capture_worker_process(self._children[procedure_id].pid)
+        except psutil.NoSuchProcess:
+            # An immediate exit has no live owner to recover after restart.
+            self._children[procedure_id].wait(timeout=3)
+            return
+        child = self._children[procedure_id]
+        assert child.stdin is not None
+        try:
+            temporary = log_path.parent / "process.tmp"
+            temporary.write_text(receipt.model_dump_json(), encoding="utf-8")
+            temporary.replace(log_path.parent / "process.json")
+            # The worker cannot execute until its recoverable identity is saved.
+            # Parent death before this write closes the pipe and the worker exits.
+            child.stdin.write(b"registered\n")
+            child.stdin.flush()
+        finally:
+            child.stdin.close()

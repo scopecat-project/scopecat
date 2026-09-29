@@ -24,10 +24,23 @@ from scopecat.records.scientific_selection import ReviewedScientificSelection
 from scopecat.records.setup import SetupRevisionRef
 
 from scopecat_server.http.transport import create_app
+from scopecat_server.services.project_workers import WorkerProcess
 from scopecat_server.services.revision_workers import (
     AuthorWorkerBinding,
     RevisionWorkers,
 )
+
+
+@pytest.fixture(autouse=True)
+def stub_worker_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Popen is mocked in this module; retirement has separate real-process tests.
+    def identity(_pid: int) -> WorkerProcess:
+        return WorkerProcess(pid=123, created=0)
+
+    monkeypatch.setattr(
+        "scopecat_server.services.project_workers.capture_worker_process",
+        identity,
+    )
 
 
 def _submission_request() -> dict[str, object]:

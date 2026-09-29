@@ -96,6 +96,25 @@ test("two workbench pages retain independent context and share collection number
     await other.getByRole("textbox", { name: "Operator", exact: true }).fill("Bob");
     const batchB = await createScope(other, "batch", "Cooldown B");
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
+    // A lesson uses the same application while both ordinary drafts stay open.
+    const practice = await context.newPage();
+    await practice.goto(`${url}/#help`);
+    await practice.getByRole("button", { name: "Start peak practice" }).click();
+    const retainedTask = practice.getByRole("link", { name: "Open practice task" });
+    await expect(retainedTask).toBeVisible();
+    const taskLink = await retainedTask.getAttribute("href");
+    await practice.reload();
+    await expect(retainedTask).toHaveAttribute("href", taskLink!);
+    await practice.getByRole("button", { name: "Clear practice…" }).click();
+    await expect(practice.getByRole("combobox", { name: "Practice files" })).toHaveValue(
+      "preserve",
+    );
+    await practice.getByRole("button", { name: "Clear this practice" }).click();
+    await expect(practice.getByText("Practice cleared", { exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
+    await expect(other.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Bob");
+    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-b");
+    await practice.close();
     await page
       .getByLabel("Experiment", { exact: true })
       .selectOption("reference_lab.frequency_amplitude");

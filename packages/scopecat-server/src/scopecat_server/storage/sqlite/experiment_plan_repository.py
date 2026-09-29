@@ -112,6 +112,9 @@ class ExperimentPlanRepository:
         )
         digest = self.store.objects.put(item.model_dump_json().encode("utf-8")).digest
         with self.store.sqlite.write_transaction() as connection:
+            from .data_cleanup import require_retained_references
+
+            require_retained_references(connection, item.model_dump_json())
             if command.previous:
                 cursor = connection.execute(
                     "UPDATE experiment_plan_heads SET revision=?, "
