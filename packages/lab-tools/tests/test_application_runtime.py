@@ -118,6 +118,7 @@ def test_conflicting_interpreter_has_explicit_stop_recovery(application):
 
 def test_failed_candidate_does_not_replace_selected_runtime(application):
     before = application.installation()
+    assert before.software_home == application.home / "software"
     application.start()
     with pytest.raises(ValueError, match="仍在运行或更新中"):
         application.select(before)

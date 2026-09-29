@@ -30,6 +30,7 @@ class Arguments(Protocol):
     manifest: str | None
     bundle: Path | None
     package: Path | None
+    software_home: Path | None
 
 
 def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
@@ -83,6 +84,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--python", type=Path)
     parser.add_argument("--static-dir", type=Path)
     parser.add_argument("--home", type=Path, required=True)
+    parser.add_argument("--software-home", type=Path)
     parser.add_argument(
         "--source", type=Path, help="Framework checkout for development GUI assets"
     )
@@ -126,6 +128,7 @@ def main(argv: list[str] | None = None) -> None:
                 static_dir=args.static_dir
                 or (args.source / "apps/scopecat-ui/dist" if args.source else None),
                 adapter=adapter,
+                software_home=args.software_home,
             )
             if args.action == "update":
                 selected = runtime.qualify(

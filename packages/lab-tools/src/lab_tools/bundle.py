@@ -306,16 +306,27 @@ def check_receipt(environment: Path, bundle: Path) -> None:
         raise ValueError(f"运行环境的交付记录与当前产物不同: {environment}")
 
 
-def install_home(root: Path, home: Path) -> Path:
+def install_home(
+    root: Path,
+    home: Path,
+    *,
+    software_home: Path | None = None,
+    entry: Path | None = None,
+) -> Path:
     """Prepare a retained release, then atomically select it for the next launch."""
     root = resolve_delivery(root)
     home = home.resolve()
-    if home.is_relative_to(root):
+    software_home = software_home.resolve() if software_home else home
+    if home.is_relative_to(root) or software_home.is_relative_to(root):
         raise ValueError("安装中心不能位于待复制的交付目录内")
     _ = verify_bundle(root)
     home.mkdir(parents=True, exist_ok=True)
+    software_home.mkdir(parents=True, exist_ok=True)
     with _installation_lock(home):
-        return _install_home_locked(root, home)
+        if software_home != home:
+            with _installation_lock(software_home):
+                return _install_home_locked(root, home, software_home, entry)
+        return _install_home_locked(root, home, software_home, entry)
 
 
 def retain_bundle(root: Path, home: Path) -> Path:
@@ -381,8 +392,10 @@ def _prepare_home_locked(root: Path, home: Path) -> tuple[Path, Path]:
     return python, bundle
 
 
-def _install_home_locked(root: Path, home: Path) -> Path:
-    python, bundle = _prepare_home_locked(root, home)
+def _install_home_locked(
+    root: Path, home: Path, software_home: Path, entry: Path | None
+) -> Path:
+    python, bundle = _prepare_home_locked(root, software_home)
     key = bundle.parent.name
     _ = subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [
@@ -391,6 +404,8 @@ def _install_home_locked(root: Path, home: Path) -> Path:
             "lab_tools.application",
             "--home",
             str(home),
+            "--software-home",
+            str(software_home),
             "--action",
             "update",
             "--static-dir",
@@ -398,10 +413,10 @@ def _install_home_locked(root: Path, home: Path) -> Path:
         ],
         check=True,
     )
-    launcher = home / "lab.py"
+    launcher = software_home / "lab.py"
     launcher_text = (
         "import json, subprocess, sys\nfrom pathlib import Path\n"
-        "home = Path(__file__).resolve().parent\n"
+        f"home = Path({str(home)!r})\n"
         "selection = json.loads((home / 'installation.json')"
         ".read_text(encoding='utf-8'))\n"
         "python = Path(selection['python'])\n"
@@ -418,13 +433,14 @@ def _install_home_locked(root: Path, home: Path) -> Path:
     )
     command_text = (
         '@echo off\ncd /d "%~dp0"\n'
-        f'"%~dp0{python.relative_to(home)}" "%~dp0lab.py" %*\n'
+        f'"%~dp0{python.relative_to(software_home)}" "%~dp0lab.py" %*\n'
         "if errorlevel 1 pause\n"
     )
     notebook_command = '@echo off\ncall "%~dp0lab.cmd" notebook %*\n'
     shell_command = (
         '#!/bin/sh\ncd -- "$(dirname -- "$0")" || exit 1\n'
-        f'{shlex.quote("./" + python.relative_to(home).as_posix())} ./lab.py "$@"\n'
+        f"{shlex.quote('./' + python.relative_to(software_home).as_posix())}"
+        ' ./lab.py "$@"\n'
         'status=$?\nif [ "$status" -ne 0 ]; then\n'
         '  printf "\\n启动失败，请保留上方错误信息。按回车关闭。"\n'
         "  read answer\nfi\n"
@@ -446,9 +462,13 @@ def _install_home_locked(root: Path, home: Path) -> Path:
             ("lab.py", launcher_text),
         ]
         for name, content in entries:
-            _ = managed_path(home, home / name)
+            _ = managed_path(software_home, software_home / name)
             with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", dir=home, prefix=f".{name}-", delete=False
+                mode="w",
+                encoding="utf-8",
+                dir=software_home,
+                prefix=f".{name}-",
+                delete=False,
             ) as stream:
                 pending.append(Path(stream.name))
                 _ = stream.write(content)
@@ -457,14 +477,21 @@ def _install_home_locked(root: Path, home: Path) -> Path:
             if name.endswith(".command"):
                 pending[-1].chmod(0o755)
         for staged, (name, _) in zip(pending, entries, strict=True):
-            _ = staged.replace(home / name)
+            _ = staged.replace(software_home / name)
     finally:
         for path in pending:
             path.unlink(missing_ok=True)
     # This file is also the standalone installer. Use the completed runtime's
     # helper, without importing package code into the bootstrap interpreter.
     _ = subprocess.run(  # noqa: S603 - selected installed runtime and fixed module
-        [str(python), "-m", "lab_tools.desktop_install", str(home)], check=True
+        [
+            str(python),
+            "-m",
+            "lab_tools.desktop_install",
+            str(software_home),
+            *([str(entry)] if entry else []),
+        ],
+        check=True,
     )
     print(
         f"已准备并选择默认版本 {key}。"
@@ -478,6 +505,8 @@ class InstallArguments(Protocol):
     destination: Path | None
     home: Path | None
     bundle: Path
+    software_home: Path | None
+    entry: Path | None
 
 
 def main() -> None:
@@ -485,17 +514,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="从本地交付目录离线安装最小教学环境")
     _ = parser.add_argument("destination", type=Path, nargs="?")
     _ = parser.add_argument("--home", type=Path)
+    _ = parser.add_argument("--software-home", type=Path)
+    _ = parser.add_argument("--entry", type=Path)
     _ = parser.add_argument("--bundle", type=Path, default=Path(__file__).parent)
     args = cast("InstallArguments", cast("object", parser.parse_args()))
     try:
         if args.home is not None:
             if args.destination is not None:
                 parser.error("destination 和 --home 只能选择一个")
-            print(install_home(Path(args.bundle), Path(args.home)))
+            print(
+                install_home(
+                    Path(args.bundle),
+                    Path(args.home),
+                    software_home=args.software_home,
+                    entry=args.entry,
+                )
+            )
         elif args.destination is not None:
             print(install_bundle(Path(args.bundle), Path(args.destination)))
         else:
-            print(install_home(Path(args.bundle), Path.home() / "Scopecat-Lab"))
+            parser.error("请指定 --home；平台默认安装请使用应用安装入口")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(2, f"{error}\n")
 

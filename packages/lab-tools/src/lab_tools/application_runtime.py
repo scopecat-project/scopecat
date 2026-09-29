@@ -36,6 +36,7 @@ class QualifiedDrivers(BaseModel):
 
 class Installation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    software_home: Path
     python: Path
     static_dir: Path
     environment: dict[str, str]
@@ -129,7 +130,7 @@ class ApplicationRuntime:
         return inspect_daemon(open_project(self.root, resolve_adapter=False))
 
     def prepare_update(self, delivery: Path) -> Installation:
-        python, bundle = prepare_home(delivery, self.home)
+        python, bundle = prepare_home(delivery, self.installation().software_home)
         candidate = self.qualify(python, bundle / "gui")
         with self.lock:
             _write(self.candidate, candidate.model_dump_json(indent=2))
@@ -149,6 +150,7 @@ class ApplicationRuntime:
         static_dir: Path | None,
         *,
         composition: str | None = None,
+        software_home: Path | None = None,
     ) -> Installation:
         composition = composition or (self.root / "scopecat.toml").read_text()
         descriptor, name = tempfile.mkstemp(prefix=".candidate-", dir=self.root)
@@ -169,6 +171,11 @@ class ApplicationRuntime:
         finally:
             manifest.unlink(missing_ok=True)
         return Installation(
+            software_home=(
+                software_home.resolve()
+                if software_home is not None
+                else self.installation().software_home
+            ),
             python=python.absolute(),
             static_dir=Path(cast("str", result["static_dir"])),
             environment=cast("dict[str, str]", result["environment"]),
@@ -186,11 +193,19 @@ class ApplicationRuntime:
         python: Path | None = None,
         static_dir: Path | None = None,
         adapter: AdapterReference | None = None,
+        software_home: Path | None = None,
     ) -> Installation:
         """Prepare an empty application; never scaffold or load author code."""
         self.home.mkdir(parents=True, exist_ok=True)
         with self.lock:
             if self.selection.exists():
+                if (
+                    software_home is not None
+                    and self.installation().software_home != software_home.resolve()
+                ):
+                    raise ValueError(
+                        "已有应用使用不同的程序目录；请选择新的数据目录安装"
+                    )
                 return self.installation()
             manifest = self.root / "scopecat.toml"
             declaration = application_declaration(adapter)
@@ -198,7 +213,11 @@ class ApplicationRuntime:
                 raise ValueError("已有应用声明与本次安装不符；原文件保留")
             if not manifest.exists():
                 _write(manifest, declaration)
-            selected = self.qualify(python or Path(sys.executable), static_dir)
+            selected = self.qualify(
+                python or Path(sys.executable),
+                static_dir,
+                software_home=software_home or self.home / "software",
+            )
             _write(self.selection, selected.model_dump_json(indent=2))
             return selected
 
@@ -212,7 +231,8 @@ class ApplicationRuntime:
                     "action": "start",
                     "root": str(self.root),
                     **selected.model_dump(
-                        mode="json", exclude={"python", "drivers", "composition"}
+                        mode="json",
+                        exclude={"python", "drivers", "composition", "software_home"},
                     ),
                 },
             )
@@ -261,6 +281,7 @@ class ApplicationRuntime:
                 candidate.python,
                 candidate.static_dir,
                 composition=candidate.composition,
+                software_home=candidate.software_home,
             )
             if qualified != candidate:
                 raise ValueError("候选环境在准备后改变；请重新准备更新")
@@ -287,7 +308,8 @@ class ApplicationRuntime:
                     "workspace": str(workspace.resolve()),
                     "author_python": str(python.absolute()) if python else None,
                     **selected.model_dump(
-                        mode="json", exclude={"python", "drivers", "composition"}
+                        mode="json",
+                        exclude={"python", "drivers", "composition", "software_home"},
                     ),
                 },
             )
