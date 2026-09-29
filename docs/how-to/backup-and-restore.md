@@ -1,7 +1,9 @@
 # Back up and restore a stopped project
 
-This workflow supports the current development format only: schema **99** and
-snapshot format **1**. It is not an upgrade path or compatibility baseline; see the
+This workflow supports the current runtime's development schema and snapshot
+format **1** only. The snapshot manifest records the exact schema version, and
+verification requires a matching runtime. It is not an upgrade path or
+compatibility baseline; see the
 [data policy](../development/data-compatibility.md).
 
 A snapshot retains the SQLite database, immutable measurement and analysis
@@ -74,8 +76,8 @@ still apply when the daemon starts; restore does not rewrite their history.
 
 The runtime and snapshot tools reject formats other than the current one. Rejection
 does not upgrade, delete or rewrite the original database or its SQLite sidecars.
-Schema 76 is a development format marker, not a promise that later releases can
-read it. The former schema 68–74 migration exercises and migration CLI are retired.
+Development schema numbers do not promise that later releases can read them.
+The former schema 68–74 migration exercises and migration CLI are retired.
 
 Keep old stores and their original environments separately if you want an archival
 reading arrangement. New Scopecat builds supply no supported read, restore or
