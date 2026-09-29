@@ -77,6 +77,50 @@ _BACKEND = "worker_fixture.backend:create_backend"
 _GAIN = InterfaceRef("tests.control/v1").property("gain")
 
 
+def test_source_worker_loads_snapshot_but_keeps_runtime_settings_root(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    source = tmp_path / "source"
+    shutil.copytree(_FIXTURE, source)
+    backend = source / "src/worker_fixture/backend.py"
+    backend.write_text(
+        backend.read_text()
+        .replace(
+            'provider_id = "tests.spawned_provider"',
+            'provider_id = "tests.source_revision"',
+        )
+        .replace(
+            "def create_backend(project_root: Path) -> InstrumentBackend:",
+            "def create_backend(project_root: Path) -> InstrumentBackend:\n"
+            '    (project_root / "factory-root.txt").write_text(str(project_root))',
+        )
+    )
+    endpoint = SubprocessInstrumentBackendEndpoint(runtime, _BACKEND, code_root=source)
+    try:
+        assert endpoint.provider_id == "tests.source_revision"
+        assert (runtime / "factory-root.txt").read_text() == str(runtime)
+        assert not (source / "factory-root.txt").exists()
+        # A later edit does not alter the code or identity in this worker.
+        identity = endpoint.artifact_hash
+        backend.write_text(
+            backend.read_text().replace("tests.source_revision", "tests.next")
+        )
+        assert endpoint.provider_id == "tests.source_revision"
+        assert endpoint.artifact_hash == identity
+        replacement = SubprocessInstrumentBackendEndpoint(
+            runtime, _BACKEND, code_root=source
+        )
+        try:
+            assert replacement.provider_id == "tests.next"
+            assert replacement.artifact_hash != identity
+        finally:
+            replacement.shutdown()
+    finally:
+        endpoint.shutdown()
+
+
 def _gain_read_request() -> BackendReadRequest:
     return BackendReadRequest(targets=(state_member_target(_GAIN),))
 

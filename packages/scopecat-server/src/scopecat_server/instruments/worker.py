@@ -273,6 +273,7 @@ class SubprocessInstrumentBackendEndpoint:
         instrument_backend_spec: str,
         *,
         installed_packages: tuple[tuple[str, str], ...] = (),
+        code_root: str | Path | None = None,
         startup_timeout: float | None = None,
         operation_timeout: float = 30.0,
         shutdown_timeout: float = 2.0,
@@ -309,6 +310,7 @@ class SubprocessInstrumentBackendEndpoint:
                 instrument_backend_spec,
                 self._endpoint_id,
                 installed_packages,
+                str(Path(code_root).resolve()) if code_root is not None else None,
             ),
             name=f"scopecat-instruments-{self._project_root.name}",
             daemon=True,
@@ -857,6 +859,7 @@ def _instrument_worker_main(
     project_root: str,
     instrument_backend_spec: str,
     installed_packages: tuple[tuple[str, str], ...] = (),
+    code_root: str | None = None,
 ) -> None:
     endpoint: LocalInstrumentBackendEndpoint | None = None
     executor: ThreadPoolExecutor | None = None
@@ -866,7 +869,7 @@ def _instrument_worker_main(
             startup_stage("loading backend factory")
             create_backend = load_instrument_backend_factory(
                 instrument_backend_spec,
-                project_root,
+                code_root or project_root,
                 installed_packages=installed_packages,
             )
             startup_stage("backend factory loaded; constructing backend")
