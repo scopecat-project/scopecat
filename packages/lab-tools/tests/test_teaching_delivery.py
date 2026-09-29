@@ -342,7 +342,7 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
     assert shlex.quote("./" + Path(calls[0][0]).relative_to(home).as_posix()) in script
     if os.name != "nt":
         assert (home / "Scopecat.command").stat().st_mode & 0o111
-    assert (home / "Notebook.command").stat().st_mode & 0o111
+        assert (home / "Notebook.command").stat().st_mode & 0o111
     assert 'notebook "$@"' in (home / "Notebook.command").read_text()
     assert not (home / "Manage.command").exists()
     assert not (home / "Manage.cmd").exists()
