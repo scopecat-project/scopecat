@@ -5,12 +5,7 @@ from pathlib import Path
 from typing import cast
 
 from scopecat.author_workspaces import local_author_workspaces
-from scopecat.project import open_project
-from scopecat.project_sources import (
-    capture_sources,
-    require_environment,
-    require_shared_composition,
-)
+from scopecat.project_sources import require_environment
 from scopecat.records.author_workspace import (
     AuthorWorkspaceCatalog,
     AuthorWorkspaceSummary,
@@ -56,17 +51,8 @@ class AuthorWorkspaceServices:
                     )
                     if service.baseline is None:
                         raise ValueError(
-                            "Registered author workspace is unavailable or has a "
-                            "different maintained composition"
+                            "Registered author workspace has no source roots"
                         )
-                    owner = open_project(root)
-                    assert service.project is not None
-                    require_shared_composition(
-                        owner,
-                        service.project,
-                        capture_sources(owner),
-                        service.baseline,
-                    )
                     require_environment(service.baseline.manifest)
                     self.services[item.id] = service
                 except (OSError, ValueError) as error:

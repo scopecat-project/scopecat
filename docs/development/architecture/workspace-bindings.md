@@ -62,7 +62,7 @@ execution remain outside this local qualification.
   retains scientific identity, source/config hashes and run addresses. Publication
   is explicit and cannot relabel another source's retained receipts.
 - Reading retained results is distinct from executing their source. Execution still
-  checks captured environment and maintained composition and never automatically
+  checks its captured environment and exact device/setup references and never automatically
   replays uncertain hardware work.
 - Current-format backup restores into a fresh location without an endpoint, local
   source binding or device dispatch. Independent writable clones and cross-store
@@ -84,8 +84,10 @@ virtual-environment symlinks; resolving it to the base interpreter would lose th
 selected environment.
 
 This is an internal local process contract, not a persistent workspace catalog.
-The daemon now composes registered workspaces with one qualified interpreter and
-maintained composition, scoped author heads, and endpoint/data/deployment checks.
+The daemon now composes registered workspaces with one qualified interpreter,
+scoped author heads, and endpoint/data/deployment checks. Shared scientific code
+and compiler factories belong to each complete source snapshot; a different
+maintenance-directory hash does not prevent registration or refresh.
 Environment qualification and deployment/data writer locks remain in force.
 Different dependency environments remain outside this qualified deployment. Reading retained evidence remains independent
 of qualifying its original code for execution.
@@ -147,15 +149,17 @@ Full installed/Windows and interactive-kernel qualification remains in closeout.
 | Daemon workspace catalog | Store-local stable workspace ID, label, registered source membership | Identifies author publication within one scientific store; paths are locations, not IDs |
 | Machine-local workspace binding | Workspace ID → canonical source root and exact interpreter path | Explicit trusted registration; excluded from portable scientific snapshots and never restored as permission to execute |
 | Workspace author service | Baseline, head generation/revision, preparation operations | Refresh and cancellation affect that workspace only |
-| Existing data/deployment authority | One data writer, maintained composition, device claims and fencing | Registration does not replace the backend, active scientific configuration or another workspace |
+| Existing data/deployment authority | One data writer, selected driver backend, device claims and fencing | Registration does not replace the backend, active scientific configuration or another workspace |
 | Page/kernel session | Selected workspace plus existing scientific context | Refresh defaults are local; prepared work retains exact source and scientific references |
 
-The first supported pair of workspaces must share the daemon's qualified Python
-and maintained composition. Their author files and module names may overlap, but
-run in separate revision workers. Reject another environment or maintenance hash
-with an actionable qualification error; do not install dependencies or restart the
-backend as a side effect of connecting or refreshing. Different environments and
-apparatus compositions need their own qualification slice.
+Registered workspaces share the daemon's qualified Python environment. Their
+scientific helpers, compiler factories and module names may differ and run in
+separate revision workers. All declared source roots are captured and validated;
+dependencies must already be available. A refresh rereads the source manifest,
+so newly declared roots join the next snapshot. Existing tasks and saved plans
+retain their original source revision. Updating the physical driver worker is an
+explicit idle-device operation, independent of author publication. Different
+dependency environments still require separate qualification.
 
 The local interpreter path selects a process; it is not an environment content
 hash. Reuse the captured Python/package/installed-author checks before execution.

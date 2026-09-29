@@ -78,10 +78,8 @@ def main() -> None:
             from scopecat.project_sources import (
                 capture_sources,
                 require_environment,
-                require_shared_composition,
             )
 
-            baseline = capture_sources(project)
             for item in local_author_workspaces(project.root):
                 source = open_project(item.root, resolve_adapter=False)
                 source = load_project(
@@ -97,7 +95,6 @@ def main() -> None:
                 ):
                     raise ValueError(f"作者目录运行绑定已改变: {item.root}")
                 candidate = capture_sources(source)
-                require_shared_composition(project, source, baseline, candidate)
                 require_environment(candidate.manifest)
                 print(f"已验证作者环境: {item.name} ({item.root})", flush=True)
         execution_packages(

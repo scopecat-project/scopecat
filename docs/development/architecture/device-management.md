@@ -161,8 +161,13 @@ and publishes its selection in the same transaction as the device revisions.
 backup/restore use the retained bytes even when the development directory moves.
 An invalid candidate leaves the previous worker and selection in place. Replaying
 the same request returns its retained result without recapturing today's files.
-This updates the driver worker only: author/compiler revision coordination and a
-workbench source-update UI remain pending. Controlled installation replacement is
+This updates the driver worker only. Author publication independently captures
+shared scientific and compiler code, and prepared tasks retain their own revision;
+it does not replace resident drivers. The **Devices and drivers → Installed drivers**
+panel also exposes source selection and explicit updates. It refreshes device and
+driver metadata after an attempt; an uncertain transport result is retried with
+the same operation identity, without automatically initiating another update.
+Controlled installation replacement is
 separate from source selection and still requires its own qualification.
 Global setup selection and overlapping combined-configuration editors have been
 removed. Every run supplies an exact setup independently of its configuration

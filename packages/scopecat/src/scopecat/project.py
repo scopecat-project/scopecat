@@ -306,11 +306,7 @@ def load_project(
             )
         merged_packages[module] = owner
     source_roots = _local_roots(authors.get("source_roots", []))
-    refresh_roots = _local_roots(authors.get("refresh_roots", []))
-    if bool(source_roots) != bool(refresh_roots):
-        raise ProjectManifestError(
-            "authors requires both source_roots and refresh_roots"
-        )
+    refresh_roots = _local_roots(authors.get("refresh_roots", list(source_roots)))
     if any(
         not any(Path(item).is_relative_to(root) for root in source_roots)
         for item in refresh_roots

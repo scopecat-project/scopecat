@@ -69,6 +69,32 @@ def imported_experiment() -> Experiment[..., object]:
     )
 
 
+def test_shared_module_outside_old_refresh_roots_uses_admitted_bytes(
+    project_files: Path,
+) -> None:
+    shared = project_files / "src/rebind_lab/shared.py"
+    shared.write_text(HELPER)
+    source = project_files / "src/rebind_lab/authored/signal.py"
+    source.write_text(SOURCE.replace("from .helper", "from ..shared"))
+    original = imported_experiment()
+    shared.write_text(HELPER.replace("gain * 2", "gain * 3"))
+    bundle = capture_sources(load_project(project_files / "scopecat.toml"))
+    # Later workspace edits must not leak into Notebook imports either.
+    shared.write_text(HELPER.replace("gain * 2", "gain * 9"))
+    _ = load_revision_experiment(
+        original,
+        bundle,
+        project_root=project_files,
+        cache=project_files / ".cache",
+        expected_fingerprint=AuthorExperiment.from_declaration(
+            original, code_revision=bundle.manifest.ref
+        ).fingerprint,
+    )
+    module = importlib.import_module("rebind_lab.shared")
+    assert module.__file__ is not None
+    assert "gain * 3" in Path(module.__file__).read_text()
+
+
 def test_rebind_defaults_helpers_and_original_requests(project_files: Path) -> None:
     original = imported_experiment()
     old_request = original()

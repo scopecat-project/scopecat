@@ -217,7 +217,6 @@ author_modules = ["my_experiments"]
 
 [authors]
 source_roots = ["src"]
-refresh_roots = ["src"]
 dependencies = []
 ```
 

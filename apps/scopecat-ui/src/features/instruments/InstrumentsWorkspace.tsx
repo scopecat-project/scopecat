@@ -4,6 +4,7 @@ import type { InstrumentSession } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import { InstrumentInspector } from "./InstrumentInspector";
+import { DriverSourcePanel } from "./DriverSourcePanel";
 import { getDevices, prepareDeviceAccess, testDeviceConnection, retireDevice } from "./device-api";
 import {
   abortInstrumentSession,
@@ -247,6 +248,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
             </li>
           ))}
         </ul>
+        <DriverSourcePanel daemonUnavailable={daemonUnavailable} sessionBusy={busy || !!session} />
       </details>
       {devicesQuery.error && <p role="alert">{errorMessage(devicesQuery.error)}</p>}
       <div className="grid min-h-[640px] grid-cols-[300px_minmax(0,1fr)] gap-3 max-[880px]:grid-cols-1">

@@ -98,7 +98,7 @@ class AuthorRevisionService:
             if state.preparation_id is not None:
                 return self.wait(state.preparation_id)
             assert self.project is not None
-            bundle = capture_sources(self.project)
+            bundle = capture_sources(load_project(self.root / "scopecat.toml"))
             operation = self._start(
                 bundle,
                 AuthorPreparationRequest(
@@ -130,7 +130,9 @@ class AuthorRevisionService:
                 return operation
             if self.project is None or self.baseline is None:
                 raise ValueError("project has no configured author source roots")
-            return self._start(capture_sources(self.project), request)
+            return self._start(
+                capture_sources(load_project(self.root / "scopecat.toml")), request
+            )
 
     def _start(
         self, bundle: AuthorRevisionBundle, request: AuthorPreparationRequest
@@ -142,7 +144,9 @@ class AuthorRevisionService:
                 return self.repository.preparation(request.operation_id)
             except KeyError:
                 pass
-            self._require_maintenance(bundle)
+            # All declared source is task-local and validated in a fresh worker.
+            # Driver activation has its own device ownership boundary.
+            require_environment(bundle.manifest)
             now = datetime.now(UTC)
             operation = AuthorPreparation(
                 operation_id=request.operation_id,
@@ -300,18 +304,5 @@ class AuthorRevisionService:
             raise ValueError(
                 "Source revision does not belong to the selected author workspace"
             ) from error
-        self._require_maintenance(bundle)
         require_environment(bundle.manifest)
         return bundle
-
-    def _require_maintenance(self, bundle: AuthorRevisionBundle) -> None:
-        if (
-            self.baseline is None
-            or bundle.manifest.maintenance_hash
-            != self.baseline.manifest.maintenance_hash
-        ):
-            raise ValueError(
-                "compiler, driver or maintained composition changed; "
-                "restart with the matching maintained source and environment "
-                "before using this revision"
-            )

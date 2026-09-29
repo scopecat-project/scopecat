@@ -170,7 +170,7 @@ def load_revision_experiment[**P, ResultT](
     ) as finder:
         if not finder.owns(module_name) or "<locals>" in qualname:
             raise ValueError(
-                "typed refresh requires an importable experiment inside refresh_roots"
+                "typed refresh requires an importable experiment inside source_roots"
             )
         value: object = importlib.import_module(module_name)
         for part in qualname.split("."):
@@ -288,7 +288,7 @@ def _revision_imports(
     finder = _RevisionImports(
         project_root,
         archive,
-        bundle.manifest.refresh_roots,
+        bundle.manifest.source_roots,
         bundle.manifest.ref,
         fingerprints,
     )

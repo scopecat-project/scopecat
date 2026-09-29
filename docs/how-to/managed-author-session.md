@@ -40,6 +40,29 @@ revision and the preview's manual-state fence. Editing the workspace afterwards
 does not alter `checked`. Running after a relevant laboratory change may require
 a new preview. Saving a named parameter version does not publish a shared default.
 
+## Refresh shared code and compiler code
+
+Keep ordinary laboratory Python modules under the project's declared
+`authors.source_roots`; a separate `refresh_roots` declaration is not required.
+After saving edits to experiments, analysis, recipes, shared helpers or compiler
+factories, use the same author connection:
+
+```python
+state = author.state()
+author.refresh_authors(expected_generation=state.generation)
+checked = author.prepare("signal")
+```
+
+Refresh validates the captured source in a fresh process while the application
+stays running. Each prepared request and saved plan keeps its own source version;
+editing shared code does not alter a request that is already prepared. If a
+compiler error appears for the selected setup, correct the source, refresh and
+prepare again. Previously retained source remains available for older tasks.
+
+Driver changes use the separate [idle-device update](control-instruments.md#update-driver-source-while-the-application-is-running).
+Author refresh keeps the current device driver version. Dependencies must already
+be available in the application's environment.
+
 ## Edit a request before preparing
 
 When the laboratory's author package is installed in the notebook environment,
