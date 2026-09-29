@@ -16,6 +16,18 @@ if TYPE_CHECKING:
 def main() -> None:
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         cast("TextIOWrapper", stream).reconfigure(encoding="utf-8")
+    if sys.stdin.readline() != "registered\n":
+        raise SystemExit("Worker was not registered by its application")
+    from scopecat_server.services.project_workers import capture_worker_process
+
+    # Record the executing interpreter, not Windows' venv redirector. Recovery
+    # can then join this process even when its launcher has already exited.
+    receipt = Path(sys.argv[3])
+    temporary = receipt.with_suffix(".worker.tmp")
+    temporary.write_text(
+        capture_worker_process(os.getpid()).model_dump_json(), encoding="utf-8"
+    )
+    temporary.replace(receipt)
     root, procedure_id = Path(sys.argv[1]).resolve(), sys.argv[2]
     record_timing("procedure_worker_entry", procedure_id=procedure_id)
     from pydantic import ValidationError

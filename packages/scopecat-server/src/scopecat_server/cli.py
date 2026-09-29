@@ -185,9 +185,9 @@ def notebook_command(context: typer.Context) -> None:
     "teach", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )
 def teach_command(context: typer.Context) -> None:
-    """Open, reset or verify a disposable tutorial sandbox (teaching install)."""
+    """Start or clear a software practice in an installed application."""
     try:
-        from lab_tools.sandbox import main as teaching_main
+        from lab_tools.practice import main as teaching_main
     except ImportError as error:
         _fail(
             RuntimeError(

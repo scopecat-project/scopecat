@@ -5,7 +5,7 @@ scientific helpers, timing and analysis; the lab maintainer configures discovery
 once. There is no per-experiment catalog, service or procedure to write.
 
 For your first request/scan/analysis, use the [starter authoring lesson](../tutorials/starter-authoring.md).
-Use a [tutorial sandbox](../tutorials/teaching-sandboxes.md) to practice one feature.
+Use [Help in the application](../tutorials/teaching-sandboxes.md) for a first practice.
 The old reference gallery is not an authoring template.
 
 ## Compose laboratory operations

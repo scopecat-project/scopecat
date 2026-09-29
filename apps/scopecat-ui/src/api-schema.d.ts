@@ -312,6 +312,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Data Cleanup Operations */
+        get: operations["data_cleanup_operations_api_v1_data_cleanup_get"];
+        put?: never;
+        /** Execute Data Cleanup */
+        post: operations["execute_data_cleanup_api_v1_data_cleanup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-cleanup/{operation_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Data Cleanup */
+        post: operations["resume_data_cleanup_api_v1_data_cleanup__operation_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-cleanup/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Data Cleanup */
+        post: operations["preview_data_cleanup_api_v1_data_cleanup_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -1007,6 +1059,41 @@ export interface paths {
         get: operations["get_parameter_revision_api_v1_parameters_revisions__revision_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/practice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Practice Catalog */
+        get: operations["practice_catalog_api_v1_practice_get"];
+        put?: never;
+        /** Create Practice */
+        post: operations["create_practice_api_v1_practice_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/practice/{scope_id}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear Practice */
+        post: operations["clear_practice_api_v1_practice__scope_id__clear_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4407,6 +4494,89 @@ export interface components {
              */
             status: "ok" | "degraded";
         };
+        /** DataCleanupBlocker */
+        DataCleanupBlocker: {
+            /** Owner */
+            owner: string;
+            /** Reason */
+            reason: string;
+        };
+        /** DataCleanupCommand */
+        DataCleanupCommand: {
+            preview: components["schemas"]["DataCleanupPreview"];
+            /** Request Key */
+            request_key: string;
+        };
+        /** DataCleanupOperation */
+        DataCleanupOperation: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at?: string;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id: string;
+            selection: components["schemas"]["DataCleanupSelection"];
+            /**
+             * State
+             * @default prepared
+             * @enum {string}
+             */
+            state: "prepared" | "records_removed" | "complete";
+        };
+        /** DataCleanupPreview */
+        DataCleanupPreview: {
+            /** Blockers */
+            blockers: components["schemas"]["DataCleanupBlocker"][];
+            /** Bytes To Reclaim */
+            bytes_to_reclaim: number;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Record Count */
+            record_count: number;
+            selection: components["schemas"]["DataCleanupSelection"];
+        };
+        /**
+         * DataCleanupSelection
+         * @description Exact records requested for deletion, never an implicit dependency cascade.
+         *
+         *     A lifecycle service must fence writers, settle workers and validate retained
+         *     scientific references before passing this selection to the storage layer.
+         */
+        DataCleanupSelection: {
+            /**
+             * Analyses
+             * @default []
+             */
+            analyses: string[];
+            /**
+             * Parameters
+             * @default []
+             */
+            parameters: string[];
+            /**
+             * Procedures
+             * @default []
+             */
+            procedures: string[];
+            /**
+             * Runs
+             * @default []
+             */
+            runs: string[];
+            /**
+             * Setup Definitions
+             * @default []
+             */
+            setup_definitions: string[];
+            /**
+             * Setups
+             * @default []
+             */
+            setups: string[];
+        };
         /** DeclaredBatch */
         DeclaredBatch: {
             /** Id */
@@ -7648,6 +7818,60 @@ export interface components {
         PointCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
         /** @enum {string} */
         PointProposalSource: "author" | "optimizer" | "operator";
+        /** PracticeCatalog */
+        PracticeCatalog: {
+            /** Items */
+            items: components["schemas"]["PracticeScope"][];
+        };
+        /** PracticeClearCommand */
+        PracticeClearCommand: {
+            files: components["schemas"]["PracticeFileDisposition"];
+        };
+        /** PracticeCreateCommand */
+        PracticeCreateCommand: {
+            /**
+             * Lesson
+             * @default manual-peaks
+             * @constant
+             */
+            lesson: "manual-peaks";
+            /** Request Key */
+            request_key: string;
+        };
+        /** @enum {string} */
+        PracticeFileDisposition: "preserve" | "discard";
+        /** PracticeScope */
+        PracticeScope: {
+            /** Cleanup Error */
+            cleanup_error?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at?: string;
+            /** Directory */
+            directory: string;
+            file_disposition?: components["schemas"]["PracticeFileDisposition"] | null;
+            /** Id */
+            id: string;
+            /** Lesson */
+            lesson: string;
+            /** Procedure Id */
+            procedure_id?: string | null;
+            /**
+             * State
+             * @default active
+             * @enum {string}
+             */
+            state: "active" | "cleaning" | "cleared";
+            /** Title */
+            title: string;
+            /**
+             * Workers Retired
+             * @default false
+             */
+            workers_retired: boolean;
+        };
         /** PreflightCost */
         PreflightCost: {
             /** Artifact Fingerprint */
@@ -11302,6 +11526,123 @@ export interface operations {
             };
         };
     };
+    data_cleanup_operations_api_v1_data_cleanup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataCleanupOperation"][];
+                };
+            };
+        };
+    };
+    execute_data_cleanup_api_v1_data_cleanup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DataCleanupCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataCleanupOperation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_data_cleanup_api_v1_data_cleanup__operation_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataCleanupOperation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_data_cleanup_api_v1_data_cleanup_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DataCleanupSelection"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataCleanupPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_devices_api_v1_devices_get: {
         parameters: {
             query?: never;
@@ -12714,6 +13055,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    practice_catalog_api_v1_practice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeCatalog"];
+                };
+            };
+        };
+    };
+    create_practice_api_v1_practice_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeCreateCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeScope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_practice_api_v1_practice__scope_id__clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PracticeClearCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeScope"];
                 };
             };
             /** @description Validation Error */

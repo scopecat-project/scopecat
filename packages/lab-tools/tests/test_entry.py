@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from lab_tools import project, sandbox
+from lab_tools import practice, project
 from scopecat_server.cli import app
 
 
@@ -22,10 +22,12 @@ def test_public_init_can_create_a_complete_topic(
     )
 
 
-def test_public_teach_forwards_sandbox_options(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_public_teach_forwards_application_practice_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     received: list[str] = []
-    monkeypatch.setattr(sandbox, "main", received.extend)
-    arguments = ["compute", "--reset", "--home", "a folder"]
+    monkeypatch.setattr(practice, "main", received.extend)
+    arguments = ["--list", "--home", "a folder"]
     result = CliRunner().invoke(app, ["teach", *arguments])
     assert result.exit_code == 0, result.output
     assert received == arguments

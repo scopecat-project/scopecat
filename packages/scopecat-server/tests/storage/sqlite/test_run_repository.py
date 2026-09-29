@@ -39,6 +39,7 @@ from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.resource_objects import resource_objects
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 
@@ -659,12 +660,13 @@ def test_rejects_refs_outside_run_namespace(tmp_path: Path, ref: str) -> None:
     assert captured.value.problems[0].code == "run.ref_path_escape"
 
 
-def test_equal_content_reuses_one_immutable_object(tmp_path: Path) -> None:
+def test_equal_content_reuses_objects_within_each_record_owner(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
 
     repository.write_snapshot(_portable_snapshot("run-a", 1))
     repository.write_snapshot(_portable_snapshot("run-b", 1))
     repository.write_bytes("run-a", "artifacts/a.bin", b"same")
+    repository.write_bytes("run-a", "artifacts/copy.bin", b"same")
     repository.write_bytes("run-b", "artifacts/b.bin", b"same")
 
     with sqlite3.connect(repository.database) as connection:
@@ -676,7 +678,7 @@ def test_equal_content_reuses_one_immutable_object(tmp_path: Path) -> None:
             )
         }
     assert len(digests) == 1
-    assert len(_object_files(repository)) == 2
+    assert len(_object_files(repository)) == 4
 
 
 def test_cached_measurement_chunks_follow_current_ref_and_owner(tmp_path: Path) -> None:
@@ -974,7 +976,9 @@ def test_corrupt_indexed_object_is_data_integrity_failure(tmp_path: Path) -> Non
             """
         ).fetchone()
     assert row is not None
-    repository.objects.path_for(row[0]).write_bytes(b"corrupt")
+    resource_objects(
+        repository.sqlite, repository.objects, "run", "run-corrupt"
+    ).path_for(row[0]).write_bytes(b"corrupt")
 
     with pytest.raises(DataIntegrityError) as captured:
         repository.read_bytes("run-corrupt", "artifacts/value.bin")

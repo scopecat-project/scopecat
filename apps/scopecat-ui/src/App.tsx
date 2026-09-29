@@ -288,7 +288,7 @@ export default function App() {
             aria-current={view === "history" ? "page" : undefined}
             onClick={() => selectView("history")}
           >
-            <Boxes size={15} aria-hidden="true" /> History
+            <Boxes size={15} aria-hidden="true" /> Data
           </button>
           <button
             type="button"

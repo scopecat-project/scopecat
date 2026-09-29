@@ -1,202 +1,60 @@
-# Runnable tutorial sandboxes
+# Practice in Scopecat
 
-Start from one complete Notebook, make a small change, then discard or reset the
-exercise. No reference-lab checkout, laboratory configuration or AI assistant is
-required. These tutorials use synthetic computation and never connect devices.
+Open **Help → Start peak practice** in the workbench. You do not need a device,
+another application, a Python environment or a notebook kernel.
 
-## Install once
+## Try a scan and a manual decision
 
-Obtain the tutorial delivery for your operating system, CPU and Python 3.14 ABI.
-Prepare Python 3.14, uv and VS Code with its Python/Jupyter extensions. From the
-received delivery directory run `python install.py`. The installer verifies and
-copies the complete offline delivery into `~/Scopecat-Lab`. Install newer deliveries
-into that same home. Failed preparation keeps the previous default entry; after
-fixing the reported cause, rerun the installer without manually deleting incomplete
-managed environments. See [fixed delivery maintenance](../how-to/maintain-application.md#install-a-newer-fixed-delivery).
+1. Start the practice and choose **Open practice task**.
+2. The task generates a synthetic frequency scan. When it asks for your judgment,
+   choose **Review curve and enter frequency**.
+3. Inspect the curve in Decisions. Select **Peak selected** and enter a frequency
+   in MHz, or choose **No clear peak** / **Unsure** and leave the frequency empty.
+4. Record your answer, then explicitly continue the task. A practice choice is
+   not a published calibration.
 
-From the installed home run `python lab.py teach compute`. The command prepares
-the exercise, starts its runtime and prints its code folder. Open that folder
-normally in VS Code; no management page or automatic editor launch is involved.
-Use `python lab.py teach --status` to list existing exercises.
+You can close the page and return through Help. The existing task retains its
+scan and decision; opening it does not measure again. Start a new practice when
+you want a fresh attempt.
 
-Each topic has its own environment and one complete Notebook:
+## Keep notes and finish
 
-| Topic | Runnable starting point |
-| --- | --- |
-| `parameters` | Edit a typed parameter table and run a seven-point scan |
-| `compute` | Return average complex IQ and read typed rows using a shared unit alias |
-| `refresh` | Edit defaults, refresh author code and import a newly added experiment |
-| `groups` | Analyze two groups from a retained scan and reopen their summaries |
-| `calibration` | Fit, verify and publish a synthetic zero offset; recover paused work and retain check-only evidence without changing parameters |
-| `joint-calibration` | Compose two candidates, remeasure the joint settings and distinguish coupled failure from missing target coverage |
-| `task-calibration` | Submit background fit stages and a final verification/publication procedure; observe acceptance, scientific rejection and concurrent branch conflicts |
+The optional notes folder shown in Help opens directly in VS Code. It contains
+ordinary Markdown files; editing notes does not require a kernel or another
+service. **Export practice files** downloads a copy.
 
-Open the generated project folder and select its `.venv` kernel. The first cell
-rejects the wrong interpreter. Run All before making one small change. The current
-Notebook instructions are in Chinese; this page explains the common entry in English.
-Detailed API explanations follow the [learning path](../getting-started/learning-path.md).
+Choose **Clear practice…** to stop that practice and remove its measurements,
+analyses and decisions. The default keeps your notes and edited files. Choose
+**Delete all files in this practice folder** only when you want those removed too.
 
-Repeated opening continues the same exercise. Close its Notebook kernel, then run
-`python lab.py teach compute --stop` before resetting with
-`python lab.py teach compute --reset`. The old copy and its edits remain.
-`python lab.py teach --clean` lists eligible old copies and asks before deleting.
-Current copies and copies with running processes are protected. Keep source edits
-you want before cleanup; releases and real experiment directories are outside it.
+An unfinished cleanup stays visible with **Retry cleanup**. Other practices,
+ordinary measurements, device settings and source folders are not selected.
+Closing the workbench page alone does not clear anything.
 
-Commands execute in the foreground and report failures there. A per-home teaching
-lock prevents overlapping preparation. Interrupted preparation never publishes
-a partial exercise as current; fix the cause and retry. Stop an exercise explicitly
-when finished. The application manager and its operation database have been retired;
-same-service practice scopes are a separate, unfinished product batch.
+## Clean up ordinary measurements
 
-Real scientific projects and retained experimental evidence do not belong in this
-resettable directory and continue to use [current-format backup/restore](../how-to/backup-and-restore.md).
-Earlier development data follows the [prebaseline policy](../development/data-compatibility.md).
+Open a measurement, project analysis or completed task and choose
+**Review data cleanup…**. Inspect the selection,
+estimated file size and any retaining references before confirming deletion.
+A task must finish or be cancelled through its normal controls first. If another
+analysis, calibration or published parameter revision still needs the evidence,
+cleanup explains what retains it; it does not silently delete dependent results.
 
-## Source development without GUI builds
-
-From a Scopecat checkout, run `uv run python teach.py source`, or double-click
-`teach.cmd` and choose 1 on Windows. The entry installs local wheels and locked
-teaching dependencies and prints the exercise inventory. Pass a topic such as `compute` to prepare it. Exercise services use
-the API-only runtime.
-It does not build the GUI or require Node. Only the exercise's author package is
-editable; new framework/tutorial contents receive a new sandbox identity.
-
-Stop old services and close kernels before selecting an updated source version.
-Each exercise retains its original installed runtime. Source trials provide quick
-API feedback; fixed deliveries provide reproducible installation acceptance.
-
-## Maintainer delivery
-
-`teach.cmd` choices 2 and 3 build and verify a fixed local delivery, respectively
-with and without installing it on the build computer. The equivalent commands are
-`uv run python teach.py release --install` and `uv run python teach.py release`.
-A release requires a clean checkout, Python/uv, Node/pnpm and build-time network
-access. Output directories are generated automatically. A failed stage prevents
-subsequent stages from running.
-
-The build exports the reviewed `uv.lock`, builds public wheels and a matching GUI,
-and records hashes and source identity. Verification uses an empty cache and
-runs the actual shipped notebooks outside the checkout, including source refresh,
-new modules, history, recovery, duplicate installation and reset. Windows and Linux
-run this in the manually dispatched public Full acceptance workflow. CI artifacts expire; retain accepted
-release bundles separately. Successful CI is software evidence, not human or
-physical-device acceptance.
-
-An explicit standalone tutorial workspace can also be generated with
-`scopecat init PATH --topic compute` in a teaching installation. The explicit teaching command manages disposable exercises; `init` without a topic still creates the small
-virtual-instrument project used for integration and application development.
-
-Laboratory-specific package selection, SDKs, addresses, bindings, acceptance
-policies and scientific records remain owned by the consuming laboratory.
-
-## What belongs to the exercise
-
-Starting a new exercise installs only its synthetic setup. It does not publish a
-global parameter default. The Notebook's `open_parameters(session)` creates or
-opens `teaching-table`, then selects that branch in the session. Saving parameters
-advances that branch; previews retain exact parameter/setup references, and
-reopening a result does not require selecting today's branch again.
-
-Before the setup cell has selected parameters, a preview reports how to select a
-branch or pass `parameters=...`. Run the setup cell, or use
-`session.use(parameter_branch="teaching-table", setup=session.setup.get("teaching-bench"))`
-when reopening a saved branch for an experiment.
-In the workbench, select the saved branch in **Measurement context**. The tutorial
-does not need **Use lab parameter default**.
-Existing exercise data is retained; upgrading does not delete defaults saved by
-older versions or rewrite their runs. Use a fresh sandbox to try the new starting
-state.
-
-Each topic includes editable `my_experiment/parameters.py`, `response.py`,
-`teaching.py` and `setup.py`. The first declares local parameter models; the next
-two define the synthetic response and experiments. The last prepares the example
-sample and parameter workspace using normal public APIs. The support package owns
-the templates and environment tools, not the learner's scientific declarations.
-The parameter topic demonstrates adding a second table alongside `Drive`.
+**Data → Data cleanup history** shows unfinished operations and lets you retry
+file reclamation after an interruption. Record removal and file removal are
+reported separately. [Back up scientific records](../how-to/backup-and-restore.md)
+before deleting anything you intend to retain.
 
 ## Notebook workspace and saved edits
 
-The topic Notebooks initialize one default workspace:
+For your own experiments, open your registered source folder in VS Code and use
+the interpreter shown in Application settings. Python files and notebooks share
+the application service. See the [learning path](../getting-started/learning-path.md)
+for authoring and analysis; the synthetic course sources remain independent
+maintainer fixtures, not separately managed tutorial installations.
 
-```python
-import scopecat as sc
-
-session = sc.notebook()  # live=True by default
-session  # project, source revision, mode and refresh status
-```
-
-The entry checks the project kernel when a local `.venv` exists, connects to the
-service prepared by the launcher and admits author source. It never launches an
-experiment. Repeating initialization reuses the session and its one cell hook.
-A kernel has one default workspace; multiple documents sharing a kernel share it.
-Close `session` before switching projects. Scripts keep `project.authoring()` and
-explicit source selection; background threads do not inherit live request selection.
-
-Both ordinary import styles support saved edits:
-
-```python
-from my_experiment.teaching import teaching_rabi
-import my_experiment.teaching as experiments
-
-first = teaching_rabi()
-second = experiments.teaching_rabi()
-```
-
-Save an edited source file and call the experiment again. Each new request selects
-the saved definition, including new default arguments and helper code. Existing
-requests, previews and running jobs retain their original source. The Notebook's
-module aliases update at cell boundaries; new modules and new experiment attributes
-are available in the next cell, without manual refresh or re-import. If a cell
-writes a new module itself, put its import in the following cell.
-
-Invalid source is reported in the current output. Repair and history cells remain
-usable, but new experiment requests retry the refresh and fail until it is fixed;
-there is no old-code fallback. Reading a historical revision does not change the
-source selected for subsequent live requests.
-
-Use `sc.notebook(live=False)` to hold the selected source, or
-`sc.notebook(live=True)` to resume saved edits. This is a source policy: parameter
-edits still need their ordinary save operation. Ordinary Python functions, class
-instances and aliases hidden inside containers are not rewritten. Static editor
-signatures may need the language server to notice a changed file.
-
-After a kernel restart, run only initialization and `session.history()` to find a
-retained run, then reopen its number with `session.run(number)`. Do not rerun the
-experiment just to restore a Python handle. `session.close()` removes the cell hook
-and default selection; it closes the client connection, not a running experiment.
-
-The lower-level `session.live(declaration)` remains useful for selectively live
-callables outside a Notebook workspace. It does not install a kernel default.
-
-## Outputs and history
-
-Simple experiments return string-keyed dictionaries of deferred data. Keys become
-recorded field paths; dataclasses remain available for typed composition and
-field-specific recording policies. Neither form makes the deferred references
-into already-computed Python values. A reader may use `rows_as(...)` to validate a
-native row schema, including units. The output dataclass is not that native row.
-
-Both synthetic response and mean computations use `@sc.compute`. The response uses
-`@sc.compute(output_type=shot_array)`: the schema factory receives the structural
-`shots` argument and declares a fixed shot axis for this request. Unknown-length
-arrays are a different contract and are not a substitute for a fixed dense axis. Call `.eager(...)` for an ordinary NumPy computation.
-Both this syntax and `experiment.compute(fn=...)` allocate node IDs automatically;
-explicit IDs are optional, and array/unit semantics remain explicit.
-
-`session.history()` displays local timestamps, names, status and stable project-local
-run numbers. Reopen a selected run with `session.run(12)`; the number is not a row
-position and does not change when newer runs arrive. `session.run_number(run)`
-provides the number for a current handle. Complete run IDs remain the portable
-identity; short numbers only make sense within their original project. Pagination
-uses `session.history(before=page.next_cursor)`.
-
-## Development and automated acceptance
-
-Development and tests use an isolated `--home PATH`. Commands such as
-`scopecat teach parameters --verify --home PATH` run the installed lesson directly.
-`--status` reports exercise locations; `--stop` stops the selected exercise.
-
-Exercises still retain separate synthetic runtimes until same-service practice
-scopes are delivered. The main application already uses a single runtime for
-registered author folders. See [application runtime ownership](../development/architecture/application-host.md).
+The optional command-line entry uses the same installed application:
+`python lab.py teach` starts a practice, `python lab.py teach --list` lists practices,
+and `python lab.py teach --clear ID` clears one while preserving its files.
+It prints locations without opening a browser. Per-topic environments and
+`--reset` / `--stop` sandbox commands are retired.

@@ -106,6 +106,10 @@ class AdmissionService:
         self._deployment_id = deployment_id
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
+        from .practice_admission import run_scope
+
+        with self._control.read_transaction() as connection:
+            _ = run_scope(connection, submission)
         retry = self._replay_admission(submission)
         if retry is not None:
             return retry
@@ -194,9 +198,20 @@ class AdmissionService:
                 return retry
             raise
 
+        # Reserve ownership before writing any bytes. Failed or interrupted
+        # preparations remain in the scope's namespace and are reclaimed with it.
+        with self._control.write_transaction() as connection:
+            scope = run_scope(connection, submission)
+            if scope is not None:
+                from ..storage.sqlite.practice import PracticeOwnership
+
+                PracticeOwnership(connection).claim(
+                    scope, "run", skeleton.snapshot.run_id
+                )
         prepared = self._runs.prepare_run_skeleton(skeleton)
         try:
             with self._control.write_transaction() as connection:
+                scope = run_scope(connection, submission)
                 if isinstance(submission.config_source, ParameterRunConfigSource):
                     source = submission.config_source
                     resolve_parameters(

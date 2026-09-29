@@ -114,39 +114,8 @@ def verify(bundle: Path, destination: Path) -> None:
         "dict[str, str]", json.loads(receipts[0].read_text(encoding="utf-8"))
     )
     assert Path(receipt["bundle"]).is_relative_to(home)
-    # The retained bundle lives inside home; users can disconnect transfer media.
-    launcher = home / "lab.py"
-    for topic in ("parameters", "compute", "refresh", "groups"):
-        subprocess.run(  # noqa: S603 - explicit local tool and argument list
-            [str(python), str(launcher), "teach", topic, "--verify"],
-            cwd=destination,
-            env=env,
-            check=True,
-        )
-    assert not (home / "host/endpoint.json").exists()
-    current = next((home / "sandboxes").glob("*/parameters/current.json"))
-    before = current.read_text(encoding="utf-8")
-    subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [str(python), str(launcher), "teach", "parameters", "--stop"],
-        cwd=destination,
-        env=env,
-        check=True,
-    )
-    assert current.read_text(encoding="utf-8") == before
-    subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [str(python), str(launcher), "teach", "parameters", "--reset", "--verify"],
-        cwd=destination,
-        env=env,
-        check=True,
-    )
-    assert current.read_text(encoding="utf-8") != before
-    from lab_tools.cleanup import remove_old_sandbox
-
-    old_generation = cast("dict[str, str]", json.loads(before))["generation"]
-    remove_old_sandbox(
-        home, current.parent.parent.name, current.parent / old_generation
-    )
-    assert not (current.parent / old_generation).exists()
+    # Installed application qualification also exercises same-service practice.
+    assert not (home / "sandboxes").exists()
     installed_python = receipts[0].parent / (
         "Scripts/python.exe" if os.name == "nt" else "bin/python"
     )
@@ -171,9 +140,9 @@ def verify(bundle: Path, destination: Path) -> None:
                 "software": "passed",
                 "human": "not-evaluated",
                 "physical": "not-evaluated",
-                "topics": ["parameters", "compute", "refresh", "groups"],
+                "practice": "synthetic scan and manual decision",
                 "reinstall": "passed",
-                "reset": "passed",
+                "same_service_cleanup": "passed",
                 "no_management_service": "passed",
                 "managed_cleanup": "passed",
                 "installed_application": "passed",

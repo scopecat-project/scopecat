@@ -27,6 +27,7 @@ from scopecat_server.storage.sqlite.project_store import (
     inspect_project_schema,
     require_current_schema,
 )
+from scopecat_server.storage.sqlite.resource_objects import resource_directory
 
 _DATABASE = Path(".scopecat/control.sqlite3")
 _OBJECTS = Path(".scopecat/objects")
@@ -114,6 +115,12 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
                     _copy(
                         receipts / relative,
                         captured / ".scopecat/author-jobs" / relative,
+                    )
+            practice = data_root / "practice"
+            if practice.exists():
+                for relative in _files(practice, source=True):
+                    _copy(
+                        practice / relative, captured / ".scopecat/practice" / relative
                     )
             # SQLite's copy primitive is used only after stopped-project ownership
             # is acquired. It folds a retained WAL into a standalone destination
@@ -258,15 +265,27 @@ def verify_store_files(project: Path) -> int:
         refs = cast(
             "list[sqlite3.Row]",
             connection.execute(
-                "SELECT digest FROM run_repository_refs "
-                "UNION SELECT digest FROM project_analysis_repository_refs "
-                "UNION SELECT bundle_digest AS digest FROM author_revisions "
-                "UNION SELECT digest FROM experiment_plan_revisions "
-                "UNION SELECT digest FROM apparatus_observation_attachments"
+                "SELECT r.digest, 'run' AS kind, r.run_id AS identity "
+                "FROM run_repository_refs r "
+                "UNION SELECT r.digest, 'analysis', a.record_id "
+                "FROM project_analysis_repository_refs r "
+                "JOIN analysis_publications a ON a.sequence=r.publication_sequence "
+                "UNION SELECT bundle_digest AS digest, NULL, NULL "
+                "FROM author_revisions "
+                "UNION SELECT digest, NULL, NULL FROM experiment_plan_revisions "
+                "UNION SELECT digest, NULL, NULL FROM apparatus_observation_attachments"
             ).fetchall(),
         )
         for row in refs:
-            objects.verify(cast("str", row["digest"]))
+            kind = cast("str | None", row["kind"])
+            selected = (
+                objects
+                if kind is None
+                else ImmutableObjectStore(
+                    resource_directory(objects, kind, cast("str", row["identity"]))
+                )
+            )
+            selected.verify(cast("str", row["digest"]))
         sample_rows = cast(
             "Iterator[sqlite3.Row]",
             connection.execute("SELECT revision_json FROM sample_revisions"),
@@ -279,10 +298,19 @@ def verify_store_files(project: Path) -> int:
                 if is_owned_sample_artifact_uri(artifact.uri):
                     objects.verify(artifact.uri)
         for relative in _files(objects.root):
-            if len(relative.parts) != 2 or len(relative.parts[0]) != 2:
+            parts = relative.parts
+            selected = objects
+            if (
+                len(parts) == 5
+                and parts[0] == "resources"
+                and parts[1] in {"run", "analysis"}
+            ):
+                selected = ImmutableObjectStore(objects.root.joinpath(*parts[:3]))
+                parts = parts[3:]
+            if len(parts) != 2 or len(parts[0]) != 2:
                 raise SnapshotError(f"invalid immutable object path: {relative}")
-            digest = "sha256:" + "".join(relative.parts)
-            objects.verify(digest)
+            digest = "sha256:" + "".join(parts)
+            selected.verify(digest)
         return version
 
 
@@ -293,8 +321,9 @@ def _allowed_path(path: PurePosixPath) -> bool:
         return True
     return (
         path.is_relative_to(PurePosixPath(".scopecat/author-jobs"))
+        or path.is_relative_to(PurePosixPath(".scopecat/practice"))
         or path == PurePosixPath(_DATABASE)
-        or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) == 4)
+        or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) in {4, 7})
     )
 
 

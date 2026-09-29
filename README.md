@@ -14,7 +14,7 @@ Start with the [documentation home](docs/index.md) or follow the
 [source preview quickstart](docs/getting-started/quickstart.md) to create a
 hardware-free project and complete the first durable run.
 
-- [Runnable tutorial sandboxes](docs/tutorials/teaching-sandboxes.md)
+- [Practice in the application](docs/tutorials/teaching-sandboxes.md)
 - [Instrument control](docs/how-to/control-instruments.md)
 - [Experiment authoring dataflow](docs/concepts/experiment-dataflow.md)
 - [Chips and physical samples](docs/concepts/samples.md)

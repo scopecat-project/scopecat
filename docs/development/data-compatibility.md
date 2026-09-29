@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **101** is a development format identifier, not the start of a compatibility
+schema **102** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,12 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 102 adds shared data-cleanup receipts, deletion fences and practice ownership.
+Run and analysis bytes are stored under their record owner, so explicit cleanup can
+reclaim them without deleting another record's content. Current-format snapshots
+retain these namespaces and editable practice files. No earlier object-layout
+reader or conversion is provided.
 
 Schema 101 retains application device registrations, immutable connections and
 driver identities, setup definitions and exact resolutions, independent parameter

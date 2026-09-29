@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from threading import Lock, RLock
 
+from scopecat_server.errors import BackendConflict
+
 DEFAULT_BUSY_TIMEOUT_SECONDS = 5.0
 
 
@@ -79,6 +81,20 @@ class SQLiteDatabase:
                 connection.rollback()
 
     @contextmanager
+    def writer_guard(self) -> Generator[sqlite3.Connection]:
+        """Serialize external object publication with database admission fences.
+
+        This does not start or finish a transaction: callers may already own a
+        write transaction whose uncommitted ownership records must be visible.
+        """
+        if not self._writer_lock.acquire(timeout=self.busy_timeout_seconds):
+            raise SQLiteBusyError("project database writer is busy")
+        try:
+            yield self._writer_connection()
+        finally:
+            self._writer_lock.release()
+
+    @contextmanager
     def write_transaction(self) -> Generator[sqlite3.Connection]:
         """Serialize the project's single SQLite writer inside the daemon."""
 
@@ -89,6 +105,11 @@ class SQLiteDatabase:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 yield connection
+            except sqlite3.IntegrityError as error:
+                connection.rollback()
+                if str(error) == "Scientific reference targets cleared data":
+                    raise BackendConflict(str(error)) from error
+                raise
             except BaseException:
                 connection.rollback()
                 raise

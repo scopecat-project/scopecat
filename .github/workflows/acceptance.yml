@@ -42,8 +42,10 @@ jobs:
       - name: Verify service recovery and process ownership
         run: >-
           uv run --locked pytest -q -n 0
-          packages/lab-tools/tests/test_services.py
-          packages/lab-tools/tests/test_application_lifecycle.py
+          packages/lab-tools/tests/test_application_runtime.py
+          packages/lab-tools/tests/test_desktop_session.py
+          packages/scopecat-server/tests/test_practice_workers.py
+          packages/scopecat-server/tests/test_practice_lifecycle.py
 
   python-tests:
     if: inputs.profile == 'full'

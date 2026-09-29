@@ -5,6 +5,7 @@ import { errorMessage, formatDateTime, formatRelative } from "../../lib/presenta
 import type { ProjectAnalysis, ProjectAnalysisSummary } from "../../types";
 import { classes, countBadge, secondaryButton } from "../../ui/styles";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
+import { ClearData } from "../history/DataCleanup";
 import {
   getProjectAnalysis,
   getProjectAnalysisArtifactDownload,
@@ -236,6 +237,8 @@ function AnalysisDetail({
         </div>
         <span className={countBadge}>{selected.outputs.length} outputs</span>
       </header>
+
+      <ClearData key={selected.id} analyses={[selected.id]} />
 
       <dl className="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-md border border-line bg-panel-soft p-3 text-[0.61rem]">
         <dt className="font-bold text-text-dim">Key</dt>

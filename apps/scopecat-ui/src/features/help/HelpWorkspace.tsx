@@ -1,4 +1,5 @@
 import type { ProjectHealth } from "../../types";
+import { PracticePanel } from "./PracticePanel";
 
 const docs = "https://scopecat-project.github.io/scopecat/";
 const section = "grid gap-3 rounded-lg border border-line bg-panel p-4";
@@ -102,21 +103,7 @@ export function HelpWorkspace({
           Maintain the application
         </a>
       </section>
-      <section className={section}>
-        <h3 className="font-semibold">Practice without devices</h3>
-        <p>
-          Tutorial deliveries include editable synthetic-data examples. The current tutorial command
-          prints a folder to open in VS Code; it does not open a management page.
-        </p>
-        <a
-          className="underline"
-          href={docs + "tutorials/teaching-sandboxes/"}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Teaching sandbox guide
-        </a>
-      </section>
+      <PracticePanel reachable={reachable} />
     </section>
   );
 }

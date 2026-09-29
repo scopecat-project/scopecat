@@ -100,14 +100,17 @@ class ImmutableObjectStore:
         if f"sha256:{actual}" != digest:
             raise ObjectCorruptError(path)
 
-    def read_cached(self, digest: str) -> bytes:
+    def read_cached(
+        self, digest: str, *, source: ImmutableObjectStore | None = None
+    ) -> bytes:
         """Reuse verified immutable bytes with bounded retained payload and entries.
 
         Cache hits still stat the object. Changed/deleted files cannot silently
         reuse the old entry; misses retain the normal SHA-256 verification.
         The bound excludes bytes retained by callers and in-flight reads.
         """
-        path = self.path_for(digest)
+        selected = self if source is None else source
+        path = selected.path_for(digest)
         with self._read_lock:
             try:
                 before = path.stat()
@@ -121,7 +124,7 @@ class ImmutableObjectStore:
                 self._read_cache.move_to_end(digest)
                 return cached[1]
             self._discard_cached(digest)
-            content = self.read(digest)
+            content = selected.read(digest)
             try:
                 after = path.stat()
             except OSError:

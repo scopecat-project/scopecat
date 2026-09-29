@@ -1336,7 +1336,7 @@ class SQLiteMeasurementDatasetRepository:
         return PreparedExecutionRecord(
             durable=durable,
             ref=ref,
-            stored=_store_model(self._runs, durable),
+            stored=_store_model(self._runs, self._run_id, durable),
         )
 
     def header_prepared_in_transaction(
@@ -1453,6 +1453,7 @@ class SQLiteMeasurementDatasetRepository:
             ref=ref,
             stored=_store_measurement_append(
                 self._runs,
+                self._run_id,
                 durable,
                 dataset_schema=selected_schema,
                 dataset_schema_hash=selected_schema_hash,
@@ -2366,7 +2367,9 @@ def _finalize_measurement_projection(
     )
 
 
-def _store_model(runs: SQLiteRunRepository, model: BaseModel) -> StoredObject:
+def _store_model(
+    runs: SQLiteRunRepository, run_id: str, model: BaseModel
+) -> StoredObject:
     try:
         content = (
             json.dumps(
@@ -2376,7 +2379,7 @@ def _store_model(runs: SQLiteRunRepository, model: BaseModel) -> StoredObject:
             ).encode()
             + b"\n"
         )
-        return runs.objects.put(content)
+        return runs.store_object(run_id, content)
     except (
         ObjectStoreError,
         PydanticSerializationError,
@@ -2390,6 +2393,7 @@ def _store_model(runs: SQLiteRunRepository, model: BaseModel) -> StoredObject:
 
 def _store_measurement_append(
     runs: SQLiteRunRepository,
+    run_id: str,
     append: MeasurementDatasetAppend,
     *,
     dataset_schema: MeasurementDatasetSchema,
@@ -2401,12 +2405,13 @@ def _store_measurement_append(
     )
 
     try:
-        return runs.objects.put(
+        return runs.store_object(
+            run_id,
             encode_measurement_append(
                 append,
                 dataset_schema,
                 dataset_schema_hash=dataset_schema_hash,
-            )
+            ),
         )
     except (MeasurementArrowCodecError, ObjectStoreError) as error:
         raise ExecutionStateError(

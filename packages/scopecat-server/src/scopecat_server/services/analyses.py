@@ -47,6 +47,7 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import ContentEntry
+from scopecat.records.practice import PracticeResource
 from scopecat.records.run import AnalysisCandidateRunConfigSource
 from scopecat.runs.refs import (
     artifact_content_ref,
@@ -59,6 +60,7 @@ from scopecat_server.storage.sqlite.analysis_repository import (
 )
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 from ..errors import BackendConflict, BackendNotFound
 from .runs import analysis_input_from_payload, analysis_output_from_payload
@@ -277,8 +279,12 @@ class AnalysisService:
                 validate_interpretation=self._validate_interpretation,
             )
             input_run_ids: set[str] = set()
+            input_owners: list[tuple[PracticeResource, str]] = []
             for input_ref in inputs:
                 if isinstance(input_ref, InterpretationAnalysisInput):
+                    input_owners.append(
+                        ("procedure", input_ref.source.procedure_run_id)
+                    )
                     continue
                 if isinstance(
                     input_ref, MeasurementAnalysisInput | ConfigurationAnalysisInput
@@ -286,6 +292,10 @@ class AnalysisService:
                     input_run_ids.add(input_ref.run_id)
                     continue
                 subject = input_ref.source.subject
+                if not isinstance(subject, RunAnalysisSubject):
+                    input_owners.append(
+                        ("analysis", input_ref.source.analysis_record_id)
+                    )
                 if isinstance(subject, RunAnalysisSubject):
                     input_run_ids.add(subject.run_id)
                 else:
@@ -300,8 +310,26 @@ class AnalysisService:
             if isinstance(command.subject, SampleAnalysisSubject):
                 self._require_sample_input_runs(command.subject, input_run_ids)
             if prepared.publication is not None:
+                input_owners.extend(("run", run_id) for run_id in input_run_ids)
+                with self._control.write_transaction() as connection:
+                    ownership = PracticeOwnership(connection)
+                    owner = ownership.require_shared(*input_owners)
+                    if owner is not None:
+                        if isinstance(command.subject, SampleAnalysisSubject):
+                            raise BackendConflict(
+                                "Practice cannot publish sample analyses"
+                            )
+                        ownership.claim(owner, "analysis", prepared.saved.record.id)
                 publication = self._repository.prepare_publication(prepared.publication)
                 with self._control.write_transaction() as connection:
+                    from scopecat_server.storage.sqlite.data_cleanup import (
+                        require_retained_references,
+                    )
+
+                    require_retained_references(connection, command.model_dump_json())
+                    _ = PracticeOwnership(connection).require_shared(
+                        ("analysis", prepared.saved.record.id)
+                    )
                     created = self._repository.publish_prepared_in_transaction(
                         connection,
                         publication,

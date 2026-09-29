@@ -26,7 +26,9 @@ class ParameterRevisionRepository:
         rows = cast(
             "list[sqlite3.Row]",
             self.connection.execute(
-                "SELECT record_json FROM parameter_revisions ORDER BY rowid DESC"
+                "SELECT record_json FROM parameter_revisions r WHERE NOT EXISTS "
+                "(SELECT 1 FROM practice_resources p WHERE p.kind='parameters' "
+                "AND p.resource_id=r.revision_id) ORDER BY r.rowid DESC"
             ).fetchall(),
         )
         return tuple(
