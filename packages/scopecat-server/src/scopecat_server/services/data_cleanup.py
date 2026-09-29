@@ -54,6 +54,16 @@ class DataCleanupService:
                 and scope.state == "cleaning"
                 and scope.workers_retired
             )
+            if scope is not None and not clearing_practice:
+                blockers.append(
+                    DataCleanupBlocker(
+                        owner=f"practice:{scope.id}",
+                        reason=(
+                            "Clear this practice from Help to settle its tasks "
+                            "and choose whether to keep its edited files"
+                        ),
+                    )
+                )
             table, column = {
                 "run": ("runs", "run_id"),
                 "analysis": ("analysis_publications", "record_id"),

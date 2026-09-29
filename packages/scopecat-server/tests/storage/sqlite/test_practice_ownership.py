@@ -2,11 +2,13 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+from scopecat.records.data_cleanup import DataCleanupSelection
 from scopecat.records.practice import PracticeScope
 from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat_testkit.config_registry import load_config
 from scopecat_testkit.setup_records import retained_setup_revision
 
+from scopecat_server.services.data_cleanup import DataCleanupService
 from scopecat_server.services.practice_admission import require_practice_setup
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.practice import PracticeOwnership
@@ -52,3 +54,7 @@ def test_practice_cannot_borrow_hardware_or_other_scope_and_does_not_pollute_cat
             owners.save(scope.model_copy(update={"state": "cleaning"}))
             with pytest.raises(ValueError, match="fenced"):
                 owners.claim("one", "run", "late")
+        preview = DataCleanupService(store).preview(
+            DataCleanupSelection(setups=(owned.id,))
+        )
+        assert any(item.owner == "practice:one" for item in preview.blockers)
