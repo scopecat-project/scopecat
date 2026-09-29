@@ -87,6 +87,7 @@ def build(repository: Path, destination: Path, ref: str = "HEAD") -> Path:
     files = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(destination.iterdir())
+        if path.suffix in {".whl", ".zip"}
     }
     manifest = destination / "preview.json"
     manifest.write_text(
