@@ -31,6 +31,7 @@ it("keeps preparation separate from stopping and applying an update", async () =
   const apply = vi.fn().mockResolvedValue(undefined);
   const dependencies = vi.fn().mockResolvedValue("Dependencies ready");
   const client = vi.fn().mockResolvedValue("/authors/.venv/bin/python");
+  const restart = vi.fn();
   const prepare = vi.fn().mockImplementation(async () => {
     state.candidate = candidate;
     return candidate;
@@ -43,7 +44,7 @@ it("keeps preparation separate from stopping and applying an update", async () =
       register_source: vi.fn(),
       prepare_author_environment: dependencies,
       create_author_environment: client,
-      restart: vi.fn(),
+      restart,
       requalify: vi.fn(),
       retry: vi.fn(),
       exit: vi.fn(),
@@ -62,7 +63,7 @@ it("keeps preparation separate from stopping and applying an update", async () =
   fireEvent.click(screen.getByRole("button", { name: "Prepare background dependencies" }));
   expect(await screen.findByText("Dependencies ready")).toBeVisible();
   expect(dependencies).toHaveBeenCalledWith("/authors");
-  expect(window.pywebview.api.restart).not.toHaveBeenCalled();
+  expect(restart).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Rebuild local Python environment" }));
   expect(await screen.findByText("/authors/.venv/bin/python")).toBeVisible();
   expect(client).toHaveBeenCalledWith("/authors", true);
