@@ -965,7 +965,7 @@ def test_analysis_dataset_input_freezes_the_exact_same_run_output_revision(
     assert review_v2.publication_hash != review_v1.publication_hash
 
 
-def test_analysis_dataset_input_rejects_a_source_from_another_run(
+def test_analysis_dataset_input_retains_and_validates_a_source_from_another_run(
     tmp_path: Path,
 ) -> None:
     first_run = execute_signal_run(
@@ -989,8 +989,8 @@ def test_analysis_dataset_input_rejects_a_source_from_another_run(
         project_root=tmp_path,
     )
     second_handle = lab.get_run(second_run.run_id)
-    invalid = replace(
-        second_handle.analysis("Invalid consumer", key="invalid-consumer").result(),
+    consumer = replace(
+        second_handle.analysis("Cross-run consumer", key="cross-run-consumer").result(),
         inputs=(
             PublishedAnalysisOutputInput(
                 id=source_output.content.dataset_id,
@@ -1008,10 +1008,22 @@ def test_analysis_dataset_input_rejects_a_source_from_another_run(
         ),
     ).fact("score", 1.0)
 
+    saved = consumer.save()
+    [retained] = saved.inputs
+    assert isinstance(retained, PublishedAnalysisRecordInput)
+    assert retained.source.subject == RunAnalysisSubject(run_id=first_handle.id)
+    assert retained.source.analysis_record_id == source.id
+    assert retained.content_hash == source_output.content.content_hash
+
+    [source_input] = consumer.inputs
+    invalid = replace(
+        consumer,
+        inputs=(replace(source_input, content_hash="sha256:" + "0" * 64),),
+    )
     with pytest.raises(CheckFailed) as rejected:
         invalid.save()
 
-    assert rejected.value.problems[0].code == "analysis_input_source_unknown"
+    assert rejected.value.problems[0].code == "analysis_input_content_mismatch"
 
 
 def test_analysis_revision_owns_its_parameter_proposal_identity(tmp_path: Path) -> None:

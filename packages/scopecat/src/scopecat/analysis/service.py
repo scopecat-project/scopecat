@@ -767,15 +767,25 @@ def _validate_measurement_analysis_input(
 def _load_published_analysis_output(
     *,
     services: ProjectStateServices,
-    repository: AnalysisRepository,
+    repository: AnalysisRepository | None,
     input_ref: PublishedAnalysisOutputInput,
     index: int,
+    primary_run_id: str | None = None,
 ) -> AnalysisRecordOutput | None:
     source = input_ref.source
     if isinstance(source.subject, RunAnalysisSubject):
         run_id = source.subject.run_id
-        snapshot = services.runs.read_snapshot(run_id)
-        _require_completed_project_input_run(snapshot.status, index=index)
+        if run_id != primary_run_id:
+            snapshot = services.runs.read_snapshot(run_id)
+            if primary_run_id is None:
+                _require_completed_project_input_run(snapshot.status, index=index)
+            elif snapshot.status != "completed":
+                _raise_analysis_problem(
+                    "analysis_secondary_run_incomplete",
+                    "secondary analysis inputs must belong to completed runs",
+                    "inputs",
+                    index,
+                )
         try:
             analysis_entry = services.runs.read_content(
                 run_id,
@@ -805,6 +815,13 @@ def _load_published_analysis_output(
             AnalysisRecord,
         )
     else:
+        if repository is None:
+            _raise_analysis_problem(
+                "analysis_input_source_unknown",
+                "run analysis inputs must identify an existing run analysis",
+                "inputs",
+                index,
+            )
         publication = repository.read_publication(
             source.analysis_record_id,
             subject=source.subject,
@@ -961,51 +978,12 @@ def _validate_analysis_inputs(
                 index=index,
             )
             continue
-        source = input_ref.source
-        if not isinstance(source.subject, RunAnalysisSubject) or (
-            source.subject.run_id != run_id
-        ):
-            _raise_analysis_problem(
-                "analysis_input_source_unknown",
-                "analysis input must identify an earlier analysis on this run",
-                "inputs",
-                index,
-            )
-        try:
-            source_entry = storage.read_content(
-                run_id,
-                role="record",
-                content_id=source.analysis_record_id,
-            )
-        except NotFound:
-            _raise_analysis_problem(
-                "analysis_input_source_unknown",
-                "analysis input must identify an earlier analysis on this run",
-                "inputs",
-                index,
-            )
-        if source_entry.kind != "analysis":
-            _raise_analysis_problem(
-                "analysis_input_source_unknown",
-                "analysis input must identify an earlier analysis on this run",
-                "inputs",
-                index,
-            )
-        source_record = storage.read_model(
-            run_id,
-            record_content_ref(
-                record_id=source.analysis_record_id,
-                kind="analysis",
-            ),
-            AnalysisRecord,
-        )
-        source_output = next(
-            (
-                output
-                for output in source_record.outputs
-                if output.id == source.output_id
-            ),
-            None,
+        source_output = _load_published_analysis_output(
+            services=services,
+            repository=None,
+            input_ref=input_ref,
+            index=index,
+            primary_run_id=run_id,
         )
         _validate_published_analysis_output_input(
             input_ref=input_ref,
