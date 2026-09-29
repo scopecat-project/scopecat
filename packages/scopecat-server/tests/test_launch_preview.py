@@ -115,8 +115,10 @@ def client(
                                     root=Path.cwd(),
                                     state=lambda: state or AuthorRevisionState(),
                                     get=Mock(),
-                                    worker_binding=AuthorWorkerBinding(
-                                        Path.cwd(), Path(sys.executable)
+                                    binding_for=Mock(
+                                        return_value=AuthorWorkerBinding(
+                                            Path.cwd(), Path(sys.executable)
+                                        )
                                     ),
                                     workers=RevisionWorkers(),
                                     close=Mock(),

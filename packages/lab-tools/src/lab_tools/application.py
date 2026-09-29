@@ -32,6 +32,27 @@ class Arguments(Protocol):
     package: Path | None
 
 
+def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
+    from .author_environment import (
+        create_client_environment,
+        prepare_execution_environment,
+    )
+
+    assert args.workspace is not None
+    if args.action == "prepare-author-environment":
+        python = prepare_execution_environment(runtime, args.workspace)
+        runtime.select_source_environment(args.workspace, python)
+        print("后台依赖已准备；重新预览使用新环境，已有任务保留原环境。")
+    else:
+        print(
+            create_client_environment(
+                runtime,
+                args.workspace,
+                rebuild=args.action == "rebuild-author-environment",
+            )
+        )
+
+
 def main(argv: list[str] | None = None) -> None:
     configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -45,6 +66,9 @@ def main(argv: list[str] | None = None) -> None:
             "prepare-capability",
             "apply-update",
             "register-source",
+            "prepare-author-environment",
+            "create-author-environment",
+            "rebuild-author-environment",
             "start",
             "stop",
             "open",
@@ -74,7 +98,16 @@ def main(argv: list[str] | None = None) -> None:
     args = cast("Arguments", cast("object", parser.parse_args(argv)))
     if bool(args.distribution) != bool(args.manifest):
         parser.error("--distribution 与 --manifest 需一起填写")
-    if args.action == "register-source" and args.workspace is None:
+    if (
+        args.action
+        in (
+            "register-source",
+            "prepare-author-environment",
+            "create-author-environment",
+            "rebuild-author-environment",
+        )
+        and args.workspace is None
+    ):
         parser.error("登记源码需要 --workspace")
     if args.action == "prepare-update" and args.bundle is None:
         parser.error("准备更新需要 --bundle")
@@ -113,10 +146,16 @@ def main(argv: list[str] | None = None) -> None:
             if candidate is None:
                 raise ValueError("请先准备更新，资格核验通过后再切换")
             runtime.select(candidate)
-            print("已切换应用环境；请重新打开 Scopecat 并重启 Python 内核。")
+            print("已切换应用环境；请重新打开 Scopecat。作者 Python 环境保持不变。")
         elif args.action == "register-source":
             assert args.workspace is not None
-            print(runtime.register_source(args.workspace))
+            print(runtime.register_source(args.workspace, python=args.python))
+        elif args.action in (
+            "create-author-environment",
+            "rebuild-author-environment",
+            "prepare-author-environment",
+        ):
+            _author_environment(runtime, args)
         elif args.action == "status":
             if not runtime.selection.is_file():
                 print(json.dumps({"state": "not-installed", "home": str(runtime.home)}))

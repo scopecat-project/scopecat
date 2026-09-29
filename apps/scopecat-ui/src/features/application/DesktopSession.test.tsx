@@ -21,6 +21,8 @@ it("leaves background work running only after the user chooses it", async () => 
       prepare_update: vi.fn(),
       apply_update: vi.fn(),
       register_source: vi.fn(),
+      prepare_author_environment: vi.fn(),
+      create_author_environment: vi.fn(),
     },
   };
   render(<DesktopSession />);
@@ -46,6 +48,8 @@ it("keeps a failed stop recoverable in the current window", async () => {
       prepare_update: vi.fn(),
       apply_update: vi.fn(),
       register_source: vi.fn(),
+      prepare_author_environment: vi.fn(),
+      create_author_environment: vi.fn(),
     },
   };
   render(<DesktopSession />);

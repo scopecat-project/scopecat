@@ -34,6 +34,7 @@ class Request(BaseModel):
     qualify_sources: bool = False
     workspace: str | None = None
     manifest: str | None = None
+    author_python: Path | None = None
 
 
 def main() -> None:
@@ -75,10 +76,6 @@ def main() -> None:
     if request.action == "probe":
         if request.qualify_sources:
             from scopecat.author_workspaces import local_author_workspaces
-            from scopecat.project_sources import (
-                capture_sources,
-                require_environment,
-            )
 
             for item in local_author_workspaces(project.root):
                 source = open_project(item.root, resolve_adapter=False)
@@ -94,8 +91,9 @@ def main() -> None:
                     owner.deployment_root,
                 ):
                     raise ValueError(f"作者目录运行绑定已改变: {item.root}")
-                candidate = capture_sources(source)
-                require_environment(candidate.manifest)
+                from scopecat_server.author_environment import capture
+
+                capture(source.root, item.python)
                 print(f"已验证作者环境: {item.name} ({item.root})", flush=True)
         execution_packages(
             (
@@ -140,7 +138,9 @@ def main() -> None:
         if environment != request.environment:
             raise ValueError("登记的 Python 环境已改变；请先重新核验当前应用环境")
         assert request.workspace is not None
-        source_id = register_author_workspace(project.root, Path(request.workspace)).id
+        source_id = register_author_workspace(
+            project.root, Path(request.workspace), python=request.author_python
+        ).id
     if request.action == "start":
         if environment != request.environment:
             raise ValueError(

@@ -29,6 +29,9 @@ it("keeps preparation separate from stopping and applying an update", async () =
     candidate: null as typeof candidate | null,
   };
   const apply = vi.fn().mockResolvedValue(undefined);
+  const dependencies = vi.fn().mockResolvedValue("Dependencies ready");
+  const client = vi.fn().mockResolvedValue("/authors/.venv/bin/python");
+  const restart = vi.fn();
   const prepare = vi.fn().mockImplementation(async () => {
     state.candidate = candidate;
     return candidate;
@@ -39,7 +42,9 @@ it("keeps preparation separate from stopping and applying an update", async () =
       prepare_update: prepare,
       apply_update: apply,
       register_source: vi.fn(),
-      restart: vi.fn(),
+      prepare_author_environment: dependencies,
+      create_author_environment: client,
+      restart,
       requalify: vi.fn(),
       retry: vi.fn(),
       exit: vi.fn(),
@@ -54,6 +59,14 @@ it("keeps preparation separate from stopping and applying an update", async () =
   );
   expect(await screen.findByText("/current/python")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Stop and apply prepared update" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("Author directory"), { target: { value: "/authors" } });
+  fireEvent.click(screen.getByRole("button", { name: "Prepare background dependencies" }));
+  expect(await screen.findByText("Dependencies ready")).toBeVisible();
+  expect(dependencies).toHaveBeenCalledWith("/authors");
+  expect(restart).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Rebuild local Python environment" }));
+  expect(await screen.findByText("/authors/.venv/bin/python")).toBeVisible();
+  expect(client).toHaveBeenCalledWith("/authors", true);
   fireEvent.change(screen.getByLabelText("Delivery directory"), { target: { value: "/delivery" } });
   fireEvent.click(screen.getByRole("button", { name: "Prepare update" }));
   expect(await screen.findByText("/candidate/python")).toBeVisible();

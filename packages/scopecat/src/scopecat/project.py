@@ -281,6 +281,7 @@ def load_project(
                 "authors.dependencies must be a list of requirements"
             )
         dependencies = tuple(cast("list[str]", dependencies_value))
+    dependencies = _project_dependencies(selected.parent, dependencies)
     packages = authors.get("packages", {})
     if not isinstance(packages, dict):
         raise ProjectManifestError(
@@ -328,6 +329,31 @@ def load_project(
         lab_adapter=lab_adapter,
         composition_bound=not author_only or resolve_adapter or bound_composition,
     )
+
+
+def _project_dependencies(
+    root: Path, dependencies: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return dependencies
+    metadata = cast(
+        "dict[str, object]", tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    )
+    project_table = metadata.get("project", {})
+    if not isinstance(project_table, dict):
+        raise ProjectManifestError("pyproject project must be a table")
+    if "dependencies" not in project_table:
+        return dependencies
+    declared = cast("dict[str, object]", project_table).get("dependencies", [])
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item.strip()
+        for item in cast("list[object]", declared)
+    ):
+        raise ProjectManifestError(
+            "project.dependencies must be a list of requirements"
+        )
+    return tuple(dict.fromkeys((*(dependencies or ()), *cast("list[str]", declared))))
 
 
 def load_captured_project(root: Path) -> Project:

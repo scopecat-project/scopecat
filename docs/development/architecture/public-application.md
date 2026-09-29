@@ -47,8 +47,8 @@ bound composition even when the live application changes.
 
 Candidate environments and capability declarations are qualified before selection,
 including driver metadata and content identity without device connection. Selection
-requires stopped process ownership, updates source interpreter bindings under the
-same start fence, and retains an interrupted selection for explicit retry. This is
+requires stopped process ownership, preserves independently selected source interpreters,
+and retains an interrupted selection for explicit retry. This is
 the application maintenance boundary: software/settings actions live in the
 workbench, and the separate manager and per-directory service registry are removed.
 Help now starts an owned software practice in this service. Ordinary selected data

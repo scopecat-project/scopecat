@@ -69,12 +69,19 @@ class DesktopAPI:
             self.retry()
 
     def register_source(self, directory: str) -> str:
+        from .author_environment import prepare_execution_environment
+
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择作者代码目录的完整路径")
         with self._operation():
+            python = (
+                prepare_execution_environment(self._runtime, path)
+                if (path / "pyproject.toml").is_file()
+                else None
+            )
             self._runtime.stop()
-            identity = self._runtime.register_source(path)
+            identity = self._runtime.register_source(path, python=python)
             self.retry()
             return identity
 
@@ -82,6 +89,28 @@ class DesktopAPI:
         with self._operation():
             self._runtime.stop()
             self.retry()
+
+    def prepare_author_environment(self, directory: str) -> str:
+        from .author_environment import prepare_execution_environment
+
+        path = Path(directory)
+        if not path.is_absolute():
+            raise ValueError("请选择已登记作者目录的完整路径")
+        with self._operation():
+            self._runtime.source(path)
+            python = prepare_execution_environment(self._runtime, path)
+            self._runtime.select_source_environment(path, python)
+            return "后台依赖已准备；重新预览使用新环境，已有任务保持原环境。"
+
+    def create_author_environment(self, directory: str, rebuild: bool = False) -> str:
+        from .author_environment import create_client_environment
+
+        path = Path(directory)
+        if not path.is_absolute():
+            raise ValueError("请选择作者目录的完整路径")
+        with self._operation():
+            self._runtime.source(path)
+            return str(create_client_environment(self._runtime, path, rebuild=rebuild))
 
     def requalify(self) -> None:
         with self._operation():

@@ -35,10 +35,12 @@ def application_for(service: object) -> DaemonApplication:
 
 @pytest.mark.parametrize("operation", ["analysis", "comparison"])
 def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -> None:
+    binding = AuthorWorkerBinding(Path.cwd(), Path(sys.executable))
+    resolve_binding = Mock(return_value=binding)
     application = application_for(
         SimpleNamespace(
             get=Mock(),
-            worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable)),
+            binding_for=resolve_binding,
         )
     )
     ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
@@ -72,10 +74,8 @@ def test_timeout_reports_unknown_publication_and_never_retries(operation: str) -
     assert "Publication outcome may be unknown" in response.json()["detail"]
     assert f"retained {operation}" in response.json()["detail"]
     assert call.call_count == 1
-    assert (
-        call.call_args.args[0]
-        == application.author_workspaces.get("test-source").worker_binding
-    )
+    assert call.call_args.args[0] == binding
+    resolve_binding.assert_called_once_with(ref)
     payload = call.call_args.args[1]
     assert isinstance(
         payload, AnalysisCall if operation == "analysis" else ComparisonCall
@@ -90,7 +90,9 @@ def test_analysis_failure_keeps_stack_in_daemon_log(
     application = application_for(
         SimpleNamespace(
             get=Mock(),
-            worker_binding=AuthorWorkerBinding(Path.cwd(), Path(sys.executable)),
+            binding_for=Mock(
+                return_value=AuthorWorkerBinding(Path.cwd(), Path(sys.executable))
+            ),
         )
     )
     command = AuthorAnalysisRequest(

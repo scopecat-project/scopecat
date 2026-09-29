@@ -19,11 +19,9 @@ from scopecat.author_workspaces import (
     service_workspace_root,
 )
 from scopecat.project import load_project, open_project
-from scopecat.project_sources import (
-    capture_sources,
-    require_environment,
-)
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME
+
+from scopecat_server.author_environment import capture, check
 
 
 def register_author_workspace(
@@ -32,6 +30,7 @@ def register_author_workspace(
     *,
     name: str | None = None,
     identity: str | None = None,
+    python: Path | None = None,
 ) -> LocalAuthorWorkspace:
     owner = open_project(service)
     project = open_project(workspace, resolve_adapter=False)
@@ -56,8 +55,15 @@ def register_author_workspace(
             for path in sorted(candidates):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 locks.enter_context(FileLock(path, timeout=0))
-            candidate = capture_sources(project)
-            require_environment(candidate.manifest)
+            entries = list(local_author_workspaces(owner.root))
+            previous = next(
+                (item for item in entries if item.root == project.root), None
+            )
+            interpreter = python or (
+                previous.python if previous else Path(sys.executable).absolute()
+            )
+            candidate = capture(project.root, interpreter, owner=owner.root)
+            check(candidate.manifest, interpreter)
             location = project.root / RUNTIME_BINDING_NAME
             if location.exists() and (
                 project.runtime_binding.data_root != binding.data_root
@@ -93,10 +99,6 @@ def register_author_workspace(
                         raise ValueError(
                             "The workspace identity is not in this scientific store"
                         )
-            entries = list(local_author_workspaces(owner.root))
-            previous = next(
-                (item for item in entries if item.root == project.root), None
-            )
             if (
                 previous is not None
                 and identity is not None
@@ -109,7 +111,12 @@ def register_author_workspace(
                 id=identity or (previous.id if previous else uuid4().hex),
                 name=name or project.root.name,
                 root=project.root,
-                python=Path(sys.executable).absolute(),
+                python=interpreter,
+                retained_pythons=tuple(
+                    dict.fromkeys((previous.python, *previous.retained_pythons))
+                )
+                if previous
+                else (),
             )
             # Location binding is local configuration, excluded from captured source.
             if not location.exists() and project.root != owner.root:

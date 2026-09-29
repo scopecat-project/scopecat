@@ -21,6 +21,7 @@ class LocalAuthorWorkspace(BaseModel):
     name: str = Field(min_length=1)
     root: Path
     python: Path
+    retained_pythons: tuple[Path, ...] = ()
 
 
 class LocalAuthorWorkspaces(BaseModel):
