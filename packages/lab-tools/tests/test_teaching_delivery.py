@@ -337,7 +337,7 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
         str(home),
         "--no-browser",
     ]
-    script = (home / "Scopecat.command").read_text()
+    script = (home / "Scopecat.command").read_text(encoding="utf-8")
     assert shlex.quote("./" + Path(calls[0][0]).relative_to(home).as_posix()) in script
     assert (home / "Scopecat.command").stat().st_mode & 0o111
     assert (home / "Notebook.command").stat().st_mode & 0o111

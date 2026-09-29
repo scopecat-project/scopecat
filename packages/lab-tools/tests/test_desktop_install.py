@@ -19,7 +19,7 @@ def test_mac_bundle_uses_selected_python_without_terminal(tmp_path, monkeypatch)
     app = desktop_install.install_entry(home, python)
     assert app == home / "Scopecat.app"
     executable = app / "Contents/MacOS/Scopecat"
-    assert shlex.split(executable.read_text().splitlines()[1]) == [
+    assert shlex.split(executable.read_text(encoding="utf-8").splitlines()[1]) == [
         "exec",
         str(python),
         str(home / "lab.py"),
