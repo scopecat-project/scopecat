@@ -81,7 +81,8 @@ def test_mac_entry_is_outside_data_and_cache(tmp_path, monkeypatch):
     )
     paths = InstallationPaths.current_user()
     assert paths.entry == tmp_path / "Applications/Scopecat.app"
-    assert paths.software.is_relative_to(paths.entry)
+    assert paths.software == paths.state / "software"
+    assert not paths.software.is_relative_to(paths.entry)
     assert not paths.state.is_relative_to(paths.entry)
     python = paths.software / "releases/test/runtime/bin/python"
     assert (
@@ -95,8 +96,90 @@ def test_mac_entry_is_outside_data_and_cache(tmp_path, monkeypatch):
 def test_windows_user_program_and_start_menu_locations():
     paths = InstallationPaths.current_user()
     assert paths.software.is_absolute()
-    assert paths.software.name == "Scopecat"
+    assert paths.software.name == "software"
     assert paths.entry is not None and paths.entry.is_absolute()
     assert paths.entry.suffix == ".lnk"
     assert paths.workspace == Path.home() / "Scopecat/experiments"
-    assert not paths.software.is_relative_to(paths.state)
+    assert paths.software.is_relative_to(paths.state)
+
+
+@pytest.fixture
+def native_start(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from lab_tools import application_runtime, native_bootstrap
+
+    paths = InstallationPaths.isolated(tmp_path / "isolated")
+    paths.state.mkdir(parents=True)
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    (payload / "bundle.json").write_text('{"build": "first"}')
+    selected = SimpleNamespace(python=Path(sys.executable))
+    updates = []
+
+    class Runtime:
+        def __init__(self, home):
+            assert home == paths.state
+
+        def configure(self, **_kwargs):
+            return selected
+
+        def installation(self):
+            return selected
+
+        def prepare_update(self, source):
+            updates.append(source)
+
+        def prepared_update(self):
+            return updates[-1] if updates else None
+
+        def status(self):
+            return SimpleNamespace(state="stopped")
+
+    monkeypatch.setattr(application_runtime, "ApplicationRuntime", Runtime)
+    args = SimpleNamespace(
+        payload=payload,
+        home=tmp_path / "isolated",
+        check_result=tmp_path / "checked.json",
+        prepared=True,
+    )
+    return native_bootstrap, args, paths, selected, updates
+
+
+def test_native_update_is_prepared_once_and_old_app_cannot_replace_it(native_start):
+    bootstrap, args, paths, selected, updates = native_start
+    bootstrap.launch(args, paths)
+    first = (args.payload / "bundle.json").read_text()
+    selected.python = paths.software / "first/python"
+    (args.payload / "bundle.json").write_text('{"build": "second"}')
+    bootstrap.launch(args, paths)
+    assert len(updates) == 1
+    assert json.loads(args.check_result.read_text())["update_available"]
+    bootstrap.launch(args, paths)
+    (args.payload / "bundle.json").write_text(first)
+    bootstrap.launch(args, paths)
+    assert len(updates) == 1
+    assert selected.python == paths.software / "first/python"
+
+
+def test_native_initializer_failure_retries_without_marking_setup_complete(
+    native_start, monkeypatch
+):
+    bootstrap, args, paths, _selected, _updates = native_start
+    (args.payload / "initialize.py").write_text("# trusted laboratory setup")
+    calls = []
+
+    def run(command):
+        calls.append(command)
+        if len(calls) == 1:
+            raise RuntimeError("setup interrupted")
+
+    monkeypatch.setattr(bootstrap, "_run", run)
+    with pytest.raises(RuntimeError, match="setup interrupted"):
+        bootstrap.launch(args, paths)
+    assert not (paths.state / "native-setup.json").exists()
+    bootstrap.launch(args, paths)
+    bootstrap.launch(args, paths)
+    assert len(calls) == 2
+    assert (paths.state / "native-setup.json").is_file()
+    assert not (paths.state / "native-setup.pending").exists()

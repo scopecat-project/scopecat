@@ -130,6 +130,7 @@ def read_bundle(root: Path) -> Bundle:
                     "dependencies.lock",
                     "build.lock",
                     "install.py",
+                    "initialize.py",
                 }
             )
         ):
@@ -163,6 +164,12 @@ def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
                 raise ValueError(f"交付文件不能是符号链接: {name}")
             actual[name] = file_hash(path)
             expected[name] = bundle["files"].get(name, "")
+        initializer = root / "initialize.py"
+        if initializer.exists() or "initialize.py" in bundle["files"]:
+            if initializer.is_symlink():
+                raise ValueError("交付文件不能是符号链接: initialize.py")
+            actual["initialize.py"] = file_hash(initializer)
+            expected["initialize.py"] = bundle["files"].get("initialize.py", "")
     if "gui/index.html" not in actual or actual != expected:
         raise ValueError("交付文件缺失、被修改或包含旧产物; 请恢复匹配的交付目录")
     return bundle
@@ -173,6 +180,8 @@ def _run_install(command: list[str]) -> None:
         command,
         check=True,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
     )
 
 
