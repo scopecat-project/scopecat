@@ -132,6 +132,7 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
 
 
 def main() -> None:
+    os.environ["PYTHONUTF8"] = "1"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--payload", type=Path, required=True)
     parser.add_argument("--home", type=Path, help="Isolated installation root")
