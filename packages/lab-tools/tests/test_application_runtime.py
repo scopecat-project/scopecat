@@ -9,9 +9,42 @@ from filelock import FileLock
 
 from lab_tools import application_runtime
 from lab_tools.application_runtime import ApplicationRuntime
+from scopecat.author_workspaces import LocalAuthorWorkspaces, author_bindings_path
 from scopecat.project import load_captured_project, open_project
 from scopecat.project_sources import capture_sources, materialize_sources
 from scopecat_server.lifecycle import write_daemon_endpoint_record
+
+
+def test_foreground_source_development_owns_and_stops_its_application(tmp_path):
+    from lab_tools.dev import development_session
+    from scopecat.project import open_project
+    from scopecat_server.lifecycle import inspect_daemon
+
+    home = tmp_path / "source development"
+    with development_session(home) as record:
+        assert record.base_url.startswith("http://127.0.0.1:")
+        assert not (home / "installation.json").exists()
+        assert not (home / "releases").exists()
+        with (
+            pytest.raises(RuntimeError, match="developer failure"),
+            development_session(tmp_path / "another"),
+        ):
+            raise RuntimeError("developer failure")
+    assert inspect_daemon(open_project(home / "runtime")).state == "stopped"
+    assert not (home / "authors/scopecat.runtime.toml").exists()
+    assert inspect_daemon(open_project(tmp_path / "another/runtime")).state == "stopped"
+    assert not (tmp_path / "another/authors/scopecat.runtime.toml").exists()
+    # Editable overlays can use an ephemeral interpreter. A later launch must
+    # explicitly register its current interpreter rather than reusing that path.
+    location = author_bindings_path(home / "runtime")
+    registry = LocalAuthorWorkspaces.model_validate_json(location.read_bytes())
+    previous = registry.items[0].model_copy(update={"python": tmp_path / "gone/python"})
+    location.write_text(
+        registry.model_copy(update={"items": (previous,)}).model_dump_json()
+    )
+    with development_session(home):
+        current = LocalAuthorWorkspaces.model_validate_json(location.read_bytes())
+        assert current.items[0].python == Path(sys.executable)
 
 
 @pytest.fixture

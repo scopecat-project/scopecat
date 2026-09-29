@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 import zipfile
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from lab_tools.bundle import (
     target_identity,
     verify_bundle,
 )
+from lab_tools.preview import Preview, unpack_gui
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
 
 REPOSITORY = Path.cwd()
@@ -46,12 +48,13 @@ class BuildArguments(Protocol):
     source: Path | None
     gui: Path | None
     recipe: Path | None
+    preview: Path | None
 
 
 @dataclass(frozen=True, slots=True)
 class DeliveryRecipe:
     lock_project: Path
-    public_source: Path
+    public_source: Path | None
     dependency_group: str
     include_project: bool
     packages: tuple[Path, ...]
@@ -111,15 +114,17 @@ def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRec
     elif "public_source" in table:
         public = directory(table["public_source"], path.parent)
     else:
-        raise ValueError(
-            "recipe requires public_source or an explicit --source checkout"
-        )
+        public = None
 
     def package(value: object) -> Path:
         if isinstance(value, dict):
             reference = cast("dict[str, object]", value)
             if set(reference) != {"source", "path"} or reference["source"] != "public":
                 raise ValueError("package reference requires source='public' and path")
+            if public is None:
+                raise ValueError(
+                    "public package references require an explicit --source checkout"
+                )
             return directory(reference["path"], public)
         return directory(value, path.parent)
 
@@ -149,9 +154,9 @@ def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRec
     )
     if len(set(result.packages)) != len(result.packages):
         raise ValueError("recipe packages contains duplicate directories")
-    if (
-        not (result.lock_project / "uv.lock").is_file()
-        or not (result.public_source / "uv.lock").is_file()
+    if not (result.lock_project / "uv.lock").is_file() or (
+        result.public_source is not None
+        and not (result.public_source / "uv.lock").is_file()
     ):
         raise ValueError("recipe projects require retained uv.lock files")
     return result
@@ -233,6 +238,7 @@ def build_delivery(
     source: Path | None = None,
     gui: Path | None = None,
     recipe: Path | None = None,
+    preview: Path | None = None,
 ) -> Path:
     if recipe is not None and notebook:
         raise ValueError("recipe cannot be combined with notebook override")
@@ -242,11 +248,17 @@ def build_delivery(
         else _default_recipe((source or REPOSITORY).resolve(), notebook)
     )
     public = plan.public_source
+    if preview is not None and (public is not None or gui is not None):
+        raise ValueError("Select either a public preview or public source/GUI")
+    if public is None and preview is None:
+        raise ValueError("A source-free delivery requires --preview")
     repository = plan.lock_project
     sources_repositories = (
         (("public", public),)
         if public == repository
         else (("public", public), ("lab", repository))
+        if public is not None
+        else (("lab", repository),)
     )
     destination = destination.resolve()
     local_names = _package_names(plan.packages)
@@ -259,15 +271,8 @@ def build_delivery(
             ).strip():
                 raise ValueError("正式发布要求 public 和实验室锁定仓库工作目录均干净")
     destination.mkdir(parents=True, exist_ok=False)
-    ui = public / "apps/scopecat-ui"
     pnpm = shutil.which("pnpm")
-    if pnpm is None and gui is None:
-        raise ValueError("维护者构建需要 pnpm")
-    if gui is None:
-        assert pnpm is not None
-        run([pnpm, "install", "--frozen-lockfile"], cwd=ui)
-        run([pnpm, "run", "build"], cwd=ui)
-    _ = shutil.copytree(gui or ui / "dist", destination / "gui")
+    preview_metadata = _prepare_gui(destination, public, gui, preview, pnpm)
     wheels = destination / "wheels"
     wheels.mkdir()
     # Export the reviewed repository lock, excluding locally built distributions.
@@ -332,9 +337,11 @@ def build_delivery(
             "-r",
             str(dependency_lock),
         ],
-        cwd=public,
+        cwd=public or repository,
     )
     selected_wheels = _unique_wheels(wheels)
+    if preview_metadata is not None:
+        _check_preview_wheels(preview_metadata, selected_wheels)
     if missing := local_names - selected_wheels.keys():
         raise ValueError(f"local package wheels missing: {sorted(missing)}")
     if "scopecat-lab-tools" not in selected_wheels:
@@ -369,7 +376,9 @@ def build_delivery(
     )
     # Copy the maintained stdlib-only installer; no second installer implementation.
     _ = shutil.copyfile(
-        public / "packages/lab-tools/src/lab_tools/bundle.py",
+        public / "packages/lab-tools/src/lab_tools/bundle.py"
+        if public is not None
+        else Path(__file__).with_name("bundle.py"),
         destination / "install.py",
     )
     files = inventory(destination, ("gui", "wheels"))
@@ -399,6 +408,8 @@ def build_delivery(
             text=True,
         ).strip():
             sources[name] += "+dirty"
+    if preview_metadata is not None:
+        sources["public"] = preview_metadata["commit"]
     _ = (destination / MANIFEST).write_text(
         json.dumps(
             {
@@ -439,6 +450,41 @@ def build_delivery(
     return destination
 
 
+def _prepare_gui(
+    destination: Path,
+    public: Path | None,
+    gui: Path | None,
+    preview: Path | None,
+    pnpm: str | None,
+) -> Preview | None:
+    if preview is not None:
+        return unpack_gui(preview, destination / "gui")
+    if gui is None:
+        if pnpm is None or public is None:
+            raise ValueError("Source builds require pnpm and a public checkout")
+        ui = public / "apps/scopecat-ui"
+        run([pnpm, "install", "--frozen-lockfile"], cwd=ui)
+        run([pnpm, "run", "build"], cwd=ui)
+        gui = ui / "dist"
+    shutil.copytree(gui, destination / "gui")
+    return None
+
+
+def _check_preview_wheels(
+    preview: Preview, wheels: dict[str, tuple[Path, str]]
+) -> None:
+    for name, version in preview["packages"].items():
+        if name not in wheels:
+            continue  # Test-only packages need not be shipped to users.
+        wheel, actual_version = wheels[name]
+        if actual_version != version or file_hash(wheel) != preview["files"].get(
+            wheel.name
+        ):
+            raise ValueError(
+                f"Wheel does not belong to the selected public preview: {name}"
+            )
+
+
 def build_managed_delivery(
     home: Path,
     *,
@@ -447,6 +493,7 @@ def build_managed_delivery(
     source: Path | None = None,
     gui: Path | None = None,
     recipe: Path | None = None,
+    preview: Path | None = None,
 ) -> Path:
     """Retain every attempt, publishing only a verified build to a stable entry."""
     home = home.resolve()
@@ -464,6 +511,7 @@ def build_managed_delivery(
                 source=source,
                 gui=gui,
                 recipe=recipe,
+                preview=preview,
             )
             verify_bundle(result)
             pointer = managed_path(home, home / CURRENT_DELIVERY)
@@ -502,6 +550,9 @@ def main() -> None:
         help="public checkout (also overrides recipe public_source)",
     )
     _ = parser.add_argument("--recipe", type=Path)
+    _ = parser.add_argument(
+        "--preview", type=Path, help="Pinned public preview.json selection file"
+    )
     _ = parser.add_argument("--gui", type=Path)
     args = cast("BuildArguments", cast("object", parser.parse_args()))
     if (args.destination is None) == (args.output_home is None):
@@ -510,16 +561,25 @@ def main() -> None:
     target = args.output_home if args.output_home is not None else args.destination
     assert target is not None
     try:
-        print(
-            build(
-                target,
-                release=args.release,
-                notebook=args.notebook,
-                source=args.source,
-                gui=args.gui,
-                recipe=args.recipe,
+        with tempfile.TemporaryDirectory(
+            prefix="scopecat-preview-assets-"
+        ) as temporary:
+            preview = None
+            if args.preview is not None:
+                from .preview import fetch_preview
+
+                preview = fetch_preview(args.preview, Path(temporary))
+            print(
+                build(
+                    target,
+                    release=args.release,
+                    notebook=args.notebook,
+                    source=args.source,
+                    gui=args.gui,
+                    recipe=args.recipe,
+                    preview=preview,
+                )
             )
-        )
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(2, f"{error}\n")
 

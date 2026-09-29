@@ -3546,13 +3546,12 @@ class InstrumentRuntime:
         with self._shutdown_lock:
             self._require_running()
             previous = self._endpoint
-            if previous is None:
-                raise BackendConflict("no instrument backend is configured")
             with self._actors.replace_backend(replacement):
                 yield
                 self._endpoint = replacement
             try:
-                previous.shutdown()
+                if previous is not None:
+                    previous.shutdown()
             except Exception as error:
                 raise BackendConflict(
                     "new driver backend is active, but the previous worker did not "

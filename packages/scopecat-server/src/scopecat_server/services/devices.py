@@ -169,11 +169,14 @@ class DeviceService:
         try:
             with self._errors(), self._mutation_lock:
                 previous = self.endpoint
-                if previous is None or replacement is previous:
+                if replacement is previous:
                     raise BackendConflict("replacement requires a new backend")
                 if not replacement.healthy:
                     raise BackendConflict("replacement backend is unavailable")
-                if replacement.provider_id != previous.provider_id:
+                if (
+                    previous is not None
+                    and replacement.provider_id != previous.provider_id
+                ):
                     raise BackendConflict("replacement must keep the provider identity")
                 devices = tuple(
                     view for view in self.list() if view.device.state != "retired"
