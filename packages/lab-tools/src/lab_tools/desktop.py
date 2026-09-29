@@ -31,6 +31,7 @@ class DesktopAPI:
         self._window = window
         self._closing = closing
         self._operation_lock = threading.Lock()
+        self._exit_thread: threading.Thread | None = None
 
     @contextmanager
     def _operation(self) -> Generator[None]:
@@ -128,7 +129,15 @@ class DesktopAPI:
         with self._operation():
             if not background:
                 self._runtime.stop()
+            self._exit_thread = threading.current_thread()
             self._closing.set()
+
+    def _finish_exit(self) -> None:
+        if self._exit_thread is not None:
+            # pywebview sends the API result back to JavaScript after exit()
+            # returns. Destroying the page before that bridge thread finishes
+            # can leave it waiting forever for a WebKit evaluation callback.
+            self._exit_thread.join()
             self._window().destroy()
 
 
@@ -227,6 +236,8 @@ def run(home: Path, source: Path | None = None) -> None:
                     activate.unlink(missing_ok=True)
                     window.restore()
                     window.show()
+            # Keep the native completion hook out of the exposed JavaScript API.
+            api._finish_exit()  # pyright: ignore[reportPrivateUsage]
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
         webview.start(supervise)
