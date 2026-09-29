@@ -1,6 +1,7 @@
 """Reject stale GUI and invalid deliveries before touching a user environment."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -157,6 +158,36 @@ def test_interrupted_copy_is_not_published_and_retry_retains_it(
     assert len(list(home.glob("releases/*/bundle-staging-*/partial"))) == 1
 
 
+def test_separate_software_keeps_launcher_bound_to_data_home(
+    delivery, tmp_path, fake_runtime, monkeypatch
+):
+    import runpy
+    import sys
+
+    home = tmp_path / "Application Support" / "Scopecat"
+    software = tmp_path / "Scopecat.app/Contents/Resources/software"
+    launcher = bundle.install_home(delivery, home, software_home=software)
+    assert launcher == software / "lab.py"
+    assert not (home / "releases").exists()
+    assert fake_runtime[0].is_relative_to(software)
+    selected = fake_runtime[0] / "bin/python"
+    (home / "installation.json").write_text(json.dumps({"python": str(selected)}))
+    calls = []
+    monkeypatch.setattr(sys, "argv", [str(launcher), "--action", "status"])
+    monkeypatch.setattr(bundle.subprocess, "call", lambda args: calls.append(args) or 0)
+    with pytest.raises(SystemExit):
+        runpy.run_path(str(launcher), run_name="__main__")
+    assert calls[0] == [
+        str(selected),
+        "-m",
+        "lab_tools.application",
+        "--home",
+        str(home),
+        "--action",
+        "status",
+    ]
+
+
 def test_interrupted_runtime_retries_at_final_path_preserving_failed_attempt(
     delivery, tmp_path, monkeypatch, fake_runtime
 ):
@@ -307,10 +338,11 @@ def test_installed_launchers_select_notebook_and_quote_shell_paths(
         str(home),
         "--no-browser",
     ]
-    script = (home / "Scopecat.command").read_text()
+    script = (home / "Scopecat.command").read_text(encoding="utf-8")
     assert shlex.quote("./" + Path(calls[0][0]).relative_to(home).as_posix()) in script
-    assert (home / "Scopecat.command").stat().st_mode & 0o111
-    assert (home / "Notebook.command").stat().st_mode & 0o111
+    if os.name != "nt":
+        assert (home / "Scopecat.command").stat().st_mode & 0o111
+        assert (home / "Notebook.command").stat().st_mode & 0o111
     assert 'notebook "$@"' in (home / "Notebook.command").read_text()
     assert not (home / "Manage.command").exists()
     assert not (home / "Manage.cmd").exists()

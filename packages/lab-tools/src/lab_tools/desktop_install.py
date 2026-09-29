@@ -13,9 +13,9 @@ from pathlib import Path
 from .windows_shortcut import CREATE_SHORTCUT
 
 
-def install_entry(home: Path, python: Path) -> Path | None:
+def install_entry(home: Path, python: Path, entry: Path | None = None) -> Path | None:
     if sys.platform == "darwin":
-        app = home / "Scopecat.app"
+        app = entry or home / "Scopecat.app"
         contents = app / "Contents"
         executable = contents / "MacOS" / "Scopecat"
         executable.parent.mkdir(parents=True, exist_ok=True)
@@ -44,7 +44,8 @@ def install_entry(home: Path, python: Path) -> Path | None:
         powershell = shutil.which("powershell.exe")
         if powershell is None:
             raise ValueError("创建桌面入口需要 Windows PowerShell")
-        link = home / "Scopecat.lnk"
+        link = entry or home / "Scopecat.lnk"
+        link.parent.mkdir(parents=True, exist_ok=True)
         # JSON is a data file, never interpolated into PowerShell program text.
         config = home / ".desktop-entry.json"
         config.write_text(
@@ -79,4 +80,10 @@ def install_entry(home: Path, python: Path) -> Path | None:
 
 
 if __name__ == "__main__":
-    print(install_entry(Path(sys.argv[1]).resolve(), Path(sys.executable)))
+    print(
+        install_entry(
+            Path(sys.argv[1]).resolve(),
+            Path(sys.executable),
+            Path(sys.argv[2]).absolute() if len(sys.argv) > 2 else None,
+        )
+    )
