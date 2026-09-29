@@ -967,6 +967,35 @@ def test_retirement_rejects_an_owned_actor_without_aborting_it() -> None:
     assert drivers[0].disconnect_count == 1
 
 
+def test_group_retirement_checks_all_owners_before_disconnecting() -> None:
+    registry = InstrumentActorRegistry()
+    drivers: list[_TrackingDriver] = []
+    endpoint = _endpoint(drivers)
+    keys = tuple(_exclusivity_key(name) for name in ("source-0", "source-1"))
+    owners = [
+        registry.acquire(
+            key,
+            f"source-{index}",
+            binding=_binding(),
+            owner=_owner(f"session-{index}"),
+            endpoint=endpoint,
+            connect=endpoint,
+        )
+        for index, key in enumerate(keys)
+    ]
+    owners[0].release()
+    with registry.begin_retirement(keys) as retirement:
+        with pytest.raises(InstrumentActorConflict, match="owned instrument"):
+            retirement.retire_idle()
+        assert all(driver.disconnect_count == 0 for driver in drivers)
+        assert all(registry.has_actor(key) for key in keys)
+        owners[1].release()
+        retirement.retire_idle()
+        assert all(driver.disconnect_count == 1 for driver in drivers)
+        assert not any(registry.has_actor(key) for key in keys)
+    registry.shutdown()
+
+
 def test_retirement_catches_an_acquire_after_its_slow_connect() -> None:
     registry = InstrumentActorRegistry()
     drivers: list[_TrackingDriver] = []

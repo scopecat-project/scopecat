@@ -603,9 +603,8 @@ class _InstrumentActor:
             if connection is not None:
                 self._disconnect(connection)
 
-    def retire_idle(self) -> None:
-        """Permanently close this actor without disturbing a published owner."""
-
+    def require_idle(self) -> None:
+        """Check retirement eligibility while the registry fences new owners."""
         with self._lock:
             if self._shutdown:
                 raise InstrumentActorShutdown(
@@ -615,6 +614,12 @@ class _InstrumentActor:
                 raise InstrumentActorConflict(
                     f"owned instrument cannot be retired: {self._exclusivity_key}"
                 )
+
+    def retire_idle(self) -> None:
+        """Permanently close this actor without disturbing a published owner."""
+
+        with self._lock:
+            self.require_idle()
             self._shutdown = True
             self._state_cache = None
             self._epoch += 1
@@ -841,20 +846,25 @@ class InstrumentActorRegistry:
         keys: tuple[str, ...],
         marker: object,
     ) -> None:
-        for exclusivity_key in keys:
-            with self._condition:
-                while (
-                    self._retirements.get(exclusivity_key) is marker
-                    and self._acquiring.get(exclusivity_key, 0) != 0
-                ):
-                    self._condition.wait()
-                if self._retirements.get(exclusivity_key) is not marker:
+        with self._condition:
+            while True:
+                if any(self._retirements.get(key) is not marker for key in keys):
                     raise InstrumentActorConflict(
                         "instrument retirement gate is released"
                     )
-                actor = self._actors.get(exclusivity_key)
-            if actor is None:
-                continue
+                if not any(self._acquiring.get(key, 0) for key in keys):
+                    break
+                self._condition.wait()
+            selected = tuple(
+                (key, actor)
+                for key in keys
+                if (actor := self._actors.get(key)) is not None
+            )
+        # Check the entire group before touching a connection. The retirement
+        # gate prevents new owners while existing owners may still release.
+        for _, actor in selected:
+            actor.require_idle()
+        for exclusivity_key, actor in selected:
             actor.retire_idle()
             with self._condition:
                 if self._retirements.get(exclusivity_key) is not marker:
