@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Local experiment application, teaching and Notebook lifecycle tools."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["fastapi>=0.116", "filelock>=3.18", "httpx2", "platformdirs>=4", "psutil>=7", "pydantic>=2", "scopecat", "scopecat-instruments", "scopecat-lab-teaching", "scopecat-server", "uvicorn>=0.35"]
+dependencies = ["fastapi>=0.116", "filelock>=3.18", "httpx2", "platformdirs>=4", "psutil>=7", "pydantic>=2", "scopecat", "scopecat-instruments", "scopecat-lab-teaching", "scopecat-server", "uv>=0.12.3,<0.13", "uvicorn>=0.35"]
 
 [project.scripts]
 scopecat-lab = "lab_tools.cli:main"

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
+
+from uv import find_uv_bin
 
 from scopecat.kernel.content_identity import sha256_json_hash
 
@@ -98,9 +99,7 @@ def prepare_execution_environment(
     if not declaration.is_file():
         raise ValueError("请在作者目录的 pyproject.toml 声明后台实验所需依赖")
     bundle = _bundle(runtime)
-    uv = shutil.which("uv")
-    if uv is None:
-        raise ValueError("准备作者依赖需要 uv")
+    uv = find_uv_bin()
     with tempfile.TemporaryDirectory(prefix="scopecat-author-lock-") as temporary:
         lock = Path(temporary) / "requirements.lock"
         _run(

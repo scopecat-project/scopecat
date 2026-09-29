@@ -1,7 +1,9 @@
 """Reject stale GUI and invalid deliveries before touching a user environment."""
 
+import io
 import json
 import os
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -63,6 +65,126 @@ def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_
     assert not destination.exists()
     # Starting an installed GUI does not reread all third-party wheels.
     assert bundle.gui_directory(delivery, {"scopecat": "current"}) == delivery / "gui"
+
+
+def add_toolchain(delivery, *, unsafe=False):
+    directory = delivery / "toolchain"
+    directory.mkdir()
+    with tarfile.open(directory / "python.tar", "w") as archive:
+        name = (
+            "../escaped"
+            if unsafe
+            else ("python.exe" if os.name == "nt" else "bin/python3")
+        )
+        member = tarfile.TarInfo(name)
+        member.size = 6
+        archive.addfile(member, io.BytesIO(b"python"))
+    (directory / ("uv.exe" if os.name == "nt" else "uv")).write_bytes(b"uv")
+    path = delivery / bundle.MANIFEST
+    document = json.loads(path.read_text())
+    document["files"].update(bundle.inventory(delivery, ("toolchain",)))
+    path.write_text(json.dumps(document))
+
+
+def test_retained_python_and_uv_do_not_use_host_path(delivery, tmp_path, monkeypatch):
+    add_toolchain(delivery)
+    commands = []
+
+    def run(command):
+        commands.append(command)
+        if command[1] == "venv":
+            Path(command[-1]).mkdir()
+
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(bundle, "_run_install", run)
+    python, retained = bundle.prepare_home(delivery, tmp_path / "installed")
+    release = retained.parent
+    assert Path(commands[0][0]).is_relative_to(retained / "toolchain")
+    base = Path(commands[0][commands[0].index("--python") + 1])
+    assert base.is_relative_to(release / "python")
+    assert base.read_bytes() == b"python"
+    assert python.parent.parent == release / "runtime"
+    # Bytecode in the extracted interpreter must not invalidate the payload.
+    (release / "python" / "generated.pyc").write_bytes(b"cache")
+    assert bundle.prepare_home(delivery, tmp_path / "installed") == (python, retained)
+    assert len(commands) == 2
+
+
+def test_python_archive_rejects_path_escape(delivery, tmp_path):
+    add_toolchain(delivery, unsafe=True)
+    with pytest.raises(tarfile.OutsideDestinationError):
+        bundle.prepare_home(delivery, tmp_path / "installed")
+    assert not list((tmp_path / "installed").rglob("escaped"))
+    assert not list((tmp_path / "installed").rglob(bundle.RECEIPT))
+
+
+def test_corrupt_python_blocks_install_before_writes(delivery, tmp_path):
+    add_toolchain(delivery)
+    (delivery / "toolchain/python.tar").write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="被修改"):
+        bundle.prepare_home(delivery, tmp_path / "installed")
+    assert not (tmp_path / "installed").exists()
+
+
+def test_wheel_delivery_uses_installed_uv_without_host_path(
+    delivery, tmp_path, monkeypatch
+):
+    prefix = tmp_path / "application"
+    uv = prefix / ("Scripts/uv.exe" if os.name == "nt" else "bin/uv")
+    uv.parent.mkdir(parents=True)
+    uv.touch()
+    commands = []
+
+    def run(command):
+        commands.append(command)
+        if command[1] == "venv":
+            Path(command[-1]).mkdir()
+
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(bundle.sys, "prefix", str(prefix))
+    monkeypatch.setattr(bundle, "_run_install", run)
+    bundle.install_bundle(delivery, tmp_path / "author")
+    assert all(command[0] == str(uv) for command in commands)
+
+
+def test_toolchain_build_ignores_managed_aliases_and_preserves_input(
+    delivery, tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from lab_tools import toolchain
+
+    before = (delivery / bundle.MANIFEST).read_bytes()
+    commands = []
+    relative = "python.exe" if os.name == "nt" else "bin/python3"
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        if command[1:3] == ["python", "install"]:
+            managed = Path(command[command.index("--install-dir") + 1])
+            root = managed / "cpython-exact-version"
+            python = root / relative
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"portable python")
+            if os.name != "nt":
+                (managed / "cpython-minor-alias").symlink_to(
+                    root, target_is_directory=True
+                )
+            return SimpleNamespace(returncode=0)
+        portable = Path(command[0]).parents[0 if os.name == "nt" else 1]
+        return SimpleNamespace(
+            stdout=json.dumps([toolchain.platform.python_version(), str(portable)])
+        )
+
+    monkeypatch.setattr(toolchain.subprocess, "run", run)
+    output = toolchain.build(delivery, tmp_path / "packaged")
+    assert (delivery / bundle.MANIFEST).read_bytes() == before
+    assert not (delivery / "toolchain").exists()
+    assert bundle.verify_bundle(output)["files"]["toolchain/python.tar"]
+    assert (output / "toolchain/LICENSE-MIT").is_file()
+    assert "--no-bin" in commands[0] and "--no-registry" in commands[0]
+    with tarfile.open(output / "toolchain/python.tar") as archive:
+        assert all(not member.issym() for member in archive.getmembers())
 
 
 def test_installer_rejects_other_platform(delivery, tmp_path):

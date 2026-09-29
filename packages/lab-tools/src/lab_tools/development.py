@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from packaging.utils import canonicalize_name
+from uv import find_uv_bin
 
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.project import open_project
@@ -36,9 +37,7 @@ def prepare_capability(runtime: ApplicationRuntime, source: Path) -> Installatio
     baseline = Path(receipt["bundle"])
     check_receipt(environment, baseline)
     manifest = verify_bundle(baseline)
-    uv = shutil.which("uv")
-    if uv is None:
-        raise ValueError("开发能力快照需要 uv；日常使用不需要此操作")
+    uv = find_uv_bin()
     with tempfile.TemporaryDirectory(prefix="scopecat-capability-") as directory:
         staging = Path(directory)
         wheels = staging / "built"
