@@ -40,6 +40,7 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 - [Automation tasks and durable execution](architecture/automation-tasks.md)
 - [Task parameter flow and acceptance](architecture/task-parameter-flow.md)
 - [Repository map](repository-map.md)
+- [Public previews and source development](public-preview.md)
 - [Core workflow evaluations](workflow-evaluations.md)
 - [Everyday Python author contract](everyday-author-contract.md)
 - [Supervised laboratory pilot roadmap](lab-pilot-roadmap.md)

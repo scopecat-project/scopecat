@@ -15,4 +15,5 @@ site/
 .test-results/
 
 results/
+.scopecat-dev/
 dist/tutorial*/

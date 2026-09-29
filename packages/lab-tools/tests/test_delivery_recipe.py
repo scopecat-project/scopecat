@@ -12,6 +12,63 @@ from lab_tools import delivery
 from lab_tools.bundle import MANIFEST, verify_bundle
 
 
+def test_recipe_can_consume_public_artifacts_without_a_checkout(
+    recipe, tmp_path, build_tools, monkeypatch
+):
+    preview = tmp_path / "preview"
+    preview.mkdir()
+    wheels = preview / "wheels"
+    wheels.mkdir()
+    plan = delivery.load_recipe(recipe)
+    for package in plan.packages[1:]:
+        delivery.run(
+            ["uv", "build", "--out-dir", str(wheels), str(package)], cwd=tmp_path
+        )
+    with zipfile.ZipFile(preview / "scopecat-ui.zip", "w") as archive:
+        archive.writestr("index.html", "<html>published GUI</html>")
+    (preview / "preview.json").write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "commit": "a" * 40,
+                "packages": {
+                    delivery.wheel_metadata(path)[0]: "1.0"
+                    for path in wheels.glob("*.whl")
+                },
+                "files": {
+                    path.name: delivery.file_hash(path)
+                    for path in [*wheels.glob("*.whl"), preview / "scopecat-ui.zip"]
+                },
+            }
+        )
+    )
+    recipe.write_text(
+        '[delivery]\nlock_project="."\ndependency_group="delivery"\ninclude_project=true\npackages=["."]\n'
+    )
+    original = delivery.run
+
+    def run(command, *, cwd):
+        original(command, cwd=cwd)
+        if "pip" in command and "wheel" in command:
+            target = Path(command[command.index("--wheel-dir") + 1])
+            for wheel in wheels.glob("*.whl"):
+                shutil.copyfile(wheel, target / wheel.name)
+
+    monkeypatch.setattr(delivery, "run", run)
+    shutil.rmtree(tmp_path / "public")
+    result = delivery.build_delivery(
+        tmp_path / "artifact", recipe=recipe, preview=preview
+    )
+    verify_bundle(result)
+    assert (result / "gui/index.html").read_text() == "<html>published GUI</html>"
+    assert json.loads((result / MANIFEST).read_text())["sources"]["public"] == "a" * 40
+    metadata = json.loads((preview / "preview.json").read_text())
+    metadata["files"][next(wheels.glob("*.whl")).name] = "0" * 64
+    (preview / "preview.json").write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="selected public preview"):
+        delivery.build_delivery(tmp_path / "rejected", recipe=recipe, preview=preview)
+
+
 def project(path: Path, name: str) -> None:
     path.mkdir(parents=True, exist_ok=True)
     (path / "pyproject.toml").write_text(f'[project]\nname="{name}"\nversion="1.0"\n')

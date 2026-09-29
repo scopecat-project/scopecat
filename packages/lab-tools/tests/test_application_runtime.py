@@ -14,6 +14,25 @@ from scopecat.project_sources import capture_sources, materialize_sources
 from scopecat_server.lifecycle import write_daemon_endpoint_record
 
 
+def test_foreground_source_development_owns_and_stops_its_application(tmp_path):
+    from lab_tools.dev import development_session
+    from scopecat.project import open_project
+    from scopecat_server.lifecycle import inspect_daemon
+
+    home = tmp_path / "source development"
+    with development_session(home) as record:
+        assert record.base_url.startswith("http://127.0.0.1:")
+        assert not (home / "installation.json").exists()
+        assert not (home / "releases").exists()
+        with (
+            pytest.raises(RuntimeError, match="developer failure"),
+            development_session(tmp_path / "another"),
+        ):
+            raise RuntimeError("developer failure")
+    assert inspect_daemon(open_project(home / "runtime")).state == "stopped"
+    assert inspect_daemon(open_project(tmp_path / "another/runtime")).state == "stopped"
+
+
 @pytest.fixture
 def application(tmp_path: Path):
     gui = tmp_path / "gui"

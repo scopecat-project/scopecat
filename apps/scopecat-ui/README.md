@@ -8,21 +8,17 @@ designed to be served by the daemon so all API calls stay on relative
 pnpm install
 ```
 
-For frontend development, use an installed, isolated development application home.
-Start it explicitly and point Vite at the same home (from this UI directory):
+For frontend development, start a foreground application from the repository root:
 
 ```sh
-uv run --project ../.. scopecat app --home /path/to/development/application --action start
-export SCOPECAT_APPLICATION_HOME=/path/to/development/application
-pnpm run dev
+uv run --group delivery python -m lab_tools.dev --source .
 ```
 
-In PowerShell set `$env:SCOPECAT_APPLICATION_HOME = "C:\path\to\development\application"`.
-Vite reads that application's selected interpreter and verified running endpoint;
-there is no fixed backend port or fallback to another application. It does not open
-a browser. Open the printed preview URL explicitly. Ctrl-C stops Vite; the application
-keeps its tasks until you explicitly run `scopecat app --home HOME --action stop`.
-Restart Vite after restarting the application so it reads the new endpoint.
+The same command works in PowerShell. It owns a separate `.scopecat-dev` data
+directory, starts the backend and Vite, and prints their URLs without opening a
+browser. Ctrl-C stops both. No desktop installation is needed. Pass `--home` to
+choose another development directory. Vite receives `SCOPECAT_DEV_ENDPOINT` from
+the launcher; it does not discover or start a daily application.
 
 `pnpm run build` writes only to this application's ignored `dist/` directory.
 Use the complete delivery workflow to install a changed bundle into the application.
