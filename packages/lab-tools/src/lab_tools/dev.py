@@ -55,7 +55,10 @@ def development_session(
         root.mkdir(exist_ok=True)
         marker.write_text(json.dumps({"kind": "scopecat-development"}))
         manifest = root / "scopecat.toml"
-        if manifest.exists() and inspect_daemon(open_project(root)).state != "stopped":
+        if manifest.exists() and inspect_daemon(open_project(root)).state not in {
+            "stopped",
+            "stale",
+        }:
             raise ValueError(
                 "Stop the existing development application before restarting"
             )
