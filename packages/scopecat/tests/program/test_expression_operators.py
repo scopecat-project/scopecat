@@ -135,6 +135,7 @@ def test_quantity_arithmetic_exposes_dimension_reducing_static_types() -> None:
     assert_type(phase, sc.ValueRef[sc.Quantity])
     assert_type(frequency / sc.Quantity(1.0, "GHz"), sc.ValueRef[float])
     assert_type(frequency * 2.0, sc.ValueRef[sc.Quantity])
+    assert_type(sc.Quantity(6.0, "GHz") - frequency, sc.ValueRef[sc.Quantity])
     assert_type(frequency * scale, sc.ValueRef[sc.Quantity])
     assert_type(frequency / scale, sc.ValueRef[sc.Quantity])
 
