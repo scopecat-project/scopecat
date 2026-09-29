@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import timedelta
 from threading import Lock
 from typing import TYPE_CHECKING, Protocol, cast
@@ -94,8 +94,17 @@ class DeviceService:
     def validate_connection(self, content: DeviceConnection) -> None:
         self.require_driver(content.driver)
         assert self.endpoint is not None
-        driver = self.endpoint.driver_catalog.get(content.driver.driver_id)
-        assert driver is not None
+        self._validate_options(content, self.endpoint)
+
+    @staticmethod
+    def _validate_options(
+        content: DeviceConnection, endpoint: InstrumentBackendEndpoint
+    ) -> None:
+        driver = endpoint.driver_catalog.get(content.driver.driver_id)
+        if driver is None:
+            raise BackendConflict(
+                f"replacement does not provide driver {content.driver.driver_id}"
+            )
         contract = next(
             (
                 item
@@ -142,6 +151,122 @@ class DeviceService:
                 for view in DeviceRepository(connection).list()
             )
 
+    def replace_backend(
+        self,
+        replacement: InstrumentBackendEndpoint,
+        instruments: InstrumentRuntime,
+        *,
+        actor: str,
+    ) -> tuple[DeviceView, ...]:
+        """Install an already validated worker and retain new device revisions.
+
+        Ownership of the replacement transfers here, including cleanup on failure.
+        A source activation coordinator must also persist the selected source before
+        exposing this operation to clients.
+        """
+        published = False
+        try:
+            with self._errors(), self._mutation_lock:
+                previous = self.endpoint
+                if previous is None or replacement is previous:
+                    raise BackendConflict("replacement requires a new backend")
+                if not replacement.healthy:
+                    raise BackendConflict("replacement backend is unavailable")
+                if replacement.provider_id != previous.provider_id:
+                    raise BackendConflict("replacement must keep the provider identity")
+                devices = tuple(
+                    view for view in self.list() if view.device.state != "retired"
+                )
+                revisions = tuple(
+                    DeviceConnectionRevision(
+                        id=f"driver-update:{uuid4().hex}",
+                        device_id=view.device.id,
+                        previous=view.device.head,
+                        content=view.revision.content.model_copy(
+                            update={
+                                "driver": DriverImplementationRef(
+                                    provider_id=replacement.provider_id,
+                                    driver_id=view.revision.content.driver.driver_id,
+                                    artifact_hash=replacement.artifact_hash,
+                                )
+                            }
+                        ),
+                        actor=actor,
+                        note="Driver source updated",
+                    )
+                    for view in devices
+                )
+                for revision in revisions:
+                    self._validate_options(revision.content, replacement)
+                with ExitStack() as stack, instruments.replace_backend(replacement):
+                    keys = tuple(
+                        dict.fromkeys(
+                            (
+                                *self.actors.connection_keys(),
+                                *(
+                                    device_resource_key(view.device.id)
+                                    for view in devices
+                                ),
+                            )
+                        )
+                    )
+                    retirement = (
+                        stack.enter_context(self.actors.begin_retirement(keys))
+                        if keys
+                        else None
+                    )
+                    # Reserve every device before disconnecting any of them. Runs
+                    # admitted concurrently either own a claim or see maintenance.
+                    sessions: dict[str, str] = {}
+                    for view in devices:
+                        device_id = view.device.id
+                        with self.control.read_transaction() as connection:
+                            self._require_drained(connection, device_id)
+                        snapshot = self.access_setup(device_id, require_driver=False)
+                        session = self.control.open_instrument_session(
+                            operation_id=f"driver-update:{uuid4().hex}",
+                            actor=actor,
+                            setup=snapshot.ref,
+                            instrument_ids=(device_id,),
+                            exclusivity_keys=(device_resource_key(device_id),),
+                            ttl=timedelta(minutes=5),
+                        )
+                        sessions[device_id] = session.session_id
+                        stack.callback(self._close_maintenance, session.session_id)
+                    try:
+                        if retirement is not None:
+                            retirement.retire_idle()
+                    except Exception as error:
+                        for session_id in sessions.values():
+                            self.control.mark_instrument_session_unknown(
+                                session_id, reason="driver_update_retirement_failed"
+                            )
+                        raise BackendConflict(
+                            "driver update could not release existing connections; "
+                            "inspect device attention before retrying"
+                        ) from error
+                    with self.control.write_transaction() as connection:
+                        repository = DeviceRepository(connection)
+                        for view, revision in zip(devices, revisions, strict=True):
+                            self._require_drained(
+                                connection, view.device.id, sessions[view.device.id]
+                            )
+                            repository.save(
+                                label=view.device.label,
+                                revision=revision,
+                                expected_head=view.device.head,
+                            )
+                    self.endpoint = replacement
+                    published = True
+                return self.list()
+        finally:
+            if not published and replacement is not self.endpoint:
+                replacement.shutdown()
+
+    def _close_maintenance(self, session_id: str) -> None:
+        if self.control.get_instrument_session(session_id).state == "active":
+            self.control.close_instrument_session(session_id, status="closed")
+
     def get(self, device_id: str) -> DeviceView:
         with self._errors(), self.control.read_transaction() as connection:
             return DeviceRepository(connection).view(device_id)
@@ -183,7 +308,7 @@ class DeviceService:
             return setups.resolve(definition.id)
 
     def save(self, command: DeviceSaveCommand) -> DeviceView:
-        with self._errors():
+        with self._errors(), self._mutation_lock:
             self.validate_connection(command.connection)
             revision = DeviceConnectionRevision(
                 id=command.revision_id,
@@ -213,7 +338,6 @@ class DeviceService:
                         )
                     return current
             with (
-                self._mutation_lock,
                 self._maintenance(
                     command.device_id, command.expected_head
                 ) as maintenance,
@@ -289,7 +413,11 @@ class DeviceService:
         )
 
     def rename(self, device_id: str, label: str) -> RegisteredDevice:
-        with self._errors(), self.control.write_transaction() as connection:
+        with (
+            self._errors(),
+            self._mutation_lock,
+            self.control.write_transaction() as connection,
+        ):
             return DeviceRepository(connection).rename(device_id, label)
 
     def retire(

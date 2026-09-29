@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from threading import Lock, RLock, Timer
 from time import perf_counter
@@ -3537,6 +3537,27 @@ class InstrumentRuntime:
         with self._lifecycle_lock:
             if self._stopping:
                 raise BackendConflict("instrument service is shutting down")
+
+    @contextmanager
+    def replace_backend(
+        self, replacement: InstrumentBackendEndpoint
+    ) -> Generator[None]:
+        """Publish a backend together with the coordinator's device revisions."""
+        with self._shutdown_lock:
+            self._require_running()
+            previous = self._endpoint
+            if previous is None:
+                raise BackendConflict("no instrument backend is configured")
+            with self._actors.replace_backend(replacement):
+                yield
+                self._endpoint = replacement
+            try:
+                previous.shutdown()
+            except Exception as error:
+                raise BackendConflict(
+                    "new driver backend is active, but the previous worker did not "
+                    "confirm shutdown; inspect worker diagnostics"
+                ) from error
 
     def shutdown(self) -> None:
         with self._shutdown_lock:

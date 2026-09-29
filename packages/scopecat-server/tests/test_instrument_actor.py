@@ -1081,6 +1081,56 @@ def test_retirement_disconnect_failure_leaves_a_terminal_actor() -> None:
     registry.shutdown()
 
 
+def test_backend_replacement_rejects_requests_with_the_previous_endpoint() -> None:
+    registry = InstrumentActorRegistry()
+    drivers: list[_TrackingDriver] = []
+    previous = _endpoint(drivers)
+    replacement = _endpoint(drivers)
+
+    def acquire(endpoint: InstrumentBackendEndpoint) -> OwnedInstrument:
+        return registry.acquire(
+            _exclusivity_key("source-0"),
+            "source-0",
+            binding=_binding(),
+            owner=_owner("session"),
+            endpoint=endpoint,
+            connect=replacement,
+        )
+
+    with (
+        registry.replace_backend(replacement),
+        pytest.raises(InstrumentActorConflict, match="being replaced"),
+    ):
+        acquire(replacement)
+    # A request can have captured the old endpoint before entering the registry.
+    with pytest.raises(InstrumentActorConflict, match="has been replaced"):
+        acquire(previous)
+    assert drivers == []
+    acquire(replacement).release()
+    registry.shutdown()
+
+
+def test_failed_backend_replacement_keeps_the_previous_endpoint_eligible() -> None:
+    registry = InstrumentActorRegistry()
+    drivers: list[_TrackingDriver] = []
+    previous = _endpoint(drivers)
+    with (
+        pytest.raises(ValueError, match="publication failed"),
+        registry.replace_backend(previous),
+    ):
+        raise ValueError("publication failed")
+    owned = registry.acquire(
+        _exclusivity_key("source-0"),
+        "source-0",
+        binding=_binding(),
+        owner=_owner("session"),
+        endpoint=previous,
+        connect=previous,
+    )
+    owned.release()
+    registry.shutdown()
+
+
 def test_stop_accepting_fences_new_owners_without_interrupting_the_drain() -> None:
     registry = InstrumentActorRegistry()
     drivers: list[_TrackingDriver] = []

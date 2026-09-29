@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from contextlib import suppress
+from collections.abc import Callable, Generator, Iterable
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from hashlib import sha256
 from threading import Condition, RLock
@@ -748,6 +748,8 @@ class InstrumentActorRegistry:
         self._condition = Condition(self._lock)
         self._acquiring: dict[str, int] = {}
         self._retirements: dict[str, object] = {}
+        self._replacing_backend = False
+        self._active_backend: InstrumentBackendEndpoint | None = None
         self._accepting = True
         self._closed = False
 
@@ -764,6 +766,13 @@ class InstrumentActorRegistry:
         with self._condition:
             if not self._accepting:
                 raise InstrumentActorShutdown("instrument actor registry is shut down")
+            if self._replacing_backend:
+                raise InstrumentActorConflict("instrument backend is being replaced")
+            if (
+                self._active_backend is not None
+                and endpoint is not self._active_backend
+            ):
+                raise InstrumentActorConflict("instrument backend has been replaced")
             if exclusivity_key in self._retirements:
                 raise InstrumentActorConflict(
                     f"instrument actor is retiring: {exclusivity_key}"
@@ -789,7 +798,7 @@ class InstrumentActorRegistry:
 
         with self._condition:
             accepting = self._accepting
-            retiring = exclusivity_key in self._retirements
+            retiring = self._replacing_backend or exclusivity_key in self._retirements
             current = self._actors.get(exclusivity_key) is actor
             if accepting and not retiring and current:
                 # Measurement context survives explicit idle-actor retirement,
@@ -815,6 +824,33 @@ class InstrumentActorRegistry:
         raise InstrumentActorConflict(
             f"instrument actor is retiring: {exclusivity_key}"
         )
+
+    @contextmanager
+    def replace_backend(
+        self, replacement: InstrumentBackendEndpoint
+    ) -> Generator[None]:
+        """Fence every resource until a coordinator publishes the replacement.
+
+        The caller must retire resident actors and preserve durable ownership
+        before publication. Failed publication keeps the previous generation
+        eligible; successful publication only accepts the replacement endpoint.
+        """
+        with self._condition:
+            if not self._accepting:
+                raise InstrumentActorShutdown("instrument actor registry is shut down")
+            if self._replacing_backend or self._retirements:
+                raise InstrumentActorConflict("instrument maintenance is in progress")
+            self._replacing_backend = True
+            while self._acquiring:
+                self._condition.wait()
+        try:
+            yield
+            with self._condition:
+                self._active_backend = replacement
+        finally:
+            with self._condition:
+                self._replacing_backend = False
+                self._condition.notify_all()
 
     def begin_retirement(
         self,
@@ -910,6 +946,11 @@ class InstrumentActorRegistry:
         """Whether this process still retains an actor after failed retirement."""
         with self._lock:
             return key in self._actors
+
+    def connection_keys(self) -> tuple[str, ...]:
+        """Resident resources, including connections without a current owner."""
+        with self._lock:
+            return tuple(self._actors)
 
     def shutdown(self) -> None:
         with self._lock:

@@ -121,6 +121,62 @@ def test_source_worker_loads_snapshot_but_keeps_runtime_settings_root(
         endpoint.shutdown()
 
 
+def test_running_application_switches_source_worker_and_reconnects(
+    tmp_path: Path,
+) -> None:
+    project = _copy_project(tmp_path)
+    source = tmp_path / "replacement-source"
+    shutil.copytree(_FIXTURE, source)
+    backend = source / "src/worker_fixture/backend.py"
+    backend.write_text(
+        backend.read_text().replace(
+            'implementation_version = "v1"', 'implementation_version = "v2"'
+        )
+    )
+    previous = SubprocessInstrumentBackendEndpoint(project, _BACKEND)
+    with LocalDaemonRuntime(
+        project, bootstrap_config=load_config(), instrument_endpoint=previous
+    ) as runtime:
+        instruments = runtime.application.instruments
+        first = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                operation_id="before-source-update",
+                actor="author",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        instruments.close_session(first.session_id)
+        replacement = SubprocessInstrumentBackendEndpoint(
+            project, _BACKEND, code_root=source
+        )
+        old_process = psutil.Process(previous.worker_pid)
+        new_process = psutil.Process(replacement.worker_pid)
+        assert previous.artifact_hash != replacement.artifact_hash
+        runtime.application.devices.replace_backend(
+            replacement, instruments, actor="author"
+        )
+        assert not old_process.is_running()
+        assert new_process.is_running()
+        assert runtime.application.health().status == "ok"
+        second = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                operation_id="after-source-update",
+                actor="author",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        instruments.close_session(second.session_id)
+        [description] = instruments.resolve_instrument_contracts(
+            load_config()
+        ).instruments
+        assert description.implementation_version == "v2"
+        assert "disconnect:source-0" in (project / "driver-events.log").read_text()
+        assert not (source / "driver-events.log").exists()
+    assert not new_process.is_running()
+
+
 def _gain_read_request() -> BackendReadRequest:
     return BackendReadRequest(targets=(state_member_target(_GAIN),))
 

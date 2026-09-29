@@ -30,6 +30,7 @@ from scopecat_server.instruments.backend import (
 )
 from scopecat_server.runtime import LocalDaemonRuntime
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
+from scopecat_server.storage.sqlite.devices import DeviceRepository
 
 
 def _endpoint() -> LocalInstrumentBackendEndpoint:
@@ -75,6 +76,221 @@ def _register(client: TestClient, device_id: str = "signal") -> dict[str, Any]:
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_backend_replacement_updates_devices_without_restarting_application(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    previous = _endpoint()
+    replacement = _endpoint()
+    monkeypatch.setattr(replacement, "_artifact_hash", "sha256:" + "0" * 64)
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=previous) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        registered = _register(client)
+        devices = runtime.application.devices
+        instruments = runtime.application.instruments
+        setup = devices.access_setup("signal")
+        first = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                setup=setup.ref,
+                actor="operator",
+                operation_id="before-update",
+                instrument_ids=("signal",),
+            )
+        )
+        instruments.close_session(first.session_id)
+        [updated] = devices.replace_backend(
+            replacement, instruments, actor="maintainer"
+        )
+        assert not previous.healthy
+        assert replacement.healthy
+        assert devices.endpoint is replacement
+        assert updated.revision.previous == setup.resolution.devices[0]
+        assert (
+            updated.revision.content.driver.artifact_hash == replacement.artifact_hash
+        )
+        assert updated.revision.content.driver.artifact_hash != previous.artifact_hash
+        assert updated.revision.content.model_dump(mode="json", exclude={"driver"}) == {
+            key: value
+            for key, value in registered["revision"]["content"].items()
+            if key != "driver"
+        }
+        assert updated.revision.actor == "maintainer"
+        assert updated.device.head != setup.resolution.devices[0]
+        assert updated.availability == "idle"
+        with pytest.raises(BackendConflict):
+            instruments.open_session(
+                InstrumentSessionOpenCommand(
+                    setup=setup.ref,
+                    actor="operator",
+                    operation_id="stale-setup",
+                    instrument_ids=("signal",),
+                )
+            )
+        refreshed = devices.access_setup("signal")
+        second = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                setup=refreshed.ref,
+                actor="operator",
+                operation_id="after-update",
+                instrument_ids=("signal",),
+            )
+        )
+        instruments.close_session(second.session_id)
+        assert client.get("/api/v1/devices").status_code == 200
+    assert not replacement.healthy
+
+
+def test_backend_replacement_busy_device_keeps_other_connections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    previous = _endpoint()
+    replacement = _endpoint()
+    disconnected: list[InstrumentHandle] = []
+    original = previous.disconnect
+
+    def track_disconnect(handle: InstrumentHandle) -> None:
+        disconnected.append(handle)
+        original(handle)
+
+    monkeypatch.setattr(previous, "disconnect", track_disconnect)
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=previous) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        devices = runtime.application.devices
+        instruments = runtime.application.instruments
+        for name in ("signal", "busy"):
+            _register(client, name)
+            setup = devices.access_setup(name)
+            opened = instruments.open_session(
+                InstrumentSessionOpenCommand(
+                    setup=setup.ref,
+                    actor="operator",
+                    operation_id=f"open-{name}",
+                    instrument_ids=(name,),
+                )
+            )
+            if name == "signal":
+                instruments.close_session(opened.session_id)
+        before = tuple(view.device.head for view in devices.list())
+        with pytest.raises(BackendConflict, match="device is in use"):
+            devices.replace_backend(replacement, instruments, actor="maintainer")
+        assert disconnected == []
+        assert previous.healthy
+        assert not replacement.healthy
+        assert devices.endpoint is previous
+        assert tuple(view.device.head for view in devices.list()) == before
+        assert devices.list()[0].availability == "idle"
+        instruments.close_session(opened.session_id)
+
+
+def test_backend_publication_failure_rolls_back_all_device_heads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    previous = _endpoint()
+    replacement = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=previous) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        for name in ("signal", "other"):
+            _register(client, name)
+        devices = runtime.application.devices
+        instruments = runtime.application.instruments
+        before = tuple(view.device.head for view in devices.list())
+        original = DeviceRepository.save
+
+        def fail_second(repository: DeviceRepository, **kwargs: Any) -> Any:
+            if kwargs["revision"].device_id == "other":
+                raise ValueError("publication interrupted")
+            return original(repository, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(DeviceRepository, "save", fail_second)
+            with pytest.raises(BackendConflict, match="publication interrupted"):
+                devices.replace_backend(replacement, instruments, actor="maintainer")
+        assert tuple(view.device.head for view in devices.list()) == before
+        assert all(view.availability == "idle" for view in devices.list())
+        assert devices.endpoint is previous
+        assert previous.healthy
+        assert not replacement.healthy
+        opened = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                setup=devices.access_setup("signal").ref,
+                actor="operator",
+                operation_id="after-failed-publication",
+                instrument_ids=("signal",),
+            )
+        )
+        instruments.close_session(opened.session_id)
+
+
+@pytest.mark.parametrize("failure", ["missing_driver", "disconnect"])
+def test_failed_backend_replacement_preserves_device_revision_and_attention(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    previous = _endpoint()
+    replacement = _endpoint()
+    disconnected: list[InstrumentHandle] = []
+    original = previous.disconnect
+
+    def disconnect(handle: InstrumentHandle) -> None:
+        disconnected.append(handle)
+        if failure == "disconnect":
+            raise RuntimeError("transport did not confirm disconnect")
+        original(handle)
+
+    if failure == "missing_driver":
+        monkeypatch.setattr(
+            replacement,
+            "_driver_catalog",
+            replacement.driver_catalog.model_copy(update={"drivers": ()}),
+        )
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=previous) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        _register(client)
+        devices = runtime.application.devices
+        instruments = runtime.application.instruments
+        setup = devices.access_setup("signal")
+        opened = instruments.open_session(
+            InstrumentSessionOpenCommand(
+                setup=setup.ref,
+                actor="operator",
+                operation_id="open",
+                instrument_ids=("signal",),
+            )
+        )
+        instruments.close_session(opened.session_id)
+        monkeypatch.setattr(previous, "disconnect", disconnect)
+        with pytest.raises(
+            BackendConflict,
+            match=(
+                "does not provide driver"
+                if failure == "missing_driver"
+                else "could not release existing connections"
+            ),
+        ):
+            devices.replace_backend(replacement, instruments, actor="maintainer")
+        assert devices.endpoint is previous
+        assert previous.healthy
+        assert not replacement.healthy
+        [view] = devices.list()
+        assert view.device.head == setup.resolution.devices[0]
+        assert len(disconnected) == (1 if failure == "disconnect" else 0)
+        assert view.availability == (
+            "quarantined" if failure == "disconnect" else "idle"
+        )
+        monkeypatch.setattr(previous, "disconnect", original)
+    with LocalDaemonRuntime(tmp_path, instrument_endpoint=_endpoint()) as reopened:
+        [retained] = reopened.application.devices.list()
+        assert retained.device.head == view.device.head
+        assert retained.availability == view.availability
 
 
 @pytest.mark.parametrize("device_id", ["signal", "rack-a/signal"])

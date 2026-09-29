@@ -147,8 +147,19 @@ head and quarantined session, including across restart.
 Address normalization covers declared TCP endpoints and serial ports. Additional
 addresses for one physical instrument must be declared explicitly; registration
 does not perform hardware discovery or infer identity from model names. The
-runtime still obtains its driver catalog from its startup backend. Controlled
-installation replacement and same-service practice scopes remain to be built.
+runtime starts with its configured backend. Its internal replacement operation
+now validates registered connection options, reserves all affected devices before
+disconnecting any, and publishes new device revisions together with the execution
+backend. Requests retaining the old endpoint are rejected after publication. A busy
+device rejects the update without disconnecting idle peers; failed connection
+retirement retains the old revisions and durable attention. A subprocess test
+switches source versions and reconnects without restarting the application.
+
+This is not yet a user-facing source update capability. Source snapshot selection
+must be persisted with activation so restart loads the same implementation; author
+revision coordination and the ordinary client/UI entry remain pending. Do not expose
+the internal replacement operation as a complete refresh command before those
+pieces are connected. Controlled installation replacement remains separate work.
 Global setup selection and overlapping combined-configuration editors have been
 removed. Every run supplies an exact setup independently of its configuration
 data and scientific provenance; see [configuration ownership](configuration-ownership.md).
