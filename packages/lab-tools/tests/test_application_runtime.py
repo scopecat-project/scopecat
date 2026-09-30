@@ -58,6 +58,37 @@ def application(tmp_path: Path):
     runtime.stop()
 
 
+def test_idle_exit_uses_live_service_and_releases_ownership(application):
+    application.start()
+    assert not application.activity().busy
+    assert application.stop_if_idle()
+    assert application.status().state == "stopped"
+
+
+def test_unavailable_author_folder_does_not_block_application_update(
+    application, tmp_path
+):
+    import httpx2
+
+    source = tmp_path / "author"
+    (source / "src").mkdir(parents=True)
+    (source / "scopecat.toml").write_text(
+        '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\n'
+        'modules=["experiment"]\ndependencies=[]\n'
+    )
+    (source / "src/experiment.py").write_text('name = "experiment"\n')
+    application.register_source(source)
+    source.rename(tmp_path / "moved-author")
+    before = application.installation()
+    candidate = application.qualify(before.python, before.static_dir)
+    application.select(candidate)
+    record = application.start()
+    with httpx2.Client(trust_env=False) as client:
+        response = client.get(record.base_url + "/api/v1/health")
+        assert response.status_code == 200
+    assert not source.exists()
+
+
 def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
     sources = []
     for name in ("first", "second"):

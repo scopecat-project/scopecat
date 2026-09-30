@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import cast
 
+import httpx2
 from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
 
@@ -20,6 +21,7 @@ from scopecat.author_workspaces import (
     author_workspace_id,
 )
 from scopecat.daemon.endpoint import DaemonEndpointRecord
+from scopecat.daemon.health import ApplicationActivity
 from scopecat.installed_adapter import AdapterReference
 from scopecat.project import open_project
 from scopecat.sdk.instruments.catalog import DriverCatalog
@@ -129,6 +131,26 @@ class ApplicationRuntime:
     def status(self) -> DaemonStatus:
         return inspect_daemon(open_project(self.root, resolve_adapter=False))
 
+    def activity(self) -> ApplicationActivity:
+        status = self.status()
+        if status.state in ("stopped", "stale"):
+            return ApplicationActivity()
+        if status.record is None:
+            raise ValueError("无法确认后台工作状态")
+        with httpx2.Client(timeout=3, trust_env=False) as client:
+            response = client.get(
+                status.record.base_url + "/api/v1/application-activity"
+            )
+            response.raise_for_status()
+            return ApplicationActivity.model_validate(response.json())
+
+    def stop_if_idle(self) -> bool:
+        with self.lock:
+            _ = stop_project(
+                open_project(self.root, resolve_adapter=False), only_if_idle=True
+            )
+            return self.status().state == "stopped"
+
     def prepare_update(self, delivery: Path) -> Installation:
         python, bundle = prepare_home(delivery, self.installation().software_home)
         candidate = self.qualify(python, bundle / "gui")
@@ -165,7 +187,6 @@ class ApplicationRuntime:
                     "root": str(self.root),
                     "manifest": str(manifest),
                     "static_dir": str(static_dir) if static_dir else None,
-                    "qualify_sources": True,
                 },
             )
         finally:

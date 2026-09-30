@@ -11,35 +11,26 @@ source folders and data locations. **Devices and drivers** maintains shared devi
    Choose your code, setup and parameters in the current task.
 3. Save edits and refresh author code. This captures source without rebuilding
    the application or installing dependencies.
-4. Finish measurements and close Python sessions before stopping. Closing the
-   native window lets you stop the application, keep it running, or cancel.
+4. Close Scopecat when finished. If it is idle, it exits directly. With unfinished
+   work, choose to wait, stop the work and quit, or continue in the background.
+   Background mode retains a menu-bar/system-tray entry with **Open** and **Quit**.
+   An idle Python session alone does not prevent quitting.
 
 Reopening restores access to retained records; it never repeats a measurement.
 Closing a browser tab or a Python client does not stop the application.
 
-## Install a newer fixed delivery
+## Install a newer application
 
-Use a delivery for the machine's OS, architecture and Python ABI. The standalone
-installer needs matching Python and uv:
+Quit Scopecat, install the newer native package for your platform, then reopen it.
+The installed application owns the desktop version; startup prepares its matching
+execution environment automatically. No delivery-directory selection or separate
+environment activation is required in Settings. You do not need system Python or uv.
 
-```sh
-python /path/to/delivery/install.py --home /path/to/Scopecat
-```
-
-For an existing application, finish active work and stop it first. Installation
-retains complete releases, verifies their contents, selects qualified software and
-publishes the native entry. Retry the same command after an error. Do not remove
-data or lock files to bypass a failed check.
-
-The workbench also offers a two-stage update. In Application settings, enter the
-delivery directory and choose **Prepare update**. The candidate is installed and
-its capabilities and registered source dependencies are checked without connecting
-devices or replacing the selected environment. Review the candidate, finish active
-work, close Python sessions, then choose **Stop and apply prepared update**.
-
-Preparation failure leaves the selected installation usable. An interrupted
-selection fences startup until the same candidate completes. Retained releases
-and source/data paths survive; this is not a scientific-data migration.
+The window appears while preparation runs. A failed preparation stays in that window
+with retry and quit controls. If an existing service is still running, finish its
+work before retrying, or explicitly stop it to complete the update. Startup never
+silently substitutes an older desktop version. An interrupted selection can be retried;
+this is not a scientific-data migration.
 Application updates preserve user Python environments and retained task environments.
 Updating client packages is a separate operation; close kernels before rebuilding them.
 

@@ -14,12 +14,14 @@ it("leaves background work running only after the user chooses it", async () => 
   window.pywebview = {
     api: {
       exit,
+      request_exit: vi
+        .fn()
+        .mockResolvedValue({ runs: 1, procedures: 0, instrument_sessions: 0, requests: 0 }),
+      wait_for_idle: vi.fn().mockResolvedValue(undefined),
       status: vi.fn(),
       retry: vi.fn(),
       restart: vi.fn(),
       requalify: vi.fn(),
-      prepare_update: vi.fn(),
-      apply_update: vi.fn(),
       register_source: vi.fn(),
       prepare_author_environment: vi.fn(),
       create_author_environment: vi.fn(),
@@ -41,12 +43,14 @@ it("keeps a failed stop recoverable in the current window", async () => {
   window.pywebview = {
     api: {
       exit,
+      request_exit: vi
+        .fn()
+        .mockResolvedValue({ runs: 1, procedures: 0, instrument_sessions: 0, requests: 0 }),
+      wait_for_idle: vi.fn().mockResolvedValue(undefined),
       status: vi.fn(),
       retry: vi.fn(),
       restart: vi.fn(),
       requalify: vi.fn(),
-      prepare_update: vi.fn(),
-      apply_update: vi.fn(),
       register_source: vi.fn(),
       prepare_author_environment: vi.fn(),
       create_author_environment: vi.fn(),

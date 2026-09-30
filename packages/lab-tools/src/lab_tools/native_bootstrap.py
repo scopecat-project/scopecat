@@ -1,4 +1,4 @@
-"""Native application bootstrap, also shipped with a minimal Python installation."""
+"""Installed-package host; preparation happens behind its already visible window."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Protocol, cast
 
+from filelock import FileLock
+
+from .application_runtime import ApplicationRuntime
 from .bundle import MANIFEST, file_hash, prepare_home
 from .installation_paths import InstallationPaths
 
@@ -20,7 +23,6 @@ class Arguments(Protocol):
     payload: Path
     home: Path | None
     check_result: Path | None
-    prepared: bool
     entry: Path | None
 
 
@@ -34,53 +36,20 @@ def _run(command: list[str]) -> None:
     )
 
 
-def launch(args: Arguments, paths: InstallationPaths) -> None:
-    if not args.prepared:
-        python, payload = prepare_home(args.payload, paths.software)
-        _run(
-            [
-                str(python),
-                "-I",
-                "-m",
-                "lab_tools.native_bootstrap",
-                "--prepared",
-                "--payload",
-                str(payload),
-                *(["--home", str(args.home)] if args.home else []),
-                *(["--entry", str(args.entry)] if args.entry else []),
-                *(
-                    ["--check-result", str(args.check_result)]
-                    if args.check_result
-                    else []
-                ),
-            ]
-        )
-        return
-
-    # These dependencies live only in the retained application runtime, not the
-    # small bootstrap interpreter embedded in the relocatable native app.
-    from filelock import FileLock
-
-    from .application_runtime import ApplicationRuntime
-
+def prepare(args: Arguments, paths: InstallationPaths) -> None:
     runtime = ApplicationRuntime(paths.state)
     with FileLock(paths.state / "native-start.lock"):
+        python, payload = prepare_home(args.payload, paths.software)
         _ = runtime.configure(
-            static_dir=args.payload / "gui", software_home=paths.software
+            python=python, static_dir=payload / "gui", software_home=paths.software
         )
         receipt = paths.state / "native-setup.json"
-        identity = file_hash(args.payload / MANIFEST)
-        seen = (
-            cast("list[str]", json.loads(receipt.read_text()))
-            if receipt.exists()
-            else []
-        )
         if not receipt.exists():
-            initializer = args.payload / "initialize.py"
+            initializer = payload / "initialize.py"
             if initializer.is_file():
                 _run(
                     [
-                        sys.executable,
+                        str(python),
                         "-I",
                         str(initializer),
                         "--state",
@@ -90,16 +59,22 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
                         *(["--entry", str(paths.entry)] if paths.entry else []),
                     ]
                 )
-        if identity not in seen:
-            if runtime.installation().python != Path(sys.executable):
-                _ = runtime.prepare_update(args.payload)
-            # Reopening an older app must not propose a downgrade or overwrite a
-            # newer candidate. Only a previously unseen payload prepares an update.
-            pending = receipt.with_suffix(".pending")
-            _ = pending.write_text(json.dumps([*seen, identity]), encoding="utf-8")
-            _ = pending.replace(receipt)
-        selected = runtime.installation()
+            receipt.write_text("{}\n", encoding="utf-8")
+        if runtime.installation().python != python or runtime.pending.exists():
+            candidate = runtime.prepare_update(payload)
+            if runtime.status().state not in ("stopped", "stale"):
+                raise ValueError(
+                    "应用更新已准备，当前后台仍在运行。请完成工作后退出旧应用，"
+                    "再点重试；或选择停止后台并完成更新。"
+                )
+            runtime.select(candidate)
+
+
+def launch(args: Arguments, paths: InstallationPaths) -> None:
     if args.check_result:
+        prepare(args, paths)
+        runtime = ApplicationRuntime(paths.state)
+        selected = runtime.installation()
         _ = args.check_result.write_text(
             json.dumps(
                 {
@@ -114,20 +89,12 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
             encoding="utf-8",
         )
         return
-    python = selected.python
-    if os.name == "nt":
-        python = python.with_name("pythonw.exe")
-    _run(
-        [
-            str(python),
-            "-I",
-            "-m",
-            "lab_tools.application",
-            "--home",
-            str(paths.state),
-            "--action",
-            "desktop",
-        ]
+    from .desktop import run
+
+    run(
+        paths.state,
+        prepare=lambda: prepare(args, paths),
+        package_identity=file_hash(args.payload / MANIFEST),
     )
 
 
@@ -138,7 +105,6 @@ def main() -> None:
     parser.add_argument("--home", type=Path, help="Isolated installation root")
     parser.add_argument("--entry", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--check-result", type=Path, help="Prepare without opening UI")
-    parser.add_argument("--prepared", action="store_true", help=argparse.SUPPRESS)
     args = cast("Arguments", cast("object", parser.parse_args()))
     paths = (
         InstallationPaths.isolated(args.home)

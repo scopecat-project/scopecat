@@ -285,6 +285,57 @@ def test_shutdown_route_requires_the_private_daemon_token() -> None:
     assert requested_tokens == ["invalid-token", "valid-token"]
 
 
+def test_idle_shutdown_fences_mutations_and_waits_for_existing_requests() -> None:
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from scopecat.daemon.health import ApplicationActivity
+
+    class IdleApplication(FakeApplication):
+        work = ApplicationActivity(calibration_tasks=1)
+
+        def activity(self) -> ApplicationActivity:
+            return self.work
+
+    entered = threading.Event()
+    release = threading.Event()
+    backend = IdleApplication()
+    app = _create_test_app(backend, request_shutdown=lambda _: True)
+
+    @app.post("/changing")
+    def changing() -> None:
+        entered.set()
+        assert release.wait(5)
+
+    client = TestClient(app)
+    assert (
+        client.post(
+            "/api/v1/shutdown?only_if_idle=true",
+            headers={"X-Scopecat-Shutdown-Token": "fixture"},
+        ).status_code
+        == 409
+    )
+    backend.work = ApplicationActivity()
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        pending = workers.submit(client.post, "/changing")
+        assert entered.wait(5)
+        try:
+            refused = client.post(
+                "/api/v1/shutdown?only_if_idle=true",
+                headers={"X-Scopecat-Shutdown-Token": "fixture"},
+            )
+            assert refused.status_code == 409
+        finally:
+            release.set()
+        assert pending.result().status_code == 200
+    accepted = client.post(
+        "/api/v1/shutdown?only_if_idle=true",
+        headers={"X-Scopecat-Shutdown-Token": "fixture"},
+    )
+    assert accepted.status_code == 202
+    assert client.post("/changing").status_code == 503
+
+
 def test_run_submission_and_backend_error_mapping() -> None:
     backend = FakeApplication()
     client = TestClient(_create_test_app(backend))

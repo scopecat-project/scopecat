@@ -107,7 +107,7 @@ def test_windows_user_program_and_start_menu_locations():
 def native_start(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    from lab_tools import application_runtime, native_bootstrap
+    from lab_tools import native_bootstrap
 
     paths = InstallationPaths.isolated(tmp_path / "isolated")
     paths.state.mkdir(parents=True)
@@ -118,6 +118,8 @@ def native_start(tmp_path, monkeypatch):
     updates = []
 
     class Runtime:
+        pending = paths.state / "installation-pending.json"
+
         def __init__(self, home):
             assert home == paths.state
 
@@ -129,37 +131,40 @@ def native_start(tmp_path, monkeypatch):
 
         def prepare_update(self, source):
             updates.append(source)
+            return SimpleNamespace(python=Path(sys.executable))
+
+        def select(self, candidate):
+            selected.python = candidate.python
 
         def prepared_update(self):
-            return updates[-1] if updates else None
+            return None
 
         def status(self):
             return SimpleNamespace(state="stopped")
 
-    monkeypatch.setattr(application_runtime, "ApplicationRuntime", Runtime)
+    monkeypatch.setattr(native_bootstrap, "ApplicationRuntime", Runtime)
+    monkeypatch.setattr(
+        native_bootstrap, "prepare_home", lambda *_: (Path(sys.executable), payload)
+    )
     args = SimpleNamespace(
         payload=payload,
         home=tmp_path / "isolated",
         check_result=tmp_path / "checked.json",
-        prepared=True,
+        entry=None,
     )
     return native_bootstrap, args, paths, selected, updates
 
 
-def test_native_update_is_prepared_once_and_old_app_cannot_replace_it(native_start):
+def test_native_package_selects_its_own_version_before_reporting_ready(native_start):
     bootstrap, args, paths, selected, updates = native_start
     bootstrap.launch(args, paths)
-    first = (args.payload / "bundle.json").read_text()
     selected.python = paths.software / "first/python"
-    (args.payload / "bundle.json").write_text('{"build": "second"}')
     bootstrap.launch(args, paths)
     assert len(updates) == 1
-    assert json.loads(args.check_result.read_text())["update_available"]
-    bootstrap.launch(args, paths)
-    (args.payload / "bundle.json").write_text(first)
+    assert not json.loads(args.check_result.read_text())["update_available"]
     bootstrap.launch(args, paths)
     assert len(updates) == 1
-    assert selected.python == paths.software / "first/python"
+    assert selected.python == Path(sys.executable)
 
 
 def test_native_initializer_failure_retries_without_marking_setup_complete(
