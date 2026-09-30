@@ -290,6 +290,11 @@ def build_delivery(
             ),
             plan.dependency_group,
             "--no-emit-local",
+            *[
+                argument
+                for name in sorted(local_names)
+                for argument in ("--no-emit-package", name)
+            ],
             "--format",
             "requirements-txt",
             "--output-file",
@@ -547,7 +552,10 @@ def main() -> None:
     _ = parser.add_argument(
         "--source",
         type=Path,
-        help="public checkout (also overrides recipe public_source)",
+        help=(
+            "public checkout for GUI and recipe packages marked source='public'; "
+            "other packages retain the recipe's locked dependencies"
+        ),
     )
     _ = parser.add_argument("--recipe", type=Path)
     _ = parser.add_argument(

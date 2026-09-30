@@ -159,6 +159,19 @@ def test_recipe_build_uses_locked_lab_and_public_toolchain(
     export, cwd = next(item for item in calls if item[0][1] == "export")
     assert cwd == tmp_path
     assert "--locked" in export and "--no-emit-local" in export
+    # Explicit source replacements may be URL dependencies in the lock, not uv
+    # workspace members. Export must not download a second wheel for them.
+    excluded = {
+        export[index + 1]
+        for index, argument in enumerate(export)
+        if argument == "--no-emit-package"
+    }
+    assert {
+        "my-adapter",
+        "scopecat",
+        "scopecat-server",
+        "scopecat-lab-tools",
+    } <= excluded
     assert export[export.index("--group") + 1] == "lab-delivery"
     assert "--no-default-groups" in export
     download, cwd = next(

@@ -22,15 +22,14 @@ Closing a browser tab or a Python client does not stop the application.
 ## Install a newer application
 
 Quit Scopecat, install the newer native package for your platform, then reopen it.
-The installed application owns the desktop version; startup prepares its matching
-execution environment automatically. No delivery-directory selection or separate
-environment activation is required in Settings. You do not need system Python or uv.
+The package already contains Python and application dependencies. Startup runs that
+version directly; it does not install another execution environment. You do not
+need system Python or uv, or an environment selection in Settings.
 
-The window appears while preparation runs. A failed preparation stays in that window
+The window appears while the application starts. A failed startup stays in that window
 with retry and quit controls. If an existing service is still running, finish its
 work before retrying, or explicitly stop it to complete the update. Startup never
-silently substitutes an older desktop version. An interrupted selection can be retried;
-this is not a scientific-data migration.
+silently substitutes an older desktop version.
 Application updates preserve user Python environments and retained task environments.
 Updating client packages is a separate operation; close kernels before rebuilding them.
 
@@ -45,7 +44,10 @@ In the native application's Settings, enter the registered folder's full path an
 choose **Create local Python environment**. Select `.venv/bin/python` on macOS or
 `.venv/Scripts/python.exe` on Windows in VS Code. This is your environment: installing
 plotting or analysis packages there does not modify the application. Do not use an
-interpreter from `releases` as a Notebook kernel.
+interpreter inside the installed application as a Notebook kernel. The generated
+environment retains its own base Python in the folder's `.scopecat-python` directory;
+keep that directory with `.venv`. Replacing or removing the application does not
+remove this interpreter.
 
 If a package is also needed by background experiments, declare it in the folder's
 `pyproject.toml`, for example:
@@ -103,8 +105,9 @@ scopecat app --home /path/to/development --action prepare-capability --package /
 This rebuilds only the selected capability wheel, reuses the installed delivery's
 GUI and dependency wheelhouse, and qualifies a separate immutable candidate.
 Unchanged candidate contents reuse the retained environment. The running application
-keeps its selected software until you explicitly stop and apply the candidate through
-Settings or `--action apply-update`. Restart Python kernels afterwards.
+keeps its selected software until you explicitly stop and apply the candidate using
+`--action apply-update`. This command-line development path is not the native
+application's update mechanism. Restart Python kernels afterwards.
 
 This is an editable-source workflow, not a mutable `pip install -e` runtime: saving
 a driver file cannot silently change a live connection or an admitted task's identity.
@@ -123,10 +126,11 @@ After a force-kill, valid stale ownership is reconciled under the runtime locks.
 A lock file's existence alone does not mean a process is alive. Ambiguous ownership
 remains an error rather than deleting records or guessing a PID.
 
-In-place edits to installed capability code or local settings invalidate the
-qualified identity. Stop the application, fix the environment, then run
-`scopecat app --home HOME --action update --python PYTHON --static-dir GUI`
-to qualify and select it again. Prefer preparing a new delivery for ordinary updates.
+After changing local settings, choose **Stop work and restart** in Application
+settings. Restart checks the current application and settings before reopening.
+If it fails, the window retains the error and retry controls. Install a corrected
+application package to repair application dependencies; do not use pip inside it.
+**Technical diagnostics** contains interpreter and capability details for maintainers.
 
 The native log is `HOME/desktop/desktop.log`; runtime logs and data are under
 `HOME/runtime/.scopecat` unless explicitly bound elsewhere. Record the exact error
