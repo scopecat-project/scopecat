@@ -95,25 +95,22 @@ author folders do not copy driver or application composition.
 
 ## Develop a capability in VS Code
 
-Use an isolated development home with the capability's complete delivery installed.
-Edit its package normally in VS Code, then prepare a snapshot of that source:
+Use an isolated foreground development application and edit ordinary source in
+VS Code:
 
 ```sh
-scopecat app --home /path/to/development --action prepare-capability --package /path/to/capability-package
+python -m lab_tools.dev --home /path/to/development --workspace /path/to/author-source --source /path/to/scopecat
 ```
 
-This rebuilds only the selected capability wheel, reuses the installed delivery's
-GUI and dependency wheelhouse, and qualifies a separate immutable candidate.
-Unchanged candidate contents reuse the retained environment. The running application
-keeps its selected software until you explicitly stop and apply the candidate using
-`--action apply-update`. This command-line development path is not the native
-application's update mechanism. Restart Python kernels afterwards.
-
-This is an editable-source workflow, not a mutable `pip install -e` runtime: saving
-a driver file cannot silently change a live connection or an admitted task's identity.
-Changed dependencies or build backends require a complete delivery; candidate failure
-leaves the selected environment intact. Author-only edits still use ordinary source
-refresh and do not need this operation.
+The development environment needs the source dependencies installed first. This
+command starts its own backend and Vite without opening a browser; Ctrl-C stops
+both. It does not install a desktop entry or share the daily application's home.
+Experiment and analysis edits use ordinary author refresh. Driver edits use
+**Update from source** in **Devices and drivers**, after finishing active work and
+releasing manual sessions. Saving a file alone does not replace a live driver.
+Dependency changes require explicit preparation of the development environment.
+Application updates use a newly built native package, not a candidate interpreter
+or a capability-wheel switch inside the running application.
 
 ## Recovery
 

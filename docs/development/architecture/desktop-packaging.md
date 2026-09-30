@@ -51,8 +51,10 @@ acceptance. A ready backend alone is not a finished desktop application.
 
 The native entry now starts the package's interpreter without calling the retained
 delivery installer. Explicitly created author environments retain their own base
-Python outside application files. The older installation-selection machinery and
-desktop maintenance actions still need retirement before this PR is complete.
+Python outside application files. Candidate-update and capability-snapshot commands
+and storage have been removed. The older retained-release installer and its entry
+generation still need retirement before this PR is complete. The pending runtime
+registration record remains a crash-recovery journal, not a user-selectable update.
 The final host must preserve the work-aware quit/background contract. Data
 initialization and explicit current-format checks are normal runtime work, not
 dependency setup.

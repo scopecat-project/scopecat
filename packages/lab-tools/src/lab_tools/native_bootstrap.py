@@ -87,7 +87,6 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
                     "python": str(selected.python),
                     "state": str(paths.state),
                     "software": str(paths.software),
-                    "update_available": runtime.prepared_update() is not None,
                     "status": runtime.status().state,
                 },
                 indent=2,

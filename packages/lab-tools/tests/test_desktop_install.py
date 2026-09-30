@@ -141,9 +141,6 @@ def native_start(tmp_path, monkeypatch):
             selected.python = candidate.python
             selected.package = candidate.package
 
-        def prepared_update(self):
-            return None
-
         def status(self):
             return SimpleNamespace(state="stopped")
 
@@ -163,7 +160,6 @@ def test_native_package_selects_its_own_version_before_reporting_ready(native_st
     selected.python = paths.software / "first/python"
     bootstrap.launch(args, paths)
     assert len(updates) == 1
-    assert not json.loads(args.check_result.read_text())["update_available"]
     bootstrap.launch(args, paths)
     assert len(updates) == 1
     assert selected.python == Path(sys.executable)

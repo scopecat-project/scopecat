@@ -60,7 +60,7 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     assert result.read_bytes() == first
     assert inventory(relocated, (".",)) == before, "Native app was modified on launch"
     state = cast("dict[str, str | bool]", json.loads(first))
-    assert state["status"] == "stopped" and state["update_available"] is False
+    assert state["status"] == "stopped"
     python = Path(cast("str", state["python"]))
     assert python.is_relative_to(relocated)
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
