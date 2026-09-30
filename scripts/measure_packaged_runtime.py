@@ -110,11 +110,14 @@ def measure(app: Path, destination: Path, repeats: int) -> None:
                 str(resources / "payload/gui"),
             ],
             env=environment,
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
+        if completed.returncode:
+            print(completed.stderr, file=sys.stderr)
+            completed.check_returncode()
         samples.append(cast("Sample", json.loads(completed.stdout)))
     assert inventory(app, (".",)) == before, "Packaged runtime changed during use"
     report = {
