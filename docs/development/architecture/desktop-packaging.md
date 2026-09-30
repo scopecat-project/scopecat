@@ -6,8 +6,9 @@ gate within that product PR, not a separate packaging product or a completed
 replacement of the existing desktop host.
 
 The baseline is a relocatable CPython runtime with dependencies prepared at build
-time. Rust/Tauri is the preferred host candidate to evaluate against the existing
-UI and Python scientific components. PyInstaller is an optional fixed-component
+time. Rust/Tauri was the preferred alternative evaluated against the existing
+UI and Python scientific components; the delivery decision is below. PyInstaller
+is an optional fixed-component
 packaging candidate; evaluate Nuitka only for an identified benefit. Do not compile
 editable author code or vendor environments into the desktop. Do not maintain
 multiple permanent distribution mechanisms after selection.
@@ -58,6 +59,15 @@ dependency setup.
 
 ## Implementation boundary
 
+For this delivery, retain the CPython/pywebview host and the existing web UI.
+Direct packaged startup and independent author Python address the demonstrated
+installation coupling without a new host protocol. The disposable Tauri prototype
+establishes feasibility, but has not qualified Windows window/tray interaction,
+active-work shutdown or failure recovery. It therefore does not justify replacing
+the functioning lifecycle implementation in this batch. Do not ship both hosts.
+Reconsider Tauri for a measured native-integration limitation; Python scientific
+execution remains a separate boundary whichever host is used.
+
 The installed package owns one fixed application runtime. Its executable starts
 that runtime directly; a previous installation's selected interpreter must not
 override it. Application updates replace application files after the owned
@@ -83,7 +93,7 @@ on this boundary in PR 3.
 The packaged-CPython qualification passes on both native distribution runners.
 A disposable macOS Tauri prototype also exercised explicit backend start,
 hide/reopen with the same endpoint, and clean quit. These establish feasibility,
-not the host decision: Windows native interaction, active-work handling, failure
-recovery, packaging and full source workflows still require qualification. Keep
-the prototype outside product code until one integrated host is selected; do not
-introduce a second user-selectable launch mode.
+not production qualification for Tauri. Keep the prototype outside product code;
+do not introduce a second user-selectable launch mode. Final qualification of the
+retained host must still cover native interaction, active-work handling, recovery
+and full source workflows for the completed product batch.
