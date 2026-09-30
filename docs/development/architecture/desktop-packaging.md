@@ -52,3 +52,35 @@ The selected implementation must remove application-startup environment creation
 and candidate selection, preserve the work-aware quit/background contract, and
 keep user Python independent of replaceable application files. Data initialization
 and explicit current-format checks are normal runtime work, not dependency setup.
+
+## Implementation boundary
+
+The installed package owns one fixed application runtime. Its executable starts
+that runtime directly; a previous installation's selected interpreter must not
+override it. Application updates replace application files after the owned
+processes exit. They do not prepare or select another Python environment inside
+the data directory. This removes `native_bootstrap.prepare`'s `prepare_home` and
+candidate-selection responsibilities, rather than merely moving them into Rust.
+
+The desktop host owns windows, reopening, background presence and application
+process lifetime. The Python backend owns scientific state, active-work reporting
+and orderly experiment shutdown. Before quitting, the host asks the backend about
+active work and offers the existing work-aware choices. Hiding a window preserves
+the same backend; reopening must not create another one. Host/backend failures
+must leave visible diagnostics and a recoverable next launch without requiring
+users to choose interpreters or kill processes manually.
+
+An author environment is a separate resource with an explicit interpreter and
+dependencies. Its base interpreter must survive replacement or removal of the
+desktop package. Registering ordinary source must not install it into application
+Python. Explicit author dependency preparation may install packages in the author
+environment; ordinary application launch may not. Vendor runtime isolation builds
+on this boundary in PR 3.
+
+The packaged-CPython qualification passes on both native distribution runners.
+A disposable macOS Tauri prototype also exercised explicit backend start,
+hide/reopen with the same endpoint, and clean quit. These establish feasibility,
+not the host decision: Windows native interaction, active-work handling, failure
+recovery, packaging and full source workflows still require qualification. Keep
+the prototype outside product code until one integrated host is selected; do not
+introduce a second user-selectable launch mode.
