@@ -49,7 +49,7 @@ export function SourceSelector({
       )}
       {catalog.isSuccess && sources.length === 0 && (
         <p>
-          Register your experiment folder in{" "}
+          Create an example folder or add existing code in{" "}
           <a className="underline" href="#settings">
             Application settings
           </a>

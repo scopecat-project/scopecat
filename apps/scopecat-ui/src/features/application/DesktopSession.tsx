@@ -14,6 +14,7 @@ export interface ApplicationStatus {
   state: string;
   detail: string | null;
   installation: InstallationStatus;
+  sources: { directory: string; python: string | null }[];
 }
 
 export interface InstallationStatus {
@@ -31,6 +32,8 @@ interface DesktopAPI {
   request_exit(): Promise<ApplicationActivity | null>;
   wait_for_idle(wait: boolean): Promise<void>;
   register_source(directory: string): Promise<string>;
+  choose_directory(): Promise<string | null>;
+  create_source(parent: string, name: string): Promise<string>;
   prepare_author_environment(directory: string): Promise<string>;
   create_author_environment(directory: string, rebuild?: boolean): Promise<string>;
 }

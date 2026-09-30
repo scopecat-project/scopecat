@@ -415,9 +415,9 @@ def initial_setup() -> ExecutableSetupSnapshot:
     )
     selected["README.md"] = (
         "# Experiment source\n\n"
-        "Open this folder in VS Code. In Scopecat Settings, create its local Python "
-        "environment, then select this folder's .venv as the Python interpreter or "
-        "notebook kernel. You can install analysis packages there with pip; "
+        "Open this folder in VS Code and select its .venv as the Python interpreter "
+        "or notebook kernel. If .venv is missing, create its local Python environment "
+        "in Scopecat Settings first. You can install analysis packages there with pip; "
         "the application has its own environment. "
         "After registration, open Scopecat and run "
         "notebooks/02_edit_scan.py cell by cell. "

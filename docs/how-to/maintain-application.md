@@ -35,14 +35,24 @@ Updating client packages is a separate operation; close kernels before rebuildin
 
 ## Author folders
 
-Author folders contain editable source and an author-only `scopecat.toml`.
-Register a folder in Application settings. Registration currently restarts the
-application, so finish active work first. Multiple folders share one service,
-device registry and data authority; their source identities remain independent.
+For your first experiment, open **Settings → Author code → New code folder**.
+Choose a save location and folder name, then **Create folder and prepare Python**.
+Scopecat creates a device-free example and an independent Python environment.
+It does not connect devices or start a measurement. Existing folders are never overwritten.
 
-In the native application's Settings, enter the registered folder's full path and
-choose **Create local Python environment**. Select `.venv/bin/python` on macOS or
-`.venv/Scripts/python.exe` on Windows in VS Code. This is your environment: installing
+After preparation, Settings shows your folder and Python path. Open that folder
+in VS Code, select its `.venv` interpreter, and run `notebooks/02_edit_scan.py`
+cell by cell. The example submits a synthetic scan, analyzes it and reopens the
+saved result. Running the submission again creates another measurement.
+
+For existing Scopecat source, choose **Use existing folder → Browse for code folder…**,
+then **Add code folder**. Select registered folders under **Your code folders**.
+Adding a folder restarts the idle application; finish active work first. Multiple
+folders share one service, device registry and data authority.
+
+If an existing folder has no local Python, choose **Create local Python environment**.
+Select `.venv/bin/python` on macOS or `.venv/Scripts/python.exe` on Windows.
+This is your environment: installing
 plotting or analysis packages there does not modify the application. Do not use an
 interpreter inside the installed application as a Notebook kernel. The generated
 environment retains its own base Python in the folder's `.scopecat-python` directory;
@@ -65,7 +75,8 @@ version = "0.1.0"
 dependencies = ["humanize==4.13.0"]
 ```
 
-Choose **Prepare background dependencies**, then refresh and preview your experiment.
+Expand **Dependencies and environment repair**, choose **Prepare background dependencies**,
+then refresh and preview your experiment.
 Preparation resolves against the fixed delivery's dependencies in a separate managed
 environment. Conflicting requirements fail without changing the running application
 or the selected source environment. Existing prepared work and plans retain their

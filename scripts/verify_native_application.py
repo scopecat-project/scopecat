@@ -12,31 +12,41 @@ from typing import cast
 from lab_tools.bundle import inventory
 
 RUNTIME_CHECK = r"""
-import json, os, subprocess, sys
+import json, os, subprocess, sys, threading
 from pathlib import Path
+from types import SimpleNamespace
 import httpx2
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.author_environment import create_client_environment
+from lab_tools.desktop import DesktopAPI
 from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 selected = runtime.installation()
 assert not (home / "software").exists()
 workspace = home / "authors"
-write_author_scaffold(workspace)
-runtime.register_source(workspace)
-client = create_client_environment(runtime, workspace)
-base = subprocess.check_output([str(client), "-I", "-c",
-    "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
-assert Path(base).is_relative_to(workspace / ".scopecat-python")
-subprocess.run([str(client), "-I", "-c", '''
+urls = []
+api = DesktopAPI(
+    runtime, lambda: SimpleNamespace(load_url=urls.append), threading.Event())
+try:
+    assert api.create_source(str(home), "authors") == str(workspace)
+    assert "source=" in urls[-1] and urls[-1].endswith("#settings")
+    client = create_client_environment(runtime, workspace)
+    expected_source = {"directory": str(workspace), "python": str(client)}
+    assert expected_source in api.status()["sources"]
+    existing = home / "existing code"
+    write_author_scaffold(existing)
+    api.register_source(str(existing))
+    assert {"directory": str(existing), "python": None} in api.status()["sources"]
+    base = subprocess.check_output([str(client), "-I", "-c",
+        "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
+    assert Path(base).is_relative_to(workspace / ".scopecat-python")
+    subprocess.run([str(client), "-I", "-c", '''
 from importlib.util import find_spec
 for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
     assert find_spec(name) is None, name
 import pip
 '''], check=True)
-assert create_client_environment(runtime, workspace) == client
-try:
     record = runtime.start()
     with httpx2.Client(trust_env=False) as http:
         assert http.get(record.base_url + "/api/v1/health").json()["status"] == "ok"

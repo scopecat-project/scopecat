@@ -1,10 +1,12 @@
 # Edit and analyze a starter experiment
 
-Use the small project created by `scopecat init` in the
-[pilot quickstart](../getting-started/quickstart.md). You do not need the reference
-lab, its device topology, quantum compiler, or calibration policies.
+In a desktop preview, choose **Settings → Author code → New code folder**, select
+a save location and create it. Open the new folder in VS Code and select its `.venv`
+interpreter. Keep Scopecat open and run `notebooks/02_edit_scan.py` cell by cell.
+The example uses synthetic data and needs no devices.
 
-Start the same project and open its GUI:
+For framework development, you can instead use the project created by `scopecat init`
+in the [source quickstart](../getting-started/quickstart.md):
 
 ```sh
 scopecat start ./my-lab
@@ -55,7 +57,7 @@ disposable comparison, `params.save("trial")` forks the branch. Previous preview
 runs and analyses retain their original inputs. Startup, editing and running
 create no global parameter default or artificial working point.
 
-The thermometer experiment lives in `authored/thermometer.py`; the first Notebook
+The separate CLI starter also includes `authored/thermometer.py`; its first Notebook
 uses the same author-session preparation path. Both scripts load the project's
 local package before refreshing its author modules, so ordinary imports work
 when running a generated script from outside its source directory.

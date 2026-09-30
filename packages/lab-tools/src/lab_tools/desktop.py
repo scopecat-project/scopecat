@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from urllib.parse import urlencode
 
 from filelock import FileLock, Timeout
 
@@ -47,13 +48,61 @@ class DesktopAPI:
             self._operation_lock.release()
 
     def status(self) -> dict[str, object]:
+        from scopecat.author_workspaces import local_author_workspaces
+
+        from .author_environment import environment_python
+
         status = self._runtime.status()
         return {
             "home": str(self._runtime.home),
             "state": status.state,
             "detail": status.detail,
             "installation": self._runtime.installation().model_dump(mode="json"),
+            "sources": [
+                {
+                    "directory": str(item.root),
+                    "python": str(python) if python.is_file() else None,
+                }
+                for item in local_author_workspaces(self._runtime.root)
+                for python in (environment_python(item.root / ".venv"),)
+            ],
         }
+
+    def choose_directory(self) -> str | None:
+        import webview
+
+        with self._operation():
+            selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
+            return selected[0] if selected else None
+
+    def create_source(self, parent: str, name: str) -> str:
+        from scopecat_server.scaffold import write_author_scaffold
+
+        from .author_environment import create_client_environment
+
+        directory = Path(parent)
+        if not directory.is_absolute() or not directory.is_dir():
+            raise ValueError("请选择新代码目录的保存位置")
+        if not name.strip() or name in (".", "..") or any(c in name for c in "/\\:"):
+            raise ValueError("请输入单个新目录名称")
+        path = directory / name
+        with self._operation():
+            write_author_scaffold(path)
+            create_client_environment(self._runtime, path)
+            self._register_source(path)
+            return str(path)
+
+    def _register_source(self, path: Path, python: Path | None = None) -> str:
+        from scopecat.project import open_project
+
+        open_project(path, resolve_adapter=False)
+        if not self._runtime.stop_if_idle():
+            raise ValueError(
+                "请先完成或停止当前工作，再添加代码目录；已创建的文件和环境保留"
+            )
+        identity = self._runtime.register_source(path, python=python)
+        self._start("?" + urlencode({"source": str(path)}) + "#settings")
+        return identity
 
     def register_source(self, directory: str) -> str:
         from .author_environment import prepare_execution_environment
@@ -67,10 +116,7 @@ class DesktopAPI:
                 if (path / "pyproject.toml").is_file()
                 else None
             )
-            self._runtime.stop()
-            identity = self._runtime.register_source(path, python=python)
-            self._start()
-            return identity
+            return self._register_source(path, python)
 
     def restart(self) -> None:
         with self._operation():
@@ -104,12 +150,12 @@ class DesktopAPI:
         with self._operation():
             self._start()
 
-    def _start(self) -> None:
+    def _start(self, location: str = "") -> None:
         if self._closing.is_set():
             return
         self._prepare()
         record = self._runtime.start()
-        self._window().load_url(record.base_url)
+        self._window().load_url(record.base_url + location)
 
     def exit(self, background: bool) -> None:
         with self._operation():

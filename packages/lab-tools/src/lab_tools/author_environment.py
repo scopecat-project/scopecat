@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .application_runtime import ApplicationRuntime
 
 
-def _python(environment: Path) -> Path:
+def environment_python(environment: Path) -> Path:
     return environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
@@ -75,7 +75,7 @@ def create_client_environment(
     if rebuild and environment.exists():
         previous = environment.rename(workspace / f".venv-retained-{uuid4().hex}")
     if environment.exists():
-        python = _python(environment)
+        python = environment_python(environment)
         if not python.is_file():
             raise ValueError(
                 f"作者环境不完整，原目录保留，请重建自己的环境：{environment}"
@@ -90,7 +90,7 @@ def create_client_environment(
             base_python=base_python,
             packages=("scopecat", "ipykernel"),
         )
-        python = _python(environment)
+        python = environment_python(environment)
         _run([str(python), "-m", "ensurepip"])
     except Exception:
         if environment.exists():
@@ -163,7 +163,7 @@ def prepare_execution_environment(
         environment = attempt / "runtime"
         base_python = _independent_python(bundle, runtime.home / "environments/python")
         _ = install_bundle(bundle, environment, base_python=base_python)
-        python = _python(environment)
+        python = environment_python(environment)
         _run(
             [
                 uv,
