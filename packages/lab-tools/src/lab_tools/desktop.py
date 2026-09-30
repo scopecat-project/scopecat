@@ -40,7 +40,7 @@ class DesktopAPI:
     @contextmanager
     def _operation(self) -> Generator[None]:
         if not self._operation_lock.acquire(blocking=False):
-            raise ValueError("应用正在准备更新或更改源码登记，请等待操作完成")
+            raise ValueError("应用正在启动或更改源码登记，请等待操作完成")
         try:
             yield
         finally:
@@ -48,13 +48,11 @@ class DesktopAPI:
 
     def status(self) -> dict[str, object]:
         status = self._runtime.status()
-        candidate = self._runtime.prepared_update()
         return {
             "home": str(self._runtime.home),
             "state": status.state,
             "detail": status.detail,
             "installation": self._runtime.installation().model_dump(mode="json"),
-            "candidate": candidate.model_dump(mode="json") if candidate else None,
         }
 
     def register_source(self, directory: str) -> str:
@@ -101,14 +99,6 @@ class DesktopAPI:
         with self._operation():
             self._runtime.source(path)
             return str(create_client_environment(self._runtime, path, rebuild=rebuild))
-
-    def requalify(self) -> None:
-        with self._operation():
-            selected = self._runtime.installation()
-            self._runtime.stop()
-            candidate = self._runtime.qualify(selected.python, selected.static_dir)
-            self._runtime.select(candidate)
-            self._start()
 
     def retry(self) -> None:
         with self._operation():
@@ -187,7 +177,7 @@ def _recovery(error: Exception) -> str:
         "</details>"
         '<button onclick="pywebview.api.retry().catch(showError)">重试</button> '
         '<button onclick="pywebview.api.restart().catch(showError)">'
-        "停止后台并完成更新 / 重新启动</button> "
+        "停止后台并重新启动</button> "
         '<button onclick="quit()">'
         "退出 Scopecat</button>"
         '<div id="quit-options" hidden>'
@@ -234,9 +224,12 @@ def run(
         closing = threading.Event()
 
         def configure() -> None:
-            _ = runtime.configure(
+            selected = runtime.configure(
                 static_dir=source / "apps/scopecat-ui/dist" if source else None
             )
+            checked = runtime.qualify(selected.python, selected.static_dir)
+            if checked != selected or runtime.pending.exists():
+                runtime.select(checked)
 
         api = DesktopAPI(runtime, lambda: window, closing, prepare or configure)
         window = cast(

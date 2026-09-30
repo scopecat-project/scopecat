@@ -20,13 +20,11 @@ it("keeps author dependencies independent and uses native application updates", 
     environment: { python: "current Python" },
     adapter_identity: "current-capability",
   };
-  const candidate = { ...installation, python: "/candidate/python" };
   const state = {
     home: "/application",
     state: "running",
     detail: null,
     installation,
-    candidate: null as typeof candidate | null,
   };
   const dependencies = vi.fn().mockResolvedValue("Dependencies ready");
   const client = vi.fn().mockResolvedValue("/authors/.venv/bin/python");
@@ -40,7 +38,6 @@ it("keeps author dependencies independent and uses native application updates", 
       prepare_author_environment: dependencies,
       create_author_environment: client,
       restart,
-      requalify: vi.fn(),
       retry: vi.fn(),
       exit: vi.fn(),
     },
@@ -52,7 +49,9 @@ it("keeps author dependencies independent and uses native application updates", 
       <ApplicationSettings />
     </QueryClientProvider>,
   );
-  expect(await screen.findByText("/current/python")).toBeVisible();
+  expect(await screen.findByText("/current/python")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Technical diagnostics"));
+  expect(screen.getByText("/current/python")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Stop and apply prepared update" })).toBeNull();
   fireEvent.change(screen.getByLabelText("Author directory"), { target: { value: "/authors" } });
   fireEvent.click(screen.getByRole("button", { name: "Prepare background dependencies" }));

@@ -22,7 +22,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   });
   const operation = useMutation({
     mutationFn: async (
-      action: "source" | "restart" | "recheck" | "dependencies" | "client" | "rebuild-client",
+      action: "source" | "restart" | "dependencies" | "client" | "rebuild-client",
     ) => {
       if (!native) return undefined;
       if (action === "source") await native.register_source(source.trim());
@@ -30,7 +30,6 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       else if (action === "client") return native.create_author_environment(source.trim());
       else if (action === "rebuild-client")
         return native.create_author_environment(source.trim(), true);
-      else if (action === "recheck") await native.requalify();
       else await native.restart();
       return undefined;
     },
@@ -60,16 +59,21 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
             Scientific data: <code>{dataRoot}</code>
           </p>
         )}
-        {status.data && <InstallationDetails installation={status.data.installation} />}
+        {status.data && (
+          <details>
+            <summary>Technical diagnostics</summary>
+            <InstallationDetails installation={status.data.installation} />
+          </details>
+        )}
         <p>
           To update Scopecat, quit the application, install the new version, then reopen it. Startup
-          prepares that version automatically. Updates keep scientific data and source folders.
+          uses the installed version directly. Updates keep scientific data and source folders.
           Reopening does not repeat measurements.
         </p>
         {!native && (
           <p>
-            Open the Scopecat desktop application for local installation and source-folder changes.
-            The command-line application entry offers the same operations.
+            Open the Scopecat desktop application to manage local source folders and Python
+            environments.
           </p>
         )}
       </section>
@@ -131,28 +135,17 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
             </button>
           </section>
           <section className={section}>
-            <h3 className="font-semibold">Connection recovery</h3>
+            <h3 className="font-semibold">Restart application</h3>
             <p>
-              Stop this application's recorded background process and reopen its workbench. This
-              interrupts active work; other application homes are independent.
+              Restart to recover the connection or apply changes to local settings. This stops
+              active work and releases devices. Saved records and source files are retained.
             </p>
             <button
               className={secondaryButton}
               disabled={busy}
               onClick={() => operation.mutate("restart")}
             >
-              Stop and reopen application
-            </button>
-            <p>
-              If local settings or a development capability changed in place, stop and recheck the
-              selected environment before reopening. Failed qualification preserves its identity.
-            </p>
-            <button
-              className={secondaryButton}
-              disabled={busy}
-              onClick={() => operation.mutate("recheck")}
-            >
-              Stop and recheck selected environment
+              Stop work and restart
             </button>
           </section>
         </>

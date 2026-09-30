@@ -130,17 +130,20 @@ def test_window_survives_until_bridge_has_delivered_exit_reply():
     window.destroy.assert_called_once()
 
 
-def test_failed_requalification_does_not_publish_or_reopen():
+def test_failed_restart_preparation_keeps_window_available():
     runtime = Mock()
-    runtime.qualify.side_effect = ValueError("missing dependency")
     window = Mock()
-    api = DesktopAPI(runtime, lambda: window, threading.Event())
+    prepare = Mock(side_effect=ValueError("missing dependency"))
+    closing = threading.Event()
+    api = DesktopAPI(runtime, lambda: window, closing, prepare)
     with pytest.raises(ValueError, match="missing dependency"):
-        api.requalify()
+        api.restart()
     runtime.stop.assert_called_once()
-    runtime.select.assert_not_called()
+    prepare.assert_called_once()
     runtime.start.assert_not_called()
     window.load_url.assert_not_called()
+    window.destroy.assert_not_called()
+    assert not closing.is_set()
 
 
 def test_interrupted_selection_can_retry_without_closing_window():

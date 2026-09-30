@@ -54,6 +54,7 @@ def prepare(args: Arguments, paths: InstallationPaths) -> None:
                     [
                         str(python),
                         "-I",
+                        "-B",
                         str(initializer),
                         "--state",
                         str(paths.state),

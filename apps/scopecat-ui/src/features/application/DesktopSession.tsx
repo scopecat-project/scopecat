@@ -14,7 +14,6 @@ export interface ApplicationStatus {
   state: string;
   detail: string | null;
   installation: InstallationStatus;
-  candidate: InstallationStatus | null;
 }
 
 export interface InstallationStatus {
@@ -28,7 +27,6 @@ interface DesktopAPI {
   status(): Promise<ApplicationStatus>;
   retry(): Promise<void>;
   restart(): Promise<void>;
-  requalify(): Promise<void>;
   exit(background: boolean): Promise<void>;
   request_exit(): Promise<ApplicationActivity | null>;
   wait_for_idle(wait: boolean): Promise<void>;
