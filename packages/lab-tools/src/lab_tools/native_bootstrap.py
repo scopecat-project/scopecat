@@ -1,4 +1,4 @@
-"""Installed-package host; preparation happens behind its already visible window."""
+"""Installed-package host using its build-time Python and dependencies directly."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from typing import Protocol, cast
 from filelock import FileLock
 
 from .application_runtime import ApplicationRuntime
-from .bundle import MANIFEST, file_hash, prepare_home
+from .bundle import MANIFEST, file_hash
 from .installation_paths import InstallationPaths
 
 
@@ -39,7 +39,10 @@ def _run(command: list[str]) -> None:
 def prepare(args: Arguments, paths: InstallationPaths) -> None:
     runtime = ApplicationRuntime(paths.state)
     with FileLock(paths.state / "native-start.lock"):
-        python, payload = prepare_home(args.payload, paths.software)
+        payload = args.payload.resolve()
+        python = Path(sys.executable)
+        if os.name == "nt":
+            python = python.with_name("python.exe")
         _ = runtime.configure(
             python=python, static_dir=payload / "gui", software_home=paths.software
         )
@@ -60,11 +63,13 @@ def prepare(args: Arguments, paths: InstallationPaths) -> None:
                     ]
                 )
             receipt.write_text("{}\n", encoding="utf-8")
-        if runtime.installation().python != python or runtime.pending.exists():
-            candidate = runtime.prepare_update(payload)
+        # The package determines the interpreter, including when an update replaces
+        # files at the same path. Never install or choose another environment here.
+        candidate = runtime.qualify(python, payload / "gui")
+        if runtime.installation() != candidate or runtime.pending.exists():
             if runtime.status().state not in ("stopped", "stale"):
                 raise ValueError(
-                    "应用更新已准备，当前后台仍在运行。请完成工作后退出旧应用，"
+                    "当前旧应用仍在运行。请完成工作后退出旧应用，"
                     "再点重试；或选择停止后台并完成更新。"
                 )
             runtime.select(candidate)

@@ -61,7 +61,7 @@ def application_declaration(adapter: AdapterReference | None) -> str:
 
 def runtime_command(python: Path, request: dict[str, object]) -> dict[str, object]:
     """Execute in the selected environment; retain its actionable failure text."""
-    environment = dict(os.environ, PYTHONUTF8="1")
+    environment = dict(os.environ, PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1")
     for name in ("SCOPECAT_DAEMON_URL", "PYTHONHOME", "PYTHONPATH"):
         environment.pop(name, None)
     with tempfile.TemporaryDirectory(prefix="scopecat-application-") as directory:

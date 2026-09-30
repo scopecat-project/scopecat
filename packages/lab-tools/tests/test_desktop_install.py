@@ -114,7 +114,7 @@ def native_start(tmp_path, monkeypatch):
     payload = tmp_path / "payload"
     payload.mkdir()
     (payload / "bundle.json").write_text('{"build": "first"}')
-    selected = SimpleNamespace(python=Path(sys.executable))
+    selected = SimpleNamespace(python=Path(sys.executable), package="first")
     updates = []
 
     class Runtime:
@@ -129,12 +129,17 @@ def native_start(tmp_path, monkeypatch):
         def installation(self):
             return selected
 
-        def prepare_update(self, source):
-            updates.append(source)
-            return SimpleNamespace(python=Path(sys.executable))
+        def qualify(self, python, static_dir):
+            assert static_dir == payload / "gui"
+            return SimpleNamespace(
+                python=python,
+                package=json.loads((payload / "bundle.json").read_text())["build"],
+            )
 
         def select(self, candidate):
+            updates.append(candidate)
             selected.python = candidate.python
+            selected.package = candidate.package
 
         def prepared_update(self):
             return None
@@ -143,9 +148,6 @@ def native_start(tmp_path, monkeypatch):
             return SimpleNamespace(state="stopped")
 
     monkeypatch.setattr(native_bootstrap, "ApplicationRuntime", Runtime)
-    monkeypatch.setattr(
-        native_bootstrap, "prepare_home", lambda *_: (Path(sys.executable), payload)
-    )
     args = SimpleNamespace(
         payload=payload,
         home=tmp_path / "isolated",
@@ -188,3 +190,14 @@ def test_native_initializer_failure_retries_without_marking_setup_complete(
     assert len(calls) == 2
     assert (paths.state / "native-setup.json").is_file()
     assert not (paths.state / "native-setup.pending").exists()
+
+
+def test_native_package_refreshes_runtime_at_the_same_install_path(native_start):
+    bootstrap, args, paths, selected, updates = native_start
+    bootstrap.launch(args, paths)
+    (args.payload / "bundle.json").write_text('{"build": "second"}')
+    bootstrap.launch(args, paths)
+    assert len(updates) == 1
+    assert selected.package == "second"
+    assert selected.python == Path(sys.executable)
+    assert not paths.software.exists()

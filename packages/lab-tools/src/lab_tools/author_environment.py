@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tarfile
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -14,7 +15,7 @@ from uv import find_uv_bin
 
 from scopecat.kernel.content_identity import sha256_json_hash
 
-from .bundle import MANIFEST, RECEIPT, file_hash, install_bundle
+from .bundle import MANIFEST, file_hash, install_bundle, verify_bundle
 
 if TYPE_CHECKING:
     from .application_runtime import ApplicationRuntime
@@ -38,12 +39,28 @@ def _run(command: list[str]) -> None:
 
 
 def _bundle(runtime: ApplicationRuntime) -> Path:
-    selected = runtime.installation()
-    receipt = cast(
-        "dict[str, str]",
-        json.loads((selected.python.parent.parent / RECEIPT).read_text()),
-    )
-    return Path(receipt["bundle"])
+    return runtime.installation().static_dir.parent
+
+
+def _independent_python(bundle: Path, home: Path) -> Path:
+    """Retain a base interpreter owned by the environment, not the application."""
+    archive = bundle / "toolchain/python.tar"
+    if not archive.is_file():
+        raise ValueError("创建独立作者环境需要包含 Python 的平台交付包")
+    key = file_hash(archive).split(":")[-1]
+    base = home / key
+    home.mkdir(parents=True, exist_ok=True)
+    from filelock import FileLock
+
+    with FileLock(home / "python.lock"):
+        if not base.exists():
+            _ = verify_bundle(bundle)
+            with tempfile.TemporaryDirectory(prefix=".python-", dir=home) as temporary:
+                staged = Path(temporary) / "runtime"
+                with tarfile.open(archive) as stream:
+                    stream.extractall(staged, filter="data")
+                staged.rename(base)
+    return base / ("python.exe" if os.name == "nt" else "bin/python3")
 
 
 def create_client_environment(
@@ -65,7 +82,10 @@ def create_client_environment(
             )
         return python
     try:
-        _ = install_bundle(bundle, environment, copy_packages=True)
+        base_python = _independent_python(bundle, workspace / ".scopecat-python")
+        _ = install_bundle(
+            bundle, environment, copy_packages=True, base_python=base_python
+        )
         python = _python(environment)
         _run([str(python), "-m", "ensurepip"])
     except Exception:
@@ -137,7 +157,8 @@ def prepare_execution_environment(
         lock = attempt / "requirements.lock"
         lock.write_text(requirements, encoding="utf-8")
         environment = attempt / "runtime"
-        _ = install_bundle(bundle, environment)
+        base_python = _independent_python(bundle, runtime.home / "environments/python")
+        _ = install_bundle(bundle, environment, base_python=base_python)
         python = _python(environment)
         _run(
             [

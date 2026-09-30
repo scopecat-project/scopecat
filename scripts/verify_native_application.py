@@ -20,13 +20,13 @@ from lab_tools.author_environment import create_client_environment
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 selected = runtime.installation()
-assert Path(sys.base_prefix).is_relative_to(home / "software")
+assert not (home / "software").exists()
 workspace = home / "authors"
 workspace.mkdir(exist_ok=True)
 client = create_client_environment(runtime, workspace)
 base = subprocess.check_output([str(client), "-I", "-c",
     "import sys, scopecat; print(sys.base_prefix)"], text=True).strip()
-assert Path(base) == Path(sys.base_prefix)
+assert Path(base).is_relative_to(workspace / ".scopecat-python")
 try:
     record = runtime.start()
     with httpx2.Client(trust_env=False) as http:
@@ -35,7 +35,7 @@ try:
 finally:
     runtime.stop()
 assert runtime.status().state == "stopped"
-print("PASS: retained runtime and author Python survive removal of native app")
+print("PASS: fixed packaged runtime starts and stops without installation")
 """
 
 
@@ -62,13 +62,25 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     state = cast("dict[str, str | bool]", json.loads(first))
     assert state["status"] == "stopped" and state["update_available"] is False
     python = Path(cast("str", state["python"]))
-    assert python.is_relative_to(home / "software")
-    relocated.rename(relocated.with_name("Removed " + app.name))
-    _ = subprocess.run(  # noqa: S603 - retained runtime after app removal
+    assert python.is_relative_to(relocated)
+    _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
         [str(python), "-I", "-c", RUNTIME_CHECK, str(home)],
         env=environment,
         check=True,
     )
+    relocated.rename(relocated.with_name("Removed " + app.name))
+    client = (
+        home
+        / "authors/.venv"
+        / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    )
+    client_check = [
+        str(client),
+        "-I",
+        "-c",
+        "import scopecat; print('PASS: independent author Python')",
+    ]
+    _ = subprocess.run(client_check, env=environment, check=True)  # noqa: S603
     if installer is not None:
         if sys.platform == "win32":
             installed = home / "Installed Scopecat"
@@ -98,7 +110,7 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
             )
             assert not (installed / "Scopecat.exe").exists()
             _ = subprocess.run(  # noqa: S603 - retained data after native uninstall
-                [str(python), "-I", "-c", RUNTIME_CHECK, str(home)],
+                client_check,
                 env=environment,
                 check=True,
             )
