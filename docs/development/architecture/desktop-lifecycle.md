@@ -19,6 +19,9 @@ The experiment service remains the single authority for tasks, data and devices.
 
 The host's own startup and recovery page must not depend on HTTP service readiness,
 author imports or driver qualification. Preparation runs outside the UI event loop.
+Application update qualification checks its own runtime and capabilities. Registered
+author folders are independently resolved when used; a moved folder or broken author
+environment must not prevent opening retained data or other sources after an update.
 Only a completed initialization receipt suppresses first-use setup on retry.
 Window hiding is not termination. JavaScript bridge replies must finish before
 destroying their window. All normal quit paths release the service before removing

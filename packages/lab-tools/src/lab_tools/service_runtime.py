@@ -31,7 +31,6 @@ class Request(BaseModel):
     environment: dict[str, str] = Field(default_factory=dict)
     settings_identity: str | None = None
     adapter_identity: str | None = None
-    qualify_sources: bool = False
     workspace: str | None = None
     manifest: str | None = None
     author_python: Path | None = None
@@ -74,27 +73,6 @@ def main() -> None:
     ):
         raise ValueError("本机设置已改变；请选择“停止并重新核验当前环境”后重试")
     if request.action == "probe":
-        if request.qualify_sources:
-            from scopecat.author_workspaces import local_author_workspaces
-
-            for item in local_author_workspaces(project.root):
-                source = open_project(item.root, resolve_adapter=False)
-                source = load_project(
-                    source.manifest,
-                    lab_adapter=project.lab_adapter if source.author_only else None,
-                    bound_composition=source.author_only,
-                )
-                binding = source.runtime_binding
-                owner = project.runtime_binding
-                if (binding.data_root, binding.deployment_root) != (
-                    owner.data_root,
-                    owner.deployment_root,
-                ):
-                    raise ValueError(f"作者目录运行绑定已改变: {item.root}")
-                from scopecat_server.author_environment import capture
-
-                capture(source.root, item.python)
-                print(f"已验证作者环境: {item.name} ({item.root})", flush=True)
         execution_packages(
             (
                 *(project.dependencies or ()),

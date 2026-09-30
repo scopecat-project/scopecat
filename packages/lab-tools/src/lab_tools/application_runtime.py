@@ -187,7 +187,6 @@ class ApplicationRuntime:
                     "root": str(self.root),
                     "manifest": str(manifest),
                     "static_dir": str(static_dir) if static_dir else None,
-                    "qualify_sources": True,
                 },
             )
         finally:

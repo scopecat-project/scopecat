@@ -179,9 +179,12 @@ def _page(content: str) -> str:
 def _recovery(error: Exception) -> str:
     return _page(
         "<h1>启动未完成</h1>"
+        "<p>应用尚未准备就绪。可以重试，或停止本应用的后台后重新启动。"
+        "如果仍无法完成，请将错误详情交给维护者。</p>"
+        "<details><summary>查看错误详情</summary>"
         f"<p>{escape(str(error))}</p>"
-        "<p>请修正问题后重试。日志位于应用数据目录的 "
-        "native-start.log 和 desktop/desktop.log。</p>"
+        "<p>日志位于应用数据目录的 native-start.log 和 desktop/desktop.log。</p>"
+        "</details>"
         '<button onclick="pywebview.api.retry().catch(showError)">重试</button> '
         '<button onclick="pywebview.api.restart().catch(showError)">'
         "停止后台并完成更新 / 重新启动</button> "
