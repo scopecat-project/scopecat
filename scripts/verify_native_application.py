@@ -64,10 +64,11 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     python = Path(cast("str", state["python"]))
     assert python.is_relative_to(relocated)
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
-        [str(python), "-I", "-c", RUNTIME_CHECK, str(home)],
+        [str(python), "-I", "-B", "-c", RUNTIME_CHECK, str(home)],
         env=environment,
         check=True,
     )
+    assert inventory(relocated, (".",)) == before, "Runtime modified application files"
     relocated.rename(relocated.with_name("Removed " + app.name))
     client = (
         home

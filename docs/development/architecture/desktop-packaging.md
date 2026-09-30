@@ -48,10 +48,13 @@ host has no controller process. It does not exercise the native window, prove
 offline dependency isolation, qualify user environments or replace the full PR 1
 acceptance. A ready backend alone is not a finished desktop application.
 
-The selected implementation must remove application-startup environment creation
-and candidate selection, preserve the work-aware quit/background contract, and
-keep user Python independent of replaceable application files. Data initialization
-and explicit current-format checks are normal runtime work, not dependency setup.
+The native entry now starts the package's interpreter without calling the retained
+delivery installer. Explicitly created author environments retain their own base
+Python outside application files. The older installation-selection machinery and
+desktop maintenance actions still need retirement before this PR is complete.
+The final host must preserve the work-aware quit/background contract. Data
+initialization and explicit current-format checks are normal runtime work, not
+dependency setup.
 
 ## Implementation boundary
 
