@@ -9,14 +9,22 @@ from packaging.utils import canonicalize_name
 
 
 def execution_packages(requirements: tuple[str, ...]) -> dict[str, str]:
+    """Dependencies of a retained backend worker, including the server."""
+    return installed_packages(("scopecat", "scopecat-server", *requirements))
+
+
+def author_packages(requirements: tuple[str, ...]) -> dict[str, str]:
+    """Dependencies needed to import declarations in a user Python process."""
+    return installed_packages(("scopecat", *requirements))
+
+
+def installed_packages(requirements: tuple[str, ...]) -> dict[str, str]:
     """Resolve installed metadata, including active markers and transitive extras.
 
     This validates an existing installation, not a package installer or solver.
     Local imports and optional runtime choices must be declared by the maintainer.
     """
-    pending = [
-        Requirement(item) for item in ("scopecat", "scopecat-server", *requirements)
-    ]
+    pending = [Requirement(item) for item in requirements]
     visited: set[tuple[str, str]] = set()
     packages: dict[str, str] = {}
     while pending:

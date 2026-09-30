@@ -93,6 +93,14 @@ Python. Explicit author dependency preparation may install packages in the autho
 environment; ordinary application launch may not. Vendor runtime isolation builds
 on this boundary in PR 3.
 
+Generated user environments install only `scopecat`, `ipykernel` and their
+dependency closure from the verified offline wheels, constrained to the delivery's
+versions. They do not install the server, desktop or teaching packages. Author
+revisions record import dependencies separately from execution dependencies:
+notebook refresh checks the former; backend recovery still checks the latter.
+Explicit author dependencies remain required on both sides. Workspaces without
+an explicit dependency declaration retain their full captured environment contract.
+
 The packaged-CPython qualification passes on both native distribution runners.
 A disposable macOS Tauri prototype also exercised explicit backend start,
 hide/reopen with the same endpoint, and clean quit. These establish feasibility,

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from lab_tools.verify_maintenance import verify_restore
 from scopecat.project import load_project
+from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.snapshots import verify_snapshot
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
@@ -23,6 +24,7 @@ def test_current_restore_prepares_only_the_recovered_environment(tmp_path, monke
     )
     store.bootstrap()
     store.close()
+    source = register_author_workspace(root, root)
     restored = root.with_name("project-maintenance") / "restored"
     prepared = []
 
@@ -36,7 +38,7 @@ def test_current_restore_prepares_only_the_recovered_environment(tmp_path, monke
 
     def execute(arguments, **kwargs):
         if "lab_tools.verify_maintenance" in arguments:
-            assert arguments[-1] == str(restored)
+            assert arguments[-3:] == [str(restored), "--source-id", source.id]
             return subprocess.CompletedProcess(arguments, 0)
         return run(arguments, **kwargs)
 

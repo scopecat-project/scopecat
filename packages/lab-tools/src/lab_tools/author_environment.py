@@ -84,7 +84,11 @@ def create_client_environment(
     try:
         base_python = _independent_python(bundle, workspace / ".scopecat-python")
         _ = install_bundle(
-            bundle, environment, copy_packages=True, base_python=base_python
+            bundle,
+            environment,
+            copy_packages=True,
+            base_python=base_python,
+            packages=("scopecat", "ipykernel"),
         )
         python = _python(environment)
         _run([str(python), "-m", "ensurepip"])

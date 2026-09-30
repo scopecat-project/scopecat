@@ -17,21 +17,32 @@ from pathlib import Path
 import httpx2
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.author_environment import create_client_environment
+from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 selected = runtime.installation()
 assert not (home / "software").exists()
 workspace = home / "authors"
-workspace.mkdir(exist_ok=True)
+write_author_scaffold(workspace)
+runtime.register_source(workspace)
 client = create_client_environment(runtime, workspace)
 base = subprocess.check_output([str(client), "-I", "-c",
-    "import sys, scopecat; print(sys.base_prefix)"], text=True).strip()
+    "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
 assert Path(base).is_relative_to(workspace / ".scopecat-python")
+subprocess.run([str(client), "-I", "-c", '''
+from importlib.util import find_spec
+for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
+    assert find_spec(name) is None, name
+import pip
+'''], check=True)
+assert create_client_environment(runtime, workspace) == client
 try:
     record = runtime.start()
     with httpx2.Client(trust_env=False) as http:
         assert http.get(record.base_url + "/api/v1/health").json()["status"] == "ok"
         assert http.get(record.base_url + "/").status_code == 200
+    subprocess.run([str(client), "-I", str(workspace / "notebooks/02_edit_scan.py")],
+        cwd=workspace, check=True)
 finally:
     runtime.stop()
 assert runtime.status().state == "stopped"

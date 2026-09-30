@@ -1,13 +1,18 @@
 """Declared installed dependency closure and unrelated author-tool isolation."""
 
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pytest
 
 from scopecat.execution_environment import execution_packages
 from scopecat.project import load_project
-from scopecat.project_sources import capture_sources, require_environment
+from scopecat.project_sources import (
+    capture_sources,
+    require_environment,
+    require_import_environment,
+)
 
 
 def _distribution(
@@ -75,6 +80,21 @@ def test_scoped_revision_ignores_tools_but_retains_execution_environment(
     lock.write_text("notebook lock version 1")
     project = load_project(manifest)
     original = capture_sources(project).manifest
+    assert "scopecat-server" in original.packages
+    assert "scopecat-server" not in original.import_packages
+    assert original.import_packages["trial-helper"] == "1.0"
+    from scopecat import project_sources
+
+    def client_version(name: str) -> str:
+        if name == "scopecat-server":
+            raise PackageNotFoundError(name)
+        return version(name)
+
+    with monkeypatch.context() as client:
+        client.setattr(project_sources, "version", client_version)
+        require_import_environment(original)
+        with pytest.raises(ValueError, match="scopecat-server"):
+            require_environment(original)
     tool.write_text("Name: trial_notebook\nVersion: 2.0\n")
     lock.write_text("notebook lock version 2")
     assert capture_sources(project).manifest == original
@@ -85,6 +105,8 @@ def test_scoped_revision_ignores_tools_but_retains_execution_environment(
     )
     with pytest.raises(ValueError, match=r"trial-helper==1\.0"):
         require_environment(original)
+    with pytest.raises(ValueError, match=r"trial-helper==1\.0"):
+        require_import_environment(original)
     helper.unlink()
     helper.parent.rmdir()
     with pytest.raises(ValueError, match="not installed"):

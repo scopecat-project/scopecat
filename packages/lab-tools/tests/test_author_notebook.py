@@ -1,4 +1,4 @@
-"""Author Notebook entry follows the registered runtime without starting a daemon."""
+"""Author Notebook uses user Python without starting or modifying the application."""
 
 import json
 import os
@@ -17,6 +17,11 @@ from scopecat_server.cli import app
 def laboratory(tmp_path, monkeypatch):
     source = tmp_path / "author"
     source.mkdir()
+    python = (
+        source / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    )
+    python.parent.mkdir(parents=True)
+    python.touch()
     home = tmp_path / "application"
     home.mkdir()
     service = SimpleNamespace(
@@ -37,23 +42,22 @@ def laboratory(tmp_path, monkeypatch):
     return source, home, service
 
 
-def test_launch_uses_latest_binding_and_private_kernel_directory(
-    laboratory, monkeypatch
-):
+def test_launch_keeps_user_python_when_application_changes(laboratory, monkeypatch):
     source, home, service = laboratory
     monkeypatch.setenv("PYTHONPATH", "foreign-source")
     monkeypatch.setenv("PYTHONHOME", "foreign-python")
     monkeypatch.setenv("SCOPECAT_DAEMON_URL", "http://foreign-service")
     sessions = []
+    python = str(author_notebook.project_python(source))
 
     def start(command, *, cwd, env):
         assert cwd == source
-        assert command[:4] == [service.python, "-I", "-m", "jupyterlab"]
+        assert command[:4] == [python, "-I", "-m", "jupyterlab"]
         assert "--no-browser" in command
         assert not {"PYTHONPATH", "PYTHONHOME", "SCOPECAT_DAEMON_URL"} & env.keys()
         path = Path(env["JUPYTER_PATH"].split(os.pathsep)[0])
         spec = json.loads((path / "kernels/scopecat-lab/kernel.json").read_text())
-        assert spec["argv"][:3] == [service.python, "-I", "-m"]
+        assert spec["argv"][:3] == [python, "-I", "-m"]
         assert spec["env"] == {}
         sessions.append(path)
 
@@ -84,6 +88,15 @@ def test_missing_notebook_extra_does_not_launch_or_install(laboratory, monkeypat
         author_notebook.launch_notebook(source, home)
 
 
+def test_missing_user_python_never_falls_back_to_application(laboratory, monkeypatch):
+    source, home, _ = laboratory
+    author_notebook.project_python(source).unlink()
+    monkeypatch.setattr(author_notebook.subprocess, "run", pytest.fail)
+    monkeypatch.setattr(author_notebook.subprocess, "Popen", pytest.fail)
+    with pytest.raises(ValueError, match=r"\.venv 尚未准备"):
+        author_notebook.launch_notebook(source, home)
+
+
 def test_pending_environment_switch_prevents_notebook_launch(tmp_path, monkeypatch):
     from lab_tools.application_runtime import ApplicationRuntime
 
@@ -110,6 +123,11 @@ def test_default_notebook_opens_sole_registered_source(tmp_path, monkeypatch):
 
     root = tmp_path / "software laboratory"
     root.mkdir()
+    python = (
+        root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    )
+    python.parent.mkdir(parents=True)
+    python.touch()
     (root / "scopecat.toml").write_text("[lab]\n")
     home = tmp_path / "home"
     home.mkdir()
@@ -142,5 +160,5 @@ def test_default_notebook_opens_sole_registered_source(tmp_path, monkeypatch):
 
     monkeypatch.setattr(author_notebook.subprocess, "Popen", start)
     assert author_notebook.launch_notebook(None, home) == 0
-    assert calls[0][0][:4] == [service.python, "-I", "-m", "jupyterlab"]
+    assert calls[0][0][:4] == [str(python), "-I", "-m", "jupyterlab"]
     assert calls[0][1] == root

@@ -6,8 +6,9 @@ registered devices and author sources. Source folders do not own services.
 
 Use VS Code normally. Select the author folder's independent `.venv` for scripts
 and Notebook kernels. Installing analysis packages there does not modify the
-application's runtime. JupyterLab remains an
-optional explicit `scopecat notebook PATH --home HOME` command.
+application's runtime. The generated environment includes Scopecat and ipykernel.
+Install optional JupyterLab in that environment before using
+`scopecat notebook PATH --home HOME`; this command also uses the folder's `.venv`.
 
 Closing the desktop window offers **Stop and close**, **Keep running in background**
 or **Cancel**. Browser tabs and Python clients do not own the service. The explicit

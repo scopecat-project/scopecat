@@ -103,10 +103,11 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
               Stop, register source and reopen
             </button>
             <p>
-              Use the source folder's .venv for Python and notebooks. Installing packages there does
-              not change this application. Declare packages needed by background experiments in
-              pyproject.toml, then prepare their execution environment. Existing tasks keep their
-              original environment.
+              Create a local Python environment for this folder, then select its .venv in VS Code.
+              It includes the Scopecat Python API and a notebook kernel. Install your own analysis
+              packages there with pip; this does not change the application. Declare packages needed
+              by background experiments in pyproject.toml, then prepare their execution environment.
+              Existing tasks keep their original environment.
             </p>
             <button
               className={secondaryButton}

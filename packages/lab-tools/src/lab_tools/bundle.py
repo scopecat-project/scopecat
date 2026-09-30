@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Protocol, TypedDict, cast
@@ -184,6 +185,7 @@ def install_bundle(
     *,
     copy_packages: bool = False,
     base_python: Path | None = None,
+    packages: tuple[str, ...] | None = None,
 ) -> Path:
     root = resolve_delivery(root)
     destination = destination.resolve()
@@ -212,28 +214,55 @@ def install_bundle(
             "--python",
             str(base_python) if base_python else sys.executable,
             str(destination),
-        ],
+        ]
     )
     python = destination / (
         "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
     )
-    _run_install(
-        [
-            uv,
-            "pip",
-            "install",
-            *(["--link-mode", "copy"] if copy_packages else []),
-            "--offline",
-            "--no-index",
-            "--require-hashes",
-            "--find-links",
-            str(root / "wheels"),
-            "--python",
-            str(python),
-            "-r",
-            str(root / "requirements.lock"),
-        ],
-    )
+    with tempfile.TemporaryDirectory(prefix="scopecat-install-") as temporary:
+        requirements = root / "requirements.lock"
+        if packages is not None:
+            requested = Path(temporary) / "requirements.in"
+            requested.write_text("\n".join(packages) + "\n", encoding="utf-8")
+            requirements = Path(temporary) / "requirements.lock"
+            _run_install(
+                [
+                    uv,
+                    "pip",
+                    "compile",
+                    str(requested),
+                    "--offline",
+                    "--no-index",
+                    "--find-links",
+                    (root / "wheels").as_uri(),
+                    "--constraint",
+                    (root / "requirements.lock").as_uri(),
+                    "--python",
+                    str(python),
+                    "--generate-hashes",
+                    "--no-header",
+                    "--no-annotate",
+                    "--output-file",
+                    str(requirements),
+                ]
+            )
+        _run_install(
+            [
+                uv,
+                "pip",
+                "install",
+                *(["--link-mode", "copy"] if copy_packages else []),
+                "--offline",
+                "--no-index",
+                "--require-hashes",
+                "--find-links",
+                str(root / "wheels"),
+                "--python",
+                str(python),
+                "-r",
+                str(requirements),
+            ]
+        )
     staged_receipt = destination / f".{RECEIPT}-{uuid.uuid4().hex}"
     _ = staged_receipt.write_text(
         json.dumps(

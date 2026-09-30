@@ -10,7 +10,7 @@ from typing import Protocol, cast
 
 from .application_runtime import ApplicationRuntime
 from .bundle import configure_console
-from .notebook import kernel_command
+from .notebook import kernel_command, project_python
 
 
 class Arguments(Protocol):
@@ -40,10 +40,10 @@ def launch_notebook(
                 workspace = sources[0].root
             workspace = workspace.resolve()
             identity = store.source(workspace)
-            installation = store.installation()
+            python = project_python(workspace)
             command, env = kernel_command(
                 workspace,
-                python=str(installation.python),
+                python=str(python),
                 source_path=False,
                 kernel_home=Path(directory),
             )
@@ -51,7 +51,7 @@ def launch_notebook(
                 env.pop(name, None)
             checked = subprocess.run(  # noqa: S603 - registered interpreter, fixed probe
                 [
-                    str(installation.python),
+                    str(python),
                     "-I",
                     "-c",
                     (
@@ -69,15 +69,15 @@ def launch_notebook(
             )
             if checked.returncode:
                 raise ValueError(
-                    "实验室环境无法加载 JupyterLab/ipykernel；请由维护者提供包含 "
-                    "scopecat-lab-tools[notebook] 的交付。没有安装或回退到其他解释器。"
+                    "本地环境无法加载 JupyterLab/ipykernel；可直接使用 VS Code，"
+                    "或在此目录 .venv 中用 pip install jupyterlab 安装可选编辑器。"
                     + checked.stderr.strip()
                 )
             if no_browser:
                 command.append("--no-browser")
             print(
                 f"Notebook 作者目录: {workspace} ({identity})\n"
-                f"应用: {store.home}\n解释器: {installation.python}\n"
+                f"应用: {store.home}\n解释器: {python}\n"
                 "仅打开编辑环境；打开 Scopecat 即可启动应用。"
                 "切换运行环境前请先关闭此 Notebook 服务和全部内核。",
                 flush=True,

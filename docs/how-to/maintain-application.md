@@ -49,6 +49,12 @@ environment retains its own base Python in the folder's `.scopecat-python` direc
 keep that directory with `.venv`. Replacing or removing the application does not
 remove this interpreter.
 
+The generated environment contains the Scopecat Python API, a notebook kernel and
+their dependencies. Desktop, service and teaching packages are not copied into it.
+VS Code can use it directly. For optional JupyterLab editing, install `jupyterlab`
+with this environment's pip; the `scopecat notebook` maintainer command also uses
+this folder's `.venv`, never application Python.
+
 If a package is also needed by background experiments, declare it in the folder's
 `pyproject.toml`, for example:
 
@@ -73,8 +79,8 @@ selected delivery, so reinstall your local additions afterwards. This operation
 does not alter source files, measurements or managed execution environments.
 
 The initial execution environment can share the immutable delivery with the app.
-Additional environments live under `HOME/environments`; retained environments and
-releases are not disposable caches. Driver-process dependencies still belong to the
+Additional environments live under `HOME/environments`; retained environments
+are not disposable caches. Driver-process dependencies still belong to the
 application delivery; this operation changes experiment workers, not connected drivers.
 
 Maintainers can use the same operations without opening a browser:
