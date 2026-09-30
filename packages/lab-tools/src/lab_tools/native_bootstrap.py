@@ -15,7 +15,7 @@ from typing import Protocol, cast
 from filelock import FileLock
 
 from .application_runtime import ApplicationRuntime
-from .bundle import prepare_home
+from .bundle import MANIFEST, file_hash, prepare_home
 from .installation_paths import InstallationPaths
 
 
@@ -91,7 +91,11 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
         return
     from .desktop import run
 
-    run(paths.state, prepare=lambda: prepare(args, paths))
+    run(
+        paths.state,
+        prepare=lambda: prepare(args, paths),
+        package_identity=file_hash(args.payload / MANIFEST),
+    )
 
 
 def main() -> None:

@@ -206,6 +206,7 @@ def run(
     source: Path | None = None,
     *,
     prepare: Callable[[], None] | None = None,
+    package_identity: str = "source-development",
 ) -> None:
     # Optional dependency: command-line/service installations stay headless.
     import pystray
@@ -221,7 +222,7 @@ def run(
     try:
         lock.acquire()
     except Timeout:
-        activate.touch()
+        activate.write_text(package_identity, encoding="utf-8")
         return
     try:
         runtime = ApplicationRuntime(home)
@@ -323,8 +324,17 @@ def run(
                     show()
                     window.load_html(_recovery(error))
                 if activate.exists():
+                    requested_package = activate.read_text(encoding="utf-8")
                     activate.unlink(missing_ok=True)
                     show()
+                    if requested_package != package_identity:
+                        quit_current = window.create_confirmation_dialog(
+                            "Scopecat 已安装其他版本",
+                            "当前窗口仍由之前打开的版本运行。"
+                            "请退出当前应用，再打开已安装的版本。现在退出？",
+                        )
+                        if quit_current:
+                            _ = request_close()
             # Keep the native completion hook out of the exposed JavaScript API.
             api._finish_exit()  # pyright: ignore[reportPrivateUsage]
 
