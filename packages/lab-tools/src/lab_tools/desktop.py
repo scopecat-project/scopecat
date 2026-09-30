@@ -148,10 +148,12 @@ class DesktopAPI:
             self._waiting.clear()
 
     def _poll_exit(self) -> None:
-        if self._waiting.is_set():
-            with self._operation():
+        if self._waiting.is_set() and self._operation_lock.acquire(blocking=False):
+            try:
                 if self._runtime.stop_if_idle():
                     self._closing.set()
+            finally:
+                self._operation_lock.release()
 
     def _finish_exit(self) -> None:
         if self._exit_thread is not None:

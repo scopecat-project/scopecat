@@ -34,6 +34,20 @@ def test_waiting_exit_can_be_cancelled_without_stopping_work():
     runtime.stop_if_idle.assert_called_once()
 
 
+def test_waiting_exit_does_not_replace_an_in_progress_preparation():
+    runtime = Mock()
+    closing = threading.Event()
+    api = DesktopAPI(runtime, Mock(), closing)
+    api.wait_for_idle(True)
+    with api._operation():
+        api._poll_exit()
+    runtime.stop_if_idle.assert_not_called()
+    assert not closing.is_set()
+    runtime.stop_if_idle.return_value = True
+    api._poll_exit()
+    assert closing.is_set()
+
+
 def finish_exit(api, background):
     bridge = threading.Thread(target=api.exit, args=(background,))
     bridge.start()
