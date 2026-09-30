@@ -296,7 +296,7 @@ def test_duplicate_wheel_distribution_is_rejected(tmp_path):
 def test_managed_build_retains_previous_success_on_failure_and_then_advances(
     recipe, tmp_path, build_tools, monkeypatch
 ):
-    from lab_tools.bundle import CURRENT_DELIVERY, resolve_delivery, retain_bundle
+    from lab_tools.bundle import CURRENT_DELIVERY, resolve_delivery
 
     gui = tmp_path / "gui"
     gui.mkdir()
@@ -321,8 +321,7 @@ def test_managed_build_retains_previous_success_on_failure_and_then_advances(
     second = delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
     assert second != first and first.is_dir()
     assert resolve_delivery(home) == second
-    retained = retain_bundle(home, tmp_path / "application")
-    assert (retained / "gui/index.html").read_text() == "<html>second</html>"
+    assert (second / "gui/index.html").read_text() == "<html>second</html>"
     # Explicit old artifacts remain selectable regardless of the moving pointer.
     assert resolve_delivery(first) == first
 

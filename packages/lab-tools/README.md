@@ -26,9 +26,9 @@ Only `--action open` launches a browser. Status, builds, tests and installation 
 headless. Software preparation and selection are separate operations; see
 [application maintenance](../../docs/how-to/maintain-application.md).
 
-Tutorial deliveries retain the explicit `python lab.py teach compute --verify`
-command. It runs directly and reports a VS Code folder, without a management
-service. Help practice uses the current application and its data cleanup. See
+Help practice uses the current application and its data cleanup. The equivalent
+headless command is `python -m lab_tools.practice --home DATA_HOME`; it reports
+the practice link and optional notes folder without opening a browser. See
 [tutorials](../../docs/tutorials/teaching-sandboxes.md).
 
 Platform installation locations and the remaining standalone packaging work are

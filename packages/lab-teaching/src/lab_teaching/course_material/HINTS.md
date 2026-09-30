@@ -3,7 +3,7 @@
 先自己尝试，再看对应题；不需要阅读或修改 bootstrap。
 
 1. `drive["q0"].frequency = 5.148` 是普通属性赋值。`5.148` 按字段声明解释为 GHz。
-   `params.diff()` 只展示变化；`params.preview()` 检查单位和范围，不保存。
+   `params.diff()` 只展示变化；下一步 `session.prepare(...)` 结合当前实验上下文检查参数，不保存。
 2. `np.linspace(0, 0.8, 21)` 有 21 点，两端都包含。用 `request.values["amplitude"] = sc.Scan(...)` 设置扫描，更改后重新运行预览单元。
 3. 先看点和曲线，再看 `status`。`passed` 是教学拟合通过，不是实机标定通过。
 4. 名字已存在时改为 `my-second-drive`。重开使用保存时打印的版本名；不要猜“最新”。

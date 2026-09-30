@@ -65,6 +65,18 @@ for the target machine before explicitly starting the daemon. Snapshot restore
 does not install packages, launch the daemon, import the application, or acquire
 hardware.
 
+Reading saved results does not require reconnecting author source. To append
+analysis using an existing source identity, explicitly register its restored
+location while the service is stopped, before starting it:
+
+```sh
+scopecat register-workspace recovered-lab --service recovered-lab --identity EXISTING_WORKSPACE_ID
+```
+
+See [source identity and relocation](../reference/project-layout.md) for the
+registration contract. Local source paths and Python environments are not restored
+as deployment bindings.
+
 Durable procedure records—including ready and unfinished work—are preserved.
 The old GUI's management file is omitted, so starting the restored GUI does not
 automatically resume those procedures. Dispatch selected procedures explicitly

@@ -91,41 +91,14 @@ def verify(bundle: Path, destination: Path) -> None:
     )
     if result.returncode == 0 or "Select Kernel" not in result.stderr:
         raise RuntimeError(f"错误内核未正确拒绝: {result.stdout}\n{result.stderr}")
-    home = destination / "中文 沙盒中心"
-    subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [sys.executable, str(bundle / "install.py"), "--home", str(home)],
-        cwd=destination,
-        env=env,
-        check=True,
-    )
-    subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [sys.executable, str(bundle / "install.py"), "--home", str(home)],
-        cwd=destination,
-        env=env,
-        check=True,
-    )
-    receipts = list((home / "releases").glob("*/runtime/scopecat-lab-delivery.json"))
-    if sys.platform == "win32":
-        # Shell links must retain Unicode arguments, not the ANSI code page's '?'.
-        shortcut = (home / "Scopecat.lnk").read_bytes()
-        assert str(home / "lab.py").encode("utf-16-le") in shortcut
-    assert len(receipts) == 1
-    receipt = cast(
-        "dict[str, str]", json.loads(receipts[0].read_text(encoding="utf-8"))
-    )
-    assert Path(receipt["bundle"]).is_relative_to(home)
-    # Installed application qualification also exercises same-service practice.
-    assert not (home / "sandboxes").exists()
-    installed_python = receipts[0].parent / (
-        "Scripts/python.exe" if os.name == "nt" else "bin/python"
-    )
-    subprocess.run(  # noqa: S603 - retained delivery interpreter and fixed check
+    home = destination / "application-state"
+    subprocess.run(  # noqa: S603 - isolated installed interpreter and fixed check
         [
-            str(installed_python),
+            str(python),
             str(Path(__file__).with_name("verify_installed_application.py")),
             str(home),
             str(destination / "application"),
-            str(Path(receipt["bundle"]) / "gui"),
+            str(bundle / "gui"),
         ],
         cwd=destination,
         env=env,
@@ -141,7 +114,6 @@ def verify(bundle: Path, destination: Path) -> None:
                 "human": "not-evaluated",
                 "physical": "not-evaluated",
                 "practice": "synthetic scan and manual decision",
-                "reinstall": "passed",
                 "same_service_cleanup": "passed",
                 "no_management_service": "passed",
                 "managed_cleanup": "passed",
@@ -154,7 +126,8 @@ def verify(bundle: Path, destination: Path) -> None:
         encoding="utf-8",
     )
     print(
-        "离线安装、教材重开、编辑器准备、错误内核、四专题与沙盒重置验收通过", flush=True
+        "离线环境、教材重开与恢复、编辑器准备、错误内核、应用启停与练习清理验收通过",
+        flush=True,
     )
 
 

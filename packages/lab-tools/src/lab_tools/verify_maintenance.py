@@ -9,8 +9,11 @@ from typing import Protocol, cast
 
 
 def verify_restore(root: Path, *, static_dir: Path | None = None) -> None:
+    from scopecat.author_workspaces import local_author_workspaces
+
     from .environment import prepare_project
 
+    source = next(item for item in local_author_workspaces(root) if item.root == root)
     output = root.with_name(root.name + "-maintenance")
     output.mkdir()
     cli = [sys.executable, "-m", "scopecat_server.cli"]
@@ -22,14 +25,21 @@ def verify_restore(root: Path, *, static_dir: Path | None = None) -> None:
         _ = subprocess.run([*cli, *arguments], check=True)  # noqa: S603 - explicit local tool and argument list
     project = output / "restored"
     python = prepare_project(project, bundle=static_dir.parent if static_dir else None)
-    command = [str(python), "-m", "lab_tools.verify_maintenance", str(project)]
+    command = [
+        str(python),
+        "-m",
+        "lab_tools.verify_maintenance",
+        str(project),
+        "--source-id",
+        source.id,
+    ]
     if static_dir is not None:
         command.extend(("--static-dir", str(static_dir)))
     _ = subprocess.run(command, check=True)  # noqa: S603 - explicit local tool and argument list
     print("备份副本、独立环境恢复、原结果读回及新增分析通过", flush=True)
 
 
-def read_copy(root: Path, *, static_dir: Path | None = None) -> None:
+def read_copy(root: Path, *, source_id: str, static_dir: Path | None = None) -> None:
     import os
 
     from .notebook_io import notebook_io
@@ -38,6 +48,7 @@ def read_copy(root: Path, *, static_dir: Path | None = None) -> None:
     from nbclient import NotebookClient
 
     import scopecat as sc
+    from scopecat_server.author_registration import register_author_workspace
     from scopecat_server.lifecycle import start_project, stop_project
 
     from .project import notebook_command
@@ -48,6 +59,9 @@ def read_copy(root: Path, *, static_dir: Path | None = None) -> None:
     previous = os.environ.get("JUPYTER_PATH")
     os.environ["JUPYTER_PATH"] = env["JUPYTER_PATH"]
     project = sc.open_project(root)
+    # Snapshot locations are intentionally unbound; explicitly reconnect the
+    # restored source identity before requesting new analysis of retained runs.
+    register_author_workspace(root, root, identity=source_id)
     notebook = nbformat.v4.new_notebook(
         cells=[
             nbformat.v4.new_code_cell(cell)
@@ -95,9 +109,11 @@ if __name__ == "__main__":
     class VerifyArguments(Protocol):
         project: Path
         static_dir: Path | None
+        source_id: str
 
     parser = argparse.ArgumentParser()
     _ = parser.add_argument("project", type=Path)
     _ = parser.add_argument("--static-dir", type=Path)
+    _ = parser.add_argument("--source-id", required=True)
     args = cast("VerifyArguments", cast("object", parser.parse_args()))
-    read_copy(args.project, static_dir=args.static_dir)
+    read_copy(args.project, source_id=args.source_id, static_dir=args.static_dir)
