@@ -58,6 +58,13 @@ def application(tmp_path: Path):
     runtime.stop()
 
 
+def test_idle_exit_uses_live_service_and_releases_ownership(application):
+    application.start()
+    assert not application.activity().busy
+    assert application.stop_if_idle()
+    assert application.status().state == "stopped"
+
+
 def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
     sources = []
     for name in ("first", "second"):

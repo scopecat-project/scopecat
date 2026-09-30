@@ -388,7 +388,9 @@ def _latest_startup_stage(log_path: Path, offset: int) -> str:
     )
 
 
-def stop_project(project: Project, *, timeout: float = 10.0) -> DaemonStatus:
+def stop_project(
+    project: Project, *, timeout: float = 10.0, only_if_idle: bool = False
+) -> DaemonStatus:
     """Stop only the process whose PID and creation time match the record."""
 
     _daemon_diagnostics.capture("before_stop", root=project.root)
@@ -411,10 +413,15 @@ def stop_project(project: Project, *, timeout: float = 10.0) -> DaemonStatus:
             record=status.record,
             detail="recorded process exited before it could be stopped",
         )
-    _request_graceful_shutdown(status.record)
+    if not _request_graceful_shutdown(status.record, only_if_idle=only_if_idle):
+        return status
     try:
         process.wait(timeout=timeout)
     except psutil.TimeoutExpired:
+        if only_if_idle:
+            raise DaemonLifecycleError(
+                "Application is still quitting; retry shortly"
+            ) from None
         process.kill()
         process.wait(timeout=2)
     _daemon_diagnostics.capture("after_stop", root=project.root)
@@ -514,18 +521,28 @@ def _read_health(base_url: str, *, timeout: float) -> DaemonHealth:
         return DaemonHealth.model_validate(response.json())
 
 
-def _request_graceful_shutdown(record: DaemonEndpointRecord) -> None:
+def _request_graceful_shutdown(
+    record: DaemonEndpointRecord, *, only_if_idle: bool = False
+) -> bool:
     try:
         with httpx2.Client(timeout=2, trust_env=False) as client:
             response = client.post(
                 f"{record.base_url.rstrip('/')}{DAEMON_SHUTDOWN_PATH}",
                 headers={DAEMON_SHUTDOWN_TOKEN_HEADER: record.shutdown_token},
+                params={"only_if_idle": "true"} if only_if_idle else None,
             )
+            if only_if_idle and response.status_code == 409:
+                return False
             response.raise_for_status()
     except httpx2.HTTPError:
+        if only_if_idle:
+            raise DaemonLifecycleError(
+                "Cannot confirm active work; retry or explicitly stop the application"
+            ) from None
         process = _matching_process(record)
         if process is not None:
             process.terminate()
+    return True
 
 
 def _bind_listener(host: str, port: int) -> socket.socket:

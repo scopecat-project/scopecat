@@ -40,8 +40,10 @@ sharing a maintained physical access key use the same claims across contexts.
 
 The application entry now owns one fixed runtime root under its installation home.
 Author folders register with that owner and do not create endpoints or installations.
-The native window loads the workbench directly and offers explicit stop/background
-choices when closing. An empty application can register independent author folders
+The native window loads the workbench directly. The next desktop lifecycle batch
+replaces service-first startup and invisible background ownership with the
+[desktop lifecycle contract](desktop-lifecycle.md).
+An empty application can register independent author folders
 without requiring an installed capability package. Captured sources retain their
 bound composition even when the live application changes.
 
@@ -323,7 +325,7 @@ Preserve current-format evidence and recovery. No development-store migration
 chains, supported data baseline or automatic replay are introduced by this work.
 Software UX convergence is the current P0, before physical acceptance. It can be
 developed on Mac; Windows uses the same product flow plus platform/hardware checks.
-Do not make this depend on a general workflow editor, remote service, tray integration,
+Do not make this depend on a general workflow editor, remote service,
 arbitrary dependency isolation or a complete physical-state model. Keep targeted
 scientific, process-ownership and persistence tests; do not preserve retired service
 topology merely to keep its old journeys unchanged.

@@ -72,9 +72,10 @@ export function HelpWorkspace({
       <section className={section}>
         <h3 className="font-semibold">Finish work or keep it running</h3>
         <p>
-          Save your files and close Python sessions. Closing the Scopecat window lets you stop the
-          application, keep it running in the background, or cancel. Closing a browser tab only
-          closes that view.
+          Save your files. Closing an idle Scopecat stops the application. With unfinished work,
+          choose to wait, stop it, or keep Scopecat in the background. The menu bar or system tray
+          provides Open and Quit. An idle Python session does not prevent quitting. Closing a
+          browser tab only closes that view.
         </p>
         <p>
           Application settings shows software updates, source registration and data locations.

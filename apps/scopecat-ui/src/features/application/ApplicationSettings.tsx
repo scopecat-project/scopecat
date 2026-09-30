@@ -1,16 +1,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ProjectHealth } from "../../types";
-import { primaryButton, secondaryButton } from "../../ui/styles";
+import { secondaryButton } from "../../ui/styles";
 import { errorMessage } from "../../lib/presentation";
-import { getDevices } from "../instruments/device-api";
 import type { InstallationStatus } from "./DesktopSession";
 
 const section = "grid gap-3 rounded-lg border border-line bg-panel p-4";
 
 export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   const [native, setNative] = useState(window.pywebview?.api);
-  const [directory, setDirectory] = useState("");
   const [source, setSource] = useState("");
   useEffect(() => {
     const ready = () => setNative(window.pywebview?.api);
@@ -22,27 +20,12 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
     queryFn: () => native!.status(),
     enabled: !!native,
   });
-  const devices = useQuery({
-    queryKey: ["devices"],
-    queryFn: ({ signal }) => getDevices(signal),
-    enabled: !!native,
-  });
   const operation = useMutation({
     mutationFn: async (
-      action:
-        | "prepare"
-        | "apply"
-        | "source"
-        | "restart"
-        | "recheck"
-        | "dependencies"
-        | "client"
-        | "rebuild-client",
+      action: "source" | "restart" | "recheck" | "dependencies" | "client" | "rebuild-client",
     ) => {
       if (!native) return undefined;
-      if (action === "prepare") await native.prepare_update(directory.trim());
-      else if (action === "apply") await native.apply_update();
-      else if (action === "source") await native.register_source(source.trim());
+      if (action === "source") await native.register_source(source.trim());
       else if (action === "dependencies") return native.prepare_author_environment(source.trim());
       else if (action === "client") return native.create_author_environment(source.trim());
       else if (action === "rebuild-client")
@@ -55,7 +38,6 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       void status.refetch();
     },
   });
-  const candidate = status.data?.candidate;
   const busy = operation.isPending;
   const dataRoot = health?.details.data_root;
   return (
@@ -80,7 +62,9 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
         )}
         {status.data && <InstallationDetails installation={status.data.installation} />}
         <p>
-          Updates keep scientific data and source folders. Reopening does not repeat measurements.
+          To update Scopecat, quit the application, install the new version, then reopen it. Startup
+          prepares that version automatically. Updates keep scientific data and source folders.
+          Reopening does not repeat measurements.
         </p>
         {!native && (
           <p>
@@ -91,54 +75,6 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       </section>
       {native && (
         <>
-          <section className={section}>
-            <h3 className="font-semibold">Prepare an update</h3>
-            <p>
-              Choose a delivery prepared by your maintainer. Preparation checks the candidate
-              without stopping current work or connecting devices. A failed preparation keeps the
-              selected installation.
-            </p>
-            <label className="grid gap-1">
-              Delivery directory
-              <input
-                value={directory}
-                onChange={(event) => setDirectory(event.target.value)}
-                disabled={busy}
-                placeholder="Full directory path"
-              />
-            </label>
-            <button
-              className={secondaryButton}
-              disabled={busy || !directory.trim()}
-              onClick={() => operation.mutate("prepare")}
-            >
-              Prepare update
-            </button>
-            {candidate && (
-              <>
-                <h4 className="font-semibold">Prepared candidate</h4>
-                <InstallationDetails installation={candidate} />
-                <p>
-                  Applying restarts this application and interrupts active work. Finish measurements
-                  and release devices first. Your source folder's Python environment is kept
-                  unchanged.
-                </p>
-                {devices.data?.items.map((item) => (
-                  <p key={item.device.id}>
-                    {item.device.label}: {item.availability}
-                    {item.owner_id && ` · ${item.owner_kind} ${item.owner_id}`}
-                  </p>
-                ))}
-                <button
-                  className={primaryButton}
-                  disabled={busy}
-                  onClick={() => operation.mutate("apply")}
-                >
-                  Stop and apply prepared update
-                </button>
-              </>
-            )}
-          </section>
           <section className={section}>
             <h3 className="font-semibold">Author code</h3>
             <p>

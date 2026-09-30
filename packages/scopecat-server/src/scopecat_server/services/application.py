@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
-from scopecat.daemon.health import DaemonHealth
+from scopecat.daemon.health import ApplicationActivity, DaemonHealth
 from scopecat.daemon.wire import (
     AttentionResolutionCommand,
     AttentionResolutionReceipt,
@@ -187,6 +187,32 @@ class DaemonApplication:
             data_root=str(self.binding.data_root),
             deployment_root=str(self.binding.deployment_root),
         )
+
+    def activity(self) -> ApplicationActivity:
+        with self._project_store.sqlite.read_transaction() as connection:
+            return ApplicationActivity(
+                runs=cast(
+                    "int",
+                    connection.execute(
+                        "SELECT count(*) FROM scheduler_runs "
+                        "WHERE state IN ('queued', 'leased', 'attention_required')"
+                    ).fetchone()[0],
+                ),
+                procedures=cast(
+                    "int",
+                    connection.execute(
+                        "SELECT count(*) FROM procedure_runs WHERE state IN "
+                        "('ready', 'leased', 'waiting_for_input', 'attention_required')"
+                    ).fetchone()[0],
+                ),
+                instrument_sessions=cast(
+                    "int",
+                    connection.execute(
+                        "SELECT count(*) FROM instrument_sessions "
+                        "WHERE state IN ('active', 'attention_required')"
+                    ).fetchone()[0],
+                ),
+            )
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
         return self._admission.submit_run(submission)

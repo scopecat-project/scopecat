@@ -1,7 +1,5 @@
 #import <Cocoa/Cocoa.h>
 #include <mach-o/dyld.h>
-#include <spawn.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -30,22 +28,16 @@ int main(int argc, char **argv) {
             arguments[i + 3] = argv[i];
             if (!strcmp(argv[i], "--check-result")) check = YES;
         }
-        pid_t child;
-        int status = 0;
-        int error = posix_spawn(&child, python, NULL, NULL, arguments, environ);
+        // Replace the launcher rather than keeping a second, unresponsive app
+        // process waiting for the desktop host for its entire lifetime.
+        execve(python, arguments, environ);
         free(arguments);
-        if (!error) {
-            while (waitpid(child, &status, 0) < 0) {
-                if (errno != EINTR) { error = errno; break; }
-            }
-        }
-        int result = error ? 1 : WIFEXITED(status) ? WEXITSTATUS(status) : 1;
-        if (result && !check) {
+        if (!check) {
             NSAlert *alert = [[NSAlert alloc] init];
             alert.messageText = @"Scopecat 启动未完成";
             alert.informativeText = @"请保留应用和数据。错误详情位于 ~/Library/Application Support/Scopecat/native-start.log。";
             [alert runModal];
         }
-        return result;
+        return 1;
     }
 }

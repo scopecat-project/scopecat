@@ -22,4 +22,21 @@ class DaemonHealth(BaseModel):
     author_workspaces: dict[str, str] = Field(default_factory=dict)
 
 
+class ApplicationActivity(BaseModel):
+    """Work affected by quitting; idle clients do not keep an application busy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    runs: int = 0
+    procedures: int = 0
+    instrument_sessions: int = 0
+    requests: int = 0
+
+    @property
+    def busy(self) -> bool:
+        return bool(
+            self.runs or self.procedures or self.instrument_sessions or self.requests
+        )
+
+
 __all__ = ["DaemonHealth"]

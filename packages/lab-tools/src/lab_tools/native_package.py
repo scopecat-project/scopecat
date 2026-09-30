@@ -61,11 +61,8 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
         with tarfile.open(payload / "toolchain/python.tar") as archive:
             archive.extractall(python_home, filter="data")
         python = python_home / ("python.exe" if os.name == "nt" else "bin/python3")
-        # Only platformdirs is needed before the retained application exists.
-        requirements = resources / "bootstrap-requirements.txt"
-        lines = (payload / "requirements.lock").read_text().splitlines()
-        requirement = next(line for line in lines if line.startswith("platformdirs=="))
-        _ = requirements.write_text(requirement + "\n", encoding="utf-8")
+        # The installed application owns its desktop host. First launch must not
+        # install a GUI or borrow a host from a previously selected environment.
         _run(
             [
                 str(payload / "toolchain" / ("uv.exe" if os.name == "nt" else "uv")),
@@ -81,22 +78,12 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                 "--find-links",
                 str(payload / "wheels"),
                 "-r",
-                str(requirements),
+                str(payload / "requirements.lock"),
             ]
         )
-        modules = resources / "bootstrap" / "lab_tools"
-        modules.mkdir(parents=True)
-        for name in (
-            "__init__.py",
-            "bundle.py",
-            "installation_paths.py",
-            "native_bootstrap.py",
-        ):
-            _ = shutil.copyfile(Path(__file__).with_name(name), modules / name)
         _ = (resources / "bootstrap.py").write_text(
             "import sys\nfrom pathlib import Path\n"
             "root = Path(__file__).resolve().parent\n"
-            "sys.path.insert(0, str(root / 'bootstrap'))\n"
             "entry = root.parents[1] if sys.platform == 'darwin' "
             "else root.parent / 'Scopecat.exe'\n"
             "sys.argv[1:1] = ['--payload', str(root / 'payload'), "

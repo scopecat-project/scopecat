@@ -380,6 +380,7 @@ from scopecat.sdk.instruments.execution import (
 )
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import RequestResponseEndpoint
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -977,16 +978,58 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         return application.health()
 
     if request_shutdown is not None:
+        # Serialize the idle decision with admission of HTTP mutations, including
+        # source preparation and maintenance. Existing operations keep quit busy.
+        lifecycle_lock = asyncio.Lock()
+        changing = 0
+        stopping = False
+
+        @app.middleware("http")
+        async def lifecycle_requests(
+            request: Request, call_next: RequestResponseEndpoint
+        ) -> Response:
+            nonlocal changing
+            mutation = (
+                request.method not in ("GET", "HEAD", "OPTIONS")
+                and request.url.path != DAEMON_SHUTDOWN_PATH
+            )
+            async with lifecycle_lock:
+                if stopping and mutation:
+                    return JSONResponse(
+                        {"detail": "Scopecat is quitting"}, status_code=503
+                    )
+                if mutation:
+                    changing += 1
+            try:
+                return await call_next(request)
+            finally:
+                if mutation:
+                    async with lifecycle_lock:
+                        changing -= 1
+
+        @app.get(f"{_API_PREFIX}/application-activity", include_in_schema=False)
+        def application_activity():
+            return application.activity().model_copy(update={"requests": changing})
 
         @app.post(DAEMON_SHUTDOWN_PATH, include_in_schema=False, status_code=202)
-        def shutdown_daemon(
+        async def shutdown_daemon(
             token: Annotated[
                 str,
                 Header(alias=DAEMON_SHUTDOWN_TOKEN_HEADER, min_length=1),
             ],
+            only_if_idle: bool = False,
         ) -> None:
-            if not request_shutdown(token):
-                raise HTTPException(status_code=403, detail="invalid shutdown token")
+            nonlocal stopping
+            async with lifecycle_lock:
+                if only_if_idle and (changing or application.activity().busy):
+                    raise HTTPException(
+                        status_code=409, detail="Application has active work"
+                    )
+                if not request_shutdown(token):
+                    raise HTTPException(
+                        status_code=403, detail="invalid shutdown token"
+                    )
+                stopping = True
 
     @app.put(
         f"{_API_PREFIX}/instrument-sessions/{{session_id}}/"
