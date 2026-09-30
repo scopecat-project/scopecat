@@ -61,7 +61,6 @@ export function analysisFigureOption(content: AnalysisFigureContent): EChartsCor
       ? `${layer.id} · ${series.label ?? series.id}`
       : (series.label ?? series.id),
   );
-  const axis = (name: string) => valueAxis(name, analysisShortNumber, 36);
   const plotted: (LineSeriesOption | ScatterSeriesOption | CustomSeriesOption)[] = [];
   entries.forEach(({ layer, series }, index) => {
     const color = SERIES_COLORS[index % SERIES_COLORS.length];
@@ -116,8 +115,8 @@ export function analysisFigureOption(content: AnalysisFigureContent): EChartsCor
     legend: entries.length > 1 ? scrollLegend(labels) : { show: false },
     series: plotted,
     tooltip: { axisPointer: { type: "cross" }, confine: true, trigger: "axis" },
-    xAxis: axis(analysisAxisLabel(first.x_axis)),
-    yAxis: axis(analysisAxisLabel(first.y_axis)),
+    xAxis: valueAxis(analysisAxisLabel(first.x_axis), analysisShortNumber, 36),
+    yAxis: valueAxis(analysisAxisLabel(first.y_axis), analysisShortNumber, 36),
   };
 }
 
