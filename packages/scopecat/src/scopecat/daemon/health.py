@@ -31,11 +31,18 @@ class ApplicationActivity(BaseModel):
     procedures: int = 0
     instrument_sessions: int = 0
     requests: int = 0
+    calibration_tasks: int = 0
+    scheduled_workflows: int = 0
 
     @property
     def busy(self) -> bool:
         return bool(
-            self.runs or self.procedures or self.instrument_sessions or self.requests
+            self.runs
+            or self.procedures
+            or self.instrument_sessions
+            or self.requests
+            or self.calibration_tasks
+            or self.scheduled_workflows
         )
 
 

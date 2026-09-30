@@ -42,6 +42,23 @@ interface ApplicationActivity {
   procedures: number;
   instrument_sessions: number;
   requests: number;
+  calibration_tasks: number;
+  scheduled_workflows: number;
+}
+
+function describeWork(work: ApplicationActivity): string {
+  const labels: [keyof ApplicationActivity, string][] = [
+    ["runs", "experiment"],
+    ["procedures", "workflow"],
+    ["instrument_sessions", "device session"],
+    ["requests", "change"],
+    ["calibration_tasks", "calibration task"],
+    ["scheduled_workflows", "scheduled workflow"],
+  ];
+  return labels
+    .filter(([key]) => work[key] > 0)
+    .map(([key, label]) => `${work[key]} ${label}${work[key] === 1 ? "" : "s"}`)
+    .join(", ");
 }
 
 declare global {
@@ -114,9 +131,7 @@ export function DesktopSession() {
           <Dialog.Popup className={`${dialogPopup} grid gap-4 p-5`}>
             <Dialog.Title className={dialogTitle}>Quit Scopecat</Dialog.Title>
             <Dialog.Description>
-              {activity && `${activity.runs} experiments, ${activity.procedures} workflows, `}
-              {activity &&
-                `${activity.instrument_sessions} device sessions and ${activity.requests} changes are unfinished. `}
+              {activity && `Unfinished work: ${describeWork(activity)}. `}
               Quitting stops this work and releases devices. Background mode keeps Scopecat
               available from the menu bar or system tray. Saved records and code are retained.
             </Dialog.Description>

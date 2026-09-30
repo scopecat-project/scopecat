@@ -191,6 +191,19 @@ class DaemonApplication:
     def activity(self) -> ApplicationActivity:
         with self._project_store.sqlite.read_transaction() as connection:
             return ApplicationActivity(
+                calibration_tasks=cast(
+                    "int",
+                    connection.execute(
+                        "SELECT count(*) FROM calibration_tasks WHERE mode = 'running'"
+                    ).fetchone()[0],
+                ),
+                scheduled_workflows=cast(
+                    "int",
+                    connection.execute(
+                        "SELECT count(*) FROM procedure_schedules "
+                        "WHERE state = 'pending'"
+                    ).fetchone()[0],
+                ),
                 runs=cast(
                     "int",
                     connection.execute(
