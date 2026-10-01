@@ -253,7 +253,7 @@ def run(
     # Optional dependency: command-line/service installations stay headless.
     import pystray
     import webview
-    from PIL import Image, ImageDraw
+    from PIL import Image
 
     home.mkdir(parents=True, exist_ok=True)
     directory = home / "desktop"
@@ -330,12 +330,8 @@ def run(
             show()
             _ = request_close()
 
-        icon_image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        drawing = ImageDraw.Draw(icon_image)
-        drawing.rounded_rectangle((4, 4, 60, 60), radius=12, fill="#2563eb")
-        drawing.line(
-            (12, 34, 23, 34, 29, 17, 37, 47, 44, 30, 53, 30), fill="white", width=4
-        )
+        with Image.open(Path(__file__).with_name("icons") / "tray.png") as image:
+            icon_image = image.convert("RGBA")
         tray = pystray.Icon(
             "Scopecat",
             icon_image,

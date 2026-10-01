@@ -92,6 +92,10 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
             encoding="utf-8",
         )
         if sys.platform == "darwin":
+            _ = shutil.copyfile(
+                Path(__file__).with_name("icons") / "Scopecat.icns",
+                resources / "Scopecat.icns",
+            )
             executable = app / "Contents/MacOS/Scopecat"
             executable.parent.mkdir(parents=True)
             _run(
@@ -111,6 +115,7 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                         "CFBundleIdentifier": "org.scopecat.desktop",
                         "CFBundleName": "Scopecat",
                         "CFBundleExecutable": "Scopecat",
+                        "CFBundleIconFile": "Scopecat.icns",
                         "CFBundlePackageType": "APPL",
                         "CFBundleShortVersionString": "0.2.0",
                         "CFBundleVersion": "1",
@@ -119,6 +124,19 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                     stream,
                 )
         else:
+            icon = Path(__file__).with_name("icons") / "Scopecat.ico"
+            resource = Path(temporary) / "icon.rc"
+            resource.write_text(f'1 ICON "{icon.as_posix()}"\n', encoding="utf-8")
+            compiled_resource = Path(temporary) / "icon.res"
+            _run(
+                [
+                    "rc.exe",
+                    "/nologo",
+                    "/c65001",
+                    f"/fo{compiled_resource}",
+                    str(resource),
+                ]
+            )
             _run(
                 [
                     "cl.exe",
@@ -127,6 +145,7 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                     "/O2",
                     "/MT",
                     str(Path(__file__).with_name("native_launcher.c")),
+                    str(compiled_resource),
                     f"/Fe:{app / 'Scopecat.exe'}",
                     f"/Fo:{Path(temporary) / 'launcher.obj'}",
                     "shell32.lib",
