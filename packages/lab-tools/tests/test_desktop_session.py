@@ -57,6 +57,28 @@ def test_folder_picker_cancellation_does_not_change_runtime():
     assert runtime.mock_calls == []
 
 
+def test_registration_validates_selected_folder_before_preparing_dependencies(
+    tmp_path, monkeypatch
+):
+    from scopecat_server.scaffold import write_author_scaffold
+
+    source = tmp_path / "experiments"
+    write_author_scaffold(source)
+    nested = source / "unrelated"
+    nested.mkdir()
+    (nested / "pyproject.toml").write_text('[project]\nname = "unrelated"\n')
+    prepare = Mock()
+    monkeypatch.setattr(
+        "lab_tools.author_environment.prepare_execution_environment", prepare
+    )
+    runtime = Mock()
+    api = DesktopAPI(runtime, Mock(), threading.Event())
+    with pytest.raises(ValueError, match="cannot read project manifest"):
+        api.register_source(str(nested))
+    prepare.assert_not_called()
+    assert runtime.mock_calls == []
+
+
 def test_busy_close_keeps_window_and_service_until_explicit_choice():
     runtime = Mock()
     runtime.stop_if_idle.return_value = False

@@ -93,9 +93,6 @@ class DesktopAPI:
             return str(path)
 
     def _register_source(self, path: Path, python: Path | None = None) -> str:
-        from scopecat.project import open_project
-
-        open_project(path, resolve_adapter=False)
         if not self._runtime.stop_if_idle():
             raise ValueError(
                 "请先完成或停止当前工作，再添加代码目录；已创建的文件和环境保留"
@@ -105,12 +102,16 @@ class DesktopAPI:
         return identity
 
     def register_source(self, directory: str) -> str:
+        from scopecat.project import load_project
+
         from .author_environment import prepare_execution_environment
 
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择作者代码目录的完整路径")
         with self._operation():
+            # Register the selected folder, not an ancestor discovered by walking up.
+            _ = load_project(path / "scopecat.toml", resolve_adapter=False)
             python = (
                 prepare_execution_environment(self._runtime, path)
                 if (path / "pyproject.toml").is_file()
