@@ -56,6 +56,9 @@ jobs:
             installer="$RUNNER_TEMP/Scopecat.dmg"
           fi
           uv run --locked python -m lab_tools.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            uv run --locked python scripts/verify_macos_desktop_exit.py "$native_app"
+          fi
           uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
           uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer"
           if [ "$RUNNER_OS" = "macOS" ]; then

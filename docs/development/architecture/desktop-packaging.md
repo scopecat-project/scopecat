@@ -215,3 +215,12 @@ confirmed the icon was visible. Closing and reopening the isolated application
 returned to the same backend; Cmd-Q stopped it. The distribution check now
 asserts the Cocoa bundle identifier after relocation, in addition to checking
 the runtime path. Object creation or `isVisible` alone is not display evidence.
+
+The first embedded host still crashed after stopping its backend: an outer
+native autorelease pool drained after `Py_BytesMain` finalized Python, invoking
+PyObjC deallocation against the destroyed interpreter. The launcher's path-setup
+pool now ends before Python starts; PyObjC owns pools during Python execution.
+The native exit qualification creates and destroys a hidden Cocoa window through
+the packaged executable and checks the complete process exit twice. This probe
+reproduced SIGSEGV with the old pool scope and exit code zero with the correction.
+Backend shutdown alone does not qualify desktop process teardown.
