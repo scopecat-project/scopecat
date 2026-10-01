@@ -190,3 +190,15 @@ Windows validation of that correction is still required. The startup/recovery
 pages share operation feedback and duplicate-action suppression. Workbench tests
 cover slow quit, failed stop and failed cancellation of automatic quit. These are
 behavioral checks, not a claim that native platform interaction is complete.
+
+A subsequent user report exposed a Cocoa delegate ABI mismatch while installing
+the Quit handler. That exception killed the startup supervisor before preparation.
+The hook now preserves pywebview's existing Objective-C method signature, and
+initialization failures enter the recovery page. A local isolated, hidden native
+window reached the workbench, invoked the actual application-termination delegate,
+and exited with its backend stopped. This checks native integration without
+claiming physical menu clicks. Native distribution CI now runs the Cocoa ABI and
+desktop session regressions before packaging.
+
+Window close now hides on **both** platforms, preserving experimental work.
+Explicit Quit from the tray/application menu remains the work-aware stop action.

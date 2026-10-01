@@ -105,7 +105,11 @@ def install_reopen_handler(
             objc.selector(
                 terminate,
                 selector=b"applicationShouldTerminate:",
-                signature=b"Q@:@",
+                # Preserve the existing bridge ABI instead of guessing the
+                # NSInteger/enum width used by pywebview's delegate.
+                signature=NSApplication.sharedApplication()
+                .delegate()
+                .applicationShouldTerminate_.signature,
             ),
         ],
     )

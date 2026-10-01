@@ -6,7 +6,24 @@ from unittest.mock import Mock
 
 import pytest
 
-from lab_tools.desktop import DesktopAPI
+from lab_tools.desktop import DesktopAPI, _window_close_handlers
+
+
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
+def test_window_close_hides_without_requesting_quit(platform, monkeypatch):
+    monkeypatch.setattr("lab_tools.desktop.sys.platform", platform)
+    window = Mock()
+    hidden = threading.Event()
+    window.hide.side_effect = hidden.set
+    closing, loaded = threading.Event(), threading.Event()
+    loaded.set()
+    close, _quit = _window_close_handlers(window, closing, loaded)
+    assert close() is False
+    assert hidden.wait(2)
+    window.run_js.assert_not_called()
+    window.destroy.assert_not_called()
+    closing.set()
+    assert close() is True
 
 
 def test_new_source_preserves_existing_files(tmp_path):

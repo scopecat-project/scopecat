@@ -270,10 +270,8 @@ def _window_close_handlers(
     def request_close() -> bool:
         if closing.is_set():
             return True
-        if sys.platform == "darwin":
-            threading.Thread(target=lambda: hide_window(window), daemon=True).start()
-            return False
-        return request_quit()
+        threading.Thread(target=lambda: hide_window(window), daemon=True).start()
+        return False
 
     return request_close, request_quit
 
@@ -361,11 +359,11 @@ def run(
             while not loaded.wait(0.5):
                 if closing.is_set():
                     return
-            install_reopen_handler(show, quit_from_menu, closing.is_set)
             if closing.is_set():
                 api._finish_exit()  # pyright: ignore[reportPrivateUsage]
                 return
             try:
+                install_reopen_handler(show, quit_from_menu, closing.is_set)
                 api.retry()
             except Exception as error:
                 logging.getLogger(__name__).exception("Application startup failed")

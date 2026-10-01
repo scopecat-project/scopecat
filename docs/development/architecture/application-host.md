@@ -38,8 +38,9 @@ Stop does not import optional adapters and remains usable after interpreter chan
 
 A per-home desktop lock and activation signal reuse the window. Native bridge
 operations act on that home only. Preparation blocks ordinary window exit until
-it completes. On macOS, window close hides the window; application Quit checks
-unfinished work. On Windows, window close requests Quit. An idle application exits;
+it completes. Window close hides the window on both macOS and Windows, preserving
+experiments and the tray/menu-bar host. Explicit application Quit checks
+unfinished work. An idle application exits;
 active work offers stop, background retention, wait until idle or cancel. Quit
 requests show progress; a failed operation leaves controls available for recovery.
 Cancelling automatic quit keeps the dialog open until cancellation succeeds.

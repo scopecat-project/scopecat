@@ -46,6 +46,7 @@ jobs:
       - name: Build native application and installer
         shell: bash
         run: |
+          uv run --locked --group delivery pytest -q -n 0 packages/lab-tools/tests/test_desktop_platform.py packages/lab-tools/tests/test_desktop_session.py
           uv run --locked python -m lab_tools.delivery "$RUNNER_TEMP/delivery"
           if [ "$RUNNER_OS" = "Windows" ]; then
             native_app="$RUNNER_TEMP/Scopecat"
