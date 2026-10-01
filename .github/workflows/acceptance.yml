@@ -57,6 +57,16 @@ jobs:
           uv run --locked python -m lab_tools.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
           uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
           uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer"
+      - name: Retain qualified preview installers
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scopecat-preview-${{ runner.os }}-${{ github.sha }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/Scopecat.dmg
+            ${{ runner.temp }}/Scopecat-Setup.exe
       - name: Retain native acceptance logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -29,6 +29,13 @@ multiple permanent distribution mechanisms after selection.
 
 ## Reproducible Python baseline
 
+Run the **Full acceptance** workflow with the **native-distribution** profile on
+the intended branch. After each platform passes, its Actions artifacts include
+`scopecat-preview-OS-COMMIT` with `Scopecat.dmg` or `Scopecat-Setup.exe`, retained
+for 14 days. The commit in the artifact name identifies the tested source.
+Failed qualifications retain diagnostics but do not publish an installer artifact.
+These are development previews, not a signed/notarized release channel.
+
 After constructing a native package, run from the repository environment:
 
 ```sh
@@ -48,6 +55,24 @@ This probe uses the existing lifecycle controller and does not prove the final
 host has no controller process. It does not exercise the native window, prove
 offline dependency isolation, qualify user environments or replace the full PR 1
 acceptance. A ready backend alone is not a finished desktop application.
+
+To qualify replacement rather than reinstalling one artifact, provide two different
+native builds with the same current scientific-data format:
+
+```sh
+uv run --locked python scripts/verify_native_replacement.py \
+  /path/to/previous/Scopecat.app /path/to/current/Scopecat.app \
+  /fresh/replacement-qualification
+```
+
+On Windows, pass the two directories containing `Scopecat.exe`. The probe copies
+the packages into its fresh test home, creates one measurement and independent user
+Python with the previous build, then replaces the application at the same path.
+It exercises a missing-GUI startup failure and retry, reads the original measurement
+without resubmission, and checks source identity, user Python configuration, unchanged
+application files and clean shutdown. Input packages are not changed. The retained
+`replacement.json` identifies both manifests. This is not a prebaseline migration
+test or a native window interaction test.
 
 The native entry now starts the package's interpreter without calling the retained
 delivery installer. Explicitly created author environments retain their own base
