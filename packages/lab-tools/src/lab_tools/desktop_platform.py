@@ -57,6 +57,9 @@ def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
         # Default setup changes Cocoa visibility from a worker thread.
         mac_tray.run_detached(setup=setup)
         mac_tray.visible = True
+        # pystray has no public template-image option. Its Cocoa image is created
+        # by the first show; let macOS supply the menu-bar appearance and tint.
+        mac_tray._icon_image.setTemplate_(True)
 
     AppHelper.callAfter(ready)
 

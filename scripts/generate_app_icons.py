@@ -50,6 +50,19 @@ def main() -> None:
         tray.thumbnail((60, 60), Image.Resampling.LANCZOS)
         canvas.alpha_composite(tray, ((64 - tray.width) // 2, (64 - tray.height) // 2))
         canvas.save(output / "tray.png")
+        # Render above the target resolution so the template keeps smooth edges.
+        _ = subprocess.run(  # noqa: S603 - fixed maintainer asset paths
+            [
+                renderer,
+                "-background",
+                "none",
+                f"MSVG:{root / 'assets/branding/menu-bar-icon.svg'}",
+                "-resize",
+                "64x64",
+                str(output / "tray-template.png"),
+            ],
+            check=True,
+        )
 
 
 if __name__ == "__main__":

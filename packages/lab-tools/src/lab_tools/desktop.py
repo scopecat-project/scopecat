@@ -359,7 +359,8 @@ def run(
         def quit_from_menu() -> None:
             _ = request_quit()
 
-        with Image.open(Path(__file__).with_name("icons") / "tray.png") as image:
+        tray_name = "tray-template.png" if sys.platform == "darwin" else "tray.png"
+        with Image.open(Path(__file__).with_name("icons") / tray_name) as image:
             icon_image = image.convert("RGBA")
 
         def create_tray() -> Icon:
