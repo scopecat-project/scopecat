@@ -202,3 +202,16 @@ desktop session regressions before packaging.
 
 Window close now hides on **both** platforms, preserving experimental work.
 Explicit Quit from the tray/application menu remains the work-aware stop action.
+
+The later missing-menu-bar report was reproduced in a packaged app: replacing
+the launcher with `execve` of the embedded Python preserved the running-app name
+but lost `NSBundle.mainBundle`'s bundle identifier. The status item reported
+visible while its native window retained zero height after layout. The Mac host
+now calls CPython's stable `Py_BytesMain` entry point in the native process and
+links the bundled library through an app-relative rpath. Python subprocesses
+still use the bundled interpreter. With the same image and tray code, the native
+window received a real screen position and 34-point height, and the user
+confirmed the icon was visible. Closing and reopening the isolated application
+returned to the same backend; Cmd-Q stopped it. The distribution check now
+asserts the Cocoa bundle identifier after relocation, in addition to checking
+the runtime path. Object creation or `isVisible` alone is not display evidence.

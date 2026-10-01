@@ -85,6 +85,10 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     assert inventory(relocated, (".",)) == before, "Native app was modified on launch"
     state = cast("dict[str, str | bool]", json.loads(first))
     assert state["status"] == "stopped"
+    if sys.platform == "darwin":
+        assert state["bundle_identifier"] == "org.scopecat.desktop", (
+            "Cocoa lost the app identity; menu-bar registration can fail"
+        )
     python = Path(cast("str", state["python"]))
     assert python.is_relative_to(relocated)
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime

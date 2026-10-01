@@ -87,12 +87,18 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
         prepare(args, paths)
         runtime = ApplicationRuntime(paths.state)
         selected = runtime.installation()
+        bundle_identifier = None
+        if sys.platform == "darwin":
+            from .desktop_platform import macos_bundle_identifier
+
+            bundle_identifier = macos_bundle_identifier()
         _ = args.check_result.write_text(
             json.dumps(
                 {
                     "python": str(selected.python),
                     "state": str(paths.state),
                     "status": runtime.status().state,
+                    "bundle_identifier": bundle_identifier,
                 },
                 indent=2,
             ),

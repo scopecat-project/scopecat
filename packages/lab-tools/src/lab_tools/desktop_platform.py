@@ -10,7 +10,7 @@ import logging
 import sys
 import threading
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     import webview
@@ -30,6 +30,13 @@ def hide_window(window: webview.Window) -> None:
     if sys.platform != "darwin":
         window.restore()
     window.hide()
+
+
+def macos_bundle_identifier() -> str | None:
+    """Cocoa's identity must remain the outer app, not the bundled Python bin."""
+    from Foundation import NSBundle
+
+    return cast("str | None", NSBundle.mainBundle().bundleIdentifier())
 
 
 def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
@@ -64,9 +71,9 @@ def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
         # by the first show; let macOS supply the menu-bar appearance and tint.
         mac_tray._icon_image.setTemplate_(True)
         logging.getLogger(__name__).info(
-            "Menu bar ready: image=%s status_item_visible=%s",
+            "Menu bar item created: image=%s bundle=%s",
             mac_tray._icon_image.size(),
-            mac_tray._status_item.isVisible(),
+            macos_bundle_identifier(),
         )
 
     AppHelper.callAfter(ready)

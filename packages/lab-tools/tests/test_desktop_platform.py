@@ -12,6 +12,10 @@ from lab_tools.desktop_platform import install_reopen_handler, start_tray
 
 def test_cocoa_tray_is_created_and_shown_on_the_main_loop(monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(
+        "lab_tools.desktop_platform.macos_bundle_identifier",
+        lambda: "org.scopecat.desktop",
+    )
     callbacks = []
     monkeypatch.setitem(
         sys.modules,

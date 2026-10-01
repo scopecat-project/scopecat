@@ -1,9 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #include <mach-o/dyld.h>
-#include <unistd.h>
-#include <errno.h>
-
-extern char **environ;
+// Stable CPython entry point; keep the native executable as the app's process.
+extern int Py_BytesMain(int argc, char **argv);
 
 int main(int argc, char **argv) {
     @autoreleasepool {
@@ -28,16 +26,18 @@ int main(int argc, char **argv) {
             arguments[i + 3] = argv[i];
             if (!strcmp(argv[i], "--check-result")) check = YES;
         }
-        // Replace the launcher rather than keeping a second, unresponsive app
-        // process waiting for the desktop host for its entire lifetime.
-        execve(python, arguments, environ);
+        // execve(python, ...) loses NSBundle.mainBundle's app identity, which
+        // prevents macOS from placing the status item in the menu bar. Embed
+        // Python on this main thread; argv[0] still selects the bundled runtime
+        // for sys.executable and backend subprocesses.
+        int result = Py_BytesMain(argc + 3, arguments);
         free(arguments);
-        if (!check) {
+        if (result && !check) {
             NSAlert *alert = [[NSAlert alloc] init];
             alert.messageText = @"Scopecat 启动未完成";
             alert.informativeText = @"请保留应用和数据。错误详情位于 ~/Library/Application Support/Scopecat/native-start.log。";
             [alert runModal];
         }
-        return 1;
+        return result;
     }
 }

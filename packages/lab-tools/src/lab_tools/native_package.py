@@ -98,6 +98,17 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
             )
             executable = app / "Contents/MacOS/Scopecat"
             executable.parent.mkdir(parents=True)
+            (python_library,) = (python_home / "lib").glob("libpython3.*.dylib")
+            # The extracted runtime can carry its build-time absolute install
+            # name. Link our host through the app-relative library path instead.
+            _run(
+                [
+                    "/usr/bin/install_name_tool",
+                    "-id",
+                    f"@rpath/{python_library.name}",
+                    str(python_library),
+                ]
+            )
             _run(
                 [
                     "/usr/bin/clang",
@@ -105,6 +116,8 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                     "-framework",
                     "Cocoa",
                     str(Path(__file__).with_name("native_launcher.m")),
+                    str(python_library),
+                    "-Wl,-rpath,@executable_path/../Resources/python/lib",
                     "-o",
                     str(executable),
                 ]
