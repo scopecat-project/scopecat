@@ -1,5 +1,9 @@
 # Application runtime ownership
 
+This describes the current prototype implementation. The
+[desktop product gate](desktop-product.md) separates application, windows, data
+access and execution; it does not require this process or HTTP topology to remain.
+
 One installed package provides one application runtime. The native window loads
 that runtime's workbench directly; there is no manager HTTP server, service
 catalog, preferred laboratory, nested workbench frame or lifecycle operation queue.

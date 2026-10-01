@@ -321,6 +321,7 @@ def run(
                 width=1280,
                 height=900,
                 min_size=(800, 600),
+                text_select=True,
             ),
         )
         loaded = threading.Event()

@@ -1,19 +1,20 @@
 # Desktop application lifecycle
 
-This is the target for the desktop convergence batch, not an acceptance report.
-The installed package owns the desktop host and expected application version.
-The host owns the window, visible background entry and experiment-service lifetime.
-The experiment service remains the single authority for tasks, data and devices.
+This is the target, not an acceptance report. The current host remains a
+single-window prototype; see the [desktop product decision gate](desktop-product.md).
+The installed application owns windows, menus and whole-application exit.
+Windows own independent view state, not device or task lifetimes. Execution has
+one resource authority across windows; that does not require one permanent HTTP
+daemon or starting experiment execution to read data.
 
 | User action or event | Required result |
 | --- | --- |
 | Open Scopecat | Show the window before preparing environments or starting the service. Enter the workbench when ready. |
-| Open it again | Activate the existing window for this data home; never start a second owner. |
+| Open it again | Activate an existing window, or create a view if all windows are closed. Never create a competing device owner. Explicit New Window opens another view. |
 | Preparation fails | Keep the window usable, explain the failed step and offer retry and exit. Do not silently open another version. |
-| Close with no active work | Stop the owned service and exit. An idle Python connection is not active work. |
-| Close with active work | Explain experiments, manual device sessions and maintenance affected. Offer return, wait for completion, or cancel work and quit. |
+| Close a window | Close that view without cancelling tasks or changing other windows. Last-window behavior is specified below. |
 | Continue in background | Hide the window, retain its host and a visible menu-bar/tray entry with Open and Quit. No invisible service-only state. |
-| Quit from the system entry | Follow the same work-aware exit path as the window. |
+| Quit from the system entry | Apply one application-wide work decision: return, wait for completion, or cancel work and quit. Close all windows only after successful shutdown. |
 | Shutdown fails | Keep the host and recovery controls available; never describe a live service as stopped. |
 | Replace the installed app | Next launch prepares and activates that package's version when safe. Active work requires an explicit decision; no silent old-version fallback. |
 
@@ -26,6 +27,14 @@ Only a completed initialization receipt suppresses first-use setup on retry.
 Window hiding is not termination. JavaScript bridge replies must finish before
 destroying their window. All normal quit paths release the service before removing
 the visible application entry.
+
+Target last-window policy: on Mac the application remains open and can create a
+view from the Dock/menu; on Windows it exits when idle, while active work remains
+visible through the tray with clear background feedback. Explicit Quit is always
+work-aware. The current prototype instead hides its sole window on both platforms;
+do not describe this as implemented multi-window behavior. A data-only window must
+not initialize hardware. Window-local selections and navigation must not become
+application-global state merely because windows share data.
 
 An installed package includes its host dependencies. It must not bootstrap a host
 from a mutable selection in the data directory. Retained execution environments

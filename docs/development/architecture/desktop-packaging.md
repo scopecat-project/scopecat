@@ -1,9 +1,10 @@
 # Ready-to-run desktop packaging
 
-PR 1 of the post-#828 milestone must deliver a ready-to-run public application.
-Changing implementation language is not itself acceptance. This is a selection
-gate within that product PR, not a separate packaging product or a completed
-replacement of the existing desktop host.
+PR #829 delivers ready-to-run installation and runtime foundations. Its current
+GUI and single-window host remain prototypes. Passing packaging and lifecycle
+checks does not qualify the desktop product experience. The next decision gate
+is the [desktop product journey](desktop-product.md), before expanding the host
+or redesigning the full GUI. Changing implementation language is not acceptance.
 
 The baseline is a relocatable CPython runtime with dependencies prepared at build
 time. Rust/Tauri was the preferred alternative evaluated against the existing
