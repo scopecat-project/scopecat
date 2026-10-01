@@ -97,7 +97,7 @@ def test_missing_user_python_never_falls_back_to_application(laboratory, monkeyp
         author_notebook.launch_notebook(source, home)
 
 
-def test_pending_environment_switch_prevents_notebook_launch(tmp_path, monkeypatch):
+def test_pending_runtime_registration_prevents_notebook_launch(tmp_path, monkeypatch):
     from lab_tools.application_runtime import ApplicationRuntime
 
     home = tmp_path / "application"
@@ -105,7 +105,7 @@ def test_pending_environment_switch_prevents_notebook_launch(tmp_path, monkeypat
     store = ApplicationRuntime(home)
     store.pending.write_text("{}")
     monkeypatch.setattr(author_notebook.subprocess, "run", pytest.fail)
-    with pytest.raises(ValueError, match="环境切换尚未完成"):
+    with pytest.raises(ValueError, match="登记尚未完成"):
         author_notebook.launch_notebook(tmp_path / "author", home)
 
 
