@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from collections.abc import Callable
@@ -24,8 +25,10 @@ def show_window(window: webview.Window) -> None:
 
 
 def hide_window(window: webview.Window) -> None:
-    # Leave the minimized state before hiding, so Show can bring the window back.
-    window.restore()
+    # WinForms needs normalized placement; Cocoa deminiaturize schedules a
+    # front-order animation which can complete after orderOut and reopen it.
+    if sys.platform != "darwin":
+        window.restore()
     window.hide()
 
 
@@ -60,6 +63,11 @@ def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
         # pystray has no public template-image option. Its Cocoa image is created
         # by the first show; let macOS supply the menu-bar appearance and tint.
         mac_tray._icon_image.setTemplate_(True)
+        logging.getLogger(__name__).info(
+            "Menu bar ready: image=%s status_item_visible=%s",
+            mac_tray._icon_image.size(),
+            mac_tray._status_item.isVisible(),
+        )
 
     AppHelper.callAfter(ready)
 

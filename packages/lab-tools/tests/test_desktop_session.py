@@ -13,6 +13,8 @@ from lab_tools.desktop import DesktopAPI, _window_close_handlers
 def test_window_close_hides_without_requesting_quit(platform, monkeypatch):
     monkeypatch.setattr("lab_tools.desktop.sys.platform", platform)
     window = Mock()
+    if platform == "darwin":
+        window.restore.side_effect = AssertionError("Cocoa hide must not deminiaturize")
     hidden = threading.Event()
     window.hide.side_effect = hidden.set
     closing, loaded = threading.Event(), threading.Event()

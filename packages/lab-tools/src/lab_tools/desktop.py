@@ -353,9 +353,10 @@ def run(
                 ),
             )
 
-        stop_tray = start_tray(create_tray)
+        stop_tray: Callable[[], None] | None = None
 
         def supervise() -> None:
+            nonlocal stop_tray
             while not loaded.wait(0.5):
                 if closing.is_set():
                     return
@@ -363,6 +364,9 @@ def run(
                 api._finish_exit()  # pyright: ignore[reportPrivateUsage]
                 return
             try:
+                # Cocoa status items need the application to have finished
+                # launching; a queued callback before webview.start is too early.
+                stop_tray = start_tray(create_tray)
                 install_reopen_handler(show, quit_from_menu, closing.is_set)
                 api.retry()
             except Exception as error:
@@ -394,7 +398,8 @@ def run(
         try:
             webview.start(supervise)
         finally:
-            stop_tray()
+            if stop_tray is not None:
+                stop_tray()
             closing.set()
     finally:
         lock.release()
