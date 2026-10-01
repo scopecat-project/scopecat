@@ -78,8 +78,10 @@ checks relocation, empty PATH, repeat startup, unchanged app contents, retained
 author Python after the app is moved away, and service start/stop before removal. The
 `native-distribution` acceptance profile builds and runs this on macOS and Windows.
 
-These are unsigned prerelease artifacts; signing and macOS notarization are not
-configured. The native private installer/preview consumer must be switched and
+Mac previews use ad-hoc signing of each embedded Mach-O file followed by the
+outer application seal. This requires no certificate or paid account, but does
+not establish Gatekeeper trust. Apple Developer ID signing and notarization are
+not configured; Windows previews remain unsigned. The native private installer/preview consumer must be switched and
 qualified before this replaces its existing maintainer installation command.
 
 Do not add a second application manager to solve packaging. Native setup and updates

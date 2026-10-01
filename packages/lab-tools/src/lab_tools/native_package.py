@@ -136,6 +136,10 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                 ]
             )
         _ = verify_bundle(payload)
+        if sys.platform == "darwin":
+            from .macos_signing import sign
+
+            sign(app)
         _ = app.rename(destination)
     return destination
 
@@ -152,6 +156,9 @@ def package(app: Path, destination: Path) -> Path:
     ) as temporary:
         staging = Path(temporary)
         if sys.platform == "darwin":
+            from .macos_signing import verify
+
+            verify(app)
             contents = staging / "contents"
             contents.mkdir()
             _ = shutil.copytree(app, contents / "Scopecat.app")

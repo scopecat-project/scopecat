@@ -3,6 +3,10 @@
 If you have a Scopecat desktop preview, open the application. Python and application
 dependencies are included; you do not need a source checkout.
 
+On macOS, copy Scopecat from the DMG to Applications before opening it.
+The free preview is ad-hoc signed, without Apple notarization. If macOS cannot
+verify the developer, follow the [first-open instructions](../how-to/mac-preview.md).
+
 - To explore without writing code, use **Help → Start peak practice**.
   [Practice in the application](../tutorials/teaching-sandboxes.md) explains the scan,
   manual decision and cleanup.

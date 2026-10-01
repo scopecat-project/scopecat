@@ -34,7 +34,21 @@ the intended branch. After each platform passes, its Actions artifacts include
 `scopecat-preview-OS-COMMIT` with `Scopecat.dmg` or `Scopecat-Setup.exe`, retained
 for 14 days. The commit in the artifact name identifies the tested source.
 Failed qualifications retain diagnostics but do not publish an installer artifact.
-These are development previews, not a signed/notarized release channel.
+These are development previews. macOS uses ad-hoc signing, without Developer ID
+or notarization; Windows installers are unsigned.
+
+Mac packaging signs embedded Mach-O files individually, inside out, before
+sealing the outer application. It refreshes the embedded delivery checksum for
+the signed toolchain executable before sealing; the input delivery is unchanged.
+The package and relocated running application must pass signature checks,
+including Python extensions outside standard nested-code directories.
+`scripts/verify_macos_download.py INSTALLER FRESH_HOME` mounts the shipped DMG
+read-only, checks its actual application, applies quarantine to the disposable
+copy, records Gatekeeper's assessment, and proves that editing a sealed resource
+fails signature verification. CI retains `macos-download/report.json`.
+Gatekeeper rejection is expected for an untrusted ad-hoc preview and is recorded
+separately from signature validity. This does not prove Finder first-open behavior;
+that still requires a browser download and the [user first-open steps](../../how-to/mac-preview.md).
 
 After constructing a native package, run from the repository environment:
 

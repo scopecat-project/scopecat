@@ -68,6 +68,10 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     relocated = app.with_name("Relocated 中文 " + app.name)
     app.rename(relocated)
     home.mkdir(parents=True)
+    if sys.platform == "darwin":
+        from lab_tools.macos_signing import verify as verify_signature
+
+        verify_signature(relocated)
     result = home / "result.json"
     executable = relocated / (
         "Contents/MacOS/Scopecat" if sys.platform == "darwin" else "Scopecat.exe"
@@ -90,6 +94,8 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Runtime modified application files"
+    if sys.platform == "darwin":
+        verify_signature(relocated)
     relocated.rename(relocated.with_name("Removed " + app.name))
     client = (
         home
