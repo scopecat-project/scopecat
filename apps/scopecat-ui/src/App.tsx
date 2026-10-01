@@ -422,8 +422,11 @@ export default function App() {
           >
             <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
             <span>
-              <strong className="text-[#ffe6e4]">Daemon unavailable.</strong> Start the local
-              Scopecat daemon, then refresh this page. No cached project data is shown.
+              <strong className="text-[#ffe6e4]">Connection interrupted.</strong>{" "}
+              {window.pywebview
+                ? "If Scopecat is restarting or adding a code folder, wait for it to finish. Otherwise, use Settings → Restart application to reconnect."
+                : "Check that Scopecat is running, then refresh this page."}{" "}
+              Saved records are retained. Live project data is unavailable until reconnected.
             </span>
           </div>
         )}

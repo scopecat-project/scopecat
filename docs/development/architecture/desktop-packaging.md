@@ -133,3 +133,27 @@ not production qualification for Tauri. Keep the prototype outside product code;
 do not introduce a second user-selectable launch mode. Final qualification of the
 retained host must still cover native interaction, active-work handling, recovery
 and full source workflows for the completed product batch.
+
+### Native interaction evidence (2026-10-01)
+
+The macOS packaged host was exercised through its actual window and JavaScript
+bridge using an isolated qualification copy. Only its bundle identifier/name and
+bootstrap's fixed test home differed from the built application; the host and UI
+implementation were unchanged. The native folder picker opened and cancelled,
+then created a device-free author folder and independent Python. Registration
+restarted the backend and returned to Settings with that folder selected.
+
+A three-point synthetic experiment, with a 30-second delay per point, exercised
+the active-work close dialog. Keep running in background returned successfully;
+subsequent window interaction and the system Quit command remained responsive.
+Cancel and Quit when work finishes worked. The client completed acquisition,
+analysis and retained-result reopening, after which the host, backend and workers
+exited without remaining qualification processes.
+
+The UI inspection tool can reactivate hidden windows. This run therefore does
+not independently prove hidden-window visibility or menu-bar/tray reopening.
+Those interactions and Windows native interaction remain unqualified. CI's
+macOS/Windows native distribution checks qualify packaging and runtime behavior,
+not these UI interactions. A transient disconnection during source registration
+also exposed obsolete daemon-start instructions; the UI now explains waiting for
+an in-progress restart or using the application's recovery action.
