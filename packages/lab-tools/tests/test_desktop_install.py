@@ -16,7 +16,6 @@ def test_isolated_installation_does_not_use_daily_locations(tmp_path):
         path.is_relative_to(tmp_path)
         for path in (
             paths.state,
-            paths.software,
             paths.cache,
             paths.workspace,
         )
@@ -35,20 +34,16 @@ def test_mac_entry_is_outside_data_and_cache(tmp_path, monkeypatch):
     )
     paths = InstallationPaths.current_user()
     assert paths.entry == tmp_path / "Applications/Scopecat.app"
-    assert paths.software == paths.state / "software"
-    assert not paths.software.is_relative_to(paths.entry)
     assert not paths.state.is_relative_to(paths.entry)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows Shell32 known folders")
 def test_windows_user_program_and_start_menu_locations():
     paths = InstallationPaths.current_user()
-    assert paths.software.is_absolute()
-    assert paths.software.name == "software"
+    assert paths.state.is_absolute()
     assert paths.entry is not None and paths.entry.is_absolute()
     assert paths.entry.suffix == ".lnk"
     assert paths.workspace == Path.home() / "Scopecat/experiments"
-    assert paths.software.is_relative_to(paths.state)
 
 
 @pytest.fixture
@@ -65,13 +60,18 @@ def native_start(tmp_path, monkeypatch):
     selected = SimpleNamespace(python=Path(sys.executable), package="first")
     updates = []
 
+    def receipt():
+        return json.dumps({"python": str(selected.python), "package": selected.package})
+
     class Runtime:
         pending = paths.state / "installation-pending.json"
+        selection = paths.state / "installation.json"
 
         def __init__(self, home):
             assert home == paths.state
 
         def configure(self, **_kwargs):
+            self.selection.write_text(receipt())
             return selected
 
         def installation(self):
@@ -82,12 +82,21 @@ def native_start(tmp_path, monkeypatch):
             return SimpleNamespace(
                 python=python,
                 package=json.loads((payload / "bundle.json").read_text())["build"],
+                model_dump_json=lambda **_kw: json.dumps(
+                    {
+                        "python": str(python),
+                        "package": json.loads((payload / "bundle.json").read_text())[
+                            "build"
+                        ],
+                    }
+                ),
             )
 
         def select(self, candidate):
             updates.append(candidate)
             selected.python = candidate.python
             selected.package = candidate.package
+            self.selection.write_text(receipt())
 
         def status(self):
             return SimpleNamespace(state="stopped")
@@ -105,7 +114,8 @@ def native_start(tmp_path, monkeypatch):
 def test_native_package_selects_its_own_version_before_reporting_ready(native_start):
     bootstrap, args, paths, selected, updates = native_start
     bootstrap.launch(args, paths)
-    selected.python = paths.software / "first/python"
+    selected.python = paths.state.parent / "previous-app/python"
+    (paths.state / "installation.json").write_text("obsolete runtime receipt")
     bootstrap.launch(args, paths)
     assert len(updates) == 1
     bootstrap.launch(args, paths)
@@ -144,4 +154,4 @@ def test_native_package_refreshes_runtime_at_the_same_install_path(native_start)
     assert len(updates) == 1
     assert selected.package == "second"
     assert selected.python == Path(sys.executable)
-    assert not paths.software.exists()
+    assert not (paths.state.parent / "software").exists()

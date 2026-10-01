@@ -1,6 +1,6 @@
 # Application runtime ownership
 
-One installation home selects one application runtime. The native window loads
+One installed package provides one application runtime. The native window loads
 that runtime's workbench directly; there is no manager HTTP server, service
 catalog, preferred laboratory, nested workbench frame or lifecycle operation queue.
 
@@ -8,22 +8,24 @@ The canonical model is [one application with independent contexts](public-applic
 Devices, drivers, source identities, setup and parameters remain independent
 concepts. Registered author folders share the application's device/data authority.
 
-## Selected software
+## Packaged runtime
 
 `ApplicationRuntime` owns a fixed `HOME/runtime` composition and an
-`installation.json` selection. Candidate deliveries live at content-addressed,
-retained release paths. A candidate probe checks registered sources in their selected
-execution interpreters and obtains driver metadata in an isolated worker without connecting
-devices. Optional SDK imports belong to connection, not catalog discovery.
+`installation.json` runtime registration. Native startup uses the Python and GUI
+inside the currently opened package. It does not install dependencies, retain
+application releases or select another interpreter from the data directory.
+Qualification obtains driver metadata without connecting devices. Unavailable
+author folders do not block an application update. Optional SDK imports belong
+to connection, not catalog discovery.
 
-Selection requires the application/deployment/data locks and a stopped owner.
-The candidate is requalified, a pending marker is persisted, the composition is
-updated, and then selection commits. Author interpreters remain selected independently. An interrupted
-switch blocks startup and is completed by retrying the same candidate. It does
-not create a new data identity or rewrite scientific data.
+Registration requires the application/deployment/data locks and a stopped owner.
+The package is requalified, a pending marker fences startup while the composition
+and runtime record are written, and the marker is removed after completion.
+A verified current package can complete an interrupted registration even if the
+previous package is no longer installed. This does not rewrite scientific data.
+Author interpreters remain independent.
 
-The stable launcher reads the same selection, including after an in-window update.
-The native shell reopens to adopt changed installed software. User-owned `.venv`
+Users quit, replace the native application and reopen it. User-owned `.venv`
 clients are updated separately and are never synchronized by application updates.
 There is no fallback to a previous driver identity after a qualification failure.
 
@@ -36,8 +38,12 @@ Stop does not import optional adapters and remains usable after interpreter chan
 
 A per-home desktop lock and activation signal reuse the window. Native bridge
 operations act on that home only. Preparation blocks ordinary window exit until
-it completes. Closing otherwise offers explicit stop, background retention or
-cancel; it does not own or kill VS Code kernels.
+it completes. On macOS, window close hides the window; application Quit checks
+unfinished work. On Windows, window close requests Quit. An idle application exits;
+active work offers stop, background retention, wait until idle or cancel. Quit
+requests show progress; a failed operation leaves controls available for recovery.
+Cancelling automatic quit keeps the dialog open until cancellation succeeds.
+The host does not own or kill VS Code kernels.
 
 CLI status, installation, source registration and start are headless. Only explicit
 open launches a browser. Tests use temporary homes and serial real-process checks.

@@ -38,7 +38,6 @@ class QualifiedDrivers(BaseModel):
 
 class Installation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    software_home: Path
     python: Path
     static_dir: Path
     environment: dict[str, str]
@@ -102,7 +101,7 @@ def _write(path: Path, content: str) -> None:
 
 
 class ApplicationRuntime:
-    """The home selects software; its fixed runtime root owns data and sources.
+    """The data home records the application runtime and registered sources.
 
     There is no service registry, preferred service, or per-source endpoint.
     Preparation may fail without changing the selected installation. Activation
@@ -118,12 +117,12 @@ class ApplicationRuntime:
 
     def installation(self) -> Installation:
         if not self.selection.is_file():
-            raise ValueError("应用尚未准备，请重新运行安装命令；没有创建其他服务")
+            raise ValueError("应用尚未准备就绪，请重新打开 Scopecat 或在启动页面重试")
         return Installation.model_validate_json(self.selection.read_bytes())
 
     def require_ready(self) -> None:
         if self.pending.exists():
-            raise ValueError("运行环境切换尚未完成，请重试应用更新；数据保留")
+            raise ValueError("应用运行信息登记尚未完成，请在启动页面重试；数据保留")
 
     def status(self) -> DaemonStatus:
         return inspect_daemon(open_project(self.root, resolve_adapter=False))
@@ -154,7 +153,6 @@ class ApplicationRuntime:
         static_dir: Path | None,
         *,
         composition: str | None = None,
-        software_home: Path | None = None,
     ) -> Installation:
         composition = composition or (self.root / "scopecat.toml").read_text()
         descriptor, name = tempfile.mkstemp(prefix=".candidate-", dir=self.root)
@@ -174,11 +172,6 @@ class ApplicationRuntime:
         finally:
             manifest.unlink(missing_ok=True)
         return Installation(
-            software_home=(
-                software_home.resolve()
-                if software_home is not None
-                else self.installation().software_home
-            ),
             python=python.absolute(),
             static_dir=Path(cast("str", result["static_dir"])),
             environment=cast("dict[str, str]", result["environment"]),
@@ -196,19 +189,11 @@ class ApplicationRuntime:
         python: Path | None = None,
         static_dir: Path | None = None,
         adapter: AdapterReference | None = None,
-        software_home: Path | None = None,
     ) -> Installation:
         """Prepare an empty application; never scaffold or load author code."""
         self.home.mkdir(parents=True, exist_ok=True)
         with self.lock:
             if self.selection.exists():
-                if (
-                    software_home is not None
-                    and self.installation().software_home != software_home.resolve()
-                ):
-                    raise ValueError(
-                        "已有应用使用不同的程序目录；请选择新的数据目录安装"
-                    )
                 return self.installation()
             manifest = self.root / "scopecat.toml"
             declaration = application_declaration(adapter)
@@ -219,7 +204,6 @@ class ApplicationRuntime:
             selected = self.qualify(
                 python or Path(sys.executable),
                 static_dir,
-                software_home=software_home or self.home / "software",
             )
             _write(self.selection, selected.model_dump_json(indent=2))
             return selected
@@ -235,7 +219,7 @@ class ApplicationRuntime:
                     "root": str(self.root),
                     **selected.model_dump(
                         mode="json",
-                        exclude={"python", "drivers", "composition", "software_home"},
+                        exclude={"python", "drivers", "composition"},
                     ),
                 },
             )
@@ -262,10 +246,10 @@ class ApplicationRuntime:
             stop_project(open_project(self.root, resolve_adapter=False))
             status = self.status()
         if status.state != "stopped":
-            raise ValueError(f"请先停止应用再切换环境：{status.detail or status.state}")
+            raise ValueError(f"请先退出正在运行的应用：{status.detail or status.state}")
 
     def select(self, candidate: Installation) -> None:
-        """Commit qualified software and source interpreters under one start fence."""
+        """Record a verified runtime under the same locks that fence startup."""
         with self.lock, ExitStack() as locks:
             binding = open_project(self.root, resolve_adapter=False).runtime_binding
             try:
@@ -277,23 +261,19 @@ class ApplicationRuntime:
                     locks.enter_context(FileLock(path, timeout=0))
             except Timeout as error:
                 raise ValueError(
-                    "应用仍在运行或更新中；候选环境保留，可停止后重试"
+                    "应用仍在运行或更新中，请退出后重试；数据保留"
                 ) from error
             self._require_stopped()
             qualified = self.qualify(
                 candidate.python,
                 candidate.static_dir,
                 composition=candidate.composition,
-                software_home=candidate.software_home,
             )
             if qualified != candidate:
-                raise ValueError("候选环境在准备后改变；请重新准备更新")
-            if (
-                self.pending.exists()
-                and Installation.model_validate_json(self.pending.read_bytes())
-                != candidate
-            ):
-                raise ValueError("请先重试上次尚未完成的环境切换")
+                raise ValueError("应用文件在检查后改变，请重新打开 Scopecat 后重试")
+            # A fully verified current package can supersede an interrupted
+            # registration. The journal fences starts; it does not pin an old
+            # package that may no longer be installed.
             _write(self.pending, candidate.model_dump_json(indent=2))
             _write(self.root / "scopecat.toml", candidate.composition)
             _write(self.selection, candidate.model_dump_json(indent=2))
@@ -312,7 +292,7 @@ class ApplicationRuntime:
                     "author_python": str(python.absolute()) if python else None,
                     **selected.model_dump(
                         mode="json",
-                        exclude={"python", "drivers", "composition", "software_home"},
+                        exclude={"python", "drivers", "composition"},
                     ),
                 },
             )

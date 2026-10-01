@@ -26,8 +26,8 @@ and `experiments` under its explicit root. It must not publish a daily Start Men
 Applications entry. The installer is headless in either mode.
 
 `ApplicationRuntime.home` is the **data** home. `installation.json` records the
-registered interpreter and GUI. The `software_home` field remains bookkeeping
-pending model cleanup; native startup does not create a software directory.
+registered interpreter and GUI of the current package. There is no separate
+software home or retained application environment inside the data directory.
 There is no retained-release installer or generated `lab.py`. Native launchers
 resolve resources relative to their executable and pass the data home explicitly.
 Scientific records remain

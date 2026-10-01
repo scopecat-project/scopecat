@@ -108,7 +108,7 @@ export function DesktopSession() {
   }, []);
 
   const exit = async (background: boolean) => {
-    if (!window.pywebview) return;
+    if (!window.pywebview || pending.current) return;
     pending.current = true;
     setProgress(background ? "Hiding the window…" : "Stopping work and releasing devices…");
     setError(undefined);
@@ -129,16 +129,30 @@ export function DesktopSession() {
     }
   };
 
+  const changeWaiting = async (wait: boolean) => {
+    if (!window.pywebview || pending.current) return;
+    pending.current = true;
+    setProgress(wait ? "Setting automatic quit…" : "Cancelling automatic quit…");
+    setError(undefined);
+    try {
+      await window.pywebview.api.wait_for_idle(wait);
+      setWaiting(wait);
+      if (!wait) setOpen(false);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      pending.current = false;
+      setProgress(undefined);
+    }
+  };
+
   return (
     <Dialog.Root
       open={open}
       onOpenChange={(next) => {
         if (!busy) {
-          setOpen(next);
-          if (!next) {
-            setWaiting(false);
-            void window.pywebview?.api.wait_for_idle(false);
-          }
+          if (!next && waiting) void changeWaiting(false);
+          else setOpen(next);
         }
       }}
     >
@@ -166,14 +180,7 @@ export function DesktopSession() {
               <button
                 className={secondaryButton}
                 disabled={busy || waiting}
-                onClick={() => {
-                  void window.pywebview?.api
-                    .wait_for_idle(true)
-                    .then(() => setWaiting(true))
-                    .catch((failure) =>
-                      setError(failure instanceof Error ? failure.message : String(failure)),
-                    );
-                }}
+                onClick={() => void changeWaiting(true)}
               >
                 Quit when work finishes
               </button>

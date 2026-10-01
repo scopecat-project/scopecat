@@ -9,6 +9,39 @@ afterEach(() => {
   delete window.pywebview;
 });
 
+it("does not dismiss automatic quit until cancellation is acknowledged", async () => {
+  const wait_for_idle = vi.fn().mockResolvedValue(undefined);
+  window.pywebview = {
+    api: {
+      wait_for_idle,
+      request_exit: vi.fn().mockResolvedValue({ runs: 1 }),
+      exit: vi.fn(),
+      status: vi.fn(),
+      retry: vi.fn(),
+      restart: vi.fn(),
+      register_source: vi.fn(),
+      choose_directory: vi.fn(),
+      create_source: vi.fn(),
+      prepare_author_environment: vi.fn(),
+      create_author_environment: vi.fn(),
+    },
+  };
+  render(<DesktopSession />);
+  act(() => window.scopecatRequestExit?.());
+  const waitButton = await screen.findByRole("button", { name: "Quit when work finishes" });
+  await waitFor(() => expect(waitButton).toBeEnabled());
+  fireEvent.click(waitButton);
+  await screen.findByText(/Waiting for work to finish/);
+  wait_for_idle.mockRejectedValueOnce(new Error("Could not cancel automatic quit"));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not cancel");
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByText(/Waiting for work to finish/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(wait_for_idle.mock.calls).toEqual([[true], [false], [false]]);
+});
+
 it("leaves background work running only after the user chooses it", async () => {
   const exit = vi.fn().mockResolvedValue(undefined);
   window.pywebview = {

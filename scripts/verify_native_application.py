@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import cast
 
 from lab_tools.bundle import inventory
+from lab_tools.macos_signing import verify as verify_signature
 
 RUNTIME_CHECK = r"""
 import json, os, subprocess, sys, threading
@@ -69,8 +70,6 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     app.rename(relocated)
     home.mkdir(parents=True)
     if sys.platform == "darwin":
-        from lab_tools.macos_signing import verify as verify_signature
-
         verify_signature(relocated)
     result = home / "result.json"
     executable = relocated / (

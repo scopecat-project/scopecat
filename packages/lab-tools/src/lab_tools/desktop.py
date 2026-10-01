@@ -48,7 +48,7 @@ class DesktopAPI:
     @contextmanager
     def _operation(self) -> Generator[None]:
         if not self._operation_lock.acquire(blocking=False):
-            raise ValueError("应用正在启动或更改源码登记，请等待操作完成")
+            raise ValueError("应用正在执行另一项操作，请稍候再试")
         try:
             yield
         finally:
@@ -185,11 +185,14 @@ class DesktopAPI:
             return self._runtime.activity().model_dump()
 
     def wait_for_idle(self, wait: bool) -> None:
-        if wait:
-            self._exit_thread = threading.current_thread()
-            self._waiting.set()
-        else:
-            self._waiting.clear()
+        with self._operation():
+            if self._closing.is_set():
+                raise ValueError("应用正在关闭，无法更改自动退出")
+            if wait:
+                self._exit_thread = threading.current_thread()
+                self._waiting.set()
+            else:
+                self._waiting.clear()
 
     def _poll_exit(self) -> None:
         if self._waiting.is_set() and self._operation_lock.acquire(blocking=False):
@@ -216,7 +219,15 @@ def _page(content: str) -> str:
         "background:white;border:1px solid #dbe2ea;border-radius:12px}"
         "p{line-height:1.7;overflow-wrap:anywhere}button{font:inherit;"
         "padding:9px 14px;margin:6px 6px 6px 0;cursor:pointer}"
-        "[role=alert]{color:#b42318}</style><main>" + content + "</main></html>"
+        "[role=alert]{color:#b42318}</style><main>"
+        + content
+        + '<div id="quit-options" hidden>'
+        '<button onclick="exit(false)">停止工作并退出</button> '
+        '<button onclick="exit(true)">保留后台并隐藏窗口</button></div>'
+        '<p id="progress" role="status"></p><p id="error" role="alert"></p>'
+        "</main><script>"
+        + Path(__file__).with_name("desktop_page.js").read_text(encoding="utf-8")
+        + "</script></html>"
     )
 
 
@@ -229,36 +240,11 @@ def _recovery(error: Exception) -> str:
         f"<p>{escape(str(error))}</p>"
         "<p>日志位于应用数据目录的 native-start.log 和 desktop/desktop.log。</p>"
         "</details>"
-        '<button onclick="pywebview.api.retry().catch(showError)">重试</button> '
-        '<button onclick="pywebview.api.restart().catch(showError)">'
+        '<button onclick="retry()">重试</button> '
+        '<button onclick="restart()">'
         "停止后台并重新启动</button> "
         '<button onclick="quit()">'
         "退出 Scopecat</button>"
-        '<div id="quit-options" hidden>'
-        '<button onclick="exit(false)">'
-        "停止工作并退出</button> "
-        '<button onclick="exit(true)">'
-        "保留后台并隐藏窗口</button></div>"
-        '<p id="progress" role="status"></p><p id="error" role="alert"></p>'
-        "<script>let pending = false; function progress(message) {"
-        "pending = Boolean(message);"
-        "document.getElementById('progress').textContent = message;"
-        "document.querySelectorAll('button').forEach(b => b.disabled = pending); }"
-        "function showError(e) { progress('');"
-        "document.getElementById('error').textContent = e.message; }"
-        "async function exit(background) { if (pending) return;"
-        "progress(background ? '正在隐藏窗口…' : '正在停止工作并释放设备，请稍候…');"
-        "try { await pywebview.api.exit(background);"
-        "progress(background ? '' : '正在关闭 Scopecat…');"
-        "} catch(e) { showError(e); }}"
-        "async function quit() { if (pending) return;"
-        "progress('正在检查未完成工作并退出，请稍候…');"
-        "try { const work = await pywebview.api.request_exit();"
-        "if (work) { showError({message: '后台仍有未完成工作，请明确选择是否停止。'});"
-        "document.getElementById('quit-options').hidden = false; }"
-        "} catch(e) { showError(e); "
-        "document.getElementById('quit-options').hidden = false; }}"
-        "window.scopecatRequestExit = quit;</script>"
     )
 
 
@@ -332,15 +318,7 @@ def run(
             "webview.Window",
             webview.create_window(  # pyright: ignore[reportUnknownMemberType]
                 "Scopecat",
-                html=_page(
-                    '<h1>Scopecat</h1><p id="status">正在准备应用，请稍候…</p>'
-                    "<script>window.scopecatRequestExit = () => "
-                    "{ document.getElementById('status').textContent = "
-                    "'正在检查未完成工作并退出，请稍候…';"
-                    "pywebview.api.request_exit().catch(e => {"
-                    "document.getElementById('status').textContent = e.message;"
-                    "}); };</script>"
-                ),
+                html=_page("<h1>Scopecat</h1><p>正在准备应用，请稍候…</p>"),
                 js_api=api,
                 width=1280,
                 height=900,

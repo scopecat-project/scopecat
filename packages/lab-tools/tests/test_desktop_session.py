@@ -164,7 +164,7 @@ def test_close_during_preparation_does_not_abandon_installer():
     closing = threading.Event()
 
     def prepare():
-        with pytest.raises(ValueError, match="等待操作完成"):
+        with pytest.raises(ValueError, match="另一项操作"):
             api.exit(True)
         window.destroy.assert_not_called()
 
@@ -199,6 +199,33 @@ def test_window_survives_until_bridge_has_delivered_exit_reply():
     bridge.join(5)
     assert not supervisor.is_alive()
     window.destroy.assert_called_once()
+
+
+def test_automatic_quit_cannot_report_cancelled_during_stop():
+    runtime = Mock()
+    api = DesktopAPI(runtime, Mock(), threading.Event())
+    api.wait_for_idle(True)
+    stopping = threading.Event()
+    finish = threading.Event()
+
+    def stop():
+        stopping.set()
+        assert finish.wait(5)
+        return True
+
+    runtime.stop_if_idle.side_effect = stop
+    poll = threading.Thread(target=api._poll_exit)
+    poll.start()
+    try:
+        assert stopping.wait(5)
+        with pytest.raises(ValueError, match="另一项操作"):
+            api.wait_for_idle(False)
+    finally:
+        finish.set()
+        poll.join(5)
+    assert not poll.is_alive()
+    with pytest.raises(ValueError, match="正在关闭"):
+        api.wait_for_idle(False)
 
 
 def test_failed_restart_preparation_keeps_window_available():

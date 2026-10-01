@@ -95,6 +95,10 @@ and storage have been removed, together with the retained-release installer and
 its generated launchers. The standalone offline-environment installer remains for
 teaching/build verification; it cannot install a desktop application. The pending runtime
 registration record remains a crash-recovery journal, not a user-selectable update.
+It may be completed by a newly verified package after replacement; recovery does
+not require reinstalling the package that first wrote the marker. The native entry
+recreates its derived runtime receipt from current package qualification, without
+reading historical receipt formats. Scientific-data readers are unaffected.
 The final host must preserve the work-aware quit/background contract. Data
 initialization and explicit current-format checks are normal runtime work, not
 dependency setup.
@@ -171,3 +175,18 @@ macOS/Windows native distribution checks qualify packaging and runtime behavior,
 not these UI interactions. A transient disconnection during source registration
 also exposed obsolete daemon-start instructions; the UI now explains waiting for
 an in-progress restart or using the application's recovery action.
+
+### Follow-up observations (2026-10-02)
+
+The user confirmed that macOS **Open Anyway** permits opening the downloaded
+preview, and subsequently confirmed menu-bar icon visibility. These observations
+do not qualify every macOS version or the full hide/reopen sequence. The Mac menu
+bar now uses a dedicated monochrome Cocoa template; the application/Dock icon
+remains colored. macOS window close hides; application Quit checks active work.
+
+The Windows report of minimizing, hiding through the tray and then failing to
+reopen led to window-state normalization before hiding and after showing. Actual
+Windows validation of that correction is still required. The startup/recovery
+pages share operation feedback and duplicate-action suppression. Workbench tests
+cover slow quit, failed stop and failed cancellation of automatic quit. These are
+behavioral checks, not a claim that native platform interaction is complete.
