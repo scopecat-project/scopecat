@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -14,10 +15,16 @@ from urllib.parse import urlencode
 from filelock import FileLock, Timeout
 
 from .application_runtime import ApplicationRuntime
-from .desktop_platform import install_reopen_handler
+from .desktop_platform import (
+    hide_window,
+    install_reopen_handler,
+    show_window,
+    start_tray,
+)
 
 if TYPE_CHECKING:
     import webview
+    from pystray._base import Icon
 
 
 class DesktopAPI:
@@ -162,7 +169,7 @@ class DesktopAPI:
         with self._operation():
             if background:
                 self._waiting.clear()
-                self._window().hide()
+                hide_window(self._window())
                 return
             if self._runtime.selection.exists():
                 self._runtime.stop()
@@ -228,19 +235,61 @@ def _recovery(error: Exception) -> str:
         '<button onclick="quit()">'
         "退出 Scopecat</button>"
         '<div id="quit-options" hidden>'
-        '<button onclick="pywebview.api.exit(false).catch(showError)">'
+        '<button onclick="exit(false)">'
         "停止工作并退出</button> "
-        '<button onclick="pywebview.api.exit(true).catch(showError)">'
+        '<button onclick="exit(true)">'
         "保留后台并隐藏窗口</button></div>"
-        '<p id="error" role="alert"></p><script>function showError(e) {'
+        '<p id="progress" role="status"></p><p id="error" role="alert"></p>'
+        "<script>let pending = false; function progress(message) {"
+        "pending = Boolean(message);"
+        "document.getElementById('progress').textContent = message;"
+        "document.querySelectorAll('button').forEach(b => b.disabled = pending); }"
+        "function showError(e) { progress('');"
         "document.getElementById('error').textContent = e.message; }"
-        "async function quit() { try { const work = await pywebview.api.request_exit();"
+        "async function exit(background) { if (pending) return;"
+        "progress(background ? '正在隐藏窗口…' : '正在停止工作并释放设备，请稍候…');"
+        "try { await pywebview.api.exit(background);"
+        "progress(background ? '' : '正在关闭 Scopecat…');"
+        "} catch(e) { showError(e); }}"
+        "async function quit() { if (pending) return;"
+        "progress('正在检查未完成工作并退出，请稍候…');"
+        "try { const work = await pywebview.api.request_exit();"
         "if (work) { showError({message: '后台仍有未完成工作，请明确选择是否停止。'});"
         "document.getElementById('quit-options').hidden = false; }"
         "} catch(e) { showError(e); "
         "document.getElementById('quit-options').hidden = false; }}"
         "window.scopecatRequestExit = quit;</script>"
     )
+
+
+def _window_close_handlers(
+    window: webview.Window, closing: threading.Event, loaded: threading.Event
+) -> tuple[Callable[[], bool], Callable[[], bool]]:
+    def request_quit() -> bool:
+        if closing.is_set():
+            return True
+        if loaded.is_set():
+            # Dispatch off the UI thread so the JavaScript bridge cannot deadlock.
+            def dispatch() -> None:
+                show_window(window)
+                window.run_js(
+                    "if (typeof window.scopecatRequestExit === 'function') "
+                    "{ window.scopecatRequestExit(); } "
+                    "else { pywebview.api.request_exit(); }"
+                )
+
+            threading.Thread(target=dispatch, daemon=True).start()
+        return False
+
+    def request_close() -> bool:
+        if closing.is_set():
+            return True
+        if sys.platform == "darwin":
+            threading.Thread(target=lambda: hide_window(window), daemon=True).start()
+            return False
+        return request_quit()
+
+    return request_close, request_quit
 
 
 def run(
@@ -286,9 +335,11 @@ def run(
                 html=_page(
                     '<h1>Scopecat</h1><p id="status">正在准备应用，请稍候…</p>'
                     "<script>window.scopecatRequestExit = () => "
+                    "{ document.getElementById('status').textContent = "
+                    "'正在检查未完成工作并退出，请稍候…';"
                     "pywebview.api.request_exit().catch(e => {"
                     "document.getElementById('status').textContent = e.message;"
-                    "});</script>"
+                    "}); };</script>"
                 ),
                 js_api=api,
                 width=1280,
@@ -299,56 +350,39 @@ def run(
         loaded = threading.Event()
         window.events.loaded += loaded.set
 
-        def request_close() -> bool:
-            if closing.is_set():
-                return True
-            if loaded.is_set():
-                # Native close callbacks may run on the UI thread. JavaScript
-                # dispatch must not block that thread waiting for itself.
-                def dispatch() -> None:
-                    window.show()
-                    window.run_js(
-                        "if (typeof window.scopecatRequestExit === 'function') "
-                        "{ window.scopecatRequestExit(); } "
-                        "else { pywebview.api.request_exit(); }"
-                    )
-
-                threading.Thread(target=dispatch, daemon=True).start()
-            else:
-                # Startup owns an operation and may still create a service.
-                # Do not abandon it by destroying the window underneath it.
-                return False
-            return False
-
+        request_close, request_quit = _window_close_handlers(window, closing, loaded)
         window.events.closing += request_close
 
         def show() -> None:
-            window.restore()
-            window.show()
+            show_window(window)
 
         def quit_from_menu() -> None:
-            show()
-            _ = request_close()
+            _ = request_quit()
 
         with Image.open(Path(__file__).with_name("icons") / "tray.png") as image:
             icon_image = image.convert("RGBA")
-        tray = pystray.Icon(
-            "Scopecat",
-            icon_image,
-            "Scopecat",
-            menu=pystray.Menu(
-                pystray.MenuItem("打开 Scopecat", show, default=True),
-                pystray.MenuItem("隐藏窗口（后台运行）", window.hide),
-                pystray.MenuItem("退出 Scopecat", quit_from_menu),
-            ),
-        )
-        tray.run_detached()  # pyright: ignore[reportUnknownMemberType]
+
+        def create_tray() -> Icon:
+            return pystray.Icon(
+                "Scopecat",
+                icon_image,
+                "Scopecat",
+                menu=pystray.Menu(
+                    pystray.MenuItem("打开 Scopecat", show, default=True),
+                    pystray.MenuItem(
+                        "隐藏窗口（后台运行）", lambda: hide_window(window)
+                    ),
+                    pystray.MenuItem("退出 Scopecat", quit_from_menu),
+                ),
+            )
+
+        stop_tray = start_tray(create_tray)
 
         def supervise() -> None:
             while not loaded.wait(0.5):
                 if closing.is_set():
                     return
-            install_reopen_handler(show)
+            install_reopen_handler(show, quit_from_menu, closing.is_set)
             if closing.is_set():
                 api._finish_exit()  # pyright: ignore[reportPrivateUsage]
                 return
@@ -375,7 +409,7 @@ def run(
                             "请退出当前应用，再打开已安装的版本。现在退出？",
                         )
                         if quit_current:
-                            _ = request_close()
+                            _ = request_quit()
             # Keep the native completion hook out of the exposed JavaScript API.
             api._finish_exit()  # pyright: ignore[reportPrivateUsage]
 
@@ -383,8 +417,7 @@ def run(
         try:
             webview.start(supervise)
         finally:
-            tray.visible = False
-            tray.stop()
+            stop_tray()
             closing.set()
     finally:
         lock.release()

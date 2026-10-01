@@ -9,21 +9,87 @@ from __future__ import annotations
 import sys
 import threading
 from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import webview
+    from pystray._base import Icon
 
 
-def install_reopen_handler(show: Callable[[], None]) -> None:
+def show_window(window: webview.Window) -> None:
+    # Show before restoring: WinForms can retain minimized placement while hidden.
+    window.show()
+    window.restore()
+    window.show()
+
+
+def hide_window(window: webview.Window) -> None:
+    # Leave the minimized state before hiding, so Show can bring the window back.
+    window.restore()
+    window.hide()
+
+
+def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
+    """Keep Cocoa status item creation and visibility on the running main loop."""
+    if sys.platform != "darwin":
+        tray = create()
+        tray.run_detached()
+
+        def stop() -> None:
+            tray.visible = False
+            tray.stop()
+
+        return stop
+
+    from PyObjCTools import AppHelper
+
+    mac_tray: Icon | None = None
+    stopped = False
+
+    def setup(_icon: Icon) -> None:
+        pass
+
+    def ready() -> None:
+        nonlocal mac_tray
+        if stopped:
+            return
+        mac_tray = create()
+        # Default setup changes Cocoa visibility from a worker thread.
+        mac_tray.run_detached(setup=setup)
+        mac_tray.visible = True
+
+    AppHelper.callAfter(ready)
+
+    def stop_mac() -> None:
+        nonlocal stopped
+        stopped = True
+        if mac_tray is not None:
+            mac_tray.visible = False
+            mac_tray.stop()
+
+    return stop_mac
+
+
+def install_reopen_handler(
+    show: Callable[[], None], quit_app: Callable[[], None], closing: Callable[[], bool]
+) -> None:
     if sys.platform != "darwin":
         return
 
     import objc
     from AppKit import NSApplication
 
-    # Add the Cocoa reopen delegate method as an Objective-C category. Preserve
-    # pywebview's existing Quit/window delegates. Unlike activation notification,
+    # Add Cocoa application delegates as an Objective-C category.
     # reopen also fires when the app is already active but its window is hidden.
     def reopen(_self: object, _app: object, _visible: bool) -> bool:
         threading.Thread(target=show, daemon=True).start()
         return True
+
+    def terminate(_self: object, _app: object) -> int:
+        if closing():
+            return 1  # NSTerminateNow
+        threading.Thread(target=quit_app, daemon=True).start()
+        return 0  # NSTerminateCancel until the backend has stopped.
 
     objc.classAddMethods(
         type(NSApplication.sharedApplication().delegate()),
@@ -32,6 +98,11 @@ def install_reopen_handler(show: Callable[[], None]) -> None:
                 reopen,
                 selector=b"applicationShouldHandleReopen:hasVisibleWindows:",
                 signature=b"B@:@B",
-            )
+            ),
+            objc.selector(
+                terminate,
+                selector=b"applicationShouldTerminate:",
+                signature=b"Q@:@",
+            ),
         ],
     )

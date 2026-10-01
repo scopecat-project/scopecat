@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   dialogBackdrop,
   dialogPopup,
@@ -71,24 +71,35 @@ declare global {
 
 export function DesktopSession() {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string>();
+  const pending = useRef(false);
+  const busy = progress !== undefined;
   const [error, setError] = useState<string>();
   const [activity, setActivity] = useState<ApplicationActivity>();
   const [waiting, setWaiting] = useState(false);
   useEffect(() => {
     window.scopecatRequestExit = () => {
+      if (!window.pywebview || pending.current) return;
+      pending.current = true;
+      setOpen(true);
+      setActivity(undefined);
+      setProgress("Checking unfinished work and closing Scopecat…");
       setError(undefined);
       void window.pywebview?.api
         .request_exit()
         .then((work) => {
           if (work) {
+            pending.current = false;
+            setProgress(undefined);
             setActivity(work);
-            setOpen(true);
+          } else {
+            setProgress("Closing Scopecat…");
           }
         })
         .catch((failure) => {
           setError(failure instanceof Error ? failure.message : String(failure));
-          setOpen(true);
+          pending.current = false;
+          setProgress(undefined);
         });
     };
     return () => {
@@ -98,18 +109,23 @@ export function DesktopSession() {
 
   const exit = async (background: boolean) => {
     if (!window.pywebview) return;
-    setBusy(true);
+    pending.current = true;
+    setProgress(background ? "Hiding the window…" : "Stopping work and releasing devices…");
     setError(undefined);
     try {
       await window.pywebview.api.exit(background);
       if (background) {
         setOpen(false);
         setWaiting(false);
+        pending.current = false;
+        setProgress(undefined);
+      } else {
+        setProgress("Closing Scopecat…");
       }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      setBusy(false);
+      pending.current = false;
+      setProgress(undefined);
     }
   };
 
@@ -136,6 +152,7 @@ export function DesktopSession() {
               Quitting stops this work and releases devices. Background mode keeps Scopecat
               available from the menu bar or system tray. Saved records and code are retained.
             </Dialog.Description>
+            {progress && <p role="status">{progress}</p>}
             {waiting && (
               <p role="status">
                 Waiting for work to finish. Close this dialog to cancel automatic quit.
@@ -150,7 +167,12 @@ export function DesktopSession() {
                 className={secondaryButton}
                 disabled={busy || waiting}
                 onClick={() => {
-                  void window.pywebview?.api.wait_for_idle(true).then(() => setWaiting(true));
+                  void window.pywebview?.api
+                    .wait_for_idle(true)
+                    .then(() => setWaiting(true))
+                    .catch((failure) =>
+                      setError(failure instanceof Error ? failure.message : String(failure)),
+                    );
                 }}
               >
                 Quit when work finishes

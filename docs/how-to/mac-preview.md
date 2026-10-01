@@ -30,3 +30,10 @@ Python environment will not repair an application signature.
 Once the app opens, use **Settings → New code folder** to create a device-free
 example and its own Python environment for VS Code. See
 [getting started](../getting-started/index.md).
+
+The red window button hides Scopecat; experiments continue. Open it again from
+the Dock or the Scopecat menu-bar icon. To stop the application, choose **Quit
+Scopecat** from its menu. The window shows progress while checking unfinished
+work and stopping. If work is still active, choose whether to stop it, wait for
+it to finish, or keep running in the background. A failed stop leaves the window
+open with the error so you can retry.
