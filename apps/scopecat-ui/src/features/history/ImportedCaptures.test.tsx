@@ -32,7 +32,9 @@ it("imports through the native picker and preserves data after cancelled or fail
     .fn()
     .mockResolvedValueOnce(null)
     .mockRejectedValueOnce(new Error("Destination is read-only"));
-  vi.stubGlobal("pywebview", { api: { open_capture: open, save_capture: save } });
+  vi.stubGlobal("pywebview", {
+    api: { open_capture: open, save_capture: save, set_window_title: vi.fn() },
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {

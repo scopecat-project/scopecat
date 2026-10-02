@@ -19,6 +19,7 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
   const register = vi.fn();
   window.pywebview = {
     api: {
+      set_window_title: vi.fn(),
       open_capture: vi.fn(),
       save_capture: vi.fn(),
       export_run: vi.fn(),
@@ -90,6 +91,7 @@ it("keeps author dependencies independent and uses native application updates", 
   const restart = vi.fn();
   window.pywebview = {
     api: {
+      set_window_title: vi.fn(),
       open_capture: vi.fn(),
       save_capture: vi.fn(),
       export_run: vi.fn(),

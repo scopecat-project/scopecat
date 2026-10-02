@@ -18,6 +18,7 @@ from .application_runtime import ApplicationRuntime
 from .desktop_platform import (
     hide_window,
     install_reopen_handler,
+    install_window_menu,
     show_window,
     start_tray,
 )
@@ -47,6 +48,9 @@ class DesktopAPI:
     def new_window(self) -> None:
         with self._session.operation():
             self._new_window()
+
+    def set_window_title(self, title: str) -> None:
+        self._window().set_title(title)
 
     def status(self) -> dict[str, object]:
         from scopecat.author_workspaces import local_author_workspaces
@@ -539,6 +543,7 @@ def run(
                 # Cocoa status items need the application to have finished
                 # launching; a queued callback before webview.start is too early.
                 stop_tray = start_tray(create_tray)
+                install_window_menu()
                 install_reopen_handler(
                     windows.show, windows.request_quit, closing.is_set
                 )

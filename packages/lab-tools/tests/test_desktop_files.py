@@ -19,6 +19,17 @@ from lab_tools.desktop_session import DesktopSession
 HASH = "sha256:" + "a" * 64
 
 
+def test_title_change_targets_only_its_own_native_window():
+    runtime, first, second = Mock(), Mock(), Mock()
+    session = DesktopSession(runtime, threading.Event())
+    api = DesktopAPI(session, lambda: first)
+    other = DesktopAPI(session, lambda: second)
+    api.set_window_title("Alpha · source · Scopecat")
+    other.set_window_title("Beta · source · Scopecat")
+    first.set_title.assert_called_once_with("Alpha · source · Scopecat")
+    second.set_title.assert_called_once_with("Beta · source · Scopecat")
+
+
 def _transport(monkeypatch, handler):
     client = httpx2.Client
     monkeypatch.setattr(

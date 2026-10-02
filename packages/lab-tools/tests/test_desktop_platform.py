@@ -7,7 +7,45 @@ from unittest.mock import Mock
 
 import pytest
 
-from lab_tools.desktop_platform import install_reopen_handler, start_tray
+from lab_tools.desktop_platform import (
+    install_reopen_handler,
+    install_window_menu,
+    start_tray,
+)
+
+
+def test_window_menu_excludes_auxiliary_windows_on_the_main_loop(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    document, auxiliary, app = Mock(), Mock(), Mock()
+    app.windows.return_value = [document, auxiliary]
+    callbacks = []
+    monkeypatch.setitem(
+        sys.modules,
+        "webview",
+        SimpleNamespace(windows=[SimpleNamespace(native=document)]),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "AppKit",
+        SimpleNamespace(
+            NSApplication=SimpleNamespace(sharedApplication=lambda: app),
+            NSMenu=Mock(),
+            NSMenuItem=Mock(),
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "PyObjCTools",
+        SimpleNamespace(AppHelper=SimpleNamespace(callAfter=callbacks.append)),
+    )
+    install_window_menu()
+    app.setWindowsMenu_.assert_not_called()
+    callbacks.pop()()
+    auxiliary.setExcludedFromWindowsMenu_.assert_called_once_with(True)
+    document.setExcludedFromWindowsMenu_.assert_not_called()
+    app.addWindowsItem_title_filename_.assert_called_once_with(
+        document, document.title(), False
+    )
 
 
 def test_cocoa_tray_is_created_and_shown_on_the_main_loop(monkeypatch):

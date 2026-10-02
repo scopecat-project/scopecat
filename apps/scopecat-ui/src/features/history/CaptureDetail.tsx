@@ -6,6 +6,7 @@ import { measurementTable, planMeasurementCharts } from "../runs/measurement-vis
 import { MeasurementChartPicker } from "../runs/MeasurementDataPreview";
 import { CaptureAnalyses } from "./CaptureAnalyses";
 import { CaptureTraces } from "./CaptureTraces";
+import { WindowTitle } from "../application/WindowTitle";
 import { selectCapture, useCaptureSelection, type CaptureSelection } from "./capture-location";
 
 export function CaptureDetail({ contentHash }: { contentHash: string }) {
@@ -39,6 +40,7 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
     );
   return (
     <section className="mt-3 space-y-3" aria-label="Captured run">
+      <WindowTitle title={`${run.snapshot.run_id} · ${capture.source_project_id} · Scopecat`} />
       <label>
         Run{" "}
         <select value={run.snapshot.run_id} onChange={(event) => selectRun(event.target.value)}>

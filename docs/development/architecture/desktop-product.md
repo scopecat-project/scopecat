@@ -192,6 +192,25 @@ the comparison journey complete merely because closing one view reveals another.
 Clipboard fidelity, work surviving all closed views, failed-shutdown recovery and
 Windows qualification also remain outstanding.
 
+### Window identification and switching correction (2026-10-03)
+
+Captured-data views now set the document and native window title to the selected
+run ID, source project and application name; leaving the view restores the
+ordinary application title. The Mac host installs Cocoa's standard Window menu
+on its main loop, with Cocoa maintaining window activation, title changes and
+closed-window removal. Existing auxiliary windows are excluded, so the tray's
+internal window does not appear as an `Item-0` document. Windows continues to use
+the native host title for the operating system's window selection surfaces;
+that platform still requires qualification.
+
+An isolated rebuilt Mac package displayed distinct Alpha and Beta titles and
+listed both in Window. Selecting Alpha from that menu activated its original
+data view while Beta remained open. Closing Alpha left Beta usable and removed
+Alpha from the menu. A final rebuild verified that the auxiliary `Item-0` entry
+was absent. This resolves the observed Mac discovery gap above through native
+window management; keyboard cycling, clipboard fidelity, complete work-aware
+lifecycle and Windows acceptance are still not established by this check.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

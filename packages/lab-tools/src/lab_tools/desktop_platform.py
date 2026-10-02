@@ -39,6 +39,33 @@ def macos_bundle_identifier() -> str | None:
     return cast("str | None", NSBundle.mainBundle().bundleIdentifier())
 
 
+def install_window_menu() -> None:
+    """Let Cocoa maintain the list and activation of native application windows."""
+    if sys.platform != "darwin":
+        return
+
+    import webview
+    from AppKit import NSApplication, NSMenu, NSMenuItem
+    from PyObjCTools import AppHelper
+
+    def install() -> None:
+        app = NSApplication.sharedApplication()
+        menu = NSMenu.alloc().initWithTitle_("窗口")
+        item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("窗口", None, "")
+        item.setSubmenu_(menu)
+        app.mainMenu().addItem_(item)
+        # Status-item and other auxiliary windows are not document views.
+        views = [view.native for view in webview.windows]
+        for window in app.windows():
+            if window not in views:
+                window.setExcludedFromWindowsMenu_(True)
+        app.setWindowsMenu_(menu)
+        for window in views:
+            app.addWindowsItem_title_filename_(window, window.title(), False)
+
+    AppHelper.callAfter(install)
+
+
 def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
     """Keep Cocoa status item creation and visibility on the running main loop."""
     if sys.platform != "darwin":

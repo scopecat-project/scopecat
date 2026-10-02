@@ -26,6 +26,7 @@ export interface InstallationStatus {
 }
 
 interface DesktopAPI {
+  set_window_title(title: string): Promise<void>;
   open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
   save_capture(contentHash: string): Promise<string | null>;
   export_run(runId: string): Promise<string | null>;
