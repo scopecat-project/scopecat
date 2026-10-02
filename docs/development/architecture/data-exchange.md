@@ -109,9 +109,11 @@ must verify object digests while copying; concurrent cleanup is an export failur
 not permission to omit a referenced output. Published analysis inputs now resolve
 transitively across run and project subjects, retaining each exact publication once.
 Each consumed output must match its kind, target, content hash and codec, using the
-same identity calculation as publication admission. Missing upstream bytes fail
-capture. Figure-layer sources, other evidence families and application integration
-are not complete yet. These capture components alone do not prove reference closure.
+same identity calculation as publication admission. Figure layers also pull in
+their exact published dataset source, even without a declared analysis input;
+a preview never substitutes for those dataset bytes. Missing upstream bytes fail
+capture. Other evidence families and application integration are not complete yet.
+These capture components alone do not prove reference closure.
 
 The low-level `scopecat.data_exchange` container now groups scientific documents,
 recording partitions and content-addressed payloads without extracting them.

@@ -10,6 +10,9 @@ from typing import cast
 
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
 from scopecat.records.analysis import (
+    AnalysisFigureRecordOutput,
+    AnalysisPublishedDatasetViewSource,
+    AnalysisPublishedOutputReference,
     AnalysisRecord,
     AnalysisSubject,
     PublishedAnalysisRecordInput,
@@ -41,12 +44,34 @@ class CapturedAnalysis:
     payloads: tuple[RetainedPayload, ...]
 
 
+def _published_dependencies(
+    record: AnalysisRecord,
+) -> Iterator[tuple[AnalysisPublishedOutputReference, tuple[str, str, str, str]]]:
+    for item in record.inputs:
+        if isinstance(item, PublishedAnalysisRecordInput):
+            yield item.source, (item.kind, item.target, item.content_hash, item.codec)
+    for output in record.outputs:
+        if isinstance(output, AnalysisFigureRecordOutput):
+            for layer in output.content.layers:
+                source = layer.source
+                if isinstance(source, AnalysisPublishedDatasetViewSource):
+                    yield (
+                        source.source,
+                        (
+                            "analysis_dataset",
+                            source.dataset.dataset_id,
+                            source.dataset.content_hash,
+                            source.dataset.codec,
+                        ),
+                    )
+
+
 def capture_analysis_input_graph(
     connection: sqlite3.Connection,
     runs: SQLiteRunRepository,
     roots: Iterable[tuple[AnalysisSubject, str]],
 ) -> tuple[CapturedAnalysis, ...]:
-    """Capture transitive published inputs and verify every consumed output.
+    """Capture published inputs and figure sources, checking exact output identity.
 
     All lookups use the caller's snapshot. Run, interpretation and revision
     dependencies are resolved by the enclosing scientific capture layer.
@@ -60,28 +85,20 @@ def capture_analysis_input_graph(
         subject, record_id = identity
         publication = capture_analysis_evidence(connection, runs, subject, record_id)
         captured[identity] = publication
-        for item in publication.evidence.record.inputs:
-            if isinstance(item, PublishedAnalysisRecordInput):
-                pending.append((item.source.subject, item.source.analysis_record_id))
+        for source, _ in _published_dependencies(publication.evidence.record):
+            pending.append((source.subject, source.analysis_record_id))
     for publication in captured.values():
-        for item in publication.evidence.record.inputs:
-            if not isinstance(item, PublishedAnalysisRecordInput):
-                continue
-            source = captured[(item.source.subject, item.source.analysis_record_id)]
+        for reference, expected in _published_dependencies(publication.evidence.record):
+            source = captured[(reference.subject, reference.analysis_record_id)]
             output = next(
                 (
                     output
                     for output in source.evidence.record.outputs
-                    if output.id == item.source.output_id
+                    if output.id == reference.output_id
                 ),
                 None,
             )
-            if published_output_input_identity(output) != (
-                item.kind,
-                item.target,
-                item.content_hash,
-                item.codec,
-            ):
+            if published_output_input_identity(output) != expected:
                 raise ValueError(
                     "analysis input evidence differs from its exact output"
                 )

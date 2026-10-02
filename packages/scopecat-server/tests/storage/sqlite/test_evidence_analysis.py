@@ -10,8 +10,18 @@ from scopecat.records.analysis import (
     ANALYSIS_ARTIFACT_CODEC,
     AnalysisArtifactRecordOutput,
     AnalysisArtifactReference,
+    AnalysisDatasetRecordOutput,
+    AnalysisDatasetReference,
     AnalysisFact,
     AnalysisFactRecordOutput,
+    AnalysisFigure,
+    AnalysisFigureAxis,
+    AnalysisFigureLayerView,
+    AnalysisFigureProjection,
+    AnalysisFigureRecordOutput,
+    AnalysisFigureSeries,
+    AnalysisFigureView,
+    AnalysisPublishedDatasetViewSource,
     AnalysisPublishedOutputReference,
     AnalysisRecord,
     ProjectAnalysisSubject,
@@ -27,7 +37,11 @@ from scopecat.records.scientific_binding import (
 )
 from scopecat.records.setup import ExecutableSetupSnapshot
 from scopecat.runs.admission import build_run_admission
-from scopecat.runs.refs import artifact_content_ref, record_content_ref
+from scopecat.runs.refs import (
+    artifact_content_ref,
+    dataset_content_ref,
+    record_content_ref,
+)
 from scopecat_testkit.authoring import load_config
 
 from scopecat_server.storage.sqlite.analysis_repository import SQLiteAnalysisRepository
@@ -38,6 +52,142 @@ from scopecat_server.storage.sqlite.evidence_analysis import (
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+
+
+def test_figure_source_retains_dataset_without_declared_input(tmp_path: Path):
+    store = SQLiteProjectStore(
+        SQLiteDatabase(tmp_path / "data.sqlite"), tmp_path / "objects"
+    )
+    store.bootstrap()
+    runs = SQLiteRunRepository(store.sqlite, store.objects.root)
+    repository = SQLiteAnalysisRepository(store.sqlite, store.objects.root)
+    subject = ProjectAnalysisSubject()
+    content = b"retained dataset bytes"
+    dataset = ContentEntry(
+        role="dataset",
+        kind="analysis_dataset",
+        id="data",
+        content_hash=sha256_content_hash(content),
+        produced_by="source",
+    )
+    reference = AnalysisDatasetReference(
+        dataset_id=dataset.id,
+        content_hash=dataset.content_hash,
+        codec="test.dataset.v1",
+    )
+    source = AnalysisRecord(
+        subject=subject,
+        title="Source",
+        revision=1,
+        publication_hash=sha256_content_hash(b"source"),
+        outputs=[
+            AnalysisDatasetRecordOutput(
+                kind="dataset", id="data", title="Data", content=reference
+            ),
+        ],
+    )
+    figure_source = AnalysisPublishedDatasetViewSource(
+        source=AnalysisPublishedOutputReference(
+            subject=subject, analysis_record_id="source", output_id="data"
+        ),
+        dataset=reference,
+    )
+    layer = AnalysisFigureLayerView(
+        id="layer",
+        source=figure_source,
+        projection=AnalysisFigureProjection(kind="line", x="x", y="y"),
+        preview=AnalysisFigure(
+            kind="line",
+            x_axis=AnalysisFigureAxis(label="x"),
+            y_axis=AnalysisFigureAxis(label="y"),
+            series=[AnalysisFigureSeries(id="curve", x=[0.0], y=[1.0])],
+        ),
+        total_points=1,
+        truncated=False,
+    )
+
+    def publish(record_id: str, record: AnalysisRecord) -> None:
+        entry = ContentEntry(
+            role="record",
+            kind="analysis",
+            id=record_id,
+            content_hash=model_wire_content_hash(record),
+        )
+        repository.publish(
+            AnalysisPublication(
+                subject=subject,
+                record=entry,
+                entries=(entry, dataset) if record_id == "source" else (entry,),
+                analysis_key=record_id,
+                revision=1,
+                publication_hash=record.publication_hash,
+                title=record.title,
+                step_id=None,
+                input_count=0,
+                output_count=1,
+                models=(
+                    ModelWrite(
+                        ref=record_content_ref(record_id=record_id, kind="analysis"),
+                        value=record,
+                    ),
+                ),
+                bytes=(
+                    BytesWrite(
+                        ref=dataset_content_ref(
+                            dataset_id=dataset.id, kind=dataset.kind
+                        ),
+                        content=content,
+                    ),
+                )
+                if record_id == "source"
+                else (),
+            )
+        )
+
+    publish("source", source)
+    for record_id, selected in (
+        ("figure", layer),
+        (
+            "mismatch",
+            layer.model_copy(
+                update={
+                    "source": figure_source.model_copy(
+                        update={
+                            "dataset": reference.model_copy(
+                                update={
+                                    "content_hash": sha256_content_hash(b"different")
+                                }
+                            ),
+                        }
+                    )
+                }
+            ),
+        ),
+    ):
+        record = AnalysisRecord(
+            subject=subject,
+            title="Figure",
+            revision=1,
+            publication_hash=sha256_content_hash(record_id.encode()),
+            outputs=[
+                AnalysisFigureRecordOutput(
+                    kind="figure",
+                    id="figure",
+                    title="Figure",
+                    content=AnalysisFigureView(
+                        layers=(selected,), total_points=1, truncated=False
+                    ),
+                )
+            ],
+        )
+        publish(record_id, record)
+    with store.sqlite.read_transaction() as connection:
+        graph = capture_analysis_input_graph(connection, runs, ((subject, "figure"),))
+        assert [item.evidence.entry.id for item in graph] == ["figure", "source"]
+        assert any(item.path.read_bytes() == content for item in graph[1].payloads)
+        with pytest.raises(ValueError, match="differs from its exact output"):
+            capture_analysis_input_graph(connection, runs, ((subject, "mismatch"),))
+    store.close()
 
 
 @pytest.mark.parametrize("run_owned", [False, True])
