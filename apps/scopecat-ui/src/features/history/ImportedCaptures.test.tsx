@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ImportedCaptures } from "./ImportedCaptures";
+import { DesktopFiles } from "../application/DesktopFiles";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
 it("imports through the native picker and preserves data after cancelled or failed saves", async () => {
@@ -66,18 +68,22 @@ it("imports through the native picker and preserves data after cancelled or fail
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <ImportedCaptures unavailable={false} />
+      <DesktopFiles />
     </QueryClientProvider>,
   );
   await screen.findByText("No imported data yet.");
   fireEvent.click(screen.getByRole("button", { name: "Open Scopecat file…" }));
   await screen.findByText("Opening and checking the selected file…");
-  expect(screen.getByRole("button", { name: "Open Scopecat file…" })).toHaveProperty(
-    "disabled",
-    true,
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Open Scopecat file…" }));
+  expect(open).toHaveBeenCalledTimes(1);
   finishOpen!();
   await screen.findByText("This data is already available.");
   await screen.findByText("Runs: scan-A");
+  await screen.findByRole("region", { name: "Captured run" });
+  act(() => window.history.back());
+  await waitFor(() => expect(screen.queryByRole("region", { name: "Captured run" })).toBeNull());
+  act(() => window.history.forward());
+  await screen.findByRole("region", { name: "Captured run" });
   fireEvent.click(screen.getByRole("button", { name: "Save a copy…" }));
   await waitFor(() => expect(screen.queryByText("Saving file…")).toBeNull());
   expect(screen.queryByText(/^Saved to/)).toBeNull();

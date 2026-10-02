@@ -20,6 +20,7 @@ import { getEvents, getHealth } from "./data/project-api";
 import { LaunchDraftProvider, useLaunchDraft } from "./features/launch/LaunchDraft";
 import { RunsWorkspace } from "./features/runs/RunsWorkspace";
 import { DesktopSession } from "./features/application/DesktopSession";
+import { DesktopFiles } from "./features/application/DesktopFiles";
 import { titleCase } from "./lib/presentation";
 import { classes, iconButton } from "./ui/styles";
 
@@ -132,7 +133,11 @@ export default function App() {
       setSelectedSampleRevision(selectedSampleRevisionFromUrl());
     };
     window.addEventListener("hashchange", restoreHashRoute);
-    return () => window.removeEventListener("hashchange", restoreHashRoute);
+    window.addEventListener("popstate", restoreHashRoute);
+    return () => {
+      window.removeEventListener("hashchange", restoreHashRoute);
+      window.removeEventListener("popstate", restoreHashRoute);
+    };
   }, []);
 
   useEffect(() => {
@@ -563,6 +568,7 @@ export default function App() {
         ) : null}
       </main>
       <DesktopSession />
+      <DesktopFiles />
     </div>
   );
 }

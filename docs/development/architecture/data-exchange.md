@@ -200,6 +200,13 @@ stream through this same backend; a failed download leaves an existing destinati
 unchanged, and cancelled dialogs perform no transfer. The shared application
 operation lock covers native transfers, including their file dialogs.
 
+Native File → Open dispatches to the focused window. Its page button and
+Cmd/Ctrl-O share one window-owned command, with progress and error feedback even
+outside the Data page. Successful opens select the capture through window URL
+history; cancellation and failure retain the previous location. The native menu
+dispatch and frontend history are covered separately by local tests; real native
+menu/shortcut qualification on both platforms remains part of the desktop gate.
+
 Local automated tests cover import feedback, duplicate receipts, cancelled saves,
 failed saves and partial-transfer cleanup. They do not qualify real native dialogs
 on either platform. Imported runs now expose their retained request/configuration

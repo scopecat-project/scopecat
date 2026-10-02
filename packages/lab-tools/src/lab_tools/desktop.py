@@ -376,6 +376,22 @@ class DesktopWindows:
     def show(self) -> None:
         show_window(self.latest.window)
 
+    def open_file(self) -> None:
+        import webview
+
+        active = webview.active_window()
+        with self._lock:
+            view = next(
+                (view for view in self._views if view.window is active), self.latest
+            )
+        show_window(view.window)
+        if self._session.base_url is None:
+            view.window.create_confirmation_dialog(
+                "暂时无法打开文件", "应用尚未准备就绪，请稍后重试"
+            )
+            return
+        view.window.run_js("window.dispatchEvent(new Event('scopecat:open-file'));")
+
     def hide(self) -> None:
         with self._lock:
             views = tuple(self._views)
@@ -509,7 +525,15 @@ def run(
             # launcher's icon. Tray artwork is configured independently above.
             webview.start(
                 supervise,
-                menu=[Menu("文件", [MenuAction("新建窗口", new_window_from_menu)])],
+                menu=[
+                    Menu(
+                        "文件",
+                        [
+                            MenuAction("打开文件…", windows.open_file),
+                            MenuAction("新建窗口", new_window_from_menu),
+                        ],
+                    )
+                ],
                 icon=(
                     str(Path(__file__).with_name("icons") / "Scopecat.ico")
                     if sys.platform == "win32"
