@@ -4,6 +4,7 @@ from base64 import b64encode
 from pathlib import Path
 
 import pytest
+from scopecat.daemon.wire import SampleCreateCommand, SampleReviseCommand
 from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.records.author_revision import (
     AuthorRevisionBundle,
@@ -20,18 +21,33 @@ from scopecat.records.parameter_revision import (
     parameter_revision_hash,
 )
 from scopecat.records.run_request import RunRequest
+from scopecat.records.sample import (
+    SampleArtifactRef,
+    SampleBinding,
+    SampleRevisionDraft,
+)
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
+from scopecat.records.scientific_scope import MeasurementTarget, TargetMember
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     ScientificSelection,
 )
 from scopecat.records.setup import SetupDefinition, SetupDefinitionRevision
+from scopecat.records.target_catalog import (
+    TargetCreateCommand,
+    TargetReviseCommand,
+    TargetRevisionDraft,
+)
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
-from scopecat_server.storage.sqlite.evidence_inputs import capture_input_revisions
+from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
+from scopecat_server.storage.sqlite.evidence_inputs import (
+    capture_input_revisions,
+    capture_sample_payloads,
+)
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
@@ -39,7 +55,118 @@ from scopecat_server.storage.sqlite.parameter_revisions import (
     ParameterRevisionRepository,
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
+from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
+
+
+def test_sample_and_target_capture_retains_exact_revisions(tmp_path: Path):
+    store = SQLiteProjectStore(
+        SQLiteDatabase(tmp_path / "data.sqlite"), tmp_path / "objects"
+    )
+    store.bootstrap()
+    samples = SQLiteSampleStore(store.sqlite, control=SQLiteControlPlane(store.sqlite))
+    content = b"original sample report"
+    attachment = store.objects.put(content)
+    first = samples.create_sample(
+        SampleCreateCommand(
+            operation_id="create",
+            sample_id="sample",
+            kind="chip",
+            actor="test",
+            content=SampleRevisionDraft(
+                display_name="Original",
+                artifacts=(
+                    SampleArtifactRef(
+                        id="report",
+                        title="Report",
+                        uri=attachment.digest,
+                        media_type="text/plain",
+                    ),
+                    SampleArtifactRef(
+                        id="external",
+                        title="External",
+                        uri="https://example.invalid/report",
+                    ),
+                    SampleArtifactRef(
+                        id="unavailable",
+                        title="Unavailable",
+                        uri="/never/read/local/file",
+                    ),
+                ),
+            ),
+        )
+    ).revision
+    member = TargetMember(
+        id="subject",
+        sample_id=first.sample_id,
+        revision=first.revision,
+        content_hash=first.content_hash,
+    )
+    catalog = TargetCatalogStore(store.sqlite, catalog_id="retained-catalog")
+    target = catalog.create(
+        TargetCreateCommand(
+            catalog_id="retained-catalog",
+            target_id="target",
+            draft=TargetRevisionDraft(
+                name="Original target",
+                content=MeasurementTarget(members=(member,)),
+                actor="test",
+            ),
+        )
+    )
+    samples.revise_sample(
+        "sample",
+        SampleReviseCommand(
+            operation_id="revise",
+            expected_revision=1,
+            actor="test",
+            content=SampleRevisionDraft(display_name="Current"),
+        ),
+    )
+    catalog.revise(
+        TargetReviseCommand(
+            expected=target.ref,
+            draft=TargetRevisionDraft(
+                name="Current target",
+                content=target.content,
+                actor="test",
+            ),
+        )
+    )
+    binding = SampleBinding(
+        role="subject",
+        sample_id=first.sample_id,
+        revision=first.revision,
+        content_hash=first.content_hash,
+        kind="chip",
+        display_name="Original",
+    )
+    with store.sqlite.read_transaction() as connection:
+        evidence = capture_input_revisions(connection, store, (target.ref, binding))
+        assert evidence.samples == (first,)
+        assert evidence.targets == (target,)
+        payloads = capture_sample_payloads(store, evidence.samples)
+        assert len(payloads) == 1
+        assert payloads[0].reference.owner_id == first.sample_id
+        assert payloads[0].reference.digest == attachment.digest
+        assert payloads[0].path.read_bytes() == content
+        for ref in (
+            binding.model_copy(update={"content_hash": "sha256:" + "f" * 64}),
+            target.ref.model_copy(update={"catalog_id": "foreign-catalog"}),
+        ):
+            with pytest.raises(ValueError, match="evidence differs"):
+                capture_input_revisions(connection, store, (ref,))
+        for ref in (
+            binding.model_copy(update={"revision": 99}),
+            target.ref.model_copy(update={"revision": 99}),
+        ):
+            with pytest.raises(KeyError, match=r"missing .* evidence"):
+                capture_input_revisions(connection, store, (ref,))
+    store.objects.path_for(attachment.digest).unlink()
+    with pytest.raises(FileNotFoundError):
+        capture_sample_payloads(store, (first,))
+    store.close()
 
 
 def test_hidden_plan_ancestry_keeps_exact_parameter_and_setup_revisions(tmp_path: Path):

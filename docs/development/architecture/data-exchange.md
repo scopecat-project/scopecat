@@ -103,6 +103,14 @@ plans and their ancestry. It does not inspect current branch heads, re-resolve a
 setup using today's devices, or require the original source directory. Retained
 source files are checked as bytes without extracting or executing them.
 
+Typed sample bindings and target members retain exact sample revisions. Target
+references retain their catalog-qualified historical revision and resolve its
+members transitively. Neither current sample heads nor current target heads replace
+accepted evidence. Owned sample attachments resolve to content-addressed payloads
+for the verified streaming writer. Missing stored files fail capture; external URLs
+and unavailable local-path references remain inert metadata and are never fetched
+or read as local paths.
+
 Analysis capture verifies the publication record and output index, then identifies
 the precise retained artifact and dataset objects for streaming. The final writer
 must verify object digests while copying; concurrent cleanup is an export failure,

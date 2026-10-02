@@ -27,7 +27,7 @@ class PayloadReference(BaseModel):
     """An inert logical reference to bytes; no archive path comes from the ref."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    owner_kind: Literal["run", "analysis"]
+    owner_kind: Literal["run", "analysis", "sample"]
     owner_id: str = Field(min_length=1)
     ref: str = Field(min_length=1)
     digest: Sha256ContentHash

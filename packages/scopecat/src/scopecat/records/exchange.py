@@ -19,7 +19,9 @@ from scopecat.records.experiment_plan import ExperimentPlanRevision
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
+from scopecat.records.sample import SampleRevision
 from scopecat.records.setup import SetupDefinitionRevision, SetupRevision
+from scopecat.records.target_catalog import TargetRevision
 
 
 class RunEvidence(BaseModel):
@@ -60,6 +62,8 @@ class InputRevisionEvidence(BaseModel):
     setup_definitions: tuple[SetupDefinitionRevision, ...] = ()
     plans: tuple[ExperimentPlanRevision, ...] = ()
     authors: tuple[AuthorRevisionBundle, ...] = ()
+    samples: tuple[SampleRevision, ...] = ()
+    targets: tuple[TargetRevision, ...] = ()
 
 
 class AnalysisEvidence(BaseModel):
