@@ -14,11 +14,7 @@ from scopecat.data_exchange import (
 )
 from scopecat.data_exchange.models import ScientificEvidence
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
-from scopecat.runs.refs import (
-    artifact_content_ref,
-    dataset_content_ref,
-    record_content_ref,
-)
+from scopecat.runs.refs import content_entry_ref
 
 from scopecat_server.storage.sqlite.evidence_analysis import capture_analysis_evidence
 from scopecat_server.storage.sqlite.evidence_inputs import capture_sample_payloads
@@ -61,13 +57,7 @@ def write_captured_exchange(
                 # The recording partition owns this logical dataset. Its identity
                 # is checked from selected records by ScientificExchange.verify.
                 continue
-            match entry.role:
-                case "record":
-                    ref = record_content_ref(record_id=entry.id, kind=entry.kind)
-                case "artifact":
-                    ref = artifact_content_ref(artifact_id=entry.id, kind=entry.kind)
-                case "dataset":
-                    ref = dataset_content_ref(dataset_id=entry.id, kind=entry.kind)
+            ref = content_entry_ref(entry)
             row = cast(
                 "sqlite3.Row | None",
                 connection.execute(

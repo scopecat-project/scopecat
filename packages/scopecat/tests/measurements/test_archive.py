@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from typing import Literal
 from zipfile import ZipFile
 
 import pytest
@@ -24,6 +25,7 @@ from scopecat.measurements.archive import (
 )
 from scopecat.measurements.imports import import_measurement_snapshot
 from scopecat.records.config import config_content_hash
+from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementDimension,
@@ -39,6 +41,7 @@ from scopecat.records.measurement_recording import (
 )
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
+from scopecat.runs.refs import content_entry_ref
 
 
 def exchange_evidence() -> ScientificEvidence:
@@ -65,6 +68,56 @@ def exchange_evidence() -> ScientificEvidence:
             ),
         ),
     )
+
+
+@pytest.mark.parametrize("role", ["record", "artifact", "dataset"])
+def test_exchange_requires_indexed_payload_and_its_scientific_identity(
+    tmp_path: Path, role: Literal["record", "artifact", "dataset"]
+):
+    from scopecat.kernel.content_identity import (
+        content_fingerprint,
+        stable_content_hash,
+    )
+
+    raw = b'{"value": 1}'
+    payload = tmp_path / "payload"
+    payload.write_bytes(raw)
+    digest = sha256_content_hash(raw)
+    semantic_hash = (
+        stable_content_hash(content_fingerprint({"value": 1}))
+        if role == "record"
+        else digest
+    )
+    entry = ContentEntry(
+        role=role, id="result", kind="result", content_hash=semantic_hash
+    )
+    evidence = exchange_evidence()
+    evidence = evidence.model_copy(
+        update={"runs": (evidence.runs[0].model_copy(update={"contents": (entry,)}),)}
+    )
+    destination = tmp_path / "exchange.scopecat"
+    with pytest.raises(ValueError, match="missing retained content"):
+        write_scientific_exchange(destination, evidence, {})
+    assert not destination.exists()
+    reference = PayloadReference(
+        owner_kind="run",
+        owner_id="synthetic",
+        ref=content_entry_ref(entry),
+        digest=digest,
+        size=len(raw),
+    )
+    sources = (PayloadSource(reference, payload),)
+    wrong = entry.model_copy(update={"content_hash": "sha256:" + "0" * 64})
+    conflicting = evidence.model_copy(
+        update={"runs": (evidence.runs[0].model_copy(update={"contents": (wrong,)}),)}
+    )
+    with pytest.raises(ValueError, match="content identity differs"):
+        write_scientific_exchange(destination, conflicting, {}, sources)
+    assert not destination.exists()
+    write_scientific_exchange(destination, evidence, {}, sources)
+    with ScientificExchange(destination) as opened:
+        opened.verify()
+    assert not list(tmp_path.glob(".exchange-*"))
 
 
 def test_exchange_reads_partition_after_borrowed_reader_closes(tmp_path: Path):

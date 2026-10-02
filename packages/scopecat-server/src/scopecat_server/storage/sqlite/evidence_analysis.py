@@ -24,7 +24,7 @@ from scopecat.records.analysis import (
     published_output_input_identity,
 )
 from scopecat.records.content import ContentEntry
-from scopecat.runs.refs import record_content_ref
+from scopecat.runs.refs import content_entry_ref, record_content_ref
 
 from scopecat_server.storage.sqlite.analysis_index import read_publication
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
@@ -193,18 +193,7 @@ def capture_analysis_evidence(
         )
     # Use exact canonical refs from the content index, not prefix/substring guesses
     # over run-owned objects that may belong to other publications.
-    from scopecat.runs.refs import artifact_content_ref, dataset_content_ref
-
-    entries_by_ref: dict[str, ContentEntry] = {}
-    for entry in contents:
-        match entry.role:
-            case "record":
-                ref = record_content_ref(record_id=entry.id, kind=entry.kind)
-            case "artifact":
-                ref = artifact_content_ref(artifact_id=entry.id, kind=entry.kind)
-            case "dataset":
-                ref = dataset_content_ref(dataset_id=entry.id, kind=entry.kind)
-        entries_by_ref[ref] = entry
+    entries_by_ref = {content_entry_ref(entry): entry for entry in contents}
     record_ref = record_content_ref(record_id=record_id, kind="analysis")
     expected = set(entries_by_ref) | {record_ref}
     payloads: list[RetainedPayload] = []

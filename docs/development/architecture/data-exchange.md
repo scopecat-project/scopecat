@@ -153,6 +153,12 @@ the package. Writing checks streamed payload hashes and verifies the staged pack
 before atomic publication. `copy_payload(reference, destination)` saves a selected
 attachment only after verifying its bytes, without replacing existing files. The
 caller supplies the destination; retained filenames are never extraction paths.
+Package verification also resolves run and analysis content entries through the
+same canonical-reference helper used by export, rejecting absent payloads or
+different scientific content identities. Owned sample attachments must match
+their retained artifact references. JSON record payloads have a 64 MiB metadata
+budget; artifact bytes remain streamed. These checks establish indexed-content
+integrity, not complete scientific-reference closure or executable trust.
 `write_captured_exchange` connects resolved evidence to stored run content, analysis
 outputs, sample attachments and measurement partitions inside the caller's read
 transaction. Missing content stops publication, and its temporary partitions are

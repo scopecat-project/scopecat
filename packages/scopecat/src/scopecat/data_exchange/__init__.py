@@ -3,21 +3,29 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import Literal, Self, cast
 from zipfile import ZIP_STORED, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.data_exchange.models import ScientificEvidence
-from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
+from scopecat.kernel.content_identity import (
+    content_fingerprint,
+    sha256_content_hash,
+    sha256_json_hash,
+    stable_content_hash,
+)
 from scopecat.measurements.archive import MeasurementSnapshot
-from scopecat.records.content import Sha256ContentHash
+from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
+from scopecat.runs.refs import content_entry_ref
 
 MAX_INDEX_BYTES = 4 * 1024 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
@@ -245,7 +253,62 @@ class ScientificExchange:
         finally:
             staged.unlink(missing_ok=True)
 
+    def _verify_content_index(self) -> None:
+        references = {
+            (ref.owner_kind, ref.owner_id, ref.ref): ref for ref in self.payloads
+        }
+
+        def verify_entry(owner_kind: str, owner_id: str, entry: ContentEntry) -> None:
+            if entry.role == "dataset" and entry.kind == "measurement_dataset":
+                return  # Verified against its recording partition below.
+            identity = (owner_kind, owner_id, content_entry_ref(entry))
+            ref = references.get(identity)
+            if ref is None:
+                raise ValueError(f"exchange is missing retained content: {identity}")
+            actual = ref.digest
+            if entry.role == "record":
+                if ref.size > MAX_EVIDENCE_BYTES:
+                    raise ValueError("exchange record exceeds the metadata budget")
+                actual = stable_content_hash(
+                    content_fingerprint(
+                        cast(
+                            "object",
+                            json.loads(self._archive.read(_object_name(ref.digest))),
+                        )
+                    )
+                )
+            if actual != entry.content_hash:
+                raise ValueError(
+                    f"exchange retained content identity differs: {identity}"
+                )
+
+        for run in self.evidence.runs:
+            for entry in run.contents:
+                verify_entry("run", run.snapshot.run_id, entry)
+        for analysis in self.evidence.analyses:
+            subject = analysis.record.subject
+            for entry in analysis.contents:
+                verify_entry(
+                    "run" if subject.kind == "run" else "analysis",
+                    subject.run_id if subject.kind == "run" else analysis.entry.id,
+                    entry,
+                )
+        for revision in self.evidence.inputs.samples:
+            for artifact in revision.content.artifacts:
+                if not is_owned_sample_artifact_uri(artifact.uri):
+                    continue
+                reference = references.get(
+                    (
+                        "sample",
+                        revision.sample_id,
+                        f"revisions/{revision.revision}/artifacts/{artifact.id}",
+                    )
+                )
+                if reference is None or reference.digest != artifact.uri:
+                    raise ValueError("exchange sample attachment is missing or differs")
+
     def verify(self) -> None:
+        self._verify_content_index()
         for snapshot in self._recordings.values():
             snapshot.verify()
         for run in self.evidence.runs:
