@@ -1,7 +1,8 @@
 # Desktop application lifecycle
 
-This is the target, not an acceptance report. The current host remains a
-single-window prototype; see the [desktop product decision gate](desktop-product.md).
+This is the target, not an acceptance report. The current host supports multiple
+views with partial packaged Mac qualification; see the
+[desktop product decision gate](desktop-product.md) for evidence and remaining gaps.
 The installed application owns windows, menus and whole-application exit.
 Windows own independent view state, not device or task lifetimes. Execution has
 one resource authority across windows; that does not require one permanent HTTP
@@ -28,11 +29,12 @@ Window hiding is not termination. JavaScript bridge replies must finish before
 destroying their window. All normal quit paths release the service before removing
 the visible application entry.
 
-Target last-window policy: on Mac the application remains open and can create a
-view from the Dock/menu; on Windows it exits when idle, while active work remains
-visible through the tray with clear background feedback. Explicit Quit is always
-work-aware. The current prototype instead hides its sole window on both platforms;
-do not describe this as implemented multi-window behavior. A data-only window must
+The last-window policy is the same on Mac and Windows: closing the last window
+hides it and retains the application with a visible menu-bar/tray entry, whether
+idle or busy. Reopening restores the retained view. Closing an additional window
+closes only that view. Closing a window does not request application exit;
+explicit Quit is always work-aware. Do not introduce idle automatic exit or
+different close semantics by platform. A data-only window must
 not initialize hardware. Window-local selections and navigation must not become
 application-global state merely because windows share data.
 
