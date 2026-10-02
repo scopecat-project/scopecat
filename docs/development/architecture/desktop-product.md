@@ -244,6 +244,35 @@ Those visual lifecycle steps, failed-shutdown recovery and Windows qualification
 remain outstanding. The current-run native export is now observed separately
 from the earlier copy-of-imported-file checks.
 
+### Mac external-analysis round trip (2026-10-03)
+
+With the isolated application stopped, a separate Python process opened the
+native export from the preceding journey. An ordinary `analysis_function` read
+the `answer` measurements and returned a dataclass containing their mean plus an
+explicit offset of `8.0`, and their count. It saved a new portable file through
+`open_capture(..., output=...)`. Independent reopening verified `mean=50.0`,
+`count=1` and the retained implementation fingerprint; the source file's SHA-256
+was unchanged. The process imported neither the server nor lab adapter.
+
+The same isolated packaged Mac app then opened the result using Cmd-O and Cocoa's
+Open dialog. Its imported-data view displayed the original measurement `42`, the
+analysis revision, the raw-measurement input identity, the `summarize` execution
+and the saved fact containing `mean: 50` and `count: 1`. Opening the result did not
+require running the analysis function again. Cmd-Q displayed shutdown feedback;
+process inspection confirmed the application and its backend exited.
+
+The same author script also passed outside the repository in a new Python 3.14
+environment containing a freshly built public `scopecat` wheel and its declared
+dependencies. Python ran with `-I`, loaded Scopecat from that environment's
+`site-packages`, and could not find either the server or lab-adapter module. It
+saved and reopened a separate result with the same conclusion, retained execution
+fingerprint and unchanged source digest. This qualifies consumer installation
+and analysis independently; the native observation above used the first result.
+
+This closes the Mac native-export / external-Python / native-open journey for a
+scalar synthetic run. It does not qualify large-waveform analysis or the Windows
+desktop journey.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

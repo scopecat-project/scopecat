@@ -348,9 +348,13 @@ digest and size. This demonstrates bounded copying for a large retained artifact
 not large-waveform analysis or a general latency guarantee. Saving remains O(file
 size) per changed publication and needs transient space for the new archive;
 many iterative saves over multi-gigabyte recordings remain a design constraint.
-Packaged desktop acceptance of the complete external-analysis journey remains
-outstanding; current-run native export and independent reopening are recorded in
-the [desktop evidence](desktop-product.md).
+The packaged Mac application has now completed a scalar native-export / external
+Python analysis / native-open round trip, displaying the unchanged measurement,
+new conclusion and retained input/execution evidence. The same analysis also
+passed in a fresh environment with only the public wheel and its dependencies,
+outside the repository, without an installed server or adapter. Large-waveform
+analysis and Windows desktop acceptance remain outstanding. See the
+[desktop evidence](desktop-product.md) for the observed scope.
 
 1. Extend stable recording capture to scientific reference closure from retained data;
    include plans, parameters, result contracts, analysis and artifact dependencies
