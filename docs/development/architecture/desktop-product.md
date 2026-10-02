@@ -211,6 +211,22 @@ was absent. This resolves the observed Mac discovery gap above through native
 window management; keyboard cycling, clipboard fidelity, complete work-aware
 lifecycle and Windows acceptance are still not established by this check.
 
+### Mac clipboard and invalid-file recovery (2026-10-03)
+
+The isolated `scopecat-window-menu-final` package was checked through native
+mouse selection and Cmd-C/Cmd-V, without JavaScript clipboard substitution.
+Selecting the Alpha run label and pasting into Find produced exactly
+`Run: desktop-alpha`. Opening a deliberately invalid synthetic `.scopecat` file
+left the Alpha view and its four acquisitions intact and displayed
+`invalid capture: File is not a zip file`; copying that error through the same
+system shortcuts reproduced the complete text. Dismissing the error and
+cancelling a subsequent native Open dialog preserved the selected Alpha record.
+Cmd-Q displayed shutdown feedback and the isolated app and backend exited.
+
+This covers Mac plain-text/identifier/error copying and failed-open recovery.
+It does not qualify Windows clipboard behavior, rich-text/table export, work
+surviving all hidden views, or recovery from failed shutdown.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
