@@ -9,7 +9,12 @@ const section = "grid gap-3 rounded-lg border border-line bg-panel p-4";
 
 export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   const [native, setNative] = useState(window.pywebview?.api);
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState(
+    new URLSearchParams(window.location.search).get("source") ?? "",
+  );
+  const [creating, setCreating] = useState(false);
+  const [parent, setParent] = useState("");
+  const [name, setName] = useState("experiments");
   useEffect(() => {
     const ready = () => setNative(window.pywebview?.api);
     window.addEventListener("pywebviewready", ready);
@@ -22,15 +27,15 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   });
   const operation = useMutation({
     mutationFn: async (
-      action: "source" | "restart" | "recheck" | "dependencies" | "client" | "rebuild-client",
+      action: "source" | "create" | "restart" | "dependencies" | "client" | "rebuild-client",
     ) => {
       if (!native) return undefined;
-      if (action === "source") await native.register_source(source.trim());
+      if (action === "create") return native.create_source(parent, name.trim());
+      else if (action === "source") await native.register_source(source.trim());
       else if (action === "dependencies") return native.prepare_author_environment(source.trim());
       else if (action === "client") return native.create_author_environment(source.trim());
       else if (action === "rebuild-client")
         return native.create_author_environment(source.trim(), true);
-      else if (action === "recheck") await native.requalify();
       else await native.restart();
       return undefined;
     },
@@ -38,7 +43,17 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       void status.refetch();
     },
   });
-  const busy = operation.isPending;
+  const picker = useMutation({
+    mutationFn: () => native!.choose_directory(),
+    onSuccess: (path) => {
+      if (path) {
+        if (creating) setParent(path);
+        else setSource(path);
+      }
+    },
+  });
+  const busy = operation.isPending || picker.isPending;
+  const selected = status.data?.sources.find((item) => item.directory === source.trim());
   const dataRoot = health?.details.data_root;
   return (
     <section className="grid max-w-4xl gap-4 p-6" aria-labelledby="application-settings-heading">
@@ -46,6 +61,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
         Application settings
       </h2>
       {operation.error && <p role="alert">{errorMessage(operation.error)}</p>}
+      {picker.error && <p role="alert">{errorMessage(picker.error)}</p>}
       {operation.data && <p role="status">{operation.data}</p>}
       {status.error && <p role="alert">{errorMessage(status.error)}</p>}
       <section className={section}>
@@ -60,16 +76,21 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
             Scientific data: <code>{dataRoot}</code>
           </p>
         )}
-        {status.data && <InstallationDetails installation={status.data.installation} />}
+        {status.data && (
+          <details>
+            <summary>Technical diagnostics</summary>
+            <InstallationDetails installation={status.data.installation} />
+          </details>
+        )}
         <p>
           To update Scopecat, quit the application, install the new version, then reopen it. Startup
-          prepares that version automatically. Updates keep scientific data and source folders.
+          uses the installed version directly. Updates keep scientific data and source folders.
           Reopening does not repeat measurements.
         </p>
         {!native && (
           <p>
-            Open the Scopecat desktop application for local installation and source-folder changes.
-            The command-line application entry offers the same operations.
+            Open the Scopecat desktop application to manage local source folders and Python
+            environments.
           </p>
         )}
       </section>
@@ -78,81 +99,156 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
           <section className={section}>
             <h3 className="font-semibold">Author code</h3>
             <p>
-              Register an existing source folder, then open it normally in VS Code. All registered
-              folders use this application. Registration prepares declared dependencies and restarts
-              the application; finish active work first.
+              Create a folder with a device-free example and its own Python environment, or add
+              existing Scopecat code. Open the folder normally in VS Code. All folders share this
+              application and its data. Adding a folder restarts the application when idle; finish
+              active work first.
             </p>
-            <label className="grid gap-1">
-              Author directory
-              <input
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
+            <div className="flex gap-2">
+              <button className={secondaryButton} disabled={busy} onClick={() => setCreating(true)}>
+                New code folder
+              </button>
+              <button
+                className={secondaryButton}
                 disabled={busy}
-                placeholder="Folder containing scopecat.toml"
-              />
-            </label>
-            <button
-              className={secondaryButton}
-              disabled={busy || !source.trim()}
-              onClick={() => operation.mutate("source")}
-            >
-              Stop, register source and reopen
-            </button>
-            <p>
-              Use the source folder's .venv for Python and notebooks. Installing packages there does
-              not change this application. Declare packages needed by background experiments in
-              pyproject.toml, then prepare their execution environment. Existing tasks keep their
-              original environment.
-            </p>
-            <button
-              className={secondaryButton}
-              disabled={busy || !source.trim()}
-              onClick={() => operation.mutate("client")}
-            >
-              Create local Python environment
-            </button>
-            <button
-              className={secondaryButton}
-              disabled={busy || !source.trim()}
-              onClick={() => operation.mutate("dependencies")}
-            >
-              Prepare background dependencies
-            </button>
-            <p>
-              To repair local Python, close its terminals and notebook kernels first. Rebuilding
-              preserves the previous environment separately and keeps your source files.
-            </p>
-            <button
-              className={secondaryButton}
-              disabled={busy || !source.trim()}
-              onClick={() => operation.mutate("rebuild-client")}
-            >
-              Rebuild local Python environment
-            </button>
+                onClick={() => setCreating(false)}
+              >
+                Use existing folder
+              </button>
+            </div>
+            {creating ? (
+              <div className="grid gap-3">
+                <button className={secondaryButton} disabled={busy} onClick={() => picker.mutate()}>
+                  Choose save location…
+                </button>
+                {parent && (
+                  <p>
+                    Save in: <code>{parent}</code>
+                  </p>
+                )}
+                <label className="grid gap-1">
+                  New folder name
+                  <input
+                    value={name}
+                    disabled={busy}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+                <p>
+                  Creates a new folder without replacing existing files. No device connection or
+                  measurement is started.
+                </p>
+                <button
+                  className={secondaryButton}
+                  disabled={busy || !parent || !name.trim()}
+                  onClick={() => operation.mutate("create")}
+                >
+                  Create folder and prepare Python
+                </button>
+              </div>
+            ) : (
+              <>
+                {!!status.data?.sources.length && (
+                  <label className="grid gap-1">
+                    Your code folders
+                    <select
+                      value={selected ? source.trim() : ""}
+                      disabled={busy}
+                      onChange={(event) => setSource(event.target.value)}
+                    >
+                      <option value="">Choose a folder</option>
+                      {status.data.sources.map((item) => (
+                        <option key={item.directory} value={item.directory}>
+                          {item.directory}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <button className={secondaryButton} disabled={busy} onClick={() => picker.mutate()}>
+                  Browse for code folder…
+                </button>
+                <label className="grid gap-1">
+                  Author directory
+                  <input
+                    value={source}
+                    onChange={(event) => setSource(event.target.value)}
+                    disabled={busy}
+                    placeholder="Folder containing scopecat.toml"
+                  />
+                </label>
+                <button
+                  className={secondaryButton}
+                  disabled={busy || !source.trim() || !!selected}
+                  onClick={() => operation.mutate("source")}
+                >
+                  Add code folder
+                </button>
+                {selected && (
+                  <p role="status">
+                    Folder ready. Open <code>{selected.directory}</code> in VS Code.
+                    {selected.python ? (
+                      <>
+                        {" "}
+                        Select <code>{selected.python}</code> for Python or notebook cells. Start
+                        with <code>notebooks/02_edit_scan.py</code> if this is a new example folder.
+                      </>
+                    ) : (
+                      <> Create its local Python environment below.</>
+                    )}
+                  </p>
+                )}
+                <p>
+                  Create a local Python environment for this folder, then select its .venv in VS
+                  Code. It includes the Scopecat Python API and a notebook kernel. Install your own
+                  analysis packages there with pip; this does not change the application. Declare
+                  packages needed by background experiments in pyproject.toml, then prepare their
+                  execution environment. Existing tasks keep their original environment.
+                </p>
+                <button
+                  className={secondaryButton}
+                  disabled={busy || !selected || !!selected.python}
+                  onClick={() => operation.mutate("client")}
+                >
+                  Create local Python environment
+                </button>
+                <details>
+                  <summary>Dependencies and environment repair</summary>
+                  <button
+                    className={secondaryButton}
+                    disabled={busy || !selected}
+                    onClick={() => operation.mutate("dependencies")}
+                  >
+                    Prepare background dependencies
+                  </button>
+                  <p>
+                    To repair local Python, close its terminals and notebook kernels first.
+                    Rebuilding preserves the previous environment separately and keeps your source
+                    files.
+                  </p>
+                  <button
+                    className={secondaryButton}
+                    disabled={busy || !selected}
+                    onClick={() => operation.mutate("rebuild-client")}
+                  >
+                    Rebuild local Python environment
+                  </button>
+                </details>
+              </>
+            )}
           </section>
           <section className={section}>
-            <h3 className="font-semibold">Connection recovery</h3>
+            <h3 className="font-semibold">Restart application</h3>
             <p>
-              Stop this application's recorded background process and reopen its workbench. This
-              interrupts active work; other application homes are independent.
+              Restart to recover the connection or apply changes to local settings. This stops
+              active work and releases devices. Saved records and source files are retained.
             </p>
             <button
               className={secondaryButton}
               disabled={busy}
               onClick={() => operation.mutate("restart")}
             >
-              Stop and reopen application
-            </button>
-            <p>
-              If local settings or a development capability changed in place, stop and recheck the
-              selected environment before reopening. Failed qualification preserves its identity.
-            </p>
-            <button
-              className={secondaryButton}
-              disabled={busy}
-              onClick={() => operation.mutate("recheck")}
-            >
-              Stop and recheck selected environment
+              Stop work and restart
             </button>
           </section>
         </>

@@ -54,7 +54,7 @@ for authoring and analysis; the synthetic course sources remain independent
 maintainer fixtures, not separately managed tutorial installations.
 
 The optional command-line entry uses the same installed application:
-`python lab.py teach` starts a practice, `python lab.py teach --list` lists practices,
-and `python lab.py teach --clear ID` clears one while preserving its files.
+`python -m lab_tools.practice --home DATA_HOME` starts a practice; add `--list`
+to list practices or `--clear ID` to clear one while preserving its files.
 It prints locations without opening a browser. Per-topic environments and
 `--reset` / `--stop` sandbox commands are retired.

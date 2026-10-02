@@ -406,7 +406,7 @@ describe("config provenance navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh project data" }));
 
     expect(await screen.findByText("Disconnected", { exact: true })).toBeVisible();
-    expect(screen.getByText("Daemon unavailable.")).toBeVisible();
+    expect(screen.getByText("Connection interrupted.")).toBeVisible();
   });
 
   it("uses durable transitions without treating a started point as complete", async () => {

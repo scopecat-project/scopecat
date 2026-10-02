@@ -87,6 +87,8 @@ def add_toolchain(delivery, *, unsafe=False):
 
 
 def test_retained_python_and_uv_do_not_use_host_path(delivery, tmp_path, monkeypatch):
+    from lab_tools.author_environment import _independent_python
+
     add_toolchain(delivery)
     commands = []
 
@@ -97,33 +99,38 @@ def test_retained_python_and_uv_do_not_use_host_path(delivery, tmp_path, monkeyp
 
     monkeypatch.setenv("PATH", "")
     monkeypatch.setattr(bundle, "_run_install", run)
-    python, retained = bundle.prepare_home(delivery, tmp_path / "installed")
-    release = retained.parent
-    assert Path(commands[0][0]).is_relative_to(retained / "toolchain")
+    python_home = tmp_path / "author-python"
+    python = _independent_python(delivery, python_home)
+    bundle.install_bundle(delivery, tmp_path / "environment", base_python=python)
+    assert Path(commands[0][0]).is_relative_to(delivery / "toolchain")
     base = Path(commands[0][commands[0].index("--python") + 1])
-    assert base.is_relative_to(release / "python")
+    assert base == python
     assert base.read_bytes() == b"python"
-    assert python.parent.parent == release / "runtime"
     # Bytecode in the extracted interpreter must not invalidate the payload.
-    (release / "python" / "generated.pyc").write_bytes(b"cache")
-    assert bundle.prepare_home(delivery, tmp_path / "installed") == (python, retained)
+    (python.parent / "generated.pyc").write_bytes(b"cache")
+    assert _independent_python(delivery, python_home) == python
     assert len(commands) == 2
 
 
 def test_python_archive_rejects_path_escape(delivery, tmp_path):
+    from lab_tools.author_environment import _independent_python
+
     add_toolchain(delivery, unsafe=True)
     with pytest.raises(tarfile.OutsideDestinationError):
-        bundle.prepare_home(delivery, tmp_path / "installed")
+        _independent_python(delivery, tmp_path / "installed")
     assert not list((tmp_path / "installed").rglob("escaped"))
     assert not list((tmp_path / "installed").rglob(bundle.RECEIPT))
 
 
 def test_corrupt_python_blocks_install_before_writes(delivery, tmp_path):
+    from lab_tools.author_environment import _independent_python
+
     add_toolchain(delivery)
     (delivery / "toolchain/python.tar").write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="被修改"):
-        bundle.prepare_home(delivery, tmp_path / "installed")
-    assert not (tmp_path / "installed").exists()
+        _independent_python(delivery, tmp_path / "installed")
+    assert not list((tmp_path / "installed").glob("*/bin/python3"))
+    assert not list((tmp_path / "installed").glob("*/python.exe"))
 
 
 def test_wheel_delivery_uses_installed_uv_without_host_path(
@@ -235,246 +242,6 @@ def test_start_checks_reused_service_gui(delivery, monkeypatch):
     check_served_gui(delivery, delivery / "gui")
 
 
-@pytest.fixture
-def fake_runtime(monkeypatch):
-    """Exercise publication without downloading or installing dependencies."""
-    installs = []
-
-    def install(source, environment):
-        installs.append(environment)
-        environment.mkdir()
-        (environment / bundle.RECEIPT).write_text(
-            json.dumps(
-                {
-                    "bundle": str(source),
-                    "manifest_sha256": bundle.file_hash(source / bundle.MANIFEST),
-                }
-            )
-        )
-        return environment
-
-    monkeypatch.setattr(bundle, "install_bundle", install)
-    monkeypatch.setattr(bundle.subprocess, "run", lambda *_args, **_kwargs: None)
-    return installs
-
-
-def test_interrupted_copy_is_not_published_and_retry_retains_it(
-    delivery, tmp_path, monkeypatch, fake_runtime
-):
-    home = tmp_path / "home"
-    copytree = bundle.shutil.copytree
-
-    def fail_copy(source, destination, **kwargs):
-        destination.mkdir()
-        (destination / "partial").write_text("interrupted copy")
-        raise OSError("copy interrupted")
-
-    monkeypatch.setattr(bundle.shutil, "copytree", fail_copy)
-    with pytest.raises(OSError, match="copy interrupted"):
-        bundle.install_home(delivery, home)
-    assert not list(home.glob("releases/*/bundle"))
-    assert not (home / "lab.py").exists()
-    monkeypatch.setattr(bundle.shutil, "copytree", copytree)
-    assert bundle.install_home(delivery, home).is_file()
-    assert len(fake_runtime) == 1
-    assert len(list(home.glob("releases/*/bundle-staging-*/partial"))) == 1
-
-
-def test_separate_software_keeps_launcher_bound_to_data_home(
-    delivery, tmp_path, fake_runtime, monkeypatch
-):
-    import runpy
-    import sys
-
-    home = tmp_path / "Application Support" / "Scopecat"
-    software = tmp_path / "Scopecat.app/Contents/Resources/software"
-    launcher = bundle.install_home(delivery, home, software_home=software)
-    assert launcher == software / "lab.py"
-    assert not (home / "releases").exists()
-    assert fake_runtime[0].is_relative_to(software)
-    selected = fake_runtime[0] / "bin/python"
-    (home / "installation.json").write_text(json.dumps({"python": str(selected)}))
-    calls = []
-    monkeypatch.setattr(sys, "argv", [str(launcher), "--action", "status"])
-    monkeypatch.setattr(bundle.subprocess, "call", lambda args: calls.append(args) or 0)
-    with pytest.raises(SystemExit):
-        runpy.run_path(str(launcher), run_name="__main__")
-    assert calls[0] == [
-        str(selected),
-        "-m",
-        "lab_tools.application",
-        "--home",
-        str(home),
-        "--action",
-        "status",
-    ]
-
-
-def test_interrupted_runtime_retries_at_final_path_preserving_failed_attempt(
-    delivery, tmp_path, monkeypatch, fake_runtime
-):
-    install = bundle.install_bundle
-
-    def fail_install(source, destination):
-        destination.mkdir()
-        (destination / "partial").write_text("incomplete runtime")
-        raise OSError("install interrupted")
-
-    home = tmp_path / "home"
-    monkeypatch.setattr(bundle, "install_bundle", fail_install)
-    with pytest.raises(OSError, match="install interrupted"):
-        bundle.install_home(delivery, home)
-    monkeypatch.setattr(bundle, "install_bundle", install)
-    bundle.install_home(delivery, home)
-    assert fake_runtime[0].name == "runtime"
-    assert len(list(home.glob("releases/*/runtime-failed-*/partial"))) == 1
-    bundle.install_home(delivery, home)
-    assert len(fake_runtime) == 1
-
-
-def test_receipt_mismatch_does_not_move_completed_runtime_or_select_it(
-    delivery, tmp_path, fake_runtime
-):
-    home = tmp_path / "home"
-    launcher = bundle.install_home(delivery, home)
-    old = launcher.read_bytes()
-    receipt = fake_runtime[0] / bundle.RECEIPT
-    receipt.write_text(json.dumps({"bundle": "wrong", "manifest_sha256": "0" * 64}))
-    with pytest.raises(ValueError, match="交付记录"):
-        bundle.install_home(delivery, home)
-    assert launcher.read_bytes() == old
-    assert not list(home.glob("releases/*/runtime-failed-*"))
-
-
-@pytest.mark.parametrize("failure", ["entry", "cmd", "selection"])
-def test_failed_validation_or_publication_keeps_old_selection(
-    delivery, tmp_path, monkeypatch, fake_runtime, failure
-):
-    home = tmp_path / "home"
-    launcher = bundle.install_home(delivery, home)
-    old = launcher.read_bytes()
-    manifest = delivery / bundle.MANIFEST
-    document = json.loads(manifest.read_text())
-    document["sources"] = {"revision": "next"}
-    manifest.write_text(json.dumps(document))
-    replace = bundle.os.replace
-
-    def fail_replace(source, destination):
-        if destination.name == ("lab.cmd" if failure == "cmd" else "lab.py"):
-            raise OSError("publish failed")
-        return replace(source, destination)
-
-    def fail_check(*args, **kwargs):
-        raise bundle.subprocess.CalledProcessError(1, "installed --help")
-
-    if failure == "entry":
-        monkeypatch.setattr(bundle.subprocess, "run", fail_check)
-        expected = bundle.subprocess.CalledProcessError
-    else:
-        monkeypatch.setattr(bundle.os, "replace", fail_replace)
-        expected = OSError
-    with pytest.raises(expected):
-        bundle.install_home(delivery, home)
-    assert launcher.read_bytes() == old
-    assert len(fake_runtime) == 2
-    assert all(environment.is_dir() for environment in fake_runtime)
-    monkeypatch.setattr(bundle.os, "replace", replace)
-    monkeypatch.setattr(bundle.subprocess, "run", lambda *_args, **_kwargs: None)
-    bundle.install_home(delivery, home)
-    assert launcher.read_bytes() == old  # Stable entry reads installation.json.
-    assert len(fake_runtime) == 2
-
-
-def test_concurrent_installations_reuse_one_complete_runtime(
-    delivery, tmp_path, monkeypatch, fake_runtime
-):
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Event
-
-    home = tmp_path / "home"
-    install = bundle.install_bundle
-    installing = Event()
-    finish = Event()
-
-    def slow_install(source, environment):
-        result = install(source, environment)
-        installing.set()
-        assert finish.wait(5)
-        return result
-
-    monkeypatch.setattr(bundle, "install_bundle", slow_install)
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(bundle.install_home, delivery, home)
-        assert installing.wait(5)
-        second = pool.submit(bundle.install_home, delivery, home)
-        try:
-            with pytest.raises(TimeoutError):
-                second.result(timeout=0.1)
-            assert not (home / "lab.py").exists()
-        finally:
-            finish.set()
-        assert first.result() == second.result() == home / "lab.py"
-    assert len(fake_runtime) == 1
-    assert not list(home.glob("releases/*/runtime-failed-*"))
-
-
-@pytest.mark.parametrize("destination", ["releases", "lab.py", ".install.lock"])
-def test_managed_symlink_destinations_rejected(
-    delivery, tmp_path, fake_runtime, destination
-):
-    home = tmp_path / "home"
-    home.mkdir()
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (home / destination).symlink_to(outside, target_is_directory=True)
-    with pytest.raises(ValueError, match="符号链接"):
-        bundle.install_home(delivery, home)
-    assert list(outside.iterdir()) == []
-
-
-def test_installed_launchers_select_notebook_and_quote_shell_paths(
-    delivery, tmp_path, fake_runtime, monkeypatch
-):
-    import runpy
-    import shlex
-    import sys
-
-    home = tmp_path / "实验室's application"
-    launcher = bundle.install_home(delivery, home)
-    calls = []
-    selected = fake_runtime[0] / (
-        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
-    )
-    (home / "installation.json").write_text(json.dumps({"python": str(selected)}))
-    monkeypatch.setattr(
-        bundle.subprocess, "call", lambda command: calls.append(command) or 0
-    )
-    monkeypatch.setattr(sys, "argv", [str(launcher), "notebook", "--no-browser"])
-    with pytest.raises(SystemExit) as exited:
-        runpy.run_path(str(launcher), run_name="__main__")
-    assert exited.value.code == 0
-    assert calls[0][1:] == [
-        "-m",
-        "lab_tools.author_notebook",
-        "--home",
-        str(home),
-        "--no-browser",
-    ]
-    script = (home / "Scopecat.command").read_text(encoding="utf-8")
-    assert shlex.quote("./" + Path(calls[0][0]).relative_to(home).as_posix()) in script
-    if os.name != "nt":
-        assert (home / "Scopecat.command").stat().st_mode & 0o111
-        assert (home / "Notebook.command").stat().st_mode & 0o111
-    assert 'notebook "$@"' in (home / "Notebook.command").read_text()
-    assert not (home / "Manage.command").exists()
-    assert not (home / "Manage.cmd").exists()
-    replacement = home / "another-release/bin/python"
-    (home / "installation.json").write_text(json.dumps({"python": str(replacement)}))
-    with pytest.raises(SystemExit):
-        runpy.run_path(str(launcher), run_name="__main__")
-    assert calls[-1][0] == str(replacement)
-
-
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):
     destination = tmp_path / "existing"
     destination.mkdir()
@@ -482,104 +249,15 @@ def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_
         bundle.install_bundle(delivery, destination)
 
 
-@pytest.mark.parametrize("package_name", ["example", "different-capability"])
-def test_development_snapshot_preserves_selected_delivery_and_qualifies_candidate(
-    delivery, tmp_path, monkeypatch, package_name
-):
-    import zipfile
-    from types import SimpleNamespace
-    from unittest.mock import Mock
+@pytest.mark.skipif(os.name == "nt", reason="Windows symlink creation needs privileges")
+def test_application_paths_reject_redirected_runtime_directory(tmp_path):
+    from lab_tools.application_runtime import ApplicationRuntime
 
-    from lab_tools import development
-
-    def wheel(path, name, content):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(path, "w") as archive:
-            archive.writestr("package/__init__.py", content)
-            archive.writestr(
-                "package.dist-info/METADATA", f"Name: {name}\nVersion: 1\n"
-            )
-
-    original = delivery / "wheels/example.whl"
-    wheel(original, "example", "original")
-    manifest = json.loads((delivery / bundle.MANIFEST).read_text())
-    manifest["files"]["wheels/example.whl"] = bundle.file_hash(original)
-    (delivery / bundle.MANIFEST).write_text(json.dumps(manifest))
-    before = original.read_bytes()
-    environment = tmp_path / "selected-runtime"
-    environment.mkdir()
-    (environment / bundle.RECEIPT).write_text(
-        json.dumps(
-            {
-                "bundle": str(delivery),
-                "manifest_sha256": bundle.file_hash(delivery / bundle.MANIFEST),
-            }
-        )
-    )
-    runtime = Mock(root=tmp_path / "application")
-    runtime.root.mkdir()
-    (runtime.root / "scopecat.toml").write_text(
-        '[lab.adapter]\ndistribution="example"\nmanifest="package/adapter.toml"\n'
-    )
-    runtime.installation.return_value = SimpleNamespace(
-        python=environment / "bin/python"
-    )
-    source = tmp_path / "source"
-    source.mkdir()
-    (source / "pyproject.toml").write_text('[project]\nname="example"\n')
-
-    def build(command, **_):
-        assert "--offline" in command
-        wheel(
-            Path(command[command.index("--out-dir") + 1]) / "new.whl",
-            package_name,
-            "changed",
-        )
-
-    def qualify(candidate):
-        checked = bundle.verify_bundle(candidate)
-        assert checked["files"]["gui/index.html"] == manifest["files"]["gui/index.html"]
-        assert "wheels/example.whl" not in checked["files"]
-        assert "wheels/new.whl" in checked["files"]
-        return "qualified"
-
-    monkeypatch.setattr(development.subprocess, "run", build)
-    runtime.prepare_update.side_effect = qualify
-    if package_name == "example":
-        assert development.prepare_capability(runtime, source) == "qualified"
-    else:
-        with pytest.raises(ValueError, match="不属于当前选定"):
-            development.prepare_capability(runtime, source)
-        runtime.prepare_update.assert_not_called()
-    assert original.read_bytes() == before
-    runtime.select.assert_not_called()
-
-
-def test_receipt_publication_interruption_is_retryable(delivery, tmp_path, monkeypatch):
-    home = tmp_path / "home"
-    replace = bundle.os.replace
-    installs = []
-
-    def run(args, **kwargs):
-        if args[1] == "venv":
-            destination = Path(args[-1])
-            installs.append(destination)
-            destination.mkdir()
-
-    def fail_receipt(source, destination):
-        if destination.name == bundle.RECEIPT:
-            raise OSError("receipt publication interrupted")
-        return replace(source, destination)
-
-    monkeypatch.setattr(bundle.shutil, "which", lambda _: "fake-uv")
-    monkeypatch.setattr(bundle.subprocess, "run", run)
-    monkeypatch.setattr(bundle.os, "replace", fail_receipt)
-    with pytest.raises(OSError, match="receipt publication interrupted"):
-        bundle.install_home(delivery, home)
-    assert not (installs[0] / bundle.RECEIPT).exists()
-    assert not (home / "lab.py").exists()
-    monkeypatch.setattr(bundle.os, "replace", replace)
-    bundle.install_home(delivery, home)
-    assert installs == [installs[0]] * 2
-    assert (installs[0] / bundle.RECEIPT).is_file()
-    assert len(list(home.glob("releases/*/runtime-failed-*"))) == 1
+    home = tmp_path / "application"
+    home.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (home / "runtime").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="符号链接"):
+        ApplicationRuntime(home)
+    assert list(outside.iterdir()) == []

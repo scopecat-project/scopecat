@@ -2,6 +2,10 @@
 
 Canonical product target, tracked by [#610](https://github.com/scopecat-project/scopecat/issues/610)
 and [#671](https://github.com/scopecat-project/scopecat/issues/671).
+The [desktop product gate](desktop-product.md) refines the presentation and runtime
+direction: multiple independent windows, data-only use without execution startup,
+and no commitment to the prototype GUI, shell or daemon/HTTP topology. References
+to one service below express shared resource authority, not a fixed process layout.
 This contract supersedes the first-run laboratory chooser and per-project/per-lesson
 service topology. It is not a claim that the target is implemented. Native desktop
 entry, explicit launch actions and recovery from interpreter mismatch and valid

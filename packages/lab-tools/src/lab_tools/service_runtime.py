@@ -66,12 +66,12 @@ def main() -> None:
         request.action in ("start", "register_source")
         and adapter_identity != request.adapter_identity
     ):
-        raise ValueError("应用能力包已改变；请选择“停止并重新核验当前环境”后重试")
+        raise ValueError("应用能力包已改变；请重新启动应用后重试")
     if (
         request.action in ("start", "register_source")
         and settings_identity != request.settings_identity
     ):
-        raise ValueError("本机设置已改变；请选择“停止并重新核验当前环境”后重试")
+        raise ValueError("本机设置已改变；请重新启动应用后重试")
     if request.action == "probe":
         execution_packages(
             (
@@ -114,17 +114,14 @@ def main() -> None:
         from scopecat_server.author_registration import register_author_workspace
 
         if environment != request.environment:
-            raise ValueError("登记的 Python 环境已改变；请先重新核验当前应用环境")
+            raise ValueError("应用运行环境已改变；请重新启动应用后重试")
         assert request.workspace is not None
         source_id = register_author_workspace(
             project.root, Path(request.workspace), python=request.author_python
         ).id
     if request.action == "start":
         if environment != request.environment:
-            raise ValueError(
-                "选定的 Python 环境已改变。请选择"
-                "“停止并重新核验当前环境”，完成后重新启动。"
-            )
+            raise ValueError("应用运行环境已改变；请重新启动应用后重试。")
         status = inspect_daemon(project)
         if status.state in ("running", "degraded") and status.record is not None:
             executable = status.record.python

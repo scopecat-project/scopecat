@@ -159,6 +159,19 @@ def test_recipe_build_uses_locked_lab_and_public_toolchain(
     export, cwd = next(item for item in calls if item[0][1] == "export")
     assert cwd == tmp_path
     assert "--locked" in export and "--no-emit-local" in export
+    # Explicit source replacements may be URL dependencies in the lock, not uv
+    # workspace members. Export must not download a second wheel for them.
+    excluded = {
+        export[index + 1]
+        for index, argument in enumerate(export)
+        if argument == "--no-emit-package"
+    }
+    assert {
+        "my-adapter",
+        "scopecat",
+        "scopecat-server",
+        "scopecat-lab-tools",
+    } <= excluded
     assert export[export.index("--group") + 1] == "lab-delivery"
     assert "--no-default-groups" in export
     download, cwd = next(
@@ -283,7 +296,7 @@ def test_duplicate_wheel_distribution_is_rejected(tmp_path):
 def test_managed_build_retains_previous_success_on_failure_and_then_advances(
     recipe, tmp_path, build_tools, monkeypatch
 ):
-    from lab_tools.bundle import CURRENT_DELIVERY, resolve_delivery, retain_bundle
+    from lab_tools.bundle import CURRENT_DELIVERY, resolve_delivery
 
     gui = tmp_path / "gui"
     gui.mkdir()
@@ -308,8 +321,7 @@ def test_managed_build_retains_previous_success_on_failure_and_then_advances(
     second = delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
     assert second != first and first.is_dir()
     assert resolve_delivery(home) == second
-    retained = retain_bundle(home, tmp_path / "application")
-    assert (retained / "gui/index.html").read_text() == "<html>second</html>"
+    assert (second / "gui/index.html").read_text() == "<html>second</html>"
     # Explicit old artifacts remain selectable regardless of the moving pointer.
     assert resolve_delivery(first) == first
 

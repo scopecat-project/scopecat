@@ -10,7 +10,8 @@ bounded execution, live visibility, and durable results as they grow.
 
 ## Documentation
 
-Start with the [documentation home](docs/index.md) or follow the
+Start with [desktop preview first steps](docs/getting-started/index.md), the
+[documentation home](docs/index.md), or follow the
 [source preview quickstart](docs/getting-started/quickstart.md) to create a
 hardware-free project and complete the first durable run.
 

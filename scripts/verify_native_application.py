@@ -10,32 +10,54 @@ from pathlib import Path
 from typing import cast
 
 from lab_tools.bundle import inventory
+from lab_tools.macos_signing import verify as verify_signature
 
 RUNTIME_CHECK = r"""
-import json, os, subprocess, sys
+import json, os, subprocess, sys, threading
 from pathlib import Path
+from types import SimpleNamespace
 import httpx2
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.author_environment import create_client_environment
+from lab_tools.desktop import DesktopAPI
+from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 selected = runtime.installation()
-assert Path(sys.base_prefix).is_relative_to(home / "software")
+assert not (home / "software").exists()
 workspace = home / "authors"
-workspace.mkdir(exist_ok=True)
-client = create_client_environment(runtime, workspace)
-base = subprocess.check_output([str(client), "-I", "-c",
-    "import sys, scopecat; print(sys.base_prefix)"], text=True).strip()
-assert Path(base) == Path(sys.base_prefix)
+urls = []
+api = DesktopAPI(
+    runtime, lambda: SimpleNamespace(load_url=urls.append), threading.Event())
 try:
+    assert api.create_source(str(home), "authors") == str(workspace)
+    assert "source=" in urls[-1] and urls[-1].endswith("#settings")
+    client = create_client_environment(runtime, workspace)
+    expected_source = {"directory": str(workspace), "python": str(client)}
+    assert expected_source in api.status()["sources"]
+    existing = home / "existing code"
+    write_author_scaffold(existing)
+    api.register_source(str(existing))
+    assert {"directory": str(existing), "python": None} in api.status()["sources"]
+    base = subprocess.check_output([str(client), "-I", "-c",
+        "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
+    assert Path(base).is_relative_to(workspace / ".scopecat-python")
+    subprocess.run([str(client), "-I", "-c", '''
+from importlib.util import find_spec
+for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
+    assert find_spec(name) is None, name
+import pip
+'''], check=True)
     record = runtime.start()
     with httpx2.Client(trust_env=False) as http:
         assert http.get(record.base_url + "/api/v1/health").json()["status"] == "ok"
         assert http.get(record.base_url + "/").status_code == 200
+    subprocess.run([str(client), "-I", str(workspace / "notebooks/02_edit_scan.py")],
+        cwd=workspace, check=True)
 finally:
     runtime.stop()
 assert runtime.status().state == "stopped"
-print("PASS: retained runtime and author Python survive removal of native app")
+print("PASS: fixed packaged runtime starts and stops without installation")
 """
 
 
@@ -47,6 +69,8 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     relocated = app.with_name("Relocated 中文 " + app.name)
     app.rename(relocated)
     home.mkdir(parents=True)
+    if sys.platform == "darwin":
+        verify_signature(relocated)
     result = home / "result.json"
     executable = relocated / (
         "Contents/MacOS/Scopecat" if sys.platform == "darwin" else "Scopecat.exe"
@@ -60,15 +84,34 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     assert result.read_bytes() == first
     assert inventory(relocated, (".",)) == before, "Native app was modified on launch"
     state = cast("dict[str, str | bool]", json.loads(first))
-    assert state["status"] == "stopped" and state["update_available"] is False
+    assert state["status"] == "stopped"
+    if sys.platform == "darwin":
+        assert state["bundle_identifier"] == "org.scopecat.desktop", (
+            "Cocoa lost the app identity; menu-bar registration can fail"
+        )
     python = Path(cast("str", state["python"]))
-    assert python.is_relative_to(home / "software")
-    relocated.rename(relocated.with_name("Removed " + app.name))
-    _ = subprocess.run(  # noqa: S603 - retained runtime after app removal
-        [str(python), "-I", "-c", RUNTIME_CHECK, str(home)],
+    assert python.is_relative_to(relocated)
+    _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
+        [str(python), "-I", "-B", "-c", RUNTIME_CHECK, str(home)],
         env=environment,
         check=True,
     )
+    assert inventory(relocated, (".",)) == before, "Runtime modified application files"
+    if sys.platform == "darwin":
+        verify_signature(relocated)
+    relocated.rename(relocated.with_name("Removed " + app.name))
+    client = (
+        home
+        / "authors/.venv"
+        / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    )
+    client_check = [
+        str(client),
+        "-I",
+        "-c",
+        "import scopecat; print('PASS: independent author Python')",
+    ]
+    _ = subprocess.run(client_check, env=environment, check=True)  # noqa: S603
     if installer is not None:
         if sys.platform == "win32":
             installed = home / "Installed Scopecat"
@@ -98,7 +141,7 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
             )
             assert not (installed / "Scopecat.exe").exists()
             _ = subprocess.run(  # noqa: S603 - retained data after native uninstall
-                [str(python), "-I", "-c", RUNTIME_CHECK, str(home)],
+                client_check,
                 env=environment,
                 check=True,
             )

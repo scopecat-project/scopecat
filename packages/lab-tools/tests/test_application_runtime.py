@@ -149,14 +149,13 @@ def test_conflicting_interpreter_has_explicit_stop_recovery(application):
 
 def test_failed_candidate_does_not_replace_selected_runtime(application):
     before = application.installation()
-    assert before.software_home == application.home / "software"
     application.start()
     with pytest.raises(ValueError, match="仍在运行或更新中"):
         application.select(before)
     assert application.installation() == before
     application.stop()
     changed = before.model_copy(update={"adapter_identity": "changed"})
-    with pytest.raises(ValueError, match="候选环境在准备后改变"):
+    with pytest.raises(ValueError, match="应用文件在检查后改变"):
         application.select(changed)
     assert application.installation() == before
     assert not application.pending.exists()
@@ -197,13 +196,18 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
         with pytest.raises(OSError, match="interrupted selection"):
             application.select(candidate)
     assert application.installation() == before
-    with pytest.raises(ValueError, match="切换尚未完成"):
+    with pytest.raises(ValueError, match="登记尚未完成"):
         application.start()
-    with pytest.raises(ValueError, match="上次尚未完成"):
-        application.select(before)
-    application.select(candidate)
+    # The original package may have been replaced before the next launch.
+    # A newly verified package must be able to complete registration.
+    replacement = application.qualify(
+        before.python,
+        before.static_dir,
+        composition=before.composition + "# replacement\n",
+    )
+    application.select(replacement)
     assert not application.pending.exists()
-    assert application.installation() == candidate
+    assert application.installation() == replacement
     assert application.start().project_root == application.root
 
 

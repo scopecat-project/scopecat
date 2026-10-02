@@ -46,6 +46,7 @@ jobs:
       - name: Build native application and installer
         shell: bash
         run: |
+          uv run --locked --group delivery pytest -q -n 0 packages/lab-tools/tests/test_desktop_platform.py packages/lab-tools/tests/test_desktop_session.py
           uv run --locked python -m lab_tools.delivery "$RUNNER_TEMP/delivery"
           if [ "$RUNNER_OS" = "Windows" ]; then
             native_app="$RUNNER_TEMP/Scopecat"
@@ -55,7 +56,24 @@ jobs:
             installer="$RUNNER_TEMP/Scopecat.dmg"
           fi
           uv run --locked python -m lab_tools.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            uv run --locked python scripts/verify_macos_desktop_exit.py "$native_app"
+          fi
+          uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
           uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
+          fi
+      - name: Retain qualified preview installers
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scopecat-preview-${{ runner.os }}-${{ github.sha }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/Scopecat.dmg
+            ${{ runner.temp }}/Scopecat-Setup.exe
       - name: Retain native acceptance logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -64,6 +82,8 @@ jobs:
           path: |
             ${{ runner.temp }}/native-acceptance/result.json
             ${{ runner.temp }}/native-acceptance/data/native-start.log
+            ${{ runner.temp }}/direct-runtime/report.json
+            ${{ runner.temp }}/macos-download/report.json
 
   service-lifecycle:
     if: inputs.profile == 'service-lifecycle'

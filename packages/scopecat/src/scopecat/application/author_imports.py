@@ -22,7 +22,7 @@ from typing import cast, override
 
 from scopecat.application.authoring import AuthorExperiment
 from scopecat.authoring.experiments import Experiment
-from scopecat.project_sources import materialize_sources, require_environment
+from scopecat.project_sources import materialize_sources, require_import_environment
 from scopecat.records.author_revision import AuthorRevisionBundle, AuthorRevisionRef
 
 _import_lock = RLock()
@@ -292,7 +292,7 @@ def _revision_imports(
         bundle.manifest.ref,
         fingerprints,
     )
-    require_environment(bundle.manifest)
+    require_import_environment(bundle.manifest)
     with _import_lock:
         previous_finders = [
             item

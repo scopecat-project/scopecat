@@ -92,8 +92,23 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
             encoding="utf-8",
         )
         if sys.platform == "darwin":
+            _ = shutil.copyfile(
+                Path(__file__).with_name("icons") / "Scopecat.icns",
+                resources / "Scopecat.icns",
+            )
             executable = app / "Contents/MacOS/Scopecat"
             executable.parent.mkdir(parents=True)
+            (python_library,) = (python_home / "lib").glob("libpython3.*.dylib")
+            # The extracted runtime can carry its build-time absolute install
+            # name. Link our host through the app-relative library path instead.
+            _run(
+                [
+                    "/usr/bin/install_name_tool",
+                    "-id",
+                    f"@rpath/{python_library.name}",
+                    str(python_library),
+                ]
+            )
             _run(
                 [
                     "/usr/bin/clang",
@@ -101,6 +116,8 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                     "-framework",
                     "Cocoa",
                     str(Path(__file__).with_name("native_launcher.m")),
+                    str(python_library),
+                    "-Wl,-rpath,@executable_path/../Resources/python/lib",
                     "-o",
                     str(executable),
                 ]
@@ -111,6 +128,7 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                         "CFBundleIdentifier": "org.scopecat.desktop",
                         "CFBundleName": "Scopecat",
                         "CFBundleExecutable": "Scopecat",
+                        "CFBundleIconFile": "Scopecat.icns",
                         "CFBundlePackageType": "APPL",
                         "CFBundleShortVersionString": "0.2.0",
                         "CFBundleVersion": "1",
@@ -119,6 +137,19 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                     stream,
                 )
         else:
+            icon = Path(__file__).with_name("icons") / "Scopecat.ico"
+            resource = Path(temporary) / "icon.rc"
+            resource.write_text(f'1 ICON "{icon.as_posix()}"\n', encoding="utf-8")
+            compiled_resource = Path(temporary) / "icon.res"
+            _run(
+                [
+                    "rc.exe",
+                    "/nologo",
+                    "/c65001",
+                    f"/fo{compiled_resource}",
+                    str(resource),
+                ]
+            )
             _run(
                 [
                     "cl.exe",
@@ -127,6 +158,7 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                     "/O2",
                     "/MT",
                     str(Path(__file__).with_name("native_launcher.c")),
+                    str(compiled_resource),
                     f"/Fe:{app / 'Scopecat.exe'}",
                     f"/Fo:{Path(temporary) / 'launcher.obj'}",
                     "shell32.lib",
@@ -136,6 +168,10 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
                 ]
             )
         _ = verify_bundle(payload)
+        if sys.platform == "darwin":
+            from .macos_signing import sign
+
+            sign(app)
         _ = app.rename(destination)
     return destination
 
@@ -152,6 +188,9 @@ def package(app: Path, destination: Path) -> Path:
     ) as temporary:
         staging = Path(temporary)
         if sys.platform == "darwin":
+            from .macos_signing import verify
+
+            verify(app)
             contents = staging / "contents"
             contents.mkdir()
             _ = shutil.copytree(app, contents / "Scopecat.app")

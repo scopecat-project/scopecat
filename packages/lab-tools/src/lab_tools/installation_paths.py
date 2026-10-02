@@ -16,7 +16,6 @@ from platformdirs import user_cache_path, user_data_path
 @dataclass(frozen=True)
 class InstallationPaths:
     state: Path
-    software: Path
     cache: Path
     workspace: Path
     entry: Path | None
@@ -34,7 +33,6 @@ class InstallationPaths:
         )
         return cls(
             home / "data",
-            home / "software",
             home / "cache",
             home / "experiments",
             entry,
@@ -53,7 +51,7 @@ class InstallationPaths:
             )
         else:
             entry = None
-        return cls(state, state / "software", cache, workspace, entry)
+        return cls(state, cache, workspace, entry)
 
 
 def _windows_folder(identity: str) -> Path:
@@ -104,7 +102,6 @@ def main() -> None:
                 name: str(value) if value is not None else None
                 for name, value in (
                     ("state", paths.state),
-                    ("software", paths.software),
                     ("cache", paths.cache),
                     ("workspace", paths.workspace),
                     ("entry", paths.entry),

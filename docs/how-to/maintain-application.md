@@ -22,30 +22,48 @@ Closing a browser tab or a Python client does not stop the application.
 ## Install a newer application
 
 Quit Scopecat, install the newer native package for your platform, then reopen it.
-The installed application owns the desktop version; startup prepares its matching
-execution environment automatically. No delivery-directory selection or separate
-environment activation is required in Settings. You do not need system Python or uv.
+The package already contains Python and application dependencies. Startup runs that
+version directly; it does not install another execution environment. You do not
+need system Python or uv, or an environment selection in Settings.
 
-The window appears while preparation runs. A failed preparation stays in that window
+The window appears while the application starts. A failed startup stays in that window
 with retry and quit controls. If an existing service is still running, finish its
 work before retrying, or explicitly stop it to complete the update. Startup never
-silently substitutes an older desktop version. An interrupted selection can be retried;
-this is not a scientific-data migration.
+silently substitutes an older desktop version.
 Application updates preserve user Python environments and retained task environments.
 Updating client packages is a separate operation; close kernels before rebuilding them.
 
 ## Author folders
 
-Author folders contain editable source and an author-only `scopecat.toml`.
-Register a folder in Application settings. Registration currently restarts the
-application, so finish active work first. Multiple folders share one service,
-device registry and data authority; their source identities remain independent.
+For your first experiment, open **Settings → Author code → New code folder**.
+Choose a save location and folder name, then **Create folder and prepare Python**.
+Scopecat creates a device-free example and an independent Python environment.
+It does not connect devices or start a measurement. Existing folders are never overwritten.
 
-In the native application's Settings, enter the registered folder's full path and
-choose **Create local Python environment**. Select `.venv/bin/python` on macOS or
-`.venv/Scripts/python.exe` on Windows in VS Code. This is your environment: installing
+After preparation, Settings shows your folder and Python path. Open that folder
+in VS Code, select its `.venv` interpreter, and run `notebooks/02_edit_scan.py`
+cell by cell. The example submits a synthetic scan, analyzes it and reopens the
+saved result. Running the submission again creates another measurement.
+
+For existing Scopecat source, choose **Use existing folder → Browse for code folder…**,
+then **Add code folder**. Select registered folders under **Your code folders**.
+Adding a folder restarts the idle application; finish active work first. Multiple
+folders share one service, device registry and data authority.
+
+If an existing folder has no local Python, choose **Create local Python environment**.
+Select `.venv/bin/python` on macOS or `.venv/Scripts/python.exe` on Windows.
+This is your environment: installing
 plotting or analysis packages there does not modify the application. Do not use an
-interpreter from `releases` as a Notebook kernel.
+interpreter inside the installed application as a Notebook kernel. The generated
+environment retains its own base Python in the folder's `.scopecat-python` directory;
+keep that directory with `.venv`. Replacing or removing the application does not
+remove this interpreter.
+
+The generated environment contains the Scopecat Python API, a notebook kernel and
+their dependencies. Desktop, service and teaching packages are not copied into it.
+VS Code can use it directly. For optional JupyterLab editing, install `jupyterlab`
+with this environment's pip; the `scopecat notebook` maintainer command also uses
+this folder's `.venv`, never application Python.
 
 If a package is also needed by background experiments, declare it in the folder's
 `pyproject.toml`, for example:
@@ -57,7 +75,8 @@ version = "0.1.0"
 dependencies = ["humanize==4.13.0"]
 ```
 
-Choose **Prepare background dependencies**, then refresh and preview your experiment.
+Expand **Dependencies and environment repair**, choose **Prepare background dependencies**,
+then refresh and preview your experiment.
 Preparation resolves against the fixed delivery's dependencies in a separate managed
 environment. Conflicting requirements fail without changing the running application
 or the selected source environment. Existing prepared work and plans retain their
@@ -71,8 +90,8 @@ selected delivery, so reinstall your local additions afterwards. This operation
 does not alter source files, measurements or managed execution environments.
 
 The initial execution environment can share the immutable delivery with the app.
-Additional environments live under `HOME/environments`; retained environments and
-releases are not disposable caches. Driver-process dependencies still belong to the
+Additional environments live under `HOME/environments`; retained environments
+are not disposable caches. Driver-process dependencies still belong to the
 application delivery; this operation changes experiment workers, not connected drivers.
 
 Maintainers can use the same operations without opening a browser:
@@ -93,24 +112,22 @@ author folders do not copy driver or application composition.
 
 ## Develop a capability in VS Code
 
-Use an isolated development home with the capability's complete delivery installed.
-Edit its package normally in VS Code, then prepare a snapshot of that source:
+Use an isolated foreground development application and edit ordinary source in
+VS Code:
 
 ```sh
-scopecat app --home /path/to/development --action prepare-capability --package /path/to/capability-package
+python -m lab_tools.dev --home /path/to/development --workspace /path/to/author-source --source /path/to/scopecat
 ```
 
-This rebuilds only the selected capability wheel, reuses the installed delivery's
-GUI and dependency wheelhouse, and qualifies a separate immutable candidate.
-Unchanged candidate contents reuse the retained environment. The running application
-keeps its selected software until you explicitly stop and apply the candidate through
-Settings or `--action apply-update`. Restart Python kernels afterwards.
-
-This is an editable-source workflow, not a mutable `pip install -e` runtime: saving
-a driver file cannot silently change a live connection or an admitted task's identity.
-Changed dependencies or build backends require a complete delivery; candidate failure
-leaves the selected environment intact. Author-only edits still use ordinary source
-refresh and do not need this operation.
+The development environment needs the source dependencies installed first. This
+command starts its own backend and Vite without opening a browser; Ctrl-C stops
+both. It does not install a desktop entry or share the daily application's home.
+Experiment and analysis edits use ordinary author refresh. Driver edits use
+**Update from source** in **Devices and drivers**, after finishing active work and
+releasing manual sessions. Saving a file alone does not replace a live driver.
+Dependency changes require explicit preparation of the development environment.
+Application updates use a newly built native package, not a candidate interpreter
+or a capability-wheel switch inside the running application.
 
 ## Recovery
 
@@ -123,10 +140,11 @@ After a force-kill, valid stale ownership is reconciled under the runtime locks.
 A lock file's existence alone does not mean a process is alive. Ambiguous ownership
 remains an error rather than deleting records or guessing a PID.
 
-In-place edits to installed capability code or local settings invalidate the
-qualified identity. Stop the application, fix the environment, then run
-`scopecat app --home HOME --action update --python PYTHON --static-dir GUI`
-to qualify and select it again. Prefer preparing a new delivery for ordinary updates.
+After changing local settings, choose **Stop work and restart** in Application
+settings. Restart checks the current application and settings before reopening.
+If it fails, the window retains the error and retry controls. Install a corrected
+application package to repair application dependencies; do not use pip inside it.
+**Technical diagnostics** contains interpreter and capability details for maintainers.
 
 The native log is `HOME/desktop/desktop.log`; runtime logs and data are under
 `HOME/runtime/.scopecat` unless explicitly bound elsewhere. Record the exact error

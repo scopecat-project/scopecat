@@ -6,7 +6,96 @@ from unittest.mock import Mock
 
 import pytest
 
-from lab_tools.desktop import DesktopAPI
+from lab_tools.desktop import DesktopAPI, _window_close_handlers
+
+
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
+def test_window_close_hides_without_requesting_quit(platform, monkeypatch):
+    monkeypatch.setattr("lab_tools.desktop.sys.platform", platform)
+    window = Mock()
+    if platform == "darwin":
+        window.restore.side_effect = AssertionError("Cocoa hide must not deminiaturize")
+    hidden = threading.Event()
+    window.hide.side_effect = hidden.set
+    closing, loaded = threading.Event(), threading.Event()
+    loaded.set()
+    close, _quit = _window_close_handlers(window, closing, loaded)
+    assert close() is False
+    assert hidden.wait(2)
+    window.run_js.assert_not_called()
+    window.destroy.assert_not_called()
+    closing.set()
+    assert close() is True
+
+
+def test_new_source_preserves_existing_files(tmp_path):
+    source = tmp_path / "experiments"
+    source.mkdir()
+    notes = source / "notes.txt"
+    notes.write_text("keep")
+    runtime = Mock()
+    api = DesktopAPI(runtime, Mock(), threading.Event())
+    with pytest.raises(FileExistsError):
+        api.create_source(str(tmp_path), "experiments")
+    assert notes.read_text() == "keep"
+    runtime.stop_if_idle.assert_not_called()
+
+
+def test_busy_source_creation_retains_folder_without_interrupting_work(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "lab_tools.author_environment.create_client_environment", lambda *_: None
+    )
+    runtime = Mock()
+    runtime.stop_if_idle.return_value = False
+    window = Mock()
+    api = DesktopAPI(runtime, lambda: window, threading.Event())
+    with pytest.raises(ValueError, match="先完成或停止"):
+        api.create_source(str(tmp_path), "experiments")
+    assert (tmp_path / "experiments/notebooks/02_edit_scan.py").is_file()
+    runtime.stop.assert_not_called()
+    runtime.register_source.assert_not_called()
+    window.load_url.assert_not_called()
+
+
+@pytest.mark.parametrize("name", ["../outside", "..", "C:outside", "nested\\folder"])
+def test_new_source_name_cannot_escape_selected_parent(tmp_path, name):
+    api = DesktopAPI(Mock(), Mock(), threading.Event())
+    with pytest.raises(ValueError, match="单个新目录"):
+        api.create_source(str(tmp_path), name)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_folder_picker_cancellation_does_not_change_runtime():
+    runtime = Mock()
+    window = Mock()
+    window.create_file_dialog.return_value = None
+    api = DesktopAPI(runtime, lambda: window, threading.Event())
+    assert api.choose_directory() is None
+    assert runtime.mock_calls == []
+
+
+def test_registration_validates_selected_folder_before_preparing_dependencies(
+    tmp_path, monkeypatch
+):
+    from scopecat_server.scaffold import write_author_scaffold
+
+    source = tmp_path / "experiments"
+    write_author_scaffold(source)
+    nested = source / "unrelated"
+    nested.mkdir()
+    (nested / "pyproject.toml").write_text('[project]\nname = "unrelated"\n')
+    prepare = Mock()
+    monkeypatch.setattr(
+        "lab_tools.author_environment.prepare_execution_environment", prepare
+    )
+    runtime = Mock()
+    api = DesktopAPI(runtime, Mock(), threading.Event())
+    with pytest.raises(ValueError, match="cannot read project manifest"):
+        api.register_source(str(nested))
+    prepare.assert_not_called()
+    assert runtime.mock_calls == []
 
 
 def test_busy_close_keeps_window_and_service_until_explicit_choice():
@@ -89,11 +178,12 @@ def test_failed_stop_keeps_window_available():
 
 def test_close_during_preparation_does_not_abandon_installer():
     runtime = Mock()
+    runtime.start.return_value = SimpleNamespace(base_url="http://127.0.0.1:1234")
     window = Mock()
     closing = threading.Event()
 
     def prepare():
-        with pytest.raises(ValueError, match="等待操作完成"):
+        with pytest.raises(ValueError, match="另一项操作"):
             api.exit(True)
         window.destroy.assert_not_called()
 
@@ -130,17 +220,47 @@ def test_window_survives_until_bridge_has_delivered_exit_reply():
     window.destroy.assert_called_once()
 
 
-def test_failed_requalification_does_not_publish_or_reopen():
+def test_automatic_quit_cannot_report_cancelled_during_stop():
     runtime = Mock()
-    runtime.qualify.side_effect = ValueError("missing dependency")
+    api = DesktopAPI(runtime, Mock(), threading.Event())
+    api.wait_for_idle(True)
+    stopping = threading.Event()
+    finish = threading.Event()
+
+    def stop():
+        stopping.set()
+        assert finish.wait(5)
+        return True
+
+    runtime.stop_if_idle.side_effect = stop
+    poll = threading.Thread(target=api._poll_exit)
+    poll.start()
+    try:
+        assert stopping.wait(5)
+        with pytest.raises(ValueError, match="另一项操作"):
+            api.wait_for_idle(False)
+    finally:
+        finish.set()
+        poll.join(5)
+    assert not poll.is_alive()
+    with pytest.raises(ValueError, match="正在关闭"):
+        api.wait_for_idle(False)
+
+
+def test_failed_restart_preparation_keeps_window_available():
+    runtime = Mock()
     window = Mock()
-    api = DesktopAPI(runtime, lambda: window, threading.Event())
+    prepare = Mock(side_effect=ValueError("missing dependency"))
+    closing = threading.Event()
+    api = DesktopAPI(runtime, lambda: window, closing, prepare)
     with pytest.raises(ValueError, match="missing dependency"):
-        api.requalify()
+        api.restart()
     runtime.stop.assert_called_once()
-    runtime.select.assert_not_called()
+    prepare.assert_called_once()
     runtime.start.assert_not_called()
     window.load_url.assert_not_called()
+    window.destroy.assert_not_called()
+    assert not closing.is_set()
 
 
 def test_interrupted_selection_can_retry_without_closing_window():

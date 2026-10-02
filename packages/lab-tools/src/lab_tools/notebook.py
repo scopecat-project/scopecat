@@ -80,5 +80,8 @@ def project_python(project: Path) -> Path:
         / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     )
     if not python.is_file():
-        raise ValueError("项目环境尚未准备; 请先执行 scopecat-lab prepare <项目目录>")
+        raise ValueError(
+            "项目 .venv 尚未准备；请在 Scopecat Settings 创建本地 Python 环境，"
+            "或对独立教材执行 scopecat-lab prepare <项目目录>"
+        )
     return python
