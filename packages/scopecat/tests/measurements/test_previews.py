@@ -1,3 +1,5 @@
+import pytest
+
 from scopecat.measurements.previews import (
     MeasurementArraySummary,
     preview_measurement_records,
@@ -27,8 +29,10 @@ def test_array_budget_is_shared_by_the_page_and_preserves_source_values():
     assert all(record.observables["signal"] is value for record in records)
 
 
-def test_partition_summary_does_not_join_buffers_and_retains_availability(monkeypatch):
-    def unexpected(*args):
+def test_partition_summary_does_not_join_buffers_and_retains_availability(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def unexpected(*args: object):
         raise AssertionError("preview joined partition buffers")
 
     monkeypatch.setattr(MeasurementPartitionedArray, "materialize", unexpected)

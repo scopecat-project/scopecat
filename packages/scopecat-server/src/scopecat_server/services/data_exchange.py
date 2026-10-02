@@ -16,6 +16,7 @@ from scopecat.data_exchange.models import (
     CaptureSummary,
     ScientificEvidence,
 )
+from scopecat.kernel.errors import NotFound
 from scopecat.measurements.previews import preview_measurement_records
 from scopecat.measurements.traces import project_measurement_trace_preview
 from scopecat.records.content import ContentEntry
@@ -27,6 +28,7 @@ from scopecat.records.measurement import (
 from scopecat.runs.refs import content_entry_ref
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
 from scopecat_server.storage.sqlite.exchange_import import (
     CaptureConflict,
     import_scientific_capture,
@@ -46,6 +48,14 @@ class DataExchangeService:
         return CaptureImportReceipt(
             capture=self.get(imported.content_hash), created=imported.created
         )
+
+    def export_run(self, run_id: str, destination: Path) -> None:
+        try:
+            export_scientific_capture(self._store, (run_id,), destination)
+        except NotFound as error:
+            raise BackendNotFound(str(error)) from error
+        except ValueError as error:
+            raise BackendConflict(str(error)) from error
 
     @staticmethod
     def _summary(row: sqlite3.Row) -> CaptureSummary:

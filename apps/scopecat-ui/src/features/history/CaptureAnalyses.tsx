@@ -40,6 +40,21 @@ export function CaptureAnalyses({
             }}
             onOpenRun={onOpenRun}
             getArtifactDownload={async (artifactId) => {
+              const output = record.outputs.find(
+                (item) => item.kind === "artifact" && item.content.artifact_id === artifactId,
+              );
+              const filename =
+                output?.kind === "artifact" ? (output.content.filename ?? artifactId) : artifactId;
+              if (window.pywebview) {
+                return {
+                  savedPath: await window.pywebview.api.save_captured_artifact(
+                    contentHash,
+                    entry.content_hash,
+                    artifactId,
+                    filename,
+                  ),
+                };
+              }
               const blob = await apiData(
                 apiClient.GET(
                   "/api/v1/data/captures/{content_hash}/analyses/{analysis_hash}/artifacts/{artifact_id}",
@@ -55,16 +70,7 @@ export function CaptureAnalyses({
                   },
                 ),
               );
-              const output = record.outputs.find(
-                (item) => item.kind === "artifact" && item.content.artifact_id === artifactId,
-              );
-              return {
-                blob,
-                filename:
-                  output?.kind === "artifact"
-                    ? (output.content.filename ?? artifactId)
-                    : artifactId,
-              };
+              return { blob, filename };
             }}
           />
         </details>

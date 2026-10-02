@@ -27,10 +27,10 @@ MAX_CAPTURE_UPLOAD_BYTES = 64 * 1024**3
 
 
 def data_exchange_router(application: DaemonApplication) -> APIRouter:
-    router = APIRouter(prefix="/api/v1/data/captures")
+    router = APIRouter(prefix="/api/v1/data")
 
     @router.post(
-        "",
+        "/captures",
         openapi_extra={
             "requestBody": {
                 "required": True,
@@ -68,18 +68,18 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
             except (ValueError, BadZipFile, KeyError) as error:
                 raise HTTPException(422, f"invalid capture: {error}") from error
 
-    @router.get("")
+    @router.get("/captures")
     def list_captures(
         offset: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=100)] = 100,
     ) -> tuple[CaptureSummary, ...]:
         return application.data_exchange.list(offset=offset, limit=limit)
 
-    @router.get("/{content_hash}/evidence")
+    @router.get("/captures/{content_hash}/evidence")
     def read_evidence(content_hash: str) -> ScientificEvidence:
         return application.data_exchange.evidence(content_hash)
 
-    @router.get("/{content_hash}/file")
+    @router.get("/captures/{content_hash}/file")
     def download_capture(content_hash: str) -> FileResponse:
         return FileResponse(
             application.data_exchange.download(content_hash),
@@ -87,7 +87,9 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
             filename="capture.scopecat",
         )
 
-    @router.get("/{content_hash}/analyses/{analysis_hash}/artifacts/{artifact_id}")
+    @router.get(
+        "/captures/{content_hash}/analyses/{analysis_hash}/artifacts/{artifact_id}"
+    )
     def download_artifact(
         content_hash: str, analysis_hash: str, artifact_id: str
     ) -> FileResponse:
@@ -107,7 +109,7 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
             temporary.cleanup()
             raise
 
-    @router.get("/{content_hash}/runs/{run_id}/recording")
+    @router.get("/captures/{content_hash}/runs/{run_id}/recording")
     def read_recording(
         content_hash: str,
         run_id: str,
@@ -119,7 +121,7 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
             content_hash, run_id, selection=selection, offset=offset, limit=limit
         )
 
-    @router.post("/{content_hash}/runs/{run_id}/recording/traces")
+    @router.post("/captures/{content_hash}/runs/{run_id}/recording/traces")
     def read_traces(
         content_hash: str,
         run_id: str,
@@ -131,5 +133,21 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
         return application.data_exchange.recording_traces(
             content_hash, run_id, query, selection=selection, offset=offset, limit=limit
         )
+
+    @router.get("/runs/{run_id}/file")
+    def export_run(run_id: str) -> FileResponse:
+        temporary = tempfile.TemporaryDirectory(prefix="scopecat-export-")
+        try:
+            destination = Path(temporary.name) / "run.scopecat"
+            application.data_exchange.export_run(run_id, destination)
+            return FileResponse(
+                destination,
+                media_type="application/octet-stream",
+                filename="run.scopecat",
+                background=BackgroundTask(temporary.cleanup),
+            )
+        except BaseException:
+            temporary.cleanup()
+            raise
 
     return router

@@ -48,6 +48,38 @@ def import_capture(base_url: str, source: Path) -> CaptureImportReceipt:
 
 
 def save_capture(base_url: str, content_hash: str, destination: Path) -> None:
+    _download(
+        base_url + "/api/v1/data/captures/" + quote(content_hash, safe="") + "/file",
+        destination,
+    )
+
+
+def export_run(base_url: str, run_id: str, destination: Path) -> None:
+    _download(
+        base_url + "/api/v1/data/runs/" + quote(run_id, safe="") + "/file", destination
+    )
+
+
+def save_captured_artifact(
+    base_url: str,
+    content_hash: str,
+    analysis_hash: str,
+    artifact_id: str,
+    destination: Path,
+) -> None:
+    _download(
+        base_url
+        + "/api/v1/data/captures/"
+        + quote(content_hash, safe="")
+        + "/analyses/"
+        + quote(analysis_hash, safe="")
+        + "/artifacts/"
+        + quote(artifact_id, safe=""),
+        destination,
+    )
+
+
+def _download(url: str, destination: Path) -> None:
     """Publish only a completed download; native Save owns overwrite confirmation."""
     with tempfile.NamedTemporaryFile(
         dir=destination.parent, prefix=".scopecat-save-", delete=False
@@ -60,10 +92,7 @@ def save_capture(base_url: str, content_hash: str, destination: Path) -> None:
                 ) as client,
                 client.stream(
                     "GET",
-                    base_url
-                    + "/api/v1/data/captures/"
-                    + quote(content_hash, safe="")
-                    + "/file",
+                    url,
                 ) as response,
             ):
                 _check_response(response)

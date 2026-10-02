@@ -28,6 +28,13 @@ export interface InstallationStatus {
 interface DesktopAPI {
   open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
   save_capture(contentHash: string): Promise<string | null>;
+  export_run(runId: string): Promise<string | null>;
+  save_captured_artifact(
+    contentHash: string,
+    analysisHash: string,
+    artifactId: string,
+    filename: string,
+  ): Promise<string | null>;
   status(): Promise<ApplicationStatus>;
   retry(): Promise<void>;
   restart(): Promise<void>;
@@ -70,6 +77,16 @@ declare global {
     pywebview?: { api: DesktopAPI };
     scopecatRequestExit?: () => void;
   }
+}
+
+export function useDesktopAvailable() {
+  const [available, setAvailable] = useState(!!window.pywebview);
+  useEffect(() => {
+    const ready = () => setAvailable(true);
+    window.addEventListener("pywebviewready", ready);
+    return () => window.removeEventListener("pywebviewready", ready);
+  }, []);
+  return available;
 }
 
 export function DesktopSession() {

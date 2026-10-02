@@ -170,10 +170,10 @@ calling the assembly function under the same transaction. The initial end-to-end
 test captures a downstream publication with its upstream analysis and run, and
 rejects a missing upstream original request. A software workflow also exports a
 rerun after analysis, candidate review and configuration activation, retaining its
-baseline recordings and explicitly referenced parameter proposals. This is still an internal export path:
-candidate/proposal identity coverage, import-side closure
-validation and the application command remain to be completed before general use.
-It is not yet an application export command or a complete-run interchange promise.
+baseline recordings and explicitly referenced parameter proposals. The application
+now exposes this collector through a current-run export command. Its presence does
+not establish a complete-run interchange promise: the remaining evidence-closure
+audit and external-analysis round trip are still part of this milestone.
 
 Machine-local registrations stay outside the exchange. Historical configuration
 and setup snapshots retain original connection descriptions as inert evidence so
@@ -199,6 +199,16 @@ and invokes native Open and Save dialogs through its window bridge. Transfers
 stream through this same backend; a failed download leaves an existing destination
 unchanged, and cancelled dialogs perform no transfer. The shared application
 operation lock covers native transfers, including their file dialogs.
+
+The current-run view also offers native export through `/api/v1/data/runs/{id}/file`.
+It asks for a destination before collecting evidence; the server removes its
+temporary archive after streaming or on collection failure. Captured analysis
+attachments use the same native save and atomic transfer path as archives, with
+the captured analysis record hash selecting the source. Cancellation clears
+previous completion feedback, failure leaves the destination unchanged, and
+success reports the saved path. Browser attachment downloads remain available
+through the same data API. Local HTTP, bridge and UI tests cover these paths;
+packaged Mac and Windows save-dialog acceptance is still outstanding.
 
 Native File → Open dispatches to the focused window. Its page button and
 Cmd/Ctrl-O share one window-owned command, with progress and error feedback even

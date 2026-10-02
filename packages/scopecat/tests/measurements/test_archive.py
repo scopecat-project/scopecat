@@ -83,6 +83,7 @@ def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing:
         AnalysisInterpretationReference,
         AnalysisPublishedOutputReference,
         AnalysisRecord,
+        AnalysisRecordInput,
         ConfigurationAnalysisRecordInput,
         InterpretationAnalysisRecordInput,
         MeasurementAnalysisRecordInput,
@@ -91,18 +92,29 @@ def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing:
     )
 
     evidence = exchange_evidence()
-    shared = {
-        "id": "input",
-        "target": "retained",
-        "content_hash": "sha256:" + "a" * 64,
-        "codec": "test",
-        "role": "source",
-    }
-    inputs = []
+    inputs: list[AnalysisRecordInput] = []
     if missing == "configuration":
-        inputs.append(ConfigurationAnalysisRecordInput(run_id="absent", **shared))
+        inputs.append(
+            ConfigurationAnalysisRecordInput(
+                run_id="absent",
+                id="input",
+                target="retained",
+                content_hash="sha256:" + "a" * 64,
+                codec="test",
+                role="source",
+            )
+        )
     elif missing == "measurement":
-        inputs.append(MeasurementAnalysisRecordInput(run_id="absent", **shared))
+        inputs.append(
+            MeasurementAnalysisRecordInput(
+                run_id="absent",
+                id="input",
+                target="retained",
+                content_hash="sha256:" + "a" * 64,
+                codec="test",
+                role="source",
+            )
+        )
     elif missing == "interpretation":
         inputs.append(
             InterpretationAnalysisRecordInput(
@@ -112,7 +124,11 @@ def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing:
                     request_hash="sha256:" + "b" * 64,
                     response_hash="sha256:" + "a" * 64,
                 ),
-                **shared,
+                id="input",
+                target="retained",
+                content_hash="sha256:" + "a" * 64,
+                codec="test",
+                role="source",
             )
         )
     elif missing == "publication":
@@ -124,7 +140,11 @@ def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing:
                     analysis_record_id="absent",
                     output_id="value",
                 ),
-                **shared,
+                id="input",
+                target="retained",
+                content_hash="sha256:" + "a" * 64,
+                codec="test",
+                role="source",
             )
         )
     record = AnalysisRecord(

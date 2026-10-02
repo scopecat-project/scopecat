@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from scopecat.data_exchange import (
     PayloadReference,
     PayloadSource,
+    ScientificExchange,
     write_scientific_exchange,
 )
 from scopecat.data_exchange.models import (
@@ -48,6 +49,8 @@ from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
+from scopecat.records.setup import ExecutableSetupSnapshot
+from scopecat.runs.admission import build_run_admission
 from scopecat.runs.refs import content_entry_ref
 from scopecat_testkit.authoring import load_config
 
@@ -55,6 +58,9 @@ from scopecat_server.http import data_exchange
 from scopecat_server.instruments.backend import InstrumentBackendUnavailable
 from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.runtime import LocalDaemonRuntime
+from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 
 def _evidence() -> ScientificEvidence:
@@ -78,6 +84,53 @@ def _evidence() -> ScientificEvidence:
     return ScientificEvidence(
         source_project_id="source", roots=("portable",), runs=(run,)
     )
+
+
+def test_current_run_export_is_portable_without_device_activation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    def unexpected_activation(self: InstrumentBackendOwner):
+        pytest.fail("export requested device capabilities")
+
+    monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
+    with (
+        LocalDaemonRuntime(tmp_path / "application") as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        store = SQLiteProjectStore(
+            SQLiteDatabase(runtime.state_dir / "control.sqlite3"),
+            runtime.state_dir / "objects",
+        )
+        try:
+            runs = SQLiteRunRepository(store.sqlite, store.objects.root)
+            config = load_config()
+            skeleton = build_run_admission(
+                config=config,
+                request=RunRequest(experiment_id="retained"),
+                scientific_binding=ResolvedScientificBinding(
+                    subject=UnboundSubject(),
+                    config_content_hash=config_content_hash(config),
+                    setup_content_hash=ExecutableSetupSnapshot.from_config(
+                        config
+                    ).execution_content_hash,
+                ),
+            )
+            prepared = runs.prepare_run_skeleton(skeleton)
+            with store.sqlite.write_transaction() as connection:
+                runs.commit_run_skeleton_in_transaction(connection, prepared)
+            run_id = skeleton.snapshot.run_id
+            response = client.get(f"/api/v1/data/runs/{run_id}/file")
+            assert response.status_code == 200, response.text
+            assert "run.scopecat" in response.headers["content-disposition"]
+            exported = tmp_path / "export.scopecat"
+            exported.write_bytes(response.content)
+            with ScientificExchange(exported) as capture:
+                capture.verify()
+                assert capture.evidence.roots == (run_id,)
+                assert capture.evidence.runs[0].request.experiment_id == "retained"
+            assert client.get("/api/v1/data/runs/missing/file").status_code == 404
+        finally:
+            store.close()
 
 
 def test_captured_traces_keep_selection_failures_and_sampling_budget(
@@ -216,8 +269,8 @@ def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -
         )
         for run_id in ("first", "second")
     )
-    analyses = []
-    payloads = []
+    analyses: list[AnalysisEvidence] = []
+    payloads: list[PayloadSource] = []
     for run in runs:
         run_id = run.snapshot.run_id
         artifact = ContentEntry(

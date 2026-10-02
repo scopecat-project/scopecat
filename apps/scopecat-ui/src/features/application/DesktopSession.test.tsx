@@ -15,6 +15,8 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
     api: {
       open_capture: vi.fn(),
       save_capture: vi.fn(),
+      export_run: vi.fn(),
+      save_captured_artifact: vi.fn(),
       wait_for_idle,
       request_exit: vi.fn().mockResolvedValue({ runs: 1 }),
       exit: vi.fn(),
@@ -50,6 +52,8 @@ it("leaves background work running only after the user chooses it", async () => 
     api: {
       open_capture: vi.fn(),
       save_capture: vi.fn(),
+      export_run: vi.fn(),
+      save_captured_artifact: vi.fn(),
       exit,
       request_exit: vi
         .fn()
@@ -90,6 +94,8 @@ it("keeps a failed stop recoverable in the current window", async () => {
     api: {
       open_capture: vi.fn(),
       save_capture: vi.fn(),
+      export_run: vi.fn(),
+      save_captured_artifact: vi.fn(),
       exit,
       request_exit: vi
         .fn()
@@ -127,6 +133,8 @@ it("shows progress immediately and prevents duplicate quit requests", async () =
     api: {
       open_capture: vi.fn(),
       save_capture: vi.fn(),
+      export_run: vi.fn(),
+      save_captured_artifact: vi.fn(),
       request_exit,
       exit: vi.fn(),
       wait_for_idle: vi.fn(),

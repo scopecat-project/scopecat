@@ -1,4 +1,5 @@
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
+import { ExportRun } from "./ExportRun";
 import { RunPlanOrigin } from "../launch/PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { AlertTriangle, Boxes, ChevronRight, Unlock } from "lucide-react";
@@ -124,6 +125,7 @@ export function RunDetail({
   return (
     <>
       <ComparisonLink runId={run.runId} />
+      <ExportRun key={run.runId} runId={run.runId} />
       <RunPlanOrigin runId={run.runId} />
       <ClearData key={run.runId} runs={[run.runId]} />
       <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />

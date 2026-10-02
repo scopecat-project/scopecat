@@ -93,21 +93,50 @@ class DesktopAPI:
             return import_capture(base_url, Path(selected[0])).model_dump(mode="json")
 
     def save_capture(self, content_hash: str) -> str | None:
-        import webview
-
         from .desktop_files import save_capture
+
+        return self._save_file(
+            lambda base, path: save_capture(base, content_hash, path)
+        )
+
+    def export_run(self, run_id: str) -> str | None:
+        from .desktop_files import export_run
+
+        return self._save_file(lambda base, path: export_run(base, run_id, path))
+
+    def save_captured_artifact(
+        self, content_hash: str, analysis_hash: str, artifact_id: str, filename: str
+    ) -> str | None:
+        from .desktop_files import save_captured_artifact
+
+        return self._save_file(
+            lambda base, path: save_captured_artifact(
+                base, content_hash, analysis_hash, artifact_id, path
+            ),
+            filename=Path(filename.replace("\\", "/")).name,
+            file_types=("All files (*.*)",),
+        )
+
+    def _save_file(
+        self,
+        download: Callable[[str, Path], None],
+        *,
+        filename: str = "capture.scopecat",
+        file_types: tuple[str, ...] = ("Scopecat (*.scopecat)",),
+    ) -> str | None:
+        import webview
 
         with self._session.operation():
             base_url = self._data_url()
             selected = self._window().create_file_dialog(
                 webview.FileDialog.SAVE,
-                save_filename="capture.scopecat",
-                file_types=("Scopecat (*.scopecat)",),
+                save_filename=filename,
+                file_types=file_types,
             )
             if not selected:
                 return None
             destination = Path(selected[0])
-            save_capture(base_url, content_hash, destination)
+            download(base_url, destination)
             return str(destination)
 
     def _data_url(self) -> str:

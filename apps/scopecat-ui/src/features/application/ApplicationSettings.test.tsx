@@ -21,6 +21,8 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
     api: {
       open_capture: vi.fn(),
       save_capture: vi.fn(),
+      export_run: vi.fn(),
+      save_captured_artifact: vi.fn(),
       status: vi.fn().mockResolvedValue({
         home: "/app",
         sources: [],
@@ -90,6 +92,8 @@ it("keeps author dependencies independent and uses native application updates", 
     api: {
       open_capture: vi.fn(),
       save_capture: vi.fn(),
+      export_run: vi.fn(),
+      save_captured_artifact: vi.fn(),
       request_exit: vi.fn(),
       wait_for_idle: vi.fn(),
       status: vi.fn().mockImplementation(async () => ({ ...state })),
