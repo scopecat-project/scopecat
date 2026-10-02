@@ -218,6 +218,33 @@ class ScientificExchange:
         """Return an existing recording; absence is not an empty dataset."""
         return self._recordings[run_id]
 
+    def copy_payload(self, reference: PayloadReference, destination: Path) -> None:
+        """Save one retained attachment after checking its owned bytes.
+
+        The caller chooses the destination. Historical filenames and logical refs
+        never become extraction paths, and existing user files are not replaced.
+        """
+        if reference not in self.payloads:
+            raise KeyError("payload reference does not belong to this exchange")
+        with tempfile.NamedTemporaryFile(
+            prefix=".exchange-payload-", dir=destination.parent, delete=False
+        ) as temp:
+            staged = Path(temp.name)
+        try:
+            checksum = hashlib.sha256()
+            with (
+                self._archive.open(_object_name(reference.digest)) as source,
+                staged.open("wb") as output,
+            ):
+                while block := source.read(1024 * 1024):
+                    output.write(block)
+                    checksum.update(block)
+            if f"sha256:{checksum.hexdigest()}" != reference.digest:
+                raise ValueError("exchange payload checksum differs")
+            os.link(staged, destination)
+        finally:
+            staged.unlink(missing_ok=True)
+
     def verify(self) -> None:
         for snapshot in self._recordings.values():
             snapshot.verify()

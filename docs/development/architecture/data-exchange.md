@@ -28,6 +28,12 @@ objects. Concurrent destructive cleanup may fail an export; publication remains
 atomic and leaves the destination absent. This recording export is not yet the
 complete scientific evidence export described below.
 
+`export_measurement_snapshot_in_transaction` also accepts the capture layer's
+existing connection. Its header, acquisition history and retained selection all
+follow that earlier read boundary, even if another connection commits acquisitions
+before recording export begins. The standalone convenience exporter opens its own
+read transaction and delegates to the same implementation.
+
 When supplied, the retained analysis selection is stored separately in pages of
 at most 1000 logical points. `selected_records(offset=..., limit=...)` follows those
 exact acquisition references in logical point order; it never substitutes the last
@@ -108,7 +114,10 @@ The low-level `scopecat.data_exchange` container now groups scientific documents
 recording partitions and content-addressed payloads without extracting them.
 Recording views borrow the package's open archive; closing a view does not close
 the package. Writing checks streamed payload hashes and verifies the staged package
-before atomic publication. This is container assembly only: the storage capture
+before atomic publication. `copy_payload(reference, destination)` saves a selected
+attachment only after verifying its bytes, without replacing existing files. The
+caller supplies the destination; retained filenames are never extraction paths.
+This is container assembly only: the storage capture
 layer still needs to resolve the complete dependency graph at one capture boundary.
 It is not yet an application export command or a complete-run interchange promise.
 

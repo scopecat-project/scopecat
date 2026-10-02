@@ -810,6 +810,36 @@ def test_measurement_export_captures_committed_history(tmp_path: Path) -> None:
         assert snapshot.header.expected_record_count == 2
 
 
+def test_measurement_export_uses_callers_earlier_capture(tmp_path: Path) -> None:
+    from scopecat.measurements.archive import MeasurementSnapshot
+
+    from scopecat_server.storage.sqlite.measurement_export import (
+        export_measurement_snapshot_in_transaction,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("shared-capture", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+    destination = tmp_path / "shared.scopecat"
+    with runs.sqlite.read_transaction() as connection:
+        # Establish the caller's snapshot before a later acquisition commits.
+        count = connection.execute(
+            "SELECT count(*) FROM execution_measurement_appends WHERE run_id=?",
+            (header.run_id,),
+        ).fetchone()[0]
+        _commit_append(runs, repository, _append(header, point_index=1))
+        export_measurement_snapshot_in_transaction(
+            connection, runs, header.run_id, destination
+        )
+    with MeasurementSnapshot(destination) as snapshot:
+        assert count == snapshot.record_count == 1
+        assert tuple(snapshot.selected_records()) == first.records
+    runs.sqlite.close()
+
+
 def test_measurement_export_missing_chunk_does_not_publish(tmp_path: Path) -> None:
     from scopecat_server.storage.sqlite.measurement_export import (
         export_measurement_snapshot,

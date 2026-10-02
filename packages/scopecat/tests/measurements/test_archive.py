@@ -97,6 +97,14 @@ def test_exchange_reads_partition_after_borrowed_reader_closes(tmp_path: Path):
             assert tuple(snapshot.records(offset=1, limit=2)) == records[1:3]
         exchange.verify()
         assert tuple(exchange.recording(header.run_id).records()) == records
+        saved = tmp_path / "selected report.txt"
+        exchange.copy_payload(reference, saved)
+        assert saved.read_bytes() == b"retained analysis"
+        with pytest.raises(FileExistsError):
+            exchange.copy_payload(reference, saved)
+        assert saved.read_bytes() == b"retained analysis"
+        with pytest.raises(KeyError, match="does not belong"):
+            exchange.copy_payload(reference.model_copy(update={"ref": "other"}), saved)
     damaged = tmp_path / "damaged-exchange.scopecat"
     rewrite(
         destination,
@@ -112,6 +120,12 @@ def test_exchange_reads_partition_after_borrowed_reader_closes(tmp_path: Path):
         pytest.raises(ValueError, match="payload checksum"),
     ):
         exchange.verify()
+    with ScientificExchange(damaged) as exchange:
+        rejected = tmp_path / "rejected.txt"
+        with pytest.raises(ValueError, match="payload checksum"):
+            exchange.copy_payload(reference, rejected)
+        assert not rejected.exists()
+    assert not list(tmp_path.glob(".exchange-payload-*"))
 
 
 def test_exchange_corrupt_payload_fails_without_publication(tmp_path: Path):
