@@ -1,6 +1,8 @@
 # Desktop product decision gate
 
 Status: agreed direction and next acceptance scope, not delivered functionality.
+Data exchange implementation and its current limits are tracked in
+[independent data and analysis](data-exchange.md).
 The existing GUI, daemon topology and pywebview shell are prototypes. Preserve
 scientific invariants and useful components, not their accidental product shape.
 Desktop is the primary entry for local files, equipment and external toolchains.
