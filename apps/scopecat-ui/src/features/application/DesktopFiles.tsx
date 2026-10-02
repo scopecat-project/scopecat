@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { secondaryButton } from "../../ui/styles";
+import { navigate } from "../../lib/navigation";
 
 const openFileEvent = "scopecat:open-file";
 
@@ -12,8 +13,7 @@ export function selectCapture(contentHash: string) {
   const url = new URL(window.location.href);
   url.searchParams.set("capture", contentHash);
   url.hash = "history";
-  window.history.pushState(null, "", url);
-  window.dispatchEvent(new HashChangeEvent("hashchange"));
+  navigate(url);
 }
 
 export function selectedCaptureFromLocation() {

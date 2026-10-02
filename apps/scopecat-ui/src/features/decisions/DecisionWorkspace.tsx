@@ -125,7 +125,7 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
             setSelectedId(selected.procedure_run_id);
             const url = new URL(window.location.href);
             url.searchParams.set("procedure", selected.procedure_run_id);
-            window.history.replaceState(null, "", url);
+            window.history.replaceState(window.history.state, "", url);
           }}
         />
       </main>

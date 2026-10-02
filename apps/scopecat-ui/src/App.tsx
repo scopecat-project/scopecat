@@ -22,6 +22,7 @@ import { RunsWorkspace } from "./features/runs/RunsWorkspace";
 import { DesktopSession } from "./features/application/DesktopSession";
 import { DesktopFiles } from "./features/application/DesktopFiles";
 import { titleCase } from "./lib/presentation";
+import { navigate, navigateBack, navigateForward, type NavigationOptions } from "./lib/navigation";
 import { classes, iconButton } from "./ui/styles";
 
 type ProjectView =
@@ -134,9 +135,13 @@ export default function App() {
     };
     window.addEventListener("hashchange", restoreHashRoute);
     window.addEventListener("popstate", restoreHashRoute);
+    window.addEventListener("scopecat:back", navigateBack);
+    window.addEventListener("scopecat:forward", navigateForward);
     return () => {
       window.removeEventListener("hashchange", restoreHashRoute);
       window.removeEventListener("popstate", restoreHashRoute);
+      window.removeEventListener("scopecat:back", navigateBack);
+      window.removeEventListener("scopecat:forward", navigateForward);
     };
   }, []);
 
@@ -220,7 +225,7 @@ export default function App() {
   };
   const selectView = (selected: ProjectView) => {
     setView(selected);
-    replaceNavigation(selected, {
+    navigateToView(selected, {
       analysisId: selected === "analyses" ? selectedAnalysisId : undefined,
       runId: selected === "runs" ? selectedRunId : undefined,
       sampleId: selected === "samples" ? selectedSampleId : undefined,
@@ -228,30 +233,30 @@ export default function App() {
     });
     window.scrollTo({ top: 0, left: 0 });
   };
-  const selectRun = useCallback((runId: string) => {
+  const selectRun = useCallback((runId: string, options?: NavigationOptions) => {
     setSelectedRunId(runId);
-    replaceNavigation("runs", { runId });
+    navigateToView("runs", { runId }, options);
   }, []);
-  const selectAnalysis = useCallback((analysisId: string) => {
+  const selectAnalysis = useCallback((analysisId: string, options?: NavigationOptions) => {
     setSelectedAnalysisId(analysisId);
-    replaceNavigation("analyses", { analysisId });
+    navigateToView("analyses", { analysisId }, options);
   }, []);
   const selectSample = useCallback((sampleId: string, revision?: number) => {
     setSelectedSampleId(sampleId);
     setSelectedSampleRevision(revision);
-    replaceNavigation("samples", { sampleId, sampleRevision: revision });
+    navigateToView("samples", { sampleId, sampleRevision: revision });
   }, []);
   const openConfigSourceRun = (runId: string) => {
     setSelectedRunId(runId);
     setView("runs");
-    replaceNavigation("runs", { runId });
+    navigateToView("runs", { runId });
     window.scrollTo({ top: 0, left: 0 });
   };
   const openRunSample = (sampleId: string, revision: number) => {
     setSelectedSampleId(sampleId);
     setSelectedSampleRevision(revision);
     setView("samples");
-    replaceNavigation("samples", { sampleId, sampleRevision: revision });
+    navigateToView("samples", { sampleId, sampleRevision: revision });
     window.scrollTo({ top: 0, left: 0 });
   };
 
@@ -666,7 +671,7 @@ function projectViewFromLocation(): ProjectView {
   return "runs";
 }
 
-function replaceNavigation(
+function navigateToView(
   view: ProjectView,
   selection: {
     analysisId?: string;
@@ -674,6 +679,7 @@ function replaceNavigation(
     sampleId?: string;
     sampleRevision?: number;
   } = {},
+  options?: NavigationOptions,
 ): void {
   const location = new URL(window.location.href);
   if (location.searchParams.get("run") !== selection.runId)
@@ -701,7 +707,7 @@ function replaceNavigation(
     location.searchParams.delete("sample-revision");
   }
   location.hash = view === "runs" ? "" : view;
-  window.history.replaceState(null, "", `${location.pathname}${location.search}${location.hash}`);
+  navigate(location, options);
 }
 
 function measurementEventRunId(event: Event): string | undefined {

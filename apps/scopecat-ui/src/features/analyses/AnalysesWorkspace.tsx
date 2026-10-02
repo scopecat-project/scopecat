@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Atom, ChevronDown, CircleOff, LoaderCircle } from "lucide-react";
 import { errorMessage, formatDateTime, formatRelative } from "../../lib/presentation";
+import type { NavigationOptions } from "../../lib/navigation";
 import type { ProjectAnalysis, ProjectAnalysisSummary } from "../../types";
 import { classes, countBadge, secondaryButton } from "../../ui/styles";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
@@ -19,7 +20,7 @@ export function AnalysesWorkspace(props: {
   projectId: string | undefined;
   daemonUnavailable: boolean;
   onOpenRun: (runId: string) => void;
-  onSelectAnalysis: (analysisId: string) => void;
+  onSelectAnalysis: (analysisId: string, options?: NavigationOptions) => void;
   selectedAnalysisId?: string;
   onHandoff: (handoff: ComparisonHandoff) => void;
 }) {
@@ -54,7 +55,7 @@ function ProjectAnalyses({
 }: {
   daemonUnavailable: boolean;
   onOpenRun: (runId: string) => void;
-  onSelectAnalysis: (analysisId: string) => void;
+  onSelectAnalysis: (analysisId: string, options?: NavigationOptions) => void;
   selectedAnalysisId?: string;
 }) {
   const analyses = useInfiniteQuery({
@@ -83,7 +84,7 @@ function ProjectAnalyses({
 
   useEffect(() => {
     if (selectedId && selectedAnalysisId === undefined) {
-      onSelectAnalysis(selectedId);
+      onSelectAnalysis(selectedId, { replace: true });
     }
   }, [onSelectAnalysis, selectedAnalysisId, selectedId]);
 

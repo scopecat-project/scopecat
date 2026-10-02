@@ -182,6 +182,52 @@ it("opens Help through navigation and a direct hash without leaving the workbenc
 });
 
 describe("config provenance navigation", () => {
+  it("restores page and record selections through back and forward", async () => {
+    window.history.replaceState(null, "", "/?sample=chip-a17#samples");
+    renderApp();
+    await screen.findByText("Selected sample chip-a17");
+    fireEvent.click(screen.getByRole("button", { name: "Select next sample" }));
+    await screen.findByText("Selected sample chip-b22");
+    fireEvent.click(screen.getByRole("button", { name: "Devices and drivers" }));
+    await screen.findByText("Instrument workspace");
+    act(() => window.history.back());
+    await screen.findByText("Selected sample chip-b22");
+    act(() => window.history.back());
+    await screen.findByText("Selected sample chip-a17");
+    act(() => window.history.forward());
+    await screen.findByText("Selected sample chip-b22");
+    act(() => window.history.forward());
+    expect(await screen.findByText("Instrument workspace")).toBeVisible();
+  });
+
+  it("does not add an extra history entry for automatic first-run selection", async () => {
+    window.history.replaceState(null, "", "/");
+    const before = window.history.length;
+    renderApp();
+    await waitFor(() => expect(window.location.search).toContain("run="));
+    expect(window.history.length).toBe(before);
+    const selected = window.location.href;
+    const back = vi.spyOn(window.history, "back");
+    act(() => {
+      window.dispatchEvent(new Event("scopecat:back"));
+    });
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    await screen.findByRole("heading", { name: "Help" });
+    act(() => {
+      window.dispatchEvent(new Event("scopecat:back"));
+    });
+    await waitFor(() => expect(window.location.href).toBe(selected));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page"),
+    );
+    act(() => {
+      window.dispatchEvent(new Event("scopecat:forward"));
+    });
+    await screen.findByRole("heading", { name: "Help" });
+  });
+
   it("restores a sample deep link and opens its run", async () => {
     window.history.replaceState(null, "", "/?sample=chip-a17#samples");
     renderApp();

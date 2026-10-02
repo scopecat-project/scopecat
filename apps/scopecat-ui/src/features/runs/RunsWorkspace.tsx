@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { NavigationOptions } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -71,7 +72,7 @@ export function RunsWorkspace({
   onOpenSample,
 }: {
   selectedRunId?: string;
-  onSelectRun: (runId: string) => void;
+  onSelectRun: (runId: string, options?: NavigationOptions) => void;
   health?: ProjectHealth;
   healthPending: boolean;
   healthReachable: boolean;
@@ -345,7 +346,7 @@ export function RunsWorkspace({
   useEffect(() => {
     if (runs.length > 0 && selectedRunId === undefined) {
       const firstRunId = runs[0]?.runId;
-      if (firstRunId !== undefined) onSelectRun(firstRunId);
+      if (firstRunId !== undefined) onSelectRun(firstRunId, { replace: true });
     }
   }, [runs, selectedRunId, onSelectRun]);
 

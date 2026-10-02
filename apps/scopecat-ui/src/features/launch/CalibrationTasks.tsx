@@ -38,7 +38,7 @@ export function CalibrationTasks({
     setSelected(id);
     const url = new URL(window.location.href);
     url.searchParams.set("task", id);
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   }
   return (
     <details

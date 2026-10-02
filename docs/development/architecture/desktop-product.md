@@ -95,6 +95,13 @@ release. It does not cover opening portable records, export, copy/find/zoom,
 in-flight experimental work, failed shutdown, or Windows multi-window behavior.
 The full bounded product slice remains incomplete.
 
+Local navigation checks now cover page and selected-record history through Back
+and Forward. User selections add entries; automatic first-record selection
+replaces the current entry so going back cannot create a selection loop. Native
+navigation commands target the focused window, and Back stops at its application
+entry rather than returning to the host's startup page. This is automated evidence;
+native multi-window navigation still needs platform qualification.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

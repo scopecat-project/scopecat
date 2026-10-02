@@ -376,7 +376,7 @@ class DesktopWindows:
     def show(self) -> None:
         show_window(self.latest.window)
 
-    def open_file(self) -> None:
+    def _command_window(self) -> webview.Window:
         import webview
 
         active = webview.active_window()
@@ -385,12 +385,21 @@ class DesktopWindows:
                 (view for view in self._views if view.window is active), self.latest
             )
         show_window(view.window)
+        return view.window
+
+    def navigate_history(self, *, backward: bool) -> None:
+        window = self._command_window()
+        event = "scopecat:back" if backward else "scopecat:forward"
+        window.run_js(f"window.dispatchEvent(new Event('{event}'));")
+
+    def open_file(self) -> None:
+        window = self._command_window()
         if self._session.base_url is None:
-            view.window.create_confirmation_dialog(
+            window.create_confirmation_dialog(
                 "暂时无法打开文件", "应用尚未准备就绪，请稍后重试"
             )
             return
-        view.window.run_js("window.dispatchEvent(new Event('scopecat:open-file'));")
+        window.run_js("window.dispatchEvent(new Event('scopecat:open-file'));")
 
     def hide(self) -> None:
         with self._lock:
@@ -532,7 +541,18 @@ def run(
                             MenuAction("打开文件…", windows.open_file),
                             MenuAction("新建窗口", new_window_from_menu),
                         ],
-                    )
+                    ),
+                    Menu(
+                        "导航",
+                        [
+                            MenuAction(
+                                "后退", lambda: windows.navigate_history(backward=True)
+                            ),
+                            MenuAction(
+                                "前进", lambda: windows.navigate_history(backward=False)
+                            ),
+                        ],
+                    ),
                 ],
                 icon=(
                     str(Path(__file__).with_name("icons") / "Scopecat.ico")

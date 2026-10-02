@@ -457,5 +457,9 @@ function reviewIdFromLocation(): string | undefined {
 function replaceReviewLocation(sessionId: string): void {
   const location = new URL(window.location.href);
   location.hash = `reviews/${encodeURIComponent(sessionId)}`;
-  window.history.replaceState(null, "", `${location.pathname}${location.search}${location.hash}`);
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${location.pathname}${location.search}${location.hash}`,
+  );
 }

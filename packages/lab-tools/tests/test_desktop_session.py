@@ -46,6 +46,15 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
         "window.dispatchEvent(new Event('scopecat:open-file'));"
     )
     second.window.run_js.assert_not_called()
+    windows.navigate_history(backward=True)
+    first.window.run_js.assert_called_with(
+        "window.dispatchEvent(new Event('scopecat:back'));"
+    )
+    windows.navigate_history(backward=False)
+    first.window.run_js.assert_called_with(
+        "window.dispatchEvent(new Event('scopecat:forward'));"
+    )
+    second.window.run_js.assert_not_called()
     prepare.assert_called_once()
     runtime.start.assert_called_once()
     second.window.get_current_url.return_value = "http://localhost:1234/?run=B#runs"

@@ -67,7 +67,7 @@ export function LaunchWorkspace({
     setProcedureId(id);
     const url = new URL(window.location.href);
     url.searchParams.set("procedure", id);
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   }
   const entry = draft?.experiment
     ? catalog.data?.find((item) => item.id === draft.experiment)
