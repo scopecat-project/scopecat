@@ -3,23 +3,12 @@ import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { detailCard, secondaryButton } from "../../ui/styles";
 import { CaptureDetail } from "./CaptureDetail";
-import {
-  requestOpenFile,
-  selectCapture,
-  selectedCaptureFromLocation,
-} from "../application/DesktopFiles";
+import { requestOpenFile } from "../application/DesktopFiles";
+import { useLocationUrl } from "../../lib/navigation";
+import { selectCapture } from "./capture-location";
 
 export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
-  const [selectedCapture, setSelectedCapture] = useState(selectedCaptureFromLocation);
-  useEffect(() => {
-    const restore = () => setSelectedCapture(selectedCaptureFromLocation());
-    window.addEventListener("hashchange", restore);
-    window.addEventListener("popstate", restore);
-    return () => {
-      window.removeEventListener("hashchange", restore);
-      window.removeEventListener("popstate", restore);
-    };
-  }, []);
+  const selectedCapture = useLocationUrl().searchParams.get("capture");
   const [desktop, setDesktop] = useState(!!window.pywebview);
   useEffect(() => {
     const ready = () => setDesktop(true);

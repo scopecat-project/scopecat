@@ -1,23 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { secondaryButton } from "../../ui/styles";
-import { navigate } from "../../lib/navigation";
+import { selectCapture } from "../history/capture-location";
 
 const openFileEvent = "scopecat:open-file";
 
 export function requestOpenFile() {
   window.dispatchEvent(new Event(openFileEvent));
-}
-
-export function selectCapture(contentHash: string) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("capture", contentHash);
-  url.hash = "history";
-  navigate(url);
-}
-
-export function selectedCaptureFromLocation() {
-  return new URLSearchParams(window.location.search).get("capture") ?? undefined;
 }
 
 /** One Open command per window, shared by the native menu and page button. */

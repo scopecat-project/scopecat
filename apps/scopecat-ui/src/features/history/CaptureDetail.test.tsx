@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CaptureDetail } from "./CaptureDetail";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
 it("keeps captures with the same run ID separate and requests retained selection explicitly", async () => {
@@ -21,21 +22,20 @@ it("keeps captures with the same run ID separate and requests retained selection
         return Response.json({
           source_project_id: source,
           roots: ["scan"],
-          runs: [
-            {
-              snapshot: { run_id: "scan" },
-              request: { experiment_id: `${source} experiment` },
-              configuration: {},
-            },
-          ],
+          runs: ["scan", "reference"].map((runId) => ({
+            snapshot: { run_id: runId },
+            request: { experiment_id: `${source} ${runId}` },
+            configuration: {},
+          })),
         });
       const selected = url.searchParams.get("selection") === "selected";
+      const offset = Number(url.searchParams.get("offset"));
       return Response.json({
         selection: selected ? "selected" : "acquired",
-        record_count: 1,
+        record_count: 101,
         selected_record_count: 1,
-        offset: 0,
-        next_offset: null,
+        offset,
+        next_offset: offset === 0 ? 100 : null,
         dataset_schema: {
           dimensions: [{ id: "point", kind: "point", size: 1 }],
           variables: [
@@ -52,7 +52,7 @@ it("keeps captures with the same run ID separate and requests retained selection
                 kind: "scalar",
                 dtype: "float64",
                 unit: "V",
-                value: source === "first" ? (selected ? 12 : 11) : 22,
+                value: offset + (source === "first" ? (selected ? 12 : 11) : 22),
               },
             },
           },
@@ -60,7 +60,7 @@ it("keeps captures with the same run ID separate and requests retained selection
       });
     }),
   );
-  render(
+  const mounted = render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
@@ -85,4 +85,27 @@ it("keeps captures with the same run ID separate and requests retained selection
         url.pathname.includes("/second/") && url.searchParams.get("selection") === "selected",
     ),
   ).toBe(false);
+  fireEvent.change(first.getByLabelText("Run"), { target: { value: "reference" } });
+  await first.findByText("11 V");
+  expect(first.getByRole("heading", { name: "first reference" })).toBeTruthy();
+  fireEvent.click(first.getByRole("button", { name: "Next measurements" }));
+  await first.findByText("111 V");
+  fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
+  await first.findByText("12 V");
+  act(() => window.history.back());
+  await first.findByText("111 V");
+  await waitFor(() =>
+    expect(first.getByLabelText("Measurements")).toHaveProperty("value", "acquired"),
+  );
+  expect(second.getByText("22 V")).toBeTruthy();
+
+  // Leaving and recreating the view restores the same source, run and page.
+  mounted.unmount();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CaptureDetail contentHash="first" />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("111 V");
+  expect(screen.getByRole("heading", { name: "first reference" })).toBeTruthy();
 });

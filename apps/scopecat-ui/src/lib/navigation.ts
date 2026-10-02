@@ -24,3 +24,17 @@ export function navigateBack() {
 export function navigateForward() {
   window.history.forward();
 }
+
+function subscribeLocation(changed: () => void) {
+  window.addEventListener("hashchange", changed);
+  window.addEventListener("popstate", changed);
+  return () => {
+    window.removeEventListener("hashchange", changed);
+    window.removeEventListener("popstate", changed);
+  };
+}
+
+export function useLocationUrl() {
+  return new URL(useSyncExternalStore(subscribeLocation, () => window.location.href));
+}
+import { useSyncExternalStore } from "react";

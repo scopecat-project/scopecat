@@ -206,6 +206,10 @@ outside the Data page. Successful opens select the capture through window URL
 history; cancellation and failure retain the previous location. The native menu
 dispatch and frontend history are covered separately by local tests; real native
 menu/shortcut qualification on both platforms remains part of the desktop gate.
+The selected run, acquisition/analysis view and page offset also belong to this
+window URL. Back and recreating the view restore them; selecting another capture
+clears these subordinate selections rather than reusing a same-named run from a
+different source.
 
 Local automated tests cover import feedback, duplicate receipts, cancelled saves,
 failed saves and partial-transfer cleanup. They do not qualify real native dialogs
