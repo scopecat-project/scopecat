@@ -11,7 +11,10 @@ from typing import cast
 from scopecat.data_exchange.models import AnalysisEvidence
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
 from scopecat.records.analysis import (
+    AnalysisArtifactRecordOutput,
+    AnalysisDatasetRecordOutput,
     AnalysisFigureRecordOutput,
+    AnalysisParameterProposalRecordOutput,
     AnalysisPublishedDatasetViewSource,
     AnalysisPublishedOutputReference,
     AnalysisRecord,
@@ -159,6 +162,35 @@ def capture_analysis_evidence(
     contents = tuple(
         ContentEntry.model_validate_json(cast("str", row[0])) for row in rows
     )
+    if isinstance(subject, RunAnalysisSubject):
+        record = AnalysisRecord.model_validate_json(
+            runs.read_bytes_in_transaction(
+                connection,
+                subject.run_id,
+                record_content_ref(record_id=record_id, kind="analysis"),
+            )
+        )
+        indexed = {(entry.role, entry.id): entry for entry in contents}
+        for output in record.outputs:
+            match output:
+                case AnalysisParameterProposalRecordOutput():
+                    role, content_id = "record", output.content.proposal_id
+                case AnalysisArtifactRecordOutput():
+                    role, content_id = "artifact", output.content.artifact_id
+                case AnalysisDatasetRecordOutput():
+                    role, content_id = "dataset", output.content.dataset_id
+                case _:
+                    continue
+            if (role, content_id) not in indexed:
+                indexed[(role, content_id)] = runs.read_content_in_transaction(
+                    connection,
+                    subject.run_id,
+                    role=role,
+                    content_id=content_id,
+                )
+        contents = tuple(
+            sorted(indexed.values(), key=lambda entry: (entry.role, entry.id))
+        )
     # Use exact canonical refs from the content index, not prefix/substring guesses
     # over run-owned objects that may belong to other publications.
     from scopecat.runs.refs import artifact_content_ref, dataset_content_ref

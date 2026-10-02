@@ -15,6 +15,7 @@ from scopecat.data_exchange.models import (
     RunEvidence,
     ScientificEvidence,
 )
+from scopecat.measurements.datasets import MEASUREMENT_DATASET_CODEC
 from scopecat.records.analysis import (
     CONFIGURATION_ANALYSIS_INPUT_CODEC,
     AnalysisInterpretationReference,
@@ -194,6 +195,24 @@ class _Capture:
                         ):
                             raise ValueError(
                                 "configuration input differs from retained run"
+                            )
+                    case MeasurementAnalysisRecordInput():
+                        entry = next(
+                            (
+                                entry
+                                for entry in self.runs[item.run_id].contents
+                                if entry.role == "dataset" and entry.id == item.target
+                            ),
+                            None,
+                        )
+                        if (
+                            entry is None
+                            or entry.kind != "measurement_dataset"
+                            or entry.content_hash != item.content_hash
+                            or item.codec != MEASUREMENT_DATASET_CODEC
+                        ):
+                            raise ValueError(
+                                "measurement input differs from retained dataset"
                             )
                     case InterpretationAnalysisRecordInput():
                         if (

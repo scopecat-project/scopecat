@@ -232,6 +232,27 @@ def test_workflow_analysis_review_activate_and_rerun_active_config(
     assert next_run.status == "completed"
     assert next_run.config_source == active_source
 
+    from scopecat.data_exchange import ScientificExchange
+
+    from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
+    from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+    from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+
+    assert isinstance(services.runs, SQLiteRunRepository)
+    store = SQLiteProjectStore(services.runs.sqlite, services.runs.objects.root)
+    destination = tmp_path / "calibrated-run.scopecat"
+    export_scientific_capture(store, (next_run.run_id,), destination)
+    with ScientificExchange(destination) as package:
+        package.verify()
+        assert {item.snapshot.run_id for item in package.evidence.runs} == {
+            run.run_id,
+            next_run.run_id,
+        }
+        assert (
+            package.recording(run.run_id).selected_content_hash
+            == summary_input.content_hash
+        )
+
 
 def test_analysis_trace_records_its_analysis_dependency(tmp_path: Path) -> None:
     run = execute_signal_run(

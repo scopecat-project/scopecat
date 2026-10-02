@@ -30,6 +30,7 @@ from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import SampleRevision
 from scopecat.records.setup import SetupDefinitionRevision, SetupRevision
 from scopecat.records.target_catalog import TargetRevision
+from scopecat.runs.refs import record_content_ref
 
 
 class RunEvidence(BaseModel):
@@ -136,7 +137,12 @@ class AnalysisEvidence(BaseModel):
                         )
                 case AnalysisParameterProposalRecordOutput():
                     entry = entries.get(("record", output.content.proposal_id))
-                    if entry is None or entry.kind != "parameter_change_proposal":
+                    if (
+                        entry is None
+                        or entry.kind != "parameter_change_proposal"
+                        or output.content.record_ref
+                        != record_content_ref(record_id=entry.id, kind=entry.kind)
+                    ):
                         raise ValueError("analysis proposal evidence is missing")
                 case _:
                     pass  # Facts, tables and figure descriptions are inline.

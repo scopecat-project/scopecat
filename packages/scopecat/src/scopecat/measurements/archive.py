@@ -27,6 +27,8 @@ from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetHeader,
+    measurement_dataset_content_hash,
+    measurement_record_content_hash,
 )
 
 if TYPE_CHECKING:
@@ -247,19 +249,36 @@ class MeasurementSnapshot:
         count = self.selected_record_count
         if count is None:
             raise ValueError("snapshot has no captured analysis selection")
+        records = tuple(self.selected_records(limit=count))
         return Dataset(
             MeasurementDataset(
                 dataset_schema=self.header.dataset_schema,
-                records=tuple(self.selected_records(limit=count)),
+                records=records,
             ),
             ContentEntry(
                 role="dataset",
                 id=self.header.dataset_schema.dataset_id,
                 kind="measurement_dataset",
-                content_hash=self.content_hash,
+                content_hash=self._selected_content_hash(records),
                 schema=self.header.dataset_schema.model_dump(mode="json"),
             ),
         )
+
+    def _selected_content_hash(self, records: Iterable[MeasurementRecord]) -> str:
+        return measurement_dataset_content_hash(
+            header_content_hash=self.header.content_hash,
+            record_content_hashes=tuple(
+                measurement_record_content_hash(record) for record in records
+            ),
+        )
+
+    @property
+    def selected_content_hash(self) -> str:
+        """Scientific dataset identity, distinct from the physical archive capture."""
+        count = self.selected_record_count
+        if count is None:
+            raise ValueError("snapshot has no captured analysis selection")
+        return self._selected_content_hash(self.selected_records(limit=count))
 
     @property
     def content_hash(self) -> str:

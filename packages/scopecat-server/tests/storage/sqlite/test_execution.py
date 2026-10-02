@@ -840,12 +840,18 @@ def test_measurement_export_uses_callers_earlier_capture(tmp_path: Path) -> None
     runs.sqlite.close()
 
 
-def test_exchange_assembly_includes_recording_partition(tmp_path: Path) -> None:
+@pytest.mark.parametrize("sealed", [False, True])
+def test_exchange_assembly_includes_recording_partition(
+    tmp_path: Path, sealed: bool
+) -> None:
     from scopecat.config.scientific_binding import bind_scientific_evidence
     from scopecat.data_exchange import ScientificExchange
     from scopecat.data_exchange.models import ScientificEvidence
+    from scopecat.records.content import ContentEntry
+    from scopecat.records.measurement_recording import measurement_dataset_content_hash
     from scopecat.records.run_request import RunRequest
     from scopecat.runs.admission import build_run_admission
+    from scopecat.runs.repository import RunContentPublication
     from scopecat_testkit.workflow_fixtures import load_config
 
     from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
@@ -868,6 +874,26 @@ def test_exchange_assembly_includes_recording_partition(tmp_path: Path) -> None:
     _commit_header(runs, repository, header)
     first = _append(header)
     _commit_append(runs, repository, first)
+    scientific_hash = measurement_dataset_content_hash(
+        header_content_hash=header.content_hash,
+        record_content_hashes=first.record_content_hashes,
+    )
+    if sealed:
+        _commit_seal(runs, repository, _seal(header, first))
+        runs.publish_content(
+            RunContentPublication(
+                run_id=header.run_id,
+                entries=(
+                    ContentEntry(
+                        role="dataset",
+                        kind="measurement_dataset",
+                        id=header.dataset_schema.dataset_id,
+                        content_hash=scientific_hash,
+                        schema=header.dataset_schema.model_dump(mode="json"),
+                    ),
+                ),
+            )
+        )
     store = SQLiteProjectStore(runs.sqlite, runs.objects.root)
     destination = tmp_path / "recorded.scopecat"
     with runs.sqlite.read_transaction() as connection:
@@ -876,13 +902,34 @@ def test_exchange_assembly_includes_recording_partition(tmp_path: Path) -> None:
             source_project_id=run.source_project_id, roots=(header.run_id,), runs=(run,)
         )
         # A later physical acquisition must not enter this captured package.
-        _commit_append(runs, repository, _append(header, point_index=1))
+        if not sealed:
+            _commit_append(runs, repository, _append(header, point_index=1))
         write_captured_exchange(connection, store, evidence, destination)
+        if sealed:
+            changed = run.model_copy(
+                update={
+                    "contents": tuple(
+                        entry.model_copy(update={"content_hash": "f" * 64})
+                        for entry in run.contents
+                    )
+                }
+            )
+            rejected = tmp_path / "mismatched.scopecat"
+            with pytest.raises(ValueError, match="recording differs"):
+                write_captured_exchange(
+                    connection,
+                    store,
+                    evidence.model_copy(update={"runs": (changed,)}),
+                    rejected,
+                )
+            assert not rejected.exists()
     store.close()
     with ScientificExchange(destination) as package:
         snapshot = package.recording(header.run_id)
         assert tuple(snapshot.selected_records()) == first.records
         assert snapshot.record_count == 1
+        assert snapshot.selected_content_hash == scientific_hash
+        assert snapshot.dataset().entry.content_hash == scientific_hash
         package.verify()
     assert not list(tmp_path.glob(".capture-*"))
 

@@ -83,6 +83,16 @@ processing should iterate `selected_records()` pages. The returned materialized
 dataset survives closing the archive. A raw snapshot without a captured selection
 cannot be converted by guessing which retries to use.
 
+The selected dataset keeps its original scientific identity, computed from the
+recording header and ordered selected record hashes. It is distinct from the
+capture manifest hash, which also identifies physical acquisition history and
+packaging partitions. Sealed measurement content is backed by the recording
+partition, not a fictitious dataset attachment path. Full package verification
+checks its ID, schema and selected-data hash against retained run content.
+Host-parameter evidence uses the same normalized persisted-model hash convention
+as other model content. This changes prebaseline development identities; no old
+identity fallback or historical-file rewrite is introduced.
+
 `scopecat.measurements.imports.import_measurement_snapshot(source, directory)`
 copies into a caller-selected data directory, verifies the owned copy in full,
 then publishes it atomically. It checks unselected historical chunks too. Equal
@@ -152,8 +162,10 @@ that capture remains open, then read the package after closing the original stor
 run/analysis references, retained input revisions and interpretation records before
 calling the assembly function under the same transaction. The initial end-to-end
 test captures a downstream publication with its upstream analysis and run, and
-rejects a missing upstream original request. This is still an internal export path:
-candidate/proposal and measurement-input identity coverage, import-side closure
+rejects a missing upstream original request. A software workflow also exports a
+rerun after analysis, candidate review and configuration activation, retaining its
+baseline recordings and explicitly referenced parameter proposals. This is still an internal export path:
+candidate/proposal identity coverage, import-side closure
 validation and the application command remain to be completed before general use.
 It is not yet an application export command or a complete-run interchange promise.
 

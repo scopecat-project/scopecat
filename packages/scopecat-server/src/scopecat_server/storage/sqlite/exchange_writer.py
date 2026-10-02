@@ -57,6 +57,10 @@ def write_captured_exchange(
         run_id = run.snapshot.run_id
         objects = ImmutableObjectStore(resource_directory(runs.objects, "run", run_id))
         for entry in run.contents:
+            if entry.role == "dataset" and entry.kind == "measurement_dataset":
+                # The recording partition owns this logical dataset. Its identity
+                # is checked from selected records by ScientificExchange.verify.
+                continue
             match entry.role:
                 case "record":
                     ref = record_content_ref(record_id=entry.id, kind=entry.kind)
@@ -82,7 +86,9 @@ def write_captured_exchange(
                     )
                 )
             if actual != entry.content_hash:
-                raise ValueError("run content differs from its retained identity")
+                raise ValueError(
+                    f"run content differs from its retained identity: {run_id}/{ref}"
+                )
             path = objects.path_for(digest)
             include(
                 PayloadSource(

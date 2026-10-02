@@ -248,6 +248,24 @@ class ScientificExchange:
     def verify(self) -> None:
         for snapshot in self._recordings.values():
             snapshot.verify()
+        for run in self.evidence.runs:
+            for entry in run.contents:
+                if entry.role != "dataset" or entry.kind != "measurement_dataset":
+                    continue
+                snapshot = self._recordings.get(run.snapshot.run_id)
+                if snapshot is None:
+                    raise ValueError(
+                        "retained measurement dataset has no recording partition"
+                    )
+                if (
+                    snapshot.header.dataset_schema.dataset_id != entry.id
+                    or snapshot.header.dataset_schema.model_dump(mode="json")
+                    != entry.data_schema
+                    or snapshot.selected_content_hash != entry.content_hash
+                ):
+                    raise ValueError(
+                        "recording differs from its retained measurement dataset"
+                    )
         for digest in {ref.digest for ref in self.payloads}:
             checksum = hashlib.sha256()
             with self._archive.open(_object_name(digest)) as source:
