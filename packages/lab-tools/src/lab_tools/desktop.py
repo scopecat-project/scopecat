@@ -6,10 +6,11 @@ import logging
 import sys
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from filelock import FileLock, Timeout
 
@@ -35,11 +36,17 @@ class DesktopAPI:
         session: DesktopSession,
         window: Callable[[], webview.Window],
         prepare: Callable[[], None] = lambda: None,
+        new_window: Callable[[], None] = lambda: None,
     ):
         self._session = session
         self._runtime = session.runtime
         self._window = window
         self._prepare = prepare
+        self._new_window = new_window
+
+    def new_window(self) -> None:
+        with self._session.operation():
+            self._new_window()
 
     def status(self) -> dict[str, object]:
         from scopecat.author_workspaces import local_author_workspaces
@@ -150,6 +157,7 @@ class DesktopAPI:
             return
         self._prepare()
         record = self._runtime.start()
+        self._session.connected(record.base_url)
         self._window().load_url(record.base_url + location)
 
     def exit(self, background: bool) -> None:
@@ -230,6 +238,121 @@ def _window_close_handlers(
     return request_close, request_quit
 
 
+@dataclass
+class DesktopView:
+    window: webview.Window
+    api: DesktopAPI
+    loaded: threading.Event
+    request_quit: Callable[[], bool]
+
+
+class DesktopWindows:
+    """Native windows share an application but own separate WebView state."""
+
+    def __init__(self, session: DesktopSession, prepare: Callable[[], None]):
+        self._session = session
+        self._prepare = prepare
+        self._views: list[DesktopView] = []
+        self._lock = threading.RLock()
+        session.connection_changed = self._reconnect
+
+    def _reconnect(self, previous: str, current: str) -> None:
+        old, new = urlsplit(previous), urlsplit(current)
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            location = view.window.get_current_url()
+            if location is None:
+                continue
+            url = urlsplit(location)
+            if (url.scheme, url.netloc) == (old.scheme, old.netloc):
+                view.window.load_url(
+                    urlunsplit(
+                        (new.scheme, new.netloc, url.path, url.query, url.fragment)
+                    )
+                )
+
+    @property
+    def latest(self) -> DesktopView:
+        with self._lock:
+            return self._views[-1]
+
+    def create(self) -> DesktopView:
+        import webview
+
+        with self._lock:
+            api = DesktopAPI(
+                self._session, lambda: window, self._prepare, self.new_window
+            )
+            window = cast(
+                "webview.Window",
+                webview.create_window(  # pyright: ignore[reportUnknownMemberType]
+                    "Scopecat",
+                    url=self._session.base_url,
+                    html=(
+                        None
+                        if self._session.base_url
+                        else _page("<h1>Scopecat</h1><p>正在准备应用，请稍候…</p>")
+                    ),
+                    js_api=api,
+                    width=1280,
+                    height=900,
+                    min_size=(800, 600),
+                    text_select=True,
+                ),
+            )
+            loaded = threading.Event()
+            window.events.loaded += loaded.set
+            hide, request_quit = _window_close_handlers(
+                window, self._session.closing, loaded
+            )
+            view = DesktopView(window, api, loaded, request_quit)
+
+            def close() -> bool:
+                with self._lock:
+                    if self._session.closing.is_set():
+                        return True
+                    if len(self._views) > 1:
+                        # Reserve the close before another window checks whether
+                        # it is the last view keeping the native host alive.
+                        self._views.remove(view)
+                        return True
+                return hide()
+
+            def closed() -> None:
+                with self._lock:
+                    if view in self._views:
+                        self._views.remove(view)
+
+            window.events.closing += close
+            window.events.closed += closed
+            self._views.append(view)
+            return view
+
+    def new_window(self) -> None:
+        if self._session.base_url is None:
+            raise ValueError("应用尚在准备，请稍后新建窗口")
+        self.create()
+
+    def show(self) -> None:
+        show_window(self.latest.window)
+
+    def hide(self) -> None:
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            hide_window(view.window)
+
+    def request_quit(self) -> None:
+        _ = self.latest.request_quit()
+
+    def destroy(self) -> None:
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            view.window.destroy()
+
+
 def run(
     home: Path,
     source: Path | None = None,
@@ -266,30 +389,19 @@ def run(
                 runtime.select(checked)
 
         session = DesktopSession(runtime, closing)
-        api = DesktopAPI(session, lambda: window, prepare or configure)
-        window = cast(
-            "webview.Window",
-            webview.create_window(  # pyright: ignore[reportUnknownMemberType]
-                "Scopecat",
-                html=_page("<h1>Scopecat</h1><p>正在准备应用，请稍候…</p>"),
-                js_api=api,
-                width=1280,
-                height=900,
-                min_size=(800, 600),
-                text_select=True,
-            ),
-        )
-        loaded = threading.Event()
-        window.events.loaded += loaded.set
+        windows = DesktopWindows(session, prepare or configure)
+        first = windows.create()
+        window, api, loaded = first.window, first.api, first.loaded
 
-        request_close, request_quit = _window_close_handlers(window, closing, loaded)
-        window.events.closing += request_close
-
-        def show() -> None:
-            show_window(window)
-
-        def quit_from_menu() -> None:
-            _ = request_quit()
+        def new_window_from_menu() -> None:
+            try:
+                with session.operation():
+                    windows.new_window()
+            except ValueError as error:
+                windows.show()
+                windows.latest.window.create_confirmation_dialog(
+                    "暂时无法新建窗口", str(error)
+                )
 
         tray_name = "tray-template.png" if sys.platform == "darwin" else "tray.png"
         with Image.open(Path(__file__).with_name("icons") / tray_name) as image:
@@ -301,11 +413,10 @@ def run(
                 icon_image,
                 "Scopecat",
                 menu=pystray.Menu(
-                    pystray.MenuItem("打开 Scopecat", show, default=True),
-                    pystray.MenuItem(
-                        "隐藏窗口（后台运行）", lambda: hide_window(window)
-                    ),
-                    pystray.MenuItem("退出 Scopecat", quit_from_menu),
+                    pystray.MenuItem("打开 Scopecat", windows.show, default=True),
+                    pystray.MenuItem("隐藏窗口（后台运行）", windows.hide),
+                    pystray.MenuItem("新建窗口", new_window_from_menu),
+                    pystray.MenuItem("退出 Scopecat", windows.request_quit),
                 ),
             )
 
@@ -317,13 +428,15 @@ def run(
                 if closing.is_set():
                     return
             if closing.is_set():
-                session.finish_exit(window.destroy)
+                session.finish_exit(windows.destroy)
                 return
             try:
                 # Cocoa status items need the application to have finished
                 # launching; a queued callback before webview.start is too early.
                 stop_tray = start_tray(create_tray)
-                install_reopen_handler(show, quit_from_menu, closing.is_set)
+                install_reopen_handler(
+                    windows.show, windows.request_quit, closing.is_set
+                )
                 api.retry()
             except Exception as error:
                 logging.getLogger(__name__).exception("Application startup failed")
@@ -332,23 +445,23 @@ def run(
                 try:
                     session.poll_exit()
                 except Exception as error:
-                    api.wait_for_idle(False)
-                    show()
-                    window.load_html(_recovery(error))
+                    session.wait_for_idle(False)
+                    windows.show()
+                    windows.latest.window.load_html(_recovery(error))
                 if activate.exists():
                     requested_package = activate.read_text(encoding="utf-8")
                     activate.unlink(missing_ok=True)
-                    show()
+                    windows.show()
                     if requested_package != package_identity:
-                        quit_current = window.create_confirmation_dialog(
+                        quit_current = windows.latest.window.create_confirmation_dialog(
                             "Scopecat 已安装其他版本",
                             "当前窗口仍由之前打开的版本运行。"
                             "请退出当前应用，再打开已安装的版本。现在退出？",
                         )
                         if quit_current:
-                            _ = request_quit()
+                            windows.request_quit()
             # Keep the native completion hook out of the exposed JavaScript API.
-            session.finish_exit(window.destroy)
+            session.finish_exit(windows.destroy)
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
         try:

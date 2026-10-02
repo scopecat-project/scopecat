@@ -15,9 +15,17 @@ class DesktopSession:
     def __init__(self, runtime: ApplicationRuntime, closing: threading.Event):
         self.runtime = runtime
         self.closing = closing
+        self.base_url: str | None = None
+        self.connection_changed: Callable[[str, str], None] = lambda _old, _new: None
         self._operation_lock = threading.Lock()
         self._exit_thread: threading.Thread | None = None
         self._waiting = threading.Event()
+
+    def connected(self, base_url: str) -> None:
+        previous = self.base_url
+        self.base_url = base_url
+        if previous is not None and previous != base_url:
+            self.connection_changed(previous, base_url)
 
     @contextmanager
     def operation(self) -> Generator[None]:

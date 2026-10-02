@@ -6,8 +6,55 @@ from unittest.mock import Mock
 
 import pytest
 
-from lab_tools.desktop import DesktopAPI, _window_close_handlers
+from lab_tools.desktop import DesktopAPI, DesktopWindows, _window_close_handlers
 from lab_tools.desktop_session import DesktopSession
+
+
+def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
+    from webview.event import Event
+
+    created = []
+
+    def create(_title, **kwargs):
+        window = Mock()
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        window.get_current_url.return_value = kwargs["url"]
+        window.destroy.side_effect = window.events.closed.set
+        created.append((window, kwargs))
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    runtime, prepare = Mock(), Mock()
+    runtime.start.return_value = SimpleNamespace(base_url="http://localhost:1234")
+    session = DesktopSession(runtime, threading.Event())
+    windows = DesktopWindows(session, prepare)
+    first = windows.create()
+    first.api.retry()
+    first.window.get_current_url.return_value = "http://localhost:1234/?run=A#runs"
+    first.api.new_window()
+    second = windows.latest
+    assert second is not first
+    assert created[1][1]["url"] == "http://localhost:1234"
+    prepare.assert_called_once()
+    runtime.start.assert_called_once()
+    second.window.get_current_url.return_value = "http://localhost:1234/?run=B#runs"
+    session.connected("http://localhost:4321")
+    first.window.load_url.assert_called_with("http://localhost:4321/?run=A#runs")
+    second.window.load_url.assert_called_with("http://localhost:4321/?run=B#runs")
+
+    # pywebview returns True from Event.set when a handler vetoes the close.
+    assert first.window.events.closing.set() is False
+    assert second.window.events.closing.set() is True
+    first.window.events.closed.set()
+    assert windows.latest is second
+    runtime.stop.assert_not_called()
+    session.closing.set()
+    windows.destroy()
+    second.window.destroy.assert_called_once()
 
 
 def test_two_windows_share_quit_decision_and_operation_lock():
