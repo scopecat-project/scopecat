@@ -35,6 +35,7 @@ nav = [
     { "Organize research history" = "how-to/research-history.md" },
     { "Control instruments" = "how-to/control-instruments.md" },
     { "Use measurement data" = "how-to/use-measurement-data.md" },
+    { "Open and share data files" = "how-to/open-and-share-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
     { "Legacy combined configuration" = "how-to/manage-configuration.md" },
     { "Automate parameter calibration" = "how-to/automate-parameter-calibration.md" },

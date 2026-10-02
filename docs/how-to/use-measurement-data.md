@@ -1,5 +1,8 @@
 # Measurement data workflows
 
+For desktop file opening, comparison and export, see
+[Open and share recorded data](open-and-share-data.md).
+
 Scopecat exposes recorded measurements as one labeled `Dataset`. Its schema
 comes from the experiment result: variable identities, roles, data types,
 units, point-domain layout, local dimensions, and recording groups are retained

@@ -36,6 +36,8 @@ maintainer or extension route. Continue according to what you want to accomplish
   run provenance, topology maps, and longitudinal analysis.
 - [Use measurement data](how-to/use-measurement-data.md) for selection, Xarray,
   Arrow, pandas, Polars, and GUI projections.
+- [Open and share data files](how-to/open-and-share-data.md) in the desktop app,
+  compare records, or take a file to your own Python environment.
 - [Write ordinary Python analysis](guides/ordinary-analysis.md) with dataclass
   conclusions and retained source provenance.
 - [Publish analysis](concepts/analysis-publication.md) for derived datasets,

@@ -6,6 +6,9 @@ source folders and data locations. **Devices and drivers** maintains shared devi
 
 ## Daily use
 
+If you only want to inspect or share saved results, start with
+[Open and share recorded data](open-and-share-data.md); no code folder is needed.
+
 1. Open Scopecat, then open your experiment code folder in VS Code.
 2. Select your code folder's `.venv` interpreter for Python and Notebook kernels.
    Choose your code, setup and parameters in the current task.
