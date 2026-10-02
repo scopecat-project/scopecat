@@ -101,8 +101,16 @@ Analysis capture verifies the publication record and output index, then identifi
 the precise retained artifact and dataset objects for streaming. The final writer
 must verify object digests while copying; concurrent cleanup is an export failure,
 not permission to omit a referenced output. Traversal across analysis inputs and
-other evidence families, final container assembly and application integration are
-not complete yet. These capture components alone do not prove reference closure.
+other evidence families and application integration are not complete yet. These
+capture components alone do not prove reference closure.
+
+The low-level `scopecat.data_exchange` container now groups scientific documents,
+recording partitions and content-addressed payloads without extracting them.
+Recording views borrow the package's open archive; closing a view does not close
+the package. Writing checks streamed payload hashes and verifies the staged package
+before atomic publication. This is container assembly only: the storage capture
+layer still needs to resolve the complete dependency graph at one capture boundary.
+It is not yet an application export command or a complete-run interchange promise.
 
 Machine-local registrations stay outside the exchange. Historical configuration
 and setup snapshots retain original connection descriptions as inert evidence so

@@ -6,13 +6,24 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
+from scopecat_testkit.workflow_fixtures import load_config
 
+from scopecat.config.scientific_binding import bind_scientific_evidence
+from scopecat.data_exchange import (
+    PayloadReference,
+    PayloadSource,
+    ScientificExchange,
+    write_scientific_exchange,
+)
+from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.measurements.archive import (
     MeasurementSnapshot,
     RecordSelection,
     write_measurement_snapshot,
 )
 from scopecat.measurements.imports import import_measurement_snapshot
+from scopecat.records.config import config_content_hash
+from scopecat.records.exchange import RunEvidence, ScientificEvidence
 from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementDimension,
@@ -26,6 +37,124 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetHeader,
 )
+from scopecat.records.run import RunSnapshot
+from scopecat.records.run_request import RunRequest
+
+
+def exchange_evidence() -> ScientificEvidence:
+    config = load_config()
+    return ScientificEvidence(
+        source_project_id="source-project",
+        roots=("synthetic",),
+        runs=(
+            RunEvidence(
+                source_project_id="source-project",
+                snapshot=RunSnapshot(
+                    run_id="synthetic",
+                    scientific_binding=bind_scientific_evidence(
+                        catalog_id="source-project",
+                        config=config,
+                        samples=(),
+                        sample_revisions={},
+                    ),
+                    config_content_hash=config_content_hash(config),
+                ),
+                request=RunRequest(experiment_id="retained"),
+                configuration=config,
+                contents=(),
+            ),
+        ),
+    )
+
+
+def test_exchange_reads_partition_after_borrowed_reader_closes(tmp_path: Path):
+    header, appends, records = recording()
+    source = tmp_path / "recording.scopecat"
+    write_measurement_snapshot(source, header, appends)
+    artifact = tmp_path / "artifact"
+    artifact.write_bytes(b"retained analysis")
+    reference = PayloadReference(
+        owner_kind="run",
+        owner_id=header.run_id,
+        ref="artifacts/report/report",
+        digest=sha256_content_hash(artifact.read_bytes()),
+        size=artifact.stat().st_size,
+    )
+    destination = tmp_path / "exchange.scopecat"
+    evidence = exchange_evidence()
+    write_scientific_exchange(
+        destination,
+        evidence,
+        {header.run_id: source},
+        (PayloadSource(reference, artifact),),
+    )
+    source.unlink()
+    artifact.unlink()
+    with ScientificExchange(destination) as exchange:
+        assert exchange.evidence == evidence
+        assert exchange.payloads == (reference,)
+        with exchange.recording(header.run_id) as snapshot:
+            assert tuple(snapshot.records(offset=1, limit=2)) == records[1:3]
+        exchange.verify()
+        assert tuple(exchange.recording(header.run_id).records()) == records
+    damaged = tmp_path / "damaged-exchange.scopecat"
+    rewrite(
+        destination,
+        damaged,
+        {
+            f"objects/{reference.digest.removeprefix('sha256:')}": bytes(
+                reference.size
+            ),
+        },
+    )
+    with (
+        ScientificExchange(damaged) as exchange,
+        pytest.raises(ValueError, match="payload checksum"),
+    ):
+        exchange.verify()
+
+
+def test_exchange_corrupt_payload_fails_without_publication(tmp_path: Path):
+    artifact = tmp_path / "artifact"
+    artifact.write_bytes(b"changed")
+    reference = PayloadReference(
+        owner_kind="run",
+        owner_id="synthetic",
+        ref="artifacts/report/report",
+        digest=sha256_content_hash(b"original"),
+        size=8,
+    )
+    destination = tmp_path / "exchange.scopecat"
+    with pytest.raises(ValueError, match="payload changed or is corrupt"):
+        write_scientific_exchange(
+            destination, exchange_evidence(), {}, (PayloadSource(reference, artifact),)
+        )
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".exchange-*"))
+
+
+def test_exchange_preserves_existing_destination(tmp_path: Path):
+    destination = tmp_path / "important.scopecat"
+    destination.write_bytes(b"user data")
+    with pytest.raises(FileExistsError):
+        write_scientific_exchange(destination, exchange_evidence(), {})
+    assert destination.read_bytes() == b"user data"
+    assert not list(tmp_path.glob(".exchange-*"))
+
+
+def test_exchange_rejects_changed_evidence_and_unknown_members(tmp_path: Path):
+    destination = tmp_path / "exchange.scopecat"
+    write_scientific_exchange(destination, exchange_evidence(), {})
+    changed = tmp_path / "changed.scopecat"
+    with ZipFile(destination) as archive:
+        evidence = archive.read("evidence.json")
+    rewrite(destination, changed, {"evidence.json": b" " * len(evidence)})
+    with pytest.raises(ValueError, match="evidence checksum"):
+        ScientificExchange(changed)
+    unknown = tmp_path / "unknown.scopecat"
+    rewrite(destination, unknown, {"../unexpected": b"inert"})
+    with pytest.raises(ValueError, match="unknown members"):
+        ScientificExchange(unknown)
 
 
 def recording():

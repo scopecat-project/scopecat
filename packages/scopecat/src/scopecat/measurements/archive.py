@@ -171,10 +171,14 @@ class MeasurementSnapshot:
     Checksums detect corruption, not publisher authenticity.
     """
 
-    def __init__(self, path: Path):
-        self._archive = ZipFile(path)
+    def __init__(self, path: Path | ZipFile, *, prefix: str = ""):
+        # A complete exchange can share one open ZIP across recording views.
+        # Prefixes address archive members, never filesystem extraction paths.
+        self._owns_archive = not isinstance(path, ZipFile)
+        self._archive = path if isinstance(path, ZipFile) else ZipFile(path)
+        self._prefix = prefix
         try:
-            info = self._archive.getinfo("manifest.json")
+            info = self._archive.getinfo(prefix + "manifest.json")
             if info.file_size > MAX_MANIFEST_BYTES:
                 raise ValueError("snapshot manifest is too large")
             self._manifest = _Manifest.model_validate_json(self._archive.read(info))
@@ -185,15 +189,21 @@ class MeasurementSnapshot:
                 f"projection/{index:08d}.json"
                 for index in range(len(self._manifest.projection or ()))
             )
-            names = self._archive.namelist()
+            names = [
+                name[len(prefix) :]
+                for name in self._archive.namelist()
+                if name.startswith(prefix)
+            ]
             if len(names) != len(expected) or set(names) != expected:
                 raise ValueError("snapshot has missing, duplicate or unknown members")
             for index, chunk in enumerate(self._manifest.chunks):
-                if self._archive.getinfo(_name(index)).file_size != chunk.size:
+                if self._archive.getinfo(prefix + _name(index)).file_size != chunk.size:
                     raise ValueError("snapshot chunk size does not match manifest")
             for index, chunk in enumerate(self._manifest.projection or ()):
                 if (
-                    self._archive.getinfo(f"projection/{index:08d}.json").file_size
+                    self._archive.getinfo(
+                        prefix + f"projection/{index:08d}.json"
+                    ).file_size
                     != chunk.size
                 ):
                     raise ValueError("snapshot projection size does not match manifest")
@@ -204,7 +214,7 @@ class MeasurementSnapshot:
                 position += chunk.count
             self._record_count = position
         except Exception:
-            self._archive.close()
+            self.close()
             raise
 
     @property
@@ -264,7 +274,7 @@ class MeasurementSnapshot:
 
     def _append(self, index: int) -> MeasurementDatasetAppend:
         chunk = self._manifest.chunks[index]
-        content = self._archive.read(_name(index))
+        content = self._archive.read(self._prefix + _name(index))
         if sha256_content_hash(content) != chunk.digest:
             raise ValueError("snapshot chunk checksum mismatch")
         append = decode_measurement_append(content, self.header.dataset_schema)
@@ -294,7 +304,9 @@ class MeasurementSnapshot:
             if position >= offset + limit:
                 break
             if following > offset:
-                content = self._archive.read(f"projection/{index:08d}.json")
+                content = self._archive.read(
+                    self._prefix + f"projection/{index:08d}.json"
+                )
                 if sha256_content_hash(content) != chunk.digest:
                     raise ValueError("snapshot projection checksum mismatch")
                 selected = _Selections.model_validate_json(content).records
@@ -358,7 +370,8 @@ class MeasurementSnapshot:
             position = following
 
     def close(self) -> None:
-        self._archive.close()
+        if self._owns_archive:
+            self._archive.close()
 
     def __enter__(self) -> Self:
         return self

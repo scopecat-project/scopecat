@@ -112,3 +112,25 @@ class AnalysisEvidence(BaseModel):
                 case _:
                     pass  # Facts, tables and figure descriptions are inline.
         return self
+
+
+class ScientificEvidence(BaseModel):
+    """Scientific documents in one captured source-project namespace."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    source_project_id: str = Field(min_length=1)
+    roots: tuple[str, ...] = Field(min_length=1)
+    runs: tuple[RunEvidence, ...]
+    inputs: InputRevisionEvidence = Field(default_factory=InputRevisionEvidence)
+    analyses: tuple[AnalysisEvidence, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_runs(self) -> Self:
+        run_ids = {item.snapshot.run_id for item in self.runs}
+        if len(run_ids) != len(self.runs) or len(set(self.roots)) != len(self.roots):
+            raise ValueError("exchange contains duplicate run identities")
+        if not set(self.roots) <= run_ids:
+            raise ValueError("exchange root run evidence is missing")
+        if any(item.source_project_id != self.source_project_id for item in self.runs):
+            raise ValueError("exchange mixes source-project namespaces")
+        return self
