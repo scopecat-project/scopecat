@@ -227,6 +227,23 @@ This covers Mac plain-text/identifier/error copying and failed-open recovery.
 It does not qualify Windows clipboard behavior, rich-text/table export, work
 surviving all hidden views, or recovery from failed shutdown.
 
+### Mac live-run export and close interaction (2026-10-03)
+
+A source-registered, device-free experiment ran one 120-second compute and
+returned `42.0` in the isolated packaged application. Closing its sole window
+while the run was active did not interrupt execution. Later observation showed
+the same run ID, one successful execution segment, one measurement and no second
+run. The native Export command saved that completed run through Cocoa's Save
+dialog. After Quit stopped the application, an independent Python reader opened
+the saved file, verified the original run ID and value, and did not import the
+server package.
+
+The automation's window observations refocus the application, so this check does
+not establish continuous hidden-window state or a tray-menu restoration action.
+Those visual lifecycle steps, failed-shutdown recovery and Windows qualification
+remain outstanding. The current-run native export is now observed separately
+from the earlier copy-of-imported-file checks.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
