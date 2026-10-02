@@ -244,8 +244,13 @@ the retained baseline using the ordinary pure configuration resolver. Project
 decision references check output existence and declared fact schema. None of this
 activates a candidate. The analysis/review/activation/rerun export test verifies a
 normal capture and rejects missing proposals, changed baselines/publications and
-forged direct-candidate hashes. Composed-candidate and automated acceptance cases
-still need dedicated end-to-end coverage before declaring the graph audit complete.
+forged direct-candidate hashes. The real two-target maintenance journey now stops
+its service, exports a verification run with composed proposals, and reads the
+capture independently; changing a contribution hash is rejected. A separate
+cross-run acceptance journey exports a run using its accepted registry entry,
+retains the project decision publication, and rejects missing decisions or changed
+decision schemas. These are local scientific-graph checks, not evidence of the
+remaining external-analysis or desktop interaction requirements.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:

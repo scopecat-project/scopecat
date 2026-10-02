@@ -146,6 +146,7 @@ try:
             assert decision.rejected == (("q4",) if case == "drift" else ())
             if case == "healthy":
                 assert final.snapshot.closure.status == "succeeded"
+                selected_run = final.output(f"verify-{TARGETS[0]}").run_id
                 saved = lab.parameters.workspace("daily")
                 assert saved.version.ref != original.ref
                 for index, target in enumerate(TARGETS):
@@ -170,4 +171,54 @@ try:
         print(case, states)
 finally:
     stop_project(project)
+
+if case == "healthy":
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+    from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+    from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
+    data_root = project.runtime_binding.data_root
+    store = SQLiteProjectStore(
+        SQLiteDatabase(data_root / "control.sqlite3"), data_root / "objects")
+    try:
+        destination = root / "composed-calibration.scopecat"
+        export_scientific_capture(store, (selected_run,), destination)
+        with ScientificExchange(destination) as capture:
+            capture.verify()
+            assert selected_run in capture.evidence.roots
+            assert len(capture.evidence.runs) >= len(TARGETS) + 1
+            assert any(item.record.title == "array-offsets"
+                for item in capture.evidence.analyses)
+            from scopecat.records.parameter_change import ParameterChangeProposal
+            from scopecat.runs.refs import content_entry_ref
+            from scopecat.data_exchange.proposals import validate_proposal_references
+            proposals = []
+            for run in capture.evidence.runs:
+                for entry in run.contents:
+                    if entry.kind != "parameter_change_proposal":
+                        continue
+                    reference = next(ref for ref in capture.payloads
+                        if ref.owner_kind == "run"
+                        and ref.owner_id == run.snapshot.run_id
+                        and ref.ref == content_entry_ref(entry))
+                    target = root / f"proposal-{len(proposals)}.json"
+                    capture.copy_payload(reference, target)
+                    proposals.append(ParameterChangeProposal.model_validate_json(
+                        target.read_bytes()))
+            composed = next(item for item in proposals if item.composition is not None)
+            original = composed.composition.sources
+            corrupted = original[0].model_copy(update={
+                "content_hash": "sha256:" + "f" * 64})
+            changed = composed.model_copy(update={
+                "composition": composed.composition.model_copy(update={
+                    "sources": (corrupted, *original[1:])})})
+            try:
+                validate_proposal_references(capture.evidence, tuple(
+                    changed if item is composed else item for item in proposals))
+            except ValueError as error:
+                assert "composed proposal content identity differs" in str(error), error
+            else:
+                raise AssertionError("changed composition source was accepted")
+    finally:
+        store.close()
 """
