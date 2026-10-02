@@ -122,7 +122,8 @@ python -m lab_tools.dev --home /path/to/development --workspace /path/to/author-
 The development environment needs the source dependencies installed first. This
 command starts its own backend and Vite without opening a browser; Ctrl-C stops
 both. It does not install a desktop entry or share the daily application's home.
-Experiment and analysis edits use ordinary author refresh. Driver edits use
+Registering the source folder does not enable its drivers. Experiment and
+analysis edits use ordinary author refresh. Initial driver selection and edits use
 **Update from source** in **Devices and drivers**, after finishing active work and
 releasing manual sessions. Saving a file alone does not replace a live driver.
 Dependency changes require explicit preparation of the development environment.

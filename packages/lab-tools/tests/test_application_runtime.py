@@ -58,6 +58,36 @@ def application(tmp_path: Path):
     runtime.stop()
 
 
+def test_development_source_registration_does_not_activate_drivers(tmp_path: Path):
+    import httpx2
+
+    from lab_tools.dev import development_session
+
+    source = tmp_path / "driver-source"
+    (source / "src").mkdir(parents=True)
+    (source / "scopecat.toml").write_text(
+        '[lab]\ninstrument_backend = "vendor_driver:create_backend"\n'
+        '[authors]\nsource_roots = ["src"]\ndependencies = []\n'
+    )
+    (source / "src/vendor_driver.py").write_text(
+        'raise RuntimeError("vendor environment is not prepared")\n'
+    )
+    with development_session(tmp_path / "development", workspace=source) as record:
+        with httpx2.Client(base_url=record.base_url, trust_env=False) as client:
+            assert client.get("/api/v1/health").status_code == 200
+            selected = client.get("/api/v1/devices/driver-source")
+            assert selected.status_code == 200
+            assert selected.json() == {"active": None}
+        assert (
+            LocalAuthorWorkspaces.model_validate_json(
+                author_bindings_path(record.project_root).read_bytes()
+            )
+            .items[0]
+            .root
+            == source
+        )
+
+
 def test_idle_exit_uses_live_service_and_releases_ownership(application):
     application.start()
     assert not application.activity().busy
