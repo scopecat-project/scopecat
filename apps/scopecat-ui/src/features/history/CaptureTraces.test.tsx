@@ -62,6 +62,8 @@ it("selects acquisition offsets and entities without hiding unavailable traces o
   const waveform = screen.getByLabelText("Waveform") as HTMLSelectElement;
   const phase = Array.from(waveform.options).find((option) => option.value.endsWith(":phase"))!;
   fireEvent.change(waveform, { target: { value: phase.value } });
-  expect((await screen.findByRole("alert")).textContent).toBe("Cannot read stored trace");
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Trace unavailable: Cannot read stored trace",
+  );
   expect(screen.queryByText("Second acquisition")).toBeNull();
 });

@@ -6,13 +6,14 @@ export interface CaptureSelection {
   offset: number;
 }
 
-export function selectCapture(contentHash: string, selection?: CaptureSelection) {
+export function selectCapture(contentHash: string | undefined, selection?: CaptureSelection) {
   const url = new URL(window.location.href);
   if (url.searchParams.get("capture") !== contentHash || selection) {
     for (const key of ["capture-run", "capture-measurements", "capture-offset"])
       url.searchParams.delete(key);
   }
-  url.searchParams.set("capture", contentHash);
+  if (contentHash) url.searchParams.set("capture", contentHash);
+  else url.searchParams.delete("capture");
   url.hash = "history";
   if (selection?.runId) url.searchParams.set("capture-run", selection.runId);
   if (selection?.measurements === "selected")

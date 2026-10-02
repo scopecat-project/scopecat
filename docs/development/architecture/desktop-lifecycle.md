@@ -29,6 +29,14 @@ Window hiding is not termination. JavaScript bridge replies must finish before
 destroying their window. All normal quit paths release the service before removing
 the visible application entry.
 
+Native file dialogs and transfers serialize within their own window, not under
+the lifecycle lock for their full duration. Active transfers participate in the
+shared Quit decision: waiting defers shutdown until completion, while Stop and
+close requests cancellation and waits for file workers to settle. Partial saves
+never replace the destination. Import cancellation is not rollback of a capture
+already committed by the backend. Environment replacement is unavailable during
+transfers. A failed or unresponsive transfer leaves a usable exit recovery path.
+
 The last-window policy is the same on Mac and Windows: closing the last window
 hides it and retains the application with a visible menu-bar/tray entry, whether
 idle or busy. Reopening restores the retained view. Closing an additional window

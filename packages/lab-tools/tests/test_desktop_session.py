@@ -10,6 +10,48 @@ from lab_tools.desktop import DesktopAPI, DesktopWindows, _window_close_handlers
 from lab_tools.desktop_session import DesktopSession
 
 
+@pytest.mark.parametrize("stop", [False, True])
+def test_file_work_allows_other_windows_and_participates_in_quit(stop):
+    runtime = Mock()
+    runtime.activity.return_value.model_dump.return_value = {}
+    runtime.stop_if_idle.return_value = True
+    session = DesktopSession(runtime, threading.Event())
+    started, release = threading.Event(), threading.Event()
+
+    def transfer():
+        with session.file_operation() as cancel:
+            started.set()
+            assert (cancel if stop else release).wait(5)
+
+    worker = threading.Thread(target=transfer)
+    worker.start()
+    try:
+        assert started.wait(5)
+        # File work in one window does not lock another window's commands.
+        with session.operation(allow_files=True):
+            pass
+        with pytest.raises(ValueError, match="文件操作"):
+            DesktopAPI(session, Mock()).restart()
+        assert session.request_exit() == {"file_operations": 1}
+        runtime.stop_if_idle.assert_not_called()
+        session.wait_for_idle(True)
+        session.poll_exit()
+        runtime.stop_if_idle.assert_not_called()
+        if stop:
+            session.exit()
+            runtime.stop.assert_called_once()
+        else:
+            release.set()
+            worker.join(5)
+            session.poll_exit()
+            runtime.stop_if_idle.assert_called_once()
+        assert session.closing.is_set()
+    finally:
+        release.set()
+        worker.join(5)
+    assert not worker.is_alive()
+
+
 def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     from webview.event import Event
 

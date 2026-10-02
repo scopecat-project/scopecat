@@ -28,10 +28,14 @@ export function ClearData({
   runs = [],
   procedures = [],
   analyses = [],
+  captures = [],
+  onCleared,
 }: {
   runs?: string[];
   procedures?: string[];
   analyses?: string[];
+  captures?: string[];
+  onCleared?: () => void;
 }) {
   const cache = useQueryClient();
   const [preview, setPreview] = useState<Preview>();
@@ -44,6 +48,7 @@ export function ClearData({
       runs,
       procedures,
       analyses,
+      captures,
       setups: [],
       setup_definitions: [],
       parameters: [],
@@ -66,14 +71,15 @@ export function ClearData({
     setPending(true);
     setError("");
     try {
-      setOperation(
-        await apiData(
-          apiClient.POST("/api/v1/data-cleanup", { body: { request_key: requestKey, preview } }),
-        ),
+      const result = await apiData(
+        apiClient.POST("/api/v1/data-cleanup", { body: { request_key: requestKey, preview } }),
       );
+      setOperation(result);
+      if (result.state === "complete") onCleared?.();
       await cache.invalidateQueries({ queryKey: ["data-cleanup"] });
       await Promise.all([
         cache.invalidateQueries({ queryKey: ["runs"] }),
+        cache.invalidateQueries({ queryKey: ["data"] }),
         cache.invalidateQueries({ queryKey: ["research", "runs"] }),
         cache.invalidateQueries({ queryKey: ["analyses", "project"], exact: true }),
       ]);
@@ -83,13 +89,24 @@ export function ClearData({
       setPending(false);
     }
   }
-  if (operation) return <CleanupResult operation={operation} update={setOperation} />;
+  if (operation)
+    return (
+      <CleanupResult
+        operation={operation}
+        update={(result) => {
+          setOperation(result);
+          if (result.state === "complete") onCleared?.();
+        }}
+      />
+    );
   return (
     <section className="grid gap-2">
       {!preview ? (
         <button
           className={secondaryButton}
-          disabled={pending || !(runs.length || procedures.length || analyses.length)}
+          disabled={
+            pending || !(runs.length || procedures.length || analyses.length || captures.length)
+          }
           onClick={() => void inspect()}
         >
           Review data cleanup…
@@ -114,6 +131,7 @@ export function ClearData({
               ...preview.selection.runs.map((id) => `Measurement: ${id}`),
               ...preview.selection.procedures.map((id) => `Task: ${id}`),
               ...preview.selection.analyses.map((id) => `Analysis: ${id}`),
+              ...preview.selection.captures.map((id) => `Imported file: ${id}`),
             ].map((label) => (
               <li key={label}>
                 <code>{label}</code>
@@ -169,6 +187,7 @@ function CleanupResult({
   operation: Operation;
   update: (value: Operation) => void;
 }) {
+  const cache = useQueryClient();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   async function resume() {
@@ -182,6 +201,7 @@ function CleanupResult({
         ),
       );
       setError("");
+      await cache.invalidateQueries();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {

@@ -50,6 +50,7 @@ interface DesktopAPI {
 }
 
 interface ApplicationActivity {
+  file_operations?: number;
   runs: number;
   procedures: number;
   instrument_sessions: number;
@@ -60,6 +61,7 @@ interface ApplicationActivity {
 
 function describeWork(work: ApplicationActivity): string {
   const labels: [keyof ApplicationActivity, string][] = [
+    ["file_operations", "file operation"],
     ["runs", "experiment"],
     ["procedures", "workflow"],
     ["instrument_sessions", "device session"],
@@ -68,7 +70,7 @@ function describeWork(work: ApplicationActivity): string {
     ["scheduled_workflows", "scheduled workflow"],
   ];
   return labels
-    .filter(([key]) => work[key] > 0)
+    .filter(([key]) => (work[key] ?? 0) > 0)
     .map(([key, label]) => `${work[key]} ${label}${work[key] === 1 ? "" : "s"}`)
     .join(", ");
 }

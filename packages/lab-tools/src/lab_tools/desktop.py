@@ -44,9 +44,10 @@ class DesktopAPI:
         self._window = window
         self._prepare = prepare
         self._new_window = new_window
+        self._file_lock = threading.Lock()
 
     def new_window(self) -> None:
-        with self._session.operation():
+        with self._session.operation(allow_files=True):
             self._new_window()
 
     def set_window_title(self, title: str) -> None:
@@ -85,7 +86,7 @@ class DesktopAPI:
 
         from .desktop_files import import_capture
 
-        with self._session.operation():
+        with self._file_lock:
             base_url = self._data_url()
             selected = self._window().create_file_dialog(
                 webview.FileDialog.OPEN,
@@ -94,19 +95,24 @@ class DesktopAPI:
             )
             if not selected:
                 return None
-            return import_capture(base_url, Path(selected[0])).model_dump(mode="json")
+            with self._session.file_operation() as cancel:
+                return import_capture(base_url, Path(selected[0]), cancel).model_dump(
+                    mode="json"
+                )
 
     def save_capture(self, content_hash: str) -> str | None:
         from .desktop_files import save_capture
 
         return self._save_file(
-            lambda base, path: save_capture(base, content_hash, path)
+            lambda base, path, cancel: save_capture(base, content_hash, path, cancel)
         )
 
     def export_run(self, run_id: str) -> str | None:
         from .desktop_files import export_run
 
-        return self._save_file(lambda base, path: export_run(base, run_id, path))
+        return self._save_file(
+            lambda base, path, cancel: export_run(base, run_id, path, cancel)
+        )
 
     def save_captured_artifact(
         self, content_hash: str, analysis_hash: str, artifact_id: str, filename: str
@@ -114,8 +120,8 @@ class DesktopAPI:
         from .desktop_files import save_captured_artifact
 
         return self._save_file(
-            lambda base, path: save_captured_artifact(
-                base, content_hash, analysis_hash, artifact_id, path
+            lambda base, path, cancel: save_captured_artifact(
+                base, content_hash, analysis_hash, artifact_id, path, cancel
             ),
             filename=Path(filename.replace("\\", "/")).name,
             file_types=("All files (*.*)",),
@@ -123,14 +129,14 @@ class DesktopAPI:
 
     def _save_file(
         self,
-        download: Callable[[str, Path], None],
+        download: Callable[[str, Path, threading.Event], None],
         *,
         filename: str = "capture.scopecat",
         file_types: tuple[str, ...] = ("Scopecat (*.scopecat)",),
     ) -> str | None:
         import webview
 
-        with self._session.operation():
+        with self._file_lock:
             base_url = self._data_url()
             selected = self._window().create_file_dialog(
                 webview.FileDialog.SAVE,
@@ -141,7 +147,8 @@ class DesktopAPI:
                 return None
             # Cocoa SAVE returns one string; other hosts return a path tuple.
             destination = Path(selected if isinstance(selected, str) else selected[0])
-            download(base_url, destination)
+            with self._session.file_operation() as cancel:
+                download(base_url, destination, cancel)
             return str(destination)
 
     def _data_url(self) -> str:
@@ -504,7 +511,7 @@ def run(
 
         def new_window_from_menu() -> None:
             try:
-                with session.operation():
+                with session.operation(allow_files=True):
                     windows.new_window()
             except ValueError as error:
                 windows.show()

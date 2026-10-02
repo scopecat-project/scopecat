@@ -11,7 +11,10 @@ from typing import cast
 from scopecat.data_exchange import ScientificExchange
 from scopecat.kernel.content_identity import sha256_json_hash
 
+from .data_cleanup import require_retained_resource
+from .object_store import ImmutableObjectStore
 from .project_store import SQLiteProjectStore
+from .resource_objects import resource_directory
 
 
 class CaptureConflict(ValueError):
@@ -60,6 +63,10 @@ def import_scientific_capture(
                 )
             roots = json.dumps(capture.evidence.roots)
         with store.sqlite.write_transaction() as connection:
+            require_retained_resource(connection, "capture", capture_hash)
+            objects = ImmutableObjectStore(
+                resource_directory(store.objects, "capture", capture_hash)
+            )
             for run_id, content_hash in identities.items():
                 previous = cast(
                     "sqlite3.Row | None",
@@ -83,11 +90,9 @@ def import_scientific_capture(
             )
             if existing is not None:
                 digest = cast("str", existing[0])
-                store.objects.verify(digest)
-                return ImportedCapture(
-                    store.objects.path_for(digest), capture_hash, False
-                )
-            retained = store.objects.put_file(staged)
+                objects.verify(digest)
+                return ImportedCapture(objects.path_for(digest), capture_hash, False)
+            retained = objects.put_file(staged)
             connection.execute(
                 "INSERT INTO imported_captures VALUES (?, ?, ?, ?)",
                 (capture_hash, project, retained.digest, roots),
@@ -99,6 +104,4 @@ def import_scientific_capture(
                     for run_id, digest in identities.items()
                 ],
             )
-        return ImportedCapture(
-            store.objects.path_for(retained.digest), capture_hash, True
-        )
+        return ImportedCapture(objects.path_for(retained.digest), capture_hash, True)

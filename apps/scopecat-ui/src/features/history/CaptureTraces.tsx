@@ -2,12 +2,10 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MeasurementDatasetSchema, MeasurementRecord } from "../../api-contract";
 import { apiClient, apiData } from "../../api-client";
-import { MeasurementChart, TraceAvailabilityDetails } from "../runs/MeasurementDataPreview";
+import { MeasurementTraceResult } from "../runs/MeasurementDataPreview";
 import {
   measurementEntityAxes,
-  measurementTraceChart,
   measurementTraceQueryPlans,
-  measurementTraceStatus,
 } from "../runs/measurement-visualization";
 
 export function CaptureTraces({
@@ -63,7 +61,6 @@ export function CaptureTraces({
         }),
       ),
   });
-  const chart = useMemo(() => measurementTraceChart(preview.data), [preview.data]);
   if (plans.length === 0 || records.length === 0) return null;
   return (
     <section className="space-y-3" aria-label="Captured waveforms">
@@ -116,15 +113,11 @@ export function CaptureTraces({
           </select>
         </label>
       )}
-      {preview.isPending && <p role="status">Reading waveform preview…</p>}
-      {preview.error && <p role="alert">{preview.error.message}</p>}
-      {preview.data && (
-        <>
-          <p role="status">{measurementTraceStatus(preview.data)}</p>
-          {chart && <MeasurementChart chart={chart} />}
-          <TraceAvailabilityDetails preview={preview.data} />
-        </>
-      )}
+      <MeasurementTraceResult
+        preview={preview.data}
+        pending={preview.isPending}
+        error={preview.error}
+      />
     </section>
   );
 }

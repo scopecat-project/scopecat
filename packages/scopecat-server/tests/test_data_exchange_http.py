@@ -1,7 +1,11 @@
 """Portable data uses the application without requesting a device backend."""
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock
+from weakref import ReferenceType, ref
 
 import pytest
 from fastapi.testclient import TestClient
@@ -60,9 +64,58 @@ from scopecat_server.http import data_exchange
 from scopecat_server.instruments.backend import InstrumentBackendUnavailable
 from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.runtime import LocalDaemonRuntime
+from scopecat_server.services.data_exchange import DataExchangeService
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+
+
+def test_recording_page_does_not_retain_a_page_of_raw_arrays(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    arrays: list[ReferenceType[MeasurementArray]] = []
+    schema = MeasurementDatasetSchema(
+        dataset_id="signals",
+        point_domain=MeasurementPointCloudPointDomain(columns=()),
+        dimensions=(MeasurementDimension(id="point", kind="point", size=3),),
+    )
+
+    def records(*, offset: int, limit: int) -> Iterator[MeasurementRecord]:
+        for index in range(offset, offset + limit):
+            if index >= 2:
+                assert arrays[index - 2]() is None, (
+                    "raw records accumulated before summarizing"
+                )
+            value = MeasurementArray.create(values=[float(index)] * 8192)
+            arrays.append(ref(value))
+            yield MeasurementRecord(
+                run_id="run",
+                point_index=index,
+                coordinates={},
+                observables={"signal": value},
+            )
+
+    exchange = MagicMock()
+    exchange.__enter__.return_value.recording.return_value = SimpleNamespace(
+        header=SimpleNamespace(dataset_schema=schema),
+        record_count=3,
+        selected_record_count=None,
+        records=records,
+    )
+    monkeypatch.setattr(
+        "scopecat_server.services.data_exchange.ScientificExchange",
+        Mock(return_value=exchange),
+    )
+    service = DataExchangeService(Mock())
+    monkeypatch.setattr(service, "path", Mock(return_value=tmp_path / "capture"))
+    page = service.recording_page(
+        "capture", "run", selection="acquired", offset=0, limit=3
+    )
+    assert len(page.items) == 3
+    assert all(
+        item.observables["signal"].kind == "array_summary" for item in page.items
+    )
+    assert all(item() is None for item in arrays)
 
 
 def _evidence() -> ScientificEvidence:

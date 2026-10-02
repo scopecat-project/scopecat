@@ -2,7 +2,7 @@
 
 import threading
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import httpx2
 import pytest
@@ -17,6 +17,26 @@ from lab_tools.desktop_files import (
 from lab_tools.desktop_session import DesktopSession
 
 HASH = "sha256:" + "a" * 64
+
+
+def test_cancelled_download_preserves_destination_and_removes_partial(
+    tmp_path, monkeypatch
+):
+    target = tmp_path / "kept.scopecat"
+    target.write_bytes(b"original")
+    cancel = threading.Event()
+
+    class Cancelled(httpx2.SyncByteStream):
+        def __iter__(self):
+            yield b"a" * 1024 * 1024
+            cancel.set()
+            yield b"b" * 1024 * 1024
+
+    _transport(monkeypatch, lambda _request: httpx2.Response(200, stream=Cancelled()))
+    with pytest.raises(ValueError, match="取消"):
+        save_capture("http://localhost:1234", HASH, target, cancel)
+    assert target.read_bytes() == b"original"
+    assert list(tmp_path.iterdir()) == [target]
 
 
 def test_title_change_targets_only_its_own_native_window():
@@ -123,9 +143,9 @@ def test_native_dialog_cancel_does_not_transfer_or_restart(
         str(target) if selection_type is str else (str(target),)
     )
     assert api.save_capture(HASH) == str(target)
-    download.assert_called_once_with("http://localhost:1234", HASH, Path(target))
+    download.assert_called_once_with("http://localhost:1234", HASH, Path(target), ANY)
     assert api.export_run("run") == str(target)
-    export.assert_called_once_with("http://localhost:1234", "run", target)
+    export.assert_called_once_with("http://localhost:1234", "run", target, ANY)
     runtime.start.assert_not_called()
     runtime.stop.assert_not_called()
 

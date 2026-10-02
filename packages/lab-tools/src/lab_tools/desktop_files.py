@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import threading
 from pathlib import Path
 from typing import cast
 from urllib.parse import quote
@@ -31,32 +32,54 @@ def _check_response(response: httpx2.Response) -> None:
     )
 
 
-def import_capture(base_url: str, source: Path) -> CaptureImportReceipt:
+def _check_cancel(cancel: threading.Event | None) -> None:
+    if cancel is not None and cancel.is_set():
+        raise ValueError("文件操作已取消")
+
+
+def import_capture(
+    base_url: str, source: Path, cancel: threading.Event | None = None
+) -> CaptureImportReceipt:
     with (
         source.open("rb") as stream,
-        httpx2.Client(
-            timeout=httpx2.Timeout(None, connect=3), trust_env=False
-        ) as client,
+        httpx2.Client(timeout=httpx2.Timeout(30, connect=3), trust_env=False) as client,
     ):
+
+        def chunks():
+            while block := stream.read(1024 * 1024):
+                _check_cancel(cancel)
+                yield block
+
+        _check_cancel(cancel)
         response = client.post(
             base_url + "/api/v1/data/captures",
             headers={"Content-Type": "application/octet-stream"},
-            content=iter(lambda: stream.read(1024 * 1024), b""),
+            content=chunks(),
         )
         _check_response(response)
         return CaptureImportReceipt.model_validate(response.json())
 
 
-def save_capture(base_url: str, content_hash: str, destination: Path) -> None:
+def save_capture(
+    base_url: str,
+    content_hash: str,
+    destination: Path,
+    cancel: threading.Event | None = None,
+) -> None:
     _download(
         base_url + "/api/v1/data/captures/" + quote(content_hash, safe="") + "/file",
         destination,
+        cancel,
     )
 
 
-def export_run(base_url: str, run_id: str, destination: Path) -> None:
+def export_run(
+    base_url: str, run_id: str, destination: Path, cancel: threading.Event | None = None
+) -> None:
     _download(
-        base_url + "/api/v1/data/runs/" + quote(run_id, safe="") + "/file", destination
+        base_url + "/api/v1/data/runs/" + quote(run_id, safe="") + "/file",
+        destination,
+        cancel,
     )
 
 
@@ -66,6 +89,7 @@ def save_captured_artifact(
     analysis_hash: str,
     artifact_id: str,
     destination: Path,
+    cancel: threading.Event | None = None,
 ) -> None:
     _download(
         base_url
@@ -76,10 +100,13 @@ def save_captured_artifact(
         + "/artifacts/"
         + quote(artifact_id, safe=""),
         destination,
+        cancel,
     )
 
 
-def _download(url: str, destination: Path) -> None:
+def _download(
+    url: str, destination: Path, cancel: threading.Event | None = None
+) -> None:
     """Publish only a completed download; native Save owns overwrite confirmation."""
     with tempfile.NamedTemporaryFile(
         dir=destination.parent, prefix=".scopecat-save-", delete=False
@@ -88,7 +115,7 @@ def _download(url: str, destination: Path) -> None:
         try:
             with (
                 httpx2.Client(
-                    timeout=httpx2.Timeout(None, connect=3), trust_env=False
+                    timeout=httpx2.Timeout(30, connect=3), trust_env=False
                 ) as client,
                 client.stream(
                     "GET",
@@ -97,6 +124,7 @@ def _download(url: str, destination: Path) -> None:
             ):
                 _check_response(response)
                 for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                    _check_cancel(cancel)
                     temporary.write(chunk)
             temporary.flush()
             os.fsync(temporary.fileno())
@@ -105,6 +133,7 @@ def _download(url: str, destination: Path) -> None:
             staged.unlink(missing_ok=True)
             raise
     try:
+        _check_cancel(cancel)
         staged.replace(destination)
     finally:
         staged.unlink(missing_ok=True)

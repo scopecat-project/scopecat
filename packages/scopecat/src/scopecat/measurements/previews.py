@@ -1,6 +1,6 @@
 """Bounded presentation values; summaries are not scientific measurement values."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable
 from math import prod
 from typing import Annotated, Literal
 
@@ -52,7 +52,7 @@ class MeasurementRecordPreview(BaseModel):
 
 
 def preview_measurement_records(
-    records: Sequence[MeasurementRecord], *, array_sample_budget: int = 4096
+    records: Iterable[MeasurementRecord], *, array_sample_budget: int = 4096
 ) -> tuple[MeasurementRecordPreview, ...]:
     """Keep small arrays within one shared page budget; summarize larger values.
 

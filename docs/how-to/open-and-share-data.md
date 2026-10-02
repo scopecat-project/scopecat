@@ -43,6 +43,12 @@ Repeatedly opening the same data does not create another measurement. A file wit
 conflicting content for an already imported source/run is rejected rather than
 replacing the earlier data.
 
+To remove an imported copy, choose **Review data cleanup…** beside it on Data.
+Review the selected file and space to reclaim, then confirm deletion. This removes
+the application's copy, not your original file. If cleanup cannot finish, use
+**Data cleanup history** to retry. Other imported files keep their own records;
+you can open a removed file again after cleanup finishes.
+
 ## Analyze with your own Python tools
 
 Install the matching public Scopecat Python package in your own environment,

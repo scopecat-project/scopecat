@@ -363,7 +363,9 @@ def test_run_evidence_captures_accepted_inputs_without_execution(
         RunEvidence.model_validate(changed)
 
 
-def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(tmp_path: Path):
+def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     from zipfile import ZipFile
 
     from scopecat.data_exchange import ScientificExchange, write_scientific_exchange
@@ -433,17 +435,61 @@ def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(tmp_path:
             connection.execute(
                 "SELECT count(*) FROM imported_run_identities"
             ).fetchone()[0]
-            == 2
+            == 3
         )
         assert (
             connection.execute("SELECT count(*) FROM scheduler_runs").fetchone()[0] == 0
         )
-    target.sqlite.close()
+    from scopecat.records.data_cleanup import DataCleanupCommand, DataCleanupSelection
+
+    from scopecat_server.errors import BackendConflict
+    from scopecat_server.services.data_cleanup import DataCleanupService
     from scopecat_server.snapshots import verify_store_files
     from scopecat_server.storage.sqlite.object_store import ObjectNotFoundError
 
+    cleanup = DataCleanupService(store)
+    preview = cleanup.preview(DataCleanupSelection(captures=(first.content_hash,)))
+    assert preview.bytes_to_reclaim == first.path.stat().st_size
+    assert not preview.blockers
+
+    def locked_file(_path: Path) -> None:
+        raise OSError("locked file")
+
+    with monkeypatch.context() as fault:
+        fault.setattr(
+            "scopecat_server.services.data_cleanup.shutil.rmtree", locked_file
+        )
+        operation = cleanup.execute(
+            DataCleanupCommand(request_key="remove-first", preview=preview)
+        )
+    assert operation.state == "records_removed"
+    assert operation.error == "locked file"
+    # The other capture continues to own the same run identity.
+    with pytest.raises(ValueError, match="different content"):
+        import_scientific_capture(store, conflict)
+    with pytest.raises(BackendConflict, match="cleared"):
+        import_scientific_capture(store, first.path)
+    assert cleanup.resume(operation.id).state == "complete"
+    assert not first.path.exists()
+    overlap = import_scientific_capture(store, overlap_path)
+    assert not overlap.created
+    result = cleanup.execute(
+        DataCleanupCommand(
+            request_key="remove-overlap",
+            preview=cleanup.preview(
+                DataCleanupSelection(captures=(overlap.content_hash,))
+            ),
+        )
+    )
+    assert result.state == "complete"
+    # Once all owners are removed, a changed capture can be imported normally.
+    replacement = import_scientific_capture(store, conflict)
+    assert replacement.created
+    assert cleanup.resume(operation.id).state == "complete"
+    assert conflict.exists()
+    target.sqlite.close()
     verify_store_files(tmp_path / "target")
-    first.path.unlink()
+    replacement.path.unlink()
     with pytest.raises(ObjectNotFoundError):
         verify_store_files(tmp_path / "target")
 

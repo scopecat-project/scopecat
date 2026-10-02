@@ -6,6 +6,24 @@ not a complete exported run.
 
 ## Current delivery status
 
+The 2026-10-03 transition-design review adds a focused closeout batch: imported
+captures now participate in ordinary preview/retry cleanup with resource-owned
+bytes and per-capture run identity membership; the recording-only import library
+has been retired. Recording page summaries consume raw records incrementally.
+Native file operations have window-local serialization and application-owned
+wait/cancel accounting, and imported/live waveform results share presentation.
+These changes supersede the package and suite checkpoint below for affected
+paths; rerun relevant checks and native lifecycle acceptance against the new
+package, not unrelated completed journeys. The development store schema is 105;
+no migration or rewriting of existing stores is performed.
+
+Local checks for this batch: 139 related Python tests passed, followed by the new
+raw-array lifetime regression and four schema/plan tests (five passed); the seven
+HTTP exchange tests passed again after bounding trace reads by the series budget.
+All 388 frontend tests passed. Python and frontend type checking, Ruff, frontend
+lint/formatting, 11 import contracts and documentation links passed. Native
+file-operation and cleanup platform observations still require a rebuilt package.
+
 This section is the PR 2 handoff checkpoint, updated on 2026-10-03 against
 `00423b27f`. Resume from the remaining items below, not from earlier planning
 language or a conversation summary. Detailed evidence is linked, not a new task
@@ -158,15 +176,9 @@ Host-parameter evidence uses the same normalized persisted-model hash convention
 as other model content. This changes prebaseline development identities; no old
 identity fallback or historical-file rewrite is introduced.
 
-`scopecat.measurements.imports.import_measurement_snapshot(source, directory)`
-copies into a caller-selected data directory, verifies the owned copy in full,
-then publishes it atomically. It checks unselected historical chunks too. Equal
-run identity and manifest content make a repeated import idempotent; equal run
-identity with different content is a conflict, including a later partial capture.
-Neither case silently replaces existing data. ZIP timestamps are not scientific
-identity. This file-level import does not register execution state or complete
-application-level evidence import. Scientific-container import and external
-analysis publication/provenance are described below.
+Measurement snapshots are recording partitions used by scientific exchange, not
+a second import library. Application import accepts complete scientific captures
+through the path below; independent Python readers can still inspect partitions.
 
 ## Scientific evidence capture and application import
 
@@ -246,8 +258,8 @@ their hashes remain verifiable. Import must not restore those descriptions into
 the receiving machine's device registry or activate source/environment selections.
 
 `import_scientific_capture` now verifies an owned copy and retains the entire
-package in the application's existing immutable object store. Schema 104 indexes
-captures and source-qualified run identities without inserting scheduler rows or
+package under its capture-owned immutable object directory. Schema 105 indexes
+captures and their source-qualified run memberships without inserting scheduler rows or
 local device bindings. Repacked identical archives reuse the retained capture;
 overlapping exports compare their shared runs, including recording and payload
 identities, before committing any import rows. Different content for an existing

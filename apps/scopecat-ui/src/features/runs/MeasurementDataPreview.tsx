@@ -103,10 +103,6 @@ export function MeasurementDataPreview({
   ]);
   const selectedTracePlan =
     tracePlans.find((plan) => plan.id === selectedTracePlanId) ?? tracePlans[0];
-  const traceChart = useMemo(
-    () => (tracePending || traceError ? undefined : measurementTraceChart(tracePreview)),
-    [traceError, tracePending, tracePreview],
-  );
   const table = useMemo(
     () =>
       measurementTable(
@@ -350,25 +346,12 @@ export function MeasurementDataPreview({
                 ))}
               </select>
             </label>
-            <span
-              className="inline-flex items-center gap-1.5"
-              role={traceError ? "alert" : "status"}
-            >
-              {tracePending && (
-                <LoaderCircle className="animate-spin" size={12} aria-hidden="true" />
-              )}
-              {tracePreviewStatus(tracePreview, traceError, tracePending)}
-            </span>
           </div>
-          {traceChart && <MeasurementChart chart={traceChart} />}
-          {!tracePending && !traceError && tracePreview && (
-            <TraceAvailabilityDetails preview={tracePreview} />
-          )}
-          {!tracePending && !traceError && tracePreview && !traceChart && (
-            <p className="m-0 text-[0.62rem] text-text-dim">
-              No durable or available series were returned for this bounded selection.
-            </p>
-          )}
+          <MeasurementTraceResult
+            preview={tracePreview}
+            pending={tracePending}
+            error={traceError}
+          />
         </div>
       )}
 
@@ -411,6 +394,31 @@ export function MeasurementDataPreview({
         </pre>
       </details>
     </div>
+  );
+}
+
+export function MeasurementTraceResult({
+  preview,
+  pending,
+  error,
+}: {
+  preview?: MeasurementTracePreview;
+  pending: boolean;
+  error: Error | null;
+}) {
+  const chart = useMemo(
+    () => (pending || error ? undefined : measurementTraceChart(preview)),
+    [preview, pending, error],
+  );
+  return (
+    <>
+      <p role={error ? "alert" : "status"}>{tracePreviewStatus(preview, error, pending)}</p>
+      {chart && <MeasurementChart chart={chart} />}
+      {!pending && !error && preview && <TraceAvailabilityDetails preview={preview} />}
+      {!pending && !error && preview && !chart && (
+        <p>No durable or available series were returned for this bounded selection.</p>
+      )}
+    </>
   );
 }
 

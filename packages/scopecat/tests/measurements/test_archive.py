@@ -26,7 +26,6 @@ from scopecat.measurements.archive import (
     write_measurement_snapshot,
 )
 from scopecat.measurements.dataset import Dataset
-from scopecat.measurements.imports import import_measurement_snapshot
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
@@ -885,41 +884,6 @@ def test_selection_cannot_relabel_a_record(tmp_path: Path):
         pytest.raises(ValueError, match="another point"),
     ):
         tuple(snapshot.selected_records())
-
-
-def test_verified_import_is_idempotent_and_conflicts_preserve_existing(tmp_path: Path):
-    header, appends, _ = recording()
-    source = tmp_path / "source.scopecat"
-    write_measurement_snapshot(source, header, appends)
-    directory = tmp_path / "library"
-    first = import_measurement_snapshot(source, directory)
-    assert first.created
-    repacked = tmp_path / "repacked.scopecat"
-    rewrite(source, repacked, {})
-    repeated = import_measurement_snapshot(repacked, directory)
-    assert repeated.path == first.path
-    assert not repeated.created
-    partial = tmp_path / "partial.scopecat"
-    write_measurement_snapshot(partial, header, appends[:1])
-    with pytest.raises(ValueError, match="different imported content"):
-        import_measurement_snapshot(partial, directory)
-    with MeasurementSnapshot(first.path) as retained:
-        assert retained.record_count == 4
-    assert not list(directory.glob(".import-*"))
-
-
-def test_import_verifies_unselected_chunks_before_publication(tmp_path: Path):
-    header, appends, _ = recording()
-    source = tmp_path / "source.scopecat"
-    write_measurement_snapshot(source, header, appends, projection=())
-    with ZipFile(source) as archive:
-        content = archive.read("chunks/00000001.arrow")
-    damaged = tmp_path / "damaged.scopecat"
-    rewrite(source, damaged, {"chunks/00000001.arrow": bytes(len(content))})
-    directory = tmp_path / "library"
-    with pytest.raises(ValueError, match="checksum"):
-        import_measurement_snapshot(damaged, directory)
-    assert not list(directory.iterdir())
 
 
 def test_snapshot_uses_ordinary_dataset_analysis_after_close(tmp_path: Path):

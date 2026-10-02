@@ -6,6 +6,7 @@ import { requestOpenFile } from "../application/DesktopFiles";
 import { useLocationUrl } from "../../lib/navigation";
 import { selectCapture } from "./capture-location";
 import { useDesktopAvailable } from "../application/DesktopSession";
+import { ClearData } from "./DataCleanup";
 
 export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
   const selectedCapture = useLocationUrl().searchParams.get("capture");
@@ -74,6 +75,12 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
                 Save a copy…
               </button>
             )}
+            <ClearData
+              captures={[capture.content_hash]}
+              onCleared={() => {
+                if (selectedCapture === capture.content_hash) selectCapture(undefined);
+              }}
+            />
           </li>
         ))}
       </ul>

@@ -21,6 +21,7 @@ def selection_resources(selection: DataCleanupSelection) -> Iterator[tuple[str, 
         ("setup", selection.setups),
         ("setup_definition", selection.setup_definitions),
         ("parameters", selection.parameters),
+        ("capture", selection.captures),
     ):
         for identity in values:
             yield kind, identity

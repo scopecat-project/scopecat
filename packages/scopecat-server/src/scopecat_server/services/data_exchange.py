@@ -2,6 +2,9 @@
 
 import json
 import sqlite3
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
+from itertools import islice
 from pathlib import Path
 from typing import Literal, cast
 
@@ -33,7 +36,9 @@ from scopecat_server.storage.sqlite.exchange_import import (
     CaptureConflict,
     import_scientific_capture,
 )
+from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+from scopecat_server.storage.sqlite.resource_objects import resource_directory
 
 
 class DataExchangeService:
@@ -97,7 +102,12 @@ class DataExchangeService:
 
     def path(self, content_hash: str) -> Path:
         digest = cast("str", self._row(content_hash)["object_digest"])
-        return self._store.objects.path_for(digest)
+        return self._objects(content_hash).path_for(digest)
+
+    def _objects(self, content_hash: str) -> ImmutableObjectStore:
+        return ImmutableObjectStore(
+            resource_directory(self._store.objects, "capture", content_hash)
+        )
 
     def evidence(self, content_hash: str) -> ScientificEvidence:
         with ScientificExchange(self.path(content_hash)) as capture:
@@ -107,8 +117,9 @@ class DataExchangeService:
 
     def download(self, content_hash: str) -> Path:
         row = self._row(content_hash)
-        self._store.objects.verify(cast("str", row["object_digest"]))
-        return self._store.objects.path_for(cast("str", row["object_digest"]))
+        objects = self._objects(content_hash)
+        objects.verify(cast("str", row["object_digest"]))
+        return objects.path_for(cast("str", row["object_digest"]))
 
     def copy_analysis_artifact(
         self,
@@ -165,9 +176,10 @@ class DataExchangeService:
         offset: int,
         limit: int,
     ) -> CaptureRecordingPage:
-        schema, count, selected_count, items = self._recording_records(
+        with self._recording_records(
             content_hash, run_id, selection=selection, offset=offset, limit=limit
-        )
+        ) as (schema, count, selected_count, records):
+            items = preview_measurement_records(records)
         following = offset + len(items)
         return CaptureRecordingPage(
             dataset_schema=schema,
@@ -176,9 +188,10 @@ class DataExchangeService:
             selected_record_count=selected_count,
             offset=offset,
             next_offset=following if following < count else None,
-            items=preview_measurement_records(items),
+            items=items,
         )
 
+    @contextmanager
     def _recording_records(
         self,
         content_hash: str,
@@ -187,8 +200,8 @@ class DataExchangeService:
         selection: Literal["acquired", "selected"],
         offset: int,
         limit: int,
-    ) -> tuple[
-        MeasurementDatasetSchema, int, int | None, tuple[MeasurementRecord, ...]
+    ) -> Generator[
+        tuple[MeasurementDatasetSchema, int, int | None, Iterator[MeasurementRecord]]
     ]:
         with ScientificExchange(self.path(content_hash)) as capture:
             try:
@@ -203,11 +216,11 @@ class DataExchangeService:
                     raise BackendConflict(
                         "this recording has no retained analysis selection"
                     )
-                items = tuple(recording.selected_records(offset=offset, limit=limit))
+                items = recording.selected_records(offset=offset, limit=limit)
             else:
                 count = recording.record_count
-                items = tuple(recording.records(offset=offset, limit=limit))
-            return (
+                items = recording.records(offset=offset, limit=limit)
+            yield (
                 recording.header.dataset_schema,
                 count,
                 recording.selected_record_count,
@@ -224,9 +237,15 @@ class DataExchangeService:
         offset: int,
         limit: int,
     ) -> MeasurementTracePreview:
-        schema, _count, _selected_count, items = self._recording_records(
+        with self._recording_records(
             content_hash, run_id, selection=selection, offset=offset, limit=limit
-        )
+        ) as (schema, count, _selected_count, records):
+            selected_records = min(limit, max(0, count - offset))
+            # Every record contributes at least one series. Records beyond the
+            # series/sample budget cannot contribute to this preview.
+            items = tuple(
+                islice(records, min(query.max_series, query.max_samples // 2))
+            )
         try:
             projection = project_measurement_trace_preview(
                 MeasurementDataset(dataset_schema=schema, records=items),
@@ -242,7 +261,7 @@ class DataExchangeService:
             )
         except ValueError as error:
             raise BackendConflict(str(error)) from error
-        selected_count = len(items) * projection.selected_entity_count
+        selected_count = selected_records * projection.selected_entity_count
         return MeasurementTracePreview.from_projection(
             projection,
             selected_series_count=selected_count,

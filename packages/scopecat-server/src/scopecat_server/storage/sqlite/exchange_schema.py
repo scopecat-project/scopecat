@@ -12,6 +12,6 @@ CREATE TABLE IF NOT EXISTS imported_run_identities (
     run_id TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     capture_hash TEXT NOT NULL REFERENCES imported_captures(content_hash),
-    PRIMARY KEY (source_project_id, run_id)
+    PRIMARY KEY (source_project_id, run_id, capture_hash)
 );
 """

@@ -275,7 +275,8 @@ def verify_store_files(project: Path) -> int:
                 "UNION SELECT digest, NULL, NULL FROM experiment_plan_revisions "
                 "UNION SELECT digest, NULL, NULL "
                 "FROM apparatus_observation_attachments "
-                "UNION SELECT object_digest, NULL, NULL FROM imported_captures"
+                "UNION SELECT object_digest, 'capture', content_hash "
+                "FROM imported_captures"
             ).fetchall(),
         )
         for row in refs:
@@ -305,7 +306,7 @@ def verify_store_files(project: Path) -> int:
             if (
                 len(parts) == 5
                 and parts[0] == "resources"
-                and parts[1] in {"run", "analysis"}
+                and parts[1] in {"run", "analysis", "capture"}
             ):
                 selected = ImmutableObjectStore(objects.root.joinpath(*parts[:3]))
                 parts = parts[3:]

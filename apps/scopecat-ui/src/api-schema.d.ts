@@ -4792,6 +4792,11 @@ export interface components {
              */
             analyses: string[];
             /**
+             * Captures
+             * @default []
+             */
+            captures: string[];
+            /**
              * Parameters
              * @default []
              */
