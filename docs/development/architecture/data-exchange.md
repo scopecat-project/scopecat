@@ -1,8 +1,22 @@
 # Independent data and analysis delivery
 
-PR 2 starts with a recording container, then adds complete scientific reference
-closure and the [two-window product journey](desktop-product.md). These are
-separate acceptance steps; a readable recording is not a complete exported run.
+PR 2 delivers portable scientific evidence, independent Python analysis and the
+[two-window product journey](desktop-product.md). A readable recording alone is
+not a complete exported run.
+
+## Current delivery status
+
+| Requirement | Current evidence | Still required before merge |
+| --- | --- | --- |
+| Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys | Final closure self-review against the complete contract |
+| Independent analysis and retained provenance | Fresh public-wheel environment; native export / Python analysis / Mac native open | Final consumer and documentation review |
+| Large-data access | 256 MiB waveform verification and analysis; byte-budgeted selection cache; bounded HTTP previews | Packaged large-waveform browsing |
+| Ordinary desktop interaction | Mac two-window, copy/find/zoom, native file commands and failure recovery observations | Remaining lifecycle observations and Windows interaction acceptance |
+| Delivery and host decision | Local Python/UI/static checks; isolated Mac packages | Final package, platform evidence, recorded host decision, self-review and CI |
+
+The detailed checks below describe their actual scope. The
+[desktop evidence](desktop-product.md) distinguishes native observations from
+automated checks; earlier observations are not claims that all later gates passed.
 
 ## Implemented foundation
 
@@ -25,8 +39,8 @@ iterator over a changing recording.
 The SQLite exporter captures the header, append index and analysis selection in
 one read transaction. Acquisition can continue through WAL while it reads immutable
 objects. Concurrent destructive cleanup may fail an export; publication remains
-atomic and leaves the destination absent. This recording export is not yet the
-complete scientific evidence export described below.
+atomic and leaves the destination absent. This low-level recording export is
+distinct from the complete scientific evidence export described below.
 
 `export_measurement_snapshot_in_transaction` also accepts the capture layer's
 existing connection. Its header, acquisition history and retained selection all
@@ -59,8 +73,9 @@ with MeasurementSnapshot(Path("measurement.scopecat")) as snapshot:
 
 This is a development format, not a supported persistent-data baseline. No
 prebaseline readers or migration chain are introduced. The snapshot has no claim
-to complete plan, parameter, setup, analysis or artifact evidence, no permissions
-to access devices, and no import path into the application store yet.
+to complete plan, parameter, setup, analysis or artifact evidence, and grants no
+permissions to access devices. Application import uses the scientific container
+described below, not this low-level recording container alone.
 
 ## Independent Python use and recording import
 
@@ -100,10 +115,10 @@ run identity and manifest content make a repeated import idempotent; equal run
 identity with different content is a conflict, including a later partial capture.
 Neither case silently replaces existing data. ZIP timestamps are not scientific
 identity. This file-level import does not register execution state or complete
-application-level evidence import. External analysis publication/provenance is
-still part of the remaining work below.
+application-level evidence import. Scientific-container import and external
+analysis publication/provenance are described below.
 
-## Evidence capture under construction
+## Scientific evidence capture and application import
 
 Retained evidence capture now reads the original request, accepted run snapshot,
 effective configuration and content index within a caller-owned SQLite transaction.
@@ -135,8 +150,8 @@ Each consumed output must match its kind, target, content hash and codec, using 
 same identity calculation as publication admission. Figure layers also pull in
 their exact published dataset source, even without a declared analysis input;
 a preview never substitutes for those dataset bytes. Missing upstream bytes fail
-capture. Other evidence families and application integration are not complete yet.
-These capture components alone do not prove reference closure.
+capture. Closure also depends on the other evidence families and reference
+verification described below; these components alone do not prove it.
 
 Interpretation capture resolves the exact request/response hashes across retained
 step attempts, rather than substituting the latest judgment. The evidence includes
@@ -172,8 +187,8 @@ rejects a missing upstream original request. A software workflow also exports a
 rerun after analysis, candidate review and configuration activation, retaining its
 baseline recordings and explicitly referenced parameter proposals. The application
 now exposes this collector through a current-run export command. Its presence does
-not establish a complete-run interchange promise: the remaining evidence-closure
-audit and external-analysis round trip are still part of this milestone.
+not establish a complete-run interchange promise: the final evidence-closure
+self-review remains part of this milestone.
 
 Machine-local registrations stay outside the exchange. Historical configuration
 and setup snapshots retain original connection descriptions as inert evidence so
@@ -208,7 +223,8 @@ the captured analysis record hash selecting the source. Cancellation clears
 previous completion feedback, failure leaves the destination unchanged, and
 success reports the saved path. Browser attachment downloads remain available
 through the same data API. Local HTTP, bridge and UI tests cover these paths;
-packaged Mac and Windows save-dialog acceptance is still outstanding.
+packaged Mac save, cancellation and failure recovery are recorded in the desktop
+evidence. Windows native saving still requires acceptance.
 
 Native File → Open dispatches to the focused window. Its page button and
 Cmd/Ctrl-O share one window-owned command, with progress and error feedback even
@@ -255,11 +271,10 @@ run links navigate within the same capture. Artifact reads resolve the verified
 analysis record content hash and its subject-qualified payload owner, so repeated
 analysis IDs in different runs cannot select the wrong attachment. Verified
 attachments are staged before streaming and temporary copies are cleaned afterward.
-This reuses the existing artifact download UI; native attachment-save behavior
-still needs the desktop acceptance checks. Measurement chart/trace browsing,
-application-wide Open commands, external-analysis provenance and full
-scientific-reference validation remain outstanding; this is not the completed
-desktop file journey.
+This reuses the existing artifact download UI; Mac native attachment saving has
+been observed. The bounded preview and native command implementations above,
+and external-analysis provenance below, are covered locally. Remaining packaged
+large-waveform, lifecycle and Windows checks are tracked by the desktop gate.
 
 Analysis-reference verification now runs in the public data layer during archive
 verification as well as store capture. Published inputs and figure data sources
@@ -291,7 +306,7 @@ capture independently; changing a contribution hash is rejected. A separate
 cross-run acceptance journey exports a run using its accepted registry entry,
 retains the project decision publication, and rejects missing decisions or changed
 decision schemas. These are local scientific-graph checks, not evidence of the
-remaining external-analysis or desktop interaction requirements.
+complete desktop interaction requirements.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:
@@ -313,7 +328,7 @@ uv run --locked ruff format --check .
 
 These are data-layer checks, not substitutes for the complete desktop journey.
 
-## Remaining PR 2 scope
+## Independent analysis and delivery boundary
 
 External analysis writes now have a storage path: `ScientificExchange.write_analyses`
 accepts ordinary prepared `AnalysisPublication` values and writes a new capture.
