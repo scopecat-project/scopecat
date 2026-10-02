@@ -20,6 +20,7 @@ import httpx2
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.author_environment import create_client_environment
 from lab_tools.desktop import DesktopAPI
+from lab_tools.desktop_session import DesktopSession
 from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
@@ -28,7 +29,8 @@ assert not (home / "software").exists()
 workspace = home / "authors"
 urls = []
 api = DesktopAPI(
-    runtime, lambda: SimpleNamespace(load_url=urls.append), threading.Event())
+    DesktopSession(runtime, threading.Event()),
+    lambda: SimpleNamespace(load_url=urls.append))
 try:
     assert api.create_source(str(home), "authors") == str(workspace)
     assert "source=" in urls[-1] and urls[-1].endswith("#settings")
@@ -41,7 +43,8 @@ try:
     assert {"directory": str(existing), "python": None} in api.status()["sources"]
     base = subprocess.check_output([str(client), "-I", "-c",
         "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
-    assert Path(base).is_relative_to(workspace / ".scopecat-python")
+    assert Path(base).resolve().is_relative_to(
+        (workspace / ".scopecat-python").resolve())
     subprocess.run([str(client), "-I", "-c", '''
 from importlib.util import find_spec
 for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
@@ -89,7 +92,7 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
         assert state["bundle_identifier"] == "org.scopecat.desktop", (
             "Cocoa lost the app identity; menu-bar registration can fail"
         )
-    python = Path(cast("str", state["python"]))
+    python = Path(cast("str", state["python"])).resolve()
     assert python.is_relative_to(relocated)
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
         [str(python), "-I", "-B", "-c", RUNTIME_CHECK, str(home)],

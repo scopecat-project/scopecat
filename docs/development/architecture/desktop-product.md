@@ -1,6 +1,7 @@
 # Desktop product decision gate
 
-Status: agreed direction and next acceptance scope, not delivered functionality.
+Status: implemented candidate with partial platform acceptance; the complete
+gate below is not yet qualified.
 Data exchange implementation and its current limits are tracked in
 [independent data and analysis](data-exchange.md).
 The existing GUI, daemon topology and pywebview shell are prototypes. Preserve
@@ -69,8 +70,9 @@ These boundaries alone do not finish the portable-data desktop journey.
 
 Use two small synthetic records with different identifiers and known values.
 No hardware, SDK, private adapter or editable source is needed. Portable-data
-reading belongs to milestone PR 2; until implemented, fixtures can demonstrate
-interactions but cannot count as data portability or data-only runtime evidence.
+reading belongs to milestone PR 2. Use exported captures to qualify portability;
+fixtures alone can demonstrate interactions but cannot count as data portability
+or data-only runtime evidence.
 
 | Step | Observable acceptance |
 | --- | --- |
@@ -318,6 +320,27 @@ Cmd-Q displayed progress; process inspection confirmed native host and backend
 exit. This qualifies Mac browsing for this synthetic size and shape, not arbitrary
 waveform layouts, multi-gigabyte latency or Windows rendering.
 
+### Packaged runtime and author environment acceptance (2026-10-03)
+
+`scripts/verify_native_application.py` passed against a disposable copy of the
+Mac package built from `fbb14e6a9`. The package includes the waveform memory fixes;
+subsequent changes at the time of this check were documentation and verifier
+repairs. The verifier now uses the shared `DesktopSession` API and resolves macOS
+`/tmp` and `/private/tmp` aliases before checking interpreter containment.
+
+The signed application was relocated into a path containing spaces and Chinese
+characters. With an empty `PATH`, two native headless launches returned the same
+stopped state and preserved application contents. Its packaged runtime created an
+independent author environment, registered author sources and completed the
+three-point synthetic author journey. The author environment excluded server,
+desktop, teaching and JupyterLab packages, and remained usable after the
+application copy was moved away. Application signatures and contents were checked
+again after the runtime journey.
+
+This qualifies the packaged runtime and environment separation, not native window
+interaction. No installer was supplied: DMG distribution, Windows installation
+and the remaining platform lifecycle observations are not covered by this check.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
@@ -345,7 +368,7 @@ and vendor runtime boundaries; PR 4 qualifies their composition and retirement.
 If the slice proves a broader UI rewrite necessary, re-plan scope explicitly
 before adding PRs or assigning the rewrite to integration closeout.
 
-Next implementation starts with per-window state and application-owned commands,
-then two data views and ordinary interactions. Execution integration follows the
-same acceptance journey; creating a second copy of the whole console is not the
-target. The [lifecycle contract](desktop-lifecycle.md) defines close versus Quit.
+Per-window state, application-owned commands and two data views are implemented.
+Complete the remaining platform observations against the same acceptance journey
+before recording the host decision. The
+[lifecycle contract](desktop-lifecycle.md) defines close versus Quit.
