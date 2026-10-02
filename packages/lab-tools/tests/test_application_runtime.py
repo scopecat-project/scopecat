@@ -65,6 +65,21 @@ def test_idle_exit_uses_live_service_and_releases_ownership(application):
     assert application.status().state == "stopped"
 
 
+def test_installation_qualification_does_not_load_driver_environment(application):
+    before = application.installation()
+    composition = (
+        '[lab]\ninstrument_backend = "unavailable_vendor_sdk:create_backend"\n'
+        "[authors]\ndependencies = []\n"
+    )
+    candidate = application.qualify(
+        before.python, before.static_dir, composition=composition
+    )
+    assert candidate.composition == composition
+    assert candidate.environment == before.environment
+    assert application.installation() == before
+    assert application.status().state == "stopped"
+
+
 def test_unavailable_author_folder_does_not_block_application_update(
     application, tmp_path
 ):

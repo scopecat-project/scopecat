@@ -90,26 +90,6 @@ def main() -> None:
         "server": version("scopecat-server"),
     }
     source_id: str | None = None
-    drivers: dict[str, object] | None = None
-    if request.action == "probe" and project.instrument_backend_spec is not None:
-        from scopecat_server.instruments.worker import (
-            SubprocessInstrumentBackendEndpoint,
-        )
-
-        endpoint = SubprocessInstrumentBackendEndpoint(
-            project.root,
-            project.instrument_backend_spec,
-            installed_packages=project.adapter_packages,
-            startup_timeout=30,
-        )
-        try:
-            # Metadata qualification must not describe bindings or connect devices.
-            drivers = {
-                "catalog": endpoint.driver_catalog.model_dump(mode="json"),
-                "artifact_hash": endpoint.artifact_hash,
-            }
-        finally:
-            endpoint.shutdown()
     if request.action == "register_source":
         from scopecat_server.author_registration import register_author_workspace
 
@@ -156,7 +136,6 @@ def main() -> None:
                 "environment": environment,
                 "settings_identity": settings_identity,
                 "adapter_identity": adapter_identity,
-                "drivers": drivers,
             }
         ),
         encoding="utf-8",

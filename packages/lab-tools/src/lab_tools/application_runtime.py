@@ -24,16 +24,9 @@ from scopecat.daemon.endpoint import DaemonEndpointRecord
 from scopecat.daemon.health import ApplicationActivity
 from scopecat.installed_adapter import AdapterReference
 from scopecat.project import open_project
-from scopecat.sdk.instruments.catalog import DriverCatalog
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
 from .bundle import managed_path
-
-
-class QualifiedDrivers(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    catalog: DriverCatalog
-    artifact_hash: str
 
 
 class Installation(BaseModel):
@@ -43,7 +36,6 @@ class Installation(BaseModel):
     environment: dict[str, str]
     settings_identity: str | None = None
     adapter_identity: str | None = None
-    drivers: QualifiedDrivers | None = None
     composition: str
 
 
@@ -177,9 +169,6 @@ class ApplicationRuntime:
             environment=cast("dict[str, str]", result["environment"]),
             settings_identity=cast("str | None", result["settings_identity"]),
             adapter_identity=cast("str | None", result["adapter_identity"]),
-            drivers=QualifiedDrivers.model_validate_json(json.dumps(result["drivers"]))
-            if result["drivers"] is not None
-            else None,
             composition=composition,
         )
 
@@ -219,7 +208,7 @@ class ApplicationRuntime:
                     "root": str(self.root),
                     **selected.model_dump(
                         mode="json",
-                        exclude={"python", "drivers", "composition"},
+                        exclude={"python", "composition"},
                     ),
                 },
             )
@@ -292,7 +281,7 @@ class ApplicationRuntime:
                     "author_python": str(python.absolute()) if python else None,
                     **selected.model_dump(
                         mode="json",
-                        exclude={"python", "drivers", "composition"},
+                        exclude={"python", "composition"},
                     ),
                 },
             )

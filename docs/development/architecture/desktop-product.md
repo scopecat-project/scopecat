@@ -24,6 +24,20 @@ An HTTP daemon is not a required product boundary. Decide IPC and process layout
 after identifying isolation, recovery and remote-access requirements. Do not move
 scientific execution into the UI process just to remove the word daemon.
 
+Data-only use means that reading data does not require a device connection,
+vendor SDK or author execution environment. It does not mean that the desktop
+must bypass its application backend. The same application may start a backend
+for data access and task management; starting it must not implicitly initialize
+execution capabilities. Open File and experimental work belong in the same
+interface, not separate data-viewer and workbench entry modes. Independent Python
+readers remain usable without starting the application.
+
+Installation qualification checks the application package, not a live driver
+catalog. Driver availability and failures belong to the device capability and
+must not become a prerequisite for opening the application. In particular,
+restoring a previously selected driver must not prevent browsing retained data
+when its environment is unavailable.
+
 ## Bounded product slice
 
 Use two small synthetic records with different identifiers and known values.
