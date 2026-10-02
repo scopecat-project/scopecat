@@ -228,8 +228,15 @@ interpretation inputs require their exact historical judgment. Duplicate analysi
 and interpretation identities are rejected. Export uses the same published-edge
 resolver and validation rules instead of maintaining a second implementation.
 Archive tests reject missing dependencies before publishing a destination file.
-This closes the analysis-input checks, not the entire scientific graph: transitive
-input revisions and candidate/proposal provenance still need import-side checks.
+Input revision discovery is also shared between store export and archive
+verification. Parameter, setup, plan, author, sample, target and configuration
+references must resolve to exact retained identities. Plan ancestry and setup
+definitions remain part of this closure; duplicate revision identities, altered
+plan contents and damaged author source bytes are rejected without loading source
+code. Tests remove individual families from a real captured plan chain and reject
+missing ancestors rather than substituting current values. Candidate/proposal
+provenance still needs import-side checks before the complete scientific graph
+can be considered verified.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:

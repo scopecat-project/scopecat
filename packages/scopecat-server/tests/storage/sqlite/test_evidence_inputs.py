@@ -10,6 +10,7 @@ from scopecat.config.registry.records import (
     ManualConfigDraftRegistrySource,
 )
 from scopecat.daemon.wire import SampleCreateCommand, SampleReviseCommand
+from scopecat.data_exchange.input_references import validate_input_references
 from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.records.author_revision import (
     AuthorRevisionBundle,
@@ -233,6 +234,11 @@ def test_sample_and_target_capture_retains_exact_revisions(tmp_path: Path):
         evidence = capture_input_revisions(connection, store, (target.ref, binding))
         assert evidence.samples == (first,)
         assert evidence.targets == (target,)
+        validate_input_references(evidence, (target.ref, binding))
+        with pytest.raises(ValueError, match="input revision is missing"):
+            validate_input_references(
+                evidence.model_copy(update={"samples": ()}), (target.ref, binding)
+            )
         payloads = capture_sample_payloads(store, evidence.samples)
         assert len(payloads) == 1
         assert payloads[0].reference.owner_id == first.sample_id
@@ -334,6 +340,24 @@ def test_hidden_plan_ancestry_keeps_exact_parameter_and_setup_revisions(tmp_path
     assert evidence.setup_definitions == (definition,)
     assert evidence.plans == (first, second)
     assert not evidence.authors
+    validate_input_references(evidence, (second.ref,))
+    for family in ("parameters", "setups", "setup_definitions", "plans"):
+        with pytest.raises(ValueError, match=r"missing|differs"):
+            validate_input_references(
+                evidence.model_copy(update={family: ()}), (second.ref,)
+            )
+    with pytest.raises(ValueError, match="input revision is missing"):
+        validate_input_references(evidence.model_copy(update={"plans": (second,)}))
+    with pytest.raises(ValueError, match="duplicate input revision"):
+        validate_input_references(
+            evidence.model_copy(update={"parameters": (parameters, parameters)})
+        )
+    with pytest.raises(ValueError, match="plan evidence content identity"):
+        validate_input_references(
+            evidence.model_copy(
+                update={"plans": (first.model_copy(update={"name": "changed"}), second)}
+            )
+        )
     with (
         store.sqlite.read_transaction() as connection,
         pytest.raises(ValueError, match="parameter evidence hash"),
@@ -385,11 +409,16 @@ def test_retained_author_evidence_is_verified_without_extracting_source(tmp_path
     with store.sqlite.read_transaction() as connection:
         evidence = capture_input_revisions(connection, store, (manifest.ref,))
     assert evidence.authors == (bundle,)
+    validate_input_references(evidence, (manifest.ref,))
     assert not list(tmp_path.rglob("experiment.py"))
 
     damaged = bundle.model_copy(
         update={"files": {"experiment.py": b64encode(b"wrong").decode()}}
     )
+    with pytest.raises(ValueError, match="source checksum mismatch"):
+        validate_input_references(
+            evidence.model_copy(update={"authors": (damaged,)}), (manifest.ref,)
+        )
     digest = store.objects.put(damaged.model_dump_json().encode()).digest
     with store.sqlite.write_transaction() as connection:
         connection.execute("UPDATE author_revisions SET bundle_digest=?", (digest,))

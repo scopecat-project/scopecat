@@ -2,20 +2,19 @@
 
 import sqlite3
 from collections import deque
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable
 from typing import cast
 
 from pydantic import BaseModel
-from scopecat.config.registry.records import ManualConfigDraftRegistrySource
 from scopecat.data_exchange import PayloadReference, PayloadSource
+from scopecat.data_exchange.input_references import InputReference, input_references
 from scopecat.data_exchange.models import ConfigurationEvidence, InputRevisionEvidence
 from scopecat.project_sources import verified_source_files
 from scopecat.records.author_revision import AuthorRevisionBundle, AuthorRevisionRef
 from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experiment_plan import ExperimentPlanRevision
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
-from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
-from scopecat.records.run import ConfigRegistryRunConfigSource
+from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.sample import SampleBinding, SampleRevision
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.records.scientific_scope import TargetMember
@@ -37,52 +36,6 @@ from scopecat_server.storage.sqlite.parameter_revisions import (
 )
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
-
-type InputReference = (
-    ParameterRevisionRef
-    | SetupRevisionRef
-    | ExperimentPlanRef
-    | AuthorRevisionRef
-    | SampleBinding
-    | TargetMember
-    | TargetRevisionRef
-    | ConfigContextRef
-)
-
-
-def _references(value: object) -> Iterator[InputReference]:
-    if isinstance(value, PlanConfigRef):
-        yield ConfigContextRef(entry_id=value.entry_id, content_hash=value.content_hash)
-        return
-    if isinstance(value, ConfigRegistryRunConfigSource):
-        yield ConfigContextRef(entry_id=value.entry_id, content_hash=value.content_hash)
-        return
-    if isinstance(value, ManualConfigDraftRegistrySource):
-        yield ConfigContextRef(
-            entry_id=value.base_entry_id, content_hash=value.base_config_content_hash
-        )
-        return
-    if isinstance(
-        value,
-        ParameterRevisionRef
-        | SetupRevisionRef
-        | ExperimentPlanRef
-        | AuthorRevisionRef
-        | SampleBinding
-        | TargetMember
-        | TargetRevisionRef
-        | ConfigContextRef,
-    ):
-        yield value
-    elif isinstance(value, BaseModel):
-        for name in type(value).model_fields:
-            yield from _references(cast("object", getattr(value, name)))
-    elif isinstance(value, Mapping):
-        for item in cast("Mapping[object, object]", value).values():
-            yield from _references(item)
-    elif isinstance(value, tuple | list):
-        for item in cast("Iterable[object]", value):
-            yield from _references(item)
 
 
 def _configuration_evidence(
@@ -110,7 +63,7 @@ def capture_input_revisions(
     Other evidence families (analysis, sample artifacts and interpretation) need
     their own resolvers; this function does not claim that they are closed.
     """
-    pending = deque(ref for model in models for ref in _references(model))
+    pending = deque(ref for model in models for ref in input_references(model))
     seen: set[InputReference] = set()
     parameters: dict[str, ParameterRevision] = {}
     setups: dict[str, SetupRevision] = {}
@@ -191,7 +144,7 @@ def capture_input_revisions(
                     raise ValueError("setup definition differs from its resolution")
                 definitions[definition.id] = definition
                 setups[item.id] = item
-                pending.extend(_references(definition))
+                pending.extend(input_references(definition))
                 captured = item
             case ExperimentPlanRef():
                 item = plan_repository.get_in_transaction(connection, ref)
@@ -217,7 +170,7 @@ def capture_input_revisions(
                     pass
                 authors[ref.content_hash] = bundle
                 captured = bundle
-        pending.extend(_references(captured))
+        pending.extend(input_references(captured))
     return InputRevisionEvidence(
         parameters=tuple(parameters[key] for key in sorted(parameters)),
         setups=tuple(setups[key] for key in sorted(setups)),
