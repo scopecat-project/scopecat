@@ -6,6 +6,12 @@ not a complete exported run.
 
 ## Current delivery status
 
+This section is the PR 2 handoff checkpoint, updated on 2026-10-03 against
+`00423b27f`. Resume from the remaining items below, not from earlier planning
+language or a conversation summary. Detailed evidence is linked, not a new task
+list. A completed check needs repeating only when a relevant change, failure or
+specific unresolved concern invalidates its evidence.
+
 | Requirement | Current evidence | Still required before merge |
 | --- | --- | --- |
 | Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys | Final closure self-review against the complete contract |
@@ -13,6 +19,50 @@ not a complete exported run.
 | Large-data access | 256 MiB waveform verification, independent analysis and packaged Mac browsing; byte-budgeted selection cache; bounded HTTP previews | Windows rendering acceptance |
 | Ordinary desktop interaction | Mac two-window, copy/find/zoom, native file commands and failure recovery observations | Remaining lifecycle observations and Windows interaction acceptance |
 | Delivery and host decision | Local Python/UI/static checks; isolated Mac packages | Final package, platform evidence, recorded host decision, self-review and CI |
+
+Completed local work:
+
+- Independent public-wheel analysis and native export/analysis/open round trip:
+  `0e5e840e8`; export and shutdown failure recovery: `b6db9c4a5`.
+- Waveform memory corrections: `a29590c3f`; packaged Mac 256 MiB waveform browsing:
+  `0605dfc65`. These are complete within their recorded scope, not pending
+  implementations.
+- User guide: `882719f91`; packaged runtime, relocation, repeat startup and
+  independent author-environment acceptance: `00423b27f`.
+- Latest local Python run: 3856 passed, 14 failed under macOS sandbox process
+  restrictions, one skipped. All 14 failed cases passed when rerun with normal
+  process permissions. This is coverage across two runs, not one all-green run.
+  Frontend: 84 files / 388 tests passed. Type checking, 11 import contracts,
+  Ruff, documentation links and strict documentation build passed. Subsequent
+  verifier changes passed targeted Ruff and type checks; no production code
+  changed after those suite results.
+- A local DMG of the qualified Mac package passed image integrity, extracted
+  application signature and deliberate-tamper detection. Gatekeeper rejected
+  the ad-hoc-signed quarantined copy; notarization is not provided. This check
+  did not attempt Finder first-open or change the user's security settings.
+
+Remaining closeout, in order:
+
+1. Finish the scientific-reference closure self-review; reuse the existing
+   export/import, proposal, interpretation and external-analysis evidence.
+2. Complete the missing Mac native observations: all views hidden and restored
+   through the menu bar, plus active-work Quit choices. Prior automation raised
+   windows while observing them, so it did not prove continuous hidden state.
+3. Update the PR description to the delivered scope, then run CI and native
+   distribution builds after local closeout. The remote PR still describes an
+   earlier foundation; its old green checks do not qualify current local work.
+4. Use that Windows artifact for the remaining PR 2 native interaction and
+   lifecycle trial. Earlier user acceptance of PR 1 is retained as PR 1 evidence,
+   not discarded and not silently relabelled as PR 2 qualification.
+5. Record the host decision and final self-review, confirm current CI, and stop
+   before merge as requested.
+
+Settled scope: one application/backend; no separate viewer mode; closing the
+last window hides to tray on both platforms even when idle; only explicit Quit
+exits. Broad GUI redesign, vendor execution isolation and real-device acceptance
+are not newly added PR 2 work. Do not reopen these decisions merely because a
+conversation was compacted. Private consumer pin updates remain separate from
+data-only application qualification.
 
 The detailed checks below describe their actual scope. The
 [desktop evidence](desktop-product.md) distinguishes native observations from
