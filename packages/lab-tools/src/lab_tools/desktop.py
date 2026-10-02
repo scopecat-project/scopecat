@@ -87,7 +87,7 @@ class DesktopAPI:
         from .desktop_files import import_capture
 
         with self._file_lock:
-            base_url = self._data_url()
+            _ = self._data_url()
             selected = self._window().create_file_dialog(
                 webview.FileDialog.OPEN,
                 allow_multiple=False,
@@ -96,9 +96,9 @@ class DesktopAPI:
             if not selected:
                 return None
             with self._session.file_operation() as cancel:
-                return import_capture(base_url, Path(selected[0]), cancel).model_dump(
-                    mode="json"
-                )
+                return import_capture(
+                    self._data_url(), Path(selected[0]), cancel
+                ).model_dump(mode="json")
 
     def save_capture(self, content_hash: str) -> str | None:
         from .desktop_files import save_capture
@@ -137,7 +137,7 @@ class DesktopAPI:
         import webview
 
         with self._file_lock:
-            base_url = self._data_url()
+            _ = self._data_url()
             selected = self._window().create_file_dialog(
                 webview.FileDialog.SAVE,
                 save_filename=filename,
@@ -148,7 +148,7 @@ class DesktopAPI:
             # Cocoa SAVE returns one string; other hosts return a path tuple.
             destination = Path(selected if isinstance(selected, str) else selected[0])
             with self._session.file_operation() as cancel:
-                download(base_url, destination, cancel)
+                download(self._data_url(), destination, cancel)
             return str(destination)
 
     def _data_url(self) -> str:

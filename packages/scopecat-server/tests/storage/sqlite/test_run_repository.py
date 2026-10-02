@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
@@ -363,8 +365,20 @@ def test_run_evidence_captures_accepted_inputs_without_execution(
         RunEvidence.model_validate(changed)
 
 
+@pytest.mark.parametrize(
+    "native_lock",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                sys.platform != "win32", reason="Windows open-file deletion semantics"
+            ),
+        ),
+    ],
+)
 def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_lock: bool
 ):
     from zipfile import ZipFile
 
@@ -455,15 +469,19 @@ def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(
     def locked_file(_path: Path) -> None:
         raise OSError("locked file")
 
-    with monkeypatch.context() as fault:
-        fault.setattr(
-            "scopecat_server.services.data_cleanup.shutil.rmtree", locked_file
-        )
+    with ExitStack() as stack:
+        if native_lock:
+            _ = stack.enter_context(first.path.open("rb"))
+        else:
+            fault = stack.enter_context(monkeypatch.context())
+            fault.setattr(
+                "scopecat_server.services.data_cleanup.shutil.rmtree", locked_file
+            )
         operation = cleanup.execute(
             DataCleanupCommand(request_key="remove-first", preview=preview)
         )
     assert operation.state == "records_removed"
-    assert operation.error == "locked file"
+    assert operation.error is not None
     # The other capture continues to own the same run identity.
     with pytest.raises(ValueError, match="different content"):
         import_scientific_capture(store, conflict)

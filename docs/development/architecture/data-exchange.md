@@ -32,7 +32,7 @@ specific unresolved concern invalidates its evidence.
 
 | Requirement | Current evidence | Still required before merge |
 | --- | --- | --- |
-| Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys | Final closure self-review against the complete contract |
+| Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys; closure self-review completed | No outstanding closure implementation item |
 | Independent analysis and retained provenance | Fresh public-wheel environment; native export / Python analysis / Mac native open | Final consumer and documentation review |
 | Large-data access | 256 MiB waveform verification, independent analysis and packaged Mac browsing; byte-budgeted selection cache; bounded HTTP previews | Windows rendering acceptance |
 | Ordinary desktop interaction | Mac two-window, copy/find/zoom, native file commands and failure recovery observations | Remaining lifecycle observations and Windows interaction acceptance |
@@ -61,17 +61,23 @@ Completed local work:
 
 Remaining closeout, in order:
 
-1. Finish the scientific-reference closure self-review; reuse the existing
-   export/import, proposal, interpretation and external-analysis evidence.
+1. Scientific-reference closure self-review is complete: traced the single read
+   transaction through typed run/input/analysis/interpretation traversal and
+   payload assembly, and checked reader validation of revision hashes, proposal
+   baselines, exact publication outputs and recording selections. Existing
+   source-isolation, missing-reference, conflict and composed-maintenance tests
+   remain the evidence; no new closure defect was found in this review.
 2. Complete the missing Mac native observations: all views hidden and restored
    through the menu bar, plus active-work Quit choices. Prior automation raised
    windows while observing them, so it did not prove continuous hidden state.
 3. Update the PR description to the delivered scope, then run CI and native
    distribution builds after local closeout. The remote PR still describes an
    earlier foundation; its old green checks do not qualify current local work.
-4. Use that Windows artifact for the remaining PR 2 native interaction and
-   lifecycle trial. Earlier user acceptance of PR 1 is retained as PR 1 evidence,
-   not discarded and not silently relabelled as PR 2 qualification.
+4. Use that Windows artifact for the bounded native interaction and lifecycle
+   check, not a duplicate full business journey. Native distribution automation
+   covers real open-file cleanup failure/retry on Windows. Earlier user acceptance
+   of unchanged PR 1 behavior remains valid; new window/file coordination receives
+   targeted observations.
 5. Record the host decision and final self-review, confirm current CI, and stop
    before merge as requested.
 

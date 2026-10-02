@@ -50,6 +50,28 @@ def test_title_change_targets_only_its_own_native_window():
     second.set_title.assert_called_once_with("Beta · source · Scopecat")
 
 
+def test_file_dialog_uses_connection_selected_after_dialog(tmp_path, monkeypatch):
+    runtime, window = Mock(), Mock()
+    session = DesktopSession(runtime, threading.Event())
+    session.connected("http://localhost:1234")
+    api = DesktopAPI(session, lambda: window)
+    target = tmp_path / "selected.scopecat"
+
+    def choose(*args, **kwargs):
+        session.connected("http://localhost:4321")
+        return (str(target),)
+
+    window.create_file_dialog.side_effect = choose
+    upload, download = Mock(), Mock()
+    monkeypatch.setattr("lab_tools.desktop_files.import_capture", upload)
+    monkeypatch.setattr("lab_tools.desktop_files.save_capture", download)
+    api.open_capture()
+    upload.assert_called_once_with("http://localhost:4321", target, ANY)
+    session.connected("http://localhost:1234")
+    api.save_capture(HASH)
+    download.assert_called_once_with("http://localhost:4321", HASH, target, ANY)
+
+
 def _transport(monkeypatch, handler):
     client = httpx2.Client
     monkeypatch.setattr(

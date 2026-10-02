@@ -86,9 +86,14 @@ or data-only runtime evidence.
 | Run a synthetic task and close all views | Task continues with an accessible background entry; reopening creates/restores a usable view without replaying the task |
 | Quit | One work-aware decision across windows; feedback persists until shutdown; complete native process exit succeeds without a crash report |
 
-Verify on Mac and Windows. Record what is observed, what is automated, and what
-is fixture-only. A mocked backend or static mockup alone cannot pass this gate.
-Include one failed export and one failed shutdown with a usable recovery path.
+Qualify both platforms using native observations for platform behavior and
+automated checks for shared data semantics. Do not repeat the full business
+journey manually on both platforms or on every new build. Retain previous
+observations unless affected code changes. A mocked backend or static mockup
+alone cannot establish native behavior. Failed export and shutdown already have
+Mac observations; Windows needs targeted regression for its own differences,
+including real open-file deletion behavior, not duplicate manual fault injection.
+Use the bounded [Windows check](../windows-application-trial.md) for PR 2.
 
 ### Current local evidence (2026-10-02)
 
@@ -352,7 +357,8 @@ Choose using: ordinary interaction quality, independent window state, native
 file/menu integration, lifecycle correctness, debugging cost, reproducible
 packaging, accessibility and maintenance effort. Record actual platform gaps and
 the ongoing glue needed, rather than ranking languages or executable sizes.
-If the candidate passes without recurring platform workarounds, reuse it. If a
+Record a reuse decision against this slice; do not reopen shell selection for
+each PR or build. If the candidate passes without recurring platform workarounds, reuse it. If a
 required interaction or lifecycle remains unreliable, compare one alternative
 using the same slice. Ship one selected host and retire the experiment.
 
