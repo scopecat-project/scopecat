@@ -71,14 +71,13 @@ Remaining closeout, in order:
    baselines, exact publication outputs and recording selections. Existing
    source-isolation, missing-reference, conflict and composed-maintenance tests
    remain the evidence; no new closure defect was found in this review.
-2. Complete the missing Mac native observation: all views remain hidden and
-   restore through the menu bar. The rebuilt package's file-work Quit choices and
-   cleanup/reimport journey are complete within the limits recorded above.
-   Automation raises windows while observing them, so it cannot prove continuous
-   hidden state. A human observation has been requested.
-3. Update the PR description to the delivered scope, then run CI and native
-   distribution builds after local closeout. The remote PR still describes an
-   earlier foundation; its old green checks do not qualify current local work.
+2. Mac native closeout is complete within its recorded scope. The maintainer
+   confirmed that the final window stayed hidden and restored through the menu
+   bar; the rebuilt package's file-work Quit choices and cleanup/reimport journey
+   passed, and the isolated test application was explicitly quit without residue.
+3. The PR description now describes the delivered scope. CI and native
+   distribution builds were dispatched against `43d504820` after local checks;
+   confirm their results rather than reusing earlier green checks.
 4. Use that Windows artifact for the bounded native interaction and lifecycle
    check, not a duplicate full business journey. Native distribution automation
    covers real open-file cleanup failure/retry on Windows. Earlier user acceptance

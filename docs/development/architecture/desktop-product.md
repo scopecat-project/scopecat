@@ -364,11 +364,12 @@ before the stop took effect, so this observation qualifies native decision and
 exit coordination, not mid-transfer cancellation. Cancellation, preservation of
 an existing destination and partial-file removal are covered by automated tests.
 
-Closing the final window left the application running. A continuous-hidden and
-menu-bar restore observation still needs a human check: this automation's native
-window reads raise the window, and its screenshots omit the system menu bar.
-These tool limitations must not be recorded as either a product failure or a
-successful tray interaction.
+Closing the final window left the application running. The maintainer then
+confirmed that it stayed hidden and restored normally through **Open Scopecat**
+in the menu bar. This is human evidence: the automation's native window reads
+raise the window and cannot independently establish continuous hidden state.
+After this check, explicit Cmd-Q exited and process inspection confirmed no
+remaining test host or backend.
 
 ## Technology decision
 
