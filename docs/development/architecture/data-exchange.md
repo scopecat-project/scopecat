@@ -56,9 +56,40 @@ prebaseline readers or migration chain are introduced. The snapshot has no claim
 to complete plan, parameter, setup, analysis or artifact evidence, no permissions
 to access devices, and no import path into the application store yet.
 
+## Independent Python use and recording import
+
+Use an ordinary environment with the public `scopecat` package. Reading does not
+import `scopecat_server`, original author code or vendor SDKs. To use the same
+labeled analysis API as the application:
+
+```python
+from pathlib import Path
+from scopecat.measurements.archive import MeasurementSnapshot
+
+with MeasurementSnapshot(Path("measurement.scopecat")) as snapshot:
+    data = snapshot.dataset()
+
+values = data.to_xarray()
+```
+
+`dataset()` explicitly materializes the captured selection in memory. Large-data
+processing should iterate `selected_records()` pages. The returned materialized
+dataset survives closing the archive. A raw snapshot without a captured selection
+cannot be converted by guessing which retries to use.
+
+`scopecat.measurements.imports.import_measurement_snapshot(source, directory)`
+copies into a caller-selected data directory, verifies the owned copy in full,
+then publishes it atomically. It checks unselected historical chunks too. Equal
+run identity and manifest content make a repeated import idempotent; equal run
+identity with different content is a conflict, including a later partial capture.
+Neither case silently replaces existing data. ZIP timestamps are not scientific
+identity. This file-level import does not register execution state or complete
+application-level evidence import. External analysis publication/provenance is
+still part of the remaining work below.
+
 ## Remaining PR 2 scope
 
-1. Capture a stable recording and scientific reference closure from retained data;
+1. Extend stable recording capture to scientific reference closure from retained data;
    include plans, parameters, result contracts, analysis and artifact dependencies
    with explicit missing-reference failures. Keep machine-local bindings outside
    the exchange contract. Do not silently turn absent provenance into empty data.

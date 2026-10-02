@@ -12,6 +12,7 @@ from scopecat.measurements.archive import (
     RecordSelection,
     write_measurement_snapshot,
 )
+from scopecat.measurements.imports import import_measurement_snapshot
 from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementDimension,
@@ -139,20 +140,39 @@ def test_unknown_members_rejected_without_extraction(tmp_path: Path):
 
 
 def test_reader_needs_no_server_or_original_project(tmp_path: Path):
-    header, appends, _ = recording()
+    header, appends, records = recording()
     source = tmp_path / "independent.scopecat"
-    write_measurement_snapshot(source, header, appends)
+    write_measurement_snapshot(
+        source,
+        header,
+        appends,
+        projection=tuple(
+            sorted(
+                (
+                    RecordSelection(
+                        point_index=record.point_index, acquisition_index=index
+                    )
+                    for index, record in enumerate(records)
+                ),
+                key=lambda item: item.point_index,
+            )
+        ),
+    )
     script = """
 import sys
 from pathlib import Path
 class ForbidServer:
     def find_spec(self, fullname, path=None, target=None):
-        if fullname == 'scopecat_server' or fullname.startswith('scopecat_server.'):
+        if fullname.split('.')[0] in {
+            'scopecat_server', 'lab_tools', 'reference_lab', 'scopecat_lab_adapter'
+        }:
             raise AssertionError('reading data must not import the execution server')
 sys.meta_path.insert(0, ForbidServer())
 from scopecat.measurements.archive import MeasurementSnapshot
 with MeasurementSnapshot(Path(sys.argv[1])) as snapshot:
     assert [r.point_index for r in snapshot.records()] == [2, 0, 3, 1]
+    data = snapshot.dataset().to_xarray()
+    assert data['iq'].values.tolist() == [0j, 1-1j, 2-2j, 3-3j]
 """
     subprocess.run(  # noqa: S603 - fixed isolated interpreter and test script
         [sys.executable, "-I", "-c", script, str(source)],
@@ -253,3 +273,58 @@ def test_selection_cannot_relabel_a_record(tmp_path: Path):
         pytest.raises(ValueError, match="another point"),
     ):
         tuple(snapshot.selected_records())
+
+
+def test_verified_import_is_idempotent_and_conflicts_preserve_existing(tmp_path: Path):
+    header, appends, _ = recording()
+    source = tmp_path / "source.scopecat"
+    write_measurement_snapshot(source, header, appends)
+    directory = tmp_path / "library"
+    first = import_measurement_snapshot(source, directory)
+    assert first.created
+    repacked = tmp_path / "repacked.scopecat"
+    rewrite(source, repacked, {})
+    repeated = import_measurement_snapshot(repacked, directory)
+    assert repeated.path == first.path
+    assert not repeated.created
+    partial = tmp_path / "partial.scopecat"
+    write_measurement_snapshot(partial, header, appends[:1])
+    with pytest.raises(ValueError, match="different imported content"):
+        import_measurement_snapshot(partial, directory)
+    with MeasurementSnapshot(first.path) as retained:
+        assert retained.record_count == 4
+    assert not list(directory.glob(".import-*"))
+
+
+def test_import_verifies_unselected_chunks_before_publication(tmp_path: Path):
+    header, appends, _ = recording()
+    source = tmp_path / "source.scopecat"
+    write_measurement_snapshot(source, header, appends, projection=())
+    with ZipFile(source) as archive:
+        content = archive.read("chunks/00000001.arrow")
+    damaged = tmp_path / "damaged.scopecat"
+    rewrite(source, damaged, {"chunks/00000001.arrow": bytes(len(content))})
+    directory = tmp_path / "library"
+    with pytest.raises(ValueError, match="checksum"):
+        import_measurement_snapshot(damaged, directory)
+    assert not list(directory.iterdir())
+
+
+def test_snapshot_uses_ordinary_dataset_analysis_after_close(tmp_path: Path):
+    header, appends, _ = recording()
+    source = tmp_path / "analysis.scopecat"
+    write_measurement_snapshot(
+        source,
+        header,
+        appends,
+        projection=(
+            RecordSelection(point_index=0, acquisition_index=1),
+            RecordSelection(point_index=1, acquisition_index=3),
+            RecordSelection(point_index=2, acquisition_index=0),
+            RecordSelection(point_index=3, acquisition_index=2),
+        ),
+    )
+    with MeasurementSnapshot(source) as snapshot:
+        dataset = snapshot.dataset()
+    values = dataset.to_xarray()
+    assert values["iq"].values.tolist() == [0j, 1 - 1j, 2 - 2j, 3 - 3j]

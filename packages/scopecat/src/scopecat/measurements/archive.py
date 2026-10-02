@@ -12,7 +12,7 @@ from bisect import bisect_right
 from collections.abc import Iterable, Iterator
 from itertools import batched
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 from zipfile import ZIP_STORED, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +28,9 @@ from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetHeader,
 )
+
+if TYPE_CHECKING:
+    from scopecat.measurements.dataset import Dataset
 
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_CHUNK_BYTES = 64 * 1024 * 1024
@@ -199,6 +202,7 @@ class MeasurementSnapshot:
             for chunk in self._manifest.chunks:
                 self._starts.append(position)
                 position += chunk.count
+            self._record_count = position
         except Exception:
             self._archive.close()
             raise
@@ -209,7 +213,43 @@ class MeasurementSnapshot:
 
     @property
     def record_count(self) -> int:
-        return sum(chunk.count for chunk in self._manifest.chunks)
+        return self._record_count
+
+    def verify(self) -> None:
+        """Check every retained acquisition and selection before accepting import."""
+        for index in range(len(self._manifest.chunks)):
+            self._append(index)
+        if self.selected_record_count is not None:
+            for _record in self.selected_records(limit=self.selected_record_count):
+                pass
+
+    def dataset(self) -> Dataset:
+        """Materialize the captured analysis selection as the ordinary Dataset API.
+
+        This explicit operation loads all selected observations into memory. For
+        bounded processing use selected_records() pages instead. The result can
+        outlive the archive context and supports to_xarray() and labeled variables.
+        """
+        from scopecat.measurements.dataset import Dataset
+        from scopecat.records.content import ContentEntry
+        from scopecat.records.measurement import MeasurementDataset
+
+        count = self.selected_record_count
+        if count is None:
+            raise ValueError("snapshot has no captured analysis selection")
+        return Dataset(
+            MeasurementDataset(
+                dataset_schema=self.header.dataset_schema,
+                records=tuple(self.selected_records(limit=count)),
+            ),
+            ContentEntry(
+                role="dataset",
+                id=self.header.dataset_schema.dataset_id,
+                kind="measurement_dataset",
+                content_hash=self.content_hash,
+                schema=self.header.dataset_schema.model_dump(mode="json"),
+            ),
+        )
 
     @property
     def content_hash(self) -> str:

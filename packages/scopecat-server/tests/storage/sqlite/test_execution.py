@@ -833,6 +833,57 @@ def test_measurement_export_missing_chunk_does_not_publish(tmp_path: Path) -> No
     runs.sqlite.close()
 
 
+def test_measurement_export_does_not_mix_concurrent_acquisitions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from collections.abc import Iterable
+
+    from scopecat.measurements.archive import (
+        MeasurementSnapshot,
+        RecordSelection,
+        write_measurement_snapshot,
+    )
+
+    from scopecat_server.storage.sqlite import measurement_export
+
+    runs = _runs(tmp_path)
+    header = _header("export-concurrent", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+
+    def acquire_during_export(
+        destination: Path,
+        captured: MeasurementDatasetHeader,
+        appends: Iterable[MeasurementDatasetAppend],
+        *,
+        projection: Iterable[RecordSelection] | None = None,
+    ) -> None:
+        # The header was read, but neither lazy append nor selection query has
+        # started. Commit through another SQLite connection at this exact point.
+        _commit_append(runs, repository, _append(header, point_index=1))
+        write_measurement_snapshot(
+            destination,
+            captured,
+            appends,
+            projection=projection,
+        )
+
+    monkeypatch.setattr(
+        measurement_export,
+        "write_measurement_snapshot",
+        acquire_during_export,
+    )
+    destination = tmp_path / "captured.scopecat"
+    measurement_export.export_measurement_snapshot(runs, header.run_id, destination)
+    with MeasurementSnapshot(destination) as snapshot:
+        assert snapshot.record_count == 1
+        assert tuple(snapshot.selected_records()) == first.records
+    runs.sqlite.close()
+
+
 def test_measurement_repository_reuses_schema_hash_for_appends(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
