@@ -73,6 +73,21 @@ Verify on Mac and Windows. Record what is observed, what is automated, and what
 is fixture-only. A mocked backend or static mockup alone cannot pass this gate.
 Include one failed export and one failed shutdown with a usable recovery path.
 
+### Current local evidence (2026-10-02)
+
+An isolated Mac app wrapper loaded the current source from the development
+environment and the existing built GUI. The native File menu created a second
+window against the same backend. Navigating that window to Data and closing it
+left the first window on Experiments. Cmd-Q displayed shutdown progress, stopped
+the backend, and released the desktop ownership lock. Automated tests also cover
+preserving per-window URL navigation when the backend address changes and keeping
+the last native window alive when multiple close requests arrive.
+
+This is source-host interaction evidence, not qualification of a newly packaged
+release. It does not cover opening portable records, export, copy/find/zoom,
+in-flight experimental work, failed shutdown, or Windows multi-window behavior.
+The full bounded product slice remains incomplete.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

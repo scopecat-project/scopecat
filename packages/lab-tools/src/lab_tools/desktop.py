@@ -364,6 +364,7 @@ def run(
     import pystray
     import webview
     from PIL import Image
+    from webview.menu import Menu, MenuAction
 
     home.mkdir(parents=True, exist_ok=True)
     directory = home / "desktop"
@@ -469,6 +470,7 @@ def run(
             # launcher's icon. Tray artwork is configured independently above.
             webview.start(
                 supervise,
+                menu=[Menu("文件", [MenuAction("新建窗口", new_window_from_menu)])],
                 icon=(
                     str(Path(__file__).with_name("icons") / "Scopecat.ico")
                     if sys.platform == "win32"
