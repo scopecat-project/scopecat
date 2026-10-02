@@ -9,6 +9,7 @@ import pytest
 
 from scopecat.measurements.archive import (
     MeasurementSnapshot,
+    RecordSelection,
     write_measurement_snapshot,
 )
 from scopecat.records.measurement import (
@@ -75,7 +76,7 @@ def recording():
     return header, appends, records
 
 
-def test_snapshot_relocates_and_preserves_acquisition_order(tmp_path):
+def test_snapshot_relocates_and_preserves_acquisition_order(tmp_path: Path):
     header, appends, records = recording()
     original = tmp_path / "measurement.scopecat"
     write_measurement_snapshot(original, header, iter(appends))
@@ -88,7 +89,7 @@ def test_snapshot_relocates_and_preserves_acquisition_order(tmp_path):
         assert tuple(snapshot.records(limit=0)) == ()
 
 
-def test_failed_export_leaves_existing_destination_untouched(tmp_path):
+def test_failed_export_leaves_existing_destination_untouched(tmp_path: Path):
     header, appends, _ = recording()
     target = tmp_path / "important.scopecat"
     target.write_bytes(b"existing user data")
@@ -110,7 +111,9 @@ def rewrite(source: Path, destination: Path, changes: dict[str, bytes]):
             rewritten.writestr(name, content)
 
 
-def test_range_reads_do_not_read_other_chunks_but_check_selected_content(tmp_path):
+def test_range_reads_do_not_read_other_chunks_but_check_selected_content(
+    tmp_path: Path,
+):
     header, appends, records = recording()
     source = tmp_path / "source.scopecat"
     write_measurement_snapshot(source, header, appends)
@@ -124,7 +127,7 @@ def test_range_reads_do_not_read_other_chunks_but_check_selected_content(tmp_pat
             tuple(snapshot.records(offset=2, limit=1))
 
 
-def test_unknown_members_rejected_without_extraction(tmp_path):
+def test_unknown_members_rejected_without_extraction(tmp_path: Path):
     header, appends, _ = recording()
     source = tmp_path / "source.scopecat"
     write_measurement_snapshot(source, header, appends)
@@ -135,7 +138,7 @@ def test_unknown_members_rejected_without_extraction(tmp_path):
     assert not (tmp_path / "escaped").exists()
 
 
-def test_reader_needs_no_server_or_original_project(tmp_path):
+def test_reader_needs_no_server_or_original_project(tmp_path: Path):
     header, appends, _ = recording()
     source = tmp_path / "independent.scopecat"
     write_measurement_snapshot(source, header, appends)
@@ -159,7 +162,7 @@ with MeasurementSnapshot(Path(sys.argv[1])) as snapshot:
     )
 
 
-def test_partial_recording_keeps_planned_count(tmp_path):
+def test_partial_recording_keeps_planned_count(tmp_path: Path):
     header, appends, records = recording()
     source = tmp_path / "partial.scopecat"
     write_measurement_snapshot(source, header, appends[:1])
@@ -167,3 +170,86 @@ def test_partial_recording_keeps_planned_count(tmp_path):
         assert snapshot.header.expected_record_count == 4
         assert snapshot.record_count == 2
         assert tuple(snapshot.records()) == records[:2]
+
+
+def test_reacquisition_retains_physical_history_beyond_planned_count(tmp_path: Path):
+    header, appends, records = recording()
+    retry = MeasurementDatasetAppend(
+        run_id=header.run_id,
+        header_content_hash=header.content_hash,
+        acquisition_start=4,
+        records=records[:2],
+    )
+    path = tmp_path / "retried.scopecat"
+    write_measurement_snapshot(path, header, (*appends, retry))
+    with MeasurementSnapshot(path) as snapshot:
+        assert snapshot.record_count == 6
+        assert tuple(snapshot.records()) == (*records, *records[:2])
+
+
+@pytest.mark.parametrize("point_index", [-1, 4])
+def test_export_rejects_point_outside_declared_domain(tmp_path: Path, point_index: int):
+    header, _, records = recording()
+    append = MeasurementDatasetAppend(
+        run_id=header.run_id,
+        header_content_hash=header.content_hash,
+        acquisition_start=0,
+        records=(records[0].model_copy(update={"point_index": point_index}),),
+    )
+    with pytest.raises(ValueError, match="point index"):
+        write_measurement_snapshot(tmp_path / "invalid.scopecat", header, (append,))
+
+
+def test_analysis_selection_is_explicit_and_preserves_recovery_choice(tmp_path: Path):
+    header, appends, records = recording()
+    retry = MeasurementDatasetAppend(
+        run_id=header.run_id,
+        header_content_hash=header.content_hash,
+        acquisition_start=4,
+        records=(records[1].model_copy(update={"metadata": {"retry": True}}),),
+    )
+    source = tmp_path / "selected.scopecat"
+    # Point zero deliberately retains its earlier acquisition; the later physical
+    # retry is retained as evidence, not silently substituted into the analysis.
+    selection = (
+        RecordSelection(point_index=0, acquisition_index=1),
+        RecordSelection(point_index=1, acquisition_index=3),
+        RecordSelection(point_index=2, acquisition_index=0),
+    )
+    write_measurement_snapshot(source, header, (*appends, retry), projection=selection)
+    with MeasurementSnapshot(source) as snapshot:
+        assert snapshot.record_count == 5
+        assert snapshot.selected_record_count == 3
+        assert tuple(snapshot.selected_records()) == (
+            records[1],
+            records[3],
+            records[0],
+        )
+        assert tuple(snapshot.selected_records(offset=1, limit=1)) == (records[3],)
+        assert tuple(snapshot.records(offset=4)) == retry.records
+
+
+def test_absent_analysis_selection_is_not_inferred(tmp_path: Path):
+    header, appends, _ = recording()
+    source = tmp_path / "unselected.scopecat"
+    write_measurement_snapshot(source, header, appends)
+    with MeasurementSnapshot(source) as snapshot:
+        assert snapshot.selected_record_count is None
+        with pytest.raises(ValueError, match="no captured analysis selection"):
+            tuple(snapshot.selected_records())
+
+
+def test_selection_cannot_relabel_a_record(tmp_path: Path):
+    header, appends, _ = recording()
+    source = tmp_path / "wrong-point.scopecat"
+    write_measurement_snapshot(
+        source,
+        header,
+        appends,
+        projection=(RecordSelection(point_index=0, acquisition_index=0),),
+    )
+    with (
+        MeasurementSnapshot(source) as snapshot,
+        pytest.raises(ValueError, match="another point"),
+    ):
+        tuple(snapshot.selected_records())

@@ -786,6 +786,53 @@ def _commit_seal(
         )
 
 
+def test_measurement_export_captures_committed_history(tmp_path: Path) -> None:
+    from scopecat.measurements.archive import MeasurementSnapshot
+
+    from scopecat_server.storage.sqlite.measurement_export import (
+        export_measurement_snapshot,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("export-history", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+    destination = tmp_path / "capture.scopecat"
+    export_measurement_snapshot(runs, header.run_id, destination)
+    _commit_append(runs, repository, _append(header, point_index=1))
+    runs.sqlite.close()
+    with MeasurementSnapshot(destination) as snapshot:
+        assert snapshot.record_count == 1
+        assert tuple(snapshot.records()) == first.records
+        assert tuple(snapshot.selected_records()) == first.records
+        assert snapshot.header.expected_record_count == 2
+
+
+def test_measurement_export_missing_chunk_does_not_publish(tmp_path: Path) -> None:
+    from scopecat_server.storage.sqlite.measurement_export import (
+        export_measurement_snapshot,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("export-missing")
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    _commit_append(runs, repository, _append(header))
+    with runs.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref IN "
+            "(SELECT ref FROM execution_measurement_appends WHERE run_id=?)",
+            (header.run_id, header.run_id),
+        )
+    destination = tmp_path / "incomplete.scopecat"
+    with pytest.raises(ValueError, match="chunk is missing"):
+        export_measurement_snapshot(runs, header.run_id, destination)
+    assert not destination.exists()
+    runs.sqlite.close()
+
+
 def test_measurement_repository_reuses_schema_hash_for_appends(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

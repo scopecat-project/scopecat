@@ -12,6 +12,8 @@ header and Arrow append chunks; it does not invent another numeric serialization
 The manifest declares exact chunk sizes, SHA-256 checksums and acquired counts.
 Chunk identities bind to the header/run and contiguous physical acquisition order.
 Planned count remains distinct from acquired count for incomplete recordings.
+Retries can make physical acquisition count exceed the logical point limit. The
+limit constrains point indices, not the number of historical acquisitions.
 
 The container is a ZIP file with fixed member names, read without extraction.
 Unknown, duplicate or missing members are rejected. Manifest size is limited to
@@ -19,6 +21,18 @@ Unknown, duplicate or missing members are rejected. Manifest size is limited to
 and publishes without replacing existing files. Caller-owned data is never deleted.
 Writers must supply a consistent captured append sequence, not an unbounded live
 iterator over a changing recording.
+
+The SQLite exporter captures the header, append index and analysis selection in
+one read transaction. Acquisition can continue through WAL while it reads immutable
+objects. Concurrent destructive cleanup may fail an export; publication remains
+atomic and leaves the destination absent. This recording export is not yet the
+complete scientific evidence export described below.
+
+When supplied, the retained analysis selection is stored separately in pages of
+at most 1000 logical points. `selected_records(offset=..., limit=...)` follows those
+exact acquisition references in logical point order; it never substitutes the last
+physical retry. A raw snapshot without a captured selection explicitly rejects this
+analysis view. Missing selection and an explicitly empty selection are distinct.
 
 Opening reads metadata only. `records(offset=..., limit=...)` verifies and decodes
 only intersecting chunks, in acquisition order rather than logical point order.

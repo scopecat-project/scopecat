@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import os
 import tempfile
+from bisect import bisect_right
 from collections.abc import Iterable, Iterator
+from itertools import batched
 from pathlib import Path
 from typing import Literal, Self
 from zipfile import ZIP_STORED, ZipFile
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-from scopecat.kernel.content_identity import sha256_content_hash
+from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
 from scopecat.measurements.recording_arrow import (
     decode_measurement_append,
     encode_measurement_append,
@@ -47,12 +49,20 @@ class _Manifest(BaseModel):
     )
     header: MeasurementDatasetHeader
     chunks: tuple[_Chunk, ...]
+    projection: tuple[_Chunk, ...] | None = None
 
-    @model_validator(mode="after")
-    def validate_count(self) -> _Manifest:
-        if sum(chunk.count for chunk in self.chunks) > self.header.record_count_limit:
-            raise ValueError("snapshot exceeds recording count limit")
-        return self
+
+class RecordSelection(BaseModel):
+    """One retained logical point and its chosen physical acquisition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    point_index: int = Field(ge=0)
+    acquisition_index: int = Field(ge=0)
+
+
+class _Selections(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    records: tuple[RecordSelection, ...] = Field(min_length=1, max_length=1000)
 
 
 def _name(index: int) -> str:
@@ -70,12 +80,19 @@ def _check_append(
         or append.acquisition_start != offset
     ):
         raise ValueError("snapshot chunk does not match recording identity/order")
+    if any(
+        not 0 <= record.point_index < header.record_count_limit
+        for record in append.records
+    ):
+        raise ValueError("snapshot point index exceeds recording limit")
 
 
 def write_measurement_snapshot(
     destination: Path,
     header: MeasurementDatasetHeader,
     appends: Iterable[MeasurementDatasetAppend],
+    *,
+    projection: Iterable[RecordSelection] | None = None,
 ) -> None:
     """Publish a new snapshot atomically; never replace an existing user file.
 
@@ -104,7 +121,34 @@ def write_measurement_snapshot(
                 archive.writestr(_name(index), content)
                 chunks.append(chunk)
                 offset += chunk.count
-            manifest = _Manifest(header=header, chunks=tuple(chunks))
+            selections: list[_Chunk] | None = None
+            if projection is not None:
+                selections = []
+                previous_point = -1
+                for index, batch in enumerate(batched(projection, 1000, strict=False)):
+                    for selected in batch:
+                        if (
+                            not previous_point
+                            < selected.point_index
+                            < header.record_count_limit
+                            or selected.acquisition_index >= offset
+                        ):
+                            raise ValueError("invalid recording projection order/range")
+                        previous_point = selected.point_index
+                    content = _Selections(records=batch).model_dump_json().encode()
+                    archive.writestr(f"projection/{index:08d}.json", content)
+                    selections.append(
+                        _Chunk(
+                            count=len(batch),
+                            size=len(content),
+                            digest=sha256_content_hash(content),
+                        )
+                    )
+            manifest = _Manifest(
+                header=header,
+                chunks=tuple(chunks),
+                projection=None if selections is None else tuple(selections),
+            )
             content = manifest.model_dump_json().encode()
             if len(content) > MAX_MANIFEST_BYTES:
                 raise ValueError("snapshot manifest is too large")
@@ -134,12 +178,27 @@ class MeasurementSnapshot:
             expected = {"manifest.json"} | {
                 _name(index) for index in range(len(self._manifest.chunks))
             }
+            expected.update(
+                f"projection/{index:08d}.json"
+                for index in range(len(self._manifest.projection or ()))
+            )
             names = self._archive.namelist()
             if len(names) != len(expected) or set(names) != expected:
                 raise ValueError("snapshot has missing, duplicate or unknown members")
             for index, chunk in enumerate(self._manifest.chunks):
                 if self._archive.getinfo(_name(index)).file_size != chunk.size:
                     raise ValueError("snapshot chunk size does not match manifest")
+            for index, chunk in enumerate(self._manifest.projection or ()):
+                if (
+                    self._archive.getinfo(f"projection/{index:08d}.json").file_size
+                    != chunk.size
+                ):
+                    raise ValueError("snapshot projection size does not match manifest")
+            self._starts: list[int] = []
+            position = 0
+            for chunk in self._manifest.chunks:
+                self._starts.append(position)
+                position += chunk.count
         except Exception:
             self._archive.close()
             raise
@@ -151,6 +210,91 @@ class MeasurementSnapshot:
     @property
     def record_count(self) -> int:
         return sum(chunk.count for chunk in self._manifest.chunks)
+
+    @property
+    def content_hash(self) -> str:
+        """Logical identity, independent of ZIP timestamps and compression."""
+        return sha256_json_hash(self._manifest.model_dump(mode="json"))
+
+    @property
+    def selected_record_count(self) -> int | None:
+        if self._manifest.projection is None:
+            return None
+        return sum(chunk.count for chunk in self._manifest.projection)
+
+    def _append(self, index: int) -> MeasurementDatasetAppend:
+        chunk = self._manifest.chunks[index]
+        content = self._archive.read(_name(index))
+        if sha256_content_hash(content) != chunk.digest:
+            raise ValueError("snapshot chunk checksum mismatch")
+        append = decode_measurement_append(content, self.header.dataset_schema)
+        _check_append(append, self.header, self._starts[index])
+        if len(append.records) != chunk.count:
+            raise ValueError("snapshot chunk record count mismatch")
+        return append
+
+    def selected_records(
+        self, *, offset: int = 0, limit: int = 1000
+    ) -> Iterator[MeasurementRecord]:
+        """Read the captured analysis selection in logical point order.
+
+        No last-write-wins inference is made from physical history. A recording
+        without an explicit captured selection cannot provide this view.
+        """
+        if offset < 0 or limit < 0:
+            raise ValueError("snapshot offset and limit must be nonnegative")
+        if self._manifest.projection is None:
+            raise ValueError("snapshot has no captured analysis selection")
+        if limit == 0:
+            return
+        position = 0
+        previous_point = -1
+        for index, chunk in enumerate(self._manifest.projection):
+            following = position + chunk.count
+            if position >= offset + limit:
+                break
+            if following > offset:
+                content = self._archive.read(f"projection/{index:08d}.json")
+                if sha256_content_hash(content) != chunk.digest:
+                    raise ValueError("snapshot projection checksum mismatch")
+                selected = _Selections.model_validate_json(content).records
+                if len(selected) != chunk.count:
+                    raise ValueError("snapshot projection count mismatch")
+                for item in selected:
+                    if (
+                        not previous_point
+                        < item.point_index
+                        < self.header.record_count_limit
+                        or item.acquisition_index >= self.record_count
+                    ):
+                        raise ValueError("invalid recording projection order/range")
+                    previous_point = item.point_index
+                selected = selected[
+                    max(0, offset - position) : min(
+                        chunk.count, offset + limit - position
+                    )
+                ]
+                # Decode each referenced chunk once per selection page. The page
+                # itself is bounded to 1000 points; do not cache the whole run.
+                groups: dict[int, list[tuple[int, RecordSelection]]] = {}
+                for order, item in enumerate(selected):
+                    source = bisect_right(self._starts, item.acquisition_index) - 1
+                    groups.setdefault(source, []).append((order, item))
+                records: dict[int, MeasurementRecord] = {}
+                for source, items in groups.items():
+                    append = self._append(source)
+                    for order, item in items:
+                        record = append.records[
+                            item.acquisition_index - self._starts[source]
+                        ]
+                        if record.point_index != item.point_index:
+                            raise ValueError(
+                                "snapshot projection selects another point"
+                            )
+                        records[order] = record
+                for order in range(len(selected)):
+                    yield records[order]
+            position = following
 
     def records(
         self, *, offset: int = 0, limit: int = 1000
@@ -167,13 +311,7 @@ class MeasurementSnapshot:
             if position >= end:
                 break
             if following > offset:
-                content = self._archive.read(_name(index))
-                if sha256_content_hash(content) != chunk.digest:
-                    raise ValueError("snapshot chunk checksum mismatch")
-                append = decode_measurement_append(content, self.header.dataset_schema)
-                _check_append(append, self.header, position)
-                if len(append.records) != chunk.count:
-                    raise ValueError("snapshot chunk record count mismatch")
+                append = self._append(index)
                 yield from append.records[
                     max(0, offset - position) : min(chunk.count, end - position)
                 ]
