@@ -166,6 +166,32 @@ path, and contained the exact expected text. This covers capture copy and analys
 attachment saving on Mac; native current-run export, Windows saving and the full
 two-window journey remain separate outstanding checks.
 
+### Packaged Mac two-record window check (2026-10-03)
+
+The package containing the Mac save correction used the same isolated home.
+Alpha was already imported through the native picker; Beta was added through the
+ordinary data API as fixture preparation, not as evidence of native file opening.
+The first window selected Alpha and Cmd-Plus twice changed its zoom to 125%.
+File / New Window opened a second view on the same backend, initially at 100%.
+That view selected Beta and Cmd-Minus changed it to 90%. Its retained analysis
+showed the expected `Beta` fact and y values 10, 20, 30, 40; the rendered line
+chart, axes and tooltip were readable at that zoom.
+
+Closing the second native window exposed the original Alpha selection still at
+125%, on the same backend address. Navigation / Back returned to the unselected
+data list; Forward restored Alpha. Cmd-0 reset that window to 100%. This proves
+these selection, zoom and close interactions without competing backend owners.
+It does not establish all multi-window lifecycle or focused-command behavior.
+
+Both native windows still have the identical title `Scopecat`, and the observed
+menu bar has no Window menu listing open views. Cmd-backtick did not switch the
+observed window in this trial; this observation alone does not determine whether
+the cause is host behavior or automation focus. A discoverable way to identify
+and switch data windows remains an unresolved product requirement. Do not call
+the comparison journey complete merely because closing one view reveals another.
+Clipboard fidelity, work surviving all closed views, failed-shutdown recovery and
+Windows qualification also remain outstanding.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
