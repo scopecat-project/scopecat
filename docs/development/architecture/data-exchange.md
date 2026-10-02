@@ -234,9 +234,18 @@ references must resolve to exact retained identities. Plan ancestry and setup
 definitions remain part of this closure; duplicate revision identities, altered
 plan contents and damaged author source bytes are rejected without loading source
 code. Tests remove individual families from a real captured plan chain and reject
-missing ancestors rather than substituting current values. Candidate/proposal
-provenance still needs import-side checks before the complete scientific graph
-can be considered verified.
+missing ancestors rather than substituting current values.
+
+Verification also reads indexed proposal records after checking their payload
+identities. Proposal ownership, baseline configuration, publishing analysis and
+named evidence outputs must agree. Candidate and composition references must
+resolve to those proposals; direct candidate configurations are recomputed from
+the retained baseline using the ordinary pure configuration resolver. Project
+decision references check output existence and declared fact schema. None of this
+activates a candidate. The analysis/review/activation/rerun export test verifies a
+normal capture and rejects missing proposals, changed baselines/publications and
+forged direct-candidate hashes. Composed-candidate and automated acceptance cases
+still need dedicated end-to-end coverage before declaring the graph audit complete.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:

@@ -1,9 +1,8 @@
 """Follow typed scientific references from selected runs in one read snapshot."""
 
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable
 from pathlib import Path
-from typing import cast
 
 from pydantic import BaseModel
 from scopecat.automation.models import AnalysisPublicationOutputRef, RunOutputRef
@@ -16,6 +15,7 @@ from scopecat.data_exchange.models import (
     ScientificEvidence,
 )
 from scopecat.data_exchange.references import validate_analysis_references
+from scopecat.data_exchange.traversal import evidence_models
 from scopecat.records.analysis import (
     AnalysisInterpretationReference,
     AnalysisPublishedOutputReference,
@@ -48,19 +48,6 @@ from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 
-def _models(value: object) -> Iterator[BaseModel]:
-    if isinstance(value, BaseModel):
-        yield value
-        for name in type(value).model_fields:
-            yield from _models(cast("object", getattr(value, name)))
-    elif isinstance(value, Mapping):
-        for item in cast("Mapping[object, object]", value).values():
-            yield from _models(item)
-    elif isinstance(value, tuple | list):
-        for item in cast("Iterable[object]", value):
-            yield from _models(item)
-
-
 class _Capture:
     def __init__(self, connection: sqlite3.Connection, store: SQLiteProjectStore):
         self.connection = connection
@@ -78,7 +65,7 @@ class _Capture:
 
     def scan(self, document: BaseModel) -> None:
         self.documents.append(document)
-        for item in _models(document):
+        for item in evidence_models(document):
             match item:
                 case (
                     RunAnalysisSubject()
@@ -174,7 +161,7 @@ class _Capture:
 
     def validate_plan_sources(self) -> None:
         for document in self.documents:
-            for item in _models(document):
+            for item in evidence_models(document):
                 match item:
                     case PlanAnalysisSource():
                         source = self.analyses[

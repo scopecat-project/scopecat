@@ -24,6 +24,7 @@ from scopecat.kernel.content_identity import (
 )
 from scopecat.measurements.archive import MeasurementSnapshot
 from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.runs.refs import content_entry_ref
 
@@ -307,13 +308,53 @@ class ScientificExchange:
                 if reference is None or reference.digest != artifact.uri:
                     raise ValueError("exchange sample attachment is missing or differs")
 
+    def _proposals(self) -> tuple[ParameterChangeProposal, ...]:
+        references = {
+            (ref.owner_kind, ref.owner_id, ref.ref): ref for ref in self.payloads
+        }
+        entries = [
+            ("run", run.snapshot.run_id, entry)
+            for run in self.evidence.runs
+            for entry in run.contents
+        ]
+        for analysis in self.evidence.analyses:
+            subject = analysis.record.subject
+            entries.extend(
+                (
+                    "run" if subject.kind == "run" else "analysis",
+                    subject.run_id if subject.kind == "run" else analysis.entry.id,
+                    entry,
+                )
+                for entry in analysis.contents
+            )
+        proposals: dict[tuple[str, str, str], ParameterChangeProposal] = {}
+        for owner_kind, owner_id, entry in entries:
+            if entry.role != "record" or entry.kind != "parameter_change_proposal":
+                continue
+            identity = (owner_kind, owner_id, content_entry_ref(entry))
+            if identity in proposals:
+                continue
+            ref = references[identity]  # Content-index verification runs first.
+            proposal = ParameterChangeProposal.model_validate_json(
+                self._archive.read(_object_name(ref.digest))
+            )
+            if proposal.id != entry.id or (
+                owner_kind == "run" and proposal.source_run_id != owner_id
+            ):
+                raise ValueError("proposal record differs from its retained owner")
+            proposals[identity] = proposal
+        return tuple(proposals.values())
+
     def verify(self) -> None:
         from .input_references import validate_input_references
+        from .proposals import validate_proposal_references
         from .references import validate_analysis_references
 
-        validate_input_references(self.evidence.inputs, (self.evidence,))
         validate_analysis_references(self.evidence)
         self._verify_content_index()
+        proposals = self._proposals()
+        validate_input_references(self.evidence.inputs, (self.evidence, *proposals))
+        validate_proposal_references(self.evidence, proposals)
         for snapshot in self._recordings.values():
             snapshot.verify()
         for run in self.evidence.runs:
