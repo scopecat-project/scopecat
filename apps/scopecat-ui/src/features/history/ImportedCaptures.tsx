@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { detailCard, secondaryButton } from "../../ui/styles";
+import { CaptureDetail } from "./CaptureDetail";
 
 export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
   const cache = useQueryClient();
+  const [selectedCapture, setSelectedCapture] = useState<string>();
   const [desktop, setDesktop] = useState(!!window.pywebview);
   useEffect(() => {
     const ready = () => setDesktop(true);
@@ -28,7 +30,10 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
   const open = useMutation({
     mutationFn: () => window.pywebview!.api.open_capture(),
     onSuccess: (receipt) => {
-      if (receipt) void cache.invalidateQueries({ queryKey: ["data", "captures"] });
+      if (receipt) {
+        setSelectedCapture(receipt.capture.content_hash);
+        void cache.invalidateQueries({ queryKey: ["data", "captures"] });
+      }
     },
   });
   const save = useMutation({
@@ -72,6 +77,13 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
           <li key={capture.content_hash} className="border-b border-line py-3">
             <p>Runs: {capture.roots.join(", ")}</p>
             <p className="text-sm text-text-dim">Source: {capture.source_project_id}</p>
+            <button
+              className={secondaryButton}
+              disabled={unavailable}
+              onClick={() => setSelectedCapture(capture.content_hash)}
+            >
+              View data
+            </button>
             {desktop && (
               <button
                 className={secondaryButton}
@@ -87,6 +99,7 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
           </li>
         ))}
       </ul>
+      {selectedCapture && <CaptureDetail key={selectedCapture} contentHash={selectedCapture} />}
       {captures.hasNextPage && (
         <button
           className={secondaryButton}

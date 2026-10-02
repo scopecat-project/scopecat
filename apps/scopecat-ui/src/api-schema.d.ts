@@ -416,6 +416,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data/captures/{content_hash}/runs/{run_id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Recording */
+        get: operations["read_recording_api_v1_data_captures__content_hash__runs__run_id__recording_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -2343,6 +2360,29 @@ export interface components {
             results: components["schemas"]["AcquisitionResultSpec"][];
         };
         /**
+         * AdaptiveDomainPlanRecord
+         * @description Durable optimizer policy for compatible runtime domain extensions.
+         */
+        AdaptiveDomainPlanRecord: {
+            /**
+             * Adaptive Coordinate Ids
+             * @default []
+             */
+            adaptive_coordinate_ids: string[];
+            /** Optimizer Id */
+            optimizer_id: string;
+            /** Per Region Point Limit */
+            per_region_point_limit?: number | null;
+            /**
+             * Scope
+             * @default per_region
+             * @enum {string}
+             */
+            scope: "per_region" | "global";
+            /** Total Point Limit */
+            total_point_limit: number;
+        };
+        /**
          * AdaptiveRegionSpec
          * @description One stable outer-domain region admitted for adaptive extension.
          */
@@ -3519,6 +3559,25 @@ export interface components {
             capture: components["schemas"]["CaptureSummary"];
             /** Created */
             created: boolean;
+        };
+        /** CaptureRecordingPage */
+        CaptureRecordingPage: {
+            dataset_schema: components["schemas"]["MeasurementDatasetSchema-Output"];
+            /** Items */
+            items: components["schemas"]["MeasurementRecord"][];
+            /** Next Offset */
+            next_offset: number | null;
+            /** Offset */
+            offset: number;
+            /** Record Count */
+            record_count: number;
+            /** Selected Record Count */
+            selected_record_count: number | null;
+            /**
+             * Selection
+             * @enum {string}
+             */
+            selection: "acquired" | "selected";
         };
         /** CaptureSummary */
         CaptureSummary: {
@@ -5478,6 +5537,21 @@ export interface components {
             maximum?: number | null;
             /** Minimum */
             minimum?: number | null;
+        };
+        /**
+         * GridDomainRecord
+         * @description Persisted Cartesian point domain with declaration-ordered axes.
+         *
+         *     An empty axis list denotes the unit point rather than an empty domain.
+         */
+        "GridDomainRecord-Output": {
+            /** Axes */
+            axes?: components["schemas"]["AxisRecord-Output"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grid";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -8013,6 +8087,23 @@ export interface components {
             proposal_fingerprint: string;
             setting: components["schemas"]["InstrumentStateSetting"];
         };
+        /**
+         * PointCloudDomainRecord
+         * @description Persisted ordered point-cloud rows with declaration-ordered columns.
+         */
+        "PointCloudDomainRecord-Output": {
+            /** Columns */
+            columns: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "points";
+            /** Rows */
+            rows: {
+                [key: string]: components["schemas"]["RunRequestScalarValue-Output"];
+            }[];
+        };
         /** @enum {string} */
         PointCoordinateKind: "bool" | "int" | "float" | "string" | "quantity" | "entity";
         /**
@@ -8052,8 +8143,63 @@ export interface components {
             unit?: string | null;
         };
         PointCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
+        "PointDomainRecord-Output": components["schemas"]["GridDomainRecord-Output"] | components["schemas"]["PointCloudDomainRecord-Output"];
+        /**
+         * PointGroupingRecord
+         * @description Durable named partition without hardware-batch semantics.
+         */
+        PointGroupingRecord: {
+            /** Id */
+            id: string;
+            /**
+             * On Interruption
+             * @default restart_group
+             * @constant
+             */
+            on_interruption: "restart_group";
+            /**
+             * Scheduling
+             * @default prefer_together
+             * @constant
+             */
+            scheduling: "prefer_together";
+            /** Varying Coordinate Ids */
+            varying_coordinate_ids: string[];
+        };
+        /**
+         * PointPlanRecord
+         * @description Persisted base point domain and its execution-independent expansion policy.
+         */
+        "PointPlanRecord-Output": {
+            domain?: components["schemas"]["PointDomainRecord-Output"];
+            /**
+             * Repeat
+             * @default 1
+             */
+            repeat: number;
+            /**
+             * Repeat Mode
+             * @default point
+             * @enum {string}
+             */
+            repeat_mode: "point" | "sweep";
+            schedule?: components["schemas"]["PointScheduleRecord"];
+        };
         /** @enum {string} */
         PointProposalSource: "author" | "optimizer" | "operator";
+        /**
+         * PointScheduleRecord
+         * @description Durable composition of base traversal and related-point grouping.
+         */
+        PointScheduleRecord: {
+            grouping?: components["schemas"]["PointGroupingRecord"] | null;
+            /**
+             * Traversal
+             * @default forward
+             * @enum {string}
+             */
+            traversal: "forward" | "snake";
+        };
         /** PracticeCatalog */
         PracticeCatalog: {
             /** Items */
@@ -9822,7 +9968,43 @@ export interface components {
             };
             record: components["schemas"]["ContentEntry"];
         };
-        "RunRequest-Output": unknown;
+        /**
+         * RunRequest
+         * @description Operator request for one structured run.
+         */
+        "RunRequest-Output": {
+            adaptive_domain_plan?: components["schemas"]["AdaptiveDomainPlanRecord"] | null;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            /** Inputs */
+            inputs?: {
+                [key: string]: components["schemas"]["RunRequestValue-Output"];
+            };
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["RunRequestJsonValue-Output"];
+            };
+            /** Operator */
+            operator?: string | null;
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
+            point_plan?: components["schemas"]["PointPlanRecord-Output"];
+            /** Record Collection */
+            record_collection?: string | null;
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+        };
         /** @enum {string} */
         RunRequestBinaryOperator: "+" | "-" | "*" | "/";
         /** RunRequestBinaryValue */
@@ -9956,6 +10138,9 @@ export interface components {
         RunRequestRangeValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | number;
         "RunRequestScalarValue-Input": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Input"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Input"] | string | boolean | number | null;
         "RunRequestScalarValue-Output": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Output"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Output"] | string | boolean | number | null;
+        "RunRequestValue-Output": components["schemas"]["RunRequestScalarValue-Output"] | components["schemas"]["RunRequestValue-Output"][] | {
+            [key: string]: components["schemas"]["RunRequestValue-Output"];
+        };
         /**
          * RunRequestView
          * @description The operator request accepted with one run.
@@ -12031,6 +12216,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_recording_api_v1_data_captures__content_hash__runs__run_id__recording_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                selection?: "acquired" | "selected";
+            };
+            header?: never;
+            path: {
+                content_hash: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureRecordingPage"];
                 };
             };
             /** @description Validation Error */

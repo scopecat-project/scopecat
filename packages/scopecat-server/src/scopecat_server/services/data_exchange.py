@@ -3,11 +3,12 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from scopecat.data_exchange import ScientificExchange
 from scopecat.data_exchange.models import (
     CaptureImportReceipt,
+    CaptureRecordingPage,
     CaptureSummary,
     ScientificEvidence,
 )
@@ -85,3 +86,40 @@ class DataExchangeService:
         row = self._row(content_hash)
         self._store.objects.verify(cast("str", row["object_digest"]))
         return self._store.objects.path_for(cast("str", row["object_digest"]))
+
+    def recording_page(
+        self,
+        content_hash: str,
+        run_id: str,
+        *,
+        selection: Literal["acquired", "selected"],
+        offset: int,
+        limit: int,
+    ) -> CaptureRecordingPage:
+        with ScientificExchange(self.path(content_hash)) as capture:
+            try:
+                recording = capture.recording(run_id)
+            except KeyError as error:
+                raise BackendNotFound(
+                    "this capture has no recording for the run"
+                ) from error
+            if selection == "selected":
+                count = recording.selected_record_count
+                if count is None:
+                    raise BackendConflict(
+                        "this recording has no retained analysis selection"
+                    )
+                items = tuple(recording.selected_records(offset=offset, limit=limit))
+            else:
+                count = recording.record_count
+                items = tuple(recording.records(offset=offset, limit=limit))
+            following = offset + len(items)
+            return CaptureRecordingPage(
+                dataset_schema=recording.header.dataset_schema,
+                selection=selection,
+                record_count=count,
+                selected_record_count=recording.selected_record_count,
+                offset=offset,
+                next_offset=following if following < count else None,
+                items=items,
+            )

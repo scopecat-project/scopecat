@@ -202,9 +202,15 @@ operation lock covers native transfers, including their file dialogs.
 
 Local automated tests cover import feedback, duplicate receipts, cancelled saves,
 failed saves and partial-transfer cleanup. They do not qualify real native dialogs
-on either platform. Imported measurement and analysis browsing, application-wide
-Open commands, external-analysis provenance and full scientific-reference
-validation remain outstanding; this is not the completed desktop file journey.
+on either platform. Imported runs now expose their retained request/configuration
+and paged measurements through the existing Data page. Acquisition order and the
+captured analysis selection are distinct choices; a missing selection is an
+explicit error rather than a last-acquisition fallback. The table renderer and
+unit formatting are shared with the existing run view. Query identities include
+the capture identity so identical run IDs from different sources do not share data
+or selection state. Chart/trace browsing, analysis browsing, application-wide Open
+commands, external-analysis provenance and full scientific-reference validation
+remain outstanding; this is not the completed desktop file journey.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:

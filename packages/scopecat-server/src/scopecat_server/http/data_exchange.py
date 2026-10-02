@@ -2,13 +2,14 @@
 
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 from zipfile import BadZipFile
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from scopecat.data_exchange.models import (
     CaptureImportReceipt,
+    CaptureRecordingPage,
     CaptureSummary,
     ScientificEvidence,
 )
@@ -79,6 +80,18 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
             application.data_exchange.download(content_hash),
             media_type="application/octet-stream",
             filename="capture.scopecat",
+        )
+
+    @router.get("/{content_hash}/runs/{run_id}/recording")
+    def read_recording(
+        content_hash: str,
+        run_id: str,
+        selection: Literal["acquired", "selected"] = "acquired",
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    ) -> CaptureRecordingPage:
+        return application.data_exchange.recording_page(
+            content_hash, run_id, selection=selection, offset=offset, limit=limit
         )
 
     return router

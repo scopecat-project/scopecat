@@ -24,6 +24,7 @@ from scopecat.records.author_revision import AuthorRevisionBundle
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.experiment_plan import ExperimentPlanRevision
+from scopecat.records.measurement import MeasurementDatasetSchema, MeasurementRecord
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
@@ -44,6 +45,17 @@ class CaptureImportReceipt(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     capture: CaptureSummary
     created: bool
+
+
+class CaptureRecordingPage(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    dataset_schema: MeasurementDatasetSchema
+    selection: Literal["acquired", "selected"]
+    record_count: int
+    selected_record_count: int | None
+    offset: int
+    next_offset: int | None
+    items: tuple[MeasurementRecord, ...]
 
 
 class RunEvidence(BaseModel):

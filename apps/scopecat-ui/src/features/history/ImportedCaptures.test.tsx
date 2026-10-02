@@ -33,7 +33,33 @@ it("imports through the native picker and preserves data after cancelled or fail
   vi.stubGlobal("pywebview", { api: { open_capture: open, save_capture: save } });
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => Response.json(imported ? [capture] : [])),
+    vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname.endsWith("/evidence"))
+        return Response.json({
+          source_project_id: "origin",
+          roots: ["scan-A"],
+          runs: [
+            {
+              snapshot: { run_id: "scan-A" },
+              request: { experiment_id: "scan" },
+              configuration: {},
+            },
+          ],
+        });
+      if (new URL(request.url).pathname.endsWith("/recording"))
+        return Response.json({
+          record_count: 0,
+          selected_record_count: 0,
+          next_offset: null,
+          items: [],
+          dataset_schema: {
+            dimensions: [],
+            variables: [],
+            point_domain: { kind: "point_cloud", columns: [] },
+          },
+        });
+      return Response.json(imported ? [capture] : []);
+    }),
   );
   render(
     <QueryClientProvider
