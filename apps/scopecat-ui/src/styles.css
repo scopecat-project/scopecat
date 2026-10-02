@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+::highlight(desktop-find) {
+  background-color: #facc15;
+  color: #171717;
+}
+
 @theme {
   --color-bg: #101214;
   --color-bg-raised: #14171a;

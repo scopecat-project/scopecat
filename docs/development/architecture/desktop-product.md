@@ -39,6 +39,14 @@ without retrying that activation. Process separation needs a concrete environmen
 fault-isolation or task-lifetime requirement; historical daemon boundaries alone
 do not justify separate product modes or duplicate data APIs.
 
+The file-open acceptance condition is: the packaged application's own data
+capabilities are sufficient, without a laboratory adapter, vendor SDK, connected
+device or user analysis environment. Qualify the dependencies and side effects,
+not the presence of a module or process named `server` or `daemon`. The HTTP
+capture tests exercise the ordinary backend with device activation forbidden,
+including data access after a previous driver activation failed. They are not
+tests of a separate viewer runtime.
+
 Installation qualification checks the application package, not a live driver
 catalog. Driver availability and failures belong to the device capability and
 must not become a prerequisite for opening the application. In particular,
@@ -119,6 +127,26 @@ exited without starting the application backend. These checks do not establish
 visible search highlighting, native accelerator behavior, chart clarity under zoom,
 or independent zoom across real windows. Those still require the packaged Mac and
 Windows journey; they are not grounds for a final shell decision.
+
+### Packaged Mac file-open and find check (2026-10-03)
+
+A local package built from `6c0670a2c` opened a synthetic `Alpha.scopecat` through
+Cmd-O and the native picker in an isolated application home. The data view showed
+run `desktop-alpha`, source `source-project`, four acquisitions and their known
+values. Native testing found that `window.find` could match its own query field,
+reporting success for absent text. Excluding the find bar fixed that false match,
+but returning input focus then removed the visible selection. The corrected
+implementation retains the matched range with a CSS Highlight independently of
+input focus and restores that range before the next engine search.
+
+A rebuilt local package verified visible highlighting of both `desktop-alpha`
+occurrences, forward movement with Enter, backward movement with Shift-Enter,
+continued query editing without clicking the field again, and `No matches` for
+`definitely-missing-record`. Escape removed the find bar. Cmd-Q displayed shutdown
+progress and stopped the isolated backend. These observations qualify this Mac
+interaction only; two-window comparisons, full native export, zoom and Windows
+qualification are still outstanding. The CSS optimizer warns about the standard
+`::highlight` selector but preserves it; the packaged Mac renderer displayed it.
 
 ## Technology decision
 

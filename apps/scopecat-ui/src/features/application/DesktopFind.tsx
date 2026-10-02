@@ -11,28 +11,59 @@ export function DesktopFind() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const toolbar = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const match = useRef<Range | null>(null);
+
+  const clearMatch = useCallback(() => {
+    match.current = null;
+    globalThis.CSS?.highlights?.delete("desktop-find");
+  }, []);
 
   const search = useCallback(
     (backwards: boolean) => {
       if (!query) return;
       const engine = window as SearchableWindow;
-      if (!engine.find) {
+      if (!engine.find || !globalThis.CSS?.highlights || typeof Highlight === "undefined") {
         setMessage("Text search is unavailable in this window.");
         return;
       }
-      setMessage(engine.find(query, false, backwards, true) ? "Match found" : "No matches");
-      input.current?.focus({ preventScroll: true });
+      const form = toolbar.current;
+      if (!form) return;
+      // WebView search includes editable fields and status text. Remove the find
+      // bar from rendered search content while the synchronous engine runs.
+      form.hidden = true;
+      try {
+        const selection = window.getSelection();
+        if (match.current?.startContainer.isConnected && selection) {
+          selection.removeAllRanges();
+          selection.addRange(match.current);
+        }
+        const found = engine.find(query, false, backwards, true);
+        clearMatch();
+        if (found && selection?.rangeCount) {
+          match.current = selection.getRangeAt(0).cloneRange();
+          // Keep the match visible while keyboard focus returns to the query.
+          CSS.highlights.set("desktop-find", new Highlight(match.current));
+        }
+        setMessage(found ? "Match found" : "No matches");
+      } finally {
+        form.hidden = false;
+        input.current?.focus({ preventScroll: true });
+      }
     },
-    [query],
+    [query, clearMatch],
   );
 
   const close = useCallback(() => {
     setOpen(false);
     setMessage("");
+    clearMatch();
     if (previousFocus.current?.isConnected) previousFocus.current.focus({ preventScroll: true });
-  }, []);
+  }, [clearMatch]);
+
+  useEffect(() => clearMatch, [clearMatch]);
 
   useEffect(() => {
     if (!desktop) return;
@@ -74,6 +105,7 @@ export function DesktopFind() {
   if (!desktop || !open) return null;
   return (
     <form
+      ref={toolbar}
       role="search"
       aria-label="Find in this view"
       className="fixed top-4 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-lg border border-line bg-panel p-3 text-text shadow-lg"
@@ -93,6 +125,7 @@ export function DesktopFind() {
           onChange={(event) => {
             setQuery(event.target.value);
             setMessage("");
+            clearMatch();
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && event.shiftKey) {
