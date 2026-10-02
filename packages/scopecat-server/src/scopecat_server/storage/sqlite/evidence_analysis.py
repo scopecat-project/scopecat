@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from scopecat.data_exchange.models import AnalysisEvidence
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
 from scopecat.records.analysis import (
     AnalysisFigureRecordOutput,
@@ -20,7 +21,6 @@ from scopecat.records.analysis import (
     published_output_input_identity,
 )
 from scopecat.records.content import ContentEntry
-from scopecat.records.exchange import AnalysisEvidence
 from scopecat.runs.refs import record_content_ref
 
 from scopecat_server.storage.sqlite.analysis_index import read_publication

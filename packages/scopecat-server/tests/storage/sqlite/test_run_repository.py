@@ -340,7 +340,7 @@ def test_structured_run_inputs_bind_source_and_snapshot_hashes(
 def test_run_evidence_captures_accepted_inputs_without_execution(
     tmp_path: Path,
 ) -> None:
-    from scopecat.records.exchange import RunEvidence
+    from scopecat.data_exchange.models import RunEvidence
 
     from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
 

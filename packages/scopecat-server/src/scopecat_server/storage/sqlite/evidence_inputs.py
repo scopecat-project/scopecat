@@ -7,9 +7,9 @@ from typing import cast
 
 from pydantic import BaseModel
 from scopecat.data_exchange import PayloadReference, PayloadSource
+from scopecat.data_exchange.models import InputRevisionEvidence
 from scopecat.project_sources import verified_source_files
 from scopecat.records.author_revision import AuthorRevisionBundle, AuthorRevisionRef
-from scopecat.records.exchange import InputRevisionEvidence
 from scopecat.records.experiment_plan import ExperimentPlanRevision
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.plan_ref import ExperimentPlanRef

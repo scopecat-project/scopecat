@@ -4,9 +4,9 @@ import sqlite3
 from collections.abc import Iterator
 from typing import cast
 
+from scopecat.data_exchange.models import RunEvidence
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import ContentEntry
-from scopecat.records.exchange import RunEvidence
 from scopecat.records.run_request import RunRequest
 from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF, RUN_REQUEST_REF
 

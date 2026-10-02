@@ -14,10 +14,10 @@ from zipfile import ZIP_STORED, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from scopecat.data_exchange.models import ScientificEvidence
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
 from scopecat.measurements.archive import MeasurementSnapshot
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.exchange import ScientificEvidence
 
 MAX_INDEX_BYTES = 4 * 1024 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024 * 1024

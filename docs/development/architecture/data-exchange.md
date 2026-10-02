@@ -123,6 +123,14 @@ a preview never substitutes for those dataset bytes. Missing upstream bytes fail
 capture. Other evidence families and application integration are not complete yet.
 These capture components alone do not prove reference closure.
 
+Interpretation capture resolves the exact request/response hashes across retained
+step attempts, rather than substituting the latest judgment. The evidence includes
+the question, response, actor, timestamps, step identity and procedure context;
+the response must still satisfy its retained request schema. These are inert
+records, not imported scheduler work. The composed exchange models live under
+`scopecat.data_exchange.models`, above records and automation, to keep dependencies
+pointing inward.
+
 The low-level `scopecat.data_exchange` container now groups scientific documents,
 recording partitions and content-addressed payloads without extracting them.
 Recording views borrow the package's open archive; closing a view does not close
@@ -149,6 +157,7 @@ uv run --locked pytest -q \
   packages/scopecat-server/tests/storage/sqlite/test_run_repository.py \
   packages/scopecat-server/tests/storage/sqlite/test_evidence_inputs.py \
   packages/scopecat-server/tests/storage/sqlite/test_evidence_analysis.py \
+  packages/scopecat-server/tests/storage/sqlite/test_automation.py \
   packages/scopecat-server/tests/storage/sqlite/test_author_revision_repository.py
 uv run --locked basedpyright
 uv run --locked lint-imports

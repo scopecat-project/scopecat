@@ -15,6 +15,7 @@ from scopecat.data_exchange import (
     ScientificExchange,
     write_scientific_exchange,
 )
+from scopecat.data_exchange.models import RunEvidence, ScientificEvidence
 from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.measurements.archive import (
     MeasurementSnapshot,
@@ -23,7 +24,6 @@ from scopecat.measurements.archive import (
 )
 from scopecat.measurements.imports import import_measurement_snapshot
 from scopecat.records.config import config_content_hash
-from scopecat.records.exchange import RunEvidence, ScientificEvidence
 from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementDimension,

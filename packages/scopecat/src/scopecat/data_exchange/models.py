@@ -5,10 +5,17 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from scopecat.analysis.facts import validate_analysis_fact_json
+from scopecat.automation.models import (
+    InterpretationOutputRef,
+    ProcedureRun,
+    ProcedureStepAttempt,
+)
 from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
     AnalysisDatasetRecordOutput,
+    AnalysisInterpretationReference,
     AnalysisParameterProposalRecordOutput,
     AnalysisRecord,
 )
@@ -118,6 +125,38 @@ class AnalysisEvidence(BaseModel):
         return self
 
 
+class InterpretationEvidence(BaseModel):
+    """A retained judgment and its procedure context, with no execution authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    reference: AnalysisInterpretationReference
+    procedure: ProcedureRun
+    step: ProcedureStepAttempt
+
+    @model_validator(mode="after")
+    def validate_judgment(self) -> Self:
+        if (
+            self.procedure.procedure_run_id != self.reference.procedure_run_id
+            or self.step.state != "succeeded"
+            or not isinstance(self.step.output, InterpretationOutputRef)
+            or self.step.output.analysis_reference != self.reference
+            or self.step.interpretation_request is None
+        ):
+            raise ValueError(
+                "interpretation evidence differs from its retained judgment"
+            )
+        try:
+            validate_analysis_fact_json(
+                self.step.output.response.value,
+                self.step.interpretation_request.structure,
+            )
+        except TypeError as error:
+            raise ValueError(
+                "interpretation response differs from its request schema"
+            ) from error
+        return self
+
+
 class ScientificEvidence(BaseModel):
     """Scientific documents in one captured source-project namespace."""
 
@@ -127,6 +166,7 @@ class ScientificEvidence(BaseModel):
     runs: tuple[RunEvidence, ...]
     inputs: InputRevisionEvidence = Field(default_factory=InputRevisionEvidence)
     analyses: tuple[AnalysisEvidence, ...] = ()
+    interpretations: tuple[InterpretationEvidence, ...] = ()
 
     @model_validator(mode="after")
     def validate_runs(self) -> Self:
