@@ -1,5 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState } from "react";
+import type { components } from "../../api-schema";
 import {
   dialogBackdrop,
   dialogPopup,
@@ -25,6 +26,8 @@ export interface InstallationStatus {
 }
 
 interface DesktopAPI {
+  open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
+  save_capture(contentHash: string): Promise<string | null>;
   status(): Promise<ApplicationStatus>;
   retry(): Promise<void>;
   restart(): Promise<void>;

@@ -17,6 +17,7 @@ it("filters retained runs and removes only their project association", async () 
     vi.fn(async (request: Request) => {
       requests.push(request);
       const url = new URL(request.url);
+      if (url.pathname === "/api/v1/data/captures") return Response.json([]);
       if (url.pathname === "/api/v1/research-projects")
         return Response.json({
           items: [

@@ -13,6 +13,8 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
   const wait_for_idle = vi.fn().mockResolvedValue(undefined);
   window.pywebview = {
     api: {
+      open_capture: vi.fn(),
+      save_capture: vi.fn(),
       wait_for_idle,
       request_exit: vi.fn().mockResolvedValue({ runs: 1 }),
       exit: vi.fn(),
@@ -46,6 +48,8 @@ it("leaves background work running only after the user chooses it", async () => 
   const exit = vi.fn().mockResolvedValue(undefined);
   window.pywebview = {
     api: {
+      open_capture: vi.fn(),
+      save_capture: vi.fn(),
       exit,
       request_exit: vi
         .fn()
@@ -84,6 +88,8 @@ it("keeps a failed stop recoverable in the current window", async () => {
   const exit = vi.fn().mockReturnValue(stop);
   window.pywebview = {
     api: {
+      open_capture: vi.fn(),
+      save_capture: vi.fn(),
       exit,
       request_exit: vi
         .fn()
@@ -119,6 +125,8 @@ it("shows progress immediately and prevents duplicate quit requests", async () =
   const request_exit = vi.fn().mockReturnValue(check);
   window.pywebview = {
     api: {
+      open_capture: vi.fn(),
+      save_capture: vi.fn(),
       request_exit,
       exit: vi.fn(),
       wait_for_idle: vi.fn(),

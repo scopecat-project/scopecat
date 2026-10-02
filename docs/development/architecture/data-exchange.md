@@ -194,10 +194,17 @@ evidence reading and verified archive download under `/api/v1/data/captures`.
 Uploads accept file bytes, not server filesystem paths; invalid files, identity
 conflicts and oversized uploads produce explicit errors without adding receipts.
 HTTP integration checks prohibit requesting device capabilities throughout the
-import/read/download journey. This establishes the application API boundary, not
-the completed desktop file workflow. Browsing views, native file commands,
-external-analysis provenance and full scientific-reference validation remain
-outstanding.
+import/read/download journey. The existing Data page now lists imported captures
+and invokes native Open and Save dialogs through its window bridge. Transfers
+stream through this same backend; a failed download leaves an existing destination
+unchanged, and cancelled dialogs perform no transfer. The shared application
+operation lock covers native transfers, including their file dialogs.
+
+Local automated tests cover import feedback, duplicate receipts, cancelled saves,
+failed saves and partial-transfer cleanup. They do not qualify real native dialogs
+on either platform. Imported measurement and analysis browsing, application-wide
+Open commands, external-analysis provenance and full scientific-reference
+validation remain outstanding; this is not the completed desktop file journey.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:

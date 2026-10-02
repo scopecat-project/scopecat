@@ -76,6 +76,45 @@ class DesktopAPI:
             selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
             return selected[0] if selected else None
 
+    def open_capture(self) -> dict[str, object] | None:
+        import webview
+
+        from .desktop_files import import_capture
+
+        with self._session.operation():
+            base_url = self._data_url()
+            selected = self._window().create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=False,
+                file_types=("Scopecat (*.scopecat)", "All files (*.*)"),
+            )
+            if not selected:
+                return None
+            return import_capture(base_url, Path(selected[0])).model_dump(mode="json")
+
+    def save_capture(self, content_hash: str) -> str | None:
+        import webview
+
+        from .desktop_files import save_capture
+
+        with self._session.operation():
+            base_url = self._data_url()
+            selected = self._window().create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename="capture.scopecat",
+                file_types=("Scopecat (*.scopecat)",),
+            )
+            if not selected:
+                return None
+            destination = Path(selected[0])
+            save_capture(base_url, content_hash, destination)
+            return str(destination)
+
+    def _data_url(self) -> str:
+        if self._session.base_url is None:
+            raise ValueError("应用尚未准备就绪，请稍后重试")
+        return self._session.base_url
+
     def create_source(self, parent: str, name: str) -> str:
         from scopecat_server.scaffold import write_author_scaffold
 
