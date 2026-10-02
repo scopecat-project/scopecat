@@ -15,14 +15,12 @@ from scopecat.data_exchange.models import (
     RunEvidence,
     ScientificEvidence,
 )
-from scopecat.measurements.datasets import MEASUREMENT_DATASET_CODEC
+from scopecat.data_exchange.references import validate_analysis_references
 from scopecat.records.analysis import (
-    CONFIGURATION_ANALYSIS_INPUT_CODEC,
     AnalysisInterpretationReference,
     AnalysisPublishedOutputReference,
     AnalysisSubject,
     ConfigurationAnalysisRecordInput,
-    InterpretationAnalysisRecordInput,
     MeasurementAnalysisRecordInput,
     ProjectAnalysisOutputReference,
     ProjectAnalysisSubject,
@@ -35,7 +33,7 @@ from scopecat.records.parameter_change import (
     ParameterProposalRef,
 )
 from scopecat.records.plan_ref import PlanAnalysisSource
-from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF, record_content_ref
+from scopecat.runs.refs import record_content_ref
 
 from scopecat_server.storage.sqlite.evidence_analysis import (
     capture_analysis_input_graph,
@@ -174,7 +172,7 @@ class _Capture:
                 self.interpretations[reference] = evidence
                 self.scan(evidence)
 
-    def validate_edges(self) -> None:
+    def validate_plan_sources(self) -> None:
         for document in self.documents:
             for item in _models(document):
                 match item:
@@ -185,43 +183,6 @@ class _Capture:
                         if source.record.publication_hash != item.publication_hash:
                             raise ValueError(
                                 "plan analysis source differs from retained publication"
-                            )
-                    case ConfigurationAnalysisRecordInput():
-                        if (
-                            item.target != CONFIG_PROFILE_SNAPSHOT_REF
-                            or item.codec != CONFIGURATION_ANALYSIS_INPUT_CODEC
-                            or item.content_hash
-                            != self.runs[item.run_id].snapshot.config_content_hash
-                        ):
-                            raise ValueError(
-                                "configuration input differs from retained run"
-                            )
-                    case MeasurementAnalysisRecordInput():
-                        entry = next(
-                            (
-                                entry
-                                for entry in self.runs[item.run_id].contents
-                                if entry.role == "dataset" and entry.id == item.target
-                            ),
-                            None,
-                        )
-                        if (
-                            entry is None
-                            or entry.kind != "measurement_dataset"
-                            or entry.content_hash != item.content_hash
-                            or item.codec != MEASUREMENT_DATASET_CODEC
-                        ):
-                            raise ValueError(
-                                "measurement input differs from retained dataset"
-                            )
-                    case InterpretationAnalysisRecordInput():
-                        if (
-                            item.target != item.source.step_key
-                            or item.content_hash != item.source.response_hash
-                            or item.codec != "scopecat.interpretation-response.v1"
-                        ):
-                            raise ValueError(
-                                "interpretation input differs from retained judgment"
                             )
                     case _:
                         pass
@@ -244,8 +205,8 @@ def capture_scientific_evidence(
             break
         inputs = updated
         capture.scan(inputs)
-    capture.validate_edges()
-    return ScientificEvidence(
+    capture.validate_plan_sources()
+    evidence = ScientificEvidence(
         source_project_id=capture.runs[roots[0]].source_project_id,
         roots=roots,
         runs=tuple(capture.runs[key] for key in sorted(capture.runs)),
@@ -263,6 +224,9 @@ def capture_scientific_evidence(
             )
         ),
     )
+
+    validate_analysis_references(evidence)
+    return evidence
 
 
 def export_scientific_capture(

@@ -9,19 +9,18 @@ from pathlib import Path
 from typing import cast
 
 from scopecat.data_exchange.models import AnalysisEvidence
+from scopecat.data_exchange.references import (
+    published_dependencies,
+    validate_published_references,
+)
 from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
 from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
     AnalysisDatasetRecordOutput,
-    AnalysisFigureRecordOutput,
     AnalysisParameterProposalRecordOutput,
-    AnalysisPublishedDatasetViewSource,
-    AnalysisPublishedOutputReference,
     AnalysisRecord,
     AnalysisSubject,
-    PublishedAnalysisRecordInput,
     RunAnalysisSubject,
-    published_output_input_identity,
 )
 from scopecat.records.content import ContentEntry
 from scopecat.runs.refs import content_entry_ref, record_content_ref
@@ -47,28 +46,6 @@ class CapturedAnalysis:
     payloads: tuple[RetainedPayload, ...]
 
 
-def _published_dependencies(
-    record: AnalysisRecord,
-) -> Iterator[tuple[AnalysisPublishedOutputReference, tuple[str, str, str, str]]]:
-    for item in record.inputs:
-        if isinstance(item, PublishedAnalysisRecordInput):
-            yield item.source, (item.kind, item.target, item.content_hash, item.codec)
-    for output in record.outputs:
-        if isinstance(output, AnalysisFigureRecordOutput):
-            for layer in output.content.layers:
-                source = layer.source
-                if isinstance(source, AnalysisPublishedDatasetViewSource):
-                    yield (
-                        source.source,
-                        (
-                            "analysis_dataset",
-                            source.dataset.dataset_id,
-                            source.dataset.content_hash,
-                            source.dataset.codec,
-                        ),
-                    )
-
-
 def capture_analysis_input_graph(
     connection: sqlite3.Connection,
     runs: SQLiteRunRepository,
@@ -88,23 +65,9 @@ def capture_analysis_input_graph(
         subject, record_id = identity
         publication = capture_analysis_evidence(connection, runs, subject, record_id)
         captured[identity] = publication
-        for source, _ in _published_dependencies(publication.evidence.record):
+        for source, _ in published_dependencies(publication.evidence.record):
             pending.append((source.subject, source.analysis_record_id))
-    for publication in captured.values():
-        for reference, expected in _published_dependencies(publication.evidence.record):
-            source = captured[(reference.subject, reference.analysis_record_id)]
-            output = next(
-                (
-                    output
-                    for output in source.evidence.record.outputs
-                    if output.id == reference.output_id
-                ),
-                None,
-            )
-            if published_output_input_identity(output) != expected:
-                raise ValueError(
-                    "analysis input evidence differs from its exact output"
-                )
+    validate_published_references(item.evidence for item in captured.values())
     return tuple(captured.values())
 
 

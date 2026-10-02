@@ -70,6 +70,90 @@ def exchange_evidence() -> ScientificEvidence:
     )
 
 
+@pytest.mark.parametrize(
+    "missing",
+    ["subject", "configuration", "measurement", "interpretation", "publication"],
+)
+def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing: str):
+    from datetime import UTC, datetime
+
+    from scopecat.data_exchange.models import AnalysisEvidence
+    from scopecat.kernel.content_identity import model_wire_content_hash
+    from scopecat.records.analysis import (
+        AnalysisInterpretationReference,
+        AnalysisPublishedOutputReference,
+        AnalysisRecord,
+        ConfigurationAnalysisRecordInput,
+        InterpretationAnalysisRecordInput,
+        MeasurementAnalysisRecordInput,
+        PublishedAnalysisRecordInput,
+        RunAnalysisSubject,
+    )
+
+    evidence = exchange_evidence()
+    shared = {
+        "id": "input",
+        "target": "retained",
+        "content_hash": "sha256:" + "a" * 64,
+        "codec": "test",
+        "role": "source",
+    }
+    inputs = []
+    if missing == "configuration":
+        inputs.append(ConfigurationAnalysisRecordInput(run_id="absent", **shared))
+    elif missing == "measurement":
+        inputs.append(MeasurementAnalysisRecordInput(run_id="absent", **shared))
+    elif missing == "interpretation":
+        inputs.append(
+            InterpretationAnalysisRecordInput(
+                source=AnalysisInterpretationReference(
+                    procedure_run_id="absent",
+                    step_key="decision",
+                    request_hash="sha256:" + "b" * 64,
+                    response_hash="sha256:" + "a" * 64,
+                ),
+                **shared,
+            )
+        )
+    elif missing == "publication":
+        inputs.append(
+            PublishedAnalysisRecordInput(
+                kind="analysis_fact",
+                source=AnalysisPublishedOutputReference(
+                    subject=RunAnalysisSubject(run_id="synthetic"),
+                    analysis_record_id="absent",
+                    output_id="value",
+                ),
+                **shared,
+            )
+        )
+    record = AnalysisRecord(
+        subject=RunAnalysisSubject(
+            run_id="absent" if missing == "subject" else "synthetic"
+        ),
+        title="Dependent",
+        revision=1,
+        publication_hash="publication",
+        inputs=inputs,
+        outputs=[],
+    )
+    entry = ContentEntry(
+        role="record",
+        id="dependent",
+        kind="analysis",
+        content_hash=model_wire_content_hash(record),
+    )
+    analysis = AnalysisEvidence(
+        entry=entry, record=record, published_at=datetime.now(UTC), contents=(entry,)
+    )
+    destination = tmp_path / "incomplete.scopecat"
+    with pytest.raises(ValueError, match="missing from exchange"):
+        write_scientific_exchange(
+            destination, evidence.model_copy(update={"analyses": (analysis,)}), {}
+        )
+    assert not destination.exists()
+
+
 @pytest.mark.parametrize("role", ["record", "artifact", "dataset"])
 def test_exchange_requires_indexed_payload_and_its_scientific_identity(
     tmp_path: Path, role: Literal["record", "artifact", "dataset"]

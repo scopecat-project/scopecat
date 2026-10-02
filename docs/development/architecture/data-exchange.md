@@ -220,6 +220,17 @@ application-wide Open commands, external-analysis provenance and full
 scientific-reference validation remain outstanding; this is not the completed
 desktop file journey.
 
+Analysis-reference verification now runs in the public data layer during archive
+verification as well as store capture. Published inputs and figure data sources
+must resolve to the exact output kind, target, content hash and codec. Analysis
+subjects and measurement/configuration inputs require their retained runs;
+interpretation inputs require their exact historical judgment. Duplicate analysis
+and interpretation identities are rejected. Export uses the same published-edge
+resolver and validation rules instead of maintaining a second implementation.
+Archive tests reject missing dependencies before publishing a destination file.
+This closes the analysis-input checks, not the entire scientific graph: transitive
+input revisions and candidate/proposal provenance still need import-side checks.
+
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:
 

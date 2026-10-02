@@ -308,6 +308,9 @@ class ScientificExchange:
                     raise ValueError("exchange sample attachment is missing or differs")
 
     def verify(self) -> None:
+        from .references import validate_analysis_references
+
+        validate_analysis_references(self.evidence)
         self._verify_content_index()
         for snapshot in self._recordings.values():
             snapshot.verify()
