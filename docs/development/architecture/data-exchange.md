@@ -340,8 +340,17 @@ changed-argument revisions, re-reading and preservation after interruption. The 
 uses an ordinary author-created result, not a hand-built publication fixture.
 An independent Python-process check reopens results without importing the server
 or lab adapter. Each changed file publication currently rewrites the portable
-archive; large-file save cost remains a qualification concern. Packaged desktop
-acceptance of this complete journey remains outstanding.
+archive. A local Mac probe (2026-10-03) retained a 256 MiB binary artifact and a
+four-point recording while saving three analysis revisions. Saves took 0.64,
+0.73 and 0.77 seconds; process peak RSS remained 180,158,464 bytes before and
+after saving. Reopening verified all three revisions and the original payload
+digest and size. This demonstrates bounded copying for a large retained artifact,
+not large-waveform analysis or a general latency guarantee. Saving remains O(file
+size) per changed publication and needs transient space for the new archive;
+many iterative saves over multi-gigabyte recordings remain a design constraint.
+Packaged desktop acceptance of the complete external-analysis journey remains
+outstanding; current-run native export and independent reopening are recorded in
+the [desktop evidence](desktop-product.md).
 
 1. Extend stable recording capture to scientific reference closure from retained data;
    include plans, parameters, result contracts, analysis and artifact dependencies
@@ -354,7 +363,7 @@ acceptance of this complete journey remains outstanding.
    access and task management; do not create a separate viewer entry mode.
    Split application commands from per-window navigation, drafts and selection.
 4. Complete the bounded two-window journey on both platforms and record the shell
-   choice. The current single-window prototype is not multi-window acceptance.
+   choice. Implemented multi-window support still needs complete platform acceptance.
 
 Current-format backup/restore remains a different capability: exchange selects
 portable scientific evidence rather than copying an entire application store.
