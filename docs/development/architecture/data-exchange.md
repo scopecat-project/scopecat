@@ -315,6 +315,20 @@ These are data-layer checks, not substitutes for the complete desktop journey.
 
 ## Remaining PR 2 scope
 
+External analysis writes now have a storage path: `ScientificExchange.write_analyses`
+accepts ordinary prepared `AnalysisPublication` values and writes a new capture.
+It preserves source run evidence, recording partitions and owned payloads, adds
+independently owned analysis records, and verifies the completed evidence closure
+before publishing the destination. Run-owned additions are rejected because they
+would change the identity of the imported source run. This uses the existing
+exchange format and application analysis records, not a second result format.
+Local tests cover preserved recordings, extracted result attachments, missing
+payload rejection, original/result imports coexisting, and repeated result import.
+This is the publication storage boundary; ordinary `AnalysisContext` authoring,
+external execution provenance capture and the complete author-facing example are
+still outstanding. Callers should not need to construct these low-level records
+as their normal analysis workflow.
+
 1. Extend stable recording capture to scientific reference closure from retained data;
    include plans, parameters, result contracts, analysis and artifact dependencies
    with explicit missing-reference failures. Keep machine-local bindings outside

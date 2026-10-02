@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from scopecat.analysis.repository import AnalysisPublication
 from scopecat.data_exchange import (
     PayloadReference,
     PayloadSource,
@@ -13,6 +14,7 @@ from scopecat.data_exchange import (
 )
 from scopecat.data_exchange.models import (
     AnalysisEvidence,
+    CaptureImportReceipt,
     RunEvidence,
     ScientificEvidence,
 )
@@ -25,10 +27,11 @@ from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
     AnalysisArtifactReference,
     AnalysisRecord,
+    ProjectAnalysisSubject,
     RunAnalysisSubject,
 )
 from scopecat.records.config import config_content_hash
-from scopecat.records.content import ContentEntry
+from scopecat.records.content import ContentEntry, ModelWrite
 from scopecat.records.measurement import (
     MeasurementArray,
     MeasurementDatasetSchema,
@@ -84,6 +87,64 @@ def _evidence() -> ScientificEvidence:
     return ScientificEvidence(
         source_project_id="source", roots=("portable",), runs=(run,)
     )
+
+
+def test_external_analysis_import_preserves_existing_source_identity(tmp_path: Path):
+    source = tmp_path / "source.scopecat"
+    write_scientific_exchange(source, _evidence(), {})
+    record = AnalysisRecord(
+        subject=ProjectAnalysisSubject(),
+        title="External result",
+        key="external",
+        revision=1,
+        publication_hash="external-result",
+        outputs=[],
+    )
+    entry = ContentEntry(
+        role="record",
+        id="analysis-external-r1",
+        kind="analysis",
+        content_hash=model_wire_content_hash(record),
+    )
+    publication = AnalysisPublication(
+        subject=record.subject,
+        record=entry,
+        entries=(entry,),
+        analysis_key="external",
+        revision=1,
+        publication_hash=record.publication_hash,
+        title=record.title,
+        step_id=None,
+        input_count=0,
+        output_count=0,
+        models=(ModelWrite(content_entry_ref(entry), record),),
+    )
+    result = tmp_path / "result.scopecat"
+    with ScientificExchange(source) as captured:
+        captured.write_analyses(result, (publication,))
+    with (
+        LocalDaemonRuntime(tmp_path / "app") as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        receipts: list[CaptureImportReceipt] = []
+        for path in (source, result, result):
+            response = client.post(
+                "/api/v1/data/captures",
+                content=path.read_bytes(),
+                headers={"Content-Type": "application/octet-stream"},
+            )
+            assert response.status_code == 200, response.text
+            receipts.append(CaptureImportReceipt.model_validate(response.json()))
+        assert [receipt.created for receipt in receipts] == [True, True, False]
+        original_hash, result_hash = (
+            receipt.capture.content_hash for receipt in receipts[:2]
+        )
+        assert original_hash != result_hash
+        original = client.get(f"/api/v1/data/captures/{original_hash}/evidence").json()
+        analyzed = client.get(f"/api/v1/data/captures/{result_hash}/evidence").json()
+        assert analyzed["runs"] == original["runs"]
+        assert original["analyses"] == []
+        assert analyzed["analyses"][0]["record"] == record.model_dump(mode="json")
 
 
 def test_current_run_export_is_portable_without_device_activation(

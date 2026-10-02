@@ -9,13 +9,16 @@ import shutil
 import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from itertools import chain
 from pathlib import Path
 from typing import Literal, Self, cast
 from zipfile import ZIP_STORED, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from scopecat.data_exchange.models import ScientificEvidence
+from scopecat.analysis.repository import AnalysisPublication
+from scopecat.data_exchange.models import AnalysisEvidence, ScientificEvidence
 from scopecat.kernel.content_identity import (
     content_fingerprint,
     sha256_content_hash,
@@ -23,6 +26,7 @@ from scopecat.kernel.content_identity import (
     stable_content_hash,
 )
 from scopecat.measurements.archive import MeasurementSnapshot
+from scopecat.records.analysis import AnalysisRecord
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
@@ -94,6 +98,17 @@ def write_scientific_exchange(
     bytes while copying and never executes or extracts retained code. Scientific
     dependency closure must be resolved by the capture layer before publication.
     """
+    _write_scientific_exchange(destination, evidence, recordings, payloads)
+
+
+def _write_scientific_exchange(
+    destination: Path,
+    evidence: ScientificEvidence,
+    recordings: Mapping[str, Path],
+    payloads: Iterable[PayloadSource],
+    *,
+    source: tuple[ZipFile, _Index] | None = None,
+) -> None:
     encoded = evidence.model_dump_json().encode()
     if len(encoded) > MAX_EVIDENCE_BYTES:
         raise ValueError("exchange evidence document exceeds the metadata budget")
@@ -110,16 +125,29 @@ def write_scientific_exchange(
         copied: set[str] = set()
         with ZipFile(staged, "w", compression=ZIP_STORED, allowZip64=True) as output:
             output.writestr("evidence.json", encoded)
+            if source is not None:
+                source_archive, source_index = source
+                recording_hashes.update(source_index.recordings)
+                references.extend(source_index.payloads)
+                copied.update(ref.digest for ref in source_index.payloads)
+                for name in source_archive.namelist():
+                    if name in {"index.json", "evidence.json"}:
+                        continue
+                    with (
+                        source_archive.open(name) as src,
+                        output.open(name, "w", force_zip64=True) as dst,
+                    ):
+                        shutil.copyfileobj(src, dst, length=1024 * 1024)
             for run_id, path in sorted(recordings.items()):
-                with ZipFile(path) as source:
-                    with MeasurementSnapshot(source) as snapshot:
+                with ZipFile(path) as recording_archive:
+                    with MeasurementSnapshot(recording_archive) as snapshot:
                         snapshot.verify()
                         if snapshot.header.run_id != run_id:
                             raise ValueError("exchange recording identity differs")
                         recording_hashes[run_id] = snapshot.content_hash
-                    for name in source.namelist():
+                    for name in recording_archive.namelist():
                         with (
-                            source.open(name) as src,
+                            recording_archive.open(name) as src,
                             output.open(
                                 _recording_prefix(run_id) + name, "w", force_zip64=True
                             ) as dst,
@@ -226,6 +254,68 @@ class ScientificExchange:
     def recording(self, run_id: str) -> MeasurementSnapshot:
         """Return an existing recording; absence is not an empty dataset."""
         return self._recordings[run_id]
+
+    def write_analyses(
+        self, destination: Path, publications: Iterable[AnalysisPublication]
+    ) -> None:
+        """Append independent analyses to a new file, preserving source runs.
+
+        Publications use the same prepared records and payloads as application
+        analysis storage. Run-owned publications must be saved at their original
+        authority; external analysis instead retains those runs as inputs.
+        The original file and any existing destination are never overwritten.
+        """
+        analyses = list(self.evidence.analyses)
+        payloads: list[PayloadSource] = []
+        with tempfile.TemporaryDirectory(prefix="scopecat-analysis-") as directory:
+            for publication in publications:
+                if publication.subject.kind == "run":
+                    raise ValueError(
+                        "external analysis must not change source run ownership"
+                    )
+                record_ref = content_entry_ref(publication.record)
+                record = next(
+                    item.value for item in publication.models if item.ref == record_ref
+                )
+                if not isinstance(record, AnalysisRecord):
+                    raise TypeError("analysis publication requires an AnalysisRecord")
+                analyses.append(
+                    AnalysisEvidence(
+                        entry=publication.record,
+                        record=record,
+                        published_at=datetime.now(UTC),
+                        contents=publication.entries,
+                    )
+                )
+                contents = chain(
+                    (
+                        (item.ref, item.value.model_dump_json().encode())
+                        for item in publication.models
+                    ),
+                    ((item.ref, item.content) for item in publication.bytes),
+                )
+                for ref, content in contents:
+                    path = Path(directory) / str(len(payloads))
+                    path.write_bytes(content)
+                    payloads.append(
+                        PayloadSource(
+                            PayloadReference(
+                                owner_kind="analysis",
+                                owner_id=publication.record.id,
+                                ref=ref,
+                                digest=sha256_content_hash(content),
+                                size=len(content),
+                            ),
+                            path,
+                        )
+                    )
+            _write_scientific_exchange(
+                destination,
+                self.evidence.model_copy(update={"analyses": tuple(analyses)}),
+                {},
+                payloads,
+                source=(self._archive, self._index),
+            )
 
     def copy_payload(self, reference: PayloadReference, destination: Path) -> None:
         """Save one retained attachment after checking its owned bytes.

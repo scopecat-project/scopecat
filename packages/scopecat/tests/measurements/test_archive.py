@@ -224,6 +224,118 @@ def test_exchange_requires_indexed_payload_and_its_scientific_identity(
     assert not list(tmp_path.glob(".exchange-*"))
 
 
+def test_external_publication_preserves_source_evidence_and_recordings(tmp_path: Path):
+    from dataclasses import replace
+
+    from scopecat.analysis.repository import AnalysisPublication
+    from scopecat.kernel.content_identity import model_wire_content_hash
+    from scopecat.records.analysis import (
+        CONFIGURATION_ANALYSIS_INPUT_CODEC,
+        AnalysisArtifactRecordOutput,
+        AnalysisArtifactReference,
+        AnalysisRecord,
+        ConfigurationAnalysisRecordInput,
+        ProjectAnalysisSubject,
+    )
+    from scopecat.records.content import BytesWrite, ModelWrite
+    from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF
+
+    header, appends, records = recording()
+    recording_file = tmp_path / "recording.scopecat"
+    write_measurement_snapshot(recording_file, header, appends)
+    evidence = exchange_evidence()
+    source = tmp_path / "source.scopecat"
+    write_scientific_exchange(source, evidence, {header.run_id: recording_file})
+    original_bytes = source.read_bytes()
+    report = b"external fit report"
+    artifact = ContentEntry(
+        role="artifact",
+        id="report",
+        kind="analysis_artifact",
+        filename="report.txt",
+        media_type="text/plain",
+        content_hash=sha256_content_hash(report),
+    )
+    record = AnalysisRecord(
+        subject=ProjectAnalysisSubject(),
+        title="External fit",
+        key="fit",
+        revision=1,
+        publication_hash="external-fit",
+        inputs=[
+            ConfigurationAnalysisRecordInput(
+                id="config",
+                run_id="synthetic",
+                target=CONFIG_PROFILE_SNAPSHOT_REF,
+                content_hash=evidence.runs[0].snapshot.config_content_hash,
+                codec=CONFIGURATION_ANALYSIS_INPUT_CODEC,
+                role="configuration",
+            )
+        ],
+        outputs=[
+            AnalysisArtifactRecordOutput(
+                kind="artifact",
+                id="report",
+                title="Report",
+                content=AnalysisArtifactReference(
+                    artifact_id=artifact.id,
+                    content_hash=artifact.content_hash,
+                    filename="report.txt",
+                    media_type="text/plain",
+                ),
+            )
+        ],
+    )
+    entry = ContentEntry(
+        role="record",
+        id="analysis-fit-r1",
+        kind="analysis",
+        content_hash=model_wire_content_hash(record),
+    )
+    publication = AnalysisPublication(
+        subject=record.subject,
+        record=entry,
+        entries=(entry, artifact),
+        analysis_key="fit",
+        revision=1,
+        publication_hash=record.publication_hash,
+        title=record.title,
+        step_id=None,
+        input_count=1,
+        output_count=1,
+        models=(ModelWrite(content_entry_ref(entry), record),),
+        bytes=(BytesWrite(content_entry_ref(artifact), report),),
+    )
+    destination = tmp_path / "analyzed.scopecat"
+    with ScientificExchange(source) as original:
+        original.write_analyses(destination, (publication,))
+        with ScientificExchange(destination) as analyzed:
+            analyzed.verify()
+            assert analyzed.evidence.runs == original.evidence.runs
+            assert analyzed.evidence.analyses[0].record == record
+            assert (
+                analyzed.recording("synthetic").content_hash
+                == original.recording("synthetic").content_hash
+            )
+            assert tuple(analyzed.recording("synthetic").records()) == records
+            attachment = next(
+                item
+                for item in analyzed.payloads
+                if item.ref == content_entry_ref(artifact)
+            )
+            extracted = tmp_path / "report.txt"
+            analyzed.copy_payload(attachment, extracted)
+            assert extracted.read_bytes() == report
+        with pytest.raises(FileExistsError):
+            original.write_analyses(destination, (publication,))
+        incomplete = tmp_path / "incomplete.scopecat"
+        with pytest.raises(ValueError, match="missing retained content"):
+            original.write_analyses(incomplete, (replace(publication, bytes=()),))
+        assert not incomplete.exists()
+    assert source.read_bytes() == original_bytes
+    assert not list(tmp_path.glob(".exchange-*"))
+
+
 def test_exchange_reads_partition_after_borrowed_reader_closes(tmp_path: Path):
     header, appends, records = recording()
     source = tmp_path / "recording.scopecat"
