@@ -840,6 +840,53 @@ def test_measurement_export_uses_callers_earlier_capture(tmp_path: Path) -> None
     runs.sqlite.close()
 
 
+def test_exchange_assembly_includes_recording_partition(tmp_path: Path) -> None:
+    from scopecat.config.scientific_binding import bind_scientific_evidence
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat.data_exchange.models import ScientificEvidence
+    from scopecat.records.run_request import RunRequest
+    from scopecat.runs.admission import build_run_admission
+    from scopecat_testkit.workflow_fixtures import load_config
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+    from scopecat_server.storage.sqlite.exchange_writer import write_captured_exchange
+
+    runs = _runs(tmp_path)
+    config = load_config()
+    skeleton = build_run_admission(
+        config=config,
+        request=RunRequest(experiment_id="recorded"),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="source", config=config, samples=(), sample_revisions={}
+        ),
+    )
+    prepared = runs.prepare_run_skeleton(skeleton)
+    with runs.sqlite.write_transaction() as connection:
+        runs.commit_run_skeleton_in_transaction(connection, prepared)
+    header = _header(skeleton.snapshot.run_id, point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+    store = SQLiteProjectStore(runs.sqlite, runs.objects.root)
+    destination = tmp_path / "recorded.scopecat"
+    with runs.sqlite.read_transaction() as connection:
+        run = capture_run_evidence(connection, runs, header.run_id)
+        evidence = ScientificEvidence(
+            source_project_id=run.source_project_id, roots=(header.run_id,), runs=(run,)
+        )
+        # A later physical acquisition must not enter this captured package.
+        _commit_append(runs, repository, _append(header, point_index=1))
+        write_captured_exchange(connection, store, evidence, destination)
+    store.close()
+    with ScientificExchange(destination) as package:
+        snapshot = package.recording(header.run_id)
+        assert tuple(snapshot.selected_records()) == first.records
+        assert snapshot.record_count == 1
+        package.verify()
+    assert not list(tmp_path.glob(".capture-*"))
+
+
 def test_measurement_export_missing_chunk_does_not_publish(tmp_path: Path) -> None:
     from scopecat_server.storage.sqlite.measurement_export import (
         export_measurement_snapshot,

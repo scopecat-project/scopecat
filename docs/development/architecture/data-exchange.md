@@ -143,8 +143,13 @@ the package. Writing checks streamed payload hashes and verifies the staged pack
 before atomic publication. `copy_payload(reference, destination)` saves a selected
 attachment only after verifying its bytes, without replacing existing files. The
 caller supplies the destination; retained filenames are never extraction paths.
-This is container assembly only: the storage capture
-layer still needs to resolve the complete dependency graph at one capture boundary.
+`write_captured_exchange` connects resolved evidence to stored run content, analysis
+outputs, sample attachments and measurement partitions inside the caller's read
+transaction. Missing content stops publication, and its temporary partitions are
+removed on completion or failure. Tests exercise later acquisitions committed while
+that capture remains open, then read the package after closing the original store.
+The storage capture layer still needs to select and resolve the complete dependency
+graph before calling this assembly function.
 It is not yet an application export command or a complete-run interchange promise.
 
 Machine-local registrations stay outside the exchange. Historical configuration

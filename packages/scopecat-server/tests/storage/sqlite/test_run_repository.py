@@ -363,6 +363,67 @@ def test_run_evidence_captures_accepted_inputs_without_execution(
         RunEvidence.model_validate(changed)
 
 
+def test_captured_exchange_survives_store_close_and_rejects_missing_bytes(
+    tmp_path: Path,
+):
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat.data_exchange.models import ScientificEvidence
+    from scopecat.kernel.content_identity import sha256_content_hash
+    from scopecat.runs.refs import artifact_content_ref
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+    from scopecat_server.storage.sqlite.exchange_writer import write_captured_exchange
+
+    repository = _repository(tmp_path)
+    store = SQLiteProjectStore(repository.sqlite, repository.objects.root)
+    skeleton = _structured_run_inputs("portable-evidence", with_source=False)
+    repository.write_run_skeleton(skeleton)
+    content = b"retained experiment notes"
+    entry = ContentEntry(
+        role="artifact",
+        id="notes",
+        kind="report",
+        content_hash=sha256_content_hash(content),
+    )
+    ref = artifact_content_ref(artifact_id=entry.id, kind=entry.kind)
+    repository.publish_content(
+        RunContentPublication(
+            run_id=skeleton.snapshot.run_id,
+            entries=(entry,),
+            bytes=(BytesWrite(ref=ref, content=content),),
+        )
+    )
+    destination = tmp_path / "portable.scopecat"
+    with store.sqlite.read_transaction() as connection:
+        run = capture_run_evidence(connection, repository, skeleton.snapshot.run_id)
+        evidence = ScientificEvidence(
+            source_project_id=run.source_project_id,
+            roots=(run.snapshot.run_id,),
+            runs=(run,),
+        )
+        write_captured_exchange(connection, store, evidence, destination)
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
+            (run.snapshot.run_id, ref),
+        )
+    rejected = tmp_path / "incomplete.scopecat"
+    with (
+        store.sqlite.read_transaction() as connection,
+        pytest.raises(KeyError, match="missing run content"),
+    ):
+        write_captured_exchange(connection, store, evidence, rejected)
+    assert not rejected.exists()
+    assert not list(tmp_path.glob(".capture-*"))
+    store.close()
+    with ScientificExchange(destination) as exchange:
+        assert exchange.evidence == evidence
+        exchange.verify()
+        saved = tmp_path / "notes.txt"
+        exchange.copy_payload(exchange.payloads[0], saved)
+        assert saved.read_bytes() == content
+
+
 def test_run_evidence_requires_the_original_request(tmp_path: Path) -> None:
     from scopecat.runs.refs import RUN_REQUEST_REF
 
