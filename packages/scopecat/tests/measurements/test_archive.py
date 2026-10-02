@@ -30,6 +30,7 @@ from scopecat.measurements.imports import import_measurement_snapshot
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
+    MeasurementDataset,
     MeasurementDatasetSchema,
     MeasurementDimension,
     MeasurementPointCloudPointDomain,
@@ -277,6 +278,11 @@ def test_capture_uses_ordinary_analysis_and_retains_execution_provenance(
     source = tmp_path / "source.scopecat"
     output = tmp_path / "analyzed.scopecat"
     write_scientific_exchange(source, evidence, {"synthetic": recording_file})
+
+    def reject_dataset_serialization(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("analysis inputs must use dataset identity, not raw JSON")
+
+    monkeypatch.setattr(MeasurementDataset, "model_dump", reject_dataset_serialization)
     with sc.open_capture(source, output=output) as captured:
         assert captured.run_ids == ("synthetic",)
         ctx = captured.analysis("synthetic", title="Local analysis", key="fit")
@@ -759,6 +765,43 @@ def test_partial_recording_keeps_planned_count(tmp_path: Path):
         assert snapshot.header.expected_record_count == 4
         assert snapshot.record_count == 2
         assert tuple(snapshot.records()) == records[:2]
+
+
+@pytest.mark.parametrize("cache_chunks", [1, 2])
+def test_selection_streams_with_bounded_chunk_reuse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cache_chunks: int
+):
+    from scopecat.measurements import archive
+
+    header, appends, records = recording()
+    source = tmp_path / "selected.scopecat"
+    write_measurement_snapshot(
+        source,
+        header,
+        appends,
+        projection=(
+            RecordSelection(point_index=p, acquisition_index=a)
+            for p, a in enumerate((1, 3, 0, 2))
+        ),
+    )
+    with ZipFile(source) as zipped:
+        budget = max(zipped.getinfo(f"chunks/{i:08d}.arrow").file_size for i in (0, 1))
+    monkeypatch.setattr(archive, "_SELECTION_CACHE_BYTES", budget * cache_chunks)
+    decoded: list[int] = []
+    original = MeasurementSnapshot._append
+
+    def observe(snapshot: MeasurementSnapshot, index: int) -> MeasurementDatasetAppend:
+        decoded.append(index)
+        return original(snapshot, index)
+
+    monkeypatch.setattr(MeasurementSnapshot, "_append", observe)
+    with MeasurementSnapshot(source) as snapshot:
+        selected = snapshot.selected_records()
+        assert next(selected) == records[1]
+        # Reading one point must not decode all other selected waveforms first.
+        assert decoded == [0]
+        assert tuple(selected) == (records[3], records[0], records[2])
+    assert decoded == ([0, 1, 0, 1] if cache_chunks == 1 else [0, 1])
 
 
 def test_reacquisition_retains_physical_history_beyond_planned_count(tmp_path: Path):

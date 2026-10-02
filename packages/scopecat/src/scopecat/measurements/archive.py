@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import tempfile
 from bisect import bisect_right
+from collections import OrderedDict
 from collections.abc import Iterable, Iterator
 from itertools import batched
 from pathlib import Path
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_CHUNK_BYTES = 64 * 1024 * 1024
+_SELECTION_CACHE_BYTES = MAX_CHUNK_BYTES
 
 
 class _Chunk(BaseModel):
@@ -321,6 +323,8 @@ class MeasurementSnapshot:
             return
         position = 0
         previous_point = -1
+        cached: OrderedDict[int, MeasurementDatasetAppend] = OrderedDict()
+        cached_bytes = 0
         for index, chunk in enumerate(self._manifest.projection):
             following = position + chunk.count
             if position >= offset + limit:
@@ -348,26 +352,29 @@ class MeasurementSnapshot:
                         chunk.count, offset + limit - position
                     )
                 ]
-                # Decode each referenced chunk once per selection page. The page
-                # itself is bounded to 1000 points; do not cache the whole run.
-                groups: dict[int, list[tuple[int, RecordSelection]]] = {}
-                for order, item in enumerate(selected):
+                # A point may contain a large waveform. Bound retained chunks by
+                # encoded bytes, not by the number of selected points. Reuse
+                # nearby acquisitions without retaining a whole selection page.
+                for item in selected:
                     source = bisect_right(self._starts, item.acquisition_index) - 1
-                    groups.setdefault(source, []).append((order, item))
-                records: dict[int, MeasurementRecord] = {}
-                for source, items in groups.items():
-                    append = self._append(source)
-                    for order, item in items:
-                        record = append.records[
-                            item.acquisition_index - self._starts[source]
-                        ]
-                        if record.point_index != item.point_index:
-                            raise ValueError(
-                                "snapshot projection selects another point"
-                            )
-                        records[order] = record
-                for order in range(len(selected)):
-                    yield records[order]
+                    append = cached.get(source)
+                    if append is None:
+                        size = self._manifest.chunks[source].size
+                        while cached and cached_bytes + size > _SELECTION_CACHE_BYTES:
+                            evicted = next(iter(cached))
+                            del cached[evicted]
+                            cached_bytes -= self._manifest.chunks[evicted].size
+                        append = self._append(source)
+                        cached[source] = append
+                        cached_bytes += size
+                    else:
+                        cached.move_to_end(source)
+                    record = append.records[
+                        item.acquisition_index - self._starts[source]
+                    ]
+                    if record.point_index != item.point_index:
+                        raise ValueError("snapshot projection selects another point")
+                    yield record
             position = following
 
     def records(

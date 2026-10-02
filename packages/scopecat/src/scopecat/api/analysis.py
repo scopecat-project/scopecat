@@ -1265,6 +1265,10 @@ def _analysis_value_hash(value: object) -> str:
 
 
 def _analysis_value_identity(value: object) -> tuple[str, str]:
+    if isinstance(value, ExperimentResultView):
+        value = cast("ExperimentResultView[object]", value).dataset
+    if isinstance(value, Dataset):
+        return MEASUREMENT_DATASET_CODEC, value.entry.content_hash
     artifact = _analysis_artifact_value(value)
     if artifact is not None:
         return ANALYSIS_ARTIFACT_CODEC, sha256_content_hash(artifact)

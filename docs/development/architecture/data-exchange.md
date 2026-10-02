@@ -348,12 +348,35 @@ digest and size. This demonstrates bounded copying for a large retained artifact
 not large-waveform analysis or a general latency guarantee. Saving remains O(file
 size) per changed publication and needs transient space for the new archive;
 many iterative saves over multi-gigabyte recordings remain a design constraint.
+
+A separate local waveform check used 32 reversed-order acquisitions, each with
+1,048,576 float64 samples (256 MiB total), and an explicit ascending logical-point
+selection. A fresh public-wheel consumer environment verified every sample,
+physical order and units, then ran an ordinary analysis over the logical selection,
+saved its mean/count conclusion and reopened it. This exposed two memory problems:
+selection pages retained up to 1000 entire waveforms, and execution-input identity
+registration attempted to JSON-encode the `Dataset` dataclass before recognizing
+that its internal members were not JSON values.
+
+Selection now yields records incrementally with a 64 MiB encoded-chunk LRU budget;
+decoding and consumer-retained records can add memory beyond that cache budget.
+Analysis identity uses the existing measurement dataset content hash directly,
+including for typed result views. Tests cover first-record streaming, eviction
+and reuse without changing logical order, and reject raw dataset JSON serialization
+during ordinary analysis. On this Mac, verified streaming peaked at 234,913,792
+bytes, down from 455,475,200; complete materialized analysis/save/reopen peaked at
+564,150,272 bytes, down from 2.1–2.7 GB. The corrected analysis journey took 4.68
+seconds. These are local observations, not fixed latency or total-memory promises.
+The ordinary analysis API still intentionally materializes selected measurements;
+larger-than-memory analysis requires bounded record processing.
+
 The packaged Mac application has now completed a scalar native-export / external
 Python analysis / native-open round trip, displaying the unchanged measurement,
 new conclusion and retained input/execution evidence. The same analysis also
 passed in a fresh environment with only the public wheel and its dependencies,
-outside the repository, without an installed server or adapter. Large-waveform
-analysis and Windows desktop acceptance remain outstanding. See the
+outside the repository, without an installed server or adapter. The waveform check
+above qualifies independent analysis at that size; native large-waveform browsing
+and Windows desktop acceptance remain outstanding. See the
 [desktop evidence](desktop-product.md) for the observed scope.
 
 1. Extend stable recording capture to scientific reference closure from retained data;
