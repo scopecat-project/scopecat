@@ -180,6 +180,17 @@ and setup snapshots retain original connection descriptions as inert evidence so
 their hashes remain verifiable. Import must not restore those descriptions into
 the receiving machine's device registry or activate source/environment selections.
 
+`import_scientific_capture` now verifies an owned copy and retains the entire
+package in the application's existing immutable object store. Schema 104 indexes
+captures and source-qualified run identities without inserting scheduler rows or
+local device bindings. Repacked identical archives reuse the retained capture;
+overlapping exports compare their shared runs, including recording and payload
+identities, before committing any import rows. Different content for an existing
+source/run is an explicit conflict. Current-format backup verification includes
+the imported archive references. The application import command, browsing views,
+external-analysis provenance and full scientific-reference validation are still
+outstanding; this storage operation is not the completed user workflow.
+
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:
 

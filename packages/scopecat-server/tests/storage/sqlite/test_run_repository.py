@@ -363,6 +363,91 @@ def test_run_evidence_captures_accepted_inputs_without_execution(
         RunEvidence.model_validate(changed)
 
 
+def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(tmp_path: Path):
+    from zipfile import ZipFile
+
+    from scopecat.data_exchange import ScientificExchange, write_scientific_exchange
+    from scopecat.data_exchange.models import ScientificEvidence
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+    from scopecat_server.storage.sqlite.exchange_import import import_scientific_capture
+
+    source_repository = _repository(tmp_path / "source")
+    skeleton = _structured_run_inputs("portable", with_source=False)
+    source_repository.write_run_skeleton(skeleton)
+    with source_repository.sqlite.read_transaction() as connection:
+        run = capture_run_evidence(connection, source_repository, "portable")
+    evidence = ScientificEvidence(
+        source_project_id=run.source_project_id, roots=("portable",), runs=(run,)
+    )
+    source = tmp_path / "capture.scopecat"
+    write_scientific_exchange(source, evidence, {})
+    source_repository.sqlite.close()
+    target = _repository(tmp_path / "target/.scopecat")
+    store = SQLiteProjectStore(target.sqlite, target.objects.root)
+    first = import_scientific_capture(store, source)
+    assert first.created
+    with ZipFile(source, "a") as archive:
+        archive.comment = b"same scientific content in different archive bytes"
+    repeated = import_scientific_capture(store, source)
+    assert not repeated.created
+    assert repeated.path == first.path
+    source.unlink()
+    with ScientificExchange(first.path) as captured:
+        assert captured.evidence == evidence
+        captured.verify()
+
+    another_run = run.model_copy(
+        update={"snapshot": run.snapshot.model_copy(update={"run_id": "another"})}
+    )
+    overlapping = evidence.model_copy(
+        update={"roots": ("another",), "runs": (run, another_run)}
+    )
+    overlap_path = tmp_path / "overlapping.scopecat"
+    write_scientific_exchange(overlap_path, overlapping, {})
+    assert import_scientific_capture(store, overlap_path).created
+
+    different = evidence.model_copy(
+        update={
+            "runs": (
+                run.model_copy(
+                    update={
+                        "request": run.request.model_copy(
+                            update={"experiment_id": "different"}
+                        )
+                    }
+                ),
+            )
+        }
+    )
+    conflict = tmp_path / "conflict.scopecat"
+    write_scientific_exchange(conflict, different, {})
+    with pytest.raises(ValueError, match="different content"):
+        import_scientific_capture(store, conflict)
+    with store.sqlite.read_connection() as connection:
+        assert (
+            connection.execute("SELECT count(*) FROM imported_captures").fetchone()[0]
+            == 2
+        )
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM imported_run_identities"
+            ).fetchone()[0]
+            == 2
+        )
+        assert (
+            connection.execute("SELECT count(*) FROM scheduler_runs").fetchone()[0] == 0
+        )
+    target.sqlite.close()
+    from scopecat_server.snapshots import verify_store_files
+    from scopecat_server.storage.sqlite.object_store import ObjectNotFoundError
+
+    verify_store_files(tmp_path / "target")
+    first.path.unlink()
+    with pytest.raises(ObjectNotFoundError):
+        verify_store_files(tmp_path / "target")
+
+
 def test_captured_exchange_survives_store_close_and_rejects_missing_bytes(
     tmp_path: Path,
 ):

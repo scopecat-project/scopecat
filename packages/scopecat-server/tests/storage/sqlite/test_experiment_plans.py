@@ -138,7 +138,7 @@ def test_schema_64_source_bytes_remain_unchanged(tmp_path: Path) -> None:
         connection.execute("INSERT INTO retained VALUES ('original')")
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 64; expected 103"):
+    with pytest.raises(SchemaVersionError, match="version: 64; expected 104"):
         store.bootstrap()
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
 

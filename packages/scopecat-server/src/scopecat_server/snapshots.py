@@ -273,7 +273,9 @@ def verify_store_files(project: Path) -> int:
                 "UNION SELECT bundle_digest AS digest, NULL, NULL "
                 "FROM author_revisions "
                 "UNION SELECT digest, NULL, NULL FROM experiment_plan_revisions "
-                "UNION SELECT digest, NULL, NULL FROM apparatus_observation_attachments"
+                "UNION SELECT digest, NULL, NULL "
+                "FROM apparatus_observation_attachments "
+                "UNION SELECT object_digest, NULL, NULL FROM imported_captures"
             ).fetchall(),
         )
         for row in refs:

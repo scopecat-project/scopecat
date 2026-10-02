@@ -80,6 +80,30 @@ class ImmutableObjectStore:
             raise ObjectCorruptError(path)
         return content
 
+    def put_file(self, source: Path) -> StoredObject:
+        """Own a large file without materializing it as one Python byte string."""
+        self.bootstrap()
+        temporary = self.root / f".import-{uuid4().hex}.tmp"
+        try:
+            checksum = hashlib.sha256()
+            with source.open("rb") as incoming, temporary.open("xb") as output:
+                while block := incoming.read(1024 * 1024):
+                    output.write(block)
+                    checksum.update(block)
+                output.flush()
+                os.fsync(output.fileno())
+            digest = f"sha256:{checksum.hexdigest()}"
+            path = self.path_for(digest)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.link(temporary, path)
+            except FileExistsError:
+                self.verify(digest)
+            _fsync_directory(path.parent)
+            return StoredObject(digest)
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def path_for(self, digest: str) -> Path:
         match = _DIGEST.fullmatch(digest)
         if match is None:
