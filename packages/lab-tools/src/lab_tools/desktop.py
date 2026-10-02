@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 import threading
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from collections.abc import Callable
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -21,6 +20,7 @@ from .desktop_platform import (
     show_window,
     start_tray,
 )
+from .desktop_session import DesktopSession
 
 if TYPE_CHECKING:
     import webview
@@ -32,27 +32,14 @@ class DesktopAPI:
 
     def __init__(
         self,
-        runtime: ApplicationRuntime,
+        session: DesktopSession,
         window: Callable[[], webview.Window],
-        closing: threading.Event,
         prepare: Callable[[], None] = lambda: None,
     ):
-        self._runtime = runtime
+        self._session = session
+        self._runtime = session.runtime
         self._window = window
-        self._closing = closing
-        self._operation_lock = threading.Lock()
-        self._exit_thread: threading.Thread | None = None
         self._prepare = prepare
-        self._waiting = threading.Event()
-
-    @contextmanager
-    def _operation(self) -> Generator[None]:
-        if not self._operation_lock.acquire(blocking=False):
-            raise ValueError("应用正在执行另一项操作，请稍候再试")
-        try:
-            yield
-        finally:
-            self._operation_lock.release()
 
     def status(self) -> dict[str, object]:
         from scopecat.author_workspaces import local_author_workspaces
@@ -78,7 +65,7 @@ class DesktopAPI:
     def choose_directory(self) -> str | None:
         import webview
 
-        with self._operation():
+        with self._session.operation():
             selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
             return selected[0] if selected else None
 
@@ -93,7 +80,7 @@ class DesktopAPI:
         if not name.strip() or name in (".", "..") or any(c in name for c in "/\\:"):
             raise ValueError("请输入单个新目录名称")
         path = directory / name
-        with self._operation():
+        with self._session.operation():
             write_author_scaffold(path)
             create_client_environment(self._runtime, path)
             self._register_source(path)
@@ -116,7 +103,7 @@ class DesktopAPI:
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择作者代码目录的完整路径")
-        with self._operation():
+        with self._session.operation():
             # Register the selected folder, not an ancestor discovered by walking up.
             _ = load_project(path / "scopecat.toml", resolve_adapter=False)
             python = (
@@ -127,7 +114,7 @@ class DesktopAPI:
             return self._register_source(path, python)
 
     def restart(self) -> None:
-        with self._operation():
+        with self._session.operation():
             if self._runtime.selection.exists():
                 self._runtime.stop()
             self._start()
@@ -138,7 +125,7 @@ class DesktopAPI:
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择已登记作者目录的完整路径")
-        with self._operation():
+        with self._session.operation():
             self._runtime.source(path)
             python = prepare_execution_environment(self._runtime, path)
             self._runtime.select_source_environment(path, python)
@@ -150,65 +137,32 @@ class DesktopAPI:
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择作者目录的完整路径")
-        with self._operation():
+        with self._session.operation():
             self._runtime.source(path)
             return str(create_client_environment(self._runtime, path, rebuild=rebuild))
 
     def retry(self) -> None:
-        with self._operation():
+        with self._session.operation():
             self._start()
 
     def _start(self, location: str = "") -> None:
-        if self._closing.is_set():
+        if self._session.closing.is_set():
             return
         self._prepare()
         record = self._runtime.start()
         self._window().load_url(record.base_url + location)
 
     def exit(self, background: bool) -> None:
-        with self._operation():
-            if background:
-                self._waiting.clear()
-                hide_window(self._window())
-                return
-            if self._runtime.selection.exists():
-                self._runtime.stop()
-            self._exit_thread = threading.current_thread()
-            self._closing.set()
+        if background:
+            self._session.keep_running(lambda: hide_window(self._window()))
+        else:
+            self._session.exit()
 
     def request_exit(self) -> dict[str, int] | None:
-        with self._operation():
-            if not self._runtime.selection.exists() or self._runtime.stop_if_idle():
-                self._exit_thread = threading.current_thread()
-                self._closing.set()
-                return None
-            return self._runtime.activity().model_dump()
+        return self._session.request_exit()
 
     def wait_for_idle(self, wait: bool) -> None:
-        with self._operation():
-            if self._closing.is_set():
-                raise ValueError("应用正在关闭，无法更改自动退出")
-            if wait:
-                self._exit_thread = threading.current_thread()
-                self._waiting.set()
-            else:
-                self._waiting.clear()
-
-    def _poll_exit(self) -> None:
-        if self._waiting.is_set() and self._operation_lock.acquire(blocking=False):
-            try:
-                if self._runtime.stop_if_idle():
-                    self._closing.set()
-            finally:
-                self._operation_lock.release()
-
-    def _finish_exit(self) -> None:
-        if self._exit_thread is not None:
-            # pywebview sends the API result back to JavaScript after exit()
-            # returns. Destroying the page before that bridge thread finishes
-            # can leave it waiting forever for a WebKit evaluation callback.
-            self._exit_thread.join()
-        self._window().destroy()
+        self._session.wait_for_idle(wait)
 
 
 def _page(content: str) -> str:
@@ -311,7 +265,8 @@ def run(
             if checked != selected or runtime.pending.exists():
                 runtime.select(checked)
 
-        api = DesktopAPI(runtime, lambda: window, closing, prepare or configure)
+        session = DesktopSession(runtime, closing)
+        api = DesktopAPI(session, lambda: window, prepare or configure)
         window = cast(
             "webview.Window",
             webview.create_window(  # pyright: ignore[reportUnknownMemberType]
@@ -362,7 +317,7 @@ def run(
                 if closing.is_set():
                     return
             if closing.is_set():
-                api._finish_exit()  # pyright: ignore[reportPrivateUsage]
+                session.finish_exit(window.destroy)
                 return
             try:
                 # Cocoa status items need the application to have finished
@@ -375,7 +330,7 @@ def run(
                 window.load_html(_recovery(error))
             while not closing.wait(0.5):
                 try:
-                    api._poll_exit()  # pyright: ignore[reportPrivateUsage]
+                    session.poll_exit()
                 except Exception as error:
                     api.wait_for_idle(False)
                     show()
@@ -393,7 +348,7 @@ def run(
                         if quit_current:
                             _ = request_quit()
             # Keep the native completion hook out of the exposed JavaScript API.
-            api._finish_exit()  # pyright: ignore[reportPrivateUsage]
+            session.finish_exit(window.destroy)
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
         try:
