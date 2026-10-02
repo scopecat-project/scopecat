@@ -10,7 +10,7 @@ not a complete exported run.
 | --- | --- | --- |
 | Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys | Final closure self-review against the complete contract |
 | Independent analysis and retained provenance | Fresh public-wheel environment; native export / Python analysis / Mac native open | Final consumer and documentation review |
-| Large-data access | 256 MiB waveform verification and analysis; byte-budgeted selection cache; bounded HTTP previews | Packaged large-waveform browsing |
+| Large-data access | 256 MiB waveform verification, independent analysis and packaged Mac browsing; byte-budgeted selection cache; bounded HTTP previews | Windows rendering acceptance |
 | Ordinary desktop interaction | Mac two-window, copy/find/zoom, native file commands and failure recovery observations | Remaining lifecycle observations and Windows interaction acceptance |
 | Delivery and host decision | Local Python/UI/static checks; isolated Mac packages | Final package, platform evidence, recorded host decision, self-review and CI |
 
@@ -390,8 +390,9 @@ Python analysis / native-open round trip, displaying the unchanged measurement,
 new conclusion and retained input/execution evidence. The same analysis also
 passed in a fresh environment with only the public wheel and its dependencies,
 outside the repository, without an installed server or adapter. The waveform check
-above qualifies independent analysis at that size; native large-waveform browsing
-and Windows desktop acceptance remain outstanding. See the
+above qualifies independent analysis at that size; the rebuilt Mac package also
+displayed its array summaries, bounded waveforms and saved conclusion. Windows
+desktop acceptance remains outstanding. See the
 [desktop evidence](desktop-product.md) for the observed scope.
 
 1. Extend stable recording capture to scientific reference closure from retained data;

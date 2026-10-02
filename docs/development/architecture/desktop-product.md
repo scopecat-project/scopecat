@@ -298,6 +298,26 @@ storage failure. The raw lock diagnostic and generic HTTP error still need bette
 wording in the later GUI redesign. It does not qualify Windows failure recovery
 or menu-bar restoration after all windows are hidden.
 
+### Packaged Mac large-waveform browsing (2026-10-03)
+
+A new native package built at `fbb14e6a9`, including the waveform-memory fixes,
+started against an empty isolated home. Cmd-O imported the independently analyzed
+256 MiB capture without an author workspace, private adapter or device setup.
+The application displayed opening/checking progress, then 32 acquisitions in their
+original descending point order. Each table row showed the 1,048,576-sample shape,
+voltage unit and available count as a summary rather than expanding the array.
+
+The waveform view visibly rendered the expected ramp and explicitly reported
+4,096 plotted samples out of 1,048,576 source samples. Selecting acquisition 2
+changed its source from point 31 / bias 31 V to point 30 / bias 30 V. Switching to
+the retained analysis selection changed the table to ascending logical points and
+reset the waveform to selected record 1 / point 0 / bias 0 V. The saved analysis
+displayed its measurement input identity, execution record and conclusion
+`mean=524303, samples=33554432`. No analysis was rerun by opening the file.
+Cmd-Q displayed progress; process inspection confirmed native host and backend
+exit. This qualifies Mac browsing for this synthetic size and shape, not arbitrary
+waveform layouts, multi-gigabyte latency or Windows rendering.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
