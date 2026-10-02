@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any
 
 import pytest
@@ -25,9 +26,11 @@ from scopecat_testkit.signal_instruments import TestSignalInstrumentProvider
 from scopecat_server.errors import BackendConflict
 from scopecat_server.instruments.actors import InstrumentActorRetirement
 from scopecat_server.instruments.backend import (
+    InstrumentBackendUnavailable,
     InstrumentHandle,
     LocalInstrumentBackendEndpoint,
 )
+from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.runtime import LocalDaemonRuntime
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.devices import DeviceRepository
@@ -76,6 +79,83 @@ def _register(client: TestClient, device_id: str = "signal") -> dict[str, Any]:
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_unavailable_driver_does_not_block_application_and_can_be_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempts = []
+
+    def unavailable(*_args: object) -> None:
+        attempts.append("activate")
+        raise InstrumentBackendUnavailable("vendor environment unavailable")
+
+    monkeypatch.setattr("scopecat_server.runtime.restore_driver_source", unavailable)
+    replacement = _endpoint()
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        assert client.get("/api/v1/health").status_code == 200
+        assert runtime.application.devices.list() == ()
+        assert attempts == []
+        with pytest.raises(InstrumentBackendUnavailable, match="vendor environment"):
+            runtime.application.instruments.driver_catalog()
+        assert attempts == ["activate"]
+        assert client.get("/api/v1/health").status_code == 200
+        runtime.application.devices.replace_backend(
+            replacement, runtime.application.instruments, actor="maintainer"
+        )
+        assert attempts == ["activate"]
+        assert runtime.application.devices.endpoint is replacement
+        assert (
+            runtime.application.instruments.driver_catalog()
+            == replacement.driver_catalog
+        )
+        _register(client)
+    assert not replacement.healthy
+
+
+def test_shutdown_without_device_use_does_not_activate_drivers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected(*_args: object) -> None:
+        raise AssertionError("driver activation during application-only use")
+
+    monkeypatch.setattr("scopecat_server.runtime.restore_driver_source", unexpected)
+    with LocalDaemonRuntime(tmp_path) as runtime:
+        assert runtime.application.instruments.healthy
+
+
+def test_backend_activation_does_not_block_health_inspection() -> None:
+    entered, release, inspected = Event(), Event(), Event()
+    endpoint = _endpoint()
+
+    def activate():
+        entered.set()
+        assert release.wait(5)
+        return endpoint
+
+    owner = InstrumentBackendOwner(activate=activate)
+    loading = Thread(target=owner.get)
+
+    def inspect():
+        assert owner.current is None
+        inspected.set()
+
+    inspection = Thread(target=inspect)
+    loading.start()
+    try:
+        assert entered.wait(5)
+        inspection.start()
+        assert inspected.wait(1)
+    finally:
+        release.set()
+        loading.join(5)
+        if inspection.ident is not None:
+            inspection.join(5)
+        assert owner.close() is endpoint
+        endpoint.shutdown()
 
 
 def test_backend_replacement_updates_devices_without_restarting_application(

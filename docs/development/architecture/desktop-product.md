@@ -38,6 +38,14 @@ must not become a prerequisite for opening the application. In particular,
 restoring a previously selected driver must not prevent browsing retained data
 when its environment is unavailable.
 
+The current device and execution services share one backend owner. Reading
+application health or closing an unused application does not activate it;
+requesting driver capabilities does. A failed activation leaves data services
+available, and a validated driver replacement can supersede the unavailable
+selection without loading it. Legacy bootstrap routines that create device
+configurations during startup still request driver capabilities and remain an
+outstanding coupling to remove; this change alone does not finish data-only use.
+
 ## Bounded product slice
 
 Use two small synthetic records with different identifiers and known values.
