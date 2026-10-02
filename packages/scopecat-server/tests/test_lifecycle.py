@@ -429,21 +429,27 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
     assert not daemon_record_path(tmp_path).exists()
     logs = list(diagnostics.glob("daemon-startup-*.log"))
     assert len(logs) == 2
+    instrument_startups = 0
     for log in logs:
         evidence = log.read_text(encoding="utf-8")
+        startup = evidence.split("starting HTTP server", 1)[0]
         assert (
             f"python entry; pid={log.stem.removeprefix('daemon-startup-')} parent="
             in evidence
         )
-        assert "instrument child spawned pid=" in evidence
+        if "instrument child spawned pid=" in startup:
+            instrument_startups += 1
+            assert "instrument readiness decoded: ready" in startup
+            assert "instrument endpoint ready" in startup
         assert "launch request to Python entry:" in evidence
-        assert "instrument readiness decoded: ready" in evidence
-        assert "instrument endpoint ready" in evidence
         assert "project schema ready" in evidence
         assert "services composed; constructing daemon application" in evidence
         assert "application services started" in evidence
         assert "runtime constructed; publishing endpoint" in evidence
         assert "starting HTTP server" in evidence
+    # This scaffold explicitly seeds a device recipe once. Restart reads retained
+    # inputs without activating the driver; ordinary desktop startup has no seed.
+    assert instrument_startups == 1
 
 
 def test_cli_start_rejects_conflicting_gui_modes(tmp_path: Path) -> None:
@@ -521,7 +527,7 @@ class _FakeProcess:
         self.terminate_calls += 1
 
 
-def test_startup_trace_locates_config_stall_after_instrument_readiness(
+def test_startup_trace_locates_config_stall_without_instrument_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -559,7 +565,7 @@ def test_startup_trace_locates_config_stall_after_instrument_readiness(
     [trace] = diagnostics.glob("daemon-startup-*.log")
     evidence = trace.read_text()
     assert "launch request to Python entry:" in evidence
-    assert "instrument endpoint ready" in evidence
+    assert "instrument endpoint ready" not in evidence
     assert "project schema ready" in evidence
     assert "daemon application ready; bootstrapping config registry" in evidence
     assert "in initial_setup" in evidence

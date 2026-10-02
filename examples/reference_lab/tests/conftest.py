@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -159,6 +159,21 @@ def reference_lab_author_imports() -> Generator[None]:
                     delattr(parent, "authored")
             else:
                 vars(parent)["authored"] = original_attribute
+
+
+@pytest.fixture
+def select_reference_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[Path], None]:
+    """Match notebook imports to a cloned source tree before its first refresh."""
+
+    def select(root: Path) -> None:
+        for name in tuple(sys.modules):
+            if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}:
+                del sys.modules[name]
+        monkeypatch.syspath_prepend(str(root / "src"))
+
+    return select
 
 
 @pytest.fixture(scope="session")

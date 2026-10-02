@@ -1,7 +1,7 @@
 """Receipt cells and independent verification without publishing shared defaults."""
 
 import shutil
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal
@@ -330,7 +330,9 @@ def test_branch_procedure_rejection_and_stale_destination_do_not_publish(
 
 def test_typed_candidates_retain_cells_and_independent_policy(
     candidate_daemon: ReferenceLabDaemon,
+    select_reference_source: Callable[[Path], None],
 ) -> None:
+    select_reference_source(candidate_daemon.root)
     project = load_project(candidate_daemon.root / "scopecat.toml")
     analysis_module = "reference_lab_authors.authored.ordinary_analysis"
     with (
