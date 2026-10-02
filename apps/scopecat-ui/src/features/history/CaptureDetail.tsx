@@ -4,6 +4,7 @@ import { apiClient, apiData } from "../../api-client";
 import { secondaryButton } from "../../ui/styles";
 import { MeasurementRecordTable } from "../runs/MeasurementRecordTable";
 import { measurementTable } from "../runs/measurement-visualization";
+import { CaptureAnalyses } from "./CaptureAnalyses";
 
 export function CaptureDetail({ contentHash }: { contentHash: string }) {
   const [selectedRun, setSelectedRun] = useState<string>();
@@ -20,10 +21,18 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
   if (evidence.error) return <p role="alert">{evidence.error.message}</p>;
   if (!evidence.data) return <p role="status">Loading data…</p>;
   const capture = evidence.data;
-  const run =
-    capture.runs.find((item) => item.snapshot.run_id === selectedRun) ??
-    capture.runs.find((item) => item.snapshot.run_id === capture.roots[0]);
-  if (!run) return <p role="alert">The captured root run is missing.</p>;
+  const run = capture.runs.find(
+    (item) => item.snapshot.run_id === (selectedRun ?? capture.roots[0]),
+  );
+  if (!run)
+    return (
+      <div>
+        <p role="alert">The referenced run is missing from this file.</p>
+        <button className={secondaryButton} onClick={() => setSelectedRun(undefined)}>
+          Back to captured run
+        </button>
+      </div>
+    );
   return (
     <section className="mt-3 space-y-3" aria-label="Captured run">
       <label>
@@ -56,6 +65,11 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
           {JSON.stringify({ request: run.request, configuration: run.configuration }, null, 2)}
         </pre>
       </details>
+      <CaptureAnalyses
+        contentHash={contentHash}
+        analyses={capture.analyses ?? []}
+        onOpenRun={setSelectedRun}
+      />
     </section>
   );
 }

@@ -208,9 +208,17 @@ captured analysis selection are distinct choices; a missing selection is an
 explicit error rather than a last-acquisition fallback. The table renderer and
 unit formatting are shared with the existing run view. Query identities include
 the capture identity so identical run IDs from different sources do not share data
-or selection state. Chart/trace browsing, analysis browsing, application-wide Open
-commands, external-analysis provenance and full scientific-reference validation
-remain outstanding; this is not the completed desktop file journey.
+or selection state. Retained analyses reuse the existing publication view for
+facts, tables, figure previews, input references and execution evidence. Source
+run links navigate within the same capture. Artifact reads resolve the verified
+analysis record content hash and its subject-qualified payload owner, so repeated
+analysis IDs in different runs cannot select the wrong attachment. Verified
+attachments are staged before streaming and temporary copies are cleaned afterward.
+This reuses the existing artifact download UI; native attachment-save behavior
+still needs the desktop acceptance checks. Measurement chart/trace browsing,
+application-wide Open commands, external-analysis provenance and full
+scientific-reference validation remain outstanding; this is not the completed
+desktop file journey.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:

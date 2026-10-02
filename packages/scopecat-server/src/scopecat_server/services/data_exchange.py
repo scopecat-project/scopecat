@@ -12,6 +12,8 @@ from scopecat.data_exchange.models import (
     CaptureSummary,
     ScientificEvidence,
 )
+from scopecat.records.content import ContentEntry
+from scopecat.runs.refs import content_entry_ref
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 from scopecat_server.storage.sqlite.exchange_import import (
@@ -86,6 +88,52 @@ class DataExchangeService:
         row = self._row(content_hash)
         self._store.objects.verify(cast("str", row["object_digest"]))
         return self._store.objects.path_for(cast("str", row["object_digest"]))
+
+    def copy_analysis_artifact(
+        self,
+        content_hash: str,
+        analysis_hash: str,
+        artifact_id: str,
+        destination: Path,
+    ) -> ContentEntry:
+        with ScientificExchange(self.path(content_hash)) as capture:
+            analysis = next(
+                (
+                    item
+                    for item in capture.evidence.analyses
+                    if item.entry.content_hash == analysis_hash
+                ),
+                None,
+            )
+            if analysis is None:
+                raise BackendNotFound("captured analysis does not exist")
+            entry = next(
+                (
+                    item
+                    for item in analysis.contents
+                    if item.role == "artifact" and item.id == artifact_id
+                ),
+                None,
+            )
+            if entry is None:
+                raise BackendNotFound("captured analysis artifact does not exist")
+            subject = analysis.record.subject
+            owner_kind = "run" if subject.kind == "run" else "analysis"
+            owner_id = subject.run_id if subject.kind == "run" else analysis.entry.id
+            reference = next(
+                (
+                    item
+                    for item in capture.payloads
+                    if item.owner_kind == owner_kind
+                    and item.owner_id == owner_id
+                    and item.ref == content_entry_ref(entry)
+                ),
+                None,
+            )
+            if reference is None:
+                raise BackendNotFound("captured artifact bytes are missing")
+            capture.copy_payload(reference, destination)
+            return entry
 
     def recording_page(
         self,

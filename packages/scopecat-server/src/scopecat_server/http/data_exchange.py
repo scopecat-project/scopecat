@@ -13,6 +13,7 @@ from scopecat.data_exchange.models import (
     CaptureSummary,
     ScientificEvidence,
 )
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 if TYPE_CHECKING:
@@ -81,6 +82,26 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
             media_type="application/octet-stream",
             filename="capture.scopecat",
         )
+
+    @router.get("/{content_hash}/analyses/{analysis_hash}/artifacts/{artifact_id}")
+    def download_artifact(
+        content_hash: str, analysis_hash: str, artifact_id: str
+    ) -> FileResponse:
+        temporary = tempfile.TemporaryDirectory(prefix="scopecat-artifact-")
+        try:
+            destination = Path(temporary.name) / "artifact"
+            entry = application.data_exchange.copy_analysis_artifact(
+                content_hash, analysis_hash, artifact_id, destination
+            )
+            return FileResponse(
+                destination,
+                media_type=entry.media_type or "application/octet-stream",
+                filename=entry.filename or artifact_id,
+                background=BackgroundTask(temporary.cleanup),
+            )
+        except BaseException:
+            temporary.cleanup()
+            raise
 
     @router.get("/{content_hash}/runs/{run_id}/recording")
     def read_recording(

@@ -17,6 +17,10 @@ _OPERATIONS = {
     ("/api/v1/data/captures", "post"),
     ("/api/v1/data/captures/{content_hash}/evidence", "get"),
     ("/api/v1/data/captures/{content_hash}/file", "get"),
+    (
+        "/api/v1/data/captures/{content_hash}/analyses/{analysis_hash}/artifacts/{artifact_id}",
+        "get",
+    ),
     ("/api/v1/data/captures/{content_hash}/runs/{run_id}/recording", "get"),
     ("/api/v1/practice", "get"),
     ("/api/v1/practice", "post"),

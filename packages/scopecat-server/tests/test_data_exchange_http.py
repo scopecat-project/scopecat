@@ -1,13 +1,33 @@
 """Portable data uses the application without requesting a device backend."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from scopecat.data_exchange import write_scientific_exchange
-from scopecat.data_exchange.models import RunEvidence, ScientificEvidence
+from scopecat.data_exchange import (
+    PayloadReference,
+    PayloadSource,
+    write_scientific_exchange,
+)
+from scopecat.data_exchange.models import (
+    AnalysisEvidence,
+    RunEvidence,
+    ScientificEvidence,
+)
+from scopecat.kernel.content_identity import (
+    model_wire_content_hash,
+    sha256_content_hash,
+)
 from scopecat.measurements.archive import RecordSelection, write_measurement_snapshot
+from scopecat.records.analysis import (
+    AnalysisArtifactRecordOutput,
+    AnalysisArtifactReference,
+    AnalysisRecord,
+    RunAnalysisSubject,
+)
 from scopecat.records.config import config_content_hash
+from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementDimension,
@@ -26,6 +46,7 @@ from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
 )
+from scopecat.runs.refs import content_entry_ref
 from scopecat_testkit.authoring import load_config
 
 from scopecat_server.http import data_exchange
@@ -33,13 +54,7 @@ from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.runtime import LocalDaemonRuntime
 
 
-def test_capture_http_without_device_activation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def unexpected_activation(self: InstrumentBackendOwner) -> None:
-        pytest.fail("data access requested device capabilities")
-
-    monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
+def _evidence() -> ScientificEvidence:
     config = load_config()
     digest = config_content_hash(config)
     run = RunEvidence(
@@ -57,9 +72,131 @@ def test_capture_http_without_device_activation(
         configuration=config,
         contents=(),
     )
-    evidence = ScientificEvidence(
+    return ScientificEvidence(
         source_project_id="source", roots=("portable",), runs=(run,)
     )
+
+
+def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -> None:
+    evidence = _evidence()
+    runs = tuple(
+        evidence.runs[0].model_copy(
+            update={
+                "snapshot": evidence.runs[0].snapshot.model_copy(
+                    update={"run_id": run_id}
+                )
+            }
+        )
+        for run_id in ("first", "second")
+    )
+    analyses = []
+    payloads = []
+    for run in runs:
+        run_id = run.snapshot.run_id
+        artifact = ContentEntry(
+            role="artifact",
+            id="attachment",
+            kind="file",
+            content_hash=sha256_content_hash(run_id.encode()),
+            filename="result.txt",
+            media_type="text/plain",
+        )
+        record = AnalysisRecord(
+            subject=RunAnalysisSubject(run_id=run_id),
+            title="Result",
+            revision=1,
+            publication_hash="same-declared-publication-hash",
+            outputs=[
+                AnalysisArtifactRecordOutput(
+                    kind="artifact",
+                    id="output",
+                    title="Attachment",
+                    content=AnalysisArtifactReference(
+                        artifact_id=artifact.id,
+                        content_hash=artifact.content_hash,
+                        media_type="text/plain",
+                        filename="result.txt",
+                    ),
+                )
+            ],
+        )
+        entry = ContentEntry(
+            role="record",
+            id="same-analysis-id",
+            kind="analysis",
+            content_hash=model_wire_content_hash(record),
+        )
+        analyses.append(
+            AnalysisEvidence(
+                entry=entry,
+                record=record,
+                published_at=datetime.now(UTC),
+                contents=(entry, artifact),
+            )
+        )
+        for item, content in (
+            (entry, record.model_dump_json().encode()),
+            (artifact, run_id.encode()),
+        ):
+            path = tmp_path / f"{run_id}-{item.role}"
+            path.write_bytes(content)
+            payloads.append(
+                PayloadSource(
+                    PayloadReference(
+                        owner_kind="run",
+                        owner_id=run_id,
+                        ref=content_entry_ref(item),
+                        digest=sha256_content_hash(content),
+                        size=len(content),
+                    ),
+                    path,
+                )
+            )
+    source = tmp_path / "analyses.scopecat"
+    write_scientific_exchange(
+        source,
+        evidence.model_copy(
+            update={
+                "roots": ("first", "second"),
+                "runs": runs,
+                "analyses": tuple(analyses),
+            }
+        ),
+        {},
+        payloads=payloads,
+    )
+    with (
+        LocalDaemonRuntime(tmp_path / "app") as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        receipt = client.post(
+            "/api/v1/data/captures",
+            content=source.read_bytes(),
+            headers={"content-type": "application/octet-stream"},
+        )
+        assert receipt.status_code == 200, receipt.text
+        capture_hash = receipt.json()["capture"]["content_hash"]
+        for run_id, analysis in zip(("first", "second"), analyses, strict=True):
+            url = (
+                f"/api/v1/data/captures/{capture_hash}/analyses/"
+                f"{analysis.entry.content_hash}/artifacts/attachment"
+            )
+            response = client.get(url)
+            assert response.status_code == 200, response.text
+            assert response.content == run_id.encode()
+            assert "result.txt" in response.headers["content-disposition"]
+            assert client.get(url + "-missing").status_code == 404
+
+
+def test_capture_http_without_device_activation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_activation(self: InstrumentBackendOwner) -> None:
+        pytest.fail("data access requested device capabilities")
+
+    monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
+    evidence = _evidence()
+    run = evidence.runs[0]
     source = tmp_path / "capture.scopecat"
     schema = MeasurementDatasetSchema(
         dataset_id="raw-measurements",
