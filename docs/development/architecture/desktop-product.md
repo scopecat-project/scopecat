@@ -273,6 +273,31 @@ This closes the Mac native-export / external-Python / native-open journey for a
 scalar synthetic run. It does not qualify large-waveform analysis or the Windows
 desktop journey.
 
+### Mac failure recovery evidence (2026-10-03)
+
+The isolated packaged app was exercised with two reversible external faults;
+neither fault required changing its host or backend code. A separate test process
+held its application-operation file lock. Cmd-Q displayed shutdown progress,
+then the lock timeout appeared in the existing quit dialog and its actions became
+available again. After releasing the test lock, Cancel returned to the same
+successful run and its measurement `42`. A later Cmd-Q completed normally;
+process inspection confirmed both native application and backend had exited.
+
+For the second fault, the synthetic imported capture's object temporarily had no
+read permissions. Native Save completed its destination selection, then the view
+reported `文件操作失败（HTTP 500）`. The selected run, measurement and analysis
+remained visible, and the save action became available again. There was no
+destination file or partial-save file. Restoring the original permissions and
+retrying saved successfully to the same requested destination, with its full path
+shown. An independent public-wheel Python environment reopened that export,
+verified measurement `42` and conclusion `mean=50, count=1`, and confirmed the
+archive matched the source byte for byte.
+
+This qualifies recoverability of these Mac failure paths, not every shutdown or
+storage failure. The raw lock diagnostic and generic HTTP error still need better
+wording in the later GUI redesign. It does not qualify Windows failure recovery
+or menu-bar restoration after all windows are hidden.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
