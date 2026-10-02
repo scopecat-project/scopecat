@@ -21,11 +21,15 @@ Local checks for this batch: 139 related Python tests passed, followed by the ne
 raw-array lifetime regression and four schema/plan tests (five passed); the seven
 HTTP exchange tests passed again after bounding trace reads by the series budget.
 All 388 frontend tests passed. Python and frontend type checking, Ruff, frontend
-lint/formatting, 11 import contracts and documentation links passed. Native
-file-operation and cleanup platform observations still require a rebuilt package.
+lint/formatting, 11 import contracts and documentation links passed. A subsequent
+13-test targeted run passed with one Windows-only open-handle test skipped on Mac;
+configured Python type checking again reported no errors or warnings.
+The rebuilt `30a1389b4` Mac package passed startup/stop, native import wait/quit,
+cleanup and reimport observations; see the [native evidence](desktop-product.md#file-operation-and-cleanup-closeout-2026-10-03)
+for the exact cancellation and tray-observation limits.
 
 This section is the PR 2 handoff checkpoint, updated on 2026-10-03 against
-`00423b27f`. Resume from the remaining items below, not from earlier planning
+`30a1389b4`. Resume from the remaining items below, not from earlier planning
 language or a conversation summary. Detailed evidence is linked, not a new task
 list. A completed check needs repeating only when a relevant change, failure or
 specific unresolved concern invalidates its evidence.
@@ -67,9 +71,11 @@ Remaining closeout, in order:
    baselines, exact publication outputs and recording selections. Existing
    source-isolation, missing-reference, conflict and composed-maintenance tests
    remain the evidence; no new closure defect was found in this review.
-2. Complete the missing Mac native observations: all views hidden and restored
-   through the menu bar, plus active-work Quit choices. Prior automation raised
-   windows while observing them, so it did not prove continuous hidden state.
+2. Complete the missing Mac native observation: all views remain hidden and
+   restore through the menu bar. The rebuilt package's file-work Quit choices and
+   cleanup/reimport journey are complete within the limits recorded above.
+   Automation raises windows while observing them, so it cannot prove continuous
+   hidden state. A human observation has been requested.
 3. Update the PR description to the delivered scope, then run CI and native
    distribution builds after local closeout. The remote PR still describes an
    earlier foundation; its old green checks do not qualify current local work.

@@ -346,6 +346,30 @@ This qualifies the packaged runtime and environment separation, not native windo
 interaction. No installer was supplied: DMG distribution, Windows installation
 and the remaining platform lifecycle observations are not covered by this check.
 
+### File-operation and cleanup closeout (2026-10-03)
+
+A fresh Mac package built from `30a1389b4` passed its headless startup/stop smoke
+check, then opened the independently analyzed 256 MiB capture in an empty isolated
+home. Cmd-Q during import reported one file operation and one backend change.
+Choosing **Quit when work finishes** retained the imported capture and exited;
+process inspection confirmed that both the native host and backend had stopped.
+Reopening the same home showed the saved imported data.
+
+The ordinary cleanup preview identified that capture and 262,349.2 KiB of owned
+files. Confirming cleanup removed its entry, and cleanup history reported records
+and files cleared. Reimporting the original file succeeded. During that import,
+Cmd-Q again exposed the file-work decision; **Stop and close** displayed stopping
+progress and exited without a remaining host or backend. The import completed
+before the stop took effect, so this observation qualifies native decision and
+exit coordination, not mid-transfer cancellation. Cancellation, preservation of
+an existing destination and partial-file removal are covered by automated tests.
+
+Closing the final window left the application running. A continuous-hidden and
+menu-bar restore observation still needs a human check: this automation's native
+window reads raise the window, and its screenshots omit the system menu bar.
+These tool limitations must not be recorded as either a product failure or a
+successful tray interaction.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
