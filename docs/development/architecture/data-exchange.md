@@ -148,8 +148,13 @@ outputs, sample attachments and measurement partitions inside the caller's read
 transaction. Missing content stops publication, and its temporary partitions are
 removed on completion or failure. Tests exercise later acquisitions committed while
 that capture remains open, then read the package after closing the original store.
-The storage capture layer still needs to select and resolve the complete dependency
-graph before calling this assembly function.
+`export_scientific_capture` now starts from selected run IDs and follows typed
+run/analysis references, retained input revisions and interpretation records before
+calling the assembly function under the same transaction. The initial end-to-end
+test captures a downstream publication with its upstream analysis and run, and
+rejects a missing upstream original request. This is still an internal export path:
+candidate/proposal and measurement-input identity coverage, import-side closure
+validation and the application command remain to be completed before general use.
 It is not yet an application export command or a complete-run interchange promise.
 
 Machine-local registrations stay outside the exchange. Historical configuration

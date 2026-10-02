@@ -424,6 +424,116 @@ def test_captured_exchange_survives_store_close_and_rejects_missing_bytes(
         assert saved.read_bytes() == content
 
 
+def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
+    from scopecat.analysis.repository import AnalysisPublication
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat.kernel.content_identity import (
+        model_wire_content_hash,
+        sha256_content_hash,
+    )
+    from scopecat.records.analysis import (
+        AnalysisFact,
+        AnalysisFactRecordOutput,
+        AnalysisPublishedOutputReference,
+        AnalysisRecord,
+        PublishedAnalysisRecordInput,
+        RunAnalysisSubject,
+    )
+    from scopecat.runs.refs import RUN_REQUEST_REF, record_content_ref
+
+    from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
+
+    runs = _repository(tmp_path)
+    store = SQLiteProjectStore(runs.sqlite, runs.objects.root)
+    for run_id in ("upstream", "selected"):
+        runs.write_run_skeleton(_structured_run_inputs(run_id, with_source=False))
+    fact = AnalysisFactRecordOutput(
+        kind="fact",
+        id="result",
+        title="Result",
+        content=AnalysisFact(
+            schema_id="test",
+            schema_codec="scopecat.analysis-fact-schema.v1",
+            schema_hash=sha256_content_hash(b"schema"),
+            codec="test.fact.v1",
+            value=1,
+        ),
+    )
+    for run_id in ("upstream", "selected"):
+        record = AnalysisRecord(
+            subject=RunAnalysisSubject(run_id=run_id),
+            title=run_id,
+            revision=1,
+            publication_hash=sha256_content_hash(run_id.encode()),
+            outputs=[fact],
+            inputs=[]
+            if run_id == "upstream"
+            else [
+                PublishedAnalysisRecordInput(
+                    id="source",
+                    kind="analysis_fact",
+                    target=fact.id,
+                    content_hash=f"sha256:{model_wire_content_hash(fact.content)}",
+                    codec=fact.content.codec,
+                    role="input",
+                    source=AnalysisPublishedOutputReference(
+                        subject=RunAnalysisSubject(run_id="upstream"),
+                        analysis_record_id="analysis",
+                        output_id=fact.id,
+                    ),
+                )
+            ],
+        )
+        entry = ContentEntry(
+            role="record",
+            kind="analysis",
+            id="analysis",
+            content_hash=model_wire_content_hash(record),
+        )
+        runs.publish_analysis(
+            AnalysisPublication(
+                subject=record.subject,
+                record=entry,
+                entries=(entry,),
+                analysis_key="analysis",
+                revision=1,
+                publication_hash=record.publication_hash,
+                title=record.title,
+                step_id=None,
+                input_count=len(record.inputs),
+                output_count=1,
+                models=(
+                    ModelWrite(
+                        ref=record_content_ref(record_id=entry.id, kind="analysis"),
+                        value=record,
+                    ),
+                ),
+                bytes=(),
+            )
+        )
+    destination = tmp_path / "selected.scopecat"
+    export_scientific_capture(store, ("selected",), destination)
+    with ScientificExchange(destination) as package:
+        assert package.evidence.roots == ("selected",)
+        assert {item.snapshot.run_id for item in package.evidence.runs} == {
+            "selected",
+            "upstream",
+        }
+        assert len(package.evidence.analyses) == 2
+        assert len(package.payloads) == 2  # Each run-owned publication appears once.
+        package.verify()
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
+            ("upstream", RUN_REQUEST_REF),
+        )
+    rejected = tmp_path / "incomplete.scopecat"
+    with pytest.raises(DataIntegrityError):
+        export_scientific_capture(store, ("selected",), rejected)
+    assert not rejected.exists()
+    store.close()
+
+
 def test_run_evidence_requires_the_original_request(tmp_path: Path) -> None:
     from scopecat.runs.refs import RUN_REQUEST_REF
 
