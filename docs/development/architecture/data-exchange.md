@@ -103,6 +103,11 @@ plans and their ancestry. It does not inspect current branch heads, re-resolve a
 setup using today's devices, or require the original source directory. Retained
 source files are checked as bytes without extracting or executing them.
 
+Retained registry and context references include their exact effective configuration
+and recursively retained base entries, including manual edits. Entry hashes are
+checked against the captured configuration. Capture never activates a configuration
+or substitutes the current workspace/registry head.
+
 Typed sample bindings and target members retain exact sample revisions. Target
 references retain their catalog-qualified historical revision and resolve its
 members transitively. Neither current sample heads nor current target heads replace

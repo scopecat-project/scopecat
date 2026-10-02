@@ -4,13 +4,19 @@ from base64 import b64encode
 from pathlib import Path
 
 import pytest
+from scopecat.config.registry.records import (
+    ConfigRegistryEntry,
+    DirectConfigRegistrySource,
+    ManualConfigDraftRegistrySource,
+)
 from scopecat.daemon.wire import SampleCreateCommand, SampleReviseCommand
 from scopecat.kernel.content_identity import sha256_content_hash
 from scopecat.records.author_revision import (
     AuthorRevisionBundle,
     AuthorRevisionManifest,
 )
-from scopecat.records.config import RoutingGraph, Topology
+from scopecat.records.config import RoutingGraph, Topology, config_content_hash
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
     ExperimentPlanSave,
@@ -20,6 +26,8 @@ from scopecat.records.parameter_revision import (
     ParameterRevision,
     parameter_revision_hash,
 )
+from scopecat.records.plan_ref import PlanConfigRef
+from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.run_request import RunRequest
 from scopecat.records.sample import (
     SampleArtifactRef,
@@ -41,7 +49,11 @@ from scopecat.records.target_catalog import (
     TargetReviseCommand,
     TargetRevisionDraft,
 )
+from scopecat_testkit.workflow_fixtures import load_config
 
+from scopecat_server.storage.sqlite.config_registry import (
+    SQLiteConfigRegistryRepository,
+)
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.evidence_inputs import (
@@ -58,6 +70,81 @@ from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.samples import SQLiteSampleStore
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
+
+
+def test_registry_capture_follows_exact_base_without_activation(tmp_path: Path):
+    store = SQLiteProjectStore(
+        SQLiteDatabase(tmp_path / "data.sqlite"), tmp_path / "objects"
+    )
+    store.bootstrap()
+    config = load_config()
+    digest = config_content_hash(config)
+    with store.sqlite.write_transaction() as connection:
+        registry = SQLiteConfigRegistryRepository(connection)
+        original = ConfigRegistryEntry(
+            id="original",
+            config_ref=registry.config_ref("original"),
+            content_hash=digest,
+            actor="test",
+            source=DirectConfigRegistrySource(),
+        )
+        edited = ConfigRegistryEntry(
+            id="edited",
+            config_ref=registry.config_ref("edited"),
+            content_hash=digest,
+            actor="test",
+            source=ManualConfigDraftRegistrySource(
+                base_entry_id=original.id,
+                base_config_content_hash=digest,
+                base_registry_generation=1,
+            ),
+        )
+        for entry in (original, edited):
+            registry.commit_revision(entry=entry, config=config)
+    source = ConfigRegistryRunConfigSource(
+        selector="retained",
+        entry_id=edited.id,
+        config_ref=edited.config_ref,
+        content_hash=digest,
+    )
+    with store.sqlite.read_transaction() as connection:
+        evidence = capture_input_revisions(connection, store, (source,))
+        assert [item.entry.id for item in evidence.configurations] == [
+            "edited",
+            "original",
+        ]
+        assert all(item.configuration == config for item in evidence.configurations)
+        assert (
+            capture_input_revisions(
+                connection,
+                store,
+                (
+                    PlanConfigRef(
+                        entry_id=edited.id,
+                        content_hash=digest,
+                    ),
+                ),
+            )
+            == evidence
+        )
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM config_registry_activations"
+            ).fetchone()[0]
+            == 0
+        )
+        with pytest.raises(ValueError, match="configuration evidence differs"):
+            capture_input_revisions(
+                connection,
+                store,
+                (
+                    ConfigContextRef(
+                        entry_id=edited.id,
+                        content_hash="sha256:" + "f" * 64,
+                    ),
+                ),
+            )
+    store.close()
 
 
 def test_sample_and_target_capture_retains_exact_revisions(tmp_path: Path):

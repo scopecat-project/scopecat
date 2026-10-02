@@ -6,13 +6,16 @@ from collections.abc import Iterable, Iterator, Mapping
 from typing import cast
 
 from pydantic import BaseModel
+from scopecat.config.registry.records import ManualConfigDraftRegistrySource
 from scopecat.data_exchange import PayloadReference, PayloadSource
-from scopecat.data_exchange.models import InputRevisionEvidence
+from scopecat.data_exchange.models import ConfigurationEvidence, InputRevisionEvidence
 from scopecat.project_sources import verified_source_files
 from scopecat.records.author_revision import AuthorRevisionBundle, AuthorRevisionRef
+from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.experiment_plan import ExperimentPlanRevision
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanConfigRef
+from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.records.sample import SampleBinding, SampleRevision
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.records.scientific_scope import TargetMember
@@ -23,6 +26,9 @@ from scopecat.records.setup import (
 )
 from scopecat.records.target_catalog import TargetRevision, TargetRevisionRef
 
+from scopecat_server.storage.sqlite.config_registry import (
+    SQLiteConfigRegistryRepository,
+)
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
@@ -40,10 +46,22 @@ type InputReference = (
     | SampleBinding
     | TargetMember
     | TargetRevisionRef
+    | ConfigContextRef
 )
 
 
 def _references(value: object) -> Iterator[InputReference]:
+    if isinstance(value, PlanConfigRef):
+        yield ConfigContextRef(entry_id=value.entry_id, content_hash=value.content_hash)
+        return
+    if isinstance(value, ConfigRegistryRunConfigSource):
+        yield ConfigContextRef(entry_id=value.entry_id, content_hash=value.content_hash)
+        return
+    if isinstance(value, ManualConfigDraftRegistrySource):
+        yield ConfigContextRef(
+            entry_id=value.base_entry_id, content_hash=value.base_config_content_hash
+        )
+        return
     if isinstance(
         value,
         ParameterRevisionRef
@@ -52,7 +70,8 @@ def _references(value: object) -> Iterator[InputReference]:
         | AuthorRevisionRef
         | SampleBinding
         | TargetMember
-        | TargetRevisionRef,
+        | TargetRevisionRef
+        | ConfigContextRef,
     ):
         yield value
     elif isinstance(value, BaseModel):
@@ -64,6 +83,18 @@ def _references(value: object) -> Iterator[InputReference]:
     elif isinstance(value, tuple | list):
         for item in cast("Iterable[object]", value):
             yield from _references(item)
+
+
+def _configuration_evidence(
+    connection: sqlite3.Connection, ref: ConfigContextRef
+) -> ConfigurationEvidence:
+    repository = SQLiteConfigRegistryRepository(connection)
+    entry = repository.read_entry(ref.entry_id)
+    if entry.id != ref.entry_id or entry.content_hash != ref.content_hash:
+        raise ValueError("configuration evidence differs from retained reference")
+    return ConfigurationEvidence(
+        entry=entry, configuration=repository.read_config(entry.config_ref)
+    )
 
 
 def capture_input_revisions(
@@ -88,6 +119,7 @@ def capture_input_revisions(
     authors: dict[str, AuthorRevisionBundle] = {}
     samples: dict[tuple[str, int], SampleRevision] = {}
     targets: dict[tuple[str, str, int], TargetRevision] = {}
+    configurations: dict[str, ConfigurationEvidence] = {}
     setup_repository = SQLiteSetupRepository(connection)
     plan_repository = ExperimentPlanRepository(store)
     while pending:
@@ -97,6 +129,10 @@ def capture_input_revisions(
         seen.add(ref)
         captured: BaseModel
         match ref:
+            case ConfigContextRef():
+                item = _configuration_evidence(connection, ref)
+                configurations[item.entry.id] = item
+                captured = item
             case SampleBinding() | TargetMember():
                 row = cast(
                     "sqlite3.Row | None",
@@ -190,6 +226,7 @@ def capture_input_revisions(
         authors=tuple(authors[key] for key in sorted(authors)),
         samples=tuple(samples[key] for key in sorted(samples)),
         targets=tuple(targets[key] for key in sorted(targets)),
+        configurations=tuple(configurations[key] for key in sorted(configurations)),
     )
 
 

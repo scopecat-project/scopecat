@@ -11,6 +11,7 @@ from scopecat.automation.models import (
     ProcedureRun,
     ProcedureStepAttempt,
 )
+from scopecat.config.registry.records import ConfigRegistryEntry
 from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
@@ -59,6 +60,22 @@ class RunEvidence(BaseModel):
         return self
 
 
+class ConfigurationEvidence(BaseModel):
+    """One retained registry entry and its effective content, without activation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    entry: ConfigRegistryEntry
+    configuration: ConfigProfileSnapshot
+
+    @model_validator(mode="after")
+    def validate_content(self) -> Self:
+        if self.entry.content_hash != config_content_hash(self.configuration):
+            raise ValueError(
+                "configuration evidence differs from its retained identity"
+            )
+        return self
+
+
 class InputRevisionEvidence(BaseModel):
     """Exact input revisions; contains no active heads or device registrations."""
 
@@ -71,6 +88,7 @@ class InputRevisionEvidence(BaseModel):
     authors: tuple[AuthorRevisionBundle, ...] = ()
     samples: tuple[SampleRevision, ...] = ()
     targets: tuple[TargetRevision, ...] = ()
+    configurations: tuple[ConfigurationEvidence, ...] = ()
 
 
 class AnalysisEvidence(BaseModel):
