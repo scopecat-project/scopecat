@@ -229,10 +229,16 @@ so repeated acquisitions of the same point remain separately inspectable. The
 trace read never materializes the entire recording or requests device capability.
 Local HTTP checks cover retry selection, a narrow peak under a sample budget,
 missing values and series truncation; frontend checks cover record/entity choice
-and clearing stale plots on errors. The record-table endpoint still transfers
-full array values in its bounded record page; trace-response limits alone do not
-qualify the whole page for large waveforms. A bounded table presentation and
-semantic cross-page projections remain incomplete.
+and clearing stale plots on errors. The record-table response now has a distinct
+presentation model and one shared 4,096-array-sample budget per page. Larger
+values expose shape, unit, available count and failure reasons instead of sample
+buffers or masks; small arrays remain available for point/entity charts. The UI
+labels summaries and excludes them from numeric plots. This does not truncate or
+rewrite the stored scientific values, and trace reads use the original records.
+Partition summaries do not join buffers; unknown segment lengths remain unknown.
+Decoding still reads intersecting archive chunks (bounded by the recording format),
+and this sample budget is not a general byte limit for arbitrary text metadata.
+Semantic cross-page projections remain incomplete.
 Retained analyses reuse the existing publication view for
 facts, tables, figure previews, input references and execution evidence. Source
 run links navigate within the same capture. Artifact reads resolve the verified

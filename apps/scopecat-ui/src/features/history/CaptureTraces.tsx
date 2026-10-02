@@ -22,7 +22,7 @@ export function CaptureTraces({
   runId: string;
   selection: "acquired" | "selected";
   offset: number;
-  records: MeasurementRecord[];
+  records: Pick<MeasurementRecord, "point_index">[];
   schema: MeasurementDatasetSchema;
 }) {
   const plans = useMemo(() => measurementTraceQueryPlans(schema), [schema]);

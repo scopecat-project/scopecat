@@ -16,9 +16,14 @@ from scopecat.data_exchange.models import (
     CaptureSummary,
     ScientificEvidence,
 )
+from scopecat.measurements.previews import preview_measurement_records
 from scopecat.measurements.traces import project_measurement_trace_preview
 from scopecat.records.content import ContentEntry
-from scopecat.records.measurement import MeasurementDataset
+from scopecat.records.measurement import (
+    MeasurementDataset,
+    MeasurementDatasetSchema,
+    MeasurementRecord,
+)
 from scopecat.runs.refs import content_entry_ref
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
@@ -150,6 +155,31 @@ class DataExchangeService:
         offset: int,
         limit: int,
     ) -> CaptureRecordingPage:
+        schema, count, selected_count, items = self._recording_records(
+            content_hash, run_id, selection=selection, offset=offset, limit=limit
+        )
+        following = offset + len(items)
+        return CaptureRecordingPage(
+            dataset_schema=schema,
+            selection=selection,
+            record_count=count,
+            selected_record_count=selected_count,
+            offset=offset,
+            next_offset=following if following < count else None,
+            items=preview_measurement_records(items),
+        )
+
+    def _recording_records(
+        self,
+        content_hash: str,
+        run_id: str,
+        *,
+        selection: Literal["acquired", "selected"],
+        offset: int,
+        limit: int,
+    ) -> tuple[
+        MeasurementDatasetSchema, int, int | None, tuple[MeasurementRecord, ...]
+    ]:
         with ScientificExchange(self.path(content_hash)) as capture:
             try:
                 recording = capture.recording(run_id)
@@ -167,15 +197,11 @@ class DataExchangeService:
             else:
                 count = recording.record_count
                 items = tuple(recording.records(offset=offset, limit=limit))
-            following = offset + len(items)
-            return CaptureRecordingPage(
-                dataset_schema=recording.header.dataset_schema,
-                selection=selection,
-                record_count=count,
-                selected_record_count=recording.selected_record_count,
-                offset=offset,
-                next_offset=following if following < count else None,
-                items=items,
+            return (
+                recording.header.dataset_schema,
+                count,
+                recording.selected_record_count,
+                items,
             )
 
     def recording_traces(
@@ -188,14 +214,12 @@ class DataExchangeService:
         offset: int,
         limit: int,
     ) -> MeasurementTracePreview:
-        page = self.recording_page(
+        schema, _count, _selected_count, items = self._recording_records(
             content_hash, run_id, selection=selection, offset=offset, limit=limit
         )
         try:
             projection = project_measurement_trace_preview(
-                MeasurementDataset(
-                    dataset_schema=page.dataset_schema, records=page.items
-                ),
+                MeasurementDataset(dataset_schema=schema, records=items),
                 query.observable_id,
                 coordinate=query.coordinate_id,
                 group=query.recording_group_id,
@@ -208,7 +232,7 @@ class DataExchangeService:
             )
         except ValueError as error:
             raise BackendConflict(str(error)) from error
-        selected_count = len(page.items) * projection.selected_entity_count
+        selected_count = len(items) * projection.selected_entity_count
         return MeasurementTracePreview.from_projection(
             projection,
             selected_series_count=selected_count,

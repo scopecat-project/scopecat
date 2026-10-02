@@ -3598,7 +3598,7 @@ export interface components {
         CaptureRecordingPage: {
             dataset_schema: components["schemas"]["MeasurementDatasetSchema-Output"];
             /** Items */
-            items: components["schemas"]["MeasurementRecord"][];
+            items: components["schemas"]["MeasurementRecordPreview"][];
             /** Next Offset */
             next_offset: number | null;
             /** Offset */
@@ -6907,6 +6907,25 @@ export interface components {
         MeasurementArrayJson: components["schemas"]["MeasurementArrayJsonItem"][];
         MeasurementArrayJsonItem: components["schemas"]["MeasurementArrayJsonLeaf"] | components["schemas"]["MeasurementArrayJsonItem"][];
         MeasurementArrayJsonLeaf: boolean | number | string | components["schemas"]["MeasurementComplexJson"];
+        /** MeasurementArraySummary */
+        MeasurementArraySummary: {
+            /** Available Sample Count */
+            available_sample_count: number;
+            dtype: components["schemas"]["MeasurementDType"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "array_summary";
+            /** Sample Count */
+            sample_count: number | null;
+            /** Shape */
+            shape: (number | null)[];
+            /** Unavailable Reasons */
+            unavailable_reasons: ("missing" | "invalid" | "overload")[];
+            /** Unit */
+            unit: string | null;
+        };
         /**
          * MeasurementArrayUnavailableGroup
          * @description One reason shared by a sparse set of unavailable array leaves.
@@ -7187,6 +7206,7 @@ export interface components {
              */
             truncated: boolean;
         };
+        MeasurementPreviewValue: components["schemas"]["MeasurementScalar-Output"] | components["schemas"]["MeasurementArray"] | components["schemas"]["MeasurementPartitionedArray"] | components["schemas"]["MeasurementSegmentedArray"] | components["schemas"]["MeasurementUnavailable"] | components["schemas"]["MeasurementArraySummary"];
         /**
          * MeasurementProductGridPointDomain
          * @description A point domain formed from the ordered product of independent axes.
@@ -7211,6 +7231,23 @@ export interface components {
             logical_point_id?: string | null;
             metadata?: components["schemas"]["MeasurementMetadata-Output"];
             observables: components["schemas"]["MeasurementValueMap"];
+            /** Point Index */
+            point_index: number;
+            /** Run Id */
+            run_id: string;
+        };
+        /** MeasurementRecordPreview */
+        MeasurementRecordPreview: {
+            /** Coordinates */
+            coordinates: {
+                [key: string]: components["schemas"]["MeasurementPreviewValue"];
+            };
+            /** Logical Point Id */
+            logical_point_id: string | null;
+            /** Observables */
+            observables: {
+                [key: string]: components["schemas"]["MeasurementPreviewValue"];
+            };
             /** Point Index */
             point_index: number;
             /** Run Id */
@@ -7376,7 +7413,8 @@ export interface components {
          * MeasurementTracePreview
          * @description Bounded numeric series for one selected point/entity-local observable.
          *
-         *     ``selected_series_count`` is the authored domain selection size. It does
+         *     ``selected_series_count`` is the selected domain or retained-record window size
+         *     multiplied by the selected entity count. It does
          *     not promise that every selected point is durable yet or has an available
          *     observable value; ``returned_series_count`` counts response series only.
          */

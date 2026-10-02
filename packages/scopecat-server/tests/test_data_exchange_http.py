@@ -92,7 +92,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
         point_domain=MeasurementPointCloudPointDomain(columns=()),
         dimensions=(
             MeasurementDimension(id="point", kind="point", size=2),
-            MeasurementDimension(id="sample", kind="sample", size=128),
+            MeasurementDimension(id="sample", kind="sample", size=8192),
         ),
         variables=(
             MeasurementVariable(
@@ -114,7 +114,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
                     "signal": MeasurementArray.create(
                         dtype="float64",
                         unit="V",
-                        values=[peak if i == 64 else 0.0 for i in range(128)],
+                        values=[peak if i == 64 else 0.0 for i in range(8192)],
                     )
                 },
             )
@@ -129,7 +129,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
                     reason="missing",
                     dtype="float64",
                     unit="V",
-                    shape=(128,),
+                    shape=(8192,),
                     metadata={},
                 )
             },
@@ -174,12 +174,20 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
         assert imported.status_code == 200, imported.text
         capture_hash = imported.json()["capture"]["content_hash"]
         url = f"/api/v1/data/captures/{capture_hash}/runs/portable/recording/traces"
+        table = client.get(url.removesuffix("/traces"))
+        assert table.status_code == 200, table.text
+        value = table.json()["items"][0]["observables"]["signal"]
+        assert value["kind"] == "array_summary"
+        assert value["shape"] == [8192]
+        assert value["available_sample_count"] == 8192
+        assert "values" not in value
+        assert len(table.content) < 6000
         query = {"observable_id": "signal", "max_samples": 8}
         for selection, peak in (("acquired", 100), ("selected", 200)):
             response = client.post(url, params={"selection": selection}, json=query)
             assert response.status_code == 200, response.text
             preview = response.json()
-            assert preview["source_sample_count"] == 128
+            assert preview["source_sample_count"] == 8192
             assert preview["returned_sample_count"] <= 8
             assert preview["samples_reduced"] is True
             assert max(preview["series"][0]["y"]) == peak
@@ -425,9 +433,10 @@ def test_capture_http_without_device_activation(
         assert [item["point_index"] for item in tail["items"]] == [1]
         selected = client.get(recording_url, params={"selection": "selected"}).json()
         assert selected["record_count"] == 2
-        assert selected["items"] == [
-            item.model_dump(mode="json") for item in records[1:]
-        ]
+        assert [item["point_index"] for item in selected["items"]] == [0, 1]
+        assert [
+            item["observables"]["signal"]["value"] for item in selected["items"]
+        ] == [1, 2]
         assert client.get(recording_url, params={"limit": 101}).status_code == 422
         assert (
             client.get(f"{url}/{capture_hash}/runs/unknown/recording").status_code

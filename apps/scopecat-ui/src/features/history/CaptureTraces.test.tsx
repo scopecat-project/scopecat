@@ -43,10 +43,7 @@ it("selects acquisition offsets and entities without hiding unavailable traces o
         runId="scan"
         selection="acquired"
         offset={20}
-        records={[
-          { run_id: "scan", point_index: 0, coordinates: {}, observables: {} },
-          { run_id: "scan", point_index: 0, coordinates: {}, observables: {} },
-        ]}
+        records={[{ point_index: 0 }, { point_index: 0 }]}
         schema={entityTraceSchema()}
       />
     </QueryClientProvider>,

@@ -137,6 +137,11 @@ function CaptureRecording({
           <MeasurementRecordTable
             table={measurementTable(page.data.items, page.data.dataset_schema)}
           />
+          {page.data.items.some((record) =>
+            [...Object.values(record.coordinates), ...Object.values(record.observables)].some(
+              (value) => value.kind === "array_summary",
+            ),
+          ) && <p>Large arrays are summarized in the table and omitted from point charts.</p>}
           <CaptureTraces
             key={`${selection}:${offset}`}
             contentHash={contentHash}

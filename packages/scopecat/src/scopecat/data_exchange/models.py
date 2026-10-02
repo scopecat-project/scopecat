@@ -13,6 +13,7 @@ from scopecat.automation.models import (
 )
 from scopecat.config.registry.records import ConfigRegistryEntry
 from scopecat.kernel.content_identity import model_wire_content_hash
+from scopecat.measurements.previews import MeasurementRecordPreview
 from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
     AnalysisDatasetRecordOutput,
@@ -24,7 +25,7 @@ from scopecat.records.author_revision import AuthorRevisionBundle
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.experiment_plan import ExperimentPlanRevision
-from scopecat.records.measurement import MeasurementDatasetSchema, MeasurementRecord
+from scopecat.records.measurement import MeasurementDatasetSchema
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
@@ -55,7 +56,7 @@ class CaptureRecordingPage(BaseModel):
     selected_record_count: int | None
     offset: int
     next_offset: int | None
-    items: tuple[MeasurementRecord, ...]
+    items: tuple[MeasurementRecordPreview, ...]
 
 
 class RunEvidence(BaseModel):
