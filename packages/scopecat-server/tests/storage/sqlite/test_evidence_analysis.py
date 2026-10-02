@@ -7,10 +7,15 @@ from scopecat.kernel.content_identity import (
     sha256_content_hash,
 )
 from scopecat.records.analysis import (
+    ANALYSIS_ARTIFACT_CODEC,
     AnalysisArtifactRecordOutput,
     AnalysisArtifactReference,
+    AnalysisFact,
+    AnalysisFactRecordOutput,
+    AnalysisPublishedOutputReference,
     AnalysisRecord,
     ProjectAnalysisSubject,
+    PublishedAnalysisRecordInput,
     RunAnalysisSubject,
 )
 from scopecat.records.config import config_content_hash
@@ -27,7 +32,10 @@ from scopecat_testkit.authoring import load_config
 
 from scopecat_server.storage.sqlite.analysis_repository import SQLiteAnalysisRepository
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
-from scopecat_server.storage.sqlite.evidence_analysis import capture_analysis_evidence
+from scopecat_server.storage.sqlite.evidence_analysis import (
+    capture_analysis_evidence,
+    capture_analysis_input_graph,
+)
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
@@ -127,6 +135,129 @@ def test_analysis_capture_keeps_exact_artifact_and_rejects_missing_ref(
     payload = next(item for item in captured.payloads if item.ref == artifact_ref)
     assert payload.path.read_bytes() == content
     assert payload.digest == artifact.content_hash
+    consumed = PublishedAnalysisRecordInput(
+        id="upstream",
+        kind="analysis_artifact",
+        target=artifact.id,
+        content_hash=artifact.content_hash,
+        codec=ANALYSIS_ARTIFACT_CODEC,
+        role="analysis",
+        source=AnalysisPublishedOutputReference(
+            subject=subject,
+            analysis_record_id=entry.id,
+            output_id="notes",
+        ),
+    )
+    fact = AnalysisFactRecordOutput(
+        kind="fact",
+        id="conclusion",
+        title="Conclusion",
+        content=AnalysisFact(
+            schema_id="test",
+            schema_codec="scopecat.analysis-fact-schema.v1",
+            schema_hash=sha256_content_hash(b"schema"),
+            codec="test.fact.v1",
+            value=2,
+        ),
+    )
+    derived = AnalysisRecord(
+        subject=ProjectAnalysisSubject(),
+        title="Derived result",
+        key="derived",
+        revision=1,
+        publication_hash=sha256_content_hash(b"derived"),
+        inputs=[consumed],
+        outputs=[fact],
+    )
+
+    def publish_derived(record_id: str, value: AnalysisRecord) -> None:
+        root = ContentEntry(
+            role="record",
+            kind="analysis",
+            id=record_id,
+            content_hash=model_wire_content_hash(value),
+        )
+        SQLiteAnalysisRepository(store.sqlite, store.objects.root).publish(
+            AnalysisPublication(
+                subject=value.subject,
+                record=root,
+                entries=(root,),
+                analysis_key=record_id,
+                revision=1,
+                publication_hash=value.publication_hash,
+                title=value.title,
+                step_id=None,
+                input_count=1,
+                output_count=len(value.outputs),
+                models=(
+                    ModelWrite(
+                        ref=record_content_ref(record_id=record_id, kind="analysis"),
+                        value=value,
+                    ),
+                ),
+                bytes=(),
+            )
+        )
+
+    publish_derived("derived", derived)
+    with store.sqlite.read_transaction() as connection:
+        graph = capture_analysis_input_graph(
+            connection,
+            runs,
+            (
+                (derived.subject, "derived"),
+                (derived.subject, "derived"),
+            ),
+        )
+    assert [item.evidence.entry.id for item in graph] == ["derived", entry.id]
+    terminal = derived.model_copy(
+        update={
+            "inputs": [
+                PublishedAnalysisRecordInput(
+                    id="conclusion",
+                    kind="analysis_fact",
+                    target=fact.id,
+                    content_hash=f"sha256:{model_wire_content_hash(fact.content)}",
+                    codec=fact.content.codec,
+                    role="analysis",
+                    source=AnalysisPublishedOutputReference(
+                        subject=derived.subject,
+                        analysis_record_id="derived",
+                        output_id=fact.id,
+                    ),
+                )
+            ],
+            "publication_hash": sha256_content_hash(b"terminal"),
+        }
+    )
+    publish_derived("terminal", terminal)
+    with store.sqlite.read_transaction() as connection:
+        graph = capture_analysis_input_graph(
+            connection, runs, ((terminal.subject, "terminal"),)
+        )
+    assert [item.evidence.entry.id for item in graph] == [
+        "terminal",
+        "derived",
+        entry.id,
+    ]
+    for field, incorrect in (
+        ("target", "different"),
+        ("content_hash", sha256_content_hash(b"different")),
+        ("codec", "different"),
+        ("kind", "analysis_dataset"),
+    ):
+        bad = derived.model_copy(
+            update={
+                "inputs": [consumed.model_copy(update={field: incorrect})],
+                "publication_hash": sha256_content_hash(field.encode()),
+            }
+        )
+        publish_derived(field, bad)
+        with (
+            store.sqlite.read_transaction() as connection,
+            pytest.raises(ValueError, match="differs from its exact output"),
+        ):
+            capture_analysis_input_graph(connection, runs, ((bad.subject, field),))
     with store.sqlite.write_transaction() as connection:
         if isinstance(subject, RunAnalysisSubject):
             connection.execute(
@@ -143,4 +274,9 @@ def test_analysis_capture_keeps_exact_artifact_and_rejects_missing_ref(
         pytest.raises(ValueError, match="missing a retained output reference"),
     ):
         capture_analysis_evidence(connection, runs, subject, entry.id)
+    with (
+        store.sqlite.read_transaction() as connection,
+        pytest.raises(ValueError, match="missing a retained output reference"),
+    ):
+        capture_analysis_input_graph(connection, runs, ((derived.subject, "derived"),))
     store.close()

@@ -106,9 +106,12 @@ source files are checked as bytes without extracting or executing them.
 Analysis capture verifies the publication record and output index, then identifies
 the precise retained artifact and dataset objects for streaming. The final writer
 must verify object digests while copying; concurrent cleanup is an export failure,
-not permission to omit a referenced output. Traversal across analysis inputs and
-other evidence families and application integration are not complete yet. These
-capture components alone do not prove reference closure.
+not permission to omit a referenced output. Published analysis inputs now resolve
+transitively across run and project subjects, retaining each exact publication once.
+Each consumed output must match its kind, target, content hash and codec, using the
+same identity calculation as publication admission. Missing upstream bytes fail
+capture. Figure-layer sources, other evidence families and application integration
+are not complete yet. These capture components alone do not prove reference closure.
 
 The low-level `scopecat.data_exchange` container now groups scientific documents,
 recording partitions and content-addressed payloads without extracting them.

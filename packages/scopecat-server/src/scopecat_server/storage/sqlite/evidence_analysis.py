@@ -2,7 +2,8 @@
 
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections import deque
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -11,7 +12,9 @@ from scopecat.kernel.content_identity import content_fingerprint, stable_content
 from scopecat.records.analysis import (
     AnalysisRecord,
     AnalysisSubject,
+    PublishedAnalysisRecordInput,
     RunAnalysisSubject,
+    published_output_input_identity,
 )
 from scopecat.records.content import ContentEntry
 from scopecat.records.exchange import AnalysisEvidence
@@ -36,6 +39,53 @@ class RetainedPayload:
 class CapturedAnalysis:
     evidence: AnalysisEvidence
     payloads: tuple[RetainedPayload, ...]
+
+
+def capture_analysis_input_graph(
+    connection: sqlite3.Connection,
+    runs: SQLiteRunRepository,
+    roots: Iterable[tuple[AnalysisSubject, str]],
+) -> tuple[CapturedAnalysis, ...]:
+    """Capture transitive published inputs and verify every consumed output.
+
+    All lookups use the caller's snapshot. Run, interpretation and revision
+    dependencies are resolved by the enclosing scientific capture layer.
+    """
+    pending = deque(roots)
+    captured: dict[tuple[AnalysisSubject, str], CapturedAnalysis] = {}
+    while pending:
+        identity = pending.popleft()
+        if identity in captured:
+            continue
+        subject, record_id = identity
+        publication = capture_analysis_evidence(connection, runs, subject, record_id)
+        captured[identity] = publication
+        for item in publication.evidence.record.inputs:
+            if isinstance(item, PublishedAnalysisRecordInput):
+                pending.append((item.source.subject, item.source.analysis_record_id))
+    for publication in captured.values():
+        for item in publication.evidence.record.inputs:
+            if not isinstance(item, PublishedAnalysisRecordInput):
+                continue
+            source = captured[(item.source.subject, item.source.analysis_record_id)]
+            output = next(
+                (
+                    output
+                    for output in source.evidence.record.outputs
+                    if output.id == item.source.output_id
+                ),
+                None,
+            )
+            if published_output_input_identity(output) != (
+                item.kind,
+                item.target,
+                item.content_hash,
+                item.codec,
+            ):
+                raise ValueError(
+                    "analysis input evidence differs from its exact output"
+                )
+    return tuple(captured.values())
 
 
 def capture_analysis_evidence(

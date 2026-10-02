@@ -76,6 +76,7 @@ from scopecat.records.analysis import (
     RunAnalysisSubject,
     SampleAnalysisSubject,
     analysis_record_id,
+    published_output_input_identity,
     validate_analysis_output_content_budget,
 )
 from scopecat.records.content import BytesWrite, ContentEntry, ModelWrite
@@ -853,39 +854,15 @@ def _validate_published_analysis_output_input(
     source_output: AnalysisRecordOutput | None,
     index: int,
 ) -> None:
-    if input_ref.kind == "analysis_dataset":
-        if not isinstance(source_output, AnalysisDatasetRecordOutput):
-            _raise_analysis_problem(
-                "analysis_input_source_kind_mismatch",
-                "analysis_dataset input source identifies a different output kind",
-                "inputs",
-                index,
-            )
-        target = source_output.content.dataset_id
-        content_hash = source_output.content.content_hash
-        codec = source_output.content.codec
-    elif input_ref.kind == "analysis_fact":
-        if not isinstance(source_output, AnalysisFactRecordOutput):
-            _raise_analysis_problem(
-                "analysis_input_source_kind_mismatch",
-                "analysis_fact input source identifies a different output kind",
-                "inputs",
-                index,
-            )
-        target = source_output.id
-        content_hash = f"sha256:{model_wire_content_hash(source_output.content)}"
-        codec = source_output.content.codec
-    else:
-        if not isinstance(source_output, AnalysisArtifactRecordOutput):
-            _raise_analysis_problem(
-                "analysis_input_source_kind_mismatch",
-                "analysis_artifact input source identifies a different output kind",
-                "inputs",
-                index,
-            )
-        target = source_output.content.artifact_id
-        content_hash = source_output.content.content_hash
-        codec = ANALYSIS_ARTIFACT_CODEC
+    identity = published_output_input_identity(source_output)
+    if identity is None or identity[0] != input_ref.kind:
+        _raise_analysis_problem(
+            "analysis_input_source_kind_mismatch",
+            f"{input_ref.kind} input source identifies a different output kind",
+            "inputs",
+            index,
+        )
+    _, target, content_hash, codec = identity
     if (
         input_ref.target != target
         or input_ref.content_hash != content_hash
