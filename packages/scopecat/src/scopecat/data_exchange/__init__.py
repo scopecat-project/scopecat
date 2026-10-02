@@ -344,6 +344,15 @@ class ScientificExchange:
         finally:
             staged.unlink(missing_ok=True)
 
+    def read_payload(self, reference: PayloadReference) -> bytes:
+        """Materialize verified owned bytes for explicit Python analysis access."""
+        if reference not in self.payloads:
+            raise KeyError("payload reference does not belong to this exchange")
+        content = self._archive.read(_object_name(reference.digest))
+        if sha256_content_hash(content) != reference.digest:
+            raise ValueError("exchange payload checksum differs")
+        return content
+
     def _verify_content_index(self) -> None:
         references = {
             (ref.owner_kind, ref.owner_id, ref.ref): ref for ref in self.payloads

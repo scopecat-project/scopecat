@@ -26,7 +26,53 @@ def mean_response(data: Dataset, *, minimum: float = 0) -> Mean:
     return Mean(float(selected.mean()), "Selected mean")
 ```
 
-In the managed notebook session, use the retained run's original source by default:
+## Analyze an exported file in your own Python environment
+
+Use a Python environment with the matching Scopecat version and your numerical
+tools installed. The application, device drivers and original author environment
+do not need to run. With the `mean_response` function above:
+
+```python
+with sc.open_capture("raw.scopecat", output="analyzed.scopecat") as capture:
+    print(capture.run_ids)
+    run_id = capture.run_ids[0]  # Choose the intended run if the file contains several.
+    publication = capture.analyze(run_id, mean_response(minimum=0.2), key="mean")
+    fitted = publication.result_as(Mean)
+    print(fitted.value.value, fitted.value.reason)
+```
+
+Each successful analysis save writes the result file atomically. Later failures
+preserve earlier saved results. The source is unchanged; choose a new destination
+when opening the capture. This handle can then update its own output with further
+analyses, but it cannot overwrite a pre-existing destination. Open `analyzed.scopecat` from the
+application’s **File → Open** command to inspect its retained results and inputs.
+
+The source measurements stay unchanged. Repeating identical analysis in the
+session reuses its publication; changing arguments or implementation creates
+a new revision under the same key. The result retains input identities, effective
+arguments, output identities, a local implementation fingerprint and Python
+interpreter description. It does not bundle your entire environment or promise
+to reconstruct it. Reading a saved conclusion does not rerun its code:
+
+```python
+with sc.open_capture("analyzed.scopecat") as capture:
+    fitted = capture.published_analysis("mean").result_as(Mean)
+    print(fitted.value)
+```
+
+For interactive work, `capture.analysis(run_id, key="fit")` returns the ordinary
+`AnalysisContext`: use `measurements()`, `trace()`, and `result()` to publish facts,
+datasets, tables, figures or attachments. Its `save()` persists the publication
+before returning. Analysis loads the captured logical-point selection
+into memory; a file without that selection cannot silently substitute physical
+acquisition order. Use the lower-level `MeasurementSnapshot` reader for bounded
+record processing. A changed publication currently writes a complete portable
+file, including the original recordings. Group related outputs in one result and
+save it once; repeated saves of large captures require corresponding disk I/O.
+
+## Analyze a run in the application
+
+In an author session, use the retained run's original source by default:
 
 ```python
 with project.authoring() as author:

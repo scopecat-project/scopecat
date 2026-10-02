@@ -13,11 +13,6 @@ from scopecat.config.candidates import (
     CandidateSelection,
     candidate_config_from_proposals,
 )
-from scopecat.daemon.views import (
-    ProjectAnalysisView,
-    RunAnalysisView,
-    SampleAnalysisView,
-)
 from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
     AnalysisDatasetRecordOutput,
@@ -29,6 +24,7 @@ from scopecat.records.analysis import (
     AnalysisParameterProposalRecordOutput,
     AnalysisPublishedDatasetViewSource,
     AnalysisPublishedOutputReference,
+    AnalysisRecord,
     AnalysisRecordInput,
     AnalysisRecordOutput,
     AnalysisTableRecordOutput,
@@ -132,12 +128,25 @@ class PublishedAnalysisArtifact:
         )
 
 
+class AnalysisPublicationView(Protocol):
+    """Retained publication data, independent of its file or remote transport."""
+
+    @property
+    def entry(self) -> ContentEntry: ...
+
+    @property
+    def analysis(self) -> AnalysisRecord: ...
+
+    @property
+    def published_at(self) -> datetime: ...
+
+
 @dataclass(frozen=True, slots=True)
 class PublishedAnalysis:
     """One immutable analysis record with output-ID based typed access."""
 
     source: _PublishedAnalysisSource
-    view: RunAnalysisView | ProjectAnalysisView | SampleAnalysisView
+    view: AnalysisPublicationView
 
     @property
     def id(self) -> str:

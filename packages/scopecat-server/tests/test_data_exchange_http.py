@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from scopecat.analysis.repository import AnalysisPublication
+from scopecat.api.capture import open_capture
 from scopecat.data_exchange import (
     PayloadReference,
     PayloadSource,
@@ -27,11 +27,10 @@ from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
     AnalysisArtifactReference,
     AnalysisRecord,
-    ProjectAnalysisSubject,
     RunAnalysisSubject,
 )
 from scopecat.records.config import config_content_hash
-from scopecat.records.content import ContentEntry, ModelWrite
+from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
     MeasurementArray,
     MeasurementDatasetSchema,
@@ -92,36 +91,12 @@ def _evidence() -> ScientificEvidence:
 def test_external_analysis_import_preserves_existing_source_identity(tmp_path: Path):
     source = tmp_path / "source.scopecat"
     write_scientific_exchange(source, _evidence(), {})
-    record = AnalysisRecord(
-        subject=ProjectAnalysisSubject(),
-        title="External result",
-        key="external",
-        revision=1,
-        publication_hash="external-result",
-        outputs=[],
-    )
-    entry = ContentEntry(
-        role="record",
-        id="analysis-external-r1",
-        kind="analysis",
-        content_hash=model_wire_content_hash(record),
-    )
-    publication = AnalysisPublication(
-        subject=record.subject,
-        record=entry,
-        entries=(entry,),
-        analysis_key="external",
-        revision=1,
-        publication_hash=record.publication_hash,
-        title=record.title,
-        step_id=None,
-        input_count=0,
-        output_count=0,
-        models=(ModelWrite(content_entry_ref(entry), record),),
-    )
     result = tmp_path / "result.scopecat"
-    with ScientificExchange(source) as captured:
-        captured.write_analyses(result, (publication,))
+    with open_capture(source, output=result) as captured:
+        context = captured.analysis("portable", title="External result", key="external")
+        digest = config_content_hash(context.config)
+        publication = context.result().fact("configuration", digest).save()
+        record = publication.view.analysis
     with (
         LocalDaemonRuntime(tmp_path / "app") as runtime,
         TestClient(runtime.app()) as client,

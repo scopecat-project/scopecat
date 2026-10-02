@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from zipfile import ZipFile
@@ -9,6 +10,7 @@ from zipfile import ZipFile
 import pytest
 from scopecat_testkit.workflow_fixtures import load_config
 
+from scopecat.api.analysis import analysis_function
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.data_exchange import (
     PayloadReference,
@@ -23,6 +25,7 @@ from scopecat.measurements.archive import (
     RecordSelection,
     write_measurement_snapshot,
 )
+from scopecat.measurements.dataset import Dataset
 from scopecat.measurements.imports import import_measurement_snapshot
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import ContentEntry
@@ -222,6 +225,160 @@ def test_exchange_requires_indexed_payload_and_its_scientific_identity(
     with ScientificExchange(destination) as opened:
         opened.verify()
     assert not list(tmp_path.glob(".exchange-*"))
+
+
+@dataclass(frozen=True)
+class PointCount:
+    count: int
+
+
+@analysis_function
+def count_capture_points(data: Dataset, *, offset: int = 0) -> PointCount:
+    return PointCount(len(data) + offset)
+
+
+def test_capture_uses_ordinary_analysis_and_retains_execution_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import scopecat as sc
+
+    def count_points(data: Dataset) -> int:
+        return len(data)
+
+    @dataclass
+    class FitPoint:
+        x: float
+        y: float
+
+    header, appends, _records = recording()
+    recording_file = tmp_path / "recording.scopecat"
+    write_measurement_snapshot(
+        recording_file,
+        header,
+        appends,
+        projection=(
+            RecordSelection(point_index=0, acquisition_index=1),
+            RecordSelection(point_index=1, acquisition_index=3),
+            RecordSelection(point_index=2, acquisition_index=0),
+            RecordSelection(point_index=3, acquisition_index=2),
+        ),
+    )
+    with MeasurementSnapshot(recording_file) as snapshot:
+        dataset_entry = snapshot.dataset().entry
+    evidence = exchange_evidence()
+    evidence = evidence.model_copy(
+        update={
+            "runs": (
+                evidence.runs[0].model_copy(update={"contents": (dataset_entry,)}),
+            )
+        }
+    )
+    source = tmp_path / "source.scopecat"
+    output = tmp_path / "analyzed.scopecat"
+    write_scientific_exchange(source, evidence, {"synthetic": recording_file})
+    with sc.open_capture(source, output=output) as captured:
+        assert captured.run_ids == ("synthetic",)
+        ctx = captured.analysis("synthetic", title="Local analysis", key="fit")
+        data = ctx.measurements()
+        count = ctx.trace(fn=count_points, data=data)
+        result = (
+            ctx.result()
+            .fact("count", count)
+            .artifact("report", text="four observations")
+            .dataset("fit", [FitPoint(0.0, 2.0), FitPoint(1.0, 3.0)])
+            .table(dataset="fit")
+            .figure(dataset="fit", kind="line", x="x", y="y")
+        )
+        saved = result.save()
+        assert result.save().id == saved.id
+        assert saved.fact("count").value == 4
+        assert saved.artifact("report").text() == "four observations"
+        assert len(saved.dataset("fit")) == 2
+        assert len(saved.executions) == 1
+        assert (
+            saved.executions[0].input_bindings[0].content_hash
+            == dataset_entry.content_hash
+        )
+        assert output.exists()
+        with ScientificExchange(output) as durable:
+            assert durable.evidence.analyses[0].published_at == saved.published_at
+        counted = captured.analyze(
+            "synthetic", count_capture_points(offset=2), key="count"
+        )
+        assert counted.result_as(PointCount).value == PointCount(6)
+        assert (
+            captured.analyze(
+                "synthetic", count_capture_points(offset=2), key="count"
+            ).id
+            == counted.id
+        )
+
+        def unavailable_destination(_self: Path, _target: str | Path) -> Path:
+            raise OSError("destination unavailable")
+
+        with monkeypatch.context() as failure:
+            failure.setattr(Path, "replace", unavailable_destination)
+            with pytest.raises(OSError, match="destination unavailable"):
+                captured.analyze(
+                    "synthetic", count_capture_points(offset=999), key="count"
+                )
+        assert captured.published_analysis("count").result_as(
+            PointCount
+        ).value == PointCount(6)
+        revised = captured.analyze(
+            "synthetic", count_capture_points(offset=3), key="count"
+        )
+        assert revised.revision == 2
+    with sc.open_capture(output) as reopened:
+        saved = reopened.published_analysis("fit")
+        assert saved.fact("count").value == 4
+        assert saved.artifact("report").text() == "four observations"
+        assert len(saved.dataset("fit")) == 2
+        assert len(saved.executions) == 1
+        assert saved.inputs[0].content_hash == dataset_entry.content_hash
+        counted = reopened.published_analysis("count")
+        assert counted.result_as(PointCount).value == PointCount(7)
+        assert (
+            counted.executions[0].metadata["local_implementation"]
+            == count_capture_points(offset=3).implementation_fingerprint
+        )
+        assert counted.executions[0].metadata["python"] == sys.version
+    with ScientificExchange(source) as original, ScientificExchange(output) as analyzed:
+        assert original.evidence.runs == analyzed.evidence.runs
+        assert len(analyzed.evidence.analyses) == 3
+    failed = tmp_path / "failed.scopecat"
+    with (
+        pytest.raises(RuntimeError, match="analysis interrupted"),
+        sc.open_capture(source, output=failed) as captured,
+    ):
+        ctx = captured.analysis("synthetic")
+        ctx.measurements()
+        ctx.result().fact("count", 4).save()
+        raise RuntimeError("analysis interrupted")
+    with ScientificExchange(failed) as retained:
+        assert len(retained.evidence.analyses) == 1
+    standalone = subprocess.run(  # noqa: S603 - fixed script and test-owned file
+        [
+            sys.executable,
+            "-c",
+            """
+import sys
+import scopecat as sc
+with sc.open_capture(sys.argv[1]) as capture:
+    assert capture.published_analysis("count").fact("result").value == {"count": 7}
+    report = capture.published_analysis("fit").artifact("report").text()
+    assert report == "four observations"
+for name in sys.modules:
+    assert not name.startswith(("scopecat_server", "lab_tools", "lab_adapter"))
+""",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert standalone.returncode == 0, standalone.stderr
 
 
 def test_external_publication_preserves_source_evidence_and_recordings(tmp_path: Path):

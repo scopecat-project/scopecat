@@ -324,10 +324,24 @@ would change the identity of the imported source run. This uses the existing
 exchange format and application analysis records, not a second result format.
 Local tests cover preserved recordings, extracted result attachments, missing
 payload rejection, original/result imports coexisting, and repeated result import.
-This is the publication storage boundary; ordinary `AnalysisContext` authoring,
-external execution provenance capture and the complete author-facing example are
-still outstanding. Callers should not need to construct these low-level records
-as their normal analysis workflow.
+`open_capture(source, output=destination)` now supplies the ordinary
+`AnalysisContext` and `analysis_function` path over a file. Each successful `save()`
+atomically updates the new output owned by that handle; later failures preserve
+previous saves. Existing destinations cannot be claimed or overwritten.
+Local function calls retain the implementation fingerprint, interpreter
+description and ordinary execution input/output bindings. The
+[ordinary analysis guide](../../guides/ordinary-analysis.md) shows the author API;
+authors do not construct exchange records themselves. Application and file
+publication share validation, revision selection, output encoding and figure
+projection. `PublishedAnalysis` consumes a transport-independent view protocol
+rather than requiring a daemon response model.
+Local tests cover facts, attachments, datasets, tables, figures, repeated saves,
+changed-argument revisions, re-reading and preservation after interruption. The HTTP import journey now
+uses an ordinary author-created result, not a hand-built publication fixture.
+An independent Python-process check reopens results without importing the server
+or lab adapter. Each changed file publication currently rewrites the portable
+archive; large-file save cost remains a qualification concern. Packaged desktop
+acceptance of this complete journey remains outstanding.
 
 1. Extend stable recording capture to scientific reference closure from retained data;
    include plans, parameters, result contracts, analysis and artifact dependencies

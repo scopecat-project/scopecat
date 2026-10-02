@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         analysis_function,
         analysis_step,
     )
+    from scopecat.api.capture import open_capture
     from scopecat.api.instruments import (
         InstrumentClientFactory,
         InstrumentRef,
@@ -442,6 +443,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         "DomainProposalSummary",
     ),
     "open_project": ("scopecat.project", "open_project"),
+    "open_capture": ("scopecat.api.capture", "open_capture"),
     "notebook": ("scopecat.notebook_workspace", "notebook"),
     "AnalysisGroupResult": ("scopecat.api.published_analysis", "AnalysisGroupResult"),
     "GroupedAnalysisResult": (

@@ -13,7 +13,11 @@ from scopecat.analysis.datasets import (
     DERIVED_DATASET_MEDIA_TYPE,
     DerivedDataset,
 )
-from scopecat.analysis.figure_views import figure_layer_budget, project_figure_layers
+from scopecat.analysis.figure_views import (
+    figure_layer_budget,
+    project_figure_layers,
+    read_figure_preview,
+)
 from scopecat.analysis.repository import (
     AnalysisPublication,
     AnalysisRepository,
@@ -483,21 +487,6 @@ def prepare_project_analysis(
 ) -> PreparedProjectAnalysis:
     """Prepare one immutable publication over explicit project inputs."""
 
-    if not inputs:
-        _raise_analysis_problem(
-            "project_analysis_input_missing",
-            "project analysis requires at least one explicit input",
-            "inputs",
-        )
-    if any(isinstance(output, AnalysisParameterProposalOutput) for output in outputs):
-        _raise_analysis_problem(
-            "project_analysis_parameter_proposal_unsupported",
-            "project analysis cannot publish parameter proposals yet",
-            "outputs",
-        )
-    _validate_analysis_output_ids(outputs)
-    _validate_analysis_input_ids(inputs)
-    _validate_analysis_execution_outputs(executions, outputs)
     for index, item in enumerate(inputs):
         if isinstance(item, InterpretationAnalysisInput):
             if not isinstance(subject, ProjectAnalysisSubject):
@@ -515,10 +504,64 @@ def prepare_project_analysis(
         repository=repository,
         inputs=inputs,
     )
+    return prepare_independent_analysis(
+        title=title,
+        analysis_key=analysis_key,
+        step_id=step_id,
+        inputs=inputs,
+        executions=executions,
+        outputs=outputs,
+        subject=subject,
+        existing=_latest_project_analysis(
+            repository=repository,
+            analysis_key=analysis_key,
+            subject=subject,
+        ),
+        read_dataset=partial(_read_figure_dataset, services, repository),
+    )
+
+
+def prepare_independent_analysis(
+    *,
+    title: str,
+    analysis_key: str,
+    step_id: str | None,
+    inputs: Sequence[AnalysisInput],
+    executions: Sequence[AnalysisExecution],
+    outputs: Sequence[AnalysisOutput],
+    subject: ProjectAnalysisSubject | SampleAnalysisSubject = _PROJECT_ANALYSIS_SUBJECT,
+    existing: RetainedAnalysis | None,
+    read_dataset: Callable[
+        [AnalysisPublishedDatasetViewSource, AnalysisFigureProjection, int],
+        tuple[DerivedDataset, int],
+    ],
+) -> PreparedProjectAnalysis:
+    """Prepare an independent publication after its owner resolves input evidence.
+
+    Application repositories and portable files share output validation, preview
+    construction, content encoding and revision identity. Each owner validates
+    frozen inputs against its own retained evidence before publishing.
+    """
+
+    if not inputs:
+        _raise_analysis_problem(
+            "project_analysis_input_missing",
+            "project analysis requires at least one explicit input",
+            "inputs",
+        )
+    if any(isinstance(output, AnalysisParameterProposalOutput) for output in outputs):
+        _raise_analysis_problem(
+            "project_analysis_parameter_proposal_unsupported",
+            "project analysis cannot publish parameter proposals yet",
+            "outputs",
+        )
+    _validate_analysis_output_ids(outputs)
+    _validate_analysis_input_ids(inputs)
+    _validate_analysis_execution_outputs(executions, outputs)
     analysis_views = _prepare_analysis_views(
         outputs,
         inputs=inputs,
-        read_dataset=partial(_read_figure_dataset, services, repository),
+        read_dataset=read_dataset,
     )
     publication_hash = _analysis_publication_hash(
         title=title,
@@ -527,11 +570,6 @@ def prepare_project_analysis(
         inputs=inputs,
         executions=executions,
         outputs=outputs,
-    )
-    existing = _latest_project_analysis(
-        repository=repository,
-        analysis_key=analysis_key,
-        subject=subject,
     )
     if existing is not None and existing.record.publication_hash == publication_hash:
         return PreparedProjectAnalysis(
@@ -653,7 +691,7 @@ def _prepare_analysis_contents(
 
 
 @dataclass(frozen=True, slots=True)
-class _ExistingAnalysis:
+class RetainedAnalysis:
     entry: ContentEntry
     record: AnalysisRecord
 
@@ -979,13 +1017,13 @@ def _latest_analysis(
     services: ProjectStateServices,
     run_id: str,
     analysis_key: str,
-) -> _ExistingAnalysis | None:
+) -> RetainedAnalysis | None:
     storage = services.runs
     publication = storage.latest_analysis_publication(run_id, analysis_key)
     if publication is None:
         return None
     entry = publication.record
-    return _ExistingAnalysis(
+    return RetainedAnalysis(
         entry=entry,
         record=storage.read_model(
             run_id,
@@ -1000,12 +1038,12 @@ def _latest_project_analysis(
     repository: AnalysisRepository,
     analysis_key: str,
     subject: ProjectAnalysisSubject | SampleAnalysisSubject,
-) -> _ExistingAnalysis | None:
+) -> RetainedAnalysis | None:
     publication = repository.latest_publication(analysis_key, subject=subject)
     if publication is None:
         return None
     entry = publication.record
-    return _ExistingAnalysis(
+    return RetainedAnalysis(
         entry=entry,
         record=repository.read_model(
             entry.id,
@@ -1484,15 +1522,10 @@ def _read_figure_dataset(
         record_id = source.source.analysis_record_id
         entry = repository.read_content(record_id, source.dataset.dataset_id)
         content = repository.read_bytes(record_id, ref)
-    columns = [projection.x, projection.y]
-    if projection.series is not None:
-        columns.append(projection.series)
-    if projection.uncertainty is not None:
-        columns.extend((projection.uncertainty.lower, projection.uncertainty.upper))
-    return DerivedDataset.preview_from_arrow_ipc(
+    return read_figure_preview(
         content,
         schema=DerivedDatasetSchema.model_validate(entry.data_schema),
-        columns=tuple(dict.fromkeys(columns)),
+        projection=projection,
         limit=limit,
     )
 
