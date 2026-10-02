@@ -101,8 +101,6 @@ export function MeasurementDataPreview({
     slice,
     slicePlan,
   ]);
-  const [requestedChartId, setRequestedChartId] = useState<string>();
-  const selectedChart = charts.find((chart) => chart.id === requestedChartId) ?? charts[0];
   const selectedTracePlan =
     tracePlans.find((plan) => plan.id === selectedTracePlanId) ?? tracePlans[0];
   const traceChart = useMemo(
@@ -375,31 +373,7 @@ export function MeasurementDataPreview({
       )}
 
       {charts.length > 0 ? (
-        <div className="border-b border-line p-2.5" data-testid="measurement-charts">
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[0.59rem] text-text-dim">
-            <span>
-              {charts.length} chart {charts.length === 1 ? "candidate" : "candidates"}
-            </span>
-            {charts.length > 1 && (
-              <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
-                Chart
-                <select
-                  aria-label="Measurement chart"
-                  className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
-                  onChange={(event) => setRequestedChartId(event.target.value)}
-                  value={selectedChart?.id ?? ""}
-                >
-                  {charts.map((chart) => (
-                    <option key={chart.id} value={chart.id}>
-                      {chartOptionLabel(chart)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-          {selectedChart && <MeasurementChart chart={selectedChart} />}
-        </div>
+        <MeasurementChartPicker charts={charts} />
       ) : tracePlans.length === 0 ? (
         <p className="m-0 border-b border-line px-3 py-2.5 text-[0.67rem] leading-normal text-text-dim">
           {emptyChartMessage({
@@ -608,6 +582,38 @@ function sliceAxisOption(axis: MeasurementSliceAxis, index: number): string {
   const unit = scalar.unit ?? axis.unit;
   const duplicate = measurementSliceAxisValueIsDuplicated(axis, index);
   return `${value}${unit ? ` ${unit}` : ""}${duplicate ? ` · Index ${index + 1}` : ""}`;
+}
+
+export function MeasurementChartPicker({ charts }: { charts: MeasurementChartPlan[] }) {
+  const [requestedChartId, setRequestedChartId] = useState<string>();
+  const selectedChart = charts.find((chart) => chart.id === requestedChartId) ?? charts[0];
+  return (
+    <div className="border-b border-line p-2.5" data-testid="measurement-charts">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[0.59rem] text-text-dim">
+        <span>
+          {charts.length} chart {charts.length === 1 ? "candidate" : "candidates"}
+        </span>
+        {charts.length > 1 && (
+          <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
+            Chart
+            <select
+              aria-label="Measurement chart"
+              className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+              onChange={(event) => setRequestedChartId(event.target.value)}
+              value={selectedChart?.id ?? ""}
+            >
+              {charts.map((chart) => (
+                <option key={chart.id} value={chart.id}>
+                  {chartOptionLabel(chart)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {selectedChart && <MeasurementChart chart={selectedChart} />}
+    </div>
+  );
 }
 
 function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {

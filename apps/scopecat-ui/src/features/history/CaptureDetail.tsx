@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { secondaryButton } from "../../ui/styles";
 import { MeasurementRecordTable } from "../runs/MeasurementRecordTable";
-import { measurementTable } from "../runs/measurement-visualization";
+import { measurementTable, planMeasurementCharts } from "../runs/measurement-visualization";
+import { MeasurementChartPicker } from "../runs/MeasurementDataPreview";
 import { CaptureAnalyses } from "./CaptureAnalyses";
 import { selectCapture, useCaptureSelection, type CaptureSelection } from "./capture-location";
 
@@ -99,6 +100,10 @@ function CaptureRecording({
         }),
       ),
   });
+  const charts = useMemo(
+    () => (page.data ? planMeasurementCharts(page.data.items, page.data.dataset_schema) : []),
+    [page.data],
+  );
   return (
     <div className="space-y-3">
       <label>
@@ -131,6 +136,15 @@ function CaptureRecording({
           <MeasurementRecordTable
             table={measurementTable(page.data.items, page.data.dataset_schema)}
           />
+          {charts.length > 0 && (
+            <section aria-label="Charts for the current measurement page">
+              <p>
+                Charts show only this page ({page.data.items.length}{" "}
+                {page.data.items.length === 1 ? "record" : "records"}).
+              </p>
+              <MeasurementChartPicker charts={charts} />
+            </section>
+          )}
           <div className="flex gap-3">
             <button
               className={secondaryButton}
@@ -156,3 +170,4 @@ function CaptureRecording({
     </div>
   );
 }
+import { useMemo } from "react";

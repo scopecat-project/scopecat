@@ -4,6 +4,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, expect, it, vi } from "vitest";
 import { CaptureDetail } from "./CaptureDetail";
 
+vi.mock("../../ui/EChartRuntime", () => ({
+  EChartRuntime: ({ option }: { option: { series: { data: number[][] }[] } }) => (
+    <output data-testid="chart-values">
+      {JSON.stringify(option.series.map((series) => series.data))}
+    </output>
+  ),
+}));
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -76,8 +84,11 @@ it("keeps captures with the same run ID separate and requests retained selection
   const second = within(screen.getByTestId("second"));
   await first.findByText("11 V");
   await second.findByText("22 V");
+  expect((await first.findByTestId("chart-values")).textContent).toBe("[[[0,11]]]");
+  expect(first.getByText("Charts show only this page (1 record).")).toBeTruthy();
   fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
   await first.findByText("12 V");
+  expect(first.getByTestId("chart-values").textContent).toBe("[[[0,12]]]");
   expect(second.getByText("22 V")).toBeTruthy();
   expect(
     requests.some(
@@ -90,6 +101,7 @@ it("keeps captures with the same run ID separate and requests retained selection
   expect(first.getByRole("heading", { name: "first reference" })).toBeTruthy();
   fireEvent.click(first.getByRole("button", { name: "Next measurements" }));
   await first.findByText("111 V");
+  expect(first.getByTestId("chart-values").textContent).toBe("[[[0,111]]]");
   fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
   await first.findByText("12 V");
   act(() => window.history.back());

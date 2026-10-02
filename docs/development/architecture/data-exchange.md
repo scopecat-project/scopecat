@@ -219,7 +219,11 @@ captured analysis selection are distinct choices; a missing selection is an
 explicit error rather than a last-acquisition fallback. The table renderer and
 unit formatting are shared with the existing run view. Query identities include
 the capture identity so identical run IDs from different sources do not share data
-or selection state. Retained analyses reuse the existing publication view for
+or selection state. Current-page point charts also reuse the run view's schema
+planner, chart selector and renderer, with an explicit page-scope label. They
+update with acquisition/analysis selection and pagination; they are not whole-run
+summaries. Bounded captured waveform traces and semantic cross-page projections
+remain incomplete. Retained analyses reuse the existing publication view for
 facts, tables, figure previews, input references and execution evidence. Source
 run links navigate within the same capture. Artifact reads resolve the verified
 analysis record content hash and its subject-qualified payload owner, so repeated
