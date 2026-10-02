@@ -30,10 +30,8 @@ from scopecat.daemon.views import (
     MeasurementPreview,
     MeasurementSlice,
     MeasurementSliceQuery,
-    MeasurementTraceFailure,
     MeasurementTracePreview,
     MeasurementTracePreviewQuery,
-    MeasurementTraceSeries,
     ParameterProposalPage,
     ParameterProposalView,
     RunAdmissionView,
@@ -1195,72 +1193,17 @@ class RunService:
                     entity_selection=selection,
                 )
             projection = _project_trace_records(schema, records, query)
-        series = tuple(
-            MeasurementTraceSeries(
-                point_index=item.point_index,
-                logical_point_id=item.logical_point_id,
-                label=item.label,
-                entity_index=(
-                    item.entity_index
-                    if bound is None or item.entity_index is None
-                    else bound.target_to_schema[item.entity_index]
-                ),
-                entity=item.entity,
-                x=tuple(float(value) for value in item.x),
-                y=item.y,
-                source_sample_count=item.source_sample_count,
-                available_sample_count=item.available_sample_count,
-                unavailable_reasons=item.unavailable_reasons,
-                evidence=item.evidence,
-            )
-            for item in projection.series
-        )
-        failures = tuple(
-            MeasurementTraceFailure(
-                point_index=item.point_index,
-                logical_point_id=item.logical_point_id,
-                label=item.label,
-                entity_index=(
-                    item.entity_index
-                    if bound is None or item.entity_index is None
-                    else bound.target_to_schema[item.entity_index]
-                ),
-                entity=item.entity,
-                reasons=item.reasons,
-                evidence=item.evidence,
-            )
-            for item in projection.failures
-        )
         inspected_series_count = min(
             series_read_limit,
             len(point_indices) * projection.selected_entity_count,
         )
         selected_series_count = selected_point_count * projection.selected_entity_count
-        return MeasurementTracePreview(
-            fixed_axis_indices=dict(query.fixed_axis_indices),
-            dimension_id=projection.dimension_id,
-            recording_group_id=projection.recording_group_id,
-            coordinate_id=projection.coordinate_id,
-            observable_id=projection.observable_id,
-            coordinate_label=projection.coordinate_label,
-            observable_label=projection.observable_label,
-            coordinate_unit=projection.coordinate_unit,
-            observable_unit=projection.observable_unit,
-            entity_dimension_id=projection.entity_dimension_id,
-            entity_acquisition=projection.entity_acquisition,
-            layout=projection.layout,
-            value_mode=projection.value_mode,
-            value_unit=projection.value_unit,
-            downsampling=projection.downsampling,
-            series=series,
-            failures=failures,
+        return MeasurementTracePreview.from_projection(
+            projection,
+            fixed_axis_indices=query.fixed_axis_indices,
+            entity_indices=None if bound is None else bound.target_to_schema,
             selected_series_count=selected_series_count,
             inspected_series_count=inspected_series_count,
-            returned_series_count=len(series),
-            truncated_series=inspected_series_count < selected_series_count,
-            source_sample_count=projection.source_sample_count,
-            returned_sample_count=projection.returned_sample_count,
-            samples_reduced=projection.samples_reduced,
         )
 
     @contextmanager

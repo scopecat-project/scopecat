@@ -425,7 +425,7 @@ function tracePreviewStatus(
   return measurementTraceStatus(preview);
 }
 
-function TraceAvailabilityDetails({ preview }: { preview: MeasurementTracePreview }) {
+export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTracePreview }) {
   const incomplete = preview.series.filter(
     (series) => series.available_sample_count < series.source_sample_count,
   );
@@ -616,7 +616,7 @@ export function MeasurementChartPicker({ charts }: { charts: MeasurementChartPla
   );
 }
 
-function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
+export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
   const points = chart.series.flatMap((series) => series.points);
   const option = useMemo(() => measurementChartOption(chart), [chart]);
   const fixedCoordinates =

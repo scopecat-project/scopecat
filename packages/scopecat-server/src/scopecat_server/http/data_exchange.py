@@ -7,6 +7,10 @@ from zipfile import BadZipFile
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
+from scopecat.daemon.views import (
+    MeasurementTracePreview,
+    MeasurementTraceProjectionQuery,
+)
 from scopecat.data_exchange.models import (
     CaptureImportReceipt,
     CaptureRecordingPage,
@@ -113,6 +117,19 @@ def data_exchange_router(application: DaemonApplication) -> APIRouter:
     ) -> CaptureRecordingPage:
         return application.data_exchange.recording_page(
             content_hash, run_id, selection=selection, offset=offset, limit=limit
+        )
+
+    @router.post("/{content_hash}/runs/{run_id}/recording/traces")
+    def read_traces(
+        content_hash: str,
+        run_id: str,
+        query: MeasurementTraceProjectionQuery,
+        selection: Literal["acquired", "selected"] = "acquired",
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 1,
+    ) -> MeasurementTracePreview:
+        return application.data_exchange.recording_traces(
+            content_hash, run_id, query, selection=selection, offset=offset, limit=limit
         )
 
     return router

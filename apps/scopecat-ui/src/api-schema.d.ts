@@ -450,6 +450,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data/captures/{content_hash}/runs/{run_id}/recording/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Traces */
+        post: operations["read_traces_api_v1_data_captures__content_hash__runs__run_id__recording_traces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -7425,7 +7442,7 @@ export interface components {
         };
         /**
          * MeasurementTracePreviewQuery
-         * @description Select one bounded, response-ready point/entity-local trace preview.
+         * @description Select a bounded trace preview within an authored point-domain slice.
          */
         MeasurementTracePreviewQuery: {
             /** Coordinate Id */
@@ -7440,6 +7457,35 @@ export interface components {
             fixed_axis_indices?: {
                 [key: string]: number;
             };
+            /**
+             * Max Samples
+             * @default 4096
+             */
+            max_samples: number;
+            /**
+             * Max Series
+             * @default 32
+             */
+            max_series: number;
+            /** Observable Id */
+            observable_id?: string | null;
+            /** Recording Group Id */
+            recording_group_id?: string | null;
+            value_mode?: components["schemas"]["TraceValueMode"] | null;
+        };
+        /**
+         * MeasurementTraceProjectionQuery
+         * @description Select observable, entities and output budget within supplied records.
+         */
+        MeasurementTraceProjectionQuery: {
+            /** Coordinate Id */
+            coordinate_id?: string | null;
+            /** @default minmax */
+            downsampling: components["schemas"]["TraceDownsampling"];
+            /** Entities */
+            entities?: components["schemas"]["EntityRef"][] | null;
+            /** Entity Indices */
+            entity_indices?: number[] | null;
             /**
              * Max Samples
              * @default 4096
@@ -12302,6 +12348,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptureRecordingPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_traces_api_v1_data_captures__content_hash__runs__run_id__recording_traces_post: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                selection?: "acquired" | "selected";
+            };
+            header?: never;
+            path: {
+                content_hash: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementTraceProjectionQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementTracePreview"];
                 };
             };
             /** @description Validation Error */

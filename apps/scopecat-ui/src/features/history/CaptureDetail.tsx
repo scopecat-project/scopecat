@@ -5,6 +5,7 @@ import { MeasurementRecordTable } from "../runs/MeasurementRecordTable";
 import { measurementTable, planMeasurementCharts } from "../runs/measurement-visualization";
 import { MeasurementChartPicker } from "../runs/MeasurementDataPreview";
 import { CaptureAnalyses } from "./CaptureAnalyses";
+import { CaptureTraces } from "./CaptureTraces";
 import { selectCapture, useCaptureSelection, type CaptureSelection } from "./capture-location";
 
 export function CaptureDetail({ contentHash }: { contentHash: string }) {
@@ -135,6 +136,15 @@ function CaptureRecording({
           </p>
           <MeasurementRecordTable
             table={measurementTable(page.data.items, page.data.dataset_schema)}
+          />
+          <CaptureTraces
+            key={`${selection}:${offset}`}
+            contentHash={contentHash}
+            runId={runId}
+            selection={selection}
+            offset={offset}
+            records={page.data.items}
+            schema={page.data.dataset_schema}
           />
           {charts.length > 0 && (
             <section aria-label="Charts for the current measurement page">

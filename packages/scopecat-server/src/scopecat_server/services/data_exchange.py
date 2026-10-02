@@ -5,6 +5,10 @@ import sqlite3
 from pathlib import Path
 from typing import Literal, cast
 
+from scopecat.daemon.views import (
+    MeasurementTracePreview,
+    MeasurementTraceProjectionQuery,
+)
 from scopecat.data_exchange import ScientificExchange
 from scopecat.data_exchange.models import (
     CaptureImportReceipt,
@@ -12,7 +16,9 @@ from scopecat.data_exchange.models import (
     CaptureSummary,
     ScientificEvidence,
 )
+from scopecat.measurements.traces import project_measurement_trace_preview
 from scopecat.records.content import ContentEntry
+from scopecat.records.measurement import MeasurementDataset
 from scopecat.runs.refs import content_entry_ref
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
@@ -171,3 +177,42 @@ class DataExchangeService:
                 next_offset=following if following < count else None,
                 items=items,
             )
+
+    def recording_traces(
+        self,
+        content_hash: str,
+        run_id: str,
+        query: MeasurementTraceProjectionQuery,
+        *,
+        selection: Literal["acquired", "selected"],
+        offset: int,
+        limit: int,
+    ) -> MeasurementTracePreview:
+        page = self.recording_page(
+            content_hash, run_id, selection=selection, offset=offset, limit=limit
+        )
+        try:
+            projection = project_measurement_trace_preview(
+                MeasurementDataset(
+                    dataset_schema=page.dataset_schema, records=page.items
+                ),
+                query.observable_id,
+                coordinate=query.coordinate_id,
+                group=query.recording_group_id,
+                max_series=query.max_series,
+                max_samples=query.max_samples,
+                value_mode=query.value_mode,
+                downsampling=query.downsampling,
+                entity_indices=query.entity_indices,
+                entities=query.entities,
+            )
+        except ValueError as error:
+            raise BackendConflict(str(error)) from error
+        selected_count = len(page.items) * projection.selected_entity_count
+        return MeasurementTracePreview.from_projection(
+            projection,
+            selected_series_count=selected_count,
+            inspected_series_count=min(
+                query.max_series, query.max_samples // 2, selected_count
+            ),
+        )

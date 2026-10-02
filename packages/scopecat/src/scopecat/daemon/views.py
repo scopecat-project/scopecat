@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from base64 import b64decode
 from binascii import Error as BinasciiError
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -33,6 +34,7 @@ from scopecat.measurements.datasets import (
 )
 from scopecat.measurements.entity_selection import MeasurementEntitySelection
 from scopecat.measurements.traces import (
+    MeasurementTraceProjection,
     TraceDownsampling,
     TraceLayout,
     TraceValueMode,
@@ -683,15 +685,12 @@ class MeasurementSlice(_ViewModel):
     truncated: bool = False
 
 
-class MeasurementTracePreviewQuery(_ViewModel):
-    """Select one bounded, response-ready point/entity-local trace preview."""
+class MeasurementTraceProjectionQuery(_ViewModel):
+    """Select observable, entities and output budget within supplied records."""
 
     recording_group_id: Annotated[str, Field(min_length=1)] | None = None
     observable_id: Annotated[str, Field(min_length=1)] | None = None
     coordinate_id: Annotated[str, Field(min_length=1)] | None = None
-    fixed_axis_indices: dict[str, Annotated[int, Field(ge=0)]] = Field(
-        default_factory=dict
-    )
     entities: tuple[EntityRef, ...] | None = Field(
         default=None, min_length=1, max_length=MAX_MEASUREMENT_TRACE_SERIES
     )
@@ -712,13 +711,11 @@ class MeasurementTracePreviewQuery(_ViewModel):
     downsampling: TraceDownsampling = "minmax"
 
     @model_validator(mode="after")
-    def validate_selection(self) -> MeasurementTracePreviewQuery:
+    def validate_selection(self) -> MeasurementTraceProjectionQuery:
         if self.recording_group_id is None and self.observable_id is None:
             raise ValueError(
                 "trace preview requires a recording_group_id or observable_id"
             )
-        if any(not axis_id for axis_id in self.fixed_axis_indices):
-            raise ValueError("trace preview axis ids must be non-empty")
         if self.entities is not None:
             if self.entity_indices is not None:
                 raise ValueError(
@@ -731,6 +728,20 @@ class MeasurementTracePreviewQuery(_ViewModel):
             set(self.entity_indices)
         ):
             raise ValueError("trace preview entity indices must be unique")
+        return self
+
+
+class MeasurementTracePreviewQuery(MeasurementTraceProjectionQuery):
+    """Select a bounded trace preview within an authored point-domain slice."""
+
+    fixed_axis_indices: dict[str, Annotated[int, Field(ge=0)]] = Field(
+        default_factory=dict
+    )
+
+    @model_validator(mode="after")
+    def validate_axes(self) -> MeasurementTracePreviewQuery:
+        if any(not axis_id for axis_id in self.fixed_axis_indices):
+            raise ValueError("trace preview axis ids must be non-empty")
         return self
 
 
@@ -779,7 +790,8 @@ class MeasurementTraceFailure(_ViewModel):
 class MeasurementTracePreview(_ViewModel):
     """Bounded numeric series for one selected point/entity-local observable.
 
-    ``selected_series_count`` is the authored domain selection size. It does
+    ``selected_series_count`` is the selected domain or retained-record window size
+    multiplied by the selected entity count. It does
     not promise that every selected point is durable yet or has an available
     observable value; ``returned_series_count`` counts response series only.
     """
@@ -810,6 +822,77 @@ class MeasurementTracePreview(_ViewModel):
     source_sample_count: Annotated[int, Field(ge=0)]
     returned_sample_count: Annotated[int, Field(ge=0)]
     samples_reduced: bool = False
+
+    @classmethod
+    def from_projection(
+        cls,
+        projection: MeasurementTraceProjection,
+        *,
+        selected_series_count: int,
+        inspected_series_count: int,
+        fixed_axis_indices: Mapping[str, int] | None = None,
+        entity_indices: Sequence[int | None] | None = None,
+    ) -> MeasurementTracePreview:
+        def entity_index(index: int | None) -> int | None:
+            return (
+                index
+                if index is None or entity_indices is None
+                else entity_indices[index]
+            )
+
+        series = tuple(
+            MeasurementTraceSeries(
+                point_index=item.point_index,
+                logical_point_id=item.logical_point_id,
+                label=item.label,
+                entity_index=entity_index(item.entity_index),
+                entity=item.entity,
+                x=tuple(float(value) for value in item.x),
+                y=item.y,
+                source_sample_count=item.source_sample_count,
+                available_sample_count=item.available_sample_count,
+                unavailable_reasons=item.unavailable_reasons,
+                evidence=item.evidence,
+            )
+            for item in projection.series
+        )
+        return cls(
+            fixed_axis_indices=dict(fixed_axis_indices or {}),
+            dimension_id=projection.dimension_id,
+            recording_group_id=projection.recording_group_id,
+            coordinate_id=projection.coordinate_id,
+            observable_id=projection.observable_id,
+            coordinate_label=projection.coordinate_label,
+            observable_label=projection.observable_label,
+            coordinate_unit=projection.coordinate_unit,
+            observable_unit=projection.observable_unit,
+            entity_dimension_id=projection.entity_dimension_id,
+            entity_acquisition=projection.entity_acquisition,
+            layout=projection.layout,
+            value_mode=projection.value_mode,
+            value_unit=projection.value_unit,
+            downsampling=projection.downsampling,
+            series=series,
+            failures=tuple(
+                MeasurementTraceFailure(
+                    point_index=item.point_index,
+                    logical_point_id=item.logical_point_id,
+                    label=item.label,
+                    entity_index=entity_index(item.entity_index),
+                    entity=item.entity,
+                    reasons=item.reasons,
+                    evidence=item.evidence,
+                )
+                for item in projection.failures
+            ),
+            selected_series_count=selected_series_count,
+            inspected_series_count=inspected_series_count,
+            returned_series_count=len(series),
+            truncated_series=inspected_series_count < selected_series_count,
+            source_sample_count=projection.source_sample_count,
+            returned_sample_count=projection.returned_sample_count,
+            samples_reduced=projection.samples_reduced,
+        )
 
     @model_validator(mode="after")
     def validate_counts(self) -> MeasurementTracePreview:
@@ -873,6 +956,7 @@ __all__ = [
     "MeasurementSliceQuery",
     "MeasurementTracePreview",
     "MeasurementTracePreviewQuery",
+    "MeasurementTraceProjectionQuery",
     "MeasurementTraceSeries",
     "ParameterProposalPage",
     "ParameterProposalView",

@@ -29,11 +29,13 @@ from scopecat.records.analysis import (
 from scopecat.records.config import config_content_hash
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import (
+    MeasurementArray,
     MeasurementDatasetSchema,
     MeasurementDimension,
     MeasurementPointCloudPointDomain,
     MeasurementRecord,
     MeasurementScalar,
+    MeasurementUnavailable,
     MeasurementVariable,
 )
 from scopecat.records.measurement_recording import (
@@ -76,6 +78,122 @@ def _evidence() -> ScientificEvidence:
     return ScientificEvidence(
         source_project_id="source", roots=("portable",), runs=(run,)
     )
+
+
+def test_captured_traces_keep_selection_failures_and_sampling_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_activation(self: InstrumentBackendOwner) -> None:
+        pytest.fail("captured traces requested device capabilities")
+
+    monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
+    schema = MeasurementDatasetSchema(
+        dataset_id="raw-measurements",
+        point_domain=MeasurementPointCloudPointDomain(columns=()),
+        dimensions=(
+            MeasurementDimension(id="point", kind="point", size=2),
+            MeasurementDimension(id="sample", kind="sample", size=128),
+        ),
+        variables=(
+            MeasurementVariable(
+                id="signal",
+                role="observable",
+                dtype="float64",
+                dims=("point", "sample"),
+                unit="V",
+            ),
+        ),
+    )
+    records = (
+        *(
+            MeasurementRecord(
+                run_id="portable",
+                point_index=0,
+                coordinates={},
+                observables={
+                    "signal": MeasurementArray.create(
+                        dtype="float64",
+                        unit="V",
+                        values=[peak if i == 64 else 0.0 for i in range(128)],
+                    )
+                },
+            )
+            for peak in (100.0, 200.0)
+        ),
+        MeasurementRecord(
+            run_id="portable",
+            point_index=1,
+            coordinates={},
+            observables={
+                "signal": MeasurementUnavailable.create(
+                    reason="missing",
+                    dtype="float64",
+                    unit="V",
+                    shape=(128,),
+                    metadata={},
+                )
+            },
+        ),
+    )
+    header = MeasurementDatasetHeader(
+        run_id="portable",
+        recording_contract_fingerprint="test",
+        dataset_schema=schema,
+        expected_record_count=2,
+        record_count_limit=2,
+    )
+    recording = tmp_path / "recording.scopecat"
+    write_measurement_snapshot(
+        recording,
+        header,
+        tuple(
+            MeasurementDatasetAppend(
+                run_id="portable",
+                header_content_hash=header.content_hash,
+                acquisition_start=index,
+                records=(record,),
+            )
+            for index, record in enumerate(records)
+        ),
+        projection=(
+            RecordSelection(point_index=0, acquisition_index=1),
+            RecordSelection(point_index=1, acquisition_index=2),
+        ),
+    )
+    source = tmp_path / "traces.scopecat"
+    write_scientific_exchange(source, _evidence(), {"portable": recording})
+    with (
+        LocalDaemonRuntime(tmp_path / "application") as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        imported = client.post(
+            "/api/v1/data/captures",
+            content=source.read_bytes(),
+            headers={"content-type": "application/octet-stream"},
+        )
+        assert imported.status_code == 200, imported.text
+        capture_hash = imported.json()["capture"]["content_hash"]
+        url = f"/api/v1/data/captures/{capture_hash}/runs/portable/recording/traces"
+        query = {"observable_id": "signal", "max_samples": 8}
+        for selection, peak in (("acquired", 100), ("selected", 200)):
+            response = client.post(url, params={"selection": selection}, json=query)
+            assert response.status_code == 200, response.text
+            preview = response.json()
+            assert preview["source_sample_count"] == 128
+            assert preview["returned_sample_count"] <= 8
+            assert preview["samples_reduced"] is True
+            assert max(preview["series"][0]["y"]) == peak
+        failed = client.post(url, params={"offset": 2}, json=query).json()
+        assert failed["series"] == []
+        assert failed["failures"][0]["reasons"] == ["missing"]
+        limited = client.post(
+            url, params={"limit": 3}, json={**query, "max_series": 1}
+        ).json()
+        assert limited["selected_series_count"] == 3
+        assert limited["inspected_series_count"] == 1
+        assert limited["truncated_series"] is True
+        assert client.post(url, json={"observable_id": "unknown"}).status_code == 409
+        assert client.post(url, json={**query, "max_samples": 1}).status_code == 422
 
 
 def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -> None:

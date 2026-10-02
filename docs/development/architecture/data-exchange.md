@@ -222,8 +222,18 @@ the capture identity so identical run IDs from different sources do not share da
 or selection state. Current-page point charts also reuse the run view's schema
 planner, chart selector and renderer, with an explicit page-scope label. They
 update with acquisition/analysis selection and pagination; they are not whole-run
-summaries. Bounded captured waveform traces and semantic cross-page projections
-remain incomplete. Retained analyses reuse the existing publication view for
+summaries. Captured waveforms now use the ordinary bounded trace projector and
+preview model, including min/max sampling, entity selection and unavailable-data
+evidence. The UI selects a record by its acquisition or retained-selection offset
+so repeated acquisitions of the same point remain separately inspectable. The
+trace read never materializes the entire recording or requests device capability.
+Local HTTP checks cover retry selection, a narrow peak under a sample budget,
+missing values and series truncation; frontend checks cover record/entity choice
+and clearing stale plots on errors. The record-table endpoint still transfers
+full array values in its bounded record page; trace-response limits alone do not
+qualify the whole page for large waveforms. A bounded table presentation and
+semantic cross-page projections remain incomplete.
+Retained analyses reuse the existing publication view for
 facts, tables, figure previews, input references and execution evidence. Source
 run links navigate within the same capture. Artifact reads resolve the verified
 analysis record content hash and its subject-qualified payload owner, so repeated
