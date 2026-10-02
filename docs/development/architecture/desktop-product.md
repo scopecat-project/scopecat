@@ -148,6 +148,24 @@ interaction only; two-window comparisons, full native export, zoom and Windows
 qualification are still outstanding. The CSS optimizer warns about the standard
 `::highlight` selector but preserves it; the packaged Mac renderer displayed it.
 
+### Packaged Mac save check (2026-10-03)
+
+Native Save cancellation returned to the same data page without claiming success.
+An attempted copy exposed a concrete host mismatch: Cocoa SAVE returns a path
+string, whereas the bridge assumed a tuple and selected its first character.
+That attempted write to `/` failed visibly and left the application usable.
+The common save bridge now accepts both host return forms; local regression tests
+cover cancellation and exact destinations for capture copies and run exports.
+
+A rebuilt isolated Mac package saved `Alpha-native-copy.scopecat` to the chosen
+directory and displayed the complete destination. The result matched the original
+archive byte for byte and reopened through `scopecat.open_capture`. The retained
+external analysis displayed the `Alpha` fact, its four-row table and figure entry.
+Its `Alpha.txt` attachment saved through the native dialog, displayed the saved
+path, and contained the exact expected text. This covers capture copy and analysis
+attachment saving on Mac; native current-run export, Windows saving and the full
+two-window journey remain separate outstanding checks.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

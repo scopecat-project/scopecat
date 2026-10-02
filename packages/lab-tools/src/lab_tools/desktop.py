@@ -135,7 +135,8 @@ class DesktopAPI:
             )
             if not selected:
                 return None
-            destination = Path(selected[0])
+            # Cocoa SAVE returns one string; other hosts return a path tuple.
+            destination = Path(selected if isinstance(selected, str) else selected[0])
             download(base_url, destination)
             return str(destination)
 

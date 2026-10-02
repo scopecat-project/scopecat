@@ -88,7 +88,10 @@ def test_native_save_failure_preserves_existing_file(
     assert sorted(tmp_path.iterdir()) == [target]
 
 
-def test_native_dialog_cancel_does_not_transfer_or_restart(tmp_path, monkeypatch):
+@pytest.mark.parametrize("selection_type", [str, tuple], ids=["cocoa", "path-tuple"])
+def test_native_dialog_cancel_does_not_transfer_or_restart(
+    tmp_path, monkeypatch, selection_type
+):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())
     session.connected("http://localhost:1234")
@@ -105,7 +108,9 @@ def test_native_dialog_cancel_does_not_transfer_or_restart(tmp_path, monkeypatch
     download.assert_not_called()
     export.assert_not_called()
     target = tmp_path / "chosen.scopecat"
-    window.create_file_dialog.return_value = (str(target),)
+    window.create_file_dialog.return_value = (
+        str(target) if selection_type is str else (str(target),)
+    )
     assert api.save_capture(HASH) == str(target)
     download.assert_called_once_with("http://localhost:1234", HASH, Path(target))
     assert api.export_run("run") == str(target)
