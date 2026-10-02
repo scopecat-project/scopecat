@@ -22,7 +22,7 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.author_revision import AuthorRevisionBundle
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
-from scopecat.records.content import ContentEntry
+from scopecat.records.content import ContentEntry, Sha256ContentHash
 from scopecat.records.experiment_plan import ExperimentPlanRevision
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.run import RunSnapshot
@@ -31,6 +31,19 @@ from scopecat.records.sample import SampleRevision
 from scopecat.records.setup import SetupDefinitionRevision, SetupRevision
 from scopecat.records.target_catalog import TargetRevision
 from scopecat.runs.refs import record_content_ref
+
+
+class CaptureSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    content_hash: Sha256ContentHash
+    source_project_id: str
+    roots: tuple[str, ...]
+
+
+class CaptureImportReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    capture: CaptureSummary
+    created: bool
 
 
 class RunEvidence(BaseModel):

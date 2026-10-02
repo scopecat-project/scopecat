@@ -187,9 +187,17 @@ local device bindings. Repacked identical archives reuse the retained capture;
 overlapping exports compare their shared runs, including recording and payload
 identities, before committing any import rows. Different content for an existing
 source/run is an explicit conflict. Current-format backup verification includes
-the imported archive references. The application import command, browsing views,
-external-analysis provenance and full scientific-reference validation are still
-outstanding; this storage operation is not the completed user workflow.
+the imported archive references.
+
+The unified application now exposes streamed file upload, retained-capture listing,
+evidence reading and verified archive download under `/api/v1/data/captures`.
+Uploads accept file bytes, not server filesystem paths; invalid files, identity
+conflicts and oversized uploads produce explicit errors without adding receipts.
+HTTP integration checks prohibit requesting device capabilities throughout the
+import/read/download journey. This establishes the application API boundary, not
+the completed desktop file workflow. Browsing views, native file commands,
+external-analysis provenance and full scientific-reference validation remain
+outstanding.
 
 During PR 2 development, run focused checks locally; trigger CI after the complete
 implementation and local self-review. The current data/evidence checks are:
@@ -219,7 +227,9 @@ These are data-layer checks, not substitutes for the complete desktop journey.
    the exchange contract. Do not silently turn absent provenance into empty data.
 2. Import with identity/content conflict detection and idempotent repeated import;
    expose independent Python analysis and retain external-analysis provenance.
-3. Provide a data-only application entry without experiment runtime preparation.
+3. Open portable data in the unified application without preparing device or
+   author execution environments. The application backend may serve both data
+   access and task management; do not create a separate viewer entry mode.
    Split application commands from per-window navigation, drafts and selection.
 4. Complete the bounded two-window journey on both platforms and record the shell
    choice. The current single-window prototype is not multi-window acceptance.

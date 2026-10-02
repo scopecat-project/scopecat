@@ -364,6 +364,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Captures */
+        get: operations["list_captures_api_v1_data_captures_get"];
+        put?: never;
+        /** Import Capture */
+        post: operations["import_capture_api_v1_data_captures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Evidence */
+        get: operations["read_evidence_api_v1_data_captures__content_hash__evidence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Capture */
+        get: operations["download_capture_api_v1_data_captures__content_hash__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -2467,6 +2519,21 @@ export interface components {
             output_id: components["schemas"]["_NonEmptyText"];
         };
         /**
+         * AnalysisEvidence
+         * @description An exact analysis publication and the index of its retained outputs.
+         */
+        AnalysisEvidence: {
+            /** Contents */
+            contents: components["schemas"]["ContentEntry"][];
+            entry: components["schemas"]["ContentEntry"];
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            record: components["schemas"]["AnalysisRecord"];
+        };
+        /**
          * AnalysisExecution
          * @description Optional execution evidence retained by an analysis publication.
          */
@@ -2907,6 +2974,46 @@ export interface components {
             expected_generation: number;
             /** Operation Id */
             operation_id: string;
+        };
+        /** AuthorRevisionBundle */
+        AuthorRevisionBundle: {
+            /** Files */
+            files: {
+                [key: string]: string;
+            };
+            manifest: components["schemas"]["AuthorRevisionManifest"];
+        };
+        /**
+         * AuthorRevisionManifest
+         * @description Local source closure plus the external environment required for recovery.
+         *
+         *     Installed distributions are identified, not archived. Recovery requires this
+         *     same environment; a manifest is not a hermetic environment image.
+         */
+        AuthorRevisionManifest: {
+            /** Files */
+            files: {
+                [key: string]: components["schemas"]["Sha256ContentHash"];
+            };
+            /** Import Packages */
+            import_packages: {
+                [key: string]: string;
+            };
+            /** Installed Authors */
+            installed_authors?: {
+                [key: string]: components["schemas"]["InstalledAuthorPackage"];
+            };
+            maintenance_hash: components["schemas"]["Sha256ContentHash"];
+            /** Packages */
+            packages: {
+                [key: string]: string;
+            };
+            /** Python */
+            python: string;
+            /** Refresh Roots */
+            refresh_roots: string[];
+            /** Source Roots */
+            source_roots: string[];
         };
         /** AuthorRevisionRef */
         AuthorRevisionRef: {
@@ -3406,6 +3513,20 @@ export interface components {
             blocked_by: string[];
             /** Status */
             status: components["schemas"]["CheckStatus"] | "blocked";
+        };
+        /** CaptureImportReceipt */
+        CaptureImportReceipt: {
+            capture: components["schemas"]["CaptureSummary"];
+            /** Created */
+            created: boolean;
+        };
+        /** CaptureSummary */
+        CaptureSummary: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Roots */
+            roots: string[];
+            /** Source Project Id */
+            source_project_id: string;
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {
@@ -4314,6 +4435,14 @@ export interface components {
         };
         "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        /**
+         * ConfigurationEvidence
+         * @description One retained registry entry and its effective content, without activation.
+         */
+        ConfigurationEvidence: {
+            configuration: components["schemas"]["ConfigProfileSnapshot"];
+            entry: components["schemas"]["ConfigRegistryEntry"];
+        };
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -5381,6 +5510,52 @@ export interface components {
             samples: components["schemas"]["SampleBinding"][];
         };
         /**
+         * InputRevisionEvidence
+         * @description Exact input revisions; contains no active heads or device registrations.
+         */
+        InputRevisionEvidence: {
+            /**
+             * Authors
+             * @default []
+             */
+            authors: components["schemas"]["AuthorRevisionBundle"][];
+            /**
+             * Configurations
+             * @default []
+             */
+            configurations: components["schemas"]["ConfigurationEvidence"][];
+            /**
+             * Parameters
+             * @default []
+             */
+            parameters: components["schemas"]["ParameterRevision"][];
+            /**
+             * Plans
+             * @default []
+             */
+            plans: components["schemas"]["ExperimentPlanRevision"][];
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleRevision"][];
+            /**
+             * Setup Definitions
+             * @default []
+             */
+            setup_definitions: components["schemas"]["SetupDefinitionRevision"][];
+            /**
+             * Setups
+             * @default []
+             */
+            setups: components["schemas"]["SetupRevision"][];
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["TargetRevision"][];
+        };
+        /**
          * InsertParameterRows
          * @description Append rows to a table-shaped parameter.
          */
@@ -5411,6 +5586,17 @@ export interface components {
             rows: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
             }[];
+        };
+        /**
+         * InstalledAuthorPackage
+         * @description Installed module tree identity; deployment must preserve these exact bytes.
+         */
+        InstalledAuthorPackage: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Distribution */
+            distribution: string;
+            /** Version */
+            version: string;
         };
         /**
          * InstrumentAcquisitionEvent
@@ -5996,6 +6182,15 @@ export interface components {
             target: components["schemas"]["_NonEmptyText"];
             /** Title */
             title?: string | null;
+        };
+        /**
+         * InterpretationEvidence
+         * @description A retained judgment and its procedure context, with no execution authority.
+         */
+        InterpretationEvidence: {
+            procedure: components["schemas"]["ProcedureRun"];
+            reference: components["schemas"]["AnalysisInterpretationReference"];
+            step: components["schemas"]["ProcedureStepAttempt"];
         };
         /**
          * InterpretationOutputRef
@@ -9297,6 +9492,30 @@ export interface components {
             values: components["schemas"]["RunPointCoordinateValue"][];
         };
         /**
+         * RunEvidence
+         * @description A run's accepted intent, effective configuration and retained content index.
+         *
+         *     Configuration is historical evidence: its connection descriptions are not
+         *     registrations or authorization to operate devices on the receiving machine.
+         *     Keep the original payload intact so its accepted hash remains checkable.
+         *     Referenced revisions and content bytes belong to the surrounding exchange.
+         */
+        RunEvidence: {
+            /**
+             * Codec
+             * @default scopecat.run-evidence.v1
+             * @constant
+             */
+            codec: "scopecat.run-evidence.v1";
+            configuration: components["schemas"]["ConfigProfileSnapshot"];
+            /** Contents */
+            contents: components["schemas"]["ContentEntry"][];
+            request: components["schemas"]["RunRequest-Output"];
+            snapshot: components["schemas"]["RunSnapshot"];
+            /** Source Project Id */
+            source_project_id: string;
+        };
+        /**
          * RunExecutionSegment
          * @description One immutable interval of continuous executor ownership within a run.
          */
@@ -10191,6 +10410,29 @@ export interface components {
              */
             shape: "scalar";
             value: components["schemas"]["ParameterAtomValue"];
+        };
+        /**
+         * ScientificEvidence
+         * @description Scientific documents in one captured source-project namespace.
+         */
+        ScientificEvidence: {
+            /**
+             * Analyses
+             * @default []
+             */
+            analyses: components["schemas"]["AnalysisEvidence"][];
+            inputs?: components["schemas"]["InputRevisionEvidence"];
+            /**
+             * Interpretations
+             * @default []
+             */
+            interpretations: components["schemas"]["InterpretationEvidence"][];
+            /** Roots */
+            roots: string[];
+            /** Runs */
+            runs: components["schemas"]["RunEvidence"][];
+            /** Source Project Id */
+            source_project_id: string;
         };
         /** ScientificSelection */
         "ScientificSelection-Input": {
@@ -11671,6 +11913,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataCleanupPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_captures_api_v1_data_captures_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_capture_api_v1_data_captures_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureImportReceipt"];
+                };
+            };
+        };
+    };
+    read_evidence_api_v1_data_captures__content_hash__evidence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScientificEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_capture_api_v1_data_captures__content_hash__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

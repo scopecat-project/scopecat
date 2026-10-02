@@ -14,6 +14,10 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from .project_store import SQLiteProjectStore
 
 
+class CaptureConflict(ValueError):
+    """A source-qualified run already has a different retained capture."""
+
+
 @dataclass(frozen=True)
 class ImportedCapture:
     path: Path
@@ -66,7 +70,7 @@ def import_scientific_capture(
                     ).fetchone(),
                 )
                 if previous is not None and previous[0] != content_hash:
-                    raise ValueError(
+                    raise CaptureConflict(
                         f"imported run has different content: {project}/{run_id}; "
                         "the earlier capture was retained"
                     )
