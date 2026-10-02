@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import cast
 
 from scopecat.measurements.archive import RecordSelection, write_measurement_snapshot
-from scopecat.measurements.recording_arrow import decode_measurement_append
 from scopecat.records.measurement_recording import (
     MeasurementDatasetAppend,
     MeasurementDatasetHeader,
@@ -44,6 +43,8 @@ def export_measurement_snapshot_in_transaction(
     The caller owns the read transaction for this entire synchronous operation.
     No second connection may select a newer header, append or analysis projection.
     """
+    from scopecat.measurements.recording_arrow import decode_measurement_append
+
     objects = ImmutableObjectStore(resource_directory(runs.objects, "run", run_id))
     row = cast(
         "sqlite3.Row | None",

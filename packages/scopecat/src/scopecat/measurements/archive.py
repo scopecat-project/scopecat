@@ -18,10 +18,6 @@ from zipfile import ZIP_STORED, ZipFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
-from scopecat.measurements.recording_arrow import (
-    decode_measurement_append,
-    encode_measurement_append,
-)
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.measurement import MeasurementRecord
 from scopecat.records.measurement_recording import (
@@ -104,6 +100,11 @@ def write_measurement_snapshot(
     The caller supplies a consistent captured append sequence. Incomplete
     recordings remain incomplete; this does not assert successful run completion.
     """
+    from scopecat.measurements.recording_arrow import (
+        decode_measurement_append,
+        encode_measurement_append,
+    )
+
     with tempfile.NamedTemporaryFile(
         prefix=".measurement-", dir=destination.parent, delete=False
     ) as staging:
@@ -292,6 +293,8 @@ class MeasurementSnapshot:
         return sum(chunk.count for chunk in self._manifest.projection)
 
     def _append(self, index: int) -> MeasurementDatasetAppend:
+        from scopecat.measurements.recording_arrow import decode_measurement_append
+
         chunk = self._manifest.chunks[index]
         content = self._archive.read(self._prefix + _name(index))
         if sha256_content_hash(content) != chunk.digest:

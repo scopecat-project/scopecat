@@ -11,9 +11,11 @@ source folders and data locations. **Devices and drivers** maintains shared devi
    Choose your code, setup and parameters in the current task.
 3. Save edits and refresh author code. This captures source without rebuilding
    the application or installing dependencies.
-4. Close Scopecat when finished. If it is idle, it exits directly. With unfinished
-   work, choose to wait, stop the work and quit, or continue in the background.
-   Background mode retains a menu-bar/system-tray entry with **Open** and **Quit**.
+4. Closing the last window keeps Scopecat in the background on both Mac and Windows,
+   with a menu-bar/system-tray entry for **Open** and **Quit**. Closing an additional
+   window only closes that view. Choose **Quit** to exit the application: if idle,
+   it exits directly; with unfinished work, choose to wait, stop the work and quit,
+   or continue in the background.
    An idle Python session alone does not prevent quitting.
 
 Reopening restores access to retained records; it never repeats a measurement.

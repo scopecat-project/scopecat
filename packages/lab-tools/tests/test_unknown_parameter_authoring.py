@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import scopecat as sc
+from lab_teaching.application import initial_setup
 from lab_teaching.project import create_project
 from scopecat.kernel.errors import CheckFailed
 from scopecat.records.run import ParameterRunConfigSource
@@ -43,6 +44,7 @@ def test_new_table_unknowns_freeze_and_structural_history(
     try:
         with project.connect() as lab:
             assert lab.config.registry().entries == ()
+            setup = lab.setup.import_recipe(initial_setup(), name="probe-bench")
             empty = lab.parameters.save(
                 name="author-empty",
                 catalog=sc.parameter_catalog("author"),
@@ -61,7 +63,7 @@ def test_new_table_unknowns_freeze_and_structural_history(
                 ].duration
                 == 40
             )
-            run = lab.run(duration_probe.build(), config=params.freeze())
+            run = lab.run(duration_probe.build(), config=params.freeze(setup=setup))
             assert run.status == "completed"
             original = run.snapshot
             assert isinstance(original.config_source, ParameterRunConfigSource)
@@ -72,14 +74,16 @@ def test_new_table_unknowns_freeze_and_structural_history(
             assert params["probes"]["q0"]["pi_amplitude"] is None
             assert params["probes"]["q1"]["pi_amplitude"] is None
             assert (
-                lab.run(duration_probe.build(), config=params.freeze()).status
+                lab.run(
+                    duration_probe.build(), config=params.freeze(setup=setup)
+                ).status
                 == "completed"
             )
             amplitudes = params[ProbeParameters]
             with pytest.raises(CheckFailed, match=r"probes.*q0.*pi_amplitude.*unknown"):
-                lab.preview(pi_probe.build(), config=params.freeze())
+                lab.preview(pi_probe.build(), config=params.freeze(setup=setup))
             amplitudes["q0"].pi_amplitude = 0.2
-            frozen = params.freeze()
+            frozen = params.freeze(setup=setup)
             prepared = lab.prepare(pi_probe.build(), config=frozen)
             assert prepared.preview().point_count == 1
             amplitudes["q0"].pi_amplitude = None
