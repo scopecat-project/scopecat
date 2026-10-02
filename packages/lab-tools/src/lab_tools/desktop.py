@@ -397,7 +397,16 @@ def run(
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
         try:
-            webview.start(supervise)
+            # WinForms otherwise extracts pythonw.exe's icon, not the native
+            # launcher's icon. Tray artwork is configured independently above.
+            webview.start(
+                supervise,
+                icon=(
+                    str(Path(__file__).with_name("icons") / "Scopecat.ico")
+                    if sys.platform == "win32"
+                    else None
+                ),
+            )
         finally:
             if stop_tray is not None:
                 stop_tray()
