@@ -102,6 +102,24 @@ navigation commands target the focused window, and Back stops at its application
 entry rather than returning to the host's startup page. This is automated evidence;
 native multi-window navigation still needs platform qualification.
 
+### Find and zoom implementation evidence (2026-10-03)
+
+The focused window now receives View-menu Find and Zoom commands. Cmd/Ctrl-F
+opens a window-owned find bar; Enter/Shift-Enter, Cmd/Ctrl-G and F3 move through
+matches. Escape closes the bar and restores the previous control's focus.
+Search uses the WebView text engine with wraparound and explicit no-match feedback.
+Cmd/Ctrl-Plus, Minus and 0 share the menu's zoom state (50–200%, reset to 100%).
+Ordinary browser access leaves these shortcuts to the browser.
+
+Local frontend checks cover menu events, keyboard routing, browser non-interference,
+focus restoration and zoom limits. Native window tests check focused-window
+dispatch. Hidden isolated Mac WebViews confirmed `window.find` exists, searches
+return true/false for present/absent text, and CSS zoom is supported. Both probes
+exited without starting the application backend. These checks do not establish
+visible search highlighting, native accelerator behavior, chart clarity under zoom,
+or independent zoom across real windows. Those still require the packaged Mac and
+Windows journey; they are not grounds for a final shell decision.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

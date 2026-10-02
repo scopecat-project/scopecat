@@ -21,6 +21,8 @@ import { LaunchDraftProvider, useLaunchDraft } from "./features/launch/LaunchDra
 import { RunsWorkspace } from "./features/runs/RunsWorkspace";
 import { DesktopSession } from "./features/application/DesktopSession";
 import { DesktopFiles } from "./features/application/DesktopFiles";
+import { DesktopZoom } from "./features/application/DesktopZoom";
+import { DesktopFind } from "./features/application/DesktopFind";
 import { titleCase } from "./lib/presentation";
 import { navigate, navigateBack, navigateForward, type NavigationOptions } from "./lib/navigation";
 import { classes, iconButton } from "./ui/styles";
@@ -574,6 +576,8 @@ export default function App() {
       </main>
       <DesktopSession />
       <DesktopFiles />
+      <DesktopZoom />
+      <DesktopFind />
     </div>
   );
 }

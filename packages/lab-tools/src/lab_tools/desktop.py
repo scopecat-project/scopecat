@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from filelock import FileLock, Timeout
@@ -430,6 +430,16 @@ class DesktopWindows:
             return
         window.run_js("window.dispatchEvent(new Event('scopecat:open-file'));")
 
+    def zoom(self, command: Literal["in", "out", "reset"]) -> None:
+        self._command_window().run_js(
+            f"window.dispatchEvent(new Event('scopecat:zoom-{command}'));"
+        )
+
+    def find(self) -> None:
+        self._command_window().run_js(
+            "window.dispatchEvent(new Event('scopecat:find'));"
+        )
+
     def hide(self) -> None:
         with self._lock:
             views = tuple(self._views)
@@ -558,6 +568,7 @@ def run(
             session.finish_exit(windows.destroy)
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
+        modifier = "⌘" if sys.platform == "darwin" else "Ctrl+"
         try:
             # WinForms otherwise extracts pythonw.exe's icon, not the native
             # launcher's icon. Tray artwork is configured independently above.
@@ -567,8 +578,24 @@ def run(
                     Menu(
                         "文件",
                         [
-                            MenuAction("打开文件…", windows.open_file),
+                            MenuAction(f"打开文件…（{modifier}O）", windows.open_file),
                             MenuAction("新建窗口", new_window_from_menu),
+                        ],
+                    ),
+                    Menu(
+                        "视图",
+                        [
+                            MenuAction(f"查找…（{modifier}F）", windows.find),
+                            MenuAction(
+                                f"放大（{modifier}+）", lambda: windows.zoom("in")
+                            ),
+                            MenuAction(
+                                f"缩小（{modifier}-）", lambda: windows.zoom("out")
+                            ),
+                            MenuAction(
+                                f"实际大小 100%（{modifier}0）",
+                                lambda: windows.zoom("reset"),
+                            ),
                         ],
                     ),
                     Menu(

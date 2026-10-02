@@ -54,6 +54,14 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     first.window.run_js.assert_called_with(
         "window.dispatchEvent(new Event('scopecat:forward'));"
     )
+    windows.zoom("in")
+    first.window.run_js.assert_called_with(
+        "window.dispatchEvent(new Event('scopecat:zoom-in'));"
+    )
+    windows.find()
+    first.window.run_js.assert_called_with(
+        "window.dispatchEvent(new Event('scopecat:find'));"
+    )
     second.window.run_js.assert_not_called()
     prepare.assert_called_once()
     runtime.start.assert_called_once()
