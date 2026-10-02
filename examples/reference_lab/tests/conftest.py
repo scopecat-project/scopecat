@@ -171,7 +171,7 @@ def select_reference_source(
         for name in tuple(sys.modules):
             if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}:
                 del sys.modules[name]
-        monkeypatch.syspath_prepend(str(root / "src"))
+        monkeypatch.setattr(sys, "path", [str(root / "src"), *sys.path])
 
     return select
 
