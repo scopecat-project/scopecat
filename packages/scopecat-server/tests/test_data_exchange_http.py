@@ -50,6 +50,7 @@ from scopecat.runs.refs import content_entry_ref
 from scopecat_testkit.authoring import load_config
 
 from scopecat_server.http import data_exchange
+from scopecat_server.instruments.backend import InstrumentBackendUnavailable
 from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.runtime import LocalDaemonRuntime
 
@@ -188,13 +189,19 @@ def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -
             assert client.get(url + "-missing").status_code == 404
 
 
+@pytest.mark.parametrize("failed_driver", [False, True], ids=["unused", "failed"])
 def test_capture_http_without_device_activation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_driver: bool
 ) -> None:
     def unexpected_activation(self: InstrumentBackendOwner) -> None:
         pytest.fail("data access requested device capabilities")
 
-    monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
+    def unavailable(*_args: object) -> None:
+        raise InstrumentBackendUnavailable("vendor environment unavailable")
+
+    monkeypatch.setattr("scopecat_server.runtime.restore_driver_source", unavailable)
+    if not failed_driver:
+        monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
     evidence = _evidence()
     run = evidence.runs[0]
     source = tmp_path / "capture.scopecat"
@@ -270,6 +277,12 @@ def test_capture_http_without_device_activation(
         LocalDaemonRuntime(tmp_path / "application") as application,
         TestClient(application.app()) as client,
     ):
+        if failed_driver:
+            with pytest.raises(
+                InstrumentBackendUnavailable, match="vendor environment"
+            ):
+                application.application.instruments.driver_catalog()
+        monkeypatch.setattr(InstrumentBackendOwner, "get", unexpected_activation)
         url = "/api/v1/data/captures"
         headers = {"content-type": "application/octet-stream"}
         uploaded = client.post(url, content=content, headers=headers)

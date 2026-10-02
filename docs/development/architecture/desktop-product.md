@@ -32,6 +32,13 @@ execution capabilities. Open File and experimental work belong in the same
 interface, not separate data-viewer and workbench entry modes. Independent Python
 readers remain usable without starting the application.
 
+Qualify this as capability independence, not absence of a backend process:
+opening a capture may start the ordinary application backend. After a device
+activation fails, the same application must still import, read and export data
+without retrying that activation. Process separation needs a concrete environment,
+fault-isolation or task-lifetime requirement; historical daemon boundaries alone
+do not justify separate product modes or duplicate data APIs.
+
 Installation qualification checks the application package, not a live driver
 catalog. Driver availability and failures belong to the device capability and
 must not become a prerequisite for opening the application. In particular,

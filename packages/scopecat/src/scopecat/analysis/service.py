@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Literal, NoReturn
 
 from scopecat.analysis.dataset_wire import DerivedDatasetSchema
@@ -318,7 +319,9 @@ def prepare_analysis(
         validate_interpretation=validate_interpretation,
     )
     analysis_views = _prepare_analysis_views(
-        outputs, inputs=inputs, services=services, repository=None
+        outputs,
+        inputs=inputs,
+        read_dataset=partial(_read_figure_dataset, services, None),
     )
     output_proposals = tuple(
         output.content
@@ -513,7 +516,9 @@ def prepare_project_analysis(
         inputs=inputs,
     )
     analysis_views = _prepare_analysis_views(
-        outputs, inputs=inputs, services=services, repository=repository
+        outputs,
+        inputs=inputs,
+        read_dataset=partial(_read_figure_dataset, services, repository),
     )
     publication_hash = _analysis_publication_hash(
         title=title,
@@ -1496,8 +1501,10 @@ def _prepare_analysis_views(
     outputs: Sequence[AnalysisOutput],
     *,
     inputs: Sequence[AnalysisInput],
-    services: ProjectStateServices,
-    repository: AnalysisRepository | None,
+    read_dataset: Callable[
+        [AnalysisPublishedDatasetViewSource, AnalysisFigureProjection, int],
+        tuple[DerivedDataset, int],
+    ],
 ) -> Mapping[str, AnalysisTableView | AnalysisFigureView]:
     datasets = {
         output.id: output.content
@@ -1548,9 +1555,7 @@ def _prepare_analysis_views(
                                 "published figure source must match "
                                 "a frozen analysis dataset input"
                             )
-                        dataset, total_points = _read_figure_dataset(
-                            services,
-                            repository,
+                        dataset, total_points = read_dataset(
                             source,
                             layer.projection,
                             figure_layer_budget(
