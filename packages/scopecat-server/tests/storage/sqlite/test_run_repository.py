@@ -337,6 +337,52 @@ def test_structured_run_inputs_bind_source_and_snapshot_hashes(
     )
 
 
+def test_run_evidence_captures_accepted_inputs_without_execution(
+    tmp_path: Path,
+) -> None:
+    from scopecat.records.exchange import RunEvidence
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+
+    repository = _repository(tmp_path)
+    skeleton = _structured_run_inputs("run-evidence", with_source=False)
+    repository.write_run_skeleton(skeleton)
+    with repository.sqlite.read_transaction() as connection:
+        evidence = capture_run_evidence(
+            connection, repository, skeleton.snapshot.run_id
+        )
+    restored = RunEvidence.model_validate_json(evidence.model_dump_json())
+    assert restored.snapshot == skeleton.snapshot
+    assert restored.request == skeleton.request
+    assert restored.configuration == skeleton.config
+    assert restored.contents == ()
+    assert restored.source_project_id
+    changed = restored.model_dump(mode="json")
+    changed["configuration"]["id"] = "different-config"
+    with pytest.raises(ValueError, match="configuration differs"):
+        RunEvidence.model_validate(changed)
+
+
+def test_run_evidence_requires_the_original_request(tmp_path: Path) -> None:
+    from scopecat.runs.refs import RUN_REQUEST_REF
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+
+    repository = _repository(tmp_path)
+    skeleton = _structured_run_inputs("run-missing-evidence", with_source=False)
+    repository.write_run_skeleton(skeleton)
+    with repository.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
+            (skeleton.snapshot.run_id, RUN_REQUEST_REF),
+        )
+    with (
+        repository.sqlite.read_transaction() as connection,
+        pytest.raises(DataIntegrityError),
+    ):
+        capture_run_evidence(connection, repository, skeleton.snapshot.run_id)
+
+
 def test_terminal_commit_publishes_outcome_and_content(
     tmp_path: Path,
 ) -> None:

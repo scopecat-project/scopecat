@@ -87,6 +87,47 @@ identity. This file-level import does not register execution state or complete
 application-level evidence import. External analysis publication/provenance is
 still part of the remaining work below.
 
+## Evidence capture under construction
+
+Retained evidence capture now reads the original request, accepted run snapshot,
+effective configuration and content index within a caller-owned SQLite transaction.
+The configuration must still hash to the accepted value. Typed parameter, setup,
+plan and author references resolve to exact retained revisions, including hidden
+plans and their ancestry. It does not inspect current branch heads, re-resolve a
+setup using today's devices, or require the original source directory. Retained
+source files are checked as bytes without extracting or executing them.
+
+Analysis capture verifies the publication record and output index, then identifies
+the precise retained artifact and dataset objects for streaming. The final writer
+must verify object digests while copying; concurrent cleanup is an export failure,
+not permission to omit a referenced output. Traversal across analysis inputs and
+other evidence families, final container assembly and application integration are
+not complete yet. These capture components alone do not prove reference closure.
+
+Machine-local registrations stay outside the exchange. Historical configuration
+and setup snapshots retain original connection descriptions as inert evidence so
+their hashes remain verifiable. Import must not restore those descriptions into
+the receiving machine's device registry or activate source/environment selections.
+
+During PR 2 development, run focused checks locally; trigger CI after the complete
+implementation and local self-review. The current data/evidence checks are:
+
+```sh
+uv run --locked pytest -q \
+  packages/scopecat/tests/measurements/test_archive.py \
+  packages/scopecat-server/tests/storage/sqlite/test_execution.py \
+  packages/scopecat-server/tests/storage/sqlite/test_run_repository.py \
+  packages/scopecat-server/tests/storage/sqlite/test_evidence_inputs.py \
+  packages/scopecat-server/tests/storage/sqlite/test_evidence_analysis.py \
+  packages/scopecat-server/tests/storage/sqlite/test_author_revision_repository.py
+uv run --locked basedpyright
+uv run --locked lint-imports
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+```
+
+These are data-layer checks, not substitutes for the complete desktop journey.
+
 ## Remaining PR 2 scope
 
 1. Extend stable recording capture to scientific reference closure from retained data;

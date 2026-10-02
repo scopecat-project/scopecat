@@ -8,6 +8,7 @@ import platform
 import shutil
 import tempfile
 import tomllib
+from collections.abc import Iterator
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
@@ -233,6 +234,17 @@ def _require_environment(
             )
 
 
+def verified_source_files(bundle: AuthorRevisionBundle) -> Iterator[tuple[str, bytes]]:
+    """Inspect retained source as bytes without extracting or executing it."""
+    if set(bundle.files) != set(bundle.manifest.files):
+        raise ValueError("author source inventory differs from manifest")
+    for name, encoded in bundle.files.items():
+        content = base64.b64decode(encoded, validate=True)
+        if sha256_content_hash(content) != bundle.manifest.files[name]:
+            raise ValueError(f"author source checksum mismatch: {name}")
+        yield name, content
+
+
 def materialize_sources(bundle: AuthorRevisionBundle, directory: Path) -> Path:
     """Verify each byte and atomically publish one immutable import tree."""
     manifest = bundle.manifest
@@ -247,10 +259,7 @@ def materialize_sources(bundle: AuthorRevisionBundle, directory: Path) -> Path:
         return target
     staged = Path(tempfile.mkdtemp(prefix=".source-", dir=directory))
     try:
-        for name, encoded in bundle.files.items():
-            content = base64.b64decode(encoded, validate=True)
-            if sha256_content_hash(content) != manifest.files[name]:
-                raise ValueError(f"author source checksum mismatch: {name}")
+        for name, content in verified_source_files(bundle):
             path = staged / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
