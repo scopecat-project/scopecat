@@ -9,7 +9,6 @@ import subprocess
 import tarfile
 import tempfile
 from contextlib import ExitStack
-from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
@@ -127,12 +126,13 @@ def prepare_execution_environment(
         raise ValueError("请在作者目录的 pyproject.toml 声明后台实验所需依赖")
     bundle = _bundle(runtime)
     uv = find_uv_bin()
+    framework = runtime.installation().environment
     with tempfile.TemporaryDirectory(prefix="scopecat-author-lock-") as temporary:
         lock = Path(temporary) / "requirements.lock"
         execution = Path(temporary) / "execution.in"
         execution.write_text(
-            f"scopecat=={version('scopecat')}\n"
-            f"scopecat-server=={version('scopecat-server')}\n",
+            f"scopecat=={framework['scopecat']}\n"
+            f"scopecat-server=={framework['server']}\n",
             encoding="utf-8",
         )
         _run(
