@@ -45,7 +45,6 @@ from scopecat_server.services.samples import SampleService
 from scopecat_server.services.setup import SetupService
 from scopecat_server.storage.sqlite.analysis_repository import SQLiteAnalysisRepository
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
-from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
@@ -193,7 +192,6 @@ class LocalDaemonRuntime:
                 sqlite,
                 runs=runs,
             )
-            config_operations = SQLiteConfigOperationStore(sqlite)
             payloads = CommandPayloadService()
 
             services = ProjectStateServices(
@@ -230,7 +228,6 @@ class LocalDaemonRuntime:
                 samples=samples,
                 control=control,
                 config_registry=config_registry,
-                config_operations=config_operations,
                 runs=runs,
                 services=services,
                 analyses=analysis_service,

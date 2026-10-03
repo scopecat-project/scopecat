@@ -44,8 +44,6 @@ from scopecat.daemon.client import (
 from scopecat.daemon.wire import (
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
-    CandidateConfigRevisionSource,
-    ConfigPublishCommand,
     ExecutorStartRequest,
     MeasurementFlushCommand,
     MeasurementHeaderCommand,
@@ -926,32 +924,16 @@ def test_project_analysis_publication_rolls_back_index_and_event_together(
             ] == ["project_analysis_saved"]
 
 
-def test_candidate_acceptance_requires_matching_cross_run_verification(
+def test_retained_registry_candidate_export_requires_exact_decision(
     tmp_path: Path,
 ) -> None:
     with LocalDaemonRuntime(
         tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
     ) as runtime:
-        from scopecat.daemon.wire import DirectConfigRevisionSource
-
-        runtime.application.config.publish_config(
-            ConfigPublishCommand(
-                operation_id="seed-evidence",
-                entry_id="baseline",
-                actor="test",
-                expected_generation=0,
-                source=DirectConfigRevisionSource(config=_config()),
-            )
-        )
         baseline_id = _complete_signal_run(
             runtime,
             submission_id="verified-baseline",
             signal=0.8,
-        )
-        unrelated_id = _complete_signal_run(
-            runtime,
-            submission_id="verified-unrelated",
-            signal=1.0,
         )
         proposal = _analysis_proposal(baseline_id)
         runtime.application.runs.save_run_analysis(
@@ -983,52 +965,6 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                 submission=candidate_submission,
             )
 
-            invalid_context = lab.analysis(
-                "Unrelated comparison",
-                key="unrelated-comparison",
-            )
-            invalid_context.measurements(baseline, id="baseline", role="baseline")
-            invalid_context.measurements(
-                lab.get_run(unrelated_id),
-                id="candidate",
-                role="candidate",
-            )
-            invalid_verification = (
-                invalid_context.result()
-                .fact(
-                    "decision",
-                    _CandidateDecision(accepted=True),
-                    schema=_CANDIDATE_DECISION_SCHEMA,
-                )
-                .save()
-            )
-            invalid_decision = invalid_verification.fact("decision")
-            invalid_acceptance = CrossRunCandidateAcceptance(
-                decision=ProjectAnalysisDecisionReference(
-                    analysis_record_id=invalid_verification.id,
-                    output_id="decision",
-                    schema_id=invalid_decision.schema_id,
-                    schema_hash=invalid_decision.schema_hash,
-                )
-            )
-            with pytest.raises(
-                BackendConflict,
-                match="independent successful run",
-            ):
-                runtime.application.config.publish_config(
-                    ConfigPublishCommand(
-                        operation_id="publish:invalid-verified-candidate",
-                        source=CandidateConfigRevisionSource(
-                            run_id=baseline_id,
-                            proposal_id=proposal.id,
-                            acceptance=invalid_acceptance,
-                        ),
-                        entry_id="invalid-verified-candidate",
-                        actor="nightly-calibration",
-                        expected_generation=1,
-                    )
-                )
-
             valid_context = lab.analysis(
                 "Candidate comparison",
                 key="candidate-comparison",
@@ -1049,34 +985,23 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                 .save()
             )
             verification_decision = verification.fact("decision")
-            with pytest.raises(
-                BackendConflict,
-                match="must identify an exact project analysis",
-            ):
-                runtime.application.config.publish_config(
-                    ConfigPublishCommand(
-                        operation_id="publish:logical-key-verification",
-                        source=CandidateConfigRevisionSource(
-                            run_id=baseline_id,
-                            proposal_id=proposal.id,
-                            acceptance=CrossRunCandidateAcceptance(
-                                decision=ProjectAnalysisDecisionReference(
-                                    analysis_record_id="candidate-comparison",
-                                    output_id="decision",
-                                    schema_id=verification_decision.schema_id,
-                                    schema_hash=verification_decision.schema_hash,
-                                )
-                            ),
-                        ),
-                        entry_id="logical-key-verification",
-                        actor="nightly-calibration",
-                        expected_generation=1,
-                    )
-                )
-            accepted = runtime.application.config.publish_config(
-                ConfigPublishCommand(
-                    operation_id="publish:verified-candidate",
-                    source=CandidateConfigRevisionSource(
+            # This fixture represents retained registry evidence, not a supported
+            # publication API. New scientific publication is tested on branches.
+            from scopecat.config.registry.service import (
+                CandidateConfigRevisionSource as CandidateRevision,
+            )
+            from scopecat.config.registry.service import (
+                ConfigRevision,
+                save_config_revision,
+            )
+
+            from scopecat_server.storage.sqlite.config_registry import (
+                SQLiteConfigRegistryStore,
+            )
+
+            accepted = save_config_revision(
+                revision=ConfigRevision(
+                    source=CandidateRevision(
                         run_id=baseline_id,
                         proposal_id=proposal.id,
                         acceptance=CrossRunCandidateAcceptance(
@@ -1088,10 +1013,13 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                             )
                         ),
                     ),
-                    entry_id="verified-candidate-config",
-                    actor="nightly-calibration",
-                    expected_generation=1,
-                )
+                    entry_id="retained-candidate-config",
+                    actor="fixture",
+                ),
+                unit_of_work=SQLiteConfigRegistryStore(
+                    runtime.application.executor._control.sqlite,
+                    runs=runtime.application.config._services.runs,
+                ).write_unit_of_work,
             )
 
             assert isinstance(accepted.entry.source, CandidateConfigRegistrySource)
@@ -1200,51 +1128,6 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                         )
             finally:
                 store.close()
-
-            rejected_context = lab.analysis(
-                "Rejected candidate comparison",
-                key="rejected-candidate-comparison",
-            )
-            rejected_context.measurements(baseline, id="baseline", role="baseline")
-            rejected_context.measurements(
-                lab.get_run(candidate_id),
-                id="candidate",
-                role="candidate",
-            )
-            rejected_verification = (
-                rejected_context.result()
-                .fact(
-                    "decision",
-                    _CandidateDecision(accepted=False),
-                    schema=_CANDIDATE_DECISION_SCHEMA,
-                )
-                .save()
-            )
-            rejected_decision = rejected_verification.fact("decision")
-            with pytest.raises(
-                BackendConflict,
-                match="did not accept the candidate",
-            ):
-                runtime.application.config.publish_config(
-                    ConfigPublishCommand(
-                        operation_id="publish:rejected-verified-candidate",
-                        source=CandidateConfigRevisionSource(
-                            run_id=baseline_id,
-                            proposal_id=proposal.id,
-                            acceptance=CrossRunCandidateAcceptance(
-                                decision=ProjectAnalysisDecisionReference(
-                                    analysis_record_id=rejected_verification.id,
-                                    output_id="decision",
-                                    schema_id=rejected_decision.schema_id,
-                                    schema_hash=rejected_decision.schema_hash,
-                                )
-                            ),
-                        ),
-                        entry_id="rejected-verified-candidate",
-                        actor="nightly-calibration",
-                        expected_generation=2,
-                    )
-                )
 
 
 def _compare_entity_runs(baseline: Dataset, candidate: Dataset) -> DerivedDataset:
@@ -1673,6 +1556,49 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
         registry = lab.config.registry()
         assert not registry.entries
         setup = lab.setup.get("initial")
+        with pytest.raises(
+            DaemonConflictError, match="must identify an exact project analysis"
+        ):
+            lab.config.client.publish_parameter_branch(
+                command.model_copy(
+                    update={
+                        "verification": command.verification.model_copy(
+                            update={"analysis_record_id": "branch-verification"}
+                        )
+                    }
+                )
+            )
+        unrelated_id = _complete_signal_run(
+            runtime, submission_id="unrelated-verification", signal=1.0
+        )
+        unrelated = lab.analysis("Unrelated verification", key="unrelated")
+        unrelated.measurements(baseline, id="baseline", role="baseline")
+        if intermediate_id is not None:
+            unrelated.measurements(
+                lab.get_run(intermediate_id), id="intermediate", role="baseline"
+            )
+        unrelated.measurements(
+            lab.get_run(unrelated_id), id="candidate", role="candidate"
+        )
+        unrelated_decision = (
+            unrelated.result()
+            .fact(
+                "decision",
+                _CandidateDecision(accepted=True),
+                schema=_CANDIDATE_DECISION_SCHEMA,
+            )
+            .save()
+        )
+        with pytest.raises(DaemonConflictError, match="independent successful run"):
+            lab.config.client.publish_parameter_branch(
+                command.model_copy(
+                    update={
+                        "verification": command.verification.model_copy(
+                            update={"analysis_record_id": unrelated_decision.id}
+                        )
+                    }
+                )
+            )
         if intermediate_id is not None:
             incomplete = lab.analysis("Missing stage", key="missing-stage")
             incomplete.measurements(baseline, id="baseline", role="baseline")
@@ -1722,8 +1648,15 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 )
             )
 
-        # Fail after writing the revision: the head and evidence must roll back too.
-        def fail_append(*args: object) -> None:
+        # Fail after writing both revision and branch receipt: none may survive.
+        from scopecat.records.parameter_branch import ParameterBranch
+
+        append = ParameterBranchRepository.append
+
+        def fail_append(
+            repository: ParameterBranchRepository, head: ParameterBranch, intent: str
+        ) -> None:
+            append(repository, head, intent)
             raise RuntimeError("head unavailable")
 
         with monkeypatch.context() as patch:

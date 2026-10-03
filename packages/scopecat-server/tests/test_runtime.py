@@ -22,9 +22,6 @@ from scopecat.application import LabBootstrap
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.documents import load_config_snapshot_document
 from scopecat.config.parameters import replace_scalar_parameter
-from scopecat.config.registry import (
-    ManualCandidateAcceptance,
-)
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     AdaptiveRegionSpec,
@@ -49,7 +46,6 @@ from scopecat.daemon.points import (
     RunPointPlanCloseCommand,
 )
 from scopecat.daemon.views import (
-    ConfigRegistryPage,
     MeasurementArrowColumn,
     MeasurementArrowQuery,
     RunAnalysisPage,
@@ -66,10 +62,6 @@ from scopecat.daemon.wire import (
     AnalysisSaveReceipt,
     AnalysisTableOutputPayload,
     AttentionResolutionCommand,
-    CandidateConfigRevisionSource,
-    ConfigEntryActivationCommand,
-    ConfigPublishCommand,
-    DirectConfigRevisionSource,
     ExecutorHeartbeat,
     ExecutorLease,
     ExecutorStartRequest,
@@ -89,7 +81,6 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.kernel.entity import EntityRef
-from scopecat.kernel.errors import StorageError
 from scopecat.kernel.points import PointProposalAttempt
 from scopecat.kernel.problems import ProblemPhase, problem
 from scopecat.kernel.quantity import Quantity
@@ -173,7 +164,7 @@ from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.server.runtime import list_test_runs
 
 import scopecat_server.services.leases as lease_supervisor_services
-from scopecat_server import BackendConflict, BackendNotFound, LocalDaemonRuntime
+from scopecat_server import BackendConflict, LocalDaemonRuntime
 from scopecat_server.services.admission import AdmissionService
 from scopecat_server.services.leases import OwnershipLeaseSupervisor
 from scopecat_server.services.point_plans import RunPointPlanService
@@ -199,25 +190,6 @@ _FIXTURE = (
 
 def _config() -> ConfigProfileSnapshot:
     return load_config_snapshot_document(_FIXTURE)
-
-
-def _direct_publish_command(
-    *,
-    entry_id: str,
-    config: ConfigProfileSnapshot,
-    actor: str,
-    expected_generation: int = 0,
-    note: str = "",
-    operation_id: str | None = None,
-) -> ConfigPublishCommand:
-    return ConfigPublishCommand(
-        operation_id=operation_id or f"publish:{entry_id}",
-        source=DirectConfigRevisionSource(config=config),
-        entry_id=entry_id,
-        actor=actor,
-        expected_generation=expected_generation,
-        note=note,
-    )
 
 
 def _run_detail(runtime: LocalDaemonRuntime, run_id: str) -> RunDetail:
@@ -830,129 +802,6 @@ def test_explicit_runtime_bootstrap_overrides_project_seed(
     assert state.parameters == explicit.parameter_snapshot
 
 
-def test_config_publish_rolls_back_registry_and_event_when_event_fails(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    command = _direct_publish_command(
-        entry_id="baseline",
-        config=_config(),
-        actor="notebook",
-    )
-    append_event = SQLiteControlPlane.append_event_in_transaction
-
-    def fail_activation_event(
-        control: SQLiteControlPlane,
-        connection: sqlite3.Connection,
-        event: DurableEventInput,
-    ) -> DurableEvent:
-        if event.kind == "config_activated":
-            raise RuntimeError("event publication failed")
-        return append_event(control, connection, event)
-
-    with LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as runtime:
-        setup = runtime.application.setup.import_recipe(
-            SetupImportCommand(
-                revision_id="initial",
-                setup=ExecutableSetupSnapshot.from_config(_config()),
-                actor="test",
-            )
-        )
-        initial_events = _events(runtime).items
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                SQLiteControlPlane,
-                "append_event_in_transaction",
-                fail_activation_event,
-            )
-            with pytest.raises(RuntimeError, match="event publication failed"):
-                runtime.application.config.publish_config(command)
-
-        assert runtime.application.config.get_config_registry() == ConfigRegistryPage()
-        assert _events(runtime).items == initial_events
-        assert runtime.application.setup.resolve("initial") == setup
-
-        receipt = runtime.application.config.publish_config(command)
-
-        assert receipt.activation.generation == 1
-        assert [
-            entry.id
-            for entry in runtime.application.config.get_config_registry().entries
-        ] == ["baseline"]
-        assert [event.kind for event in _events(runtime).items] == [
-            "config_saved",
-            "config_activated",
-        ]
-
-
-def test_config_activation_rolls_back_when_operation_commit_fails(
-    tmp_path: Path,
-) -> None:
-    baseline = _config().model_copy(update={"id": "operation-baseline"})
-    current = baseline.model_copy(update={"id": "operation-current"})
-    operation_id = "activation:rollback"
-    with LocalDaemonRuntime(
-        tmp_path, bootstrap_config=baseline, instrument_endpoint=signal_endpoint()
-    ) as runtime:
-        service = runtime.application.config
-        baseline_entry = service.publish_config(
-            _direct_publish_command(
-                config=baseline,
-                entry_id=baseline.id,
-                actor="test",
-                expected_generation=0,
-            )
-        ).entry
-        service.publish_config(
-            _direct_publish_command(
-                entry_id=current.id,
-                config=current,
-                actor="notebook",
-                expected_generation=1,
-            )
-        )
-        command = ConfigEntryActivationCommand(
-            operation_id=operation_id,
-            entry_id=baseline_entry.id,
-            actor="operator",
-            expected_generation=2,
-        )
-        history_before = service.get_config_activation_history().items
-        events_before = _events(runtime).items
-        database = runtime.state_dir / "control.sqlite3"
-        with sqlite3.connect(database) as connection:
-            connection.execute(
-                """
-                CREATE TRIGGER reject_config_activation_operation
-                BEFORE INSERT ON config_operations
-                BEGIN
-                    SELECT RAISE(ABORT, 'injected operation failure');
-                END
-                """
-            )
-
-        with pytest.raises(StorageError):
-            service.activate_config_entry(command)
-
-        active_after_failure = service.get_active_config()
-        assert active_after_failure.entry.id == current.id
-        assert active_after_failure.activation.generation == 2
-        assert service.get_config_activation_history().items == history_before
-        assert _events(runtime).items == events_before
-        with pytest.raises(BackendNotFound):
-            service.get_config_activation_operation(operation_id)
-
-        with sqlite3.connect(database) as connection:
-            connection.execute("DROP TRIGGER reject_config_activation_operation")
-
-        receipt = service.activate_config_entry(command)
-
-        assert receipt.activation.generation == 3
-        assert receipt.activation.entry_id == baseline_entry.id
-        assert service.get_config_activation_operation(operation_id) == receipt
-        assert len(_events(runtime).items) == len(events_before) + 1
-
-
 def test_admission_is_durably_idempotent(tmp_path: Path) -> None:
     state = tmp_path / ".scopecat"
     database = state / "control.sqlite3"
@@ -1493,134 +1342,6 @@ def test_analysis_publication_rolls_back_refs_index_and_event_together(
             for event in _events(runtime, run_id=admission.run_id).items
             if event.kind == "analysis_saved"
         ] == ["analysis_saved"]
-
-
-def test_candidate_publish_rolls_back_approval_with_event(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with LocalDaemonRuntime(
-        tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
-    ) as runtime:
-        runtime.application.config.publish_config(
-            _direct_publish_command(
-                config=_config(),
-                entry_id="baseline",
-                actor="test",
-                expected_generation=0,
-            )
-        )
-        admission = runtime.application.submit_run(
-            _submission(runtime, "decision-atomic")
-        )
-        proposal = _analysis_proposal(admission.run_id)
-        runtime.application.runs.save_run_analysis(
-            admission.run_id,
-            _analysis_command(proposal),
-        )
-        command = ConfigPublishCommand(
-            operation_id="publish:candidate-atomic",
-            source=CandidateConfigRevisionSource(
-                run_id=admission.run_id,
-                proposal_id=proposal.id,
-                acceptance=ManualCandidateAcceptance(),
-            ),
-            entry_id="candidate-atomic",
-            actor="nightly-calibration",
-            expected_generation=1,
-        )
-        before = _run_state(runtime, admission.run_id)
-        events_before = _events(runtime, run_id=admission.run_id).items
-        append_event = SQLiteControlPlane.append_event_in_transaction
-
-        def fail_decision_event(
-            control: SQLiteControlPlane,
-            connection: sqlite3.Connection,
-            event: DurableEventInput,
-        ) -> DurableEvent:
-            if event.kind == "parameter_proposal_approved":
-                raise RuntimeError("approval event publication failed")
-            return append_event(control, connection, event)
-
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                SQLiteControlPlane,
-                "append_event_in_transaction",
-                fail_decision_event,
-            )
-            with pytest.raises(
-                RuntimeError,
-                match="approval event publication failed",
-            ):
-                runtime.application.config.publish_config(command)
-
-        proposals = runtime.application.runs.list_parameter_proposals(admission.run_id)
-        assert _run_state(runtime, admission.run_id) == before
-        assert proposals.items[0].approval is None
-        assert [
-            entry.id
-            for entry in runtime.application.config.get_config_registry().entries
-            if entry.id == "candidate-atomic"
-        ] == []
-        assert [
-            event.kind
-            for event in _events(runtime, run_id=admission.run_id).items
-            if event.kind == "parameter_proposal_approved"
-        ] == []
-        assert _events(runtime, run_id=admission.run_id).items == events_before
-        with pytest.raises(BackendNotFound):
-            runtime.application.config.get_config_publish_operation(
-                command.operation_id
-            )
-
-        database = runtime.state_dir / "control.sqlite3"
-        with sqlite3.connect(database) as connection:
-            connection.execute(
-                """
-                CREATE TRIGGER reject_config_publish_operation
-                BEFORE INSERT ON config_operations
-                WHEN NEW.kind = 'publish_revision'
-                BEGIN
-                    SELECT RAISE(ABORT, 'injected publish operation failure');
-                END
-                """
-            )
-
-        with pytest.raises(StorageError):
-            runtime.application.config.publish_config(command)
-
-        proposals = runtime.application.runs.list_parameter_proposals(admission.run_id)
-        assert _run_state(runtime, admission.run_id) == before
-        assert proposals.items[0].approval is None
-        assert _events(runtime, run_id=admission.run_id).items == events_before
-        assert "candidate-atomic" not in {
-            entry.id
-            for entry in runtime.application.config.get_config_registry().entries
-        }
-        with pytest.raises(BackendNotFound):
-            runtime.application.config.get_config_publish_operation(
-                command.operation_id
-            )
-
-        with sqlite3.connect(database) as connection:
-            connection.execute("DROP TRIGGER reject_config_publish_operation")
-
-        receipt = runtime.application.config.publish_config(command)
-        proposals = runtime.application.runs.list_parameter_proposals(admission.run_id)
-
-        assert proposals.items[0].approval is not None
-        assert receipt.entry.id == "candidate-atomic"
-        assert (
-            runtime.application.config.get_config_publish_operation(
-                command.operation_id
-            )
-            == receipt
-        )
-        assert [
-            event.kind
-            for event in _events(runtime, run_id=admission.run_id).items
-            if event.kind == "parameter_proposal_approved"
-        ] == ["parameter_proposal_approved"]
 
 
 def test_executor_start_is_atomic_idempotent_and_quiet_when_resources_busy(
