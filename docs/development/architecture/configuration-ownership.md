@@ -74,28 +74,25 @@ atomic revision/head/receipt rollback, replay and current-format restore.
 The device-session lost-response test now changes driver availability directly,
 without manufacturing an unrelated global configuration activation.
 
-The old publication/activation wire commands, operation receipts and their
-`config_operations` store/table are also retired. Low-level registry entry
-publication and activation history still have separate fixture/provenance
-consumers; this is not their wholesale retirement. Registry export
-coverage constructs retained source evidence without global activation and
-checks that missing or altered decision evidence is rejected. Keep this
-read/provenance contract separate from user editing authority.
+Global publication, activation and manual-draft APIs, wire commands, operation
+receipts, activation history and their SQLite tables are retired. The combined
+working-point writer/head, setup rebind and `parameters.bind(...)` intermediate
+save are retired too. Independent preparation retains exact parameter/setup
+inputs directly. No registry selector resolves a global default; named retained
+snapshots are read by exact identity.
 
-The low-level global manual-draft preview and revision source are retired as
-well; no product consumer remained. Editing uses independent parameter branches.
-`test_parameter_branches.py` covers concurrent checkout, immutable selection,
-atomic stale-save rejection, replay and reopening; `test_branch_parameter_editor.py`
-covers edits before setup and rejection without partial changes. The deleted
-global-draft tests asserted active-default publication, preview tokens and
-restoration semantics that are no longer an author contract.
+Parameter branch tests retain concurrent checkout, immutable selections, stale
+save rejection, atomic revision/head/receipt rollback, replay and current-format
+restore. Structure editing, unknown cells and source-address mapping have focused
+branch/core coverage. The removed tests asserted global-default activation or
+combined workspace writes, not an additional supported author contract.
 
-Structure, retained-context and template-import fixtures save named snapshots
-without activating a default. Retained manual-draft source records still
-participate in evidence-input traversal and exact registry reads; removing the
-unused editing producer does not remove those provenance checks. The remaining
-global activation fixtures and combined-context writers are separate retirement
-work, not a second supported editor.
+Immutable registry entries remain retained execution/provenance data. Evidence
+fixtures save entries without activation; export still rejects missing decision
+evidence or changed schema identity. The source records and exact reads used by
+those retained snapshots do not confer editing authority or a compatibility
+promise for earlier stores. No application HTTP/client command writes a combined
+configuration.
 
 A verified candidate publishes to a reviewed parameter branch with
 `publish_to_branch(...)`. Publication checks the exact destination head,
@@ -127,7 +124,8 @@ prove that hardware was untouched.
 
 ## Persistence
 
-Development schema 106 retires the unused global configuration operation table.
+Development schema 107 removes configuration activation history and combined
+workspace heads, following schema 106 removal of operation receipts.
 It retains device registrations, immutable connection
 revisions, declared access aliases, connection-test evidence, setup definitions
 and exact resolutions with the existing parameter and run records. Current-format

@@ -18,6 +18,5 @@ DATA_REFERENCE_COLUMNS = (
     ("measurement_target_revisions", "target_id", "revision_json", "target"),
     ("apparatus_object_revisions", "object_id", "revision_json", "apparatus"),
     ("apparatus_observations", "observation_id", "observation_json", "observation"),
-    ("config_registry_activations", "generation", "record_json", "activation"),
     ("procedure_schedules", "schedule_id", "schedule_json", "schedule"),
 )

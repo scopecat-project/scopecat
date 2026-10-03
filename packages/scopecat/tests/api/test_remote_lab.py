@@ -30,11 +30,6 @@ from scopecat.api._runner import _DaemonRunner
 from scopecat.api.analysis import AnalysisContext
 from scopecat.api.lab import LabClient
 from scopecat.api.run import RunHandle
-from scopecat.config.registry.records import (
-    ConfigRegistryActivationRecord,
-    ConfigRegistryEntry,
-    DirectConfigRegistrySource,
-)
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import (
     RunExecutionSegment,
@@ -49,7 +44,6 @@ from scopecat.daemon.client import (
 from scopecat.daemon.execution import ExecutorLeaseLostError
 from scopecat.daemon.points import RunPointPlanView
 from scopecat.daemon.views import (
-    ActiveConfigView,
     MeasurementPreview,
     RunAdmissionView,
     RunConfigView,
@@ -510,11 +504,10 @@ def test_execute_submits_complete_plan_and_heartbeats(
     planned = replace(
         planned_without_source,
         config_source=ConfigRegistryRunConfigSource(
-            selector="active",
+            selector="baseline",
             entry_id="baseline",
             config_ref="config-registry/configs/baseline.json",
             content_hash=config_content_hash(planned_without_source.config),
-            registry_generation=3,
         ),
     )
     preview = build_run_program_preview(planned.program)
@@ -1269,17 +1262,12 @@ def test_run_invocation_uses_explicit_config_and_bound_system(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config()
-    entry, activation = _config_registry_records(config)
     catalog = _instrument_catalog(config)
     system = ExperimentSystem(instrument_catalog=catalog)
     captured: dict[str, object] = {}
     built_from: list[tuple[ConfigProfileSnapshot, InstrumentContractCatalog]] = []
 
     def handler(http_request: httpx2.Request) -> httpx2.Response:
-        if http_request.url.path == "/api/v1/config-registry/active":
-            return _model(
-                ActiveConfigView(entry=entry, activation=activation, config=config)
-            )
         assert http_request.url.path == "/api/v1/instrument-contracts/resolve"
         assert (
             InstrumentContractCatalogRequest.model_validate_json(
@@ -1384,15 +1372,10 @@ def test_run_invocation_uses_daemon_catalog_without_a_local_builder(
 
 def test_preview_invocation_uses_explicit_inputs_without_admission() -> None:
     config = load_config()
-    entry, activation = _config_registry_records(config)
     requests: list[httpx2.Request] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
-        if request.url.path == "/api/v1/config-registry/active":
-            return _model(
-                ActiveConfigView(entry=entry, activation=activation, config=config)
-            )
         assert request.url.path == "/api/v1/instrument-contracts/resolve"
         assert (
             InstrumentContractCatalogRequest.model_validate_json(request.content).config
@@ -1451,31 +1434,6 @@ def _client(
         "http://daemon.local",
         transport=httpx2.MockTransport(handler),
     )
-
-
-def _config_registry_records(
-    config: ConfigProfileSnapshot,
-) -> tuple[
-    ConfigRegistryEntry,
-    ConfigRegistryActivationRecord,
-]:
-    entry = ConfigRegistryEntry(
-        id="baseline",
-        config_ref="config-registry/entries/baseline/config.json",
-        content_hash=config_content_hash(config),
-        source=DirectConfigRegistrySource(),
-        actor="notebook",
-        recorded_at=_NOW,
-    )
-    activation = ConfigRegistryActivationRecord(
-        generation=1,
-        action="activation",
-        entry_id=entry.id,
-        entry_content_hash=entry.content_hash,
-        actor="operator",
-        recorded_at=_NOW,
-    )
-    return entry, activation
 
 
 def _admission(submission: RunSubmission) -> RunAdmission:

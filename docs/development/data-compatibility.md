@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **106** is a development format identifier, not the start of a compatibility
+schema **107** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,10 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 107 removes the global configuration activation and combined workspace-head
+tables and activation-generation fields. Exact retained snapshot reads and current
+parameter-branch recovery remain checked. No old-format reader or migration is added.
 
 Schema 106 removes the unused global configuration operation receipt table.
 Parameter branch receipts and retained scientific configuration evidence remain.

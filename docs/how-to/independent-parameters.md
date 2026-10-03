@@ -1,7 +1,7 @@
 # Save parameters before selecting execution context
 
-Parameter declarations and values can exist before a bench, sample, batch or
-working point is selected. Use a connected `lab` or author `session`:
+Parameter declarations and values can exist before a bench, sample or batch
+is selected. Use a connected `lab` or author `session`:
 
 ```python
 parameters = lab.parameters.save(
@@ -25,9 +25,8 @@ session.use(parameters=parameters)  # a saved name or exact reference also works
 ```
 
 This preserves the selected subject, batch, operator and record collection.
-Independent parameters replace the configuration choice, not the whole context;
-they do not inherit a working point's calibration publication ownership. Choose
-either `parameters` or `working_point` in one `use` call. Other sessions are
+Independent parameters replace the configuration choice, not the whole context.
+Selecting values does not assert calibration applicability. Other sessions are
 unaffected. Selection and editing require no executable setup; select a saved
 setup in this session before previewing or running an experiment. For repeated editing,
 use [a parameter branch and `session.params`](parameter-branches.md).
@@ -58,8 +57,8 @@ Use a saved setup revision or exact reference. Selecting another independent
 parameter revision, saving branch edits and preparing with a branch editor retain
 this setup choice. `session.use(setup=None)` clears the pin; choose a setup again
 before the next preview. A failed selection leaves both the session and editor
-unchanged. Setup selection requires independent parameters; working points and
-candidates already own their configuration evidence. Changing the subject retains
+unchanged. Setup selection requires independent parameters; retained candidates
+already own their configuration evidence. Changing the subject retains
 independent parameters, the selected setup and unsaved branch edits, and clears
 the previous subject's batch. Preview checks whether those inputs are suitable
 for the new subject.
@@ -82,9 +81,8 @@ replaces the captured connection revisions.
 
 Low-level callers can supply an exact `setup=` to `resolve`, or choose
 `ParameterConfiguration(ref=..., setup=...)` inside a scientific selection.
-`parameters.bind(...)` can retain a named combined execution snapshot;
-normal independent-parameter launches do not need it. The combination is evidence,
-not a second parameter editor.
+Preparation retains the exact combination as execution evidence. There is no
+separate combined-configuration save step.
 
 These are distinct responsibilities:
 
@@ -92,7 +90,7 @@ These are distinct responsibilities:
 | --- | --- |
 | Parameter revision | Declarations and values, independent of equipment |
 | Prepared inputs | Exact parameter/setup combination; no calibration acceptance |
-| Measurement selection | Subject, batch and saved inputs or working point |
+| Measurement selection | Subject, batch and explicit parameters or retained candidate |
 | Run evidence | Resolved inputs and scientific binding used for that run |
 
 Compilation still consumes a combined snapshot, while run provenance retains
@@ -101,8 +99,9 @@ parameter revisions and setup revisions atomically, without selecting defaults.
 Parameter edits and verified publications update explicit parameter branches.
 The former working-point editor and global-default publication API are retired.
 
-Current storage is development schema 101. No prebaseline migration or persistent
-compatibility promise is introduced. Current-format backup/restore includes
+No prebaseline migration or persistent compatibility promise is introduced;
+see the [data-format policy](../development/data-compatibility.md).
+Current-format backup/restore includes
 standalone revisions even when no setup has ever been saved.
 
 For ongoing edits without naming every revision, use a

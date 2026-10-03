@@ -347,7 +347,7 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         )
         branch = lab.parameters.create_branch("daily", revision=baseline)
         registry = lab.config.registry()
-        assert registry.entries == () and registry.activation is None
+        assert registry.entries == ()
         setup = lab.setup.get("initial")
         sample = lab.samples.create(
             "candidate-sample",
@@ -517,7 +517,7 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
         )
         branch = lab.parameters.create_branch("drag/daily", revision=parameters)
         registry = lab.config.registry()
-        assert registry.entries == () and registry.activation is None
+        assert registry.entries == ()
         setup = lab.setup.get("initial")
         resolved = lab.parameters.resolve(parameters, setup=setup)
         invocation = drag_beta_experiment.build()

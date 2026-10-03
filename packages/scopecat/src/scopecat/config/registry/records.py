@@ -134,48 +134,8 @@ class ConfigRegistryEntry(_FrozenRegistryModel):
     recorded_at: datetime = Field(default_factory=utc_now)
 
 
-def _exclude_none(value: object) -> bool:
-    return value is None
-
-
-class ConfigRegistryActivationRecord(_FrozenRegistryModel):
-    generation: int = Field(ge=1)
-    action: Literal["activation", "inventory_migration"]
-    entry_id: str
-    entry_content_hash: ConfigContentHash
-    # Most recent activation of this exact entry before this restoration.
-    # No new calibration decision or validity is implied by restoring content.
-    restored_from_generation: int | None = Field(
-        default=None, ge=1, exclude_if=_exclude_none
-    )
-    previous_entry_id: str | None = None
-    previous_entry_content_hash: ConfigContentHash | None = None
-    actor: str
-    note: str = ""
-    recorded_at: datetime = Field(default_factory=utc_now)
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> ConfigRegistryActivationRecord:
-        if not self.entry_id or not self.actor.strip():
-            msg = "config registry activation identity fields must be non-empty"
-            raise ValueError(msg)
-        if (self.previous_entry_id is None) != (
-            self.previous_entry_content_hash is None
-        ):
-            msg = "previous registry entry id and content hash must be paired"
-            raise ValueError(msg)
-        return self
-
-
 class ConfigRegistryEntryPage(_FrozenRegistryModel):
     """Newest-first keyset page of saved configuration revisions."""
 
     items: tuple[ConfigRegistryEntry, ...] = ()
-    next_cursor: int | None = Field(default=None, ge=1)
-
-
-class ConfigRegistryActivationPage(_FrozenRegistryModel):
-    """Newest-first keyset page of default configuration changes."""
-
-    items: tuple[ConfigRegistryActivationRecord, ...] = ()
     next_cursor: int | None = Field(default=None, ge=1)

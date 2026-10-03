@@ -13,7 +13,7 @@ from scopecat.config.registry.service import (
     ConfigRegistryMutationResult,
     ConfigRevision,
     load_config_registry_entry_snapshot,
-    publish_config_revision,
+    save_config_revision,
 )
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.config import ConfigProfileSnapshot
@@ -80,28 +80,15 @@ def load_config_registry_config(
     ).config
 
 
-def _current_config_registry_generation(
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> int:
-    with unit_of_work() as work:
-        return work.registry.current_generation()
-
-
-def activate_candidate_config(
+def retain_candidate_config(
     *,
     candidate: CandidateConfig,
     services: ProjectStateServices,
     entry_id: str | None = None,
     actor: str,
     note: str = "",
-    expected_generation: int | None = None,
 ) -> ConfigRegistryMutationResult:
-    generation = (
-        _current_config_registry_generation(services.config_registry)
-        if expected_generation is None
-        else expected_generation
-    )
-    return publish_config_revision(
+    return save_config_revision(
         revision=ConfigRevision(
             source=CandidateConfigRevisionSource(
                 run_id=candidate.source_run_id,
@@ -113,7 +100,6 @@ def activate_candidate_config(
             note=note,
         ),
         unit_of_work=services.config_registry,
-        expected_generation=generation,
     )
 
 

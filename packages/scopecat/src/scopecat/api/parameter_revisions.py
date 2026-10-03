@@ -12,9 +12,8 @@ from scopecat.config.candidate_merges import merge_parameter_branches
 from scopecat.config.parameter_updates import materialize_context_updates
 from scopecat.config.structure import ParameterContentPreview, preview_parameter_content
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.views import ConfigEntryView, ParameterResolution
+from scopecat.daemon.views import ParameterResolution
 from scopecat.daemon.wire import (
-    ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchPage,
     ParameterResolveCommand,
@@ -100,34 +99,6 @@ class LabParameterOperations:
 
     def list(self) -> tuple[ParameterRevision, ...]:
         return self.client.parameter_revisions().items
-
-    def bind(
-        self,
-        revision: ParameterRevision | ParameterRevisionRef,
-        *,
-        setup: SetupRevision | SetupRevisionRef,
-        name: str,
-        system_id: str,
-        note: str = "",
-    ) -> ConfigEntryView:
-        """Save an exact execution combination without activating either owner.
-
-        Select the result through the existing saved-configuration measurement
-        context. This validates structural compatibility, not calibration reuse.
-        Execution still requires a compatible independently selected setup.
-        """
-        return self.client.bind_parameters(
-            ParameterBindCommand(
-                parameters=revision.ref
-                if isinstance(revision, ParameterRevision)
-                else revision,
-                setup=setup.ref if isinstance(setup, SetupRevision) else setup,
-                entry_id=name,
-                system_id=system_id,
-                actor=self.operator,
-                note=note,
-            )
-        )
 
     def resolve(
         self,

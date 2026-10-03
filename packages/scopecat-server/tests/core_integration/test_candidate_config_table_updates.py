@@ -11,7 +11,7 @@ from scopecat.config.registry import (
 from scopecat.config.registry.service import (
     ConfigRevision,
     DirectConfigRevisionSource,
-    publish_config_revision,
+    save_config_revision,
 )
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_types import Float, Scalar, String, Table, TableColumn
@@ -22,9 +22,9 @@ from scopecat.records.parameter import (
     TableParameterValue,
 )
 from scopecat_testkit.config_registry import (
-    activate_candidate_config,
     initialize_setup,
     load_config_registry_config,
+    retain_candidate_config,
 )
 from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.paths import CORE_FIXTURE_DIR as EXAMPLE_DIR
@@ -37,19 +37,18 @@ from scopecat_testkit.signal_instruments import TestSignalInstrumentProvider
 from scopecat_testkit.workflow_fixtures import load_invocation
 
 
-def test_candidate_config_activation_materializes_table_row_updates(
+def test_retained_candidate_materializes_table_row_updates(
     tmp_path: Path,
 ) -> None:
     config = _config_with_drive_channels()
     initialize_setup(config, unit_of_work=sqlite_config_registry_unit_of_work(tmp_path))
-    publish_config_revision(
+    save_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(config),
             entry_id="initial",
             actor="operator",
         ),
         unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
-        expected_generation=0,
     )
     composition = compose_test_instruments(
         config=config,
@@ -106,7 +105,7 @@ def test_candidate_config_activation_materializes_table_row_updates(
     assert existing[0].after == 0.75
     lab.review_parameter_proposal(run, proposal.id)
 
-    activation = activate_candidate_config(
+    activation = retain_candidate_config(
         candidate=candidate,
         services=sqlite_project_services(tmp_path),
         actor="operator",

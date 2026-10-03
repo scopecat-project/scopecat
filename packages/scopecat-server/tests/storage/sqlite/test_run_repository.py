@@ -139,11 +139,10 @@ def _portable_snapshot(run_id: str, day: int) -> RunSnapshot:
 
 def _config_source(content_hash: str) -> RunConfigSource:
     return ConfigRegistryRunConfigSource(
-        selector="active",
+        selector="baseline",
         entry_id="config-entry",
         config_ref="configs/config-entry.json",
         content_hash=content_hash,
-        registry_generation=1,
     )
 
 

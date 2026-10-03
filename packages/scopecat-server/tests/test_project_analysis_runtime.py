@@ -1357,7 +1357,7 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
                     .fact_as("decision", schema)
                     .accepted
                 )
-        assert lab.config.registry().activation is None
+        assert lab.config.registry().entries == ()
 
 
 @pytest.mark.parametrize("sequential", [False, True])

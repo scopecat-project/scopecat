@@ -1,8 +1,5 @@
 """Context persistence and provenance use the ordinary registry, without devices."""
 
-from functools import partial
-from pathlib import Path
-
 import pytest
 from scopecat.config.contexts import (
     apply_context_overrides,
@@ -10,16 +7,6 @@ from scopecat.config.contexts import (
     validate_context_config,
 )
 from scopecat.config.parameter_updates import ReplaceParameter
-from scopecat.config.registry import (
-    ConfigRevision,
-    DirectConfigRevisionSource,
-)
-from scopecat.config.registry.records import ContextConfigRegistrySource
-from scopecat.config.registry.service import (
-    ConfigRegistryEntrySnapshot,
-    save_config_context,
-    save_config_revision,
-)
 from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.value_types import Float, Scalar, Table, TableColumn
@@ -32,67 +19,7 @@ from scopecat.records.parameter import (
     ScalarParameterValue,
     TableParameterValue,
 )
-from scopecat.records.sample import SampleBinding
-from scopecat_testkit.config_registry import initialize_setup, load_config
-from scopecat_testkit.server.runtime import sqlite_config_registry_unit_of_work
-
-
-def test_two_samples_two_working_points_are_saved_without_activation(
-    tmp_path: Path,
-) -> None:
-    uow = sqlite_config_registry_unit_of_work(tmp_path)
-    base = load_config()
-    initialize_setup(base, unit_of_work=uow)
-    seed = save_config_revision(
-        revision=ConfigRevision(
-            source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"
-        ),
-        unit_of_work=uow,
-    )
-    base_ref = ConfigContextRef(
-        entry_id=seed.entry.id, content_hash=seed.entry.content_hash
-    )
-    saved: list[ConfigRegistryEntrySnapshot] = []
-    for index, (sample, point) in enumerate(
-        (("a", "parked"), ("a", "shifted"), ("b", "parked"), ("b", "shifted"))
-    ):
-        parameters = ParameterSnapshot(
-            id=base.parameter_snapshot.id,
-            values=(
-                ScalarParameterValue(
-                    id="drive_frequency", value=Quantity(4.8 + index / 10, "GHz")
-                ),
-            ),
-        )
-        command = partial(
-            save_config_context,
-            entry_id=f"{sample}-{point}",
-            base=base_ref,
-            sample=SampleBinding(
-                role="subject",
-                sample_id=sample,
-                revision=1,
-                content_hash="sha256:" + "a" * 64,
-                kind="synthetic",
-                display_name=sample,
-                context_id=point,
-            ),
-            working_point_id=point,
-            label=f"{sample} / {point}",
-            parameters=parameters,
-            actor="operator",
-            note="trial",
-            unit_of_work=uow,
-        )
-        entry = command()
-        assert command().entry == entry.entry
-        assert isinstance(entry.entry.source, ContextConfigRegistrySource)
-        assert entry.entry.source.context.sample.sample_id == sample
-        saved.append(entry)
-    with uow() as work:
-        assert work.registry.current_generation() == 0
-    assert len({item.entry.id for item in saved}) == 4
-    assert len({item.entry.content_hash for item in saved}) == 4
+from scopecat_testkit.config_registry import load_config
 
 
 def test_partial_context_validates_present_values_and_can_fill_unknown() -> None:

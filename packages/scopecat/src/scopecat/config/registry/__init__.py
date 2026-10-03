@@ -17,8 +17,6 @@ if TYPE_CHECKING:
         BoundParameterRegistrySource,
         CandidateAcceptance,
         CandidateConfigRegistrySource,
-        ConfigRegistryActivationPage,
-        ConfigRegistryActivationRecord,
         ConfigRegistryEntry,
         ConfigRegistryEntryPage,
         ConfigRegistryEntrySource,
@@ -29,8 +27,6 @@ if TYPE_CHECKING:
         ParameterConfigRegistrySource,
     )
     from scopecat.config.registry.service import (
-        ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR,
-        ActiveConfigRegistrySnapshot,
         CandidateConfigRevisionSource,
         ConfigRegistryEntrySnapshot,
         ConfigRegistryMutationResult,
@@ -40,15 +36,9 @@ if TYPE_CHECKING:
         DirectConfigRevisionSource,
         InstrumentInventoryMigrationDelta,
         InstrumentInventoryMigrationPlan,
-        ParameterConfigRevisionSource,
-        activate_config_registry_entry,
-        load_active_config_registry_snapshot,
-        load_config_registry_activation,
-        load_config_registry_activation_page,
         load_config_registry_entry_snapshot,
         load_config_registry_page,
         plan_instrument_inventory_migration,
-        publish_config_revision,
         resolve_config_registry_config_source,
     )
 
@@ -57,8 +47,6 @@ _RECORD_EXPORTS = (
     "BoundParameterRegistrySource",
     "CandidateAcceptance",
     "CandidateConfigRegistrySource",
-    "ConfigRegistryActivationPage",
-    "ConfigRegistryActivationRecord",
     "ConfigRegistryEntry",
     "ConfigRegistryEntryPage",
     "ConfigRegistryEntrySource",
@@ -74,8 +62,6 @@ _PORT_EXPORTS = (
     "ConfigRegistryUnitOfWorkFactory",
 )
 _SERVICE_EXPORTS = (
-    "ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR",
-    "ActiveConfigRegistrySnapshot",
     "CandidateConfigRevisionSource",
     "ConfigRevision",
     "ConfigRevisionSource",
@@ -83,17 +69,11 @@ _SERVICE_EXPORTS = (
     "ConfigRegistryMutationResult",
     "ConfigRegistryPageSnapshot",
     "DirectConfigRevisionSource",
-    "ParameterConfigRevisionSource",
     "InstrumentInventoryMigrationDelta",
     "InstrumentInventoryMigrationPlan",
-    "activate_config_registry_entry",
-    "load_active_config_registry_snapshot",
-    "load_config_registry_activation",
-    "load_config_registry_activation_page",
     "load_config_registry_entry_snapshot",
     "load_config_registry_page",
     "plan_instrument_inventory_migration",
-    "publish_config_revision",
     "resolve_config_registry_config_source",
 )
 _EXPORTS = {

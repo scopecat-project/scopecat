@@ -208,17 +208,6 @@ class ParameterRevisionList(_WireModel):
     items: tuple[ParameterRevision, ...]
 
 
-class ParameterBindCommand(_WireModel):
-    """Prepare saved execution inputs without selecting a global default."""
-
-    parameters: ParameterRevisionRef
-    setup: SetupRevisionRef
-    entry_id: NonEmptyText
-    system_id: NonEmptyText
-    actor: NonEmptyText
-    note: str = ""
-
-
 class ParameterResolveCommand(_WireModel):
     parameters: ParameterRevisionRef
     setup: SetupRevisionRef
@@ -1266,7 +1255,6 @@ __all__ = [
     "MeasurementHeaderCommand",
     "MeasurementIngestReceipt",
     "MeasurementSealCommand",
-    "ParameterBindCommand",
     "ParameterBranchCommitCommand",
     "ParameterBranchHistory",
     "ParameterBranchPage",

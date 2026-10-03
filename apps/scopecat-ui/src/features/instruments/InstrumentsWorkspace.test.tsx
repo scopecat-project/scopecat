@@ -1692,15 +1692,6 @@ function flatDcApplyReceipt(): Awaited<ReturnType<typeof applyInstrumentState>> 
 
 function activeConfig(): ConfigEntryView {
   return {
-    latest_activation: {
-      generation: 3,
-      action: "activation",
-      entry_id: "lab-default",
-      entry_content_hash: "sha256:active",
-      actor: "Ada",
-      note: "",
-      recorded_at: "2026-07-27T08:00:00Z",
-    },
     entry: {
       id: "lab-default",
       content_hash: "sha256:active",

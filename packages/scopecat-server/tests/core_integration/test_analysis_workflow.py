@@ -47,7 +47,7 @@ from scopecat.records.analysis import (
 )
 from scopecat.records.config import config_content_hash
 from scopecat.runs.refs import record_content_ref
-from scopecat_testkit.config_registry import activate_candidate_config, initialize_setup
+from scopecat_testkit.config_registry import initialize_setup, retain_candidate_config
 from scopecat_testkit.server.in_process_lab import in_process_lab
 from scopecat_testkit.server.runtime import (
     sqlite_project_services,
@@ -176,19 +176,18 @@ class _DatasetTraceStep:
         return context.result("Dataset trace").fact("points", count)
 
 
-def test_workflow_analysis_review_activate_and_rerun_active_config(
+def test_workflow_analysis_review_retain_and_rerun_exact_config(
     tmp_path: Path,
 ) -> None:
     services = sqlite_project_services(tmp_path)
     initialize_setup(load_config(), unit_of_work=services.config_registry)
-    config_registry_service.publish_config_revision(
+    config_registry_service.save_config_revision(
         revision=config_registry_service.ConfigRevision(
             source=config_registry_service.DirectConfigRevisionSource(load_config()),
             entry_id="initial",
             actor="operator",
         ),
         unit_of_work=services.config_registry,
-        expected_generation=0,
     )
     run = execute_signal_run(
         config=load_config(),
@@ -202,23 +201,23 @@ def test_workflow_analysis_review_activate_and_rerun_active_config(
     analysis = run_handle.analyze(BestSignalAnalysisStep())
     candidate = analysis.candidate_config()
     lab.review_parameter_proposal(run_handle, candidate.proposal_id)
-    activation = activate_candidate_config(
+    retained = retain_candidate_config(
         candidate=candidate,
         services=services,
         entry_id="candidate-best-signal",
         actor="operator",
     )
-    active_config, active_source = (
+    retained_config, retained_source = (
         config_registry_service.resolve_config_registry_config_source(
-            selector="active",
+            selector=retained.entry.id,
             unit_of_work=services.config_registry,
         )
     )
     next_run = execute_signal_run(
-        config=active_config,
+        config=retained_config,
         experiment=load_invocation(),
         project_root=tmp_path,
-        config_source=active_source,
+        config_source=retained_source,
     )
 
     assert isinstance(summary, sc.PublishedAnalysis)
@@ -228,9 +227,9 @@ def test_workflow_analysis_review_activate_and_rerun_active_config(
     assert summary_input.content_hash == run_handle.measurements().entry.content_hash
     assert summary_input.codec == "scopecat.measurement-dataset.v12"
     assert candidate.parameter_proposal.deltas[0].parameter_id == "drive_frequency"
-    assert activation.entry.id == "candidate-best-signal"
+    assert retained.entry.id == "candidate-best-signal"
     assert next_run.status == "completed"
-    assert next_run.config_source == active_source
+    assert next_run.config_source == retained_source
 
     from scopecat.data_exchange import ScientificExchange
 

@@ -7,8 +7,6 @@ from types import TracebackType
 from typing import Protocol, Self
 
 from scopecat.config.registry.records import (
-    ConfigRegistryActivationPage,
-    ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
     ConfigRegistryEntryPage,
 )
@@ -19,9 +17,6 @@ from scopecat.setup.ports import SetupRepository
 
 class ConfigRegistryRepository(Protocol):
     """Persistence boundary for registry records and commit markers."""
-
-    @property
-    def active_ref(self) -> str: ...
 
     def entry_ref(self, entry_id: str) -> str: ...
 
@@ -42,41 +37,11 @@ class ConfigRegistryRepository(Protocol):
 
     def read_config(self, ref: str) -> ConfigProfileSnapshot: ...
 
-    def context_head(self, workspace_id: str) -> str: ...
-
-    def set_context_head(self, workspace_id: str, entry_id: str) -> None: ...
-
-    def current_generation(self) -> int: ...
-
-    def read_latest_activation(self) -> ConfigRegistryActivationRecord | None: ...
-
-    def read_activation(self, generation: int) -> ConfigRegistryActivationRecord: ...
-
-    def read_latest_entry_activation(
-        self, entry_id: str
-    ) -> ConfigRegistryActivationRecord | None: ...
-
-    def list_activation_history(self) -> tuple[ConfigRegistryActivationRecord, ...]: ...
-
-    def list_activation_page(
-        self,
-        *,
-        limit: int,
-        before: int | None,
-    ) -> ConfigRegistryActivationPage: ...
-
     def commit_revision(
         self,
         *,
         entry: ConfigRegistryEntry,
         config: ConfigProfileSnapshot,
-    ) -> None: ...
-
-    def commit_activation(
-        self,
-        *,
-        expected_generation: int,
-        record: ConfigRegistryActivationRecord,
     ) -> None: ...
 
 

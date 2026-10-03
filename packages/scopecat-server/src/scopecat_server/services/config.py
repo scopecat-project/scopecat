@@ -30,7 +30,6 @@ from scopecat.daemon.views import (
 )
 from scopecat.daemon.wire import (
     ConfigContextResolveCommand,
-    ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchPublishCommand,
     ParameterResolveCommand,
@@ -52,7 +51,6 @@ from scopecat.records.parameter_branch import (
 )
 from scopecat.records.parameter_revision import (
     ParameterRevision,
-    ParameterRevisionContent,
     parameter_revision_hash,
 )
 from scopecat.records.run import (
@@ -305,49 +303,6 @@ class ConfigService:
                 except ValueError as error:
                     raise BackendConflict(str(error)) from error
 
-    def bind_parameters(self, command: ParameterBindCommand) -> ConfigEntryView:
-        """Resolve exact independent inputs; do not select setup or parameters."""
-        with (
-            self._mutation_lock,
-            self._config_errors(),
-            self._config_transaction() as (connection, services),
-        ):
-            try:
-                parameters = ParameterRevisionRepository(connection).get(
-                    command.parameters.revision_id
-                )
-                if parameters.ref != command.parameters:
-                    raise BackendConflict(
-                        "parameter reference does not match saved content"
-                    )
-                result = config_registry_service.save_config_revision(
-                    revision=config_registry_service.ConfigRevision(
-                        entry_id=command.entry_id,
-                        actor=command.actor,
-                        note=command.note,
-                        source=config_registry_service.ParameterConfigRevisionSource(
-                            parameters=ParameterRevisionContent(
-                                id=command.entry_id,
-                                system_id=command.system_id,
-                                catalog=parameters.catalog,
-                                parameters=parameters.parameters,
-                            ),
-                            setup=command.setup,
-                            origin=parameters.ref,
-                        ),
-                    ),
-                    unit_of_work=services.config_registry,
-                )
-                saved = config_registry_service.load_config_registry_entry_snapshot(
-                    entry_id=result.entry.id,
-                    unit_of_work=services.config_registry,
-                )
-                return ConfigEntryView(entry=saved.entry, config=saved.config)
-            except KeyError as error:
-                raise BackendNotFound(
-                    "parameter or setup revision was not found"
-                ) from error
-
     def resolve_context(
         self, command: ConfigContextResolveCommand
     ) -> ConfigContextResolution:
@@ -401,7 +356,6 @@ class ConfigService:
             )
             return ConfigRegistryPage(
                 entries=snapshot.entries,
-                activation=snapshot.activation,
                 next_cursor=snapshot.next_cursor,
             )
 
@@ -414,7 +368,6 @@ class ConfigService:
             return ConfigEntryView(
                 entry=snapshot.entry,
                 config=snapshot.config,
-                latest_activation=snapshot.latest_activation,
                 structure_version=parameter_structure_version(
                     snapshot.config.parameter_catalog
                 ),

@@ -128,12 +128,6 @@ def test_registry_capture_follows_exact_base_without_activation(tmp_path: Path):
             )
             == evidence
         )
-        assert (
-            connection.execute(
-                "SELECT count(*) FROM config_registry_activations"
-            ).fetchone()[0]
-            == 0
-        )
         with pytest.raises(ValueError, match="configuration evidence differs"):
             capture_input_revisions(
                 connection,
