@@ -116,7 +116,7 @@ def create_client_environment(
 def prepare_execution_environment(
     runtime: ApplicationRuntime, workspace: Path, *, offline: bool = False
 ) -> Path:
-    """Resolve declared additions against a fixed delivery without editing it.
+    """Resolve source dependencies with the application's framework API version.
 
     The returned environment is application-owned. Existing published source and
     pending tasks retain their previous interpreters when this candidate is selected.
@@ -183,6 +183,8 @@ def prepare_execution_environment(
                     uv,
                     "pip",
                     "install",
+                    "--project",
+                    str(workspace),
                     "--python",
                     str(python),
                     "--require-hashes",
