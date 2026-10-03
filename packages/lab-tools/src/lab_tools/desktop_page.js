@@ -49,3 +49,8 @@ function quit() {
 }
 
 window.scopecatRequestExit = quit;
+window.addEventListener("keydown", (event) => {
+  if (!window.pywebview || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== "q") return;
+  event.preventDefault();
+  if (!event.repeat) quit();
+});

@@ -388,6 +388,17 @@ guarded Back command. Session regressions cover initial entry, retry and both
 windows reconnecting while retaining their record routes. The replacement package
 needs a focused first-window back check in addition to multi-window restoration.
 
+The following native-distribution run failed on both platforms in the acceptance
+script, after packaging: its fake window still implemented `load_url` rather than
+`run_js`. The verifier now records and checks replacement navigation. Desktop
+Ctrl-Q and a File/Quit entry also request the ordinary application-owned Quit
+decision; startup/recovery pages support Ctrl-Q too. Alt-F4 retains window-close
+semantics. Local checks passed 37 Python session/file tests and five UI Quit tests,
+including file-work waiting via Ctrl-Q and prevention of duplicate pending quits.
+Short transfers do not require repeated human attempts to catch the operation;
+deterministic cancellation and file-integrity tests remain the evidence for that
+case. Native keyboard delivery is still a focused Windows package observation.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

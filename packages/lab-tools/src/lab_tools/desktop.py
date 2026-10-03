@@ -604,6 +604,9 @@ def run(
                         [
                             MenuAction(f"打开文件…（{modifier}O）", windows.open_file),
                             MenuAction("新建窗口", new_window_from_menu),
+                            MenuAction(
+                                f"退出 Scopecat（{modifier}Q）", windows.request_quit
+                            ),
                         ],
                     ),
                     Menu(

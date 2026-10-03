@@ -27,13 +27,16 @@ runtime = ApplicationRuntime(home / "data")
 selected = runtime.installation()
 assert not (home / "software").exists()
 workspace = home / "authors"
-urls = []
+navigation = []
 api = DesktopAPI(
     DesktopSession(runtime, threading.Event()),
-    lambda: SimpleNamespace(load_url=urls.append))
+    lambda: SimpleNamespace(run_js=navigation.append))
 try:
     assert api.create_source(str(home), "authors") == str(workspace)
-    assert "source=" in urls[-1] and urls[-1].endswith("#settings")
+    assert navigation[-1].startswith("window.location.replace(")
+    url = json.loads(
+        navigation[-1].removeprefix("window.location.replace(").removesuffix(");"))
+    assert "source=" in url and url.endswith("#settings")
     client = create_client_environment(runtime, workspace)
     expected_source = {"directory": str(workspace), "python": str(client)}
     assert expected_source in api.status()["sources"]

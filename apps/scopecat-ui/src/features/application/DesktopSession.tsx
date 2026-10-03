@@ -125,7 +125,22 @@ export function DesktopSession() {
           setProgress(undefined);
         });
     };
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        !window.pywebview ||
+        !event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        event.key.toLowerCase() !== "q"
+      )
+        return;
+      event.preventDefault();
+      if (!event.repeat) window.scopecatRequestExit?.();
+    };
+    window.addEventListener("keydown", keydown);
     return () => {
+      window.removeEventListener("keydown", keydown);
       delete window.scopecatRequestExit;
     };
   }, []);

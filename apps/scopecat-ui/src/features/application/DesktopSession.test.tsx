@@ -19,7 +19,7 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),
       wait_for_idle,
-      request_exit: vi.fn().mockResolvedValue({ runs: 1 }),
+      request_exit: vi.fn().mockResolvedValue({ file_operations: 1 }),
       exit: vi.fn(),
       status: vi.fn(),
       retry: vi.fn(),
@@ -32,8 +32,9 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
     },
   };
   render(<DesktopSession />);
-  act(() => window.scopecatRequestExit?.());
+  fireEvent.keyDown(window, { key: "q", ctrlKey: true });
   const waitButton = await screen.findByRole("button", { name: "Quit when work finishes" });
+  expect(screen.getByText(/Unfinished work: 1 file operation/)).toBeInTheDocument();
   await waitFor(() => expect(waitButton).toBeEnabled());
   fireEvent.click(waitButton);
   await screen.findByText(/Waiting for work to finish/);
@@ -153,12 +154,27 @@ it("shows progress immediately and prevents duplicate quit requests", async () =
     },
   };
   render(<DesktopSession />);
-  act(() => window.scopecatRequestExit?.());
+  const shortcut = new KeyboardEvent("keydown", { key: "q", ctrlKey: true, cancelable: true });
+  act(() => {
+    window.dispatchEvent(shortcut);
+  });
+  expect(shortcut.defaultPrevented).toBe(true);
   expect(screen.getByRole("status")).toHaveTextContent("Checking unfinished work");
   expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   act(() => window.scopecatRequestExit?.());
+  fireEvent.keyDown(window, { key: "q", ctrlKey: true, repeat: true });
   expect(request_exit).toHaveBeenCalledTimes(1);
   await act(async () => finishCheck(null));
   expect(screen.getByRole("status")).toHaveTextContent("Closing Scopecat");
   expect(screen.getByRole("button", { name: "Stop and close" })).toBeDisabled();
+});
+
+it("does not intercept quit keys in an ordinary browser", () => {
+  render(<DesktopSession />);
+  const shortcut = new KeyboardEvent("keydown", { key: "q", ctrlKey: true, cancelable: true });
+  act(() => {
+    window.dispatchEvent(shortcut);
+  });
+  expect(shortcut.defaultPrevented).toBe(false);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
