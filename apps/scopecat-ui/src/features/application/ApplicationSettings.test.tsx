@@ -94,6 +94,7 @@ it("keeps author dependencies independent and uses native application updates", 
     ],
   };
   const dependencies = vi.fn().mockResolvedValue("Dependencies ready");
+  const selectEnvironment = vi.fn();
   const client = vi.fn().mockResolvedValue("/authors/.venv/bin/python");
   const restart = vi.fn();
   window.pywebview = {
@@ -107,7 +108,7 @@ it("keeps author dependencies independent and uses native application updates", 
       wait_for_idle: vi.fn(),
       status: vi.fn().mockImplementation(async () => ({ ...state })),
       register_source: vi.fn(),
-      select_source_environment: vi.fn(),
+      select_source_environment: selectEnvironment,
       choose_directory: vi.fn(),
       create_source: vi.fn(),
       prepare_author_environment: dependencies,
@@ -139,12 +140,7 @@ it("keeps author dependencies independent and uses native application updates", 
     target: { value: "/custom/python" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Use this execution Python" }));
-  await waitFor(() =>
-    expect(window.pywebview!.api.select_source_environment).toHaveBeenCalledWith(
-      "/authors",
-      "/custom/python",
-    ),
-  );
+  await waitFor(() => expect(selectEnvironment).toHaveBeenCalledWith("/authors", "/custom/python"));
   expect(dependencies).toHaveBeenCalledTimes(1);
   expect(restart).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText("Local environment repair"));
