@@ -27,7 +27,6 @@ class AuthorWorkspaceServices:
         self.services: dict[str, AuthorRevisionService] = {}
         self.unavailable: dict[str, str] = {}
         self.binding = load_runtime_binding(root)
-        self._roots: dict[str, str] = {}
         self._load_lock = RLock()
         try:
             self._refresh()
@@ -61,7 +60,6 @@ class AuthorWorkspaceServices:
             raise ValueError(
                 "Registered author workspace has a different runtime binding"
             )
-        self._roots.setdefault(str(item.root), item.id)
         service = AuthorRevisionService(
             item.root,
             self.store,
@@ -134,7 +132,9 @@ class AuthorWorkspaceServices:
 
     @property
     def roots(self) -> dict[str, str]:
-        return dict(self._roots)
+        # Endpoint verification must recognize a new registration before its
+        # first catalog request, without importing source from a health probe.
+        return {str(item.root): item.id for item in local_author_workspaces(self.root)}
 
     def close(self) -> None:
         self.request_stop()

@@ -1,6 +1,7 @@
 """Real vendor processes have independent imports and explicit failure outcomes."""
 
 import io
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -77,6 +78,31 @@ def test_wire_rejects_object_arrays_and_bad_lengths() -> None:
         sdk_wire.send(io.BytesIO(), np.array([object()], dtype=object))
     with pytest.raises(ValueError, match="header"):
         sdk_wire.receive(io.BytesIO(b"\xff\xff\xff\xff"))
+
+
+def test_sdk_does_not_survive_its_crashed_driver(command: tuple[str, ...]) -> None:
+    code = (
+        "import os, threading, time\n"
+        "from scopecat_instruments.sdk_process import SDKProcess\n"
+        f"sdk = SDKProcess({command!r})\n"
+        "print(sdk.pid, flush=True)\n"
+        "threading.Thread(target=sdk.call, args=('wait',), daemon=True).start()\n"
+        "time.sleep(.2)\nos._exit(17)\n"
+    )
+    parent = subprocess.run(  # noqa: S603 - fixture-owned driver and vendor
+        [sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=15
+    )
+    assert parent.returncode == 17, parent.stderr
+    identity = int(parent.stdout.strip())
+    try:
+        child = psutil.Process(identity)
+    except psutil.NoSuchProcess:
+        return
+    try:
+        child.wait(timeout=8)
+    except psutil.TimeoutExpired:
+        # Some test hosts defer reaping orphans. A zombie owns no hardware.
+        assert child.status() == psutil.STATUS_ZOMBIE
 
 
 def test_upload_timeout_reaps_a_vendor_that_stops_reading(

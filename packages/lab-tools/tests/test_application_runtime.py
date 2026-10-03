@@ -176,6 +176,8 @@ def test_select_existing_environment_validates_before_publishing(
 def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
     import httpx2
 
+    from scopecat.daemon.endpoint import resolve_daemon_endpoint
+
     running = application.start()
     sources = []
     for name in ("first", "second"):
@@ -187,6 +189,7 @@ def test_two_sources_share_empty_application_without_owning_it(application, tmp_
         )
         (root / "src/experiment.py").write_text(f"name = {name!r}\n")
         identity = application.register_source(root)
+        assert resolve_daemon_endpoint(root) == running.base_url
         assert application.source(root) == identity
         sources.append((root, identity))
         with httpx2.Client(base_url=running.base_url, trust_env=False) as client:
