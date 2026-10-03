@@ -132,8 +132,8 @@ dispatch. Hidden isolated Mac WebViews confirmed `window.find` exists, searches
 return true/false for present/absent text, and CSS zoom is supported. Both probes
 exited without starting the application backend. These checks do not establish
 visible search highlighting, native accelerator behavior, chart clarity under zoom,
-or independent zoom across real windows. Those still require the packaged Mac and
-Windows journey; they are not grounds for a final shell decision.
+or independent zoom across real windows. The later packaged Mac observations and
+Windows checklist supply that separate evidence for the host decision.
 
 ### Packaged Mac file-open and find check (2026-10-03)
 
@@ -208,7 +208,7 @@ on its main loop, with Cocoa maintaining window activation, title changes and
 closed-window removal. Existing auxiliary windows are excluded, so the tray's
 internal window does not appear as an `Item-0` document. Windows continues to use
 the native host title for the operating system's window selection surfaces;
-that platform still requires qualification.
+the later four-item Windows checklist includes that behavior.
 
 An isolated rebuilt Mac package displayed distinct Alpha and Beta titles and
 listed both in Window. Selecting Alpha from that menu activated its original
@@ -344,7 +344,7 @@ again after the runtime journey.
 
 This qualifies the packaged runtime and environment separation, not native window
 interaction. No installer was supplied: DMG distribution, Windows installation
-and the remaining platform lifecycle observations are not covered by this check.
+and native platform lifecycle observations are covered by separate checks below.
 
 ### File-operation and cleanup closeout (2026-10-03)
 
@@ -377,16 +377,16 @@ now restores every retained view, in creation order, without recreating closed
 views or restarting the backend. The same callback serves repeat launch and
 macOS reopen. The window-coordination regression covers hide/open of two views
 and reopening after one view is closed; all 28 session/platform tests passed.
-The earlier single-window human observation does not qualify this correction's
-multi-window native behavior; the next package needs that focused observation.
+The earlier single-window observation is not multi-window evidence; the later
+Windows checklist acceptance below covers the corrected package.
 
 The first view also retained its startup page in native navigation history:
 entering the workbench used a normal URL load. Startup/retry and backend reconnect
 now use `location.replace` rather than adding a history entry. This addresses
 native back navigation itself instead of relying only on the application's
 guarded Back command. Session regressions cover initial entry, retry and both
-windows reconnecting while retaining their record routes. The replacement package
-needs a focused first-window back check in addition to multi-window restoration.
+windows reconnecting while retaining their record routes. The corrected package
+was included in the later Windows checklist acceptance below.
 
 The following native-distribution run failed on both platforms in the acceptance
 script, after packaging: its fake window still implemented `load_url` rather than
@@ -397,23 +397,29 @@ semantics. Local checks passed 37 Python session/file tests and five UI Quit tes
 including file-work waiting via Ctrl-Q and prevention of duplicate pending quits.
 Short transfers do not require repeated human attempts to catch the operation;
 deterministic cancellation and file-integrity tests remain the evidence for that
-case. Native keyboard delivery is still a focused Windows package observation.
+case. The maintainer subsequently completed all four Windows checklist items
+with the `13f365110` package and reported no obvious problems. Both native
+distribution jobs passed; the subsequent test-only correction at `9ecbd5142`
+passed ordinary CI and all 390 frontend tests. This closes the bounded native
+acceptance, not exhaustive platform or arbitrary-data-size qualification.
 
 ## Technology decision
 
-Implement this slice before broad GUI redesign or more host-specific polish.
-The current Python/WebView host is a candidate, not a permanent commitment.
-Evaluate another shell only against a demonstrated limitation in this slice.
-Keep scientific Python unchanged unless a separate requirement justifies change.
+Decision on 2026-10-03: retain the Python/WebView host for the delivered slice.
+Independent windows, native file commands, basic text interaction and lifecycle
+behavior have bounded Mac/Windows evidence, and both distributions are
+reproducibly qualified. The discovered restoration/history issues were corrected
+in shared application coordination; no remaining demonstrated limitation requires
+a second shell. Scientific Python and ordinary author environments remain separate
+from the packaged application runtime.
 
-Choose using: ordinary interaction quality, independent window state, native
-file/menu integration, lifecycle correctness, debugging cost, reproducible
-packaging, accessibility and maintenance effort. Record actual platform gaps and
-the ongoing glue needed, rather than ranking languages or executable sizes.
-Record a reuse decision against this slice; do not reopen shell selection for
-each PR or build. If the candidate passes without recurring platform workarounds, reuse it. If a
-required interaction or lifecycle remains unreliable, compare one alternative
-using the same slice. Ship one selected host and retire the experiment.
+This decision accepts the existing Cocoa/WinForms activation, menu, icon and exit
+glue as a maintenance cost; it does not declare the GUI finished or promise
+unrestricted WebView capability. Reconsider the host only for a concrete required
+interaction, accessibility or lifecycle limitation, or recurring platform repair
+cost that cannot reasonably be resolved in this boundary. Compare an alternative
+against the same user journey then, not at every PR or build. Broad GUI redesign
+can proceed independently of this host reuse decision.
 
 ## Delivery boundary
 
@@ -428,6 +434,5 @@ If the slice proves a broader UI rewrite necessary, re-plan scope explicitly
 before adding PRs or assigning the rewrite to integration closeout.
 
 Per-window state, application-owned commands and two data views are implemented.
-Complete the remaining platform observations against the same acceptance journey
-before recording the host decision. The
+The bounded platform observations and host decision are complete. The
 [lifecycle contract](desktop-lifecycle.md) defines close versus Quit.

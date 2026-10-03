@@ -6,15 +6,25 @@ not a complete exported run.
 
 ## Current delivery status
 
+PR 2 closeout is complete as of 2026-10-03. The maintainer completed the four-item
+Windows native checklist without an obvious problem using the corrected package.
+[Native distribution acceptance](https://github.com/scopecat-project/scopecat/actions/runs/37110939966)
+passed on Mac and Windows at `13f365110`;
+[CI](https://github.com/scopecat-project/scopecat/actions/runs/37111184660) passed at
+`9ecbd5142`, whose only additional change repairs a frontend test fixture.
+The final frontend suite passed 390 tests. The Python/WebView host is retained
+for this slice; see the [decision](desktop-product.md#technology-decision).
+The evidence below is historical detail, not outstanding work. Final closeout
+changes documentation only and must pass ordinary PR CI before squash merge.
+
 The 2026-10-03 transition-design review adds a focused closeout batch: imported
 captures now participate in ordinary preview/retry cleanup with resource-owned
 bytes and per-capture run identity membership; the recording-only import library
 has been retired. Recording page summaries consume raw records incrementally.
 Native file operations have window-local serialization and application-owned
 wait/cancel accounting, and imported/live waveform results share presentation.
-These changes supersede the package and suite checkpoint below for affected
-paths; rerun relevant checks and native lifecycle acceptance against the new
-package, not unrelated completed journeys. The development store schema is 105;
+These changes superseded earlier package and suite evidence for affected paths;
+the relevant checks and native acceptance have since completed. The development store schema is 105;
 no migration or rewriting of existing stores is performed.
 
 Local checks for this batch: 139 related Python tests passed, followed by the new
@@ -29,7 +39,7 @@ cleanup and reimport observations; see the [native evidence](desktop-product.md#
 for the exact cancellation and tray-observation limits.
 
 This section is the PR 2 handoff checkpoint, updated on 2026-10-03 against
-`30a1389b4`. Resume from the remaining items below, not from earlier planning
+`9ecbd5142`. Use the completed evidence below, not earlier planning
 language or a conversation summary. Detailed evidence is linked, not a new task
 list. A completed check needs repeating only when a relevant change, failure or
 specific unresolved concern invalidates its evidence.
@@ -37,10 +47,10 @@ specific unresolved concern invalidates its evidence.
 | Requirement | Current evidence | Still required before merge |
 | --- | --- | --- |
 | Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys; closure self-review completed | No outstanding closure implementation item |
-| Independent analysis and retained provenance | Fresh public-wheel environment; native export / Python analysis / Mac native open | Final consumer and documentation review |
-| Large-data access | 256 MiB waveform verification, independent analysis and packaged Mac browsing; byte-budgeted selection cache; bounded HTTP previews | Windows rendering acceptance |
-| Ordinary desktop interaction | Mac two-window, copy/find/zoom, native file commands and failure recovery observations | Remaining lifecycle observations and Windows interaction acceptance |
-| Delivery and host decision | Local Python/UI/static checks; isolated Mac packages | Final package, platform evidence, recorded host decision, self-review and CI |
+| Independent analysis and retained provenance | Fresh public-wheel environment; native export / Python analysis / Mac native open; consumer/documentation review | Complete |
+| Large-data access | 256 MiB waveform verification, independent analysis and packaged Mac browsing; bounded previews; Windows checklist accepted | Complete within tested sizes and shapes |
+| Ordinary desktop interaction | Recorded Mac observations and maintainer acceptance of the four-item Windows checklist | Complete within the bounded checklist |
+| Delivery and host decision | Both native distributions passed; current implementation CI passed; host reuse and self-review recorded | Documentation closeout CI and squash merge |
 
 Completed local work:
 
@@ -63,7 +73,7 @@ Completed local work:
   the ad-hoc-signed quarantined copy; notarization is not provided. This check
   did not attempt Finder first-open or change the user's security settings.
 
-Remaining closeout, in order:
+Completed closeout:
 
 1. Scientific-reference closure self-review is complete: traced the single read
    transaction through typed run/input/analysis/interpretation traversal and
@@ -75,16 +85,17 @@ Remaining closeout, in order:
    confirmed that the final window stayed hidden and restored through the menu
    bar; the rebuilt package's file-work Quit choices and cleanup/reimport journey
    passed, and the isolated test application was explicitly quit without residue.
-3. The PR description now describes the delivered scope. CI and native
-   distribution builds were dispatched against `43d504820` after local checks;
-   confirm their results rather than reusing earlier green checks.
-4. Use that Windows artifact for the bounded native interaction and lifecycle
-   check, not a duplicate full business journey. Native distribution automation
-   covers real open-file cleanup failure/retry on Windows. Earlier user acceptance
-   of unchanged PR 1 behavior remains valid; new window/file coordination receives
-   targeted observations.
-5. Record the host decision and final self-review, confirm current CI, and stop
-   before merge as requested.
+3. The PR description describes the delivered scope. The current implementation
+   CI and corrected native distributions passed, as linked above.
+4. The maintainer accepted the Windows four-item native checklist. Real open-file
+   cleanup recovery, cancellation and file integrity remain automated checks;
+   short transfers do not require racing a manual quit action.
+5. Final self-review found no remaining blocking issue: scientific-reference
+   closure, consumer boundaries, cleanup ownership/retry and desktop transitions
+   have recorded checks. The latest review checked all-window restoration,
+   replacement navigation, Quit shortcut delegation and repaired verifier/test
+   consumers. Retain the current host; broad GUI redesign and execution isolation
+   remain separate work. The maintainer authorized squash merging after closeout.
 
 Settled scope: one application/backend; no separate viewer mode; closing the
 last window hides to tray on both platforms even when idle; only explicit Quit
@@ -297,7 +308,7 @@ previous completion feedback, failure leaves the destination unchanged, and
 success reports the saved path. Browser attachment downloads remain available
 through the same data API. Local HTTP, bridge and UI tests cover these paths;
 packaged Mac save, cancellation and failure recovery are recorded in the desktop
-evidence. Windows native saving still requires acceptance.
+evidence. Windows native saving is included in the accepted four-item checklist.
 
 Native File → Open dispatches to the focused window. Its page button and
 Cmd/Ctrl-O share one window-owned command, with progress and error feedback even
@@ -346,8 +357,8 @@ analysis IDs in different runs cannot select the wrong attachment. Verified
 attachments are staged before streaming and temporary copies are cleaned afterward.
 This reuses the existing artifact download UI; Mac native attachment saving has
 been observed. The bounded preview and native command implementations above,
-and external-analysis provenance below, are covered locally. Remaining packaged
-large-waveform, lifecycle and Windows checks are tracked by the desktop gate.
+and external-analysis provenance below, are covered locally. Packaged waveform,
+lifecycle and Windows evidence is recorded in the completed desktop gate.
 
 Analysis-reference verification now runs in the public data layer during archive
 verification as well as store capture. Published inputs and figure data sources
