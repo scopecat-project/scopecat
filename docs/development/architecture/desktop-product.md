@@ -2,7 +2,7 @@
 
 Status: the bounded product gate was completed in PR #837, including maintainer
 Mac/Windows observations. Retain the Python/WebView host (see Technology decision).
-PR #844 delivered independent execution and SDK environments; PR 4 qualifies their
+PR #844 delivered independent execution and SDK environments; #845 completed their
 composition, release and retirement. The sections below retain the acceptance
 contract and evidence, not a new queue of unimplemented desktop features.
 Data exchange implementation and its current limits are tracked in
@@ -99,6 +99,10 @@ including real open-file deletion behavior, not duplicate manual fault injection
 Use the bounded [Windows check](../windows-application-trial.md) for PR 2.
 
 ### Current local evidence (2026-10-02)
+
+Historical checkpoint: this and the following dated subsections record observations
+at their respective revisions. Their outstanding checks were subsequently reconciled
+in #837/#845; they are not current tasks. Use #616 for remaining observations.
 
 An isolated Mac app wrapper loaded the current source from the development
 environment and the existing built GUI. The native File menu created a second
@@ -426,15 +430,19 @@ can proceed independently of this host reuse decision.
 
 ## Delivery boundary
 
+The four-part desktop milestone below is completed (#829/#837/#844/#845).
+Earlier dated observations describe limits at their recorded revisions; later
+accepted evidence supersedes their outstanding-check lists. Current remaining
+qualification belongs to #616, not a new four-PR budget.
+
 PR #829 finishes install/runtime foundations and concrete defects, including text
 selection. It must not claim a finished desktop product, multi-window support or
 final GUI architecture. Do not expand it into a full GUI rewrite.
 
-Keep the four-PR milestone budget: PR 2 combines independent data/analysis with
-this bounded product slice and a recorded shell decision; PR 3 covers execution
-and vendor runtime boundaries; PR 4 qualifies their composition and retirement.
-If the slice proves a broader UI rewrite necessary, re-plan scope explicitly
-before adding PRs or assigning the rewrite to integration closeout.
+#837 combined independent data/analysis with this bounded product slice and a
+recorded shell decision; #844 delivered execution/vendor runtime boundaries;
+#845 qualified composition and retirement. A broader GUI redesign is a separate
+future scope, not unfinished integration closeout.
 
 Per-window state, application-owned commands and two data views are implemented.
 The bounded platform observations and host decision are complete. The

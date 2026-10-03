@@ -66,3 +66,31 @@ another full-laboratory example or journey.
 Persistent-format changes follow the [prebaseline data policy](data-compatibility.md).
 Current-format recovery remains tested; old development migration exercises do
 not establish a compatibility baseline or require new readers.
+
+## Handoff and evidence
+
+The [platform index](platform-status.md) links current work owners. Each issue
+body owns its current scope, remaining conditions and evidence; PRs own delivered
+changes and validation. Architecture describes current contracts. Dated audits
+and old numbered batches are historical, even when they use future tense.
+
+A source merge, a release artifact, a consumer pin and human/hardware acceptance
+are separate facts. Update affected issue bodies at closeout, not only comments.
+Do not add a second handoff ledger or depend on ignored local notes.
+
+Use tracked files and explicit source paths when exploring a checkout. Local
+ignored directories can contain retired checkouts, bytecode, environments and
+scientific data; their presence is not maintained implementation. Do not delete
+them as part of a documentation or code refactor.
+
+Tests generate .test-results and temporary runtime bindings; these are outputs,
+not checkout prerequisites. A fresh source export plus locked dependency setup
+should reproduce software checks. SDK installations and real-device settings
+are explicit external prerequisites, never implied by a developer's machine.
+
+For an unresolved failure, retain the source/environment identity, exact command,
+observed outcome and diagnostic limits in its issue. Save a sanitized minimal
+log/excerpt in that issue or a durable artifact with an access-controlled link.
+CI artifacts have retention limits; a temporary path or expired artifact alone
+is not a portable evidence record. If an old raw log is unavailable, say so and
+retain its recorded observations without claiming to have reverified them.

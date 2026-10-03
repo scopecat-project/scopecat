@@ -1,112 +1,16 @@
 # Independent data and analysis delivery
 
-PR 2 delivers portable scientific evidence, independent Python analysis and the
-[two-window product journey](desktop-product.md). A readable recording alone is
-not a complete exported run.
+Portable scientific evidence and independent analysis were delivered in
+[#837](https://github.com/scopecat-project/scopecat/pull/837), with installed
+composition qualified in [#845](https://github.com/scopecat-project/scopecat/pull/845).
+[#575](https://github.com/scopecat-project/scopecat/issues/575) is closed.
+The bounded Mac/Windows native observations are complete; unfamiliar-user and
+physical qualification remain separate in #616. Current limits are described below.
 
-## Current delivery status
-
-PR 2 closeout is complete as of 2026-10-03. The maintainer completed the four-item
-Windows native checklist without an obvious problem using the corrected package.
-[Native distribution acceptance](https://github.com/scopecat-project/scopecat/actions/runs/37110939966)
-passed on Mac and Windows at `13f365110`;
-[CI](https://github.com/scopecat-project/scopecat/actions/runs/37111184660) passed at
-`9ecbd5142`, whose only additional change repairs a frontend test fixture.
-The final frontend suite passed 390 tests. The Python/WebView host is retained
-for this slice; see the [decision](desktop-product.md#technology-decision).
-The evidence below is historical detail, not outstanding work. Final closeout
-changes documentation only and must pass ordinary PR CI before squash merge.
-
-The 2026-10-03 transition-design review adds a focused closeout batch: imported
-captures now participate in ordinary preview/retry cleanup with resource-owned
-bytes and per-capture run identity membership; the recording-only import library
-has been retired. Recording page summaries consume raw records incrementally.
-Native file operations have window-local serialization and application-owned
-wait/cancel accounting, and imported/live waveform results share presentation.
-These changes superseded earlier package and suite evidence for affected paths;
-the relevant checks and native acceptance have since completed. The development store schema is 107;
-no migration or rewriting of existing stores is performed.
-
-Local checks for this batch: 139 related Python tests passed, followed by the new
-raw-array lifetime regression and four schema/plan tests (five passed); the seven
-HTTP exchange tests passed again after bounding trace reads by the series budget.
-All 388 frontend tests passed. Python and frontend type checking, Ruff, frontend
-lint/formatting, 11 import contracts and documentation links passed. A subsequent
-13-test targeted run passed with one Windows-only open-handle test skipped on Mac;
-configured Python type checking again reported no errors or warnings.
-The rebuilt `30a1389b4` Mac package passed startup/stop, native import wait/quit,
-cleanup and reimport observations; see the [native evidence](desktop-product.md#file-operation-and-cleanup-closeout-2026-10-03)
-for the exact cancellation and tray-observation limits.
-
-This section is the PR 2 handoff checkpoint, updated on 2026-10-03 against
-`9ecbd5142`. Use the completed evidence below, not earlier planning
-language or a conversation summary. Detailed evidence is linked, not a new task
-list. A completed check needs repeating only when a relevant change, failure or
-specific unresolved concern invalidates its evidence.
-
-| Requirement | Current evidence | Still required before merge |
-| --- | --- | --- |
-| Scientific reference closure and import conflicts | Local archive/storage/HTTP tests, composed-maintenance and accepted-decision journeys; closure self-review completed | No outstanding closure implementation item |
-| Independent analysis and retained provenance | Fresh public-wheel environment; native export / Python analysis / Mac native open; consumer/documentation review | Complete |
-| Large-data access | 256 MiB waveform verification, independent analysis and packaged Mac browsing; bounded previews; Windows checklist accepted | Complete within tested sizes and shapes |
-| Ordinary desktop interaction | Recorded Mac observations and maintainer acceptance of the four-item Windows checklist | Complete within the bounded checklist |
-| Delivery and host decision | Both native distributions passed; current implementation CI passed; host reuse and self-review recorded | Documentation closeout CI and squash merge |
-
-Completed local work:
-
-- Independent public-wheel analysis and native export/analysis/open round trip:
-  `0e5e840e8`; export and shutdown failure recovery: `b6db9c4a5`.
-- Waveform memory corrections: `a29590c3f`; packaged Mac 256 MiB waveform browsing:
-  `0605dfc65`. These are complete within their recorded scope, not pending
-  implementations.
-- User guide: `882719f91`; packaged runtime, relocation, repeat startup and
-  independent author-environment acceptance: `00423b27f`.
-- Latest local Python run: 3856 passed, 14 failed under macOS sandbox process
-  restrictions, one skipped. All 14 failed cases passed when rerun with normal
-  process permissions. This is coverage across two runs, not one all-green run.
-  Frontend: 84 files / 388 tests passed. Type checking, 11 import contracts,
-  Ruff, documentation links and strict documentation build passed. Subsequent
-  verifier changes passed targeted Ruff and type checks; no production code
-  changed after those suite results.
-- A local DMG of the qualified Mac package passed image integrity, extracted
-  application signature and deliberate-tamper detection. Gatekeeper rejected
-  the ad-hoc-signed quarantined copy; notarization is not provided. This check
-  did not attempt Finder first-open or change the user's security settings.
-
-Completed closeout:
-
-1. Scientific-reference closure self-review is complete: traced the single read
-   transaction through typed run/input/analysis/interpretation traversal and
-   payload assembly, and checked reader validation of revision hashes, proposal
-   baselines, exact publication outputs and recording selections. Existing
-   source-isolation, missing-reference, conflict and composed-maintenance tests
-   remain the evidence; no new closure defect was found in this review.
-2. Mac native closeout is complete within its recorded scope. The maintainer
-   confirmed that the final window stayed hidden and restored through the menu
-   bar; the rebuilt package's file-work Quit choices and cleanup/reimport journey
-   passed, and the isolated test application was explicitly quit without residue.
-3. The PR description describes the delivered scope. The current implementation
-   CI and corrected native distributions passed, as linked above.
-4. The maintainer accepted the Windows four-item native checklist. Real open-file
-   cleanup recovery, cancellation and file integrity remain automated checks;
-   short transfers do not require racing a manual quit action.
-5. Final self-review found no remaining blocking issue: scientific-reference
-   closure, consumer boundaries, cleanup ownership/retry and desktop transitions
-   have recorded checks. The latest review checked all-window restoration,
-   replacement navigation, Quit shortcut delegation and repaired verifier/test
-   consumers. Retain the current host; broad GUI redesign and execution isolation
-   remain separate work. The maintainer authorized squash merging after closeout.
-
-Settled scope: one application/backend; no separate viewer mode; closing the
-last window hides to tray on both platforms even when idle; only explicit Quit
-exits. Broad GUI redesign, vendor execution isolation and real-device acceptance
-are not newly added PR 2 work. Do not reopen these decisions merely because a
-conversation was compacted. Private consumer pin updates remain separate from
-data-only application qualification.
-
-The detailed checks below describe their actual scope. The
-[desktop evidence](desktop-product.md) distinguishes native observations from
-automated checks; earlier observations are not claims that all later gates passed.
+The pre-merge chronology and exact historical measurements remain in
+[the recorded revision](https://github.com/scopecat-project/scopecat/blob/11c5fcd3347cb2a9795492d97e9370a7c907e69f/docs/development/architecture/data-exchange.md)
+and merged PRs. They are not remaining merge gates. No supported persistent-data
+baseline or prebaseline migration is introduced.
 
 ## Implemented foundation
 
@@ -392,8 +296,7 @@ retains the project decision publication, and rejects missing decisions or chang
 decision schemas. These are local scientific-graph checks, not evidence of the
 complete desktop interaction requirements.
 
-During PR 2 development, run focused checks locally; trigger CI after the complete
-implementation and local self-review. The current data/evidence checks are:
+For changes to this capability, run affected checks locally before CI and self-review. The current data/evidence checks are:
 
 ```sh
 uv run --locked pytest -q \
@@ -475,22 +378,10 @@ new conclusion and retained input/execution evidence. The same analysis also
 passed in a fresh environment with only the public wheel and its dependencies,
 outside the repository, without an installed server or adapter. The waveform check
 above qualifies independent analysis at that size; the rebuilt Mac package also
-displayed its array summaries, bounded waveforms and saved conclusion. Windows
-desktop acceptance remains outstanding. See the
-[desktop evidence](desktop-product.md) for the observed scope.
-
-1. Extend stable recording capture to scientific reference closure from retained data;
-   include plans, parameters, result contracts, analysis and artifact dependencies
-   with explicit missing-reference failures. Keep machine-local bindings outside
-   the exchange contract. Do not silently turn absent provenance into empty data.
-2. Import with identity/content conflict detection and idempotent repeated import;
-   expose independent Python analysis and retain external-analysis provenance.
-3. Open portable data in the unified application without preparing device or
-   author execution environments. The application backend may serve both data
-   access and task management; do not create a separate viewer entry mode.
-   Split application commands from per-window navigation, drafts and selection.
-4. Complete the bounded two-window journey on both platforms and record the shell
-   choice. Implemented multi-window support still needs complete platform acceptance.
+displayed its array summaries, bounded waveforms and saved conclusion. The bounded Windows native checklist was accepted in #837. See the
+[desktop evidence](desktop-product.md) for its scope. Independent data opening,
+reference closure, conflict handling and external analysis are delivered, not a
+new implementation sequence.
 
 Current-format backup/restore remains a different capability: exchange selects
 portable scientific evidence rather than copying an entire application store.
