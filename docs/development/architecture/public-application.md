@@ -169,7 +169,7 @@ are unaffected. A lesson does not require its own service or virtual environment
 
 Remove the standalone manager product surface. Move task failures and recovery into
 the workbench, device connections and driver maintenance into **Devices and drivers**,
-application updates into settings, storage into **Data**,
+source/environment maintenance into settings, storage into **Data**,
 and diagnostics/tutorials into Help. Hiding the old chooser or renaming a laboratory
 does not satisfy this contract. Retain necessary logs and controlled lifecycle actions.
 Devices and drivers is a direct workbench destination, reachable from the
@@ -298,31 +298,25 @@ physical device cannot acquire a second owner through another code folder. Switc
 qualified environments requires quiescence and explicit device reinitialization
 where necessary. Serial runs alone do not establish equivalent hardware state.
 
-Current same-environment workspace publication and independent parameter heads
-provide building blocks. Heterogeneous environments, parameter-contract negotiation
-and application-wide device authority remain unimplemented contracts;
-see [workspace bindings](workspace-bindings.md) and
+Independent execution/SDK environments and application-wide device authority are
+implemented. General parameter-contract negotiation is not promised by these
+boundaries; see [workspace bindings](workspace-bindings.md) and
 [configuration ownership](configuration-ownership.md).
 
-## Ordered implementation and evidence
+## Delivery and evidence
 
-1. Establish device/connection ownership, setup references and unified physical
-   access, including probes and resident connections. Build on explicit sources and
-   contexts from #806/#808; replace embedded connection editing, not merely the
-   service chooser. Follow [device management](device-management.md) under #671/#754.
-2. Enter the workbench directly and replace manager consumers with contextual
-   actions/settings (#675, #615). Source edits use refresh; runtime updates preserve
-   content identity, data and recoverable installation state (#712).
-3. Run and clear tutorials as owned simulation-only practice scopes (#565).
-4. Qualify the combined software journey (#616): launch directly; create two drafts
-   with independent simulated device contexts on one service; complete tutorial
-   manual peak selection; clear it without changing either draft or retained real
-   records; restart and reopen retained tasks without replay. Test conflicting
-   aliases for one physical resource before admitting real hardware. Verify GUI and
-   Python clients share authority and recovery does not require killing processes.
-5. Only then perform ordinary-user and Windows physical-device qualification of
-   scan → manual peak selection → fine scan → verification → publication → reopen.
-   Simulation, platform usability and scientific validity are separate evidence.
+Device/connection ownership, direct entry, contextual maintenance and same-service
+practice were delivered before the desktop milestone; their old implementation
+sequence is not a pending backlog. The desktop milestone consists of #829
+(installation), #837 (data and desktop), #844 (ordinary source and environments),
+and PR 4 (composition/release/retirement), tracked by #610/#616.
+
+The [packaging matrix](desktop-packaging.md#required-comparison) maps composition
+checks to maintained tests and prior evidence. Preserve independent contexts,
+resource exclusion, source/environment identity, manual continuation, cleanup and
+restart without replay when retiring an old entry or fixture. Ordinary-user
+observation and Windows physical-device qualification of scan → manual peak → fine
+scan → verification → publication → reopen remain separate from software evidence.
 
 Preserve current-format evidence and recovery. No development-store migration
 chains, supported data baseline or automatic replay are introduced by this work.

@@ -41,7 +41,7 @@ supplying service locations or internal identities.
 
 **Executable evidence:** the generated `notebooks/01_first_run.py` exercised by
 `packages/scopecat-server/tests/test_lifecycle.py`, and the
-[source preview quickstart](../getting-started/quickstart.md).
+[first experiment](../getting-started/quickstart.md).
 
 **Success evidence:** terminal `completed` status, one stable run ID, persistent
 run history, and automatic notebook/GUI discovery of the same project daemon.

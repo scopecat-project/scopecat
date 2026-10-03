@@ -12,7 +12,7 @@ bounded execution, live visibility, and durable results as they grow.
 
 Start with [desktop preview first steps](docs/getting-started/index.md), the
 [documentation home](docs/index.md), or follow the
-[source preview quickstart](docs/getting-started/quickstart.md) to create a
+[first experiment](docs/getting-started/quickstart.md) to create a
 hardware-free project and complete the first durable run.
 
 - [Practice in the application](docs/tutorials/teaching-sandboxes.md)
