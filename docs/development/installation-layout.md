@@ -159,8 +159,9 @@ author Python after the app is moved away, and service start/stop before removal
 Mac previews use ad-hoc signing of each embedded Mach-O file followed by the
 outer application seal. This requires no certificate or paid account, but does
 not establish Gatekeeper trust. Apple Developer ID signing and notarization are
-not configured; Windows previews remain unsigned. The native private installer/preview consumer must be switched and
-qualified before this replaces its existing maintainer installation command.
+not configured; Windows previews remain unsigned. Private consumers use the public
+installer and register ordinary laboratory source with an explicit execution
+Python. They do not rebuild the application or inject startup initialization.
 
 Do not add a second application manager to solve packaging. Native setup and updates
 must use the same application/data ownership, independent author environments and
