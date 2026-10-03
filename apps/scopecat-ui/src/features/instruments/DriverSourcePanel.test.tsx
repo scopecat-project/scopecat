@@ -20,6 +20,7 @@ const selection = {
     expected_previous: null,
   },
   factory: "lab.drivers:build",
+  python: "/execution/python",
   artifact_hash: "sha256:driver",
   code_revision: { content_hash: "sha256:source" },
 };
