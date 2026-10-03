@@ -998,7 +998,7 @@ def test_shutdown_interrupts_a_blocked_driver_call(tmp_path: Path) -> None:
     elapsed = time.monotonic() - started_at
     invocation.join(timeout=2)
 
-    assert elapsed < 0.5
+    assert elapsed < 2
     assert not invocation.is_alive()
     assert len(errors) == 1
     assert isinstance(errors[0], InstrumentBackendUnavailable)

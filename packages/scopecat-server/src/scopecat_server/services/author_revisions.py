@@ -105,6 +105,10 @@ class AuthorRevisionService:
         )
         return bundle
 
+    def current_source(self) -> AuthorRevisionRef:
+        """Inspect source in its execution environment without publishing."""
+        return self._capture().manifest.ref
+
     @property
     def worker_binding(self) -> AuthorWorkerBinding:
         return AuthorWorkerBinding(self.root, self._interpreters()[0])

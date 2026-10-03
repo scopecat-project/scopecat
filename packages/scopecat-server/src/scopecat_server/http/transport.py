@@ -617,6 +617,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
 
+    @app.get(f"{_API_PREFIX}/author-revisions/current-source")
+    def current_author_source(
+        workspace: Annotated[str, Header(alias="X-Scopecat-Workspace")],
+    ) -> AuthorRevisionRef:
+        try:
+            return authors(workspace).current_source()
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+
     @app.get(f"{_API_PREFIX}/author-revisions/{{content_hash}}")
     def author_revision(
         content_hash: str,

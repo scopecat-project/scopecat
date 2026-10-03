@@ -829,6 +829,9 @@ class SubprocessInstrumentBackendEndpoint:
                     response = received.response
                     self._process.join(max(0.0, (selected_deadline - monotonic()) / 2))
             self._close_connection()
+            # A short cooperative grace must still leave time for OS process-tree
+            # inspection and reaping after forced termination on desktop hosts.
+            selected_deadline = max(selected_deadline, monotonic() + 0.5)
             _terminate_process_until(self._process, selected_deadline)
             self._receiver.join(max(0.0, selected_deadline - monotonic()))
             if self._receiver.is_alive():
