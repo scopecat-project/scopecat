@@ -134,6 +134,45 @@ def test_unavailable_author_folder_does_not_block_application_update(
     assert not source.exists()
 
 
+def test_select_existing_environment_validates_before_publishing(
+    application, tmp_path, monkeypatch
+):
+    source = tmp_path / "author"
+    (source / "src").mkdir(parents=True)
+    (source / "scopecat.toml").write_text(
+        '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\n'
+        'modules=["experiment"]\ndependencies=[]\n'
+    )
+    (source / "src/experiment.py").write_text('name = "experiment"\n')
+    application.register_source(source)
+    location = author_bindings_path(application.root)
+    original = LocalAuthorWorkspaces.model_validate_json(location.read_bytes()).items[0]
+    python = tmp_path / "environment/python"
+    python.parent.mkdir()
+    python.symlink_to(sys.executable)
+    checked = []
+
+    def capture(root, interpreter, *, owner):
+        checked.append((root, interpreter, owner))
+
+    monkeypatch.setattr("scopecat_server.author_environment.capture", capture)
+    monkeypatch.chdir(tmp_path)
+    application.select_source_environment(Path("author"), Path("environment/python"))
+    selected = LocalAuthorWorkspaces.model_validate_json(location.read_bytes()).items[0]
+    assert selected.python == python
+    assert selected.retained_pythons == (original.python,)
+    assert checked == [(source, python, application.root)]
+    before = location.read_bytes()
+
+    def fail(*args, **kwargs):
+        raise ValueError("incompatible execution environment")
+
+    monkeypatch.setattr("scopecat_server.author_environment.capture", fail)
+    with pytest.raises(ValueError, match="incompatible"):
+        application.select_source_environment(source, tmp_path / "invalid/python")
+    assert location.read_bytes() == before
+
+
 def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
     sources = []
     for name in ("first", "second"):

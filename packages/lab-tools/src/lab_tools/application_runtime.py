@@ -291,6 +291,9 @@ class ApplicationRuntime:
         """Publish an explicitly prepared execution environment without restarting."""
         from scopecat_server.author_environment import capture
 
+        workspace = workspace.resolve()
+        # Preserve venv executable symlinks; resolving them selects the base Python.
+        python = python.absolute()
         with self.lock:
             self.require_ready()
             identity = self.source(workspace)

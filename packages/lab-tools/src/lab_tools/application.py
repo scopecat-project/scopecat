@@ -60,6 +60,7 @@ def main(argv: list[str] | None = None) -> None:
             "configure",
             "update",
             "register-source",
+            "select-source-environment",
             "prepare-author-environment",
             "create-author-environment",
             "rebuild-author-environment",
@@ -92,6 +93,7 @@ def main(argv: list[str] | None = None) -> None:
         args.action
         in (
             "register-source",
+            "select-source-environment",
             "prepare-author-environment",
             "create-author-environment",
             "rebuild-author-environment",
@@ -99,6 +101,8 @@ def main(argv: list[str] | None = None) -> None:
         and args.workspace is None
     ):
         parser.error("登记源码需要 --workspace")
+    if args.action == "select-source-environment" and args.python is None:
+        parser.error("选择执行环境需要 --python 指向已有解释器")
     runtime = ApplicationRuntime(args.home)
     try:
         if args.action in ("configure", "update"):
@@ -124,6 +128,10 @@ def main(argv: list[str] | None = None) -> None:
         elif args.action == "register-source":
             assert args.workspace is not None
             print(runtime.register_source(args.workspace, python=args.python))
+        elif args.action == "select-source-environment":
+            assert args.workspace is not None and args.python is not None
+            runtime.select_source_environment(args.workspace, args.python)
+            print("执行环境已选择；重新预览使用新环境，已有任务保留原环境。")
         elif args.action in (
             "create-author-environment",
             "rebuild-author-environment",

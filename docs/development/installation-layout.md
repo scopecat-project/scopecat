@@ -50,6 +50,11 @@ Use `--keep-work` only when diagnosing a failure, and remove the printed workspa
 afterwards. The reports directory must be fresh; remove the previous small report
 after review. CI artifacts have their own bounded retention.
 
+`verify_native_replacement.py PREVIOUS CURRENT REPORTS` follows the same policy:
+replacement copies and the generated author environment are disposable; startup
+and replacement reports and available logs survive failure. Both input packages
+remain untouched. `--keep-work` retains the isolated replacement workspace.
+
 Shared Git ignores cover generated outputs, tool environments and local runtime
 data. They must not hide maintained documentation, assets or editor tasks. A
 machine's retained legacy paths belong in `.git/info/exclude`; do not add a new
@@ -57,6 +62,22 @@ shared ignore for each diagnostic experiment. Document decisions in ordinary
 development docs, not in `AGENTS.md` or an ever-growing generated report archive.
 
 ## Installed application directories
+
+For an already registered source folder, maintainers can select an existing
+execution interpreter without installing packages or restarting the application:
+
+```sh
+python -m lab_tools.application --home /path/to/application-home \
+  --action select-source-environment --workspace /path/to/source \
+  --python /path/to/execution-environment/bin/python
+```
+
+On Windows, pass the environment's `Scripts/python.exe`. The interpreter must
+already provide compatible Scopecat execution dependencies and source requirements.
+Validation precedes saving the binding; failure preserves the prior selection.
+This changes background execution for subsequent preparation, not the interpreter
+selected in VS Code. Existing retained tasks keep their environment binding.
+The maintenance entry does not yet establish an independent vendor SDK protocol.
 
 | Purpose | macOS | Windows |
 | --- | --- | --- |
