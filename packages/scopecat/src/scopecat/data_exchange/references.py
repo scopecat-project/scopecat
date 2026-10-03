@@ -109,7 +109,8 @@ def validate_analysis_references(evidence: ScientificEvidence) -> None:
                     )
                     if (
                         entry is None
-                        or entry.kind != "measurement_dataset"
+                        or entry.kind
+                        not in {"measurement_dataset", "measurement_slice"}
                         or entry.content_hash != item.content_hash
                         or item.codec != MEASUREMENT_DATASET_CODEC
                     ):

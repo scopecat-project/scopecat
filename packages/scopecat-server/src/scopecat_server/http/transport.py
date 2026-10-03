@@ -13,7 +13,9 @@ import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
+from functools import cache
 from pathlib import Path, PurePosixPath
+from threading import Event
 from typing import Annotated, Literal, cast, override
 from urllib.parse import quote
 
@@ -248,6 +250,11 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.analysis_follow import (
+    AnalysisFollowPage,
+    AnalysisFollowRequest,
+    AnalysisFollowView,
+)
 from scopecat.records.apparatus_history import (
     MAX_APPARATUS_ATTACHMENT_BYTES,
     ApparatusAttachment,
@@ -467,6 +474,22 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
 
+    def analyze_follow(
+        command: AuthorAnalysisRequest, timeout: float, cancelled: Event
+    ) -> AuthorAnalysisReceipt:
+        return AuthorAnalysisReceipt.model_validate_json(
+            retained_call(
+                AnalysisCall(request=command),
+                started=time.perf_counter(),
+                timeout=timeout,
+                cancelled=cancelled,
+            )
+        )
+
+    @cache
+    def follow_runner():
+        return application.analysis_follow_runner(analyze_follow)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         task_runner = CalibrationTaskRunner(
@@ -474,9 +497,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         )
         project_workers.start()
         task_runner.start()
+        follow_runner().start()
         try:
             yield
         finally:
+            follow_runner().stop()
             task_runner.stop()
             project_workers.stop()
             application.author_workspaces.close()
@@ -664,7 +689,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(404, "Author preparation not found") from error
 
     def retained_call(
-        command: AnalysisCall | ComparisonCall, response: Response, *, started: float
+        command: AnalysisCall | ComparisonCall,
+        response: Response | None = None,
+        *,
+        started: float,
+        timeout: float = 60,
+        cancelled: Event | None = None,
     ) -> str:
         operation = command.kind
         service = authors(command.request.workspace_id)
@@ -679,7 +709,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 if command.code_revision
                 else service.worker_binding,
                 command,
-                timeout=60,
+                timeout=timeout,
+                cancelled=cancelled,
             )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
@@ -692,9 +723,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 "inspect retained analyses before repeating. "
                 "Publication outcome may be unknown.",
             ) from error
-        response.headers["Server-Timing"] = worker_server_timing(
-            completed.stderr, total_seconds=time.perf_counter() - started
-        )
+        if response is not None:
+            response.headers["Server-Timing"] = worker_server_timing(
+                completed.stderr, total_seconds=time.perf_counter() - started
+            )
         if completed.returncode:
             logging.getLogger(__name__).error(
                 "Retained %s failed:\n%s", operation, completed.stderr
@@ -704,6 +736,39 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 422, lines[-1] if lines else f"Retained {operation} failed"
             )
         return completed.stdout
+
+    @app.post(f"{_API_PREFIX}/analysis-follows")
+    def create_analysis_follow(command: AnalysisFollowRequest) -> AnalysisFollowView:
+        try:
+            authors(command.analysis.workspace_id).get(command.analysis.code_revision)
+            application.runs.get_run(command.analysis.run_id)
+            return application.analysis_follows.create(command)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+
+    @app.get(f"{_API_PREFIX}/analysis-follows/{{identity}}")
+    def analysis_follow_page(
+        identity: str,
+        after: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> AnalysisFollowPage:
+        try:
+            return application.analysis_follows.page(identity, after=after, limit=limit)
+        except KeyError as error:
+            raise HTTPException(404, "Analysis follow not found") from error
+
+    @app.get(f"{_API_PREFIX}/runs/{{run_id}}/analysis-follows")
+    def run_analysis_follows(run_id: str) -> tuple[AnalysisFollowView, ...]:
+        return application.analysis_follows.for_run(run_id)
+
+    @app.post(f"{_API_PREFIX}/analysis-follows/{{identity}}/stop")
+    def stop_analysis_follow(identity: str) -> AnalysisFollowView:
+        try:
+            application.analysis_follows.get(identity)
+            follow_runner().cancel(identity)
+            return application.analysis_follows.get(identity)
+        except KeyError as error:
+            raise HTTPException(404, "Analysis follow not found") from error
 
     @app.post(f"{_API_PREFIX}/author-revisions/analyze")
     def analyze_author_revision(

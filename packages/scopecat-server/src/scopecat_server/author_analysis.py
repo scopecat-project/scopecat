@@ -73,11 +73,20 @@ def _analyze_groups(
     step: AnalysisInvocation,
     request: AuthorAnalysisRequest,
 ) -> AuthorAnalysisReceipt:
-    if run.status != "completed":
+    if run.status != "completed" and request.measurement_slice is None:
         raise ValueError("offline grouped analysis requires a completed run")
     grouping = request.grouping
     assert grouping is not None
-    parent = AnalysisContext(run=run, default_key=request.key or step.id)
+    data_slice = (
+        run.measurements(selector=request.measurement_slice)
+        if request.measurement_slice is not None
+        else None
+    )
+    if data_slice is not None and data_slice.entry.kind != "measurement_slice":
+        raise ValueError("group input must be an immutable measurement slice")
+    parent = AnalysisContext(
+        run=run, default_key=request.key or step.id, measurement_data=data_slice
+    )
     data = parent.measurements()
     receipts: list[AuthorAnalysisGroupReceipt] = []
     for group in partition_groups(data, grouping):

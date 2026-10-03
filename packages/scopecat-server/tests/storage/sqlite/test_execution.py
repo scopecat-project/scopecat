@@ -1614,3 +1614,218 @@ def test_durable_preview_keeps_fixed_output_and_selects_latest_unfixed_tail(
         *fixed.records,
         *resumed.records,
     )
+
+
+def test_measurement_slice_waits_for_fixed_points_and_survives_later_acquisition(
+    tmp_path: Path,
+) -> None:
+    from scopecat.runs.access import dataset_storage_ref
+
+    from scopecat_server.storage.sqlite.measurement_slices import (
+        freeze_measurement_slice,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("live-slice", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header, point_index=0)
+    _commit_acquisition(runs, repository, first)
+    assert (
+        freeze_measurement_slice(runs, header.run_id, (0,), max_input_bytes=1_000_000)
+        is None
+    )
+    _commit_append(runs, repository, first)
+    assert (
+        freeze_measurement_slice(runs, header.run_id, (0, 1), max_input_bytes=1_000_000)
+        is None
+    )
+    with pytest.raises(ValueError, match="byte budget"):
+        freeze_measurement_slice(runs, header.run_id, (0,), max_input_bytes=1)
+    selected = freeze_measurement_slice(
+        runs, header.run_id, (0,), max_input_bytes=1_000_000
+    )
+    assert selected is not None
+    assert selected.data_schema is None  # schema stays in the shared hashed header
+    _commit_append(runs, repository, _append(header, point_index=1))
+    _commit_acquisition(
+        runs, repository, _append(header, point_index=0, acquisition_start=2, value=99)
+    )
+    assert (
+        freeze_measurement_slice(runs, header.run_id, (0,), max_input_bytes=1_000_000)
+        == selected
+    )
+    reopened = SQLiteRunRepository(runs.sqlite, runs.objects.root)
+    assert reopened.read_measurement_records(
+        header.run_id, dataset_storage_ref(selected)
+    ) == list(first.records)
+
+
+def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
+    tmp_path: Path,
+) -> None:
+    from threading import Event
+
+    from scopecat.records.analysis_follow import AnalysisFollowRequest
+    from scopecat.records.analysis_grouping import AnalysisGrouping
+    from scopecat.records.author_revision import (
+        AuthorAnalysisGroupReceipt,
+        AuthorAnalysisReceipt,
+        AuthorAnalysisRequest,
+        AuthorRevisionRef,
+    )
+    from scopecat.records.content import ModelWrite
+    from scopecat.records.measurement import (
+        MeasurementPointDomainAxis,
+        MeasurementPointDomainValuesSource,
+        MeasurementProductGridPointDomain,
+    )
+    from scopecat.records.scientific_binding import (
+        ResolvedScientificBinding,
+        UnboundSubject,
+    )
+    from scopecat.runs.refs import SCIENTIFIC_BINDING_REF
+    from scopecat.runs.repository import RunContentPublication
+
+    from scopecat_server.services.analysis_follow import AnalysisFollowRunner
+    from scopecat_server.storage.sqlite.analysis_follow import AnalysisFollowRepository
+
+    runs = _runs(tmp_path)
+    base = _header("live-follow", point_count=2)
+    header = base.model_copy(
+        update={
+            "dataset_schema": base.dataset_schema.model_copy(
+                update={
+                    "point_domain": MeasurementProductGridPointDomain(
+                        axes=(
+                            MeasurementPointDomainAxis(
+                                id="power",
+                                size=2,
+                                source=MeasurementPointDomainValuesSource(
+                                    values=(
+                                        MeasurementScalar.create(
+                                            value=0, dtype="int64"
+                                        ),
+                                        MeasurementScalar.create(
+                                            value=1, dtype="int64"
+                                        ),
+                                    )
+                                ),
+                            ),
+                        )
+                    ),
+                    "variables": (
+                        *base.dataset_schema.variables,
+                        MeasurementVariable(
+                            id="power",
+                            role="coordinate",
+                            dtype="int64",
+                            dims=("point",),
+                        ),
+                        MeasurementVariable(
+                            id="frequency",
+                            role="coordinate",
+                            dtype="float64",
+                            dims=("point",),
+                        ),
+                    ),
+                }
+            )
+        }
+    )
+    measurements = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, measurements, header)
+    runs.publish_content(
+        RunContentPublication(
+            run_id=header.run_id,
+            entries=(),
+            models=(
+                ModelWrite(
+                    ref=SCIENTIFIC_BINDING_REF,
+                    value=ResolvedScientificBinding(
+                        subject=UnboundSubject(),
+                        config_content_hash="sha256:" + "0" * 64,
+                        setup_content_hash="sha256:" + "0" * 64,
+                    ),
+                ),
+            ),
+        )
+    )
+    repository = AnalysisFollowRepository(runs.sqlite)
+    ref = AuthorRevisionRef(content_hash="sha256:" + "a" * 64)
+    command = AnalysisFollowRequest(
+        id="follow",
+        analysis=AuthorAnalysisRequest(
+            workspace_id="authors",
+            code_revision=ref,
+            run_id=header.run_id,
+            analysis="authors:fit",
+            grouping=AnalysisGrouping(by=("power",), fitting="frequency"),
+        ),
+    )
+    repository.create(command)
+    seen: list[str] = []
+
+    def analyze(
+        request: AuthorAnalysisRequest, timeout: float, cancelled: Event
+    ) -> AuthorAnalysisReceipt:
+        assert request.measurement_slice is not None
+        assert timeout == 60 and not cancelled.is_set()
+        seen.append(request.measurement_slice)
+        return AuthorAnalysisReceipt(
+            code_revision=ref,
+            analysis_id="manifest",
+            groups=(
+                AuthorAnalysisGroupReceipt(
+                    coordinates={},
+                    point_indices=(len(seen) - 1,),
+                    analysis_id=f"fit-{len(seen)}",
+                ),
+            ),
+        )
+
+    runner = AnalysisFollowRunner(repository, runs, analyze)
+    runner.advance(command.id)
+    assert not seen
+    for index in range(2):
+        raw = _append(header, point_index=index)
+        append = raw.model_copy(
+            update={
+                "records": (
+                    raw.records[0].model_copy(
+                        update={
+                            "coordinates": {
+                                "power": MeasurementScalar.create(
+                                    value=index, dtype="int64"
+                                ),
+                                "frequency": MeasurementScalar.create(
+                                    value=1.0, dtype="float64"
+                                ),
+                            }
+                        }
+                    ),
+                )
+            }
+        )
+        _commit_acquisition(runs, measurements, append)
+        runner.advance(command.id)
+        assert len(seen) == index
+        _commit_append(runs, measurements, append)
+        runner.advance(command.id)
+        assert len(seen) == index + 1
+    runner.advance(command.id)
+    assert repository.get(command.id).state == "completed"
+    reopened = AnalysisFollowRepository(runs.sqlite)
+    first = reopened.page(command.id, limit=2)
+    second = reopened.page(command.id, after=first.next_cursor, limit=2)
+    assert first.has_more and not second.has_more
+    assert first.follow.state == "completed"
+    assert [event.state for event in first.events + second.events] == [
+        "running",
+        "succeeded",
+        "running",
+        "succeeded",
+    ]
+    assert reopened.create(command).finished_count == 2
+    AnalysisFollowRunner(reopened, runs, analyze).advance(command.id)
+    assert len(seen) == 2

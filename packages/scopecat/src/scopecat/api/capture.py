@@ -112,8 +112,14 @@ class Capture:
             default_key=key,
         )
 
-    def measurements(self, run_id: str) -> Dataset:
-        return self._source.recording(run_id).dataset()
+    def measurements(
+        self, run_id: str, *, selector: str = "raw-measurements"
+    ) -> Dataset:
+        return (
+            self._source.recording(run_id).dataset()
+            if selector == "raw-measurements"
+            else self._source.measurement_slice(run_id, selector)
+        )
 
     def analyze(
         self, run_id: str, invocation: AnalysisInvocation, *, key: str | None = None

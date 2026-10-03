@@ -328,16 +328,24 @@ class RunHandle:
             content_id=content_id,
         )
 
-    def measurements(self) -> Dataset:
+    def measurements(self, *, selector: str = RAW_MEASUREMENTS_DATASET_ID) -> Dataset:
         """Open a lazy measurement dataset using this handle's connection.
 
         Read it while the session is open, or reattach the run in a new session
         and open its measurements there. Materialized values remain local data.
+        A retained slice selector materializes its fixed selection of acquisitions.
         """
 
-        entry = self.content("dataset", RAW_MEASUREMENTS_DATASET_ID)
-        if entry.kind != MEASUREMENT_DATASET_KIND:
+        entry = self.content("dataset", selector)
+        if entry.kind not in {MEASUREMENT_DATASET_KIND, "measurement_slice"}:
             raise ValueError("measurement dataset content has the wrong kind")
+        if entry.kind == "measurement_slice":
+            return Dataset(
+                self.session.run_operations.load_measurement_dataset(
+                    self.id, selector=entry.id
+                ).dataset,
+                entry,
+            )
         if entry.data_schema is None:
             raise ValueError("measurement dataset is missing its semantic schema")
         schema = MeasurementDatasetSchema.model_validate(entry.data_schema)

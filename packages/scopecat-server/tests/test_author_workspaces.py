@@ -1,6 +1,8 @@
 """Two registered source owners execute through one deployment and data writer."""
 
 import shutil
+import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import open_project
 from scopecat.records.launch_rejection import AuthorLaunchRejected
 from scopecat.records.scientific_selection import ParameterConfiguration
+from scopecat_testkit.project_loading import isolated_project_imports
 
 from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
@@ -25,6 +28,27 @@ from scopecat_server.snapshots import SnapshotError, create_snapshot, restore_sn
 class Summary:
     mean: float
     points: int
+
+
+@pytest.fixture(autouse=True)
+def restore_author_imports() -> Iterator[None]:
+    # Branch editors can import more than one retained source root in this test.
+    # The generic loader fixture tracks one root; restore the whole test namespace.
+    with isolated_project_imports():
+        previous_finders = sys.meta_path.copy()
+        previous = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "scopecat_lab" or name.startswith("scopecat_lab.")
+        }
+        try:
+            yield
+        finally:
+            sys.meta_path[:] = previous_finders
+            for name in tuple(sys.modules):
+                if name == "scopecat_lab" or name.startswith("scopecat_lab."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous)
 
 
 def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:

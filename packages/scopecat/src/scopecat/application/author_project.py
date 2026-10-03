@@ -72,6 +72,11 @@ from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
 from scopecat.project_sources import SourceProject
+from scopecat.records.analysis_follow import (
+    AnalysisFollowPage,
+    AnalysisFollowRequest,
+    AnalysisFollowView,
+)
 from scopecat.records.analysis_grouping import AnalysisGrouping
 from scopecat.records.author_revision import (
     AuthorAnalysisGroupReceipt,
@@ -1062,6 +1067,70 @@ class AuthorProject(DaemonClient):
             raise
         return self.read_groups_as(run_id, receipt.analysis_id, result_type)
 
+    def follow_groups_as[ResultT](
+        self,
+        run_id: str,
+        analysis: str,
+        result_type: type[ResultT],
+        *,
+        by: tuple[str, ...],
+        fitting: str,
+        repeats: Literal["separate", "combine"] = "separate",
+        source: Literal["original", "current"] = "original",
+        arguments: Mapping[str, AnalysisArgument] | None = None,
+        identity: str | None = None,
+        max_groups: int = 1000,
+        max_points_per_group: int = 4096,
+        max_input_bytes: int = 64 * 1024 * 1024,
+        timeout_seconds: float = 60,
+    ) -> GroupAnalysisFollow[ResultT]:
+        """Analyze complete live groups with the same function used offline.
+
+        The admitted source and arguments are fixed for this follow. Closing the
+        client leaves acquisition and analysis running; retain the returned id to
+        reopen it. Only closed product grids currently prove group completion.
+        """
+        ordinary_result_schema(result_type)
+        command = AnalysisFollowRequest(
+            id=identity or uuid4().hex,
+            analysis=AuthorAnalysisRequest(
+                run_id=run_id,
+                analysis=analysis,
+                workspace_id=self._analysis_workspace(run_id, source),
+                code_revision=self._analysis_revision(run_id, source),
+                arguments=encode_arguments(analysis, arguments),
+                grouping=AnalysisGrouping(by=by, fitting=fitting, repeats=repeats),
+            ),
+            max_groups=max_groups,
+            max_points_per_group=max_points_per_group,
+            max_input_bytes=max_input_bytes,
+            timeout_seconds=timeout_seconds,
+        )
+        self.create_analysis_follow(command)
+        return GroupAnalysisFollow(self, command.id, result_type)
+
+    def reopen_group_follow_as[ResultT](
+        self, identity: str, result_type: type[ResultT]
+    ) -> GroupAnalysisFollow[ResultT]:
+        """Reconnect to retained progress without submitting analysis again."""
+        ordinary_result_schema(result_type)
+        self.analysis_follow_page(identity, limit=1)
+        return GroupAnalysisFollow(self, identity, result_type)
+
+    def read_group_as[ResultT](
+        self,
+        run_id: str,
+        receipt: AuthorAnalysisGroupReceipt,
+        result_type: type[ResultT],
+    ) -> AnalysisGroupResult[ResultT]:
+        schema = ordinary_result_schema(result_type)
+        child = self.run(run_id).published_analysis(receipt.analysis_id)
+        return AnalysisGroupResult(
+            receipt,
+            child.fact_as("result", schema) if receipt.error is None else None,
+            child,
+        )
+
     def read_groups_as[ResultT](
         self,
         run_id: str,
@@ -1069,23 +1138,46 @@ class AuthorProject(DaemonClient):
         result_type: type[ResultT],
     ) -> GroupedAnalysisResult[ResultT]:
         """Read an existing group manifest and native results without executing code."""
-        schema = ordinary_result_schema(result_type)
         run = self.run(run_id)
         publication = run.published_analysis(publication_id)
         receipts = TypeAdapter(tuple[AuthorAnalysisGroupReceipt, ...]).validate_json(
             publication.artifact("groups").text()
         )
-        groups: list[AnalysisGroupResult[ResultT]] = []
-        for receipt in receipts:
-            child = run.published_analysis(receipt.analysis_id)
-            groups.append(
-                AnalysisGroupResult(
-                    receipt,
-                    child.fact_as("result", schema) if receipt.error is None else None,
-                    child,
-                )
+        return GroupedAnalysisResult(
+            tuple(
+                self.read_group_as(run_id, receipt, result_type) for receipt in receipts
+            ),
+            publication,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GroupAnalysisFollow[ResultT]:
+    client: AuthorProject
+    id: str
+    result_type: type[ResultT]
+
+    def poll(self, *, after: int = 0, limit: int = 50) -> AnalysisFollowPage:
+        """Read progress; save next_cursor and drain has_more even after completion."""
+        return self.client.analysis_follow_page(self.id, after=after, limit=limit)
+
+    def results(
+        self, page: AnalysisFollowPage
+    ) -> tuple[AnalysisGroupResult[ResultT], ...]:
+        """Materialize only this page's published results, including failed groups."""
+        if page.follow.request.id != self.id:
+            raise ValueError("progress page belongs to a different analysis follow")
+        return tuple(
+            self.client.read_group_as(
+                page.follow.request.analysis.run_id, event.receipt, self.result_type
             )
-        return GroupedAnalysisResult(tuple(groups), publication)
+            for event in page.events
+            if event.receipt is not None
+        )
+
+    def stop(self) -> AnalysisFollowView:
+        """Stop this analysis follow without stopping the acquisition."""
+        return self.client.stop_analysis_follow(self.id)
 
 
 @dataclass(frozen=True, slots=True)

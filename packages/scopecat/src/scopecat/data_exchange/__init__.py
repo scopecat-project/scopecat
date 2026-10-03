@@ -7,12 +7,12 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import chain
 from pathlib import Path
-from typing import Literal, Self, cast
+from typing import TYPE_CHECKING, Literal, Self, cast
 from zipfile import ZIP_STORED, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -28,9 +28,15 @@ from scopecat.kernel.content_identity import (
 from scopecat.measurements.archive import MeasurementSnapshot
 from scopecat.records.analysis import AnalysisRecord
 from scopecat.records.content import ContentEntry, Sha256ContentHash
+from scopecat.records.measurement import MeasurementDataset, MeasurementRecord
+from scopecat.records.measurement_recording import measurement_record_content_hash
+from scopecat.records.measurement_slice import MeasurementSlice
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.runs.refs import content_entry_ref
+
+if TYPE_CHECKING:
+    from scopecat.measurements.dataset import Dataset
 
 MAX_INDEX_BYTES = 4 * 1024 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
@@ -255,6 +261,66 @@ class ScientificExchange:
         """Return an existing recording; absence is not an empty dataset."""
         return self._recordings[run_id]
 
+    def measurement_slice(self, run_id: str, selector: str) -> Dataset:
+        """Open an exact retained slice independently of the application's state."""
+        from scopecat.measurements.dataset import Dataset
+
+        entry, recording, selection = self._measurement_slice(run_id, selector)
+        return Dataset(
+            MeasurementDataset(
+                dataset_schema=recording.header.dataset_schema,
+                records=tuple(self._slice_records(recording, selection)),
+                metadata=entry.metadata,
+            ),
+            entry,
+        )
+
+    def _measurement_slice(
+        self, run_id: str, selector: str
+    ) -> tuple[ContentEntry, MeasurementSnapshot, MeasurementSlice]:
+        run = next(run for run in self.evidence.runs if run.snapshot.run_id == run_id)
+        entry = next(
+            entry
+            for entry in run.contents
+            if entry.role == "dataset" and entry.id == selector
+        )
+        if entry.kind != "measurement_slice":
+            raise ValueError("selected content is not a measurement slice")
+        reference = next(
+            ref
+            for ref in self.payloads
+            if ref.owner_kind == "run"
+            and ref.owner_id == run_id
+            and ref.ref == content_entry_ref(entry)
+        )
+        if reference.size > MAX_EVIDENCE_BYTES:
+            raise ValueError("measurement slice exceeds the metadata budget")
+        selection = MeasurementSlice.model_validate_json(self.read_payload(reference))
+        recording = self.recording(run_id)
+        if (
+            selection.run_id != run_id
+            or selection.header_content_hash != recording.header.content_hash
+        ):
+            raise ValueError("measurement slice header differs from its recording")
+        return entry, recording, selection
+
+    @staticmethod
+    def _slice_records(
+        recording: MeasurementSnapshot, selection: MeasurementSlice
+    ) -> Iterator[MeasurementRecord]:
+        records = recording.records_at(
+            point.acquisition_index for point in selection.points
+        )
+        for point, record in zip(selection.points, records, strict=True):
+            if (
+                record.point_index != point.point_index
+                or measurement_record_content_hash(record) != point.record_content_hash
+            ):
+                raise ValueError(
+                    "measurement slice differs from its retained acquisitions"
+                )
+            yield record
+
     def write_analyses(
         self, destination: Path, publications: Iterable[AnalysisPublication]
     ) -> None:
@@ -458,6 +524,13 @@ class ScientificExchange:
             snapshot.verify()
         for run in self.evidence.runs:
             for entry in run.contents:
+                if entry.role == "dataset" and entry.kind == "measurement_slice":
+                    _, recording, selection = self._measurement_slice(
+                        run.snapshot.run_id, entry.id
+                    )
+                    for _ in self._slice_records(recording, selection):
+                        pass
+                    continue
                 if entry.role != "dataset" or entry.kind != "measurement_dataset":
                     continue
                 snapshot = self._recordings.get(run.snapshot.run_id)

@@ -237,6 +237,11 @@ from scopecat.kernel.content_identity import (
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.measurements.recording_arrow import encode_measurement_append
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.analysis_follow import (
+    AnalysisFollowPage,
+    AnalysisFollowRequest,
+    AnalysisFollowView,
+)
 from scopecat.records.apparatus_history import (
     ApparatusAttachment,
     ApparatusObjectCreate,
@@ -532,6 +537,28 @@ class DaemonClient:
             )
         )
         return AuthorPreparationOperation(self, operation.operation_id).wait()
+
+    def create_analysis_follow(
+        self, command: AnalysisFollowRequest
+    ) -> AnalysisFollowView:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/analysis-follows", command, AnalysisFollowView
+        )
+
+    def analysis_follow_page(
+        self, identity: str, *, after: int = 0, limit: int = 50
+    ) -> AnalysisFollowPage:
+        return self._get_model(
+            f"{_API_PREFIX}/analysis-follows/{quote(identity, safe='')}",
+            AnalysisFollowPage,
+            params={"after": after, "limit": limit},
+        )
+
+    def stop_analysis_follow(self, identity: str) -> AnalysisFollowView:
+        response = self._request(
+            "POST", f"{_API_PREFIX}/analysis-follows/{quote(identity, safe='')}/stop"
+        )
+        return AnalysisFollowView.model_validate_json(response.content)
 
     def analyze_author_revision(
         self, request: AuthorAnalysisRequest

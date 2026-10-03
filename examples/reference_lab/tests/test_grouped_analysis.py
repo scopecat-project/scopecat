@@ -1,11 +1,15 @@
 """Offline groups retain failures, recovery and readable historical evidence."""
 
 import shutil
+import time
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx2
 import pytest
 import scopecat as sc
+from scopecat.api.capture import open_capture
+from scopecat.api.published_analysis import AnalysisGroupResult
 from scopecat.application.author_project import AuthorPreparedLaunch
 from scopecat.project import load_project
 from scopecat_server.lifecycle import start_project, stop_project
@@ -57,7 +61,7 @@ def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
 """
     )
     project = load_project(root / "scopecat.toml")
-    start_project(project)
+    endpoint = start_project(project)
     analysis = "reference_lab_authors.authored.ordinary_analysis:group_peak"
     try:
         with project.authoring() as author:
@@ -111,6 +115,43 @@ def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
                 run.id, analysis, PeakResult, by=("gain",), fitting="frequency"
             )
             assert len(first.groups) == 2
+            follow = author.follow_groups_as(
+                run.id, analysis, PeakResult, by=("gain",), fitting="frequency"
+            )
+            deadline = time.monotonic() + 30
+            cursor = 0
+            followed: list[AnalysisGroupResult[PeakResult]] = []
+            while True:
+                page = follow.poll(after=cursor)
+                followed.extend(follow.results(page))
+                cursor = page.next_cursor
+                if page.follow.state != "running" and not page.has_more:
+                    break
+                assert time.monotonic() < deadline, page.follow
+                time.sleep(0.1)
+            assert page.follow.state == "completed", page.follow
+            assert page.follow.failed_count == 1
+            assert [group.value for group in followed] == [
+                group.value for group in first.groups
+            ]
+            exported = tmp_path / "groups.scopecat"
+            response = httpx2.get(
+                f"{endpoint.base_url}/api/v1/data/runs/{run.id}/file",
+                trust_env=False,
+            )
+            response.raise_for_status()
+            exported.write_bytes(response.content)
+            retained_events = follow.poll().events
+            with open_capture(exported) as capture:
+                for event in retained_events:
+                    if event.state != "succeeded":
+                        continue
+                    assert event.measurement_slice is not None
+                    data = capture.measurements(
+                        run.id, selector=event.measurement_slice
+                    )
+                    assert len(data) == 3
+                    assert set(data["gain"].require_values()) == {1.0}
             contextual = author.analyze_groups_as(
                 run.id,
                 analysis.replace(":group_peak", ":context_group_peak"),
@@ -166,6 +207,12 @@ def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
     start_project(project)
     try:
         with project.authoring() as author:
+            reopened_follow = author.reopen_group_follow_as(follow.id, PeakResult)
+            retained_page = reopened_follow.poll()
+            assert retained_page.follow.state == "completed"
+            assert [
+                group.value for group in reopened_follow.results(retained_page)
+            ] == [group.value for group in followed]
             restored = author.read_groups_as(run.id, first.publication.id, PeakResult)
             assert restored.groups[1].value == success.value
             assert restored.groups[0].receipt.error == failed.receipt.error

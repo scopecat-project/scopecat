@@ -96,7 +96,10 @@ class _Worker:
             return stream.read().decode("utf-8", errors="replace")
 
     def call(
-        self, command: LaunchRequest | AnalysisCall | ComparisonCall, timeout: float
+        self,
+        command: LaunchRequest | AnalysisCall | ComparisonCall,
+        timeout: float,
+        cancelled: threading.Event | None = None,
     ) -> subprocess.CompletedProcess[str]:
         assert self.process.stdin is not None
         self.stderr.seek(0)
@@ -109,15 +112,29 @@ class _Worker:
             return subprocess.CompletedProcess(
                 self.process.args, self.process.returncode or 1, "", self.diagnostics()
             )
-        return self.receive(timeout)
+        return self.receive(timeout, cancelled)
 
-    def receive(self, timeout: float) -> subprocess.CompletedProcess[str]:
-        try:
-            response = self.responses.get(timeout=timeout)
-        except Empty:
-            raise subprocess.TimeoutExpired(
-                self.process.args, timeout, stderr=self.diagnostics()
-            ) from None
+    def receive(
+        self, timeout: float, cancelled: threading.Event | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        deadline = time.monotonic() + timeout
+        while True:
+            if cancelled is not None and cancelled.is_set():
+                raise InterruptedError(
+                    "Analysis stopped; publication outcome may be unknown"
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(
+                    self.process.args, timeout, stderr=self.diagnostics()
+                )
+            try:
+                response = self.responses.get(
+                    timeout=min(remaining, 0.1) if cancelled else remaining
+                )
+                break
+            except Empty:
+                continue
         if not response:
             self.process.wait(timeout=5)
         return subprocess.CompletedProcess(
@@ -280,6 +297,7 @@ class RevisionWorkers:
         command: LaunchRequest | AnalysisCall | ComparisonCall,
         *,
         timeout: float = 60,
+        cancelled: threading.Event | None = None,
     ) -> subprocess.CompletedProcess[str]:
         assert command.code_revision is not None
         key = _WorkerKey(binding, command.code_revision.content_hash)
@@ -287,11 +305,17 @@ class RevisionWorkers:
         if not self._condition.acquire(timeout=timeout):
             raise subprocess.TimeoutExpired("author worker queue", timeout)
         try:
-            if not self._condition.wait_for(
-                lambda: key not in self._busy and self._has_capacity(key),
-                timeout=max(0, timeout - (time.monotonic() - started)),
-            ):
-                raise subprocess.TimeoutExpired("author worker queue", timeout)
+            while key in self._busy or not self._has_capacity(key):
+                if cancelled is not None and cancelled.is_set():
+                    raise InterruptedError("Analysis stopped before worker admission")
+                remaining = timeout - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired("author worker queue", timeout)
+                self._condition.wait(
+                    timeout=min(remaining, 0.1) if cancelled else remaining
+                )
+            if cancelled is not None and cancelled.is_set():
+                raise InterruptedError("Analysis stopped before worker admission")
             worker = self._workers.get(key)
             if worker is None:
                 self._evict_idle()
@@ -305,7 +329,7 @@ class RevisionWorkers:
         discard = True
         try:
             result = worker.call(
-                command, max(0.001, timeout - (time.monotonic() - started))
+                command, max(0.001, timeout - (time.monotonic() - started)), cancelled
             )
             discard = result.returncode != 0
             return result

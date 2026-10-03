@@ -323,8 +323,6 @@ class MeasurementSnapshot:
             return
         position = 0
         previous_point = -1
-        cached: OrderedDict[int, MeasurementDatasetAppend] = OrderedDict()
-        cached_bytes = 0
         for index, chunk in enumerate(self._manifest.projection):
             following = position + chunk.count
             if position >= offset + limit:
@@ -352,26 +350,8 @@ class MeasurementSnapshot:
                         chunk.count, offset + limit - position
                     )
                 ]
-                # A point may contain a large waveform. Bound retained chunks by
-                # encoded bytes, not by the number of selected points. Reuse
-                # nearby acquisitions without retaining a whole selection page.
-                for item in selected:
-                    source = bisect_right(self._starts, item.acquisition_index) - 1
-                    append = cached.get(source)
-                    if append is None:
-                        size = self._manifest.chunks[source].size
-                        while cached and cached_bytes + size > _SELECTION_CACHE_BYTES:
-                            evicted = next(iter(cached))
-                            del cached[evicted]
-                            cached_bytes -= self._manifest.chunks[evicted].size
-                        append = self._append(source)
-                        cached[source] = append
-                        cached_bytes += size
-                    else:
-                        cached.move_to_end(source)
-                    record = append.records[
-                        item.acquisition_index - self._starts[source]
-                    ]
+                records = self.records_at(item.acquisition_index for item in selected)
+                for item, record in zip(selected, records, strict=True):
                     if record.point_index != item.point_index:
                         raise ValueError("snapshot projection selects another point")
                     yield record
@@ -397,6 +377,28 @@ class MeasurementSnapshot:
                     max(0, offset - position) : min(chunk.count, end - position)
                 ]
             position = following
+
+    def records_at(self, indices: Iterable[int]) -> Iterator[MeasurementRecord]:
+        """Read exact physical acquisitions with a bounded decoded-chunk cache."""
+        cached: OrderedDict[int, MeasurementDatasetAppend] = OrderedDict()
+        cached_bytes = 0
+        for index in indices:
+            if not 0 <= index < self.record_count:
+                raise ValueError("acquisition index is outside the captured recording")
+            source = bisect_right(self._starts, index) - 1
+            append = cached.get(source)
+            if append is None:
+                size = self._manifest.chunks[source].size
+                while cached and cached_bytes + size > _SELECTION_CACHE_BYTES:
+                    evicted = next(iter(cached))
+                    del cached[evicted]
+                    cached_bytes -= self._manifest.chunks[evicted].size
+                append = self._append(source)
+                cached[source] = append
+                cached_bytes += size
+            else:
+                cached.move_to_end(source)
+            yield append.records[index - self._starts[source]]
 
     def close(self) -> None:
         if self._owns_archive:

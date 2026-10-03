@@ -590,6 +590,7 @@ def test_http_lifespan_starts_and_stops_manager() -> None:
                         SimpleNamespace(
                             project_root=Path.cwd(),
                             calibration_tasks=Mock(),
+                            analysis_follow_runner=Mock(),
                             manual_previews=_manual_previews(),
                             author_workspaces=SimpleNamespace(
                                 root=Path.cwd(),

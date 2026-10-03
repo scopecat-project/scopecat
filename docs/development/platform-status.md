@@ -63,6 +63,18 @@ driver identity and original-source analysis. Existing preparation stage reporti
 preview diagnostics, admission receipts and typed reopen paths remain authoritative;
 this batch does not add a second progress or result model. Live grouping is batch 3.
 
+Batch 3 ([#851](https://github.com/scopecat-project/scopecat/pull/851)) implements
+fixed Cartesian group completion from committed logical-point
+projections, immutable acquisition-reference slices, bounded author-worker execution,
+durable event cursors and restart reads. It reuses ordinary/context analysis and
+existing publications. The run view reports progress and refreshes results; stopping
+analysis leaves acquisition running. Cleanup waits for active analysis, and exported
+captures retain independently readable slices. The reference scenarios cover power
+spectroscopy with instrument-returned frequency arrays and repeated synthetic T1.
+Paired, adaptive and point-cloud live completion, stateful reducers and feedback
+gating remain separate capabilities. Schema 108 remains a prebaseline development
+format. These software scenarios do not replace physical acceptance.
+
 The sections below retain the earlier scientific audit and its evidence inventory;
 current configuration authority is governed by the linked ownership contract.
 
@@ -196,7 +208,7 @@ Concurrent jobs and one batched acquisition are different contracts.
 - **Fixtures:** use the [ownership map](reference-fixtures.md) and
   [gallery retirement](reference-gallery-retirement.md). Preserve demonstrated
   routing, compiler, resource and recovery coverage; moving files is not cleanup.
-- **Other platform work:** live grouped analysis, symbolic argument typing,
+- **Other platform work:** open-domain live completion, stateful reducers, symbolic argument typing,
   heterogeneous environments and installation qualification remain separate.
   Do not count delivered compute or native readers as missing.
 - **Later contracts:** native install/uninstall, tray/login startup, LAN

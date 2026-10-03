@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import (
     Annotated,
     Literal,
@@ -816,22 +816,32 @@ def measurement_point_axis_values(
 ) -> tuple[MeasurementScalar | None, ...]:
     """Materialize one durable axis only when an analysis view needs its values."""
 
+    return tuple(iter_measurement_point_axis_values(axis))
+
+
+def iter_measurement_point_axis_values(
+    axis: MeasurementPointDomainAxis,
+) -> Iterator[MeasurementScalar | None]:
+    """Read compact generated coordinates without allocating the entire axis."""
+
     source = axis.source
     if isinstance(source, MeasurementPointDomainValuesSource):
-        return tuple(source.values)
+        yield from source.values
+        return
     if isinstance(source, MeasurementPointDomainRangeSource):
         start = _measurement_scalar_range_value(source.start)
         stop = _measurement_scalar_range_value(source.stop)
-        return tuple(
+        yield from (
             _measurement_scalar_from_generated(
                 source.start,
                 point_axis_range_value(start, stop, axis.size, index),
             )
             for index in range(axis.size)
         )
+        return
     center = Quantity(cast("float", source.center.value), source.center.unit)
     span = Quantity(cast("float", source.span.value), source.span.unit)
-    return tuple(
+    yield from (
         _measurement_scalar_from_generated(
             source.center,
             point_axis_linear_value(center, span, axis.size, index),

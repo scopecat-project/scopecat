@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analysis-follows/{identity}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Analysis Follow */
+        post: operations["stop_analysis_follow_api_v1_analysis_follows__identity__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/author-preparations": {
         parameters: {
             query?: never;
@@ -1597,6 +1614,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/analysis-follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Analysis Follows */
+        get: operations["run_analysis_follows_api_v1_runs__run_id__analysis_follows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/artifacts/{selector}/bytes": {
         parameters: {
             query?: never;
@@ -2803,6 +2837,68 @@ export interface components {
             /** Truncated */
             truncated: boolean;
         };
+        /** AnalysisFollowRequest */
+        AnalysisFollowRequest: {
+            analysis: components["schemas"]["AuthorAnalysisRequest"];
+            /** Id */
+            id: string;
+            /**
+             * Max Groups
+             * @default 1000
+             */
+            max_groups: number;
+            /**
+             * Max Input Bytes
+             * @default 67108864
+             */
+            max_input_bytes: number;
+            /**
+             * Max Points Per Group
+             * @default 4096
+             */
+            max_points_per_group: number;
+            /**
+             * Timeout Seconds
+             * @default 60
+             */
+            timeout_seconds: number;
+        };
+        /** @enum {string} */
+        AnalysisFollowState: "running" | "completed" | "attention" | "stopped";
+        /** AnalysisFollowView */
+        AnalysisFollowView: {
+            /** Active Group */
+            active_group?: number | null;
+            /** Error */
+            error?: string | null;
+            /**
+             * Failed Count
+             * @default 0
+             */
+            failed_count: number;
+            /**
+             * Finished Count
+             * @default 0
+             */
+            finished_count: number;
+            /** Group Count */
+            group_count?: number | null;
+            request: components["schemas"]["AnalysisFollowRequest"];
+            state: components["schemas"]["AnalysisFollowState"];
+        };
+        /** AnalysisGrouping */
+        AnalysisGrouping: {
+            /** By */
+            by: string[];
+            /** Fitting */
+            fitting: string;
+            /**
+             * Repeats
+             * @default separate
+             * @enum {string}
+             */
+            repeats: "separate" | "combine";
+        };
         /**
          * AnalysisInterpretationReference
          * @description Exact durable judgment identity; values remain in the procedure journal.
@@ -3008,6 +3104,28 @@ export interface components {
              * @enum {string}
              */
             state: "queued" | "closed";
+        };
+        /** AuthorAnalysisRequest */
+        AuthorAnalysisRequest: {
+            /**
+             * Analysis
+             * @description Configured author module:analysis name
+             */
+            analysis: string;
+            /** Arguments */
+            arguments?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            grouping?: components["schemas"]["AnalysisGrouping"] | null;
+            /** Key */
+            key?: string | null;
+            /** Measurement Slice */
+            measurement_slice?: string | null;
+            /** Run Id */
+            run_id: string;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /**
          * AuthorPreparation
@@ -11536,6 +11654,37 @@ export interface operations {
             };
         };
     };
+    stop_analysis_follow_api_v1_analysis_follows__identity__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                identity: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisFollowView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     author_preparations_api_v1_author_preparations_get: {
         parameters: {
             query?: never;
@@ -14763,6 +14912,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunAnalysisView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_analysis_follows_api_v1_runs__run_id__analysis_follows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisFollowView"][];
                 };
             };
             /** @description Validation Error */
