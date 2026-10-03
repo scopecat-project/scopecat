@@ -2,17 +2,35 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import subprocess
-import sys
+import tempfile
 import time
 from pathlib import Path
+from typing import Protocol, cast
 
 from lab_tools.macos_signing import verify as verify_signature
 
 
-def verify(installer: Path, home: Path) -> None:
+def verify(installer: Path, home: Path, *, keep_work: bool = False) -> None:
+    home.mkdir(parents=True, exist_ok=False)
+    with tempfile.TemporaryDirectory(
+        prefix="work-", dir=home, delete=not keep_work
+    ) as directory:
+        workspace = Path(directory) / "download"
+        try:
+            _verify(installer, workspace)
+        finally:
+            report = workspace / "report.json"
+            if report.is_file():
+                shutil.copyfile(report, home / "report.json")
+            if keep_work:
+                print(f"Retained download workspace: {directory}")
+
+
+def _verify(installer: Path, home: Path) -> None:
     home.mkdir(parents=True, exist_ok=False)
     mount = home / "mounted"
     mount.mkdir()
@@ -80,5 +98,16 @@ def verify(installer: Path, home: Path) -> None:
     print(json.dumps(report, indent=2))
 
 
+class Arguments(Protocol):
+    installer: Path
+    reports: Path
+    keep_work: bool
+
+
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]), Path(sys.argv[2]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("installer", type=Path)
+    parser.add_argument("reports", type=Path)
+    parser.add_argument("--keep-work", action="store_true")
+    args = cast("Arguments", cast("object", parser.parse_args()))
+    verify(args.installer, args.reports, keep_work=args.keep_work)

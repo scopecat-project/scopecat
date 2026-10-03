@@ -4,16 +4,12 @@ __pycache__/
 .ruff_cache/
 .coverage
 .benchmarks/
-.scopecat-examples/
-.scopecat-embedded/
-.venv/
+.venv*/
 node_modules/
-apps/scopecat-ui/dist/
-dist/scopecat-server/
-site/
+/build/
+/dist/
+/site/
 
 .test-results/
 
-results/
-.scopecat-dev/
-dist/tutorial*/
+/.scopecat-dev/

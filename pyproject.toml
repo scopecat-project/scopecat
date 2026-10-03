@@ -424,6 +424,7 @@ fast_paths = [
   "packages/scopecat-quantum/tests",
   "packages/lab-tools/tests/test_test_tiers.py",
   "packages/lab-tools/tests/test_preview.py",
+  "packages/lab-tools/tests/test_acceptance_workspaces.py",
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [
