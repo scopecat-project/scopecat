@@ -52,6 +52,7 @@ class LabDeviceOperations:
         source_root: str | Path,
         *,
         operation_id: str | None = None,
+        python: str | Path | None = None,
     ) -> DriverSourceSelection:
         """Capture local source and switch drivers once affected devices are idle."""
         current = self.driver_source()
@@ -62,6 +63,9 @@ class LabDeviceOperations:
             DriverSourceUpdate(
                 operation_id=operation_id or uuid4().hex,
                 source_root=str(Path(source_root).expanduser().resolve()),
+                python=str(Path(python).expanduser().absolute())
+                if python is not None
+                else None,
                 expected_previous=previous,
                 actor=self.operator,
             )

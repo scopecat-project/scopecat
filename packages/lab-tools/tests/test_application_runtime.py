@@ -152,8 +152,8 @@ def test_select_existing_environment_validates_before_publishing(
     python.symlink_to(sys.executable)
     checked = []
 
-    def capture(root, interpreter, *, owner):
-        checked.append((root, interpreter, owner))
+    def capture(root, interpreter):
+        checked.append((root, interpreter))
 
     monkeypatch.setattr("scopecat_server.author_environment.capture", capture)
     monkeypatch.chdir(tmp_path)
@@ -161,7 +161,7 @@ def test_select_existing_environment_validates_before_publishing(
     selected = LocalAuthorWorkspaces.model_validate_json(location.read_bytes()).items[0]
     assert selected.python == python
     assert selected.retained_pythons == (original.python,)
-    assert checked == [(source, python, application.root)]
+    assert checked == [(source, python)]
     before = location.read_bytes()
 
     def fail(*args, **kwargs):
@@ -174,6 +174,9 @@ def test_select_existing_environment_validates_before_publishing(
 
 
 def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
+    import httpx2
+
+    running = application.start()
     sources = []
     for name in ("first", "second"):
         root = tmp_path / name
@@ -186,8 +189,13 @@ def test_two_sources_share_empty_application_without_owning_it(application, tmp_
         identity = application.register_source(root)
         assert application.source(root) == identity
         sources.append((root, identity))
+        with httpx2.Client(base_url=running.base_url, trust_env=False) as client:
+            response = client.get("/api/v1/author-workspaces")
+            response.raise_for_status()
+            assert identity in {item["id"] for item in response.json()["items"]}
     assert sources[0][1] != sources[1][1]
     record = application.start()
+    assert record.pid == running.pid
     assert application.start() == record
     assert record.project_root == application.root
     assert all(

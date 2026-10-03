@@ -221,16 +221,20 @@ def test_busy_source_creation_retains_folder_without_interrupting_work(
     monkeypatch.setattr(
         "lab_tools.author_environment.create_client_environment", lambda *_: None
     )
+    monkeypatch.setattr(
+        "lab_tools.author_environment.prepare_execution_environment",
+        lambda *_: tmp_path / "execution/python",
+    )
     runtime = Mock()
     runtime.stop_if_idle.return_value = False
     window = Mock()
     api = DesktopAPI(DesktopSession(runtime, threading.Event()), lambda: window)
-    with pytest.raises(ValueError, match="先完成或停止"):
-        api.create_source(str(tmp_path), "experiments")
+    runtime.start.return_value.base_url = "http://127.0.0.1:1234"
+    api.create_source(str(tmp_path), "experiments")
     assert (tmp_path / "experiments/notebooks/02_edit_scan.py").is_file()
     runtime.stop.assert_not_called()
-    runtime.register_source.assert_not_called()
-    window.run_js.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    runtime.register_source.assert_called_once()
 
 
 @pytest.mark.parametrize("name", ["../outside", "..", "C:outside", "nested\\folder"])
@@ -267,7 +271,7 @@ def test_registration_validates_selected_folder_before_preparing_dependencies(
     runtime = Mock()
     api = DesktopAPI(DesktopSession(runtime, threading.Event()), Mock())
     with pytest.raises(ValueError, match="cannot read project manifest"):
-        api.register_source(str(nested))
+        api.register_source(str(nested), str(nested / "python"))
     prepare.assert_not_called()
     assert runtime.mock_calls == []
 

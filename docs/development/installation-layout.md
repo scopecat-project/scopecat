@@ -77,7 +77,12 @@ already provide compatible Scopecat execution dependencies and source requiremen
 Validation precedes saving the binding; failure preserves the prior selection.
 This changes background execution for subsequent preparation, not the interpreter
 selected in VS Code. Existing retained tasks keep their environment binding.
-The maintenance entry does not yet establish an independent vendor SDK protocol.
+Settings exposes the same operation. Adding a folder requires an explicit execution
+Python; preparing dependencies from `pyproject.toml` is a separate action. Registration
+is visible to the running application without restarting it. Managed preparation
+resolves the source requirements with compatible Scopecat execution packages, not
+the desktop application's complete dependency lock. Vendor SDKs can use another
+interpreter through the [SDK process protocol](architecture/sdk-process.md).
 
 | Purpose | macOS | Windows |
 | --- | --- | --- |
@@ -139,8 +144,8 @@ These are maintainer prerequisites, not end-user prerequisites.
 
 The native executable runs the complete bundled Python runtime and enters the
 desktop workbench. It does not install application dependencies or open
-a browser. A trusted `--initializer SCRIPT` may scaffold laboratory starter code;
-it is checksummed with the delivery, runs on first setup and retries if interrupted.
+a browser. Laboratory initialization scripts are not part of native startup.
+Create or register ordinary source explicitly after opening the application.
 Updates replace the native application after work has stopped. Startup registers
 the installed runtime; it never selects a separately prepared candidate.
 

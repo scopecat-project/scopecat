@@ -66,7 +66,6 @@ class Project:
     adapter_packages: tuple[tuple[str, str], ...] = ()
     author_only: bool = False
     lab_adapter: AdapterReference | None = None
-    composition_bound: bool = True
 
     @property
     def runtime_binding(self) -> RuntimeBinding:
@@ -192,8 +191,6 @@ def load_project(
     manifest: str | Path,
     *,
     resolve_adapter: bool = True,
-    lab_adapter: AdapterReference | None = None,
-    bound_composition: bool = False,
 ) -> Project:
     """Load the project contract shared by daemon and notebook tooling."""
 
@@ -208,13 +205,8 @@ def load_project(
             f"cannot read project manifest {selected}: {error}"
         ) from error
 
-    lab, author_only = _laboratory_table(
-        document,
-        selected.parent,
-        resolve_adapter=resolve_adapter,
-        lab_adapter=lab_adapter,
-        bound_composition=bound_composition,
-    )
+    lab, author_only = _laboratory_table(document)
+    lab_adapter: AdapterReference | None = None
     if "adapter" in lab:
         from scopecat.installed_adapter import parse_adapter_reference
 
@@ -327,7 +319,6 @@ def load_project(
         dependencies=dependencies,
         author_only=author_only,
         lab_adapter=lab_adapter,
-        composition_bound=not author_only or resolve_adapter or bound_composition,
     )
 
 
@@ -357,58 +348,17 @@ def _project_dependencies(
 
 
 def load_captured_project(root: Path) -> Project:
-    """Load the retained laboratory declaration, never the current local binding."""
-    from scopecat.author_workspaces import LABORATORY_MANIFEST_NAME
-    from scopecat.installed_adapter import parse_adapter_reference
-
-    path = root / LABORATORY_MANIFEST_NAME
-    adapter = None
-    if path.is_file():
-        document = tomllib.loads(path.read_text(encoding="utf-8"))
-        lab = cast("dict[str, object]", document["lab"])
-        adapter = parse_adapter_reference(lab["adapter"]) if "adapter" in lab else None
-    else:
-        # Combined projects carry their own laboratory declaration. An author-only
-        # archive must never resolve a live registration when its pin is absent.
-        document = tomllib.loads((root / "scopecat.toml").read_text(encoding="utf-8"))
-        if "lab" not in document:
-            raise ValueError(
-                "Author-only revision is missing its laboratory declaration"
-            )
-    return load_project(
-        root / "scopecat.toml", lab_adapter=adapter, bound_composition=path.is_file()
-    )
+    """Load the revision's own declaration without consulting application bindings."""
+    return load_project(root / "scopecat.toml")
 
 
 def _laboratory_table(
     document: dict[str, object],
-    root: Path,
-    *,
-    resolve_adapter: bool,
-    lab_adapter: AdapterReference | None,
-    bound_composition: bool,
 ) -> tuple[dict[str, object], bool]:
     author_only = "lab" not in document and "authors" in document
     if author_only:
-        if resolve_adapter and lab_adapter is None and not bound_composition:
-            from scopecat.author_workspaces import bound_lab_adapter
-
-            lab_adapter = bound_lab_adapter(root)
-        lab_value: object = (
-            {
-                "adapter": {
-                    "distribution": lab_adapter.distribution,
-                    "manifest": lab_adapter.manifest,
-                }
-            }
-            if lab_adapter is not None
-            else {}
-        )
+        lab_value: object = {}
     else:
-        if lab_adapter is not None:
-            raise ProjectManifestError(
-                "only author-only manifests inherit a laboratory"
-            )
         lab_value = document.get("lab")
     if not isinstance(lab_value, dict):
         raise ProjectManifestError("scopecat.toml requires a [lab] or [authors] table")

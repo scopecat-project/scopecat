@@ -1,4 +1,4 @@
-"""Minimal multiprocessing entry point for an instrument worker."""
+"""Minimal entry point in the selected instrument execution environment."""
 
 from __future__ import annotations
 
@@ -50,3 +50,32 @@ def run_instrument_worker(
 
 
 __all__ = ["run_instrument_worker"]
+
+
+if __name__ == "__main__":
+    import json
+    import socket
+    import sys
+
+    from .worker_transport import ByteConnection
+
+    request = cast("dict[str, object]", json.loads(sys.argv[3]))
+    with socket.create_connection(
+        ("127.0.0.1", int(sys.argv[1])), timeout=30
+    ) as channel:
+        channel.settimeout(None)
+        connection = ByteConnection(channel)
+        connection.send_bytes(sys.argv[2].encode())
+        run_instrument_worker(
+            connection,
+            cast("str", request["root"]),
+            cast("str", request["factory"]),
+            cast("str", request["generation"]),
+            tuple(
+                (name, distribution)
+                for name, distribution in cast(
+                    "list[tuple[str, str]]", request["packages"]
+                )
+            ),
+            cast("str | None", request["code_root"]),
+        )

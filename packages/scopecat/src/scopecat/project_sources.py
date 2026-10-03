@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import platform
 import shutil
 import tempfile
@@ -14,7 +13,6 @@ from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
-from scopecat.author_workspaces import LABORATORY_MANIFEST_NAME
 from scopecat.kernel.content_identity import (
     content_fingerprint,
     sha256_content_hash,
@@ -27,7 +25,7 @@ from scopecat.records.author_revision import (
 )
 
 if TYPE_CHECKING:
-    from scopecat.installed_adapter import AdapterReference
+    pass
 
 
 loading_workspace: ContextVar[str | None] = ContextVar(
@@ -67,31 +65,12 @@ class SourceProject(Protocol):
     @property
     def dependencies(self) -> tuple[str, ...] | None: ...
     @property
-    def author_only(self) -> bool: ...
-    @property
-    def composition_bound(self) -> bool: ...
-    @property
-    def lab_adapter(self) -> AdapterReference | None: ...
-    @property
     def adapter_packages(self) -> tuple[tuple[str, str], ...]: ...
 
 
 def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     """Snapshot all declared roots, including helpers, analysis and local resources."""
     files: dict[str, bytes] = {"scopecat.toml": project.manifest.read_bytes()}
-    if project.author_only:
-        if not project.composition_bound:
-            raise ValueError("Author-only source capture requires a bound application")
-        adapter = project.lab_adapter
-        files[LABORATORY_MANIFEST_NAME] = (
-            (
-                "[lab.adapter]\n"
-                f"distribution = {json.dumps(adapter.distribution)}\n"
-                f"manifest = {json.dumps(adapter.manifest)}\n"
-            )
-            if adapter is not None
-            else "[lab]\n"
-        ).encode()
     for name in (
         ("pyproject.toml",)
         if project.dependencies is not None

@@ -13,6 +13,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
     new URLSearchParams(window.location.search).get("source") ?? "",
   );
   const [creating, setCreating] = useState(false);
+  const [interpreter, setInterpreter] = useState("");
   const [parent, setParent] = useState("");
   const [name, setName] = useState("experiments");
   useEffect(() => {
@@ -27,11 +28,20 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   });
   const operation = useMutation({
     mutationFn: async (
-      action: "source" | "create" | "restart" | "dependencies" | "client" | "rebuild-client",
+      action:
+        | "source"
+        | "environment"
+        | "create"
+        | "restart"
+        | "dependencies"
+        | "client"
+        | "rebuild-client",
     ) => {
       if (!native) return undefined;
       if (action === "create") return native.create_source(parent, name.trim());
-      else if (action === "source") await native.register_source(source.trim());
+      else if (action === "source") await native.register_source(source.trim(), interpreter.trim());
+      else if (action === "environment")
+        return native.select_source_environment(source.trim(), interpreter.trim());
       else if (action === "dependencies") return native.prepare_author_environment(source.trim());
       else if (action === "client") return native.create_author_environment(source.trim());
       else if (action === "rebuild-client")
@@ -101,8 +111,8 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
             <p>
               Create a folder with a device-free example and its own Python environment, or add
               existing Scopecat code. Open the folder normally in VS Code. All folders share this
-              application and its data. Adding a folder restarts the application when idle; finish
-              active work first.
+              application and its data. Choose an existing execution Python when adding code;
+              registration does not install packages or restart the application.
             </p>
             <div className="flex gap-2">
               <button className={secondaryButton} disabled={busy} onClick={() => setCreating(true)}>
@@ -177,12 +187,33 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                     placeholder="Folder containing scopecat.toml"
                   />
                 </label>
+                <label className="grid gap-1">
+                  Execution Python
+                  <input
+                    value={interpreter}
+                    disabled={busy}
+                    onChange={(event) => setInterpreter(event.target.value)}
+                    placeholder="Full path to python or python.exe"
+                  />
+                </label>
                 <button
                   className={secondaryButton}
-                  disabled={busy || !source.trim() || !!selected}
+                  disabled={busy || !source.trim() || !interpreter.trim() || !!selected}
                   onClick={() => operation.mutate("source")}
                 >
                   Add code folder
+                </button>
+                {selected && (
+                  <p>
+                    Current execution Python: <code>{selected.execution_python}</code>
+                  </p>
+                )}
+                <button
+                  className={secondaryButton}
+                  disabled={busy || !selected || !interpreter.trim()}
+                  onClick={() => operation.mutate("environment")}
+                >
+                  Use this execution Python
                 </button>
                 {selected && (
                   <p role="status">
@@ -212,15 +243,15 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                 >
                   Create local Python environment
                 </button>
+                <button
+                  className={secondaryButton}
+                  disabled={busy || !source.trim()}
+                  onClick={() => operation.mutate("dependencies")}
+                >
+                  Prepare execution environment from pyproject.toml
+                </button>
                 <details>
-                  <summary>Dependencies and environment repair</summary>
-                  <button
-                    className={secondaryButton}
-                    disabled={busy || !selected}
-                    onClick={() => operation.mutate("dependencies")}
-                  >
-                    Prepare background dependencies
-                  </button>
+                  <summary>Local environment repair</summary>
                   <p>
                     To repair local Python, close its terminals and notebook kernels first.
                     Rebuilding preserves the previous environment separately and keeps your source

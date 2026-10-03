@@ -217,7 +217,7 @@ def test_registration_locks_candidate_and_rebinding_revokes_old_location(
     old.runtime_binding.deployment_root.mkdir(parents=True)
     with (
         FileLock(old.runtime_binding.deployment_root / "deployment.lock"),
-        pytest.raises(ValueError, match="Stop the deployment"),
+        pytest.raises(ValueError, match="another running application"),
     ):
         register_author_workspace(owner.root, old.root)
     assert not (old.root / "scopecat.runtime.toml").exists()

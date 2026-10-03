@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
-from multiprocessing import get_context
-from multiprocessing.process import BaseProcess
 from pathlib import Path
 from threading import Event, Lock, RLock, Thread
 from time import monotonic
@@ -65,7 +64,7 @@ from .worker_output import (
     record_problem,
     worker_operation,
 )
-from .worker_process import run_instrument_worker
+from .worker_transport import WorkerProcess, launch
 from .worker_wire import (
     DEFAULT_WIRE_LIMITS,
     CollectFrames,
@@ -275,6 +274,7 @@ class SubprocessInstrumentBackendEndpoint:
         instrument_backend_spec: str,
         *,
         installed_packages: tuple[tuple[str, str], ...] = (),
+        python: Path | None = None,
         code_root: str | Path | None = None,
         source_revision: AuthorRevisionRef | None = None,
         startup_timeout: float | None = None,
@@ -303,31 +303,21 @@ class SubprocessInstrumentBackendEndpoint:
         self._connection_closed = False
         self._cleanup_complete = False
 
-        context = get_context("spawn")
-        parent, child = context.Pipe(duplex=True)
-        process = context.Process(
-            target=run_instrument_worker,
-            args=(
-                child,
-                str(self._project_root),
-                instrument_backend_spec,
-                self._endpoint_id,
-                installed_packages,
-                str(Path(code_root).resolve()) if code_root is not None else None,
-            ),
-            name=f"scopecat-instruments-{self._project_root.name}",
-            daemon=True,
+        parent, process = launch(
+            python or Path(sys.executable),
+            {
+                "root": str(self._project_root),
+                "factory": instrument_backend_spec,
+                "generation": self._endpoint_id,
+                "packages": installed_packages,
+                "code_root": str(Path(code_root).resolve())
+                if code_root is not None
+                else None,
+            },
+            timeout=startup_timeout or 30.0,
         )
         self._connection: _ByteConnection = parent
-        self._process: BaseProcess = process
-        startup_stage("spawning instrument child")
-        try:
-            process.start()
-        except BaseException:
-            parent.close()
-            child.close()
-            raise
-        child.close()
+        self._process = process
         startup_stage(
             f"instrument child spawned pid={process.pid} generation={self._endpoint_id}"
         )
@@ -1408,18 +1398,18 @@ def _require_child_handle(request: _RpcRequest) -> InstrumentHandle:
     return request.handle.to_handle()
 
 
-def _stop_process(process: BaseProcess, timeout: float) -> None:
+def _stop_process(process: WorkerProcess, timeout: float) -> None:
     _stop_process_until(process, monotonic() + timeout)
     process.close()
 
 
-def _stop_process_until(process: BaseProcess, deadline: float) -> None:
+def _stop_process_until(process: WorkerProcess, deadline: float) -> None:
     remaining = max(0.0, deadline - monotonic())
     process.join(remaining / 2)
     _terminate_process_until(process, deadline)
 
 
-def _terminate_process_until(process: BaseProcess, deadline: float) -> None:
+def _terminate_process_until(process: WorkerProcess, deadline: float) -> None:
     if process.is_alive():
         process.terminate()
         remaining = max(0.0, deadline - monotonic())

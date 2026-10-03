@@ -79,7 +79,11 @@ class AuthorRevisionService:
                     )
                 )
         manifest = root / "scopecat.toml"
-        self.project = load_project(manifest) if manifest.is_file() else None
+        self.project = (
+            load_project(manifest, resolve_adapter=False)
+            if manifest.is_file()
+            else None
+        )
         self.baseline = (
             self._capture()
             if self.project is not None

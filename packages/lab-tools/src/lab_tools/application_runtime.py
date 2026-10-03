@@ -297,26 +297,29 @@ class ApplicationRuntime:
         with self.lock:
             self.require_ready()
             identity = self.source(workspace)
-            capture(workspace, python, owner=self.root)
+            capture(workspace, python)
             path = author_bindings_path(self.root)
-            registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
-            items = tuple(
-                item.model_copy(
-                    update={
-                        "python": python,
-                        "retained_pythons": tuple(
-                            dict.fromkeys((item.python, *item.retained_pythons))
-                        ),
-                    }
+            with FileLock(path.parent / "author-workspaces.lock", timeout=30):
+                registry = LocalAuthorWorkspaces.model_validate_json(path.read_bytes())
+                items = tuple(
+                    item.model_copy(
+                        update={
+                            "python": python,
+                            "retained_pythons": tuple(
+                                dict.fromkeys((item.python, *item.retained_pythons))
+                            ),
+                        }
+                    )
+                    if item.id == identity and item.python != python
+                    else item
+                    for item in registry.items
                 )
-                if item.id == identity and item.python != python
-                else item
-                for item in registry.items
-            )
-            _write(
-                path,
-                registry.model_copy(update={"items": items}).model_dump_json(indent=2),
-            )
+                _write(
+                    path,
+                    registry.model_copy(update={"items": items}).model_dump_json(
+                        indent=2
+                    ),
+                )
 
     def source(self, workspace: Path) -> str:
         """Opening registered code joins this home; it cannot create another owner."""

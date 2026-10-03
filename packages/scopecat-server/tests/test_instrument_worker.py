@@ -5,12 +5,13 @@ import os
 import shutil
 import sqlite3
 import sys
+import sysconfig
 import time
+import venv
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from importlib.util import find_spec
-from multiprocessing.process import BaseProcess
 from pathlib import Path
 from threading import Thread
 from typing import Annotated, Protocol, cast
@@ -71,6 +72,7 @@ from scopecat_server.instruments.backend import (
     InstrumentHandleInvalid,
 )
 from scopecat_server.instruments.worker import SubprocessInstrumentBackendEndpoint
+from scopecat_server.instruments.worker_transport import WorkerProcess
 from scopecat_server.runtime import LocalDaemonRuntime
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
@@ -227,6 +229,49 @@ def test_first_driver_source_can_be_added_to_a_running_empty_application(
         assert reopened.application.driver_sources.current() == selected
         endpoint = reopened.application.devices.endpoint
         assert endpoint is not None and endpoint.artifact_hash == selected.artifact_hash
+
+
+def test_driver_uses_selected_python_and_retains_it_after_reopen(
+    tmp_path: Path,
+) -> None:
+    environment = tmp_path / "execution"
+    # Reuse test dependencies while changing sys.prefix and interpreter ownership.
+    venv.EnvBuilder(system_site_packages=True).create(environment)
+    version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    site = environment / (
+        "Lib/site-packages"
+        if sys.platform == "win32"
+        else f"lib/python{version}/site-packages"
+    )
+    (site / "test-dependencies.pth").write_text(
+        f"import site; site.addsitedir({sysconfig.get_path('purelib')!r})\n"
+    )
+    python = environment / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    project = _copy_project(tmp_path)
+    (project / "scopecat.toml").write_text("[lab]\n")
+    source = _driver_source(tmp_path)
+    backend = source / "src/worker_fixture/backend.py"
+    backend.write_text(
+        backend.read_text().replace(
+            "from __future__ import annotations",
+            "from __future__ import annotations\nimport sys\n"
+            f"assert sys.prefix == {str(environment)!r}\n",
+        )
+    )
+    with (
+        LocalDaemonRuntime(project) as runtime,
+        TestClient(runtime.app()) as transport,
+        _http_daemon_client(transport) as client,
+    ):
+        selected = LabDeviceOperations(client, "maintainer").update_driver_source(
+            source, python=python
+        )
+        assert selected.python == str(python)
+    with LocalDaemonRuntime(project) as reopened:
+        assert reopened.application.driver_sources.current() == selected
+        assert reopened.application.devices.endpoint is not None
 
 
 def test_driver_source_api_survives_source_removal_restart_and_backup(
@@ -1192,7 +1237,7 @@ def test_instrument_startup_timeout_retains_child_phase_and_reaps_process(
     stopped: list[tuple[int | None, int | None, bool]] = []
     terminate = worker._terminate_process_until
 
-    def observe_termination(process: BaseProcess, deadline: float) -> None:
+    def observe_termination(process: WorkerProcess, deadline: float) -> None:
         terminate(process, deadline)
         stopped.append((process.pid, process.exitcode, process.is_alive()))
 

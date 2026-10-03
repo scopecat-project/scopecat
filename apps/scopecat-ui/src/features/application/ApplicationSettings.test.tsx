@@ -37,6 +37,7 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
       choose_directory: choose,
       create_source: create,
       register_source: register,
+      select_source_environment: vi.fn(),
       restart: vi.fn(),
       retry: vi.fn(),
       exit: vi.fn(),
@@ -84,7 +85,13 @@ it("keeps author dependencies independent and uses native application updates", 
     state: "running",
     detail: null,
     installation,
-    sources: [{ directory: "/authors", python: "/authors/.venv/bin/python" }],
+    sources: [
+      {
+        directory: "/authors",
+        python: "/authors/.venv/bin/python",
+        execution_python: "/execution/bin/python",
+      },
+    ],
   };
   const dependencies = vi.fn().mockResolvedValue("Dependencies ready");
   const client = vi.fn().mockResolvedValue("/authors/.venv/bin/python");
@@ -100,6 +107,7 @@ it("keeps author dependencies independent and uses native application updates", 
       wait_for_idle: vi.fn(),
       status: vi.fn().mockImplementation(async () => ({ ...state })),
       register_source: vi.fn(),
+      select_source_environment: vi.fn(),
       choose_directory: vi.fn(),
       create_source: vi.fn(),
       prepare_author_environment: dependencies,
@@ -121,11 +129,25 @@ it("keeps author dependencies independent and uses native application updates", 
   expect(screen.getByText("/current/python")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Stop and apply prepared update" })).toBeNull();
   fireEvent.change(screen.getByLabelText("Author directory"), { target: { value: "/authors" } });
-  fireEvent.click(screen.getByText("Dependencies and environment repair"));
-  fireEvent.click(screen.getByRole("button", { name: "Prepare background dependencies" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Prepare execution environment from pyproject.toml" }),
+  );
   expect(await screen.findByText("Dependencies ready")).toBeVisible();
   expect(dependencies).toHaveBeenCalledWith("/authors");
   expect(restart).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Execution Python"), {
+    target: { value: "/custom/python" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Use this execution Python" }));
+  await waitFor(() =>
+    expect(window.pywebview!.api.select_source_environment).toHaveBeenCalledWith(
+      "/authors",
+      "/custom/python",
+    ),
+  );
+  expect(dependencies).toHaveBeenCalledTimes(1);
+  expect(restart).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Local environment repair"));
   fireEvent.click(screen.getByRole("button", { name: "Rebuild local Python environment" }));
   expect(await screen.findByText("/authors/.venv/bin/python")).toBeVisible();
   expect(client).toHaveBeenCalledWith("/authors", true);

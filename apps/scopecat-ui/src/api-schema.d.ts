@@ -5124,6 +5124,8 @@ export interface components {
             code_revision: components["schemas"]["AuthorRevisionRef"];
             /** Factory */
             factory: string;
+            /** Python */
+            python: string;
             request: components["schemas"]["DriverSourceUpdate"];
         };
         /** DriverSourceState */
@@ -5138,6 +5140,8 @@ export interface components {
             expected_previous?: string | null;
             /** Operation Id */
             operation_id: string;
+            /** Python */
+            python?: string | null;
             /** Source Root */
             source_root: string;
         };

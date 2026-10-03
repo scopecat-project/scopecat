@@ -11,6 +11,7 @@ class DriverSourceUpdate(BaseModel):
 
     operation_id: str = Field(min_length=1)
     source_root: str = Field(min_length=1)
+    python: str | None = None
     expected_previous: str | None = None
     actor: str = Field(min_length=1)
 
@@ -19,6 +20,7 @@ class DriverSourceSelection(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     request: DriverSourceUpdate
+    python: str
     code_revision: AuthorRevisionRef
     factory: str
     artifact_hash: Sha256ContentHash

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import plistlib
 import shutil
@@ -15,14 +14,14 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import toolchain
-from .bundle import MANIFEST, file_hash, resolve_delivery, verify_bundle
+from .bundle import resolve_delivery, verify_bundle
 
 
 def _run(command: list[str]) -> None:
     _ = subprocess.run(command, check=True)  # noqa: S603 - fixed build tools
 
 
-def build(source: Path, destination: Path, *, initializer: Path | None = None) -> Path:
+def build(source: Path, destination: Path) -> Path:
     if sys.platform not in ("darwin", "win32"):
         raise ValueError("原生应用需要在 macOS 或 Windows 上构建")
     source = resolve_delivery(source)
@@ -50,13 +49,7 @@ def build(source: Path, destination: Path, *, initializer: Path | None = None) -
             _ = shutil.copytree(source, payload)
         else:
             _ = toolchain.build(source, payload)
-        document = verify_bundle(payload)
-        if initializer:
-            _ = shutil.copyfile(initializer, payload / "initialize.py")
-            document["files"]["initialize.py"] = file_hash(payload / "initialize.py")
-            _ = (payload / MANIFEST).write_text(
-                json.dumps(document, indent=2) + "\n", encoding="utf-8"
-            )
+        _ = verify_bundle(payload)
         python_home = resources / "python"
         with tarfile.open(payload / "toolchain/python.tar") as archive:
             archive.extractall(python_home, filter="data")
@@ -243,7 +236,6 @@ def package(app: Path, destination: Path) -> Path:
 class Arguments(Protocol):
     source: Path
     destination: Path
-    initializer: Path | None
     installer: Path | None
 
 
@@ -251,12 +243,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("destination", type=Path)
-    parser.add_argument("--initializer", type=Path)
     parser.add_argument(
         "--installer", type=Path, help="Also create a DMG or Windows Setup"
     )
     args = cast("Arguments", cast("object", parser.parse_args()))
-    app = build(args.source, args.destination, initializer=args.initializer)
+    app = build(args.source, args.destination)
     print(app)
     if args.installer:
         print(package(app, args.installer))

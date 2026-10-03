@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tarfile
 import tempfile
+from contextlib import ExitStack
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
@@ -126,16 +129,21 @@ def prepare_execution_environment(
     uv = find_uv_bin()
     with tempfile.TemporaryDirectory(prefix="scopecat-author-lock-") as temporary:
         lock = Path(temporary) / "requirements.lock"
+        execution = Path(temporary) / "execution.in"
+        execution.write_text(
+            f"scopecat=={version('scopecat')}\n"
+            f"scopecat-server=={version('scopecat-server')}\n",
+            encoding="utf-8",
+        )
         _run(
             [
                 uv,
                 "pip",
                 "compile",
                 str(declaration),
+                str(execution),
                 "--python",
                 str(runtime.installation().python),
-                "--constraint",
-                (bundle / "requirements.lock").as_uri(),
                 "--find-links",
                 (bundle / "wheels").as_uri(),
                 "--generate-hashes",
@@ -158,33 +166,36 @@ def prepare_execution_environment(
         # Never rename a completed virtual environment: its scripts contain paths.
         attempt = directory / uuid4().hex
         attempt.mkdir(parents=True)
-        lock = attempt / "requirements.lock"
-        lock.write_text(requirements, encoding="utf-8")
-        environment = attempt / "runtime"
-        base_python = _independent_python(bundle, runtime.home / "environments/python")
-        _ = install_bundle(bundle, environment, base_python=base_python)
-        python = environment_python(environment)
-        _run(
-            [
-                uv,
-                "pip",
-                "install",
-                "--python",
-                str(python),
-                "--require-hashes",
-                "--find-links",
-                (bundle / "wheels").as_uri(),
-                "--constraint",
-                (bundle / "requirements.lock").as_uri(),
-                "-r",
-                str(lock),
-                *(["--offline"] if offline else []),
-            ]
-        )
-        from scopecat_server.author_environment import capture
+        with ExitStack() as failed:
+            failed.callback(shutil.rmtree, attempt)
+            lock = attempt / "requirements.lock"
+            lock.write_text(requirements, encoding="utf-8")
+            environment = attempt / "runtime"
+            base_python = _independent_python(
+                bundle, runtime.home / "environments/python"
+            )
+            _run([uv, "venv", "--python", str(base_python), str(environment)])
+            python = environment_python(environment)
+            _run(
+                [
+                    uv,
+                    "pip",
+                    "install",
+                    "--python",
+                    str(python),
+                    "--require-hashes",
+                    "--find-links",
+                    (bundle / "wheels").as_uri(),
+                    "-r",
+                    str(lock),
+                    *(["--offline"] if offline else []),
+                ]
+            )
+            from scopecat_server.author_environment import capture
 
-        capture(workspace, python, owner=runtime.root)
-        temporary = ready.with_suffix(".tmp")
-        temporary.write_text(json.dumps({"python": str(python)}), encoding="utf-8")
-        temporary.replace(ready)
-        return python
+            capture(workspace, python)
+            temporary = ready.with_suffix(".tmp")
+            temporary.write_text(json.dumps({"python": str(python)}), encoding="utf-8")
+            temporary.replace(ready)
+            _ = failed.pop_all()
+            return python

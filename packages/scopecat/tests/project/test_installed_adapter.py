@@ -170,7 +170,7 @@ def test_manifest_must_belong_to_declared_distribution(
         open_project(root)
 
 
-def test_author_only_capture_pins_laboratory_without_copying_live_manifest(
+def test_author_only_capture_never_inherits_application_adapter(
     adapter: tuple[Path, Path],
 ) -> None:
     import json
@@ -197,8 +197,7 @@ def test_author_only_capture_pins_laboratory_without_copying_live_manifest(
         'refresh_roots=["src"]\ndependencies=[]\n'
     )
     assert open_project(source, resolve_adapter=False).author_only
-    with pytest.raises(ValueError, match="not registered"):
-        open_project(source)
+    assert open_project(source).lab_adapter is None
     binding = owner / ".scopecat"
     (source / "scopecat.runtime.toml").write_text(
         f"[runtime]\ndata_root={json.dumps(str(binding))}\n"
@@ -226,8 +225,6 @@ def test_author_only_capture_pins_laboratory_without_copying_live_manifest(
     assert open_project(source).lab_adapter is None
     retained = load_captured_project(archive)
     assert retained.author_only and retained.lab_adapter == project.lab_adapter
-    assert retained.bootstrap_spec == "test_lab_adapter.bootstrap:create"
+    assert retained.bootstrap_spec is None
     assert (archive / "scopecat.toml").read_bytes() == manifest.read_bytes()
-    (archive / "scopecat.laboratory.toml").unlink()
-    with pytest.raises(ValueError, match="missing its laboratory declaration"):
-        load_captured_project(archive)
+    assert not (archive / "scopecat.laboratory.toml").exists()

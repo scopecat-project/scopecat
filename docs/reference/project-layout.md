@@ -1,8 +1,9 @@
 # Project layout and manifest
 
-For an installed laboratory, author code can live in a separate folder whose
-`scopecat.toml` contains only `[authors]`. Register it with the existing laboratory;
-it inherits the adapter and shared runtime without copying `[lab]` or drivers.
+Author code can live in a separate folder whose `scopecat.toml` contains only
+`[authors]`. Register it with the running application and select its execution
+Python. Registration shares data and device ownership, not laboratory code.
+Declare needed scientific capabilities in that folder's `[lab.capabilities]`.
 See [author folders in the application](../how-to/maintain-application.md#author-folders).
 The combined layout below remains the form for laboratory-owned local composition.
 
