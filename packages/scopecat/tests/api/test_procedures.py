@@ -37,21 +37,12 @@ from scopecat.automation.worker import ProcedureNeedsAttention
 from scopecat.config.candidates import CandidateConfig
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.drafts import ConfigDraft
-from scopecat.config.registry import (
-    CandidateConfigRegistrySource,
-    ConfigPublishOperation,
-    ConfigRegistryActivationRecord,
-    ConfigRegistryEntry,
-)
 from scopecat.daemon.client import (
     DaemonConflictError,
     DaemonNotFoundError,
 )
 from scopecat.daemon.views import RunAnalysisView
 from scopecat.daemon.wire import (
-    CandidateConfigRevisionSource,
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
     ParameterBranchPublishCommand,
 )
 from scopecat.kernel.quantity import Quantity
@@ -311,46 +302,6 @@ class _ExactAnalysisSession:
         return cast("PublishedAnalysis", cast("object", self._verification))
 
 
-class _PublishConfig:
-    operator = "lab-operator"
-
-    def __init__(
-        self,
-        *,
-        publish_error: Exception | None = None,
-        lookup_error: Exception | None = None,
-        receipt_operation_id: str | None = None,
-        receipt_base_config_content_hash: Sha256ContentHash | None = None,
-    ) -> None:
-        self.publish_error = publish_error
-        self.lookup_error = lookup_error
-        self.receipt_operation_id = receipt_operation_id
-        self.receipt_base_config_content_hash = receipt_base_config_content_hash
-        self.commands: list[ConfigPublishCommand] = []
-        self.lookup_calls: list[str] = []
-
-    def publish_config(self, command: ConfigPublishCommand) -> ConfigPublishReceipt:
-        self.commands.append(command)
-        if self.publish_error is not None:
-            raise self.publish_error
-        return _publish_receipt(
-            command,
-            operation_id=self.receipt_operation_id or command.operation_id,
-            base_config_content_hash=self.receipt_base_config_content_hash,
-        )
-
-    def publish_operation(self, operation_id: str) -> ConfigPublishReceipt:
-        self.lookup_calls.append(operation_id)
-        if self.lookup_error is not None:
-            raise self.lookup_error
-        [command] = self.commands
-        return _publish_receipt(
-            command,
-            operation_id=self.receipt_operation_id or operation_id,
-            base_config_content_hash=self.receipt_base_config_content_hash,
-        )
-
-
 @dataclass(frozen=True, slots=True)
 class _DirectConfig:
     def resolve_with_source(
@@ -561,9 +512,10 @@ def test_run_analysis_rejects_durable_upstream_mismatch() -> None:
         )
 
 
-class _BranchPublishConfig(_PublishConfig):
+class _BranchPublishConfig:
+    operator = "lab-operator"
+
     def __init__(self, error: Exception | None = None) -> None:
-        super().__init__()
         self.client = self
         self.error = error
         self.branch_commands: list[ParameterBranchPublishCommand] = []
@@ -737,7 +689,7 @@ def test_parameter_publication_wrong_receipt_requires_attention() -> None:
 
 def _verified_candidate_context(
     durable: _RecordingProcedureContext,
-    config: _PublishConfig,
+    config: _BranchPublishConfig,
     *,
     accepted: bool = True,
 ) -> tuple[
@@ -799,52 +751,6 @@ def _verified_candidate_context(
         candidate_ref,
         verification,
         proposal,
-    )
-
-
-def _publish_receipt(
-    command: ConfigPublishCommand,
-    *,
-    operation_id: str,
-    base_config_content_hash: Sha256ContentHash | None = None,
-) -> ConfigPublishReceipt:
-    source = command.source
-    assert isinstance(source, CandidateConfigRevisionSource)
-    content_hash = config_content_hash(load_config())
-    entry = ConfigRegistryEntry(
-        id=command.entry_id,
-        config_ref=f"config-registry/entries/{command.entry_id}/config.json",
-        content_hash=content_hash,
-        source=CandidateConfigRegistrySource(
-            run_id=source.run_id,
-            proposal_id=source.proposal_id,
-            base_config_content_hash=base_config_content_hash or content_hash,
-            acceptance=source.acceptance,
-        ),
-        actor=command.actor,
-        note=command.note,
-    )
-    activation = ConfigRegistryActivationRecord(
-        generation=command.expected_generation + 1,
-        action="activation",
-        entry_id=entry.id,
-        entry_content_hash=entry.content_hash,
-        actor=command.actor,
-        note=command.note,
-    )
-    return ConfigPublishReceipt(
-        operation=ConfigPublishOperation(
-            operation_id=operation_id,
-            intent_hash=command.intent_hash,
-            source_intent_hash=command.source_intent_hash,
-            entry_id=command.entry_id,
-            expected_generation=command.expected_generation,
-            actor=command.actor,
-            note=command.note,
-            activation_generation=activation.generation,
-        ),
-        entry=entry,
-        activation=activation,
     )
 
 

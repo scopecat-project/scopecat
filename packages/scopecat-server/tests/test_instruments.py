@@ -20,8 +20,6 @@ from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary, RunResourceRequirement
 from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.wire import (
-    ConfigPublishCommand,
-    DirectConfigRevisionSource,
     ExecutorStartRequest,
     InstrumentConfiguredDefaultsApplyCommand,
     InstrumentDriverProbeCommand,
@@ -1429,7 +1427,7 @@ def test_open_retry_reuses_session_without_reprovisioning(tmp_path: Path) -> Non
             daemon.close_instrument_session(first.session_id)
 
 
-def test_open_retry_recovers_before_resolving_replacement_config(
+def test_open_retry_recovers_before_rechecking_unavailable_driver(
     tmp_path: Path,
 ) -> None:
     provider = _ToggleDescriptionProvider()
@@ -1437,29 +1435,19 @@ def test_open_retry_recovers_before_resolving_replacement_config(
         with TestClient(runtime.app()) as transport:
             original = runtime.application.setup.resolve("initial")
             command = InstrumentSessionOpenCommand(
-                operation_id="open-retry-after-config-activation",
+                operation_id="open-retry-after-driver-unavailable",
                 actor="alice",
                 instrument_ids=("source-0",),
                 setup=runtime.application.setup.resolve("initial").ref,
             )
 
-            def replace_active_config() -> None:
-                updated = load_config().model_copy(update={"id": "updated-config"})
-                runtime.application.config.publish_config(
-                    ConfigPublishCommand(
-                        operation_id="publish:updated-config-after-open",
-                        source=DirectConfigRevisionSource(config=updated),
-                        entry_id="updated-config",
-                        actor="operator",
-                        expected_generation=0,
-                    )
-                )
+            def lose_driver_description() -> None:
                 provider.description_available = False
 
             daemon = _daemon_client(
                 transport,
                 drop_response_suffix="/instrument-sessions",
-                on_response_drop=replace_active_config,
+                on_response_drop=lose_driver_description,
             )
             session = daemon.open_instrument_session(command)
 

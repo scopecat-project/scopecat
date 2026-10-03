@@ -1,4 +1,4 @@
-"""Configuration registry application service."""
+"""Independent parameter editing and retained configuration evidence."""
 
 from __future__ import annotations
 
@@ -8,9 +8,6 @@ from contextlib import contextmanager
 from dataclasses import replace
 from threading import Lock
 
-from scopecat.config.changes import (
-    prepare_parameter_change_approval,
-)
 from scopecat.config.contexts import (
     apply_context_overrides,
     context_value_origins,
@@ -19,40 +16,23 @@ from scopecat.config.contexts import (
 from scopecat.config.parameter_resolution import validate_parameter_snapshot
 from scopecat.config.registry import service as config_registry_service
 from scopecat.config.registry.records import (
-    ConfigActivationOperation,
-    ConfigPublishOperation,
     ContextConfigRegistrySource,
     CrossRunCandidateAcceptance,
 )
 from scopecat.config.structure import (
     parameter_structure_version,
 )
-from scopecat.control.models import (
-    DurableEventInput,
-)
 from scopecat.daemon.views import (
-    ActiveConfigView,
-    ConfigActivationPage,
     ConfigContextResolution,
-    ConfigDraftPreview,
     ConfigEntryView,
     ConfigRegistryPage,
     ParameterResolution,
 )
 from scopecat.daemon.wire import (
-    CandidateConfigRevisionSource,
-    ConfigActivationReceipt,
     ConfigContextResolveCommand,
-    ConfigDraftCommand,
-    ConfigEntryActivationCommand,
-    ConfigPublishCommand,
-    ConfigPublishReceipt,
-    DirectConfigRevisionSource,
-    ManualConfigDraftRevisionSource,
     ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchPublishCommand,
-    ParameterConfigRevisionSource,
     ParameterResolveCommand,
     ParameterSaveCommand,
 )
@@ -79,7 +59,6 @@ from scopecat.records.run import (
     ParameterRunConfigSource,
 )
 
-from scopecat_server.storage.sqlite.config_operations import SQLiteConfigOperationStore
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
 from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.parameter_branches import ParameterBranchRepository
@@ -95,14 +74,13 @@ from .samples import SampleService
 
 
 class ConfigService:
-    """Own config-registry commands and their in-process serialization."""
+    """Own parameter branches and resolve exact scientific inputs."""
 
     def __init__(
         self,
         *,
         control: SQLiteControlPlane,
         config_registry: SQLiteConfigRegistryStore,
-        config_operations: SQLiteConfigOperationStore,
         runs: SQLiteRunRepository,
         services: ProjectStateServices,
         analyses: AnalysisService,
@@ -111,7 +89,6 @@ class ConfigService:
         self._samples = samples
         self._control = control
         self._config_registry = config_registry
-        self._config_operations = config_operations
         self._runs = runs
         self._services = services
         self._analyses = analyses
@@ -428,34 +405,6 @@ class ConfigService:
                 next_cursor=snapshot.next_cursor,
             )
 
-    def get_config_activation_history(
-        self,
-        *,
-        limit: int = 100,
-        before: int | None = None,
-    ) -> ConfigActivationPage:
-        with self._config_errors():
-            page = config_registry_service.load_config_registry_activation_page(
-                limit=limit,
-                before=before,
-                unit_of_work=self._config_registry.read_unit_of_work,
-            )
-            return ConfigActivationPage(
-                items=page.items,
-                next_cursor=page.next_cursor,
-            )
-
-    def get_active_config(self) -> ActiveConfigView:
-        with self._config_errors():
-            snapshot = config_registry_service.load_active_config_registry_snapshot(
-                unit_of_work=self._config_registry.read_unit_of_work
-            )
-            return ActiveConfigView(
-                entry=snapshot.entry,
-                activation=snapshot.activation,
-                config=snapshot.config,
-            )
-
     def get_config_entry(self, entry_id: str) -> ConfigEntryView:
         with self._config_errors():
             snapshot = config_registry_service.load_config_registry_entry_snapshot(
@@ -468,254 +417,6 @@ class ConfigService:
                 latest_activation=snapshot.latest_activation,
                 structure_version=parameter_structure_version(
                     snapshot.config.parameter_catalog
-                ),
-            )
-
-    def get_config_activation_operation(
-        self,
-        operation_id: str,
-    ) -> ConfigActivationReceipt:
-        with self._config_errors():
-            receipt = self._config_operations.find(operation_id)
-            if receipt is None:
-                raise BackendNotFound(
-                    f"config activation operation was not found: {operation_id}"
-                )
-            if not isinstance(receipt, ConfigActivationReceipt):
-                raise BackendConflict(
-                    f"config operation is not an activation: {operation_id}"
-                )
-            return receipt
-
-    def get_config_publish_operation(
-        self,
-        operation_id: str,
-    ) -> ConfigPublishReceipt:
-        with self._config_errors():
-            receipt = self._config_operations.find(operation_id)
-            if receipt is None:
-                raise BackendNotFound(
-                    f"config publish operation was not found: {operation_id}"
-                )
-            if type(receipt) is not ConfigPublishReceipt:
-                raise BackendConflict(
-                    f"config operation is not a config publication: {operation_id}"
-                )
-            return receipt
-
-    def publish_config(
-        self,
-        command: ConfigPublishCommand,
-    ) -> ConfigPublishReceipt:
-        """Publish one revision; candidate approval shares the same commit."""
-
-        receipt = self._publish_revision(command)
-        assert type(receipt) is ConfigPublishReceipt
-        return receipt
-
-    def _publish_revision(
-        self,
-        command: ConfigPublishCommand,
-    ) -> ConfigPublishReceipt:
-        with self._mutation_lock, self._config_errors():
-            with self._config_transaction() as transaction:
-                connection, services = transaction
-                existing = self._config_operations.find_in_transaction(
-                    connection,
-                    command.operation_id,
-                )
-                if existing is not None:
-                    if (
-                        type(existing) is not ConfigPublishReceipt
-                        or existing.operation.intent_hash != command.intent_hash
-                    ):
-                        raise BackendConflict(
-                            "config operation id is already committed for a different "
-                            f"intent: {command.operation_id}"
-                        )
-                    return existing
-                source = command.source
-                if isinstance(source, CandidateConfigRevisionSource):
-                    if isinstance(source.acceptance, CrossRunCandidateAcceptance):
-                        self._analyses.validate_candidate_verification(
-                            source.acceptance.decision,
-                            source_run_id=source.run_id,
-                            proposal_id=source.proposal_id,
-                        )
-                    prepared = prepare_parameter_change_approval(
-                        run_id=source.run_id,
-                        selector=source.proposal_id,
-                        services=self._services,
-                        actor=command.actor,
-                        note=command.note,
-                    )
-                    if prepared.publication is not None:
-                        publication = self._runs.prepare_content_publication(
-                            prepared.publication
-                        )
-                        self._runs.publish_prepared_content_in_transaction(
-                            connection,
-                            publication,
-                        )
-                        self._control.append_event_in_transaction(
-                            connection,
-                            DurableEventInput(
-                                run_id=source.run_id,
-                                kind="parameter_proposal_approved",
-                                payload={
-                                    "proposal_id": source.proposal_id,
-                                    "actor": command.actor,
-                                },
-                                occurred_at=prepared.approval.approved_at,
-                            ),
-                        )
-                result = config_registry_service.publish_config_revision(
-                    revision=_config_revision(command),
-                    unit_of_work=services.config_registry,
-                    expected_generation=command.expected_generation,
-                )
-                self._append_revision_events(connection, command, result)
-                activation = result.activation
-                assert activation is not None
-                operation = ConfigPublishOperation(
-                    operation_id=command.operation_id,
-                    intent_hash=command.intent_hash,
-                    source_intent_hash=command.source_intent_hash,
-                    entry_id=command.entry_id,
-                    expected_generation=command.expected_generation,
-                    actor=command.actor,
-                    note=command.note,
-                    activation_generation=activation.generation,
-                )
-                receipt = ConfigPublishReceipt(
-                    operation=operation,
-                    entry=result.entry,
-                    deltas=result.deltas,
-                    activation=activation,
-                )
-                self._config_operations.commit_in_transaction(connection, receipt)
-            return receipt
-
-    def preview_config_draft(
-        self,
-        command: ConfigDraftCommand,
-    ) -> ConfigDraftPreview:
-        with self._config_errors():
-            result = config_registry_service.preview_manual_config_draft(
-                unit_of_work=self._config_registry.read_unit_of_work,
-                base_entry_id=command.base_entry_id,
-                base_config_content_hash=command.base_content_hash,
-                base_generation=command.base_generation,
-                candidate_id=command.candidate_id,
-                updates=command.updates,
-            )
-            candidate = result.check.candidate
-            return ConfigDraftPreview(
-                valid=result.check.ok,
-                base_entry=result.base_entry,
-                base_generation=result.base_generation,
-                base_content_hash=result.base_entry.content_hash,
-                config=candidate,
-                result_content_hash=(
-                    None if candidate is None else config_content_hash(candidate)
-                ),
-                deltas=result.check.deltas,
-                problems=result.check.problems,
-            )
-
-    def activate_config_entry(
-        self,
-        command: ConfigEntryActivationCommand,
-    ) -> ConfigActivationReceipt:
-        with self._mutation_lock, self._config_errors():
-            with self._config_transaction() as transaction:
-                connection, services = transaction
-                existing = self._config_operations.find_in_transaction(
-                    connection,
-                    command.operation_id,
-                )
-                if existing is not None:
-                    if (
-                        not isinstance(existing, ConfigActivationReceipt)
-                        or existing.operation.intent_hash != command.intent_hash
-                    ):
-                        raise BackendConflict(
-                            "config operation id is already committed for a different "
-                            f"intent: {command.operation_id}"
-                        )
-                    return existing
-                result = config_registry_service.activate_config_registry_entry(
-                    entry_id=command.entry_id,
-                    unit_of_work=services.config_registry,
-                    actor=command.actor,
-                    expected_generation=command.expected_generation,
-                    note=command.note,
-                )
-                activation = result.activation
-                assert activation is not None
-                if result.activated:
-                    self._control.append_event_in_transaction(
-                        connection,
-                        DurableEventInput(
-                            kind="config_activated",
-                            payload={
-                                "entry_id": activation.entry_id,
-                                "generation": activation.generation,
-                            },
-                            occurred_at=activation.recorded_at,
-                        ),
-                    )
-                operation = ConfigActivationOperation(
-                    operation_id=command.operation_id,
-                    intent_hash=command.intent_hash,
-                    entry_id=command.entry_id,
-                    expected_generation=command.expected_generation,
-                    actor=command.actor,
-                    note=command.note,
-                    activation_generation=activation.generation,
-                )
-                receipt = ConfigActivationReceipt(
-                    operation=operation,
-                    activation=activation,
-                )
-                self._config_operations.commit_in_transaction(
-                    connection,
-                    receipt,
-                )
-            return receipt
-
-    def _append_revision_events(
-        self,
-        connection: sqlite3.Connection,
-        command: ConfigPublishCommand,
-        result: config_registry_service.ConfigRegistryMutationResult,
-    ) -> None:
-        source = command.source
-        run_id = (
-            source.run_id if isinstance(source, CandidateConfigRevisionSource) else None
-        )
-        if result.saved:
-            self._control.append_event_in_transaction(
-                connection,
-                DurableEventInput(
-                    run_id=run_id,
-                    kind="config_saved",
-                    payload={"entry_id": result.entry.id},
-                    occurred_at=result.entry.recorded_at,
-                ),
-            )
-        activation = result.activation
-        if result.activated and activation is not None:
-            self._control.append_event_in_transaction(
-                connection,
-                DurableEventInput(
-                    run_id=run_id,
-                    kind="config_activated",
-                    payload={
-                        "entry_id": result.entry.id,
-                        "generation": activation.generation,
-                    },
-                    occurred_at=activation.recorded_at,
                 ),
             )
 
@@ -746,39 +447,3 @@ class ConfigService:
             DataIntegrityError,
         ) as error:
             raise BackendConflict(str(error)) from error
-
-
-def _config_revision(
-    command: ConfigPublishCommand,
-) -> config_registry_service.ConfigRevision:
-    source = command.source
-    if isinstance(source, DirectConfigRevisionSource):
-        revision_source = config_registry_service.DirectConfigRevisionSource(
-            source.config
-        )
-    elif isinstance(source, ParameterConfigRevisionSource):
-        revision_source = config_registry_service.ParameterConfigRevisionSource(
-            parameters=source.parameters, setup=source.setup
-        )
-    elif isinstance(source, ManualConfigDraftRevisionSource):
-        draft = source.draft
-        revision_source = config_registry_service.ManualConfigDraftRevisionSource(
-            base_entry_id=draft.base_entry_id,
-            base_config_content_hash=draft.base_content_hash,
-            base_generation=draft.base_generation,
-            candidate_id=draft.candidate_id,
-            updates=draft.updates,
-            expected_result_content_hash=source.expected_result_content_hash,
-        )
-    else:
-        revision_source = config_registry_service.CandidateConfigRevisionSource(
-            run_id=source.run_id,
-            proposal_id=source.proposal_id,
-            acceptance=source.acceptance,
-        )
-    return config_registry_service.ConfigRevision(
-        source=revision_source,
-        entry_id=command.entry_id,
-        actor=command.actor,
-        note=command.note,
-    )

@@ -67,6 +67,19 @@ working-point workspace, setup-rebinding editor and global-default publication
 HTTP/Python commands have been removed. Their former UI editors and proposal
 “Accept as default” action are also removed.
 
+The internal `ConfigService` global publisher, activation, draft preview and
+operation lookup methods are retired too. Current runtime wiring no longer
+constructs their operation store. Branch tests retain exact verification,
+atomic revision/head/receipt rollback, replay and current-format restore.
+The device-session lost-response test now changes driver availability directly,
+without manufacturing an unrelated global configuration activation.
+
+Low-level registry publication/storage and old wire record fixtures still have
+separate consumers; this is not their wholesale retirement. Registry export
+coverage constructs retained source evidence without global activation and
+checks that missing or altered decision evidence is rejected. Keep this
+read/provenance contract separate from user editing authority.
+
 A verified candidate publishes to a reviewed parameter branch with
 `publish_to_branch(...)`. Publication checks the exact destination head,
 candidate base and verification evidence, then records the new immutable
