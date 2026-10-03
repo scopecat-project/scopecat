@@ -22,7 +22,6 @@ from scopecat.author_workspaces import (
 )
 from scopecat.daemon.endpoint import DaemonEndpointRecord
 from scopecat.daemon.health import ApplicationActivity
-from scopecat.installed_adapter import AdapterReference
 from scopecat.project import open_project
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
@@ -37,17 +36,6 @@ class Installation(BaseModel):
     settings_identity: str | None = None
     adapter_identity: str | None = None
     composition: str
-
-
-def application_declaration(adapter: AdapterReference | None) -> str:
-    return (
-        "[lab]\n[authors]\ndependencies = []\n"
-        if adapter is None
-        else "[lab.adapter]\n"
-        f"distribution = {json.dumps(adapter.distribution)}\n"
-        f"manifest = {json.dumps(adapter.manifest)}\n"
-        "[authors]\ndependencies = []\n"
-    )
 
 
 def runtime_command(python: Path, request: dict[str, object]) -> dict[str, object]:
@@ -177,7 +165,6 @@ class ApplicationRuntime:
         *,
         python: Path | None = None,
         static_dir: Path | None = None,
-        adapter: AdapterReference | None = None,
     ) -> Installation:
         """Prepare an empty application; never scaffold or load author code."""
         self.home.mkdir(parents=True, exist_ok=True)
@@ -185,7 +172,7 @@ class ApplicationRuntime:
             if self.selection.exists():
                 return self.installation()
             manifest = self.root / "scopecat.toml"
-            declaration = application_declaration(adapter)
+            declaration = "[lab]\n[authors]\ndependencies = []\n"
             if manifest.exists() and manifest.read_text() != declaration:
                 raise ValueError("已有应用声明与本次安装不符；原文件保留")
             if not manifest.exists():

@@ -7,12 +7,12 @@ direction: multiple independent windows, data-only use without execution startup
 and no commitment to the prototype GUI, shell or daemon/HTTP topology. References
 to one service below express shared resource authority, not a fixed process layout.
 This contract supersedes the first-run laboratory chooser and per-project/per-lesson
-service topology. It is not a claim that the target is implemented. Native desktop
-entry, explicit launch actions and recovery from interpreter mismatch and valid
-stale process records are delivered foundations (#801–#804). The first product
-batch (#812) delivers registered device ownership, canonical physical access,
-independent setup/parameter editing and exact setup admission without a global
-active setup. Same-service practice cleanup remains a separate delivery batch.
+service topology. Those paths have retired, and shared device ownership and
+same-application practice are delivered. Desktop PR #829 provides ready-to-run
+installation, #837 independent data and bounded Mac/Windows interaction, and #844
+ordinary source with independent execution and SDK environments. PR 4 qualifies
+composition, publication and remaining retirement; physical scientific acceptance
+and unfamiliar-user observation remain separate.
 
 The product direction is stronger abstractions within one application, not a
 collection of project services hidden behind one window. The concrete device,
@@ -44,19 +44,19 @@ sharing a maintained physical access key use the same claims across contexts.
 
 The application entry now owns one fixed runtime root under its installation home.
 Author folders register with that owner and do not create endpoints or installations.
-The native window loads the workbench directly. The next desktop lifecycle batch
-replaces service-first startup and invisible background ownership with the
+The native window loads the workbench directly. Window closing, tray restoration
+and explicit whole-application Quit follow the delivered
 [desktop lifecycle contract](desktop-lifecycle.md).
 An empty application can register independent author folders
 without requiring an installed capability package. Captured sources retain their
 bound composition even when the live application changes.
 
-Candidate environments and capability declarations are qualified before selection,
-including driver metadata and content identity without device connection. Selection
-requires stopped process ownership, preserves independently selected source interpreters,
-and retains an interrupted selection for explicit retry. This is
-the application maintenance boundary: software/settings actions live in the
-workbench, and the separate manager and per-directory service registry are removed.
+Application dependencies are built into the native package; updating replaces that
+package after work has stopped. Author dependency preparation and driver selection
+are explicit, independent maintenance actions, with metadata and content checks
+before activation. There is no user-facing candidate application environment switch.
+Software/settings actions live in the workbench; the separate manager and
+per-directory service registry are removed.
 Help now starts an owned software practice in this service. Ordinary selected data
 and practice use the same preview, retained-reference protection, durable cleanup
 receipt and physical-file reclamation. Practice adds software-only admission and
@@ -169,7 +169,7 @@ are unaffected. A lesson does not require its own service or virtual environment
 
 Remove the standalone manager product surface. Move task failures and recovery into
 the workbench, device connections and driver maintenance into **Devices and drivers**,
-application updates into settings, storage into **Data**,
+source/environment maintenance into settings, storage into **Data**,
 and diagnostics/tutorials into Help. Hiding the old chooser or renaming a laboratory
 does not satisfy this contract. Retain necessary logs and controlled lifecycle actions.
 Devices and drivers is a direct workbench destination, reachable from the
@@ -241,19 +241,18 @@ workers validate that identity before resolving current package declarations.
 Captured local source remains available; historical adapter wheels must be retained
 and restored separately. Recording identity does not archive or reinstall wheels.
 
-Registration probes the selected experiment interpreter, not the host interpreter,
-and records adapter content identity. Startup checks it; changing the adapter
-requires stopping and rechecking. Status and stop parse only the local manifest
-and runtime binding, so removal of an adapter cannot disable service recovery.
-Laboratory maintainers can build that fixed artifact through a TOML delivery
-recipe selecting the reviewed lock project, group and local packages. This reuses
-the public builder, inventory/hash checks and installer rather than introducing
-an adapter-specific installation script. First-run uses an installer-owned attempt
-record, process identity and locks to retain/retry only its own incomplete `.venv`.
-The created environment stays at its final path; the retained artifact owns its GUI.
+Registration probes the selected experiment interpreter, not application Python,
+and captures package identity. The author source owns this declaration; the
+application CLI no longer accepts a distribution/manifest injection. Changing the
+package or execution interpreter requires refreshing the source and explicitly
+updating an idle driver. It does not replace the application. Retained work still
+requires its recorded source/environment identity; an unavailable extension cannot
+prevent opening unrelated data or stopping the application.
 
-This is a same-runtime package contract, not shared device authority across
-heterogeneous environments or a native installation system.
+An extension wheel is optional distribution of ordinary laboratory code. Install
+it in the selected execution environment, never the desktop runtime. Vendor SDKs
+can use their own process/environment while device ownership remains unified.
+Offline environment bundles are separate from the public native installer.
 
 ## Local settings boundary
 
@@ -299,31 +298,25 @@ physical device cannot acquire a second owner through another code folder. Switc
 qualified environments requires quiescence and explicit device reinitialization
 where necessary. Serial runs alone do not establish equivalent hardware state.
 
-Current same-environment workspace publication and independent parameter heads
-provide building blocks. Heterogeneous environments, parameter-contract negotiation
-and application-wide device authority remain unimplemented contracts;
-see [workspace bindings](workspace-bindings.md) and
+Independent execution/SDK environments and application-wide device authority are
+implemented. General parameter-contract negotiation is not promised by these
+boundaries; see [workspace bindings](workspace-bindings.md) and
 [configuration ownership](configuration-ownership.md).
 
-## Ordered implementation and evidence
+## Delivery and evidence
 
-1. Establish device/connection ownership, setup references and unified physical
-   access, including probes and resident connections. Build on explicit sources and
-   contexts from #806/#808; replace embedded connection editing, not merely the
-   service chooser. Follow [device management](device-management.md) under #671/#754.
-2. Enter the workbench directly and replace manager consumers with contextual
-   actions/settings (#675, #615). Source edits use refresh; runtime updates preserve
-   content identity, data and recoverable installation state (#712).
-3. Run and clear tutorials as owned simulation-only practice scopes (#565).
-4. Qualify the combined software journey (#616): launch directly; create two drafts
-   with independent simulated device contexts on one service; complete tutorial
-   manual peak selection; clear it without changing either draft or retained real
-   records; restart and reopen retained tasks without replay. Test conflicting
-   aliases for one physical resource before admitting real hardware. Verify GUI and
-   Python clients share authority and recovery does not require killing processes.
-5. Only then perform ordinary-user and Windows physical-device qualification of
-   scan → manual peak selection → fine scan → verification → publication → reopen.
-   Simulation, platform usability and scientific validity are separate evidence.
+Device/connection ownership, direct entry, contextual maintenance and same-service
+practice were delivered before the desktop milestone; their old implementation
+sequence is not a pending backlog. The desktop milestone consists of #829
+(installation), #837 (data and desktop), #844 (ordinary source and environments),
+and PR 4 (composition/release/retirement), tracked by #610/#616.
+
+The [packaging matrix](desktop-packaging.md#required-comparison) maps composition
+checks to maintained tests and prior evidence. Preserve independent contexts,
+resource exclusion, source/environment identity, manual continuation, cleanup and
+restart without replay when retiring an old entry or fixture. Ordinary-user
+observation and Windows physical-device qualification of scan → manual peak → fine
+scan → verification → publication → reopen remain separate from software evidence.
 
 Preserve current-format evidence and recovery. No development-store migration
 chains, supported data baseline or automatic replay are introduced by this work.

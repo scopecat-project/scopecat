@@ -1,19 +1,16 @@
 # Platform status and remaining work
 
-Audited against the local implementation on 2026-09-24, including task finalization,
-six-target qualification, scoped dependency evidence and independent author consumers. This is the current work list;
-earlier delivery notes are historical context, not additional pending work.
-No new hardware or installed Windows qualification is claimed by this audit.
+Scientific audit baseline: 2026-09-24, including task finalization, six-target
+qualification and independent author consumers. The scientific sections below
+retain that audit; they are not an additional desktop implementation queue.
 
-Application priorities have since been corrected by the
-[canonical application contract](architecture/public-application.md). Before physical
-acceptance, converge direct workbench entry, an application service independent of
-author/device contexts, shared resource claims and same-service tutorial cleanup.
-Retire the manager topology and service-source `legacy` special case. Native entry
-and interpreter/stale-process recovery (#801–#804) are delivered foundations, not
-completion of this target. Existing browser journeys with obsolete parameter/default
-assumptions need revision and requalification; routine CI does not establish that
-those journeys or Windows physical use pass.
+Desktop status is governed by the [application contract](architecture/public-application.md)
+and [product decision](architecture/desktop-product.md). The manager, per-source
+services and per-lesson environments have retired. PR #829 delivered ready-to-run
+installation, #837 independent data and the bounded desktop journey, and #844
+ordinary sources with independent execution/SDK environments. PR 4 qualifies their
+composition and release; actual editor, unfamiliar-user and hardware observations
+remain distinct. Track the software gate in #610/#616/#671.
 
 ## Delivered boundaries
 
@@ -26,7 +23,7 @@ those journeys or Windows physical use pass.
 | Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles, focused reports and scoped parameter-read evidence | Applicability still uses exact contexts; partial read capture does not enable selective cross-revision reuse |
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
-| Application | Native workbench/settings entry, installed adapters, registered author folders, notebook interpreter selection and recoverable stopped environment replacement | Shared application authority, independent device contexts, practice scopes and manager retirement remain unimplemented; native installer qualification is separate |
+| Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
 | Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 98 is not a supported persistent-data baseline |
 
 See [configuration ownership](configuration-ownership.md),

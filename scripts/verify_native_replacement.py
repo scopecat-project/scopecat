@@ -18,14 +18,18 @@ SEED = r'''
 import json, subprocess, sys
 from pathlib import Path
 from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.author_environment import create_client_environment
+from lab_tools.author_environment import (
+    create_client_environment, prepare_execution_environment,
+)
 from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 source = home / "authors"
 write_author_scaffold(source)
-identity = runtime.register_source(source)
 client = create_client_environment(runtime, source)
+execution = prepare_execution_environment(runtime, source, offline=True)
+identity = runtime.register_source(source, python=execution)
+assert execution != client and execution != runtime.installation().python
 try:
     runtime.start()
     subprocess.run([str(client), "-I", "-c", """

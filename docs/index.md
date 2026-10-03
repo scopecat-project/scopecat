@@ -16,10 +16,10 @@ design contract under evaluation.
 
 ## Start here
 
-The [pilot bundle quickstart](getting-started/quickstart.md) also covers the
-small virtual-instrument application for integration work.
-It installs a supplied bundle, creates a hardware-free project and starts its console, then
-runs the smallest experiment through the complete durable workflow.
+Start with the [desktop first steps](getting-started/index.md). Open received data
+directly, or follow the [first experiment](getting-started/quickstart.md) to create
+ordinary code and retain a synthetic result. No per-project service installation
+is required.
 
 Use the [learning paths](getting-started/learning-path.md) to choose an author,
 maintainer or extension route. Continue according to what you want to accomplish:

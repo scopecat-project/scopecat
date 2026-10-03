@@ -8,9 +8,9 @@ import sys
 import sysconfig
 from pathlib import Path
 
-import pytest
-
 from lab_tools.application_runtime import ApplicationRuntime
+from scopecat.api.devices import LabDeviceOperations
+from scopecat.daemon.client import DaemonClient
 from scopecat_server.scaffold import write_project_scaffold
 
 
@@ -163,6 +163,8 @@ assert application.authors is not None
 assert len(application.authors.experiments) == 3
 from local_experiments import signal
 from test_lab.authored.parameters import open_parameters
+with project.connect() as lab:
+    lab.devices.update_driver_source(project.root)
 with project.authoring() as author:
     open_parameters(author)
     signal = author.load_experiment(signal)
@@ -191,7 +193,7 @@ with project.authoring() as author:
     assert historical.value.mean == 2 / 3
     assert historical.value.points == 3
     bundle = capture_sources(project)
-    assert "scopecat.laboratory.toml" in bundle.files
+    assert "scopecat.toml" in bundle.files
     identity = bundle.manifest.model_dump_json()
     (project.root / "retained-identity.json").write_text(identity)
     print(json.dumps({"original": original.id, "changed": changed.id}))
@@ -249,7 +251,7 @@ try:
     require_environment(bundle.manifest)
     archive = materialize_sources(bundle, destination / "retained")
     archived = load_captured_project(archive)
-    assert archived.author_only
+    assert archived.lab_adapter is not None
     assert archived.lab_adapter.distribution == "test-lab-adapter"
 finally:
     stop_project(restored)
@@ -285,7 +287,7 @@ def check_notebook_kernel(project: Path, python: Path, kernel_home: Path) -> Non
             f"assert Path(sys.executable) == Path({str(python)!r})\n"
             f"assert Path.cwd() == Path({str(project)!r})\n"
             "project = open_project(Path.cwd())\n"
-            "assert project.author_only\n"
+            "assert project.lab_adapter is not None\n"
             "assert project.lab_adapter.distribution == 'test-lab-adapter'\n",
             timeout=30,
         )
@@ -298,8 +300,6 @@ def check_notebook_kernel(project: Path, python: Path, kernel_home: Path) -> Non
 def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     tmp_path: Path, monkeypatch, delivery: Path
 ) -> None:
-    from scopecat.installed_adapter import AdapterReference
-
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
     trace = tmp_path / "adapter-origins.jsonl"
@@ -314,6 +314,8 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
         .replace("from .parameters import", "from test_lab.authored.parameters import")
     )
     (project / "scopecat.toml").write_text(
+        '[lab.adapter]\ndistribution = "test-lab-adapter"\n'
+        'manifest = "test_lab/adapter.toml"\n'
         '[authors]\nmodules = ["local_experiments"]\nsource_roots = ["src"]\n'
         'refresh_roots = ["src"]\ndependencies = []\n'
     )
@@ -322,20 +324,17 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
         tmp_path / "first-runtime", wheel, environment, tmp_path
     )
     selected = application.configure(
-        python=python,
         static_dir=delivery / "gui",
-        adapter=AdapterReference("test-lab-adapter", "test_lab/adapter.toml"),
     )
-    workspace_id = application.register_source(project)
-    assert application.register_source(project) == workspace_id
+    workspace_id = application.register_source(project, python=python)
+    assert application.register_source(project, python=python) == workspace_id
     assert application.source(project) == workspace_id
     assert not (application.home / "host/services.sqlite").exists()
     # Qualification checks the package without activating its backend.
     assert not trace.exists()
     try:
-        application.start()
-        origins = [json.loads(line) for line in trace.read_text().splitlines()]
-        bootstrap = next(item for item in origins if item["role"] == "bootstrap")
+        record = application.start()
+        assert not trace.exists(), "Application startup activated the adapter"
         result = json.loads(
             run(
                 [str(python), "-c", _AUTHOR_JOURNEY, str(project)],
@@ -348,7 +347,7 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
         assert result["original"] != result["changed"]
         origins = [json.loads(line) for line in trace.read_text().splitlines()]
         instrument = next(item for item in origins if item["role"] == "instrument")
-        assert bootstrap["pid"] != instrument["pid"]
+        assert record.pid != instrument["pid"]
         assert all(Path(item["file"]).is_relative_to(site) for item in origins)
         run(
             [
@@ -378,13 +377,19 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
         replacement, site = install_adapter_environment(
             tmp_path / "replacement-runtime", wheel, environment, tmp_path
         )
-        updated = application.qualify(replacement, delivery / "gui")
-        application.select(updated)
-        assert updated.python != selected.python and selected.python.is_file()
+        application.select_source_environment(project, replacement)
+        assert application.installation() == selected
         assert application.source(project) == workspace_id
         python = replacement
         check_notebook_kernel(project, python, tmp_path / "notebook-kernels")
-        application.start()
+        record = application.start()
+        with DaemonClient(record.base_url) as client:
+            driver = LabDeviceOperations(client, "maintainer").update_driver_source(
+                project
+            )
+        assert driver.python == str(replacement)
+        origins = [json.loads(line) for line in trace.read_text().splitlines()]
+        assert Path(origins[-1]["file"]).is_relative_to(site)
         run(
             [
                 str(python),
@@ -395,20 +400,20 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
             cwd=project,
             environment=environment,
         )
-        origins = [json.loads(line) for line in trace.read_text().splitlines()]
-        assert Path(origins[-1]["file"]).is_relative_to(site)
+        assert application.installation().python != replacement
         resource = site / "test_lab/configuration.py"
         original = resource.read_bytes()
         try:
             resource.write_bytes(original + b"\n# same-version installation changed\n")
-            with pytest.raises(ValueError, match="能力包已改变"):
-                application.start()
+            application.start()
             assert application.status().state == "running"
         finally:
             resource.write_bytes(original)
-        # Explicit shutdown remains available after loss of an optional package.
+        # The application remains available after loss of the source's package.
         shutil.rmtree(site / "test_lab")
         shutil.rmtree(site / "test_lab_adapter-1.0.0.dist-info")
+        application.stop()
+        application.start()
         application.stop()
         assert application.status().state == "stopped"
     finally:

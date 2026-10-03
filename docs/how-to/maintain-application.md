@@ -10,7 +10,7 @@ If you only want to inspect or share saved results, start with
 [Open and share recorded data](open-and-share-data.md); no code folder is needed.
 
 1. Open Scopecat, then open your experiment code folder in VS Code.
-2. Select your code folder's `.venv` interpreter for Python and Notebook kernels.
+2. Select your prepared or self-managed Python for scripts and Notebook kernels.
    Choose your code, setup and parameters in the current task.
 3. Save edits and refresh author code. This captures source without rebuilding
    the application or installing dependencies.
@@ -118,9 +118,10 @@ scopecat app --home /path/to/Scopecat --action stop
 Only `--action open` opens a browser; `--action desktop` opens the native window.
 A source checkout can initially configure an isolated development home with
 `--action configure --source /path/to/scopecat`, after building its GUI.
-Explicit installed capabilities use paired `--distribution` and `--manifest`
-arguments during configure/update. The capability distribution owns its manifest;
-author folders do not copy driver or application composition.
+Installed capability packages belong to the source's selected execution environment.
+Declare their manifest in that source's `scopecat.toml`, as described in
+[installed laboratory adapters](../development/architecture/public-application.md#installed-laboratory-adapters).
+Do not install them into or configure them on the application itself.
 
 ## Develop a capability in VS Code
 

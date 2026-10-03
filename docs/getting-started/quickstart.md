@@ -1,138 +1,30 @@
-# Pilot bundle quickstart
+# First experiment
 
-For a complete runnable Notebook and automatic environment setup, start with
-[tutorial sandboxes](../tutorials/teaching-sandboxes.md). Each topic is independent and disposable.
+Open the installed Scopecat application. This example uses synthetic data and
+needs no devices. To inspect a received file instead, use
+[Open and share recorded data](../how-to/open-and-share-data.md).
 
-Install the locally supplied pilot bundle to create a project, retain one virtual
-thermometer measurement, and inspect it in the project console. No laboratory
-hardware, source checkout, Node.js, or GUI build is needed on the operator's
-machine.
+1. In **Settings → Author code → New code folder**, choose a location and name,
+   then **Create folder and prepare Python**. Wait for the folder and Python path
+   to appear. This explicit preparation is separate from application startup.
+2. Open that folder in VS Code. With the Python and Jupyter extensions installed,
+   select the displayed Python and open `notebooks/02_edit_scan.py`.
+3. Run the cells in order. Preview describes the three scan points without
+   acquiring; the submission creates a run. Its result is `[0.5, 1.0, 0.5]`.
+4. Inspect the saved run in **Experiments**. Change the scan positions, preview
+   again, and submit only when you want another measurement. A wait timeout means
+   wait again on the same task, not submit it again.
+5. Save your code. Closing the last Scopecat window hides it to the menu bar or
+   tray. Choose **Quit** to exit; active work presents a decision. Reopen the
+   application and select the retained run without executing the submission again.
 
-## Requirements and supported platforms
+Install extra analysis packages in your selected Python, never application Python.
+For existing laboratory code or background dependency changes, follow
+[application maintenance](../how-to/maintain-application.md#author-folders).
 
-Use Python **3.14** and [uv](https://docs.astral.sh/uv/). The installed lifecycle is
-verified in CI on Windows and Ubuntu Linux. Other Python versions and operating
-systems are outside the pilot's tested envelope. This is a local, supervised,
-single-lab installation; public package-index publication is not required.
+If connection fails, open Scopecat and check the selected interpreter. If preview
+fails, correct the reported input or source before submitting. Startup failures
+retain retry and quit controls; preserve their details when asking for help.
 
-Obtain the complete `scopecat-server` artifact directory from a pilot build. It
-contains four Scopecat wheels, a GUI-bearing server source archive,
-`requirements.txt`, and `manifest.json`. The manifest records Python and UI
-versions, package versions, wheel/file SHA-256 hashes, source commit and dirty
-state, and both dependency lock hashes. The requirements pin and hash all runtime
-dependencies. Keep this directory with the project backups so the same reader can
-be installed again. Third-party dependencies are downloaded from the configured
-Python package index; this is not an offline wheelhouse.
-
-## Install the bundle
-
-From the artifact directory, run the same commands in PowerShell or a POSIX shell:
-
-```sh
-uv venv --python 3.14 .venv
-uv pip sync --python .venv --require-hashes --only-binary :all: requirements.txt
-```
-
-The relative wheel paths in `requirements.txt` require this working directory.
-Hash verification checks the artifacts against the supplied requirements; obtain
-the bundle from your trusted pilot distributor.
-
-Activate the environment in PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Or in a POSIX shell:
-
-```sh
-source .venv/bin/activate
-```
-
-## Create and start a project
-
-```sh
-scopecat init ./my-lab
-scopecat config check ./my-lab
-scopecat start ./my-lab
-scopecat status ./my-lab
-scopecat open ./my-lab
-```
-
-`init` creates editable Python application and configuration source. `config
-check` validates that source without creating project state. The initial
-instrument is explicitly a virtual thermometer; it makes no hardware connection.
-
-`start` serves the installed GUI, chooses an available loopback port, and records
-it inside the project. Notebook clients and `open` discover this same endpoint.
-
-## Measure and inspect
-
-```sh
-python ./my-lab/notebooks/01_first_run.py
-```
-
-The script prints a run ID, `completed` status, and a console link selecting that
-run. Open the link to select the `first_run` experiment. Under **Measurement
-data**, open **Raw records** to inspect one temperature sample of **0.02 K**, its
-resistance, and evidence identifying the virtual `thermometer` instrument.
-
-The generated `configuration.py` declares the virtual instrument and its routing.
-Startup selects equipment without creating a global parameter default. Both
-notebooks open the independent `starter` branch defined in
-`authored/parameters.py`. Its `response.scale` parameter controls the synthetic
-scan in the second notebook; the thermometer takes one sample without consuming
-parameter values. In the workbench, choose the saved `starter` branch under
-**Measurement context** before preparing another experiment.
-
-## Restart and retain the result
-
-```sh
-scopecat stop ./my-lab
-scopecat start ./my-lab
-scopecat open ./my-lab
-```
-
-Select the same run and confirm that its ID and measurement values are
-unchanged. Restart can choose a different port, so reopen through `scopecat open`
-instead of bookmarking the old daemon URL. Stop when finished:
-
-```sh
-scopecat stop ./my-lab
-```
-
-## Diagnose a failed first run
-
-- **Missing application dependency:** a missing Python module or the project
-  loader's `missing Python module` message identifies a dependency installation
-  problem. Use this environment's Python, reinstall the matching bundle, and
-  install any dependencies introduced by your edited application source.
-- **Daemon unavailable:** `no daemon endpoint`, a refused HTTP connection, or a
-  degraded `scopecat status` describes the service. Run `status`, then `start`;
-  startup errors identify the project log. This is separate from an instrument
-  connection failure.
-- **Instrument connection failed:** instrument diagnostics identify the binding
-  and driver. The unchanged starter uses only `kind="virtual"`; a device
-  connection problem after editing configuration belongs to that binding.
-
-## Build a bundle from source (maintainers)
-
-From a clean checkout of the intended revision:
-
-```sh
-uv sync --locked
-pnpm --dir apps/scopecat-ui install --frozen-lockfile
-pnpm --dir apps/scopecat-ui run build
-uv run python scripts/build_server_distribution.py
-uv run python scripts/verify_pilot_bundle.py dist/scopecat-server
-```
-
-Distribute the complete `dist/scopecat-server` directory. Each build replaces that
-artifact directory from a fresh staging area. The verifier installs into a fresh
-environment outside the checkout, serves bundled assets, reads the generated
-measurement, and checks it again after restart. CI also exercises installation on
-Windows without a Node setup in the installation job.
-
-Next, [edit and analyze a starter experiment](../tutorials/starter-authoring.md)
-in this same project. See the [project layout reference](../reference/project-layout.md)
-for file ownership, or choose another [tutorial sandbox](../tutorials/teaching-sandboxes.md).
+Framework contributors use [source development](../development/public-preview.md#run-without-installation).
+The old per-project pilot environment is not a desktop installation prerequisite.
