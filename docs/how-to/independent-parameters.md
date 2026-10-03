@@ -82,9 +82,8 @@ replaces the captured connection revisions.
 
 Low-level callers can supply an exact `setup=` to `resolve`, or choose
 `ParameterConfiguration(ref=..., setup=...)` inside a scientific selection.
-`parameters.bind(...)` can retain a named combined execution snapshot;
-normal independent-parameter launches do not need it. The combination is evidence,
-not a second parameter editor.
+Preparation retains the exact combination as execution evidence. There is no
+separate combined-configuration save step.
 
 These are distinct responsibilities:
 

@@ -7,11 +7,11 @@ The maintained contract and the remaining implementation boundary are recorded i
 Device registration, setup definitions and parameter branches are separate owners.
 Resolved configurations are execution evidence rather than another editing API.
 
-The current batch retires working-point editors and global-default publication
-commands together with their GUI and Python consumers. Remaining
-combined-configuration execution and bootstrap dependencies must also be accounted
-for before the batch is complete. Do not retain a public writer solely for old
-development fixtures or add prebaseline compatibility readers.
+Global-default publication/activation, combined working-point writes, setup
+rebind and intermediate parameter binding saves have retired with their mutable
+storage, API and obsolete consumers. Ordinary preparation uses independent
+parameter/setup inputs. Named combined snapshots remain exact execution/evidence
+data; they are not an alternative editor or a default-selection mechanism.
 
 User workflows are described in [parameter editing](../how-to/manage-configuration.md),
 [experiment setup](../how-to/maintain-executable-setup.md) and

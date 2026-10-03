@@ -100,8 +100,6 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
         ).entry
         == retained.entry
     )
-    with registry.write_unit_of_work() as work:
-        assert work.registry.current_generation() == 0
     reopened, _ = services(tmp_path)
     assert reopened.import_template(command) == first
     for changed in ({"actor": "another"}, {"note": "another"}):

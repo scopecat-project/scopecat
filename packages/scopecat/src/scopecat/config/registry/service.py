@@ -1,17 +1,7 @@
-"""Configuration-registry use cases and persistence ports.
+"""Immutable configuration evidence and exact named snapshot resolution.
 
-The registry stores named configuration snapshots under the project-local
-``config-registry`` tree. Its append-only activation log projects the active
-entry for later runs and supplies an independent history view for clients that
-want to select an earlier exact entry.
-Revisions can be saved directly from a
-``ConfigProfileSnapshot`` or from a candidate configuration.
-
-Runs started from a registry entry carry source coordinates on the durable run
-snapshot. Reporting code can then show which registry selector and entry were
-used without mixing run lifecycle data into the config snapshot. Candidate
-evidence is verified and frozen when the revision is saved; later events do not
-retroactively revoke committed entries.
+Parameter branches own editing. Registry snapshots retain composed execution
+inputs and scientific provenance; no entry is a project-wide default.
 """
 
 from __future__ import annotations
@@ -25,7 +15,7 @@ from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_from_snapshot,
 )
-from scopecat.config.contexts import context_value_origins, validate_context_config
+from scopecat.config.contexts import validate_context_config
 from scopecat.config.profile_validation import validate_config_profile
 from scopecat.config.registry.ports import (
     ConfigRegistryRepository,
@@ -33,22 +23,11 @@ from scopecat.config.registry.ports import (
     ConfigRegistryUnitOfWorkFactory,
 )
 from scopecat.config.registry.records import (
-    BoundParameterRegistrySource,
     CandidateAcceptance,
     CandidateConfigRegistrySource,
-    ConfigRegistryActivationPage,
-    ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
     ContextConfigRegistrySource,
     DirectConfigRegistrySource,
-    ManualConfigDraftRegistrySource,
-    ParameterConfigRegistrySource,
-    SetupRebindRegistrySource,
-)
-from scopecat.config.structure import (
-    ParameterStructurePlan,
-    mapped_structure_origins,
-    preview_parameter_structure,
 )
 from scopecat.kernel.errors import (
     CheckFailed,
@@ -69,31 +48,21 @@ from scopecat.records.config import (
     config_content_equal,
     config_content_hash,
 )
-from scopecat.records.config_context import ConfigContextMetadata, ConfigContextRef
 from scopecat.records.content import ContentEntry
-from scopecat.records.parameter import ParameterSnapshot
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterValueDelta,
-)
-from scopecat.records.parameter_revision import (
-    ParameterRevisionContent,
-    ParameterRevisionRef,
 )
 from scopecat.records.run import (
     ConfigRegistryRunConfigSource,
     RunConfigSource,
 )
-from scopecat.records.sample import SampleBinding
 from scopecat.records.setup import (
     ExecutableSetupSnapshot,
-    SetupRevision,
-    SetupRevisionRef,
 )
 from scopecat.runs.refs import record_content_ref
 from scopecat.runs.repository import RunRepository
 
-ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR = "active"
 SAFE_ENTRY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
@@ -110,24 +79,13 @@ class DirectConfigRevisionSource:
 
 
 @dataclass(frozen=True, slots=True)
-class ParameterConfigRevisionSource:
-    parameters: ParameterRevisionContent
-    setup: SetupRevisionRef
-    origin: ParameterRevisionRef | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class CandidateConfigRevisionSource:
     run_id: str
     proposal_id: str
     acceptance: CandidateAcceptance
 
 
-type ConfigRevisionSource = (
-    DirectConfigRevisionSource
-    | ParameterConfigRevisionSource
-    | CandidateConfigRevisionSource
-)
+type ConfigRevisionSource = DirectConfigRevisionSource | CandidateConfigRevisionSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,31 +115,20 @@ class InstrumentInventoryMigrationPlan:
 class ConfigRegistryEntrySnapshot:
     entry: ConfigRegistryEntry
     config: ConfigProfileSnapshot
-    latest_activation: ConfigRegistryActivationRecord | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ConfigRegistryPageSnapshot:
     entries: tuple[ConfigRegistryEntry, ...]
-    activation: ConfigRegistryActivationRecord | None
     next_cursor: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class ActiveConfigRegistrySnapshot:
-    entry: ConfigRegistryEntry
-    activation: ConfigRegistryActivationRecord
-    config: ConfigProfileSnapshot
-
-
-@dataclass(frozen=True, slots=True)
 class ConfigRegistryMutationResult:
-    """Committed registry facts used to publish matching project events."""
+    """An immutable evidence save and its resolved parameter deltas."""
 
     entry: ConfigRegistryEntry
-    activation: ConfigRegistryActivationRecord | None = None
     saved: bool = False
-    activated: bool = False
     deltas: tuple[ParameterValueDelta, ...] = ()
 
 
@@ -196,36 +143,6 @@ def save_config_revision(
         return _save_config_revision_locked(revision=revision, work=work)
 
 
-def publish_config_revision(
-    *,
-    revision: ConfigRevision,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-    expected_generation: int,
-) -> ConfigRegistryMutationResult:
-    """Save one immutable revision and select it in the same transaction."""
-
-    _validate_config_revision(revision)
-    with unit_of_work() as work:
-        saved = _save_config_revision_locked(
-            revision=revision,
-            work=work,
-        )
-        activated = _activate_config_registry_entry_locked(
-            entry_id=saved.entry.id,
-            work=work,
-            actor=revision.actor,
-            note=revision.note,
-            expected_generation=expected_generation,
-        )
-        return ConfigRegistryMutationResult(
-            entry=saved.entry,
-            activation=activated.activation,
-            saved=saved.saved,
-            activated=activated.activated,
-            deltas=saved.deltas,
-        )
-
-
 def _save_config_revision_locked(
     *,
     revision: ConfigRevision,
@@ -236,31 +153,6 @@ def _save_config_revision_locked(
     if isinstance(source, DirectConfigRevisionSource):
         config = source.config
         entry_source = DirectConfigRegistrySource()
-        entry_id = _required_revision_entry_id(revision)
-    elif isinstance(source, ParameterConfigRevisionSource):
-        from scopecat.config.resolution import compose_configuration
-
-        setup = work.setups.read_revision(source.setup.revision_id)
-        if setup.ref != source.setup:
-            raise _registry_failure(
-                Conflict,
-                code="config_registry.setup_reference_mismatch",
-                message="parameter publication requires an exact saved setup",
-                location=_registry_model_location("setup"),
-            )
-        parameters = source.parameters
-        config = compose_configuration(
-            setup.setup,
-            id=parameters.id,
-            system_id=parameters.system_id,
-            catalog=parameters.catalog,
-            parameters=parameters.parameters,
-        )
-        entry_source = (
-            BoundParameterRegistrySource(parameters=source.origin, setup=setup.ref)
-            if source.origin is not None
-            else ParameterConfigRegistrySource(setup=setup.ref)
-        )
         entry_id = _required_revision_entry_id(revision)
     else:
         validated = validate_candidate_source_records(
@@ -381,24 +273,12 @@ def load_config_registry_page(
     before: int | None,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
 ) -> ConfigRegistryPageSnapshot:
-    """Read one newest-first registry page and the active projection."""
+    """Read one newest-first page of immutable evidence entries."""
 
     with unit_of_work() as work:
         page = work.registry.list_entry_page(limit=limit, before=before)
-        activation = _read_latest_activation(work.registry)
-        if activation is not None:
-            loaded = _load_config_registry_entry_locked(
-                entry_id=activation.entry_id,
-                work=work,
-            )
-            _validate_active_entry_identity(
-                work.registry,
-                activation,
-                loaded.entry,
-            )
         return ConfigRegistryPageSnapshot(
             entries=page.items,
-            activation=activation,
             next_cursor=page.next_cursor,
         )
 
@@ -414,7 +294,6 @@ def load_config_registry_entry_snapshot(
         return ConfigRegistryEntrySnapshot(
             entry=loaded.entry,
             config=loaded.config,
-            latest_activation=_latest_entry_activation(work.registry, loaded.entry),
         )
 
 
@@ -438,184 +317,15 @@ def _load_config_registry_entry_locked(
     )
 
 
-def load_active_config_registry_snapshot(
-    *,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ActiveConfigRegistrySnapshot:
-    """Read the active head and its immutable config in one transaction."""
-
-    with unit_of_work() as work:
-        activation = _load_active_config_registry_activation_locked(work.registry)
-        loaded = _load_config_registry_entry_locked(
-            entry_id=activation.entry_id,
-            work=work,
-        )
-        _validate_active_entry_identity(work.registry, activation, loaded.entry)
-        return ActiveConfigRegistrySnapshot(
-            entry=loaded.entry,
-            activation=activation,
-            config=loaded.config,
-        )
-
-
 def resolve_config_registry_config_source(
     *, selector: str, unit_of_work: ConfigRegistryUnitOfWorkFactory
 ) -> tuple[ConfigProfileSnapshot, RunConfigSource]:
-    if selector != ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR:
-        _validate_entry_id(selector)
+    _validate_entry_id(selector)
     with unit_of_work() as work:
-        if selector == ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR:
-            return _resolve_active_config_registry_config_source_locked(work=work)
         return _resolve_entry_config_registry_config_source_locked(
             selector=selector,
             work=work,
         )
-
-
-def activate_config_registry_entry(
-    *,
-    entry_id: str,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-    actor: str,
-    expected_generation: int,
-    note: str = "",
-) -> ConfigRegistryMutationResult:
-    _validate_entry_id(entry_id)
-    _validate_required_text(actor, field="actor")
-    with unit_of_work() as work:
-        return _activate_config_registry_entry_locked(
-            entry_id=entry_id,
-            work=work,
-            actor=actor,
-            expected_generation=expected_generation,
-            note=note,
-        )
-
-
-def _activate_config_registry_entry_locked(
-    *,
-    entry_id: str,
-    work: ConfigRegistryUnitOfWork,
-    actor: str,
-    expected_generation: int | None,
-    note: str,
-) -> ConfigRegistryMutationResult:
-    return _commit_config_registry_activation_locked(
-        entry_id=entry_id,
-        work=work,
-        actor=actor,
-        expected_generation=expected_generation,
-        note=note,
-    )
-
-
-def _commit_config_registry_activation_locked(
-    *,
-    entry_id: str,
-    work: ConfigRegistryUnitOfWork,
-    actor: str,
-    expected_generation: int | None,
-    note: str,
-) -> ConfigRegistryMutationResult:
-    current_activation = _read_latest_activation(work.registry)
-    if expected_generation is not None:
-        _require_expected_generation(
-            current_activation,
-            expected_generation,
-            active_ref=work.registry.active_ref,
-        )
-    loaded = _load_config_registry_entry_locked(
-        entry_id=entry_id,
-        work=work,
-    )
-    entry = loaded.entry
-    if isinstance(entry.source, ContextConfigRegistrySource):
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.context_not_global_default",
-            message=(
-                "parameter contexts are selected per run, "
-                "not activated as the lab default"
-            ),
-            location=_registry_model_location("entry_id"),
-            details={"entry_id": entry.id},
-        )
-    prior_activation = _latest_entry_activation(work.registry, entry)
-    if prior_activation is None:
-        _validate_derived_entry_base(current_activation, entry, work)
-    if current_activation is not None and current_activation.entry_id == entry.id:
-        _validate_active_entry_identity(work.registry, current_activation, entry)
-        return ConfigRegistryMutationResult(
-            entry=entry,
-            activation=current_activation,
-        )
-    previous_entry_id = (
-        current_activation.entry_id if current_activation is not None else None
-    )
-    previous_content_hash = (
-        current_activation.entry_content_hash
-        if current_activation is not None
-        else None
-    )
-    current_generation = (
-        0 if current_activation is None else current_activation.generation
-    )
-    generation = current_generation + 1
-    record = ConfigRegistryActivationRecord(
-        generation=generation,
-        action="activation",
-        entry_id=entry.id,
-        entry_content_hash=entry.content_hash,
-        restored_from_generation=(
-            prior_activation.generation if prior_activation is not None else None
-        ),
-        previous_entry_id=previous_entry_id,
-        previous_entry_content_hash=previous_content_hash,
-        actor=actor,
-        note=note,
-    )
-    work.registry.commit_activation(
-        expected_generation=current_generation,
-        record=record,
-    )
-    return ConfigRegistryMutationResult(
-        entry=entry,
-        activation=record,
-        activated=True,
-    )
-
-
-def load_config_registry_activation(
-    *,
-    generation: int,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ConfigRegistryActivationRecord:
-    with unit_of_work() as work:
-        return work.registry.read_activation(generation)
-
-
-def load_config_registry_activation_page(
-    *,
-    limit: int,
-    before: int | None,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ConfigRegistryActivationPage:
-    with unit_of_work() as work:
-        return work.registry.list_activation_page(limit=limit, before=before)
-
-
-def _load_active_config_registry_activation_locked(
-    repository: ConfigRegistryRepository,
-) -> ConfigRegistryActivationRecord:
-    activation = repository.read_latest_activation()
-    if activation is None:
-        raise _registry_failure(
-            NotFound,
-            code="config_registry.no_active_entry",
-            message="config registry has no active entry",
-            location=_registry_model_location("active"),
-        )
-    return activation
 
 
 def _resolve_entry_config_registry_config_source_locked(
@@ -631,26 +341,6 @@ def _resolve_entry_config_registry_config_source_locked(
         entry_id=entry.id,
         config_ref=entry.config_ref,
         content_hash=entry.content_hash,
-    )
-    return loaded.config, source
-
-
-def _resolve_active_config_registry_config_source_locked(
-    *, work: ConfigRegistryUnitOfWork
-) -> tuple[ConfigProfileSnapshot, RunConfigSource]:
-    activation = _load_active_config_registry_activation_locked(work.registry)
-    loaded = _load_config_registry_entry_locked(
-        entry_id=activation.entry_id,
-        work=work,
-    )
-    entry = loaded.entry
-    _validate_active_entry_identity(work.registry, activation, entry)
-    source = ConfigRegistryRunConfigSource(
-        selector=ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR,
-        entry_id=entry.id,
-        config_ref=entry.config_ref,
-        content_hash=entry.content_hash,
-        registry_generation=activation.generation,
     )
     return loaded.config, source
 
@@ -784,34 +474,6 @@ def _same_revision(
     )
 
 
-def _read_latest_activation(
-    repository: ConfigRegistryRepository,
-) -> ConfigRegistryActivationRecord | None:
-    return repository.read_latest_activation()
-
-
-def _require_expected_generation(
-    activation: ConfigRegistryActivationRecord | None,
-    expected_generation: int,
-    *,
-    active_ref: str,
-) -> None:
-    current_generation = 0 if activation is None else activation.generation
-    if expected_generation == current_generation:
-        return
-    raise _registry_failure(
-        Conflict,
-        code="config_registry.conflict",
-        message="config registry active state changed",
-        location=_registry_model_location("expected_generation"),
-        related_locations=(_registry_storage_location(active_ref),),
-        details={
-            "expected_generation": expected_generation,
-            "actual_generation": current_generation,
-        },
-    )
-
-
 def _read_entry_config(
     repository: ConfigRegistryRepository,
     entry: ConfigRegistryEntry,
@@ -834,82 +496,6 @@ def _read_entry_config(
             },
         )
     return config
-
-
-def _validate_active_entry_identity(
-    repository: ConfigRegistryRepository,
-    activation: ConfigRegistryActivationRecord,
-    entry: ConfigRegistryEntry,
-) -> None:
-    if (
-        activation.entry_id == entry.id
-        and activation.entry_content_hash == entry.content_hash
-    ):
-        return
-    raise _registry_failure(
-        DataIntegrityError,
-        code="config_registry.active_content_mismatch",
-        message="active config registry state does not match its entry",
-        location=_registry_storage_location(repository.active_ref),
-        related_locations=(_registry_storage_location(repository.entry_ref(entry.id)),),
-        details={"entry_id": entry.id},
-    )
-
-
-def _latest_entry_activation(
-    repository: ConfigRegistryRepository, entry: ConfigRegistryEntry
-) -> ConfigRegistryActivationRecord | None:
-    activation = repository.read_latest_entry_activation(entry.id)
-    if activation is not None:
-        _validate_active_entry_identity(repository, activation, entry)
-    return activation
-
-
-def _validate_derived_entry_base(
-    activation: ConfigRegistryActivationRecord | None,
-    entry: ConfigRegistryEntry,
-    work: ConfigRegistryUnitOfWork,
-) -> None:
-    if activation is None:
-        return
-    if activation.entry_id == entry.id:
-        _validate_active_entry_identity(work.registry, activation, entry)
-        return
-    active = _load_config_registry_entry_locked(
-        entry_id=activation.entry_id,
-        work=work,
-    )
-    active_entry = active.entry
-    _validate_active_entry_identity(work.registry, activation, active_entry)
-    if isinstance(
-        entry.source,
-        (
-            CandidateConfigRegistrySource,
-            ManualConfigDraftRegistrySource,
-        ),
-    ):
-        base_content_hash = entry.source.base_config_content_hash
-    else:
-        return
-    if base_content_hash == active_entry.content_hash:
-        return
-    raise _registry_failure(
-        Conflict,
-        code="config_registry.stale_candidate",
-        message="candidate config was based on a different active config",
-        location=_registry_model_location(
-            "entries",
-            entry.id,
-            "source",
-            "base_config_content_hash",
-        ),
-        related_locations=(_registry_storage_location(work.registry.active_ref),),
-        details={
-            "entry_id": entry.id,
-            "candidate_base_content_hash": base_content_hash,
-            "active_content_hash": active_entry.content_hash,
-        },
-    )
 
 
 def _require_valid_config(config: ConfigProfileSnapshot) -> None:
@@ -1109,8 +695,6 @@ def _registry_storage_location(
 
 
 __all__ = [
-    "ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR",
-    "ActiveConfigRegistrySnapshot",
     "CandidateConfigRevisionSource",
     "ConfigRegistryEntrySnapshot",
     "ConfigRegistryMutationResult",
@@ -1123,257 +707,9 @@ __all__ = [
     "DirectConfigRevisionSource",
     "InstrumentInventoryMigrationDelta",
     "InstrumentInventoryMigrationPlan",
-    "activate_config_registry_entry",
-    "load_active_config_registry_snapshot",
-    "load_config_registry_activation",
-    "load_config_registry_activation_page",
     "load_config_registry_entry_snapshot",
     "load_config_registry_page",
     "plan_instrument_inventory_migration",
-    "publish_config_revision",
     "resolve_config_registry_config_source",
     "save_config_revision",
 ]
-
-
-def save_config_context(
-    *,
-    entry_id: str,
-    base: ConfigContextRef,
-    sample: SampleBinding,
-    working_point_id: str,
-    label: str,
-    parameters: ParameterSnapshot | None,
-    structure_plan: ParameterStructurePlan | None = None,
-    advance: bool = False,
-    publication: CandidateConfigRegistrySource | None = None,
-    actor: str,
-    note: str,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ConfigRegistryEntrySnapshot:
-    """Save one working point with a transaction-local head CAS."""
-    with unit_of_work() as work:
-        return _save_config_context_locked(
-            entry_id=entry_id,
-            base=base,
-            sample=sample,
-            working_point_id=working_point_id,
-            label=label,
-            parameters=parameters,
-            structure_plan=structure_plan,
-            advance=advance,
-            publication=publication,
-            actor=actor,
-            note=note,
-            work=work,
-        )
-
-
-def _save_config_context_locked(
-    *,
-    entry_id: str,
-    base: ConfigContextRef,
-    sample: SampleBinding,
-    working_point_id: str,
-    label: str,
-    parameters: ParameterSnapshot | None,
-    structure_plan: ParameterStructurePlan | None = None,
-    advance: bool = False,
-    publication: CandidateConfigRegistrySource | None = None,
-    actor: str,
-    note: str,
-    work: ConfigRegistryUnitOfWork,
-    profile_id: str | None = None,
-    rebound_setup: SetupRevision | None = None,
-) -> ConfigRegistryEntrySnapshot:
-    _validate_entry_id(entry_id)
-    _validate_required_text(actor, field="actor")
-    loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
-    if loaded.entry.content_hash != base.content_hash:
-        raise ValueError("context base does not match the exact registry revision")
-    existing = work.registry.entry_exists(entry_id)
-    context = (
-        loaded.entry.source.context
-        if isinstance(loaded.entry.source, ContextConfigRegistrySource)
-        else None
-    )
-    if advance and (
-        context is None
-        or context.sample != sample
-        or context.working_point_id != working_point_id
-    ):
-        raise ValueError("saving a workspace cannot change its sample or working point")
-    workspace_id = context.workspace_id if advance and context else entry_id
-    if advance and not existing:
-        head = work.registry.context_head(workspace_id)
-        if head != base.entry_id:
-            raise ValueError(
-                f"Workspace changed: latest version is {head!r}; "
-                "reopen latest or rebase before saving"
-            )
-    if structure_plan is not None and structure_plan.base != base:
-        raise ValueError("structure plan must match the exact base")
-    structural = (
-        preview_parameter_structure(loaded.config, structure_plan)
-        if structure_plan
-        else None
-    )
-    baseline = structural.config if structural else loaded.config
-    if rebound_setup is not None:
-        baseline = rebound_setup.setup.compose(baseline)
-    config = baseline.model_copy(
-        update={
-            "id": baseline.id if profile_id is None else profile_id,
-            "parameter_snapshot": baseline.parameter_snapshot
-            if parameters is None
-            else parameters,
-        }
-    )
-    validate_context_config(config)
-    selected_ref = ConfigContextRef(
-        entry_id=entry_id, content_hash=config_content_hash(config)
-    )
-    inherited = (
-        loaded.entry.source.context.value_origins
-        if isinstance(loaded.entry.source, ContextConfigRegistrySource)
-        else ()
-    )
-    source = ContextConfigRegistrySource(
-        rebind=(
-            SetupRebindRegistrySource(base=base, setup=rebound_setup.ref)
-            if rebound_setup
-            else None
-        ),
-        publication=publication,
-        context=ConfigContextMetadata(
-            sample=sample,
-            working_point_id=working_point_id,
-            label=label,
-            workspace_id=workspace_id,
-            base=base,
-            structure=structural.origin
-            if structural
-            else (
-                loaded.entry.source.context.structure
-                if isinstance(loaded.entry.source, ContextConfigRegistrySource)
-                else None
-            ),
-            value_origins=context_value_origins(
-                config,
-                base=structural.config.parameter_snapshot,
-                base_ref=base,
-                selected_ref=selected_ref,
-                inherited=mapped_structure_origins(
-                    loaded.config,
-                    structural,
-                    base_ref=base,
-                    selected_ref=selected_ref,
-                    inherited=inherited,
-                ),
-            )
-            if structural
-            else context_value_origins(
-                config,
-                base=loaded.config.parameter_snapshot,
-                base_ref=base,
-                selected_ref=selected_ref,
-                inherited=inherited,
-            ),
-        ),
-    )
-    entry = ConfigRegistryEntry(
-        id=entry_id,
-        config_ref=work.registry.config_ref(entry_id),
-        content_hash=selected_ref.content_hash,
-        source=source,
-        actor=actor,
-        note=note,
-    )
-    committed = _commit_revision_locked(
-        repository=work.registry, requested_entry=entry, config=config
-    )
-    if not existing:
-        work.registry.set_context_head(workspace_id, entry_id)
-    return ConfigRegistryEntrySnapshot(entry=committed.entry, config=config)
-
-
-def latest_parameter_context(
-    context: ConfigContextRef, *, unit_of_work: ConfigRegistryUnitOfWorkFactory
-) -> ConfigRegistryEntrySnapshot:
-    """Resolve an explicit workspace's latest saved version, never activate it."""
-    with unit_of_work() as work:
-        selected = _load_config_registry_entry_locked(
-            entry_id=context.entry_id, work=work
-        )
-        if selected.entry.content_hash != context.content_hash:
-            raise ValueError("context reference does not match saved version")
-        if not isinstance(selected.entry.source, ContextConfigRegistrySource):
-            raise ValueError("not a parameter workspace context")
-        workspace_id = selected.entry.source.context.workspace_id
-        return _load_config_registry_entry_locked(
-            entry_id=work.registry.context_head(workspace_id), work=work
-        )
-
-
-def preview_setup_rebind(
-    *,
-    base: ConfigContextRef,
-    setup: SetupRevisionRef,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ConfigProfileSnapshot:
-    """Compose explicitly without saving, selecting, or claiming calibration."""
-    with unit_of_work() as work:
-        loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
-        revision = work.setups.read_revision(setup.revision_id)
-        if loaded.entry.content_hash != base.content_hash or revision.ref != setup:
-            raise ValueError("setup rebind requires exact saved inputs")
-        config = revision.setup.compose(loaded.config)
-        _require_valid_config(config)
-        return config
-
-
-def rebind_config_setup(
-    *,
-    base: ConfigContextRef,
-    setup: SetupRevisionRef,
-    entry_id: str,
-    actor: str,
-    note: str,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-) -> ConfigRegistryEntrySnapshot:
-    """Save a new unverified branch; never advance its source or any default."""
-    with unit_of_work() as work:
-        _validate_entry_id(entry_id)
-        _validate_required_text(actor, field="actor")
-        loaded = _load_config_registry_entry_locked(entry_id=base.entry_id, work=work)
-        revision = work.setups.read_revision(setup.revision_id)
-        if loaded.entry.content_hash != base.content_hash or revision.ref != setup:
-            raise ValueError("setup rebind requires exact saved inputs")
-        config = revision.setup.compose(loaded.config)
-        _require_valid_config(config)
-        if isinstance(loaded.entry.source, ContextConfigRegistrySource):
-            context = loaded.entry.source.context
-            return _save_config_context_locked(
-                entry_id=entry_id,
-                base=base,
-                sample=context.sample,
-                working_point_id=context.working_point_id,
-                label=entry_id,
-                parameters=None,
-                actor=actor,
-                note=note,
-                work=work,
-                rebound_setup=revision,
-            )
-        entry = ConfigRegistryEntry(
-            id=entry_id,
-            config_ref=work.registry.config_ref(entry_id),
-            content_hash=config_content_hash(config),
-            actor=actor,
-            note=note,
-            source=SetupRebindRegistrySource(base=base, setup=setup),
-        )
-        saved = _commit_revision_locked(
-            repository=work.registry, requested_entry=entry, config=config
-        )
-        return ConfigRegistryEntrySnapshot(entry=saved.entry, config=config)

@@ -147,7 +147,7 @@ beforeEach(() => {
               lookupMatch === "different-config"
                 ? {
                     ...original?.reviewed?.config_source,
-                    registry_generation: 999,
+                    content_hash: "sha256:changed",
                   }
                 : original?.reviewed?.config_source,
           },

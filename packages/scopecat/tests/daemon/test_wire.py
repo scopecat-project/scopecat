@@ -255,11 +255,10 @@ def test_analysis_save_command_bounds_output_count() -> None:
 def test_run_submission_is_closed_typed_json_without_executable_state() -> None:
     config = load_config()
     source = ConfigRegistryRunConfigSource(
-        selector="active",
+        selector="baseline",
         entry_id="baseline",
         config_ref="config-registry/configs/baseline.json",
         content_hash=config_content_hash(config),
-        registry_generation=2,
     )
     submission = RunSubmission(
         execution_setup=SetupRevisionRef(

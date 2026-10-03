@@ -8,7 +8,7 @@ Desktop status is governed by the [application contract](architecture/public-app
 and [product decision](architecture/desktop-product.md). The manager, per-source
 services and per-lesson environments have retired. PR #829 delivered ready-to-run
 installation, #837 independent data and the bounded desktop journey, and #844
-ordinary sources with independent execution/SDK environments. PR 4 qualifies their
+ordinary sources with independent execution/SDK environments. #845 completed their
 composition and release; actual editor, unfamiliar-user and hardware observations
 remain distinct. Track the software gate in #610/#616/#671.
 
@@ -16,7 +16,7 @@ remain distinct. Track the software gate in #610/#616/#671.
 
 | Area | Implemented | Current boundary |
 | --- | --- | --- |
-| Parameters/setup | Independent immutable revisions, branches, session setup pins and exact context resolution | Some consumers still use combined configurations and optional global parameter defaults |
+| Parameters/setup | Independent immutable revisions, branches, session setup pins and exact context resolution | Combined snapshots remain exact execution/provenance data; global defaults and combined writers are retired |
 | Scientific context | Common `MeasurementContext` for saved revisions and retained candidates; subject separated from `TargetSetupBinding`; mappings checked at admission and for applicability | Overrides/unsaved inputs remain outside exact contexts; candidates do not inherit saved-revision applicability |
 | Targets | Catalog definitions and a general pure topology mapping checker | Registered execution remains single-member, no target connections, identity mapping |
 | Candidates | Retained proposals, sibling composition, sequential chains, independent verification and fenced branch publication; optional task finalization handoff | Final scientific policy and publication remain explicitly authored |
@@ -24,12 +24,38 @@ remain distinct. Track the software gate in #610/#616/#671.
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
-| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 98 is not a supported persistent-data baseline |
+| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | Schema 107 is not a supported persistent-data baseline |
 
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
 [automation tasks](architecture/automation-tasks.md) and
 [the public application contract](architecture/public-application.md).
+
+## Current development batches
+
+The next budget is five public PRs, distinct from the completed desktop four:
+
+1. Retire global configuration and combined editing authority, including consumers,
+   storage and misleading reference fixtures. This batch removes activation/history,
+   workspace heads/rebind and intermediate binding saves. Preserve exact evidence
+   reads and current-format recovery.
+2. Converge the ordinary edit/prepare/acquire/analyze/reopen author loop, analysis
+   invocation semantics, stable/trial parameter contracts and actionable feedback.
+   Use measurements for performance changes; do not rebuild delivered typed reads.
+3. Reuse ordinary analysis for completed live groups, bounded background work and
+   reconnect, extending the delivered offline API.
+4. Explain calibration applicability with qualified dependency coverage; unknown
+   dependencies cannot justify cross-revision reuse.
+5. Add bounded check-first repair with explicit budgets, retained partial progress
+   and final verification/publication. Start with exact contexts if necessary.
+
+Prioritize 1–2, then 3. Batches 4–5 are subsequent scientific automation, not new
+prerequisites for supervised hardware acceptance. Private consumers/docs move with
+relevant public capabilities; native/manual checks repeat only for changed contracts.
+Actual editor, unfamiliar-user and physical observations remain separate in #616.
+
+The sections below retain the earlier scientific audit and its evidence inventory;
+current configuration authority is governed by the linked ownership contract.
 
 ## Implementation order
 
@@ -83,9 +109,8 @@ The launcher suite now selects independent inputs too, retaining foreign-endpoin
 isolation and rejecting new work when executable setup authority changes.
 The standard reference bootstrap now initializes equipment only; its temporary
 equipment-only replacement and manifest rewrites are retired, including acceptance
-capture and snapshot recovery. Remaining legacy consumers include combined
-configuration editing/default-selection APIs and working-point launch
-paths. Their presence does not imply that new author workflows require those owners.
+capture and snapshot recovery. The combined editing/default-selection writers and working-point heads have
+since retired. Retained exact snapshot/context reads remain evidence consumers. Their presence does not imply that new author workflows require those owners.
 The retained device gallery now uses equipment-only startup and explicit fixture
 parameter revisions, while keeping its physical-behavior assertions. Use the
 [fixture ownership inventory](reference-fixtures.md) to retain each useful behavior
@@ -96,9 +121,8 @@ compared, published or exported the daemon-wide combined default. Source checkin
 remains read-only; author edits use parameter branches, equipment changes use setup
 operations, and scientific retention uses snapshot backup/restore. The old command
 mock tests are removed with their implementations; current-format parsing,
-bootstrap validation and backup/restore coverage remain. Low-level combined
-registry and working-point APIs still have separate consumers and are not removed
-by this CLI retirement.
+bootstrap validation and backup/restore coverage remain. That CLI retirement preceded the subsequent removal of low-level global activation
+and combined working-point writers. Immutable registry evidence is retained.
 
 Author guides now consistently start from independent parameter branches. The
 batch guide reflects the tested distinction between reusing values and reusing
@@ -143,7 +167,7 @@ execution and automatic selective repair are not established by this scenario.
   after dependencies can explain invalidation.
 
 Setup still aggregates control topology, instrument registry, routing, domain
-target and software scenario. One active setup remains deployment authority.
+target and software scenario. Registered device heads and explicit setup resolutions own execution authority.
 Independent execution must follow resource overlap, not source folders or target
 names. Avoid an exhaustive physical inventory without a concrete consumer.
 

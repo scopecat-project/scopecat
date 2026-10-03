@@ -17,9 +17,6 @@ from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
-from scopecat.records.run import (
-    ConfigRegistryRunConfigSource,
-)
 from scopecat.records.scientific_selection import (
     LaunchConfigSource as LaunchConfigSource,
 )
@@ -66,14 +63,7 @@ class LaunchRequest(BaseModel):
                 raise ValueError(
                     "submit requires a request key and preview request hash"
                 )
-            if self.reviewed is None or (
-                isinstance(
-                    self.reviewed.config_source,
-                    ConfigRegistryRunConfigSource,
-                )
-                and self.reviewed.config_source.selector == "active"
-                and self.reviewed.config_source.registry_generation is None
-            ):
+            if self.reviewed is None:
                 raise ValueError("submit requires the preview's configuration binding")
             if self.expected_request_hash != self.request_hash:
                 raise ValueError("request changed since preview; preview again")

@@ -76,6 +76,29 @@ expresses an obsolete requirement before removing it.
   checks durable Arrow pagination and schema. These directly cover the deleted
   workbench's summary counts without acquiring a resonator scan first.
 
+## Configuration-authority retirement evidence
+
+Global activation, stale-global-default and restoration-of-default assertions are
+retired. `test_parameter_branches.py` and the verified branch publication journey
+own CAS, replay, atomic rollback and current-format recovery. Registry storage
+still checks exact reads, duplicate identity, pagination and borrowed transaction
+ownership; its injected write failure now targets the immutable revision insert.
+
+The deleted combined-context persistence tests are not an editor to preserve.
+`test_branch_parameter_editor.py` covers structural edits, copying, rebase/fork,
+unknown values and conflicts on independent branches. Core
+`tests/config/test_parameter_structure.py` covers imported/unknown evidence,
+renamed source-cell addresses and preservation of untouched row provenance.
+Retained input/export tests continue checking exact identities and missing or
+altered scientific evidence. Candidate table updates retain typed row materialization,
+and drifted source snapshots are rejected before an immutable evidence entry is saved.
+The old global-default rerun fixture now explicitly selects the saved evidence entry.
+
+The unused GUI `ConfigEntryInspector` and its default/restore actions are removed.
+`parameters.bind(...)` no longer manufactures an intermediate combined entry;
+independent preparation retains the exact parameter/setup choice directly.
+No frozen environment, compatibility reader or historical-file rewrite is added.
+
 ## Development order
 
 The [calibration composition contract](calibration-composition.md) separates pure

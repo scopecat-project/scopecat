@@ -18,13 +18,13 @@ from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.registry.service import (
     ConfigRevision,
     DirectConfigRevisionSource,
-    publish_config_revision,
+    save_config_revision,
 )
 from scopecat.kernel.errors import CheckFailed, Conflict, DataIntegrityError
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import ParameterChangeProposal
-from scopecat_testkit.config_registry import activate_candidate_config, initialize_setup
+from scopecat_testkit.config_registry import initialize_setup, retain_candidate_config
 from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.server.in_process_lab import InProcessLab, in_process_lab
 from scopecat_testkit.server.runtime import (
@@ -249,14 +249,13 @@ def test_candidate_config_rejects_drifted_source_snapshot_before_publish(
     initialize_setup(
         run.config, unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
     )
-    initial = publish_config_revision(
+    initial = save_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(run.config),
             entry_id="initial",
             actor="operator",
         ),
         unit_of_work=sqlite_config_registry_unit_of_work(tmp_path),
-        expected_generation=0,
     )
     candidate = (
         run.analysis("stale fit")
@@ -279,7 +278,7 @@ def test_candidate_config_rejects_drifted_source_snapshot_before_publish(
     )
 
     with pytest.raises(DataIntegrityError) as error:
-        activate_candidate_config(
+        retain_candidate_config(
             candidate=candidate,
             services=sqlite_project_services(tmp_path),
             actor="operator",
@@ -288,7 +287,6 @@ def test_candidate_config_rejects_drifted_source_snapshot_before_publish(
     assert error.value.problems[0].code == "run.config_provenance_mismatch"
     with sqlite_config_registry_unit_of_work(tmp_path)() as work:
         assert work.registry.list_entries() == (initial.entry,)
-        assert work.registry.current_generation() == 1
 
 
 def test_parameter_change_proposal_round_trips_and_is_persisted(

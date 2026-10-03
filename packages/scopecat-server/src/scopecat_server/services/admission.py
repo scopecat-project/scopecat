@@ -22,7 +22,7 @@ from scopecat.daemon.wire import (
     RunAdmission,
     RunSubmission,
 )
-from scopecat.kernel.errors import NotFound, ProblemFailure
+from scopecat.kernel.errors import ProblemFailure
 from scopecat.kernel.interaction_timing import record_timing
 from scopecat.kernel.problems import (
     ProblemPhase,
@@ -399,32 +399,7 @@ class AdmissionService:
                 raise BackendConflict(
                     "run config source does not match its registry entry"
                 )
-            if (
-                source.selector
-                == config_registry_service.ACTIVE_CONFIG_REGISTRY_ENTRY_SELECTOR
-            ):
-                generation = source.registry_generation
-                try:
-                    activation = (
-                        None
-                        if generation is None
-                        else config_registry_service.load_config_registry_activation(
-                            generation=generation,
-                            unit_of_work=self._services.config_registry,
-                        )
-                    )
-                except NotFound:
-                    activation = None
-                if (
-                    generation is None
-                    or activation is None
-                    or activation.entry_id != entry.id
-                    or activation.entry_content_hash != entry.content_hash
-                ):
-                    raise BackendConflict(
-                        "run config source does not match registry activation history"
-                    )
-            elif source.selector != entry.id:
+            if source.selector != entry.id:
                 raise BackendConflict(
                     "run config source selector does not match its registry entry"
                 )

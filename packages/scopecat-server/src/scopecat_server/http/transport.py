@@ -210,7 +210,6 @@ from scopecat.daemon.wire import (
     MeasurementHeaderCommand,
     MeasurementIngestReceipt,
     MeasurementSealCommand,
-    ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchHistory,
     ParameterBranchPage,
@@ -1119,10 +1118,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/parameters/revisions")
     def save_parameter_revision(command: ParameterSaveCommand) -> ParameterRevision:
         return application.config.save_parameters(command)
-
-    @app.post(f"{_API_PREFIX}/parameters/bindings")
-    def bind_parameter_revision(command: ParameterBindCommand) -> ConfigEntryView:
-        return application.config.bind_parameters(command)
 
     @app.post(f"{_API_PREFIX}/parameters/resolve")
     def resolve_parameter_inputs(

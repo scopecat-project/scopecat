@@ -29,11 +29,6 @@ class ConfigRegistryRunConfigSource(BaseModel):
     entry_id: str
     config_ref: str
     content_hash: ConfigContentHash
-    registry_generation: int | None = Field(
-        default=None,
-        ge=1,
-        description=("Historical activation generation for the active selector only."),
-    )
 
 
 class ParameterRunConfigSource(BaseModel):

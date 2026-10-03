@@ -1,9 +1,5 @@
 import { apiClient, apiData } from "../../api-client";
-import type {
-  ConfigActivationRecord,
-  ConfigProfileSnapshot,
-  ConfigRegistryEntry,
-} from "../../api-contract";
+import type { ConfigProfileSnapshot, ConfigRegistryEntry } from "../../api-contract";
 import type { components } from "../../api-schema";
 
 export interface ConfigSnapshotSummary {
@@ -16,7 +12,6 @@ export interface ConfigRegistryEntryDetail {
   entry: ConfigRegistryEntry;
   config: ConfigProfileSnapshot;
   summary: ConfigSnapshotSummary;
-  latestActivation?: ConfigActivationRecord | null;
   structureVersion?: string | null;
 }
 
@@ -35,7 +30,6 @@ export async function getConfigRegistryEntry(
     entry: response.entry,
     config,
     summary: summarizeConfigSnapshot(config),
-    latestActivation: response.latest_activation,
     structureVersion: response.structure_version,
   };
 }

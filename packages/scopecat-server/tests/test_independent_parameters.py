@@ -12,14 +12,10 @@ from scopecat.application.launch import LaunchPreview
 from scopecat.application.launch_config import resolve_launch_config
 from scopecat.application.session_context import INHERIT
 from scopecat.config.parameter_updates import replace_scalar_parameter
-from scopecat.config.registry.records import BoundParameterRegistrySource
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.views import ConfigEntryView
 from scopecat.daemon.wire import (
-    ParameterBindCommand,
     ParameterSaveCommand,
     SampleCreateCommand,
-    SetupImportCommand,
 )
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.experiment_plan import ExperimentPlanSave
@@ -42,7 +38,7 @@ from scopecat_testkit.workflow_fixtures import load_config
 from scopecat_server.runtime import LocalDaemonRuntime
 
 
-def test_independent_parameters_bind_without_selecting_and_reopen(
+def test_independent_parameters_save_without_setup_and_reopen(
     tmp_path: Path,
 ) -> None:
     config = load_config()
@@ -72,7 +68,6 @@ def test_independent_parameters_bind_without_selecting_and_reopen(
                 response.json()
             ]
             assert client.get("/api/v1/setup/active").status_code == 404
-            assert runtime.application.config.get_config_registry().activation is None
             if first:
                 assert not runtime.application.setup.list()
                 assert not runtime.application.config.get_config_registry().entries
@@ -84,56 +79,9 @@ def test_independent_parameters_bind_without_selecting_and_reopen(
                     ).status_code
                     == 409
                 )
-                setup = runtime.application.setup.import_recipe(
-                    SetupImportCommand(
-                        revision_id="bench",
-                        setup=ExecutableSetupSnapshot.from_config(config),
-                        actor="maintainer",
-                    )
-                )
-                binding = ParameterBindCommand(
-                    parameters=revision.ref,
-                    setup=setup.ref,
-                    entry_id="prepared-inputs",
-                    system_id=config.system.id,
-                    actor="author",
-                )
-                stale = binding.model_copy(
-                    update={
-                        "parameters": revision.ref.model_copy(
-                            update={"content_hash": "sha256:" + "0" * 64}
-                        ),
-                    }
-                )
-                assert (
-                    client.post(
-                        "/api/v1/parameters/bindings",
-                        json=stale.model_dump(mode="json"),
-                    ).status_code
-                    == 409
-                )
-                assert not runtime.application.config.get_config_registry().entries
-                response = client.post(
-                    "/api/v1/parameters/bindings", json=binding.model_dump(mode="json")
-                )
-                assert response.status_code == 200
-                assert (
-                    client.post(
-                        "/api/v1/parameters/bindings",
-                        json=binding.model_dump(mode="json"),
-                    ).json()
-                    == response.json()
-                )
-                prepared = ConfigEntryView.model_validate(response.json())
-                assert prepared.config.parameter_snapshot == revision.parameters
-                assert prepared.entry.source == BoundParameterRegistrySource(
-                    parameters=revision.ref, setup=setup.ref
-                )
-            else:
-                saved = runtime.application.config.get_config_entry("prepared-inputs")
-                assert isinstance(saved.entry.source, BoundParameterRegistrySource)
-                assert saved.entry.source.parameters == revision.ref
-                assert saved.config.parameter_snapshot == config.parameter_snapshot
+            assert revision.parameters == config.parameter_snapshot
+            assert not runtime.application.setup.list()
+            assert not runtime.application.config.get_config_registry().entries
 
 
 def test_independent_parameter_validation_does_not_need_setup(tmp_path: Path) -> None:
@@ -191,9 +139,6 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
             setup = lab.setup.import_recipe(
                 ExecutableSetupSnapshot.from_config(config), name="bench"
             )
-            prepared = lab.parameters.bind(
-                parameters, setup=setup, name="prepared", system_id="lab"
-            )
             runtime.application.samples.create(
                 SampleCreateCommand(
                     operation_id="sample",
@@ -223,12 +168,10 @@ def test_prepared_inputs_retain_subject_batch_and_explicit_setup(
                 selection=selection,
             )
             resolved = resolve_launch_config(lab, request)
-            assert (
-                resolved.config.parameter_snapshot == prepared.config.parameter_snapshot
-            )
+            assert resolved.config.parameter_snapshot == parameters.parameters
             sample = resolved.reviewed.binding.samples[0]
             assert (sample.sample_id, sample.batch_id) == ("chip", "cooldown")
-            assert lab.config.registry().activation is None
+            assert lab.config.registry().entries == ()
             assert lab.parameters.get(parameters.id) == parameters
             collection = client.create_record_collection("Trial")
             registry_before = lab.config.registry()

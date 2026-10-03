@@ -8,7 +8,6 @@ from typing import cast
 import pytest
 from scopecat.config.documents import load_config_snapshot_document
 from scopecat.config.registry.records import (
-    ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
 )
 from scopecat.config.registry.service import (
@@ -16,16 +15,13 @@ from scopecat.config.registry.service import (
     ConfigRegistryUnitOfWorkFactory,
     ConfigRevision,
     DirectConfigRevisionSource,
-    activate_config_registry_entry,
-    load_active_config_registry_snapshot,
     load_config_registry_entry_snapshot,
     load_config_registry_page,
-    publish_config_revision,
-    resolve_config_registry_config_source,
+    save_config_revision,
 )
 from scopecat.kernel.errors import Conflict, StorageError
 from scopecat.records.config import ConfigProfileSnapshot
-from scopecat.records.run import ConfigRegistryRunConfigSource, RunSnapshot
+from scopecat.records.run import RunSnapshot
 from scopecat.records.scientific_binding import (
     ResolvedScientificBinding,
     UnboundSubject,
@@ -44,13 +40,6 @@ from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 # Test-only storage observations. Product callers use the exact snapshot/page
 # services instead of these former convenience wrappers.
-def current_config_registry_generation(
-    *, unit_of_work: ConfigRegistryUnitOfWorkFactory
-) -> int:
-    with unit_of_work() as work:
-        return work.registry.current_generation()
-
-
 def list_config_registry_entries(
     *, unit_of_work: ConfigRegistryUnitOfWorkFactory
 ) -> list[ConfigRegistryEntry]:
@@ -58,27 +47,15 @@ def list_config_registry_entries(
         return list(work.registry.list_entries())
 
 
-def load_active_config_registry_activation(
-    *, unit_of_work: ConfigRegistryUnitOfWorkFactory
-) -> ConfigRegistryActivationRecord:
-    return load_active_config_registry_snapshot(unit_of_work=unit_of_work).activation
-
-
-def _publish_direct_revision(
+def _save_direct_revision(
     *,
     config: ConfigProfileSnapshot,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
     entry_id: str,
     actor: str,
-    expected_generation: int | None = None,
     note: str = "",
 ) -> ConfigRegistryMutationResult:
-    generation = (
-        current_config_registry_generation(unit_of_work=unit_of_work)
-        if expected_generation is None
-        else expected_generation
-    )
-    return publish_config_revision(
+    return save_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(config),
             entry_id=entry_id,
@@ -86,7 +63,6 @@ def _publish_direct_revision(
             note=note,
         ),
         unit_of_work=unit_of_work,
-        expected_generation=generation,
     )
 
 
@@ -103,14 +79,14 @@ def test_publish_is_idempotent_and_round_trips(tmp_path: Path) -> None:
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
 
     initialize_setup(config, unit_of_work=unit_of_work)
-    first = _publish_direct_revision(
+    first = _save_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
         entry_id="contract-entry",
         actor="contract",
         note="same request",
     ).entry
-    repeated = _publish_direct_revision(
+    repeated = _save_direct_revision(
         config=config.model_copy(deep=True),
         unit_of_work=unit_of_work,
         entry_id="contract-entry",
@@ -133,7 +109,7 @@ def test_duplicate_identity_rejects_different_request(tmp_path: Path) -> None:
     unit_of_work = _store(tmp_path).write_unit_of_work
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
     initialize_setup(config, unit_of_work=unit_of_work)
-    _publish_direct_revision(
+    _save_direct_revision(
         config=config,
         unit_of_work=unit_of_work,
         entry_id="contract-conflict",
@@ -141,63 +117,13 @@ def test_duplicate_identity_rejects_different_request(tmp_path: Path) -> None:
     )
 
     with pytest.raises(Conflict) as captured:
-        _publish_direct_revision(
+        _save_direct_revision(
             config=config,
             unit_of_work=unit_of_work,
             entry_id="contract-conflict",
             actor="different",
         )
     assert captured.value.problems[0].code == "config_registry.duplicate_entry"
-
-
-def test_activation_uses_generation_cas_and_resolves_source(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = _store(tmp_path).write_unit_of_work
-    config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
-    initialize_setup(config, unit_of_work=unit_of_work)
-    result = _publish_direct_revision(
-        config=config,
-        unit_of_work=unit_of_work,
-        entry_id="contract-active",
-        actor="contract",
-        expected_generation=0,
-    )
-    entry = result.entry
-    activation = result.activation
-    assert activation is not None
-
-    assert activation.generation == 1
-    assert current_config_registry_generation(unit_of_work=unit_of_work) == 1
-    assert (
-        load_active_config_registry_activation(unit_of_work=unit_of_work) == activation
-    )
-    resolved, source = resolve_config_registry_config_source(
-        selector="active",
-        unit_of_work=unit_of_work,
-    )
-    assert resolved == config
-    assert isinstance(source, ConfigRegistryRunConfigSource)
-    assert source.entry_id == entry.id
-
-    with pytest.raises(Conflict) as captured:
-        _publish_direct_revision(
-            config=config,
-            unit_of_work=unit_of_work,
-            entry_id="stale-generation",
-            actor="contract",
-            expected_generation=2,
-        )
-    assert captured.value.problems[0].code == "config_registry.conflict"
-
-    with pytest.raises(Conflict) as repeated:
-        activate_config_registry_entry(
-            entry_id=entry.id,
-            unit_of_work=unit_of_work,
-            actor="contract",
-            expected_generation=0,
-        )
-    assert repeated.value.problems[0].code == "config_registry.conflict"
 
 
 def test_registry_and_run_reads_share_one_database(tmp_path: Path) -> None:
@@ -222,7 +148,7 @@ def test_registry_and_run_reads_share_one_database(tmp_path: Path) -> None:
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
 
     initialize_setup(config, unit_of_work=store.write_unit_of_work)
-    _publish_direct_revision(
+    _save_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
         entry_id="shared",
@@ -240,13 +166,13 @@ def test_listing_reads_entry_metadata_without_loading_each_config(
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
     initialize_setup(config, unit_of_work=store.write_unit_of_work)
-    _publish_direct_revision(
+    _save_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
         entry_id="first",
         actor="test",
     )
-    _publish_direct_revision(
+    _save_direct_revision(
         config=config.model_copy(update={"id": "second"}),
         unit_of_work=store.write_unit_of_work,
         entry_id="second",
@@ -273,14 +199,14 @@ def test_listing_reads_entry_metadata_without_loading_each_config(
     connection.close()
 
 
-def test_registry_and_activation_pages_use_stable_newest_first_cursors(
+def test_registry_pages_use_stable_newest_first_cursors(
     tmp_path: Path,
 ) -> None:
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
     initialize_setup(config, unit_of_work=store.write_unit_of_work)
     for index in range(1, 4):
-        _publish_direct_revision(
+        _save_direct_revision(
             config=config.model_copy(update={"id": f"config-{index}"}),
             unit_of_work=store.write_unit_of_work,
             entry_id=f"entry-{index}",
@@ -293,34 +219,21 @@ def test_registry_and_activation_pages_use_stable_newest_first_cursors(
             limit=2,
             before=entry_head.next_cursor,
         )
-        activation_head = work.registry.list_activation_page(limit=2, before=None)
-        activation_tail = work.registry.list_activation_page(
-            limit=2,
-            before=activation_head.next_cursor,
-        )
-        first_activation = work.registry.read_activation(1)
-
     assert [entry.id for entry in entry_head.items] == ["entry-3", "entry-2"]
     assert entry_head.next_cursor == 2
     assert [entry.id for entry in entry_tail.items] == ["entry-1"]
     assert entry_tail.next_cursor is None
-    assert [record.generation for record in activation_head.items] == [3, 2]
-    assert activation_head.next_cursor == 2
-    assert [record.generation for record in activation_tail.items] == [1]
-    assert activation_tail.next_cursor is None
-    assert first_activation.entry_id == "entry-1"
 
 
 def test_aggregate_reads_open_one_unit_of_work(tmp_path: Path) -> None:
     store = _store(tmp_path)
     config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
     initialize_setup(config, unit_of_work=store.write_unit_of_work)
-    _publish_direct_revision(
+    _save_direct_revision(
         config=config,
         unit_of_work=store.write_unit_of_work,
         entry_id="active",
         actor="test",
-        expected_generation=0,
     )
     opens = 0
 
@@ -336,17 +249,13 @@ def test_aggregate_reads_open_one_unit_of_work(tmp_path: Path) -> None:
     )
     assert opens == 1
     opens = 0
-    active = load_active_config_registry_snapshot(unit_of_work=counted_unit_of_work)
-    assert opens == 1
-    opens = 0
     entry = load_config_registry_entry_snapshot(
         entry_id="active",
         unit_of_work=counted_unit_of_work,
     )
     assert opens == 1
-    assert registry.activation == active.activation
-    assert active.entry == entry.entry
-    assert active.config == entry.config
+    assert registry.entries == (entry.entry,)
+    assert entry.config == config
 
 
 def test_publish_rolls_back_together(tmp_path: Path) -> None:
@@ -355,8 +264,8 @@ def test_publish_rolls_back_together(tmp_path: Path) -> None:
     with sqlite3.connect(store.database) as connection:
         connection.execute(
             """
-            CREATE TRIGGER reject_initial_activation
-            BEFORE INSERT ON config_registry_activations
+            CREATE TRIGGER reject_revision
+            BEFORE INSERT ON config_registry_entries
             BEGIN
                 SELECT RAISE(ABORT, 'injected failure');
             END
@@ -365,12 +274,11 @@ def test_publish_rolls_back_together(tmp_path: Path) -> None:
 
     initialize_setup(config, unit_of_work=store.write_unit_of_work)
     with pytest.raises(StorageError):
-        _publish_direct_revision(
+        _save_direct_revision(
             config=config,
             unit_of_work=store.write_unit_of_work,
             entry_id="rolled-back",
             actor="test",
-            expected_generation=0,
         )
 
     assert list_config_registry_entries(unit_of_work=store.read_unit_of_work) == []
@@ -390,7 +298,7 @@ def test_borrowed_unit_of_work_leaves_transaction_and_connection_owned_by_caller
 
     connection.execute("BEGIN IMMEDIATE")
 
-    _publish_direct_revision(
+    _save_direct_revision(
         config=config,
         unit_of_work=partial(store.borrowed_unit_of_work, connection),
         entry_id="borrowed",
@@ -426,38 +334,3 @@ def test_borrowed_unit_of_work_only_scopes_registry_access(tmp_path: Path) -> No
         _ = work.registry
     connection.rollback()
     connection.close()
-
-
-def test_generation_cas_is_shared_across_store_instances(tmp_path: Path) -> None:
-    store = _store(tmp_path)
-    peer = SQLiteConfigRegistryStore(store.sqlite, runs=store.runs)
-    config = load_config_snapshot_document(CORE_FIXTURE_DIR / "config-snapshot.json")
-    initialize_setup(config, unit_of_work=store.write_unit_of_work)
-    _publish_direct_revision(
-        config=config,
-        unit_of_work=store.write_unit_of_work,
-        entry_id="first",
-        actor="test",
-    )
-    _publish_direct_revision(
-        config=config.model_copy(update={"id": "second-config"}),
-        unit_of_work=store.write_unit_of_work,
-        entry_id="second",
-        actor="test",
-    )
-    activate_config_registry_entry(
-        entry_id="first",
-        unit_of_work=store.write_unit_of_work,
-        actor="first",
-        expected_generation=2,
-    )
-
-    with pytest.raises(Conflict) as captured:
-        activate_config_registry_entry(
-            entry_id="second",
-            unit_of_work=peer.write_unit_of_work,
-            actor="second",
-            expected_generation=2,
-        )
-
-    assert captured.value.problems[0].code == "config_registry.conflict"

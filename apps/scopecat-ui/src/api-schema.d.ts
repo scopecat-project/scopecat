@@ -4390,7 +4390,6 @@ export interface components {
         ConfigEntryView: {
             config: components["schemas"]["ConfigProfileSnapshot"];
             entry: components["schemas"]["ConfigRegistryEntry"];
-            latest_activation?: components["schemas"]["ConfigRegistryActivationRecord"] | null;
             structure_version?: components["schemas"]["ConfigContentHash"] | null;
         };
         /**
@@ -4417,36 +4416,6 @@ export interface components {
              * @enum {string}
              */
             kind: "config_publish";
-        };
-        /** ConfigRegistryActivationRecord */
-        ConfigRegistryActivationRecord: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "activation" | "inventory_migration";
-            /** Actor */
-            actor: string;
-            entry_content_hash: components["schemas"]["ConfigContentHash"];
-            /** Entry Id */
-            entry_id: string;
-            /** Generation */
-            generation: number;
-            /**
-             * Note
-             * @default
-             */
-            note: string;
-            previous_entry_content_hash?: components["schemas"]["ConfigContentHash"] | null;
-            /** Previous Entry Id */
-            previous_entry_id?: string | null;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at?: string;
-            /** Restored From Generation */
-            restored_from_generation?: number | null;
         };
         /** ConfigRegistryEntry */
         ConfigRegistryEntry: {
@@ -4475,7 +4444,6 @@ export interface components {
          * @description Newest-first page of saved revisions and the current activation head.
          */
         ConfigRegistryPage: {
-            activation?: components["schemas"]["ConfigRegistryActivationRecord"] | null;
             /**
              * Entries
              * @default []
@@ -4496,11 +4464,6 @@ export interface components {
              * @enum {string}
              */
             kind: "config_registry";
-            /**
-             * Registry Generation
-             * @description Historical activation generation for the active selector only.
-             */
-            registry_generation?: number | null;
             /** Selector */
             selector: string;
         };

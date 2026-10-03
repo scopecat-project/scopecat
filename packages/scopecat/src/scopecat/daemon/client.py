@@ -193,7 +193,6 @@ from scopecat.daemon.wire import (
     MeasurementHeaderCommand,
     MeasurementIngestReceipt,
     MeasurementSealCommand,
-    ParameterBindCommand,
     ParameterBranchCommitCommand,
     ParameterBranchHistory,
     ParameterBranchPage,
@@ -1098,11 +1097,6 @@ class DaemonClient:
     def save_parameters(self, command: ParameterSaveCommand) -> ParameterRevision:
         return self._post_idempotent_model(
             f"{_API_PREFIX}/parameters/revisions", command, ParameterRevision
-        )
-
-    def bind_parameters(self, command: ParameterBindCommand) -> ConfigEntryView:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/parameters/bindings", command, ConfigEntryView
         )
 
     def resolve_parameters(

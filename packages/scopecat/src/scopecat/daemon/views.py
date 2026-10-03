@@ -11,7 +11,6 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.config.registry.records import (
-    ConfigRegistryActivationRecord,
     ConfigRegistryEntry,
 )
 from scopecat.control.models import (
@@ -78,34 +77,17 @@ class _ViewModel(BaseModel):
 
 
 class ConfigRegistryPage(_ViewModel):
-    """Newest-first page of saved revisions and the current activation head."""
+    """Newest-first page of immutable retained configurations."""
 
     entries: tuple[ConfigRegistryEntry, ...] = ()
-    activation: ConfigRegistryActivationRecord | None = None
     next_cursor: int | None = Field(default=None, ge=1)
-
-
-class ConfigActivationPage(_ViewModel):
-    """Newest-first page of default configuration changes."""
-
-    items: tuple[ConfigRegistryActivationRecord, ...] = ()
-    next_cursor: int | None = Field(default=None, ge=1)
-
-
-class ActiveConfigView(_ViewModel):
-    """The active registry identity and its resolved immutable snapshot."""
-
-    entry: ConfigRegistryEntry
-    activation: ConfigRegistryActivationRecord
-    config: ConfigProfileSnapshot
 
 
 class ConfigEntryView(_ViewModel):
-    """One immutable configuration and its most recent activation, if any."""
+    """One exact retained configuration and its structural identity."""
 
     entry: ConfigRegistryEntry
     config: ConfigProfileSnapshot
-    latest_activation: ConfigRegistryActivationRecord | None = None
     structure_version: ConfigContentHash | None = None
 
 
@@ -937,9 +919,7 @@ def _validate_base64(value: str) -> None:
 
 
 __all__ = [
-    "ActiveConfigView",
     "AnalysisContentBytesView",
-    "ConfigActivationPage",
     "ConfigDraftPreview",
     "ConfigEntryView",
     "ConfigRegistryPage",
