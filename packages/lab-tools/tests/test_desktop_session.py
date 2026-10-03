@@ -112,11 +112,28 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     first.window.load_url.assert_called_with("http://localhost:4321/?run=A#runs")
     second.window.load_url.assert_called_with("http://localhost:4321/?run=B#runs")
 
+    # Tray hide/open is application-wide: neither retained view may be stranded.
+    shown = Mock()
+    monkeypatch.setattr("lab_tools.desktop.show_window", shown)
+    windows.hide()
+    first.window.hide.assert_called_once()
+    second.window.hide.assert_called_once()
+    windows.show()
+    assert [call.args[0] for call in shown.call_args_list] == [
+        first.window,
+        second.window,
+    ]
+    assert len(created) == 2
+    runtime.start.assert_called_once()
+
     # pywebview returns True from Event.set when a handler vetoes the close.
     assert first.window.events.closing.set() is False
     assert second.window.events.closing.set() is True
     first.window.events.closed.set()
     assert windows.latest is second
+    shown.reset_mock()
+    windows.show()
+    shown.assert_called_once_with(second.window)
     runtime.stop.assert_not_called()
     session.closing.set()
     windows.destroy()

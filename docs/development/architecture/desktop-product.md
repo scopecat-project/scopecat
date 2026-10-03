@@ -371,6 +371,15 @@ raise the window and cannot independently establish continuous hidden state.
 After this check, explicit Cmd-Q exited and process inspection confirmed no
 remaining test host or backend.
 
+The subsequent multi-window trial exposed an application-level mismatch: tray
+hide hid every retained view, but tray open restored only the latest view. Open
+now restores every retained view, in creation order, without recreating closed
+views or restarting the backend. The same callback serves repeat launch and
+macOS reopen. The window-coordination regression covers hide/open of two views
+and reopening after one view is closed; all 28 session/platform tests passed.
+The earlier single-window human observation does not qualify this correction's
+multi-window native behavior; the next package needs that focused observation.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.

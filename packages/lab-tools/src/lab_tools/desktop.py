@@ -415,7 +415,10 @@ class DesktopWindows:
         self.create()
 
     def show(self) -> None:
-        show_window(self.latest.window)
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            show_window(view.window)
 
     def _command_window(self) -> webview.Window:
         import webview
