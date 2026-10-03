@@ -4385,7 +4385,7 @@ export interface components {
         };
         /**
          * ConfigEntryView
-         * @description One immutable configuration and its most recent activation, if any.
+         * @description One exact retained configuration and its structural identity.
          */
         ConfigEntryView: {
             config: components["schemas"]["ConfigProfileSnapshot"];
@@ -4441,7 +4441,7 @@ export interface components {
         };
         /**
          * ConfigRegistryPage
-         * @description Newest-first page of saved revisions and the current activation head.
+         * @description Newest-first page of immutable retained configurations.
          */
         ConfigRegistryPage: {
             /**
