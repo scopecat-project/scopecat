@@ -21,6 +21,32 @@ def consume(
     return Result(frequency)
 
 
+@sc.analysis_step
+def contextual(
+    context: sc.AnalysisContext,
+    *,
+    frequency: sc.Quantity,
+    threshold: float | None = 0.2,
+) -> sc.Analysis:
+    return context.result().fact("frequency", frequency)
+
+
+def test_context_arguments_and_defaults_match_ordinary_invocation() -> None:
+    frequency = sc.Quantity(4.8, "GHz")
+    arguments = encode_arguments("contextual", {"frequency": frequency})
+    assert bind_arguments(contextual.__wrapped__, arguments) == bind_arguments(
+        consume.function, arguments
+    )
+    assert (
+        contextual(frequency=frequency).arguments
+        == consume(frequency=frequency).arguments
+    )
+    assert (
+        contextual(frequency=frequency).arguments
+        == contextual(frequency=frequency, threshold=0.2).arguments
+    )
+
+
 def test_native_and_json_arguments_use_selected_signature_and_defaults() -> None:
     q = sc.Quantity(4.8, "GHz")
     encoded = encode_arguments("consume", {"frequency": q})

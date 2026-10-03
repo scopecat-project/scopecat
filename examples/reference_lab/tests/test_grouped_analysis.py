@@ -47,6 +47,13 @@ def group_peak(data: Dataset) -> sc.AnalysisProducts[PeakResult]:
     if float(data["gain"].require_values()[0]) == 0:
         raise ValueError("zero gain rejected by draft policy")
     return estimate_peak.function(data)
+
+@sc.analysis_step
+def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
+    data = context.measurements()
+    assert len(data) == 3
+    assert len(set(data["gain"].require_values())) == 1
+    return estimate_peak().run(context)
 """
     )
     project = load_project(root / "scopecat.toml")
@@ -104,6 +111,18 @@ def group_peak(data: Dataset) -> sc.AnalysisProducts[PeakResult]:
                 run.id, analysis, PeakResult, by=("gain",), fitting="frequency"
             )
             assert len(first.groups) == 2
+            contextual = author.analyze_groups_as(
+                run.id,
+                analysis.replace(":group_peak", ":context_group_peak"),
+                PeakResult,
+                by=("gain",),
+                fitting="frequency",
+            )
+            assert all(group.receipt.error is None for group in contextual.groups)
+            assert contextual.groups[0].value is not None
+            assert contextual.groups[0].value.status == "no_response"
+            assert contextual.groups[1].value is not None
+            assert contextual.groups[1].value.frequency == sc.Quantity(4.8, "GHz")
             failed, success = first.groups
             assert failed.value is None
             assert "zero gain" in (failed.receipt.error or "")

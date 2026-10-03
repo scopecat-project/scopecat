@@ -135,15 +135,12 @@ def analyze(
     project: Project, application: LabApplication, request: AuthorAnalysisRequest
 ) -> AuthorAnalysisReceipt:
     from scopecat.api.analysis import (
-        AnalysisContext,
         AnalysisDefinition,
         AnalysisFunctionDefinition,
     )
     from scopecat.daemon.endpoint import resolve_daemon_endpoint
-    from scopecat.kernel.content_identity import canonical_json
-    from scopecat.records.author_revision import (
-        AuthorAnalysisReceipt,
-    )
+
+    from scopecat_server.author_analysis import analyze as analyze_run
 
     with application.connect(
         resolve_daemon_endpoint(project.root), operator="author-analysis"
@@ -158,41 +155,11 @@ def analyze(
         definition = cast("object", getattr(module, name))
         if not isinstance(definition, AnalysisDefinition | AnalysisFunctionDefinition):
             raise ValueError("author analysis must use the existing analysis decorator")
-        if isinstance(definition, AnalysisFunctionDefinition):
-            from scopecat.analysis.arguments import bind_arguments
-
-            arguments = bind_arguments(definition.function, request.arguments)
-        else:
-            arguments = request.arguments
-        if request.grouping is not None:
-            if not isinstance(definition, AnalysisFunctionDefinition):
-                raise TypeError(
-                    "grouped analysis requires an ordinary analysis_function"
-                )
-            from scopecat_server.grouped_analysis import analyze_groups
-
-            return analyze_groups(
-                lab.get_run(request.run_id),
-                cast("AnalysisFunctionDefinition[..., object]", definition),
-                arguments,
-                request,
-            )
-        step = definition(**arguments)
-        run = lab.get_run(request.run_id)
-        result = step.run(
-            AnalysisContext(
-                run=run, default_key=request.key or step.id, step_id=step.id
-            )
+        return analyze_run(
+            lab.get_run(request.run_id),
+            cast(
+                "AnalysisDefinition[...] | AnalysisFunctionDefinition[..., object]",
+                definition,
+            ),
+            request,
         )
-        published = (
-            result.fact("author_code_revision", request.code_revision.content_hash)
-            .fact("author_workspace", request.workspace_id)
-            .artifact(
-                "author_analysis_arguments", text=canonical_json(request.arguments)
-            )
-            .save()
-        )
-        receipt = AuthorAnalysisReceipt(
-            code_revision=request.code_revision, analysis_id=published.id
-        )
-    return receipt

@@ -323,6 +323,26 @@ environment operation requiring a restart and matching revision/deployment;
 original analysis must restore the original installed package bytes. Existing
 workers are not live filesystem integrity monitors.
 
+## Stable and trial work
+
+Use separate parameter branches for trial values, even when two registered source
+folders initially read the same parameter revision. Select the source folder,
+parameter branch and setup independently; refreshing trial code neither advances
+the stable parameter branch nor replaces device drivers. Preparing a run freezes
+the selected source and values. Later edits do not change that prepared run.
+Edit `author.params` to keep the session's selected branch synchronized with your
+saves. An independently opened `author.parameters.workspace(...)` is a separate
+checkout; pass it to `prepare(..., parameters=...)` or explicitly select the branch
+again to use its saved head. Another session's save never silently changes yours.
+
+Preview checks the selected parameter catalog against the experiment's declared
+fields, keys and units. A matching field name alone does not establish compatibility.
+Fix an incompatible trial declaration or explicitly prepare matching trial
+parameters; do not change the stable branch to make a trial preview pass. A semantic
+change with identical Python types and units cannot be inferred automatically:
+give the changed concept an explicit field/contract identity rather than silently
+reusing a name. Original-source analysis continues to use the run's retained code.
+
 ## Execution dependency scope
 
 Maintainers can select execution dependencies separately from notebook tooling:

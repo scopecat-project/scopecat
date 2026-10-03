@@ -87,3 +87,16 @@ def verify_peak(
         <= tolerance.to("GHz").value
     )
     return PeakVerification(accepted, fit.frequency, expected_frequency, tolerance)
+
+
+@sc.analysis_step
+def verify_with_context(
+    context: sc.AnalysisContext,
+    *,
+    expected_frequency: sc.Quantity,
+    tolerance: sc.Quantity = DEFAULT_TOLERANCE,
+) -> sc.Analysis:
+    """Compose ordinary analysis when additional retained evidence is needed."""
+    return verify_peak(
+        expected_frequency=expected_frequency.to("GHz"), tolerance=tolerance
+    ).run(context)

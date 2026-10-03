@@ -95,6 +95,14 @@ pickled. Supported annotations are scalar/optional/literal values, `Quantity`,
 and typed lists/string-keyed dictionaries of those values. Unannotated arguments
 remain JSON values; annotate quantity inputs to receive native quantities.
 
+The same managed argument rules apply to `@sc.analysis_step` functions taking an
+`AnalysisContext`. Use that form when composing several analyses or retaining
+additional evidence. An ordinary invocation can run in the supplied context:
+`mean_response(minimum=0.2).run(context)`. Both forms retain requested arguments
+and effective arguments including the selected source's defaults. Direct local
+Python calls can still use native objects such as run handles; the remote argument
+boundary does not serialize those objects.
+
 Invalid types identify the function and argument instead of failing at the raw
 JSON request boundary. Numeric strings are not silently converted. Requested
 units are retained as supplied; the analysis can explicitly convert with `.to(...)`.

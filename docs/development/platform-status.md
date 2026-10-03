@@ -54,6 +54,14 @@ prerequisites for supervised hardware acceptance. Private consumers/docs move wi
 relevant public capabilities; native/manual checks repeat only for changed contracts.
 Actual editor, unfamiliar-user and physical observations remain separate in #616.
 
+Batch 1 is merged in [#849](https://github.com/scopecat-project/scopecat/pull/849).
+Batch 2 unifies managed ordinary/context analysis arguments, defaults and
+publication, and lets both use completed-run groups. The shared two-source journey
+also checks separate stable/trial parameter branches, incompatible units, preserved
+driver identity and original-source analysis. Existing preparation stage reporting,
+preview diagnostics, admission receipts and typed reopen paths remain authoritative;
+this batch does not add a second progress or result model. Live grouping is batch 3.
+
 The sections below retain the earlier scientific audit and its evidence inventory;
 current configuration authority is governed by the linked ownership contract.
 
