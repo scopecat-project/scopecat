@@ -91,7 +91,8 @@ Immutable registry entries remain retained execution/provenance data. Evidence
 fixtures save entries without activation; export still rejects missing decision
 evidence or changed schema identity. The source records and exact reads used by
 those retained snapshots do not confer editing authority or a compatibility
-promise for earlier stores. No HTTP/Python combined-snapshot writer remains.
+promise for earlier stores. No application HTTP/client command writes a combined
+configuration.
 
 A verified candidate publishes to a reviewed parameter branch with
 `publish_to_branch(...)`. Publication checks the exact destination head,
