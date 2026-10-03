@@ -26,8 +26,6 @@ from scopecat.config.candidates import (
     resolve_candidate_config_from_snapshot,
 )
 from scopecat.config.contexts import context_value_origins, validate_context_config
-from scopecat.config.drafts import ConfigDraft, ConfigDraftCheckResult
-from scopecat.config.parameter_updates import ParameterUpdate
 from scopecat.config.profile_validation import validate_config_profile
 from scopecat.config.registry.ports import (
     ConfigRegistryRepository,
@@ -67,7 +65,6 @@ from scopecat.kernel.problems import (
     StorageLocation,
 )
 from scopecat.records.config import (
-    ConfigContentHash,
     ConfigProfileSnapshot,
     config_content_equal,
     config_content_hash,
@@ -120,16 +117,6 @@ class ParameterConfigRevisionSource:
 
 
 @dataclass(frozen=True, slots=True)
-class ManualConfigDraftRevisionSource:
-    base_entry_id: str
-    base_config_content_hash: ConfigContentHash
-    base_generation: int
-    candidate_id: str
-    updates: tuple[ParameterUpdate, ...]
-    expected_result_content_hash: ConfigContentHash
-
-
-@dataclass(frozen=True, slots=True)
 class CandidateConfigRevisionSource:
     run_id: str
     proposal_id: str
@@ -139,7 +126,6 @@ class CandidateConfigRevisionSource:
 type ConfigRevisionSource = (
     DirectConfigRevisionSource
     | ParameterConfigRevisionSource
-    | ManualConfigDraftRevisionSource
     | CandidateConfigRevisionSource
 )
 
@@ -197,123 +183,6 @@ class ConfigRegistryMutationResult:
     saved: bool = False
     activated: bool = False
     deltas: tuple[ParameterValueDelta, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class ManualConfigDraftResult:
-    """One daemon-authoritative check against an observed active entry."""
-
-    base_entry: ConfigRegistryEntry
-    base_generation: int
-    check: ConfigDraftCheckResult
-
-
-def preview_manual_config_draft(
-    *,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-    base_entry_id: str,
-    base_config_content_hash: ConfigContentHash,
-    base_generation: int,
-    candidate_id: str,
-    updates: Sequence[ParameterUpdate],
-) -> ManualConfigDraftResult:
-    """Check transient typed edits without committing registry state."""
-
-    with unit_of_work() as work:
-        return _check_manual_config_draft_locked(
-            work=work,
-            base_entry_id=base_entry_id,
-            base_config_content_hash=base_config_content_hash,
-            base_generation=base_generation,
-            candidate_id=candidate_id,
-            updates=updates,
-        )
-
-
-def _prepare_manual_config_draft_locked(
-    *,
-    work: ConfigRegistryUnitOfWork,
-    source: ManualConfigDraftRevisionSource,
-) -> tuple[
-    ConfigProfileSnapshot,
-    ManualConfigDraftRegistrySource,
-    tuple[ParameterValueDelta, ...],
-]:
-    result = _check_manual_config_draft_locked(
-        work=work,
-        base_entry_id=source.base_entry_id,
-        base_config_content_hash=source.base_config_content_hash,
-        base_generation=source.base_generation,
-        candidate_id=source.candidate_id,
-        updates=source.updates,
-    )
-    if not result.check.ok:
-        raise CheckFailed(result.check.problems)
-    candidate = result.check.candidate
-    assert candidate is not None
-    result_content_hash = config_content_hash(candidate)
-    if result_content_hash != source.expected_result_content_hash:
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.config_draft_result_changed",
-            message="config draft result changed since it was previewed",
-            location=_registry_model_location("expected_result_content_hash"),
-            details={
-                "expected_content_hash": source.expected_result_content_hash,
-                "actual_content_hash": result_content_hash,
-            },
-        )
-    return (
-        candidate,
-        ManualConfigDraftRegistrySource(
-            base_entry_id=result.base_entry.id,
-            base_config_content_hash=result.base_entry.content_hash,
-            base_registry_generation=result.base_generation,
-        ),
-        result.check.deltas,
-    )
-
-
-def _check_manual_config_draft_locked(
-    *,
-    work: ConfigRegistryUnitOfWork,
-    base_entry_id: str,
-    base_config_content_hash: ConfigContentHash,
-    base_generation: int,
-    candidate_id: str,
-    updates: Sequence[ParameterUpdate],
-) -> ManualConfigDraftResult:
-    activation = _load_active_config_registry_activation_locked(work.registry)
-    _require_expected_generation(
-        activation,
-        base_generation,
-        active_ref=work.registry.active_ref,
-    )
-    if (
-        activation.entry_id != base_entry_id
-        or activation.entry_content_hash != base_config_content_hash
-    ):
-        raise _registry_failure(
-            Conflict,
-            code="config_registry.config_draft_base_changed",
-            message="config draft base is no longer the active entry",
-            location=_registry_model_location("base_entry_id"),
-            related_locations=(_registry_storage_location(work.registry.active_ref),),
-            details={
-                "expected_entry_id": base_entry_id,
-                "actual_entry_id": activation.entry_id,
-                "expected_content_hash": base_config_content_hash,
-                "actual_content_hash": activation.entry_content_hash,
-            },
-        )
-    loaded = _load_config_registry_entry_locked(entry_id=base_entry_id, work=work)
-    _validate_active_entry_identity(work.registry, activation, loaded.entry)
-    check = ConfigDraft(loaded.config).apply(*updates).check(candidate_id=candidate_id)
-    return ManualConfigDraftResult(
-        base_entry=loaded.entry,
-        base_generation=activation.generation,
-        check=check,
-    )
 
 
 def save_config_revision(
@@ -391,12 +260,6 @@ def _save_config_revision_locked(
             BoundParameterRegistrySource(parameters=source.origin, setup=setup.ref)
             if source.origin is not None
             else ParameterConfigRegistrySource(setup=setup.ref)
-        )
-        entry_id = _required_revision_entry_id(revision)
-    elif isinstance(source, ManualConfigDraftRevisionSource):
-        config, entry_source, deltas = _prepare_manual_config_draft_locked(
-            work=work,
-            source=source,
         )
         entry_id = _required_revision_entry_id(revision)
     else:
@@ -1260,8 +1123,6 @@ __all__ = [
     "DirectConfigRevisionSource",
     "InstrumentInventoryMigrationDelta",
     "InstrumentInventoryMigrationPlan",
-    "ManualConfigDraftResult",
-    "ManualConfigDraftRevisionSource",
     "activate_config_registry_entry",
     "load_active_config_registry_snapshot",
     "load_config_registry_activation",
@@ -1269,7 +1130,6 @@ __all__ = [
     "load_config_registry_entry_snapshot",
     "load_config_registry_page",
     "plan_instrument_inventory_migration",
-    "preview_manual_config_draft",
     "publish_config_revision",
     "resolve_config_registry_config_source",
     "save_config_revision",

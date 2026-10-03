@@ -12,8 +12,6 @@ from scopecat.config.candidates import (
     resolve_candidate_config_snapshot,
 )
 from scopecat.config.changes import load_parameter_change_proposal
-from scopecat.config.parameter_updates import ParameterUpdate
-from scopecat.config.parameters import replace_scalar_parameter
 from scopecat.config.registry import (
     CandidateConfigRegistrySource,
     CandidateConfigRevisionSource,
@@ -27,13 +25,9 @@ from scopecat.config.registry import (
     InstrumentInventoryMigrationDelta,
     InstrumentInventoryMigrationPlan,
     ManualCandidateAcceptance,
-    ManualConfigDraftRegistrySource,
-    ManualConfigDraftResult,
-    ManualConfigDraftRevisionSource,
     activate_config_registry_entry,
     load_active_config_registry_snapshot,
     plan_instrument_inventory_migration,
-    preview_manual_config_draft,
     publish_config_revision,
     resolve_config_registry_config_source,
 )
@@ -42,13 +36,10 @@ from scopecat.kernel.errors import (
     Conflict,
     DataIntegrityError,
 )
-from scopecat.kernel.quantity import Quantity
 from scopecat.records.config import (
-    ConfigContentHash,
     ConfigProfileSnapshot,
     config_content_hash,
 )
-from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_change import ParameterChangeProposal
 from scopecat.records.run import ConfigRegistryRunConfigSource
 from scopecat.runs.refs import record_content_ref
@@ -57,7 +48,6 @@ from scopecat_testkit.config_registry import (
     initialize_setup,
     load_config,
     load_config_registry_config,
-    load_config_registry_entry,
     review_parameter_change_proposal,
 )
 from scopecat_testkit.server.config_registry import signal_run_with_parameter_change
@@ -185,268 +175,6 @@ def test_registry_rejects_invalid_actor_before_storage(tmp_path: Path) -> None:
             unit_of_work=sqlite_config_registry_unit_of_work(tmp_path)
         )
         == []
-    )
-
-
-def test_manual_config_draft_preview_is_read_only_and_publish_records_source(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    base, activation = _seed_active_config_registry(tmp_path)
-    entries_before = list_config_registry_entries(unit_of_work=unit_of_work)
-
-    preview = preview_manual_config_draft(
-        unit_of_work=unit_of_work,
-        base_entry_id=base.id,
-        base_config_content_hash=base.content_hash,
-        base_generation=activation.generation,
-        candidate_id="manual-preview",
-        updates=_manual_config_updates(),
-    )
-
-    assert isinstance(preview, ManualConfigDraftResult)
-    assert preview.base_entry == base
-    assert preview.base_generation == activation.generation
-    assert preview.check.ok
-    assert preview.check.candidate is not None
-    assert preview.check.candidate.id == "manual-preview"
-    frequency = preview.check.candidate.parameter_snapshot.get("drive_frequency")
-    assert frequency == ScalarParameterValue(
-        id="drive_frequency",
-        value=Quantity(value=5.2, unit="GHz"),
-    )
-    assert list_config_registry_entries(unit_of_work=unit_of_work) == entries_before
-    assert (
-        load_active_config_registry_activation(unit_of_work=unit_of_work) == activation
-    )
-
-    mutation = _publish_draft_revision(
-        unit_of_work=unit_of_work,
-        base_entry_id=base.id,
-        base_config_content_hash=base.content_hash,
-        base_generation=activation.generation,
-        candidate_id="manual-preview",
-        updates=_manual_config_updates(),
-        expected_result_content_hash=config_content_hash(
-            preview.check.candidate,
-        ),
-        entry_id="manual-entry",
-        actor="operator",
-        note="adjust drive frequency",
-    )
-
-    entry = mutation.entry
-    assert mutation.deltas == preview.check.deltas
-    assert isinstance(entry.source, ManualConfigDraftRegistrySource)
-    assert entry.source.base_entry_id == base.id
-    assert entry.source.base_config_content_hash == base.content_hash
-    assert entry.source.base_registry_generation == activation.generation
-    persisted = load_config_registry_entry(
-        entry_id=entry.id,
-        unit_of_work=unit_of_work,
-    )
-    assert persisted == entry
-    assert isinstance(persisted.source, ManualConfigDraftRegistrySource)
-    assert (
-        load_config_registry_config(
-            entry_id=entry.id,
-            unit_of_work=unit_of_work,
-        )
-        == preview.check.candidate
-    )
-    assert mutation.activation == load_active_config_registry_activation(
-        unit_of_work=unit_of_work
-    )
-
-
-@pytest.mark.parametrize(
-    ("stale_field", "expected_code"),
-    (
-        ("generation", "config_registry.conflict"),
-        ("content_hash", "config_registry.config_draft_base_changed"),
-    ),
-)
-def test_manual_config_draft_publish_rejects_stale_base_identity(
-    tmp_path: Path,
-    stale_field: Literal["generation", "content_hash"],
-    expected_code: str,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    base, activation = _seed_active_config_registry(tmp_path)
-    preview = preview_manual_config_draft(
-        unit_of_work=unit_of_work,
-        base_entry_id=base.id,
-        base_config_content_hash=base.content_hash,
-        base_generation=activation.generation,
-        candidate_id="stale-preview",
-        updates=_manual_config_updates(),
-    )
-    assert preview.check.candidate is not None
-    base_generation = activation.generation
-    base_content_hash = base.content_hash
-    if stale_field == "generation":
-        newer = _publish_direct_revision(
-            config=load_config().model_copy(update={"id": "newer-config"}),
-            unit_of_work=unit_of_work,
-            entry_id="newer-entry",
-            actor="operator",
-            expected_generation=activation.generation,
-        )
-        assert newer.activation is not None
-        assert newer.activation.generation == activation.generation + 1
-    else:
-        base_content_hash = "sha256:" + ("0" * 64)
-
-    with pytest.raises(Conflict) as error:
-        _publish_draft_revision(
-            unit_of_work=unit_of_work,
-            base_entry_id=base.id,
-            base_config_content_hash=base_content_hash,
-            base_generation=base_generation,
-            candidate_id="stale-preview",
-            updates=_manual_config_updates(),
-            expected_result_content_hash=config_content_hash(
-                preview.check.candidate,
-            ),
-            entry_id=f"stale-{stale_field}",
-            actor="operator",
-        )
-
-    assert error.value.problems[0].code == expected_code
-    assert f"stale-{stale_field}" not in {
-        entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
-    }
-
-
-def test_manual_config_draft_publish_rejects_changed_preview_result(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    base, activation = _seed_active_config_registry(tmp_path)
-
-    with pytest.raises(Conflict) as error:
-        _publish_draft_revision(
-            unit_of_work=unit_of_work,
-            base_entry_id=base.id,
-            base_config_content_hash=base.content_hash,
-            base_generation=activation.generation,
-            candidate_id="changed-result",
-            updates=_manual_config_updates(),
-            expected_result_content_hash="sha256:" + ("0" * 64),
-            entry_id="changed-result",
-            actor="operator",
-        )
-
-    assert error.value.problems[0].code == (
-        "config_registry.config_draft_result_changed"
-    )
-    assert [
-        entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
-    ] == [base.id]
-    assert (
-        load_active_config_registry_activation(unit_of_work=unit_of_work) == activation
-    )
-
-
-def test_manual_config_draft_set_default_stale_conflict_leaves_no_entry(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    base, activation = _seed_active_config_registry(tmp_path)
-    preview = preview_manual_config_draft(
-        unit_of_work=unit_of_work,
-        base_entry_id=base.id,
-        base_config_content_hash=base.content_hash,
-        base_generation=activation.generation,
-        candidate_id="stale-default",
-        updates=_manual_config_updates(),
-    )
-    assert preview.check.candidate is not None
-    newer = _publish_direct_revision(
-        config=load_config().model_copy(update={"id": "newer-config"}),
-        unit_of_work=unit_of_work,
-        entry_id="newer-entry",
-        actor="operator",
-        expected_generation=activation.generation,
-    )
-    newer_activation = newer.activation
-    assert newer_activation is not None
-
-    with pytest.raises(Conflict) as error:
-        _publish_draft_revision(
-            unit_of_work=unit_of_work,
-            base_entry_id=base.id,
-            base_config_content_hash=base.content_hash,
-            base_generation=activation.generation,
-            candidate_id="stale-default",
-            updates=_manual_config_updates(),
-            expected_result_content_hash=config_content_hash(
-                preview.check.candidate,
-            ),
-            entry_id="stale-default",
-            actor="operator",
-        )
-
-    assert error.value.problems[0].code == "config_registry.conflict"
-    assert "stale-default" not in {
-        entry.id for entry in list_config_registry_entries(unit_of_work=unit_of_work)
-    }
-    assert (
-        load_active_config_registry_activation(unit_of_work=unit_of_work)
-        == newer_activation
-    )
-    assert newer_activation.entry_id == newer.entry.id
-
-
-def test_manual_config_draft_restores_after_its_original_base_changes(
-    tmp_path: Path,
-) -> None:
-    unit_of_work = sqlite_config_registry_unit_of_work(tmp_path)
-    base, activation = _seed_active_config_registry(tmp_path)
-    preview = preview_manual_config_draft(
-        unit_of_work=unit_of_work,
-        base_entry_id=base.id,
-        base_config_content_hash=base.content_hash,
-        base_generation=activation.generation,
-        candidate_id="manual-candidate",
-        updates=_manual_config_updates(),
-    )
-    assert preview.check.candidate is not None
-    manual = _publish_draft_revision(
-        unit_of_work=unit_of_work,
-        base_entry_id=base.id,
-        base_config_content_hash=base.content_hash,
-        base_generation=activation.generation,
-        candidate_id="manual-candidate",
-        updates=_manual_config_updates(),
-        expected_result_content_hash=config_content_hash(preview.check.candidate),
-        entry_id="manual-candidate",
-        actor="operator",
-    )
-    newer = _publish_direct_revision(
-        config=load_config().model_copy(update={"id": "newer-config"}),
-        unit_of_work=unit_of_work,
-        entry_id="newer-entry",
-        actor="operator",
-        expected_generation=activation.generation + 1,
-    )
-    newer_activation = newer.activation
-    assert newer_activation is not None
-
-    restored = activate_config_registry_entry(
-        entry_id=manual.entry.id,
-        unit_of_work=unit_of_work,
-        actor="operator",
-        expected_generation=newer_activation.generation,
-    )
-    assert manual.activation is not None
-    assert restored.activation is not None
-    assert restored.entry == manual.entry
-    assert restored.activation.restored_from_generation == manual.activation.generation
-    assert restored.activation.generation == newer_activation.generation + 1
-    assert (
-        load_active_config_registry_snapshot(unit_of_work=unit_of_work).config
-        == preview.check.candidate
     )
 
 
@@ -1061,38 +789,6 @@ def _publish_direct_revision(
     )
 
 
-def _publish_draft_revision(
-    *,
-    unit_of_work: ConfigRegistryUnitOfWorkFactory,
-    base_entry_id: str,
-    base_config_content_hash: ConfigContentHash,
-    base_generation: int,
-    candidate_id: str,
-    updates: tuple[ParameterUpdate, ...],
-    expected_result_content_hash: ConfigContentHash,
-    entry_id: str,
-    actor: str,
-    note: str = "",
-) -> ConfigRegistryMutationResult:
-    return publish_config_revision(
-        revision=ConfigRevision(
-            source=ManualConfigDraftRevisionSource(
-                base_entry_id=base_entry_id,
-                base_config_content_hash=base_config_content_hash,
-                base_generation=base_generation,
-                candidate_id=candidate_id,
-                updates=updates,
-                expected_result_content_hash=expected_result_content_hash,
-            ),
-            entry_id=entry_id,
-            actor=actor,
-            note=note,
-        ),
-        unit_of_work=unit_of_work,
-        expected_generation=base_generation,
-    )
-
-
 def _publish_candidate_revision(
     *,
     unit_of_work: ConfigRegistryUnitOfWorkFactory,
@@ -1156,30 +852,5 @@ def _resolved_candidate(
                 candidate,
                 services=sqlite_project_services(project_root),
             ),
-        ),
-    )
-
-
-def _seed_active_config_registry(
-    project_root: Path,
-) -> tuple[ConfigRegistryEntry, ConfigRegistryActivationRecord]:
-    initialize_setup(
-        load_config(), unit_of_work=sqlite_config_registry_unit_of_work(project_root)
-    )
-    result = _publish_direct_revision(
-        config=load_config(),
-        unit_of_work=sqlite_config_registry_unit_of_work(project_root),
-        entry_id="manual-base",
-        actor="operator",
-    )
-    assert result.activation is not None
-    return result.entry, result.activation
-
-
-def _manual_config_updates() -> tuple[ParameterUpdate, ...]:
-    return (
-        replace_scalar_parameter(
-            "drive_frequency",
-            Quantity(value=5.2, unit="GHz"),
         ),
     )

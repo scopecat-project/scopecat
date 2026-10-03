@@ -6,8 +6,8 @@ import pytest
 from scopecat.config.registry.service import (
     ConfigRevision,
     DirectConfigRevisionSource,
-    load_active_config_registry_snapshot,
-    publish_config_revision,
+    load_config_registry_entry_snapshot,
+    save_config_revision,
 )
 from scopecat.daemon.wire import ConfigurationTemplateImportCommand
 from scopecat.records.configuration_template import ConfigurationTemplate
@@ -70,13 +70,12 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
 
     service, registry = services(tmp_path)
     initialize_setup(load_config(), unit_of_work=registry.write_unit_of_work)
-    publish_config_revision(
+    retained = save_config_revision(
         revision=ConfigRevision(
-            entry_id="default",
+            entry_id="retained",
             actor="maintainer",
             source=DirectConfigRevisionSource(config=load_config()),
         ),
-        expected_generation=0,
         unit_of_work=registry.write_unit_of_work,
     )
     current = service.list()
@@ -96,11 +95,13 @@ def test_import_retries_and_reopens_without_changing_authority(tmp_path: Path) -
     assert service.import_template(command) == first
     assert current[0] in service.list()
     assert (
-        load_active_config_registry_snapshot(
-            unit_of_work=registry.write_unit_of_work
-        ).entry.id
-        == "default"
+        load_config_registry_entry_snapshot(
+            entry_id=retained.entry.id, unit_of_work=registry.write_unit_of_work
+        ).entry
+        == retained.entry
     )
+    with registry.write_unit_of_work() as work:
+        assert work.registry.current_generation() == 0
     reopened, _ = services(tmp_path)
     assert reopened.import_template(command) == first
     for changed in ({"actor": "another"}, {"note": "another"}):

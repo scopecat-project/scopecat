@@ -82,6 +82,21 @@ coverage constructs retained source evidence without global activation and
 checks that missing or altered decision evidence is rejected. Keep this
 read/provenance contract separate from user editing authority.
 
+The low-level global manual-draft preview and revision source are retired as
+well; no product consumer remained. Editing uses independent parameter branches.
+`test_parameter_branches.py` covers concurrent checkout, immutable selection,
+atomic stale-save rejection, replay and reopening; `test_branch_parameter_editor.py`
+covers edits before setup and rejection without partial changes. The deleted
+global-draft tests asserted active-default publication, preview tokens and
+restoration semantics that are no longer an author contract.
+
+Structure, retained-context and template-import fixtures save named snapshots
+without activating a default. Retained manual-draft source records still
+participate in evidence-input traversal and exact registry reads; removing the
+unused editing producer does not remove those provenance checks. The remaining
+global activation fixtures and combined-context writers are separate retirement
+work, not a second supported editor.
+
 A verified candidate publishes to a reviewed parameter branch with
 `publish_to_branch(...)`. Publication checks the exact destination head,
 candidate base and verification evidence, then records the new immutable
