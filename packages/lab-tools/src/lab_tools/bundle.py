@@ -124,7 +124,6 @@ def read_bundle(root: Path) -> Bundle:
                     "dependencies.lock",
                     "build.lock",
                     "install.py",
-                    "initialize.py",
                 }
             )
         ):

@@ -41,12 +41,18 @@ try:
         navigation[-1].removeprefix("window.location.replace(").removesuffix(");"))
     assert "source=" in url and url.endswith("#settings")
     client = create_client_environment(runtime, workspace)
-    expected_source = {"directory": str(workspace), "python": str(client)}
-    assert expected_source in api.status()["sources"]
+    binding = next(item for item in api.status()["sources"]
+                   if item["directory"] == str(workspace))
+    assert binding["python"] == str(client)
+    execution = binding["execution_python"]
+    assert execution != str(selected.python)
     existing = home / "existing code"
     write_author_scaffold(existing)
-    api.register_source(str(existing))
-    assert {"directory": str(existing), "python": None} in api.status()["sources"]
+    before = runtime.status().record
+    api.register_source(str(existing), execution)
+    assert runtime.status().record == before
+    assert {"directory": str(existing), "python": None,
+            "execution_python": execution} in api.status()["sources"]
     base = subprocess.check_output([str(client), "-I", "-c",
         "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
     assert Path(base).resolve().is_relative_to(
