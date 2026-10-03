@@ -14,16 +14,20 @@ Repository-local outputs have distinct lifetimes:
 | --- | --- |
 | `/build/` | Rebuildable intermediate files and delivery staging; remove after packaging |
 | `/dist/native/` | One current native candidate at a stable path |
-| `/dist/qualified/` | One latest accepted installer; replace only after a new candidate passes |
+| `/dist/qualified/` | Local copy of one accepted installer; publish before relying on it for distribution |
 | `/.test-results/` | Small reports and logs; keep the latest successful run and latest failure |
-| `/.scopecat-dev/` | Persistent source-development data; never part of build cleanup |
+| `/.scopecat-dev/` | Disposable development data and generated example source; reused between runs, removable with the checkout |
 
 Tool-owned directories such as frontend `dist`, `.venv` and `node_modules` retain
 their ordinary locations. Share uv/pnpm caches rather than creating another cache
 per build. Cache pruning is separate maintenance, not a broad directory deletion.
-Old `results/` directories are historical local evidence, not a supported new
-output location. Existing stores, source checkouts and SDK environments require
-owner review; ignoring a directory does not make its contents disposable.
+Old `results/` directories are not a supported output location. New development
+must not depend on untracked inputs. Retained scientific data, site settings and
+vendor SDK installations belong outside the checkout, at explicit locations.
+Use `lab_tools.dev --home /absolute/path/outside/checkout` for retained development
+work, separate from the installed application's data. Move useful authored code
+into tracked source before cleaning the generated example. Existing historical
+files still require owner review; this convention does not authorize their deletion.
 
 Use the same application path, name and bundle identity for repeated native
 checks. Stop that application before replacing its package. Keep test data in an
@@ -55,11 +59,14 @@ replacement copies and the generated author environment are disposable; startup
 and replacement reports and available logs survive failure. Both input packages
 remain untouched. `--keep-work` retains the isolated replacement workspace.
 
-Shared Git ignores cover generated outputs, tool environments and local runtime
-data. They must not hide maintained documentation, assets or editor tasks. A
-machine's retained legacy paths belong in `.git/info/exclude`; do not add a new
-shared ignore for each diagnostic experiment. Document decisions in ordinary
-development docs, not in `AGENTS.md` or an ever-growing generated report archive.
+Shared Git ignores cover disposable outputs, rebuildable tool environments and
+temporary runtime bindings. They must not hide maintained source, documentation,
+assets or editor tasks. Do not hide retained inputs with `.git/info/exclude`, or
+create sibling directories to bypass unexplained checkout state. Reuse the fixed
+output locations; after stopping their processes, remove obsolete outputs before
+rebuilding. Incompatible development stores are explicitly reset, not migrated or
+silently replaced by a new directory. Diagnostic `--keep-work` directories must
+be removed after their useful evidence is published to the owning issue.
 
 ## Installed application directories
 
