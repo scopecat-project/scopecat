@@ -153,7 +153,7 @@ export function RunComparison({
     url.searchParams.set("compare", primary);
     if (id) url.searchParams.set("comparison-analysis", id);
     else url.searchParams.delete("comparison-analysis");
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   }
   function changeRuns(left: string, right: string) {
     setPrimary(left);

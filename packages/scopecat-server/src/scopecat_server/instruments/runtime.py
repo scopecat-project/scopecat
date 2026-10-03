@@ -185,6 +185,7 @@ from .commands import (
     observed_members,
 )
 from .costs import observe_operation
+from .owner import InstrumentBackendOwner
 
 if TYPE_CHECKING:
     from ..command_payloads import CommandPayloadScope, CommandPayloadService
@@ -199,7 +200,7 @@ class InstrumentRuntime:
         control: SQLiteControlPlane,
         runs: SQLiteRunRepository,
         setup: SetupReader,
-        endpoint: InstrumentBackendEndpoint | None,
+        backend: InstrumentBackendOwner,
         payloads: CommandPayloadService,
         actors: InstrumentActorRegistry,
         shutdown_grace_seconds: float,
@@ -211,7 +212,7 @@ class InstrumentRuntime:
         self._control = control
         self._runs = runs
         self._setup = setup
-        self._endpoint = endpoint
+        self._backend = backend
         self._payloads = payloads
         self._actors = actors
         self._shutdown_grace_seconds = shutdown_grace_seconds
@@ -229,8 +230,12 @@ class InstrumentRuntime:
 
     @property
     def healthy(self) -> bool:
-        endpoint = self._endpoint
+        endpoint = self._backend.current
         return endpoint is None or endpoint.healthy
+
+    @property
+    def _endpoint(self) -> InstrumentBackendEndpoint | None:
+        return self._backend.get()
 
     def release_idle_instruments(
         self, command: InstrumentReleaseCommand
@@ -3545,10 +3550,9 @@ class InstrumentRuntime:
         """Publish a backend together with the coordinator's device revisions."""
         with self._shutdown_lock:
             self._require_running()
-            previous = self._endpoint
             with self._actors.replace_backend(replacement):
                 yield
-                self._endpoint = replacement
+                previous = self._backend.replace(replacement)
             try:
                 if previous is not None:
                     previous.shutdown()
@@ -3576,7 +3580,7 @@ class InstrumentRuntime:
             with self._run_lock:
                 run_contexts = tuple(self._run_contexts.items())
                 self._run_contexts = {}
-        endpoint = self._endpoint
+        endpoint = self._backend.close()
         deadline = (
             None
             if endpoint is None

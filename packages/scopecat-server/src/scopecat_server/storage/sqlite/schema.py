@@ -18,6 +18,7 @@ from scopecat_server.storage.sqlite.collection_schema import (
 from scopecat_server.storage.sqlite.config_schema import CONFIG_REGISTRY_TABLES_SQL
 from scopecat_server.storage.sqlite.data_cleanup_schema import DATA_CLEANUP_TABLES_SQL
 from scopecat_server.storage.sqlite.device_schema import DEVICE_TABLES_SQL
+from scopecat_server.storage.sqlite.exchange_schema import EXCHANGE_TABLES_SQL
 from scopecat_server.storage.sqlite.execution_schema import EXECUTION_TABLES_SQL
 from scopecat_server.storage.sqlite.experiment_plan_schema import (
     EXPERIMENT_PLAN_TABLES_SQL,
@@ -32,7 +33,7 @@ from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 from scopecat_server.storage.sqlite.setup_schema import SETUP_TABLES_SQL
 from scopecat_server.storage.sqlite.target_schema import TARGET_CATALOG_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 103
+PROJECT_SCHEMA_VERSION = 105
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -224,6 +225,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         SETUP_TABLES_SQL,
         DEVICE_TABLES_SQL,
         EXECUTION_TABLES_SQL,
+        EXCHANGE_TABLES_SQL,
         AUTHOR_REVISION_TABLES_SQL,
         AUTHOR_WORKSPACE_TABLES_SQL,
         EXPERIMENT_PLAN_TABLES_SQL,

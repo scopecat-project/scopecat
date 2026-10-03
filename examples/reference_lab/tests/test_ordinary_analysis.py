@@ -1,6 +1,7 @@
 """Ordinary functions publish real retained evidence and survive source changes."""
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx2
@@ -24,6 +25,7 @@ pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
 def test_ordinary_analysis_retained_source_arguments_and_restart(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    select_reference_source: Callable[[Path], None],
 ) -> None:
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     root = tmp_path / "ordinary"
@@ -31,6 +33,7 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_reference_source(root)
     project = load_project(root / "scopecat.toml")
     endpoint = start_project(project)
     name = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"

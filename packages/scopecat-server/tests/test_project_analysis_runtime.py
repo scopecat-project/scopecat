@@ -1106,6 +1106,101 @@ def test_candidate_acceptance_requires_matching_cross_run_verification(
                 )
             )
 
+            from scopecat.data_exchange import ScientificExchange
+            from scopecat.data_exchange.proposals import validate_proposal_references
+            from scopecat.records.run import ConfigRegistryRunConfigSource
+
+            from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+            from scopecat_server.storage.sqlite.evidence_graph import (
+                export_scientific_capture,
+            )
+            from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+
+            accepted_config = runtime.application.config.get_config_entry(
+                accepted.entry.id
+            )
+            accepted_id = _complete_signal_run(
+                runtime,
+                submission_id="accepted-export",
+                signal=1.1,
+                submission=_submission(runtime, "accepted-export").model_copy(
+                    update={
+                        "config": accepted_config.config,
+                        "config_source": ConfigRegistryRunConfigSource(
+                            selector=accepted.entry.id,
+                            entry_id=accepted.entry.id,
+                            config_ref=accepted.entry.config_ref,
+                            content_hash=accepted.entry.content_hash,
+                        ),
+                    }
+                ),
+            )
+            store = SQLiteProjectStore(
+                SQLiteDatabase(runtime.state_dir / "control.sqlite3"),
+                runtime.state_dir / "objects",
+            )
+            try:
+                destination = tmp_path / "accepted-candidate.scopecat"
+                export_scientific_capture(store, (accepted_id,), destination)
+                with ScientificExchange(destination) as capture:
+                    capture.verify()
+                    assert any(
+                        item.entry.id == verification.id
+                        for item in capture.evidence.analyses
+                    )
+                    incomplete = capture.evidence.model_copy(
+                        update={
+                            "analyses": tuple(
+                                item
+                                for item in capture.evidence.analyses
+                                if item.entry.id != verification.id
+                            )
+                        }
+                    )
+                    with pytest.raises(
+                        ValueError, match="project decision output is missing"
+                    ):
+                        validate_proposal_references(incomplete, (proposal,))
+                    wrong_source = accepted.entry.source.model_copy(
+                        update={
+                            "acceptance": CrossRunCandidateAcceptance(
+                                decision=ProjectAnalysisDecisionReference(
+                                    analysis_record_id=verification.id,
+                                    output_id="decision",
+                                    schema_id=_CANDIDATE_DECISION_SCHEMA.id,
+                                    schema_hash="sha256:" + "f" * 64,
+                                )
+                            )
+                        }
+                    )
+                    changed_inputs = capture.evidence.inputs.model_copy(
+                        update={
+                            "configurations": tuple(
+                                item.model_copy(
+                                    update={
+                                        "entry": item.entry.model_copy(
+                                            update={"source": wrong_source}
+                                        )
+                                    }
+                                )
+                                if item.entry.id == accepted.entry.id
+                                else item
+                                for item in capture.evidence.inputs.configurations
+                            )
+                        }
+                    )
+                    with pytest.raises(
+                        ValueError, match="project decision fact schema differs"
+                    ):
+                        validate_proposal_references(
+                            capture.evidence.model_copy(
+                                update={"inputs": changed_inputs}
+                            ),
+                            (proposal,),
+                        )
+            finally:
+                store.close()
+
             rejected_context = lab.analysis(
                 "Rejected candidate comparison",
                 key="rejected-candidate-comparison",

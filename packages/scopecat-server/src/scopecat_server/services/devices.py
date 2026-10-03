@@ -43,6 +43,7 @@ from scopecat_server.instruments.actors import (
     InstrumentActorShutdown,
 )
 from scopecat_server.instruments.backend import InstrumentBackendEndpoint
+from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.storage.sqlite.control_plane import (
     ControlPlaneConflict,
     SQLiteControlPlane,
@@ -64,12 +65,16 @@ class DeviceService:
         *,
         control: SQLiteControlPlane,
         actors: InstrumentActorRegistry,
-        endpoint: InstrumentBackendEndpoint | None,
+        backend: InstrumentBackendOwner,
     ) -> None:
         self.control = control
         self.actors = actors
-        self.endpoint = endpoint
+        self.backend = backend
         self._mutation_lock = Lock()
+
+    @property
+    def endpoint(self) -> InstrumentBackendEndpoint | None:
+        return self.backend.get()
 
     def driver_ref(self, driver_id: str) -> DriverImplementationRef:
         endpoint = self.endpoint
@@ -168,7 +173,7 @@ class DeviceService:
         published = False
         try:
             with self._errors(), self._mutation_lock:
-                previous = self.endpoint
+                previous = self.backend.current
                 if replacement is previous:
                     raise BackendConflict("replacement requires a new backend")
                 if not replacement.healthy:
@@ -181,6 +186,11 @@ class DeviceService:
                 devices = tuple(
                     view for view in self.list() if view.device.state != "retired"
                 )
+                if any(
+                    view.revision.content.driver.provider_id != replacement.provider_id
+                    for view in devices
+                ):
+                    raise BackendConflict("replacement must keep the provider identity")
                 revisions = tuple(
                     DeviceConnectionRevision(
                         id=f"driver-update:{uuid4().hex}",
@@ -262,7 +272,6 @@ class DeviceService:
                             )
                         if publish_source is not None:
                             publish_source(connection)
-                    self.endpoint = replacement
                     published = True
                 return self.list()
         finally:

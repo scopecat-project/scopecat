@@ -412,6 +412,7 @@ from ..command_payloads import (
 from ..errors import BackendConflict, BackendNotFound
 from ..instruments.backend import InstrumentBackendError
 from ..services.application import DaemonApplication
+from .data_exchange import data_exchange_router
 
 _API_PREFIX = "/api/v1"
 _ARROW_STREAM_MEDIA_TYPE = "application/vnd.apache.arrow.stream"
@@ -506,6 +507,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
     _install_error_mapping(app)
+    app.include_router(data_exchange_router(application))
 
     @app.post("/api/v1/data-cleanup/preview")
     def preview_data_cleanup(selection: DataCleanupSelection) -> DataCleanupPreview:

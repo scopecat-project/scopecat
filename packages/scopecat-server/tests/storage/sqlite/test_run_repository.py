@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
@@ -335,6 +337,370 @@ def test_structured_run_inputs_bind_source_and_snapshot_hashes(
         repository.read_config_profile_snapshot(skeleton.snapshot.run_id)
         == skeleton.config
     )
+
+
+def test_run_evidence_captures_accepted_inputs_without_execution(
+    tmp_path: Path,
+) -> None:
+    from scopecat.data_exchange.models import RunEvidence
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+
+    repository = _repository(tmp_path)
+    skeleton = _structured_run_inputs("run-evidence", with_source=False)
+    repository.write_run_skeleton(skeleton)
+    with repository.sqlite.read_transaction() as connection:
+        evidence = capture_run_evidence(
+            connection, repository, skeleton.snapshot.run_id
+        )
+    restored = RunEvidence.model_validate_json(evidence.model_dump_json())
+    assert restored.snapshot == skeleton.snapshot
+    assert restored.request == skeleton.request
+    assert restored.configuration == skeleton.config
+    assert restored.contents == ()
+    assert restored.source_project_id
+    changed = restored.model_dump(mode="json")
+    changed["configuration"]["id"] = "different-config"
+    with pytest.raises(ValueError, match="configuration differs"):
+        RunEvidence.model_validate(changed)
+
+
+@pytest.mark.parametrize(
+    "native_lock",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                sys.platform != "win32", reason="Windows open-file deletion semantics"
+            ),
+        ),
+    ],
+)
+def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_lock: bool
+):
+    from zipfile import ZipFile
+
+    from scopecat.data_exchange import ScientificExchange, write_scientific_exchange
+    from scopecat.data_exchange.models import ScientificEvidence
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+    from scopecat_server.storage.sqlite.exchange_import import import_scientific_capture
+
+    source_repository = _repository(tmp_path / "source")
+    skeleton = _structured_run_inputs("portable", with_source=False)
+    source_repository.write_run_skeleton(skeleton)
+    with source_repository.sqlite.read_transaction() as connection:
+        run = capture_run_evidence(connection, source_repository, "portable")
+    evidence = ScientificEvidence(
+        source_project_id=run.source_project_id, roots=("portable",), runs=(run,)
+    )
+    source = tmp_path / "capture.scopecat"
+    write_scientific_exchange(source, evidence, {})
+    source_repository.sqlite.close()
+    target = _repository(tmp_path / "target/.scopecat")
+    store = SQLiteProjectStore(target.sqlite, target.objects.root)
+    first = import_scientific_capture(store, source)
+    assert first.created
+    with ZipFile(source, "a") as archive:
+        archive.comment = b"same scientific content in different archive bytes"
+    repeated = import_scientific_capture(store, source)
+    assert not repeated.created
+    assert repeated.path == first.path
+    source.unlink()
+    with ScientificExchange(first.path) as captured:
+        assert captured.evidence == evidence
+        captured.verify()
+
+    another_run = run.model_copy(
+        update={"snapshot": run.snapshot.model_copy(update={"run_id": "another"})}
+    )
+    overlapping = evidence.model_copy(
+        update={"roots": ("another",), "runs": (run, another_run)}
+    )
+    overlap_path = tmp_path / "overlapping.scopecat"
+    write_scientific_exchange(overlap_path, overlapping, {})
+    assert import_scientific_capture(store, overlap_path).created
+
+    different = evidence.model_copy(
+        update={
+            "runs": (
+                run.model_copy(
+                    update={
+                        "request": run.request.model_copy(
+                            update={"experiment_id": "different"}
+                        )
+                    }
+                ),
+            )
+        }
+    )
+    conflict = tmp_path / "conflict.scopecat"
+    write_scientific_exchange(conflict, different, {})
+    with pytest.raises(ValueError, match="different content"):
+        import_scientific_capture(store, conflict)
+    with store.sqlite.read_connection() as connection:
+        assert (
+            connection.execute("SELECT count(*) FROM imported_captures").fetchone()[0]
+            == 2
+        )
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM imported_run_identities"
+            ).fetchone()[0]
+            == 3
+        )
+        assert (
+            connection.execute("SELECT count(*) FROM scheduler_runs").fetchone()[0] == 0
+        )
+    from scopecat.records.data_cleanup import DataCleanupCommand, DataCleanupSelection
+
+    from scopecat_server.errors import BackendConflict
+    from scopecat_server.services.data_cleanup import DataCleanupService
+    from scopecat_server.snapshots import verify_store_files
+    from scopecat_server.storage.sqlite.object_store import ObjectNotFoundError
+
+    cleanup = DataCleanupService(store)
+    preview = cleanup.preview(DataCleanupSelection(captures=(first.content_hash,)))
+    assert preview.bytes_to_reclaim == first.path.stat().st_size
+    assert not preview.blockers
+
+    def locked_file(_path: Path) -> None:
+        raise OSError("locked file")
+
+    with ExitStack() as stack:
+        if native_lock:
+            _ = stack.enter_context(first.path.open("rb"))
+        else:
+            fault = stack.enter_context(monkeypatch.context())
+            fault.setattr(
+                "scopecat_server.services.data_cleanup.shutil.rmtree", locked_file
+            )
+        operation = cleanup.execute(
+            DataCleanupCommand(request_key="remove-first", preview=preview)
+        )
+    assert operation.state == "records_removed"
+    assert operation.error is not None
+    # The other capture continues to own the same run identity.
+    with pytest.raises(ValueError, match="different content"):
+        import_scientific_capture(store, conflict)
+    with pytest.raises(BackendConflict, match="cleared"):
+        import_scientific_capture(store, first.path)
+    assert cleanup.resume(operation.id).state == "complete"
+    assert not first.path.exists()
+    overlap = import_scientific_capture(store, overlap_path)
+    assert not overlap.created
+    result = cleanup.execute(
+        DataCleanupCommand(
+            request_key="remove-overlap",
+            preview=cleanup.preview(
+                DataCleanupSelection(captures=(overlap.content_hash,))
+            ),
+        )
+    )
+    assert result.state == "complete"
+    # Once all owners are removed, a changed capture can be imported normally.
+    replacement = import_scientific_capture(store, conflict)
+    assert replacement.created
+    assert cleanup.resume(operation.id).state == "complete"
+    assert conflict.exists()
+    target.sqlite.close()
+    verify_store_files(tmp_path / "target")
+    replacement.path.unlink()
+    with pytest.raises(ObjectNotFoundError):
+        verify_store_files(tmp_path / "target")
+
+
+def test_captured_exchange_survives_store_close_and_rejects_missing_bytes(
+    tmp_path: Path,
+):
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat.data_exchange.models import ScientificEvidence
+    from scopecat.kernel.content_identity import sha256_content_hash
+    from scopecat.runs.refs import artifact_content_ref
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+    from scopecat_server.storage.sqlite.exchange_writer import write_captured_exchange
+
+    repository = _repository(tmp_path)
+    store = SQLiteProjectStore(repository.sqlite, repository.objects.root)
+    skeleton = _structured_run_inputs("portable-evidence", with_source=False)
+    repository.write_run_skeleton(skeleton)
+    content = b"retained experiment notes"
+    entry = ContentEntry(
+        role="artifact",
+        id="notes",
+        kind="report",
+        content_hash=sha256_content_hash(content),
+    )
+    ref = artifact_content_ref(artifact_id=entry.id, kind=entry.kind)
+    repository.publish_content(
+        RunContentPublication(
+            run_id=skeleton.snapshot.run_id,
+            entries=(entry,),
+            bytes=(BytesWrite(ref=ref, content=content),),
+        )
+    )
+    destination = tmp_path / "portable.scopecat"
+    with store.sqlite.read_transaction() as connection:
+        run = capture_run_evidence(connection, repository, skeleton.snapshot.run_id)
+        evidence = ScientificEvidence(
+            source_project_id=run.source_project_id,
+            roots=(run.snapshot.run_id,),
+            runs=(run,),
+        )
+        write_captured_exchange(connection, store, evidence, destination)
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
+            (run.snapshot.run_id, ref),
+        )
+    rejected = tmp_path / "incomplete.scopecat"
+    with (
+        store.sqlite.read_transaction() as connection,
+        pytest.raises(KeyError, match="missing run content"),
+    ):
+        write_captured_exchange(connection, store, evidence, rejected)
+    assert not rejected.exists()
+    assert not list(tmp_path.glob(".capture-*"))
+    store.close()
+    with ScientificExchange(destination) as exchange:
+        assert exchange.evidence == evidence
+        exchange.verify()
+        saved = tmp_path / "notes.txt"
+        exchange.copy_payload(exchange.payloads[0], saved)
+        assert saved.read_bytes() == content
+
+
+def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
+    from scopecat.analysis.repository import AnalysisPublication
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat.kernel.content_identity import (
+        model_wire_content_hash,
+        sha256_content_hash,
+    )
+    from scopecat.records.analysis import (
+        AnalysisFact,
+        AnalysisFactRecordOutput,
+        AnalysisPublishedOutputReference,
+        AnalysisRecord,
+        PublishedAnalysisRecordInput,
+        RunAnalysisSubject,
+    )
+    from scopecat.runs.refs import RUN_REQUEST_REF, record_content_ref
+
+    from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
+
+    runs = _repository(tmp_path)
+    store = SQLiteProjectStore(runs.sqlite, runs.objects.root)
+    for run_id in ("upstream", "selected"):
+        runs.write_run_skeleton(_structured_run_inputs(run_id, with_source=False))
+    fact = AnalysisFactRecordOutput(
+        kind="fact",
+        id="result",
+        title="Result",
+        content=AnalysisFact(
+            schema_id="test",
+            schema_codec="scopecat.analysis-fact-schema.v1",
+            schema_hash=sha256_content_hash(b"schema"),
+            codec="test.fact.v1",
+            value=1,
+        ),
+    )
+    for run_id in ("upstream", "selected"):
+        record = AnalysisRecord(
+            subject=RunAnalysisSubject(run_id=run_id),
+            title=run_id,
+            revision=1,
+            publication_hash=sha256_content_hash(run_id.encode()),
+            outputs=[fact],
+            inputs=[]
+            if run_id == "upstream"
+            else [
+                PublishedAnalysisRecordInput(
+                    id="source",
+                    kind="analysis_fact",
+                    target=fact.id,
+                    content_hash=f"sha256:{model_wire_content_hash(fact.content)}",
+                    codec=fact.content.codec,
+                    role="input",
+                    source=AnalysisPublishedOutputReference(
+                        subject=RunAnalysisSubject(run_id="upstream"),
+                        analysis_record_id="analysis",
+                        output_id=fact.id,
+                    ),
+                )
+            ],
+        )
+        entry = ContentEntry(
+            role="record",
+            kind="analysis",
+            id="analysis",
+            content_hash=model_wire_content_hash(record),
+        )
+        runs.publish_analysis(
+            AnalysisPublication(
+                subject=record.subject,
+                record=entry,
+                entries=(entry,),
+                analysis_key="analysis",
+                revision=1,
+                publication_hash=record.publication_hash,
+                title=record.title,
+                step_id=None,
+                input_count=len(record.inputs),
+                output_count=1,
+                models=(
+                    ModelWrite(
+                        ref=record_content_ref(record_id=entry.id, kind="analysis"),
+                        value=record,
+                    ),
+                ),
+                bytes=(),
+            )
+        )
+    destination = tmp_path / "selected.scopecat"
+    export_scientific_capture(store, ("selected",), destination)
+    with ScientificExchange(destination) as package:
+        assert package.evidence.roots == ("selected",)
+        assert {item.snapshot.run_id for item in package.evidence.runs} == {
+            "selected",
+            "upstream",
+        }
+        assert len(package.evidence.analyses) == 2
+        assert len(package.payloads) == 2  # Each run-owned publication appears once.
+        package.verify()
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
+            ("upstream", RUN_REQUEST_REF),
+        )
+    rejected = tmp_path / "incomplete.scopecat"
+    with pytest.raises(DataIntegrityError):
+        export_scientific_capture(store, ("selected",), rejected)
+    assert not rejected.exists()
+    store.close()
+
+
+def test_run_evidence_requires_the_original_request(tmp_path: Path) -> None:
+    from scopecat.runs.refs import RUN_REQUEST_REF
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+
+    repository = _repository(tmp_path)
+    skeleton = _structured_run_inputs("run-missing-evidence", with_source=False)
+    repository.write_run_skeleton(skeleton)
+    with repository.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
+            (skeleton.snapshot.run_id, RUN_REQUEST_REF),
+        )
+    with (
+        repository.sqlite.read_transaction() as connection,
+        pytest.raises(DataIntegrityError),
+    ):
+        capture_run_evidence(connection, repository, skeleton.snapshot.run_id)
 
 
 def test_terminal_commit_publishes_outcome_and_content(

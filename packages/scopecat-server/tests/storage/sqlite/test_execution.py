@@ -786,6 +786,228 @@ def _commit_seal(
         )
 
 
+def test_measurement_export_captures_committed_history(tmp_path: Path) -> None:
+    from scopecat.measurements.archive import MeasurementSnapshot
+
+    from scopecat_server.storage.sqlite.measurement_export import (
+        export_measurement_snapshot,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("export-history", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+    destination = tmp_path / "capture.scopecat"
+    export_measurement_snapshot(runs, header.run_id, destination)
+    _commit_append(runs, repository, _append(header, point_index=1))
+    runs.sqlite.close()
+    with MeasurementSnapshot(destination) as snapshot:
+        assert snapshot.record_count == 1
+        assert tuple(snapshot.records()) == first.records
+        assert tuple(snapshot.selected_records()) == first.records
+        assert snapshot.header.expected_record_count == 2
+
+
+def test_measurement_export_uses_callers_earlier_capture(tmp_path: Path) -> None:
+    from scopecat.measurements.archive import MeasurementSnapshot
+
+    from scopecat_server.storage.sqlite.measurement_export import (
+        export_measurement_snapshot_in_transaction,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("shared-capture", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+    destination = tmp_path / "shared.scopecat"
+    with runs.sqlite.read_transaction() as connection:
+        # Establish the caller's snapshot before a later acquisition commits.
+        count = connection.execute(
+            "SELECT count(*) FROM execution_measurement_appends WHERE run_id=?",
+            (header.run_id,),
+        ).fetchone()[0]
+        _commit_append(runs, repository, _append(header, point_index=1))
+        export_measurement_snapshot_in_transaction(
+            connection, runs, header.run_id, destination
+        )
+    with MeasurementSnapshot(destination) as snapshot:
+        assert count == snapshot.record_count == 1
+        assert tuple(snapshot.selected_records()) == first.records
+    runs.sqlite.close()
+
+
+@pytest.mark.parametrize("sealed", [False, True])
+def test_exchange_assembly_includes_recording_partition(
+    tmp_path: Path, sealed: bool
+) -> None:
+    from scopecat.config.scientific_binding import bind_scientific_evidence
+    from scopecat.data_exchange import ScientificExchange
+    from scopecat.data_exchange.models import ScientificEvidence
+    from scopecat.records.content import ContentEntry
+    from scopecat.records.measurement_recording import measurement_dataset_content_hash
+    from scopecat.records.run_request import RunRequest
+    from scopecat.runs.admission import build_run_admission
+    from scopecat.runs.repository import RunContentPublication
+    from scopecat_testkit.workflow_fixtures import load_config
+
+    from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
+    from scopecat_server.storage.sqlite.exchange_writer import write_captured_exchange
+
+    runs = _runs(tmp_path)
+    config = load_config()
+    skeleton = build_run_admission(
+        config=config,
+        request=RunRequest(experiment_id="recorded"),
+        scientific_binding=bind_scientific_evidence(
+            catalog_id="source", config=config, samples=(), sample_revisions={}
+        ),
+    )
+    prepared = runs.prepare_run_skeleton(skeleton)
+    with runs.sqlite.write_transaction() as connection:
+        runs.commit_run_skeleton_in_transaction(connection, prepared)
+    header = _header(skeleton.snapshot.run_id, point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+    scientific_hash = measurement_dataset_content_hash(
+        header_content_hash=header.content_hash,
+        record_content_hashes=first.record_content_hashes,
+    )
+    if sealed:
+        _commit_seal(runs, repository, _seal(header, first))
+        runs.publish_content(
+            RunContentPublication(
+                run_id=header.run_id,
+                entries=(
+                    ContentEntry(
+                        role="dataset",
+                        kind="measurement_dataset",
+                        id=header.dataset_schema.dataset_id,
+                        content_hash=scientific_hash,
+                        schema=header.dataset_schema.model_dump(mode="json"),
+                    ),
+                ),
+            )
+        )
+    store = SQLiteProjectStore(runs.sqlite, runs.objects.root)
+    destination = tmp_path / "recorded.scopecat"
+    with runs.sqlite.read_transaction() as connection:
+        run = capture_run_evidence(connection, runs, header.run_id)
+        evidence = ScientificEvidence(
+            source_project_id=run.source_project_id, roots=(header.run_id,), runs=(run,)
+        )
+        # A later physical acquisition must not enter this captured package.
+        if not sealed:
+            _commit_append(runs, repository, _append(header, point_index=1))
+        write_captured_exchange(connection, store, evidence, destination)
+        if sealed:
+            changed = run.model_copy(
+                update={
+                    "contents": tuple(
+                        entry.model_copy(update={"content_hash": "f" * 64})
+                        for entry in run.contents
+                    )
+                }
+            )
+            rejected = tmp_path / "mismatched.scopecat"
+            with pytest.raises(ValueError, match="recording differs"):
+                write_captured_exchange(
+                    connection,
+                    store,
+                    evidence.model_copy(update={"runs": (changed,)}),
+                    rejected,
+                )
+            assert not rejected.exists()
+    store.close()
+    with ScientificExchange(destination) as package:
+        snapshot = package.recording(header.run_id)
+        assert tuple(snapshot.selected_records()) == first.records
+        assert snapshot.record_count == 1
+        assert snapshot.selected_content_hash == scientific_hash
+        assert snapshot.dataset().entry.content_hash == scientific_hash
+        package.verify()
+    assert not list(tmp_path.glob(".capture-*"))
+
+
+def test_measurement_export_missing_chunk_does_not_publish(tmp_path: Path) -> None:
+    from scopecat_server.storage.sqlite.measurement_export import (
+        export_measurement_snapshot,
+    )
+
+    runs = _runs(tmp_path)
+    header = _header("export-missing")
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    _commit_append(runs, repository, _append(header))
+    with runs.sqlite.write_transaction() as connection:
+        connection.execute(
+            "DELETE FROM run_repository_refs WHERE run_id=? AND ref IN "
+            "(SELECT ref FROM execution_measurement_appends WHERE run_id=?)",
+            (header.run_id, header.run_id),
+        )
+    destination = tmp_path / "incomplete.scopecat"
+    with pytest.raises(ValueError, match="chunk is missing"):
+        export_measurement_snapshot(runs, header.run_id, destination)
+    assert not destination.exists()
+    runs.sqlite.close()
+
+
+def test_measurement_export_does_not_mix_concurrent_acquisitions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from collections.abc import Iterable
+
+    from scopecat.measurements.archive import (
+        MeasurementSnapshot,
+        RecordSelection,
+        write_measurement_snapshot,
+    )
+
+    from scopecat_server.storage.sqlite import measurement_export
+
+    runs = _runs(tmp_path)
+    header = _header("export-concurrent", point_count=2)
+    repository = SQLiteMeasurementDatasetRepository(runs, run_id=header.run_id)
+    _commit_header(runs, repository, header)
+    first = _append(header)
+    _commit_append(runs, repository, first)
+
+    def acquire_during_export(
+        destination: Path,
+        captured: MeasurementDatasetHeader,
+        appends: Iterable[MeasurementDatasetAppend],
+        *,
+        projection: Iterable[RecordSelection] | None = None,
+    ) -> None:
+        # The header was read, but neither lazy append nor selection query has
+        # started. Commit through another SQLite connection at this exact point.
+        _commit_append(runs, repository, _append(header, point_index=1))
+        write_measurement_snapshot(
+            destination,
+            captured,
+            appends,
+            projection=projection,
+        )
+
+    monkeypatch.setattr(
+        measurement_export,
+        "write_measurement_snapshot",
+        acquire_during_export,
+    )
+    destination = tmp_path / "captured.scopecat"
+    measurement_export.export_measurement_snapshot(runs, header.run_id, destination)
+    with MeasurementSnapshot(destination) as snapshot:
+        assert snapshot.record_count == 1
+        assert tuple(snapshot.selected_records()) == first.records
+    runs.sqlite.close()
+
+
 def test_measurement_repository_reuses_schema_hash_for_appends(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

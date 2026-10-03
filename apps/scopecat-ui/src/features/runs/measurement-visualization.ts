@@ -1,10 +1,18 @@
 import type {
   ComplexComponents,
   MeasurementDatasetSchema,
-  MeasurementRecord,
+  MeasurementRecord as ScientificMeasurementRecord,
   MeasurementTracePreview,
-  MeasurementValue,
+  MeasurementValue as ScientificMeasurementValue,
 } from "../../api-contract";
+import type { components } from "../../api-schema";
+
+type MeasurementRecord =
+  | ScientificMeasurementRecord
+  | components["schemas"]["MeasurementRecordPreview"];
+type MeasurementValue =
+  | ScientificMeasurementValue
+  | components["schemas"]["MeasurementArraySummary"];
 
 type SchemaVariable = NonNullable<MeasurementDatasetSchema["variables"]>[number];
 type ProductGridSchemaAxis = Extract<
@@ -1048,6 +1056,19 @@ function formatMeasurementValue(
   selectedEntities: number[],
 ): string {
   if (!value) return "—";
+  if (value.kind === "array_summary") {
+    const shape = value.shape.map((extent) => extent ?? "?").join(" × ");
+    const available =
+      value.sample_count === null
+        ? `${value.available_sample_count} available`
+        : `${value.available_sample_count}/${value.sample_count} available`;
+    return [
+      `${shape} samples${unitSuffix(value.unit)}`,
+      available,
+      ...value.unavailable_reasons,
+      "preview summary",
+    ].join(" · ");
+  }
   if (entityAxis && variable.entityAxisOffset !== undefined) {
     return formatEntityMeasurementValue(value, variable, entityAxis, selectedEntities);
   }
@@ -1142,7 +1163,7 @@ function entityLocalShapes(
   selected: number[],
 ): (number | null)[][] {
   const offset = variable.entityAxisOffset;
-  if (offset === undefined || value.kind === "scalar") return [];
+  if (offset === undefined || value.kind === "scalar" || value.kind === "array_summary") return [];
   if (value.kind === "segmented_array") {
     return selected.flatMap((index) => {
       const segment = value.segments[index];
@@ -1190,7 +1211,8 @@ function entityValueIsComplete(
   entityAxis: number,
   entityIndex: number,
 ): boolean {
-  if (value.kind === "unavailable" || value.kind === "scalar") return false;
+  if (value.kind === "unavailable" || value.kind === "scalar" || value.kind === "array_summary")
+    return false;
   if (value.kind === "segmented_array") {
     const segment = value.segments[entityIndex];
     return (

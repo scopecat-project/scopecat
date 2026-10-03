@@ -16,11 +16,14 @@ const selection = {
   setups: [],
   setup_definitions: [],
   parameters: [],
+  captures: [],
 };
-function show() {
+function show(
+  props: { runs?: string[]; captures?: string[]; onCleared?: () => void } = { runs: ["scan"] },
+) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ClearData runs={["scan"]} />
+      <ClearData {...props} />
     </QueryClientProvider>,
   );
 }
@@ -69,11 +72,13 @@ it("requires reviewing an explicit expanded selection before clearing retained d
 });
 
 it("reports unfinished physical cleanup and resumes the same operation", async () => {
+  const captureSelection = { ...selection, runs: [], captures: ["imported"] };
+  const cleared = vi.fn();
   const fetch = vi
     .fn()
     .mockResolvedValueOnce(
       response({
-        selection,
+        selection: captureSelection,
         fingerprint: "one",
         record_count: 1,
         bytes_to_reclaim: 1024,
@@ -81,16 +86,25 @@ it("reports unfinished physical cleanup and resumes the same operation", async (
       }),
     )
     .mockResolvedValueOnce(
-      response({ id: "retry-me", state: "records_removed", selection, error: "File in use" }),
+      response({
+        id: "retry-me",
+        state: "records_removed",
+        selection: captureSelection,
+        error: "File in use",
+      }),
     )
-    .mockResolvedValueOnce(response({ id: "retry-me", state: "complete", selection }));
+    .mockResolvedValueOnce(
+      response({ id: "retry-me", state: "complete", selection: captureSelection }),
+    );
   vi.stubGlobal("fetch", fetch);
-  show();
+  show({ captures: ["imported"], onCleared: cleared });
   fireEvent.click(screen.getByRole("button", { name: "Review data cleanup…" }));
   fireEvent.click(await screen.findByRole("button", { name: "Delete selected records and files" }));
   expect(await screen.findByText("Records removed; file cleanup needs retry.")).toBeVisible();
+  expect(cleared).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Retry cleanup" }));
   expect(await screen.findByText("Records and files cleared.")).toBeVisible();
+  expect(cleared).toHaveBeenCalledOnce();
   const request = fetch.mock.calls[2]?.[0] as Request;
   expect(request.url).toContain("/data-cleanup/retry-me/resume");
 });

@@ -1,6 +1,7 @@
 """Offline groups retain failures, recovery and readable historical evidence."""
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,9 @@ pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
 
 
 def test_grouped_analysis_recovery_and_restart(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    select_reference_source: Callable[[Path], None],
 ) -> None:
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     root = tmp_path / "groups"
@@ -26,6 +29,7 @@ def test_grouped_analysis_recovery_and_restart(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_reference_source(root)
     signal = root / "src/reference_lab_authors/authored/signal.py"
     signal.write_text(
         signal.read_text().replace(

@@ -430,6 +430,7 @@ integration_paths = [
   "packages/scopecat-server/tests",
   "packages/lab-tools/tests/test_application_entry.py",
   "packages/lab-tools/tests/test_desktop_install.py",
+  "packages/lab-tools/tests/test_desktop_files.py",
   "packages/lab-tools/tests/test_author_notebook.py",
   "packages/lab-tools/tests/test_calibration_smoke.py",
   "packages/lab-tools/tests/test_delivery_recipe.py",

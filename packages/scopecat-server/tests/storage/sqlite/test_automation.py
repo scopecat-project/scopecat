@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
+from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.automation import (
     ConfigPublishOutputRef,
     ParameterBranchPublishOutputRef,
@@ -12,6 +14,12 @@ from scopecat.automation import (
     ProcedureStepAttempt,
     procedure_intent_hash,
 )
+from scopecat.automation.interpretations import (
+    InterpretationRequest,
+    InterpretationResponse,
+)
+from scopecat.automation.models import InterpretationOutputRef
+from scopecat.data_exchange.models import InterpretationEvidence
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevisionRef
 
@@ -21,11 +29,100 @@ from scopecat_server.storage.sqlite.automation import (
     SQLiteAutomationStore,
 )
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.evidence_interpretation import (
+    capture_interpretation_evidence,
+)
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 _START = datetime(2026, 8, 18, 9, tzinfo=UTC)
 _HASH = "sha256:" + "1" * 64
 _STEP_HASH = "sha256:" + "2" * 64
+
+
+class _Decision(BaseModel):
+    frequency: float
+
+
+def test_interpretation_export_resolves_original_attempt_after_a_new_judgment(
+    tmp_path: Path,
+):
+    store = _store(tmp_path)
+    procedure = _run()
+    schema = AnalysisFactSchema("test.peak.v1", _Decision)
+    request = InterpretationRequest(
+        title="Select peak",
+        instructions="Choose the measured peak frequency",
+        schema_id=schema.id,
+        schema_hash=schema.schema_hash,
+        structure=schema.structure,
+    )
+    outputs = tuple(
+        InterpretationOutputRef(
+            procedure_run_id=procedure.procedure_run_id,
+            step_key="peak",
+            request_hash=request.request_hash,
+            response=InterpretationResponse(
+                actor=actor,
+                actor_kind="human",
+                value={"frequency": frequency},
+                submitted_at=_START,
+            ),
+        )
+        for actor, frequency in (("first", 6.1), ("second", 6.2))
+    )
+    attempts = tuple(
+        ProcedureStepAttempt(
+            procedure_run_id=procedure.procedure_run_id,
+            step_key="peak",
+            attempt=index,
+            operation="interpretation",
+            intent_hash=request.request_hash,
+            revision=1,
+            state="succeeded",
+            started_at=_START,
+            updated_at=_START,
+            finished_at=_START,
+            output=output,
+            interpretation_request=request,
+        )
+        for index, output in enumerate(outputs, start=1)
+    )
+    with store.write_transaction() as connection:
+        store.insert_run_in_transaction(connection, procedure)
+        for attempt in attempts:
+            store.insert_step_attempt_in_transaction(connection, attempt)
+    with store.sqlite.read_transaction() as connection:
+        for output, attempt in zip(outputs, attempts, strict=True):
+            evidence = capture_interpretation_evidence(
+                connection, output.analysis_reference
+            )
+            assert evidence.step == attempt
+            assert evidence.procedure == procedure
+            assert (
+                InterpretationEvidence.model_validate_json(evidence.model_dump_json())
+                == evidence
+            )
+        with pytest.raises(KeyError, match="missing interpretation evidence"):
+            capture_interpretation_evidence(
+                connection,
+                outputs[0].analysis_reference.model_copy(
+                    update={"response_hash": "sha256:" + "f" * 64},
+                ),
+            )
+    invalid = outputs[0].model_copy(
+        update={
+            "response": outputs[0].response.model_copy(
+                update={"value": {"frequency": "not numeric"}}
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="response differs from its request schema"):
+        InterpretationEvidence(
+            reference=invalid.analysis_reference,
+            procedure=procedure,
+            step=attempts[0].model_copy(update={"output": invalid}),
+        )
+    store.sqlite.close()
 
 
 def _store(tmp_path: Path) -> SQLiteAutomationStore:

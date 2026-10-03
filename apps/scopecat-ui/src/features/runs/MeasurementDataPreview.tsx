@@ -1,3 +1,4 @@
+import { MeasurementRecordTable } from "./MeasurementRecordTable";
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import type { MeasurementTracePreview } from "../../api-contract";
@@ -100,14 +101,8 @@ export function MeasurementDataPreview({
     slice,
     slicePlan,
   ]);
-  const [requestedChartId, setRequestedChartId] = useState<string>();
-  const selectedChart = charts.find((chart) => chart.id === requestedChartId) ?? charts[0];
   const selectedTracePlan =
     tracePlans.find((plan) => plan.id === selectedTracePlanId) ?? tracePlans[0];
-  const traceChart = useMemo(
-    () => (tracePending || traceError ? undefined : measurementTraceChart(tracePreview)),
-    [traceError, tracePending, tracePreview],
-  );
   const table = useMemo(
     () =>
       measurementTable(
@@ -351,54 +346,17 @@ export function MeasurementDataPreview({
                 ))}
               </select>
             </label>
-            <span
-              className="inline-flex items-center gap-1.5"
-              role={traceError ? "alert" : "status"}
-            >
-              {tracePending && (
-                <LoaderCircle className="animate-spin" size={12} aria-hidden="true" />
-              )}
-              {tracePreviewStatus(tracePreview, traceError, tracePending)}
-            </span>
           </div>
-          {traceChart && <MeasurementChart chart={traceChart} />}
-          {!tracePending && !traceError && tracePreview && (
-            <TraceAvailabilityDetails preview={tracePreview} />
-          )}
-          {!tracePending && !traceError && tracePreview && !traceChart && (
-            <p className="m-0 text-[0.62rem] text-text-dim">
-              No durable or available series were returned for this bounded selection.
-            </p>
-          )}
+          <MeasurementTraceResult
+            preview={tracePreview}
+            pending={tracePending}
+            error={traceError}
+          />
         </div>
       )}
 
       {charts.length > 0 ? (
-        <div className="border-b border-line p-2.5" data-testid="measurement-charts">
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[0.59rem] text-text-dim">
-            <span>
-              {charts.length} chart {charts.length === 1 ? "candidate" : "candidates"}
-            </span>
-            {charts.length > 1 && (
-              <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
-                Chart
-                <select
-                  aria-label="Measurement chart"
-                  className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
-                  onChange={(event) => setRequestedChartId(event.target.value)}
-                  value={selectedChart?.id ?? ""}
-                >
-                  {charts.map((chart) => (
-                    <option key={chart.id} value={chart.id}>
-                      {chartOptionLabel(chart)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-          {selectedChart && <MeasurementChart chart={selectedChart} />}
-        </div>
+        <MeasurementChartPicker charts={charts} />
       ) : tracePlans.length === 0 ? (
         <p className="m-0 border-b border-line px-3 py-2.5 text-[0.67rem] leading-normal text-text-dim">
           {emptyChartMessage({
@@ -421,51 +379,7 @@ export function MeasurementDataPreview({
         </p>
       )}
 
-      <div className="overflow-x-auto" data-testid="measurement-table">
-        <table className="w-full min-w-max border-collapse text-left text-[0.66rem]">
-          <thead className="bg-panel-soft text-[0.59rem] tracking-[0.06em] text-text-dim uppercase">
-            <tr>
-              {table.columns.map((column) => (
-                <th
-                  className="border-b border-line px-3 py-2 font-bold"
-                  key={column.id}
-                  scope="col"
-                >
-                  {column.label}
-                  {column.role !== "point" && (
-                    <span className="ml-1.5 text-[0.52rem] text-text-dim">{column.role}</span>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map((row) => (
-              <tr className="border-b border-line last:border-b-0" key={row.id}>
-                {row.cells.map((cell, index) =>
-                  index === 0 ? (
-                    <th
-                      className="px-3 py-2 font-mono font-medium text-text-soft"
-                      key={index}
-                      scope="row"
-                    >
-                      {cell}
-                    </th>
-                  ) : (
-                    <td
-                      className="max-w-[260px] truncate px-3 py-2 text-text-soft"
-                      key={index}
-                      title={cell}
-                    >
-                      {cell}
-                    </td>
-                  ),
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <MeasurementRecordTable table={table} />
 
       <details className="border-t border-line text-[0.64rem] text-text-dim">
         <summary className="cursor-pointer px-3 py-2 font-bold hover:text-text-soft">
@@ -483,6 +397,31 @@ export function MeasurementDataPreview({
   );
 }
 
+export function MeasurementTraceResult({
+  preview,
+  pending,
+  error,
+}: {
+  preview?: MeasurementTracePreview;
+  pending: boolean;
+  error: Error | null;
+}) {
+  const chart = useMemo(
+    () => (pending || error ? undefined : measurementTraceChart(preview)),
+    [preview, pending, error],
+  );
+  return (
+    <>
+      <p role={error ? "alert" : "status"}>{tracePreviewStatus(preview, error, pending)}</p>
+      {chart && <MeasurementChart chart={chart} />}
+      {!pending && !error && preview && <TraceAvailabilityDetails preview={preview} />}
+      {!pending && !error && preview && !chart && (
+        <p>No durable or available series were returned for this bounded selection.</p>
+      )}
+    </>
+  );
+}
+
 function tracePreviewStatus(
   preview: MeasurementTracePreview | undefined,
   error: Error | null,
@@ -494,7 +433,7 @@ function tracePreviewStatus(
   return measurementTraceStatus(preview);
 }
 
-function TraceAvailabilityDetails({ preview }: { preview: MeasurementTracePreview }) {
+export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTracePreview }) {
   const incomplete = preview.series.filter(
     (series) => series.available_sample_count < series.source_sample_count,
   );
@@ -653,7 +592,39 @@ function sliceAxisOption(axis: MeasurementSliceAxis, index: number): string {
   return `${value}${unit ? ` ${unit}` : ""}${duplicate ? ` · Index ${index + 1}` : ""}`;
 }
 
-function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
+export function MeasurementChartPicker({ charts }: { charts: MeasurementChartPlan[] }) {
+  const [requestedChartId, setRequestedChartId] = useState<string>();
+  const selectedChart = charts.find((chart) => chart.id === requestedChartId) ?? charts[0];
+  return (
+    <div className="border-b border-line p-2.5" data-testid="measurement-charts">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-[0.59rem] text-text-dim">
+        <span>
+          {charts.length} chart {charts.length === 1 ? "candidate" : "candidates"}
+        </span>
+        {charts.length > 1 && (
+          <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
+            Chart
+            <select
+              aria-label="Measurement chart"
+              className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+              onChange={(event) => setRequestedChartId(event.target.value)}
+              value={selectedChart?.id ?? ""}
+            >
+              {charts.map((chart) => (
+                <option key={chart.id} value={chart.id}>
+                  {chartOptionLabel(chart)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {selectedChart && <MeasurementChart chart={selectedChart} />}
+    </div>
+  );
+}
+
+export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
   const points = chart.series.flatMap((series) => series.points);
   const option = useMemo(() => measurementChartOption(chart), [chart]);
   const fixedCoordinates =

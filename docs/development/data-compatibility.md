@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **103** is a development format identifier, not the start of a compatibility
+schema **105** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,13 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 105 retains imported evidence in capture-owned object directories and
+records each capture's membership of source-qualified run identities. Ordinary
+cleanup can remove one capture without releasing identities retained by others;
+its deletion fence remains until file cleanup succeeds. Importing does not restore
+device registrations or runnable tasks. Earlier development stores are not
+migrated or rewritten when opened.
 
 Schema 103 retains driver source selections together with their immutable source
 bundles. Activation commits with device connection heads. Current-format restart

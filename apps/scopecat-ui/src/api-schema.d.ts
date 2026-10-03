@@ -364,6 +364,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Captures */
+        get: operations["list_captures_api_v1_data_captures_get"];
+        put?: never;
+        /** Import Capture */
+        post: operations["import_capture_api_v1_data_captures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/analyses/{analysis_hash}/artifacts/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Artifact */
+        get: operations["download_artifact_api_v1_data_captures__content_hash__analyses__analysis_hash__artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Evidence */
+        get: operations["read_evidence_api_v1_data_captures__content_hash__evidence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Capture */
+        get: operations["download_capture_api_v1_data_captures__content_hash__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/runs/{run_id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Recording */
+        get: operations["read_recording_api_v1_data_captures__content_hash__runs__run_id__recording_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data/captures/{content_hash}/runs/{run_id}/recording/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Traces */
+        post: operations["read_traces_api_v1_data_captures__content_hash__runs__run_id__recording_traces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -2291,6 +2394,29 @@ export interface components {
             results: components["schemas"]["AcquisitionResultSpec"][];
         };
         /**
+         * AdaptiveDomainPlanRecord
+         * @description Durable optimizer policy for compatible runtime domain extensions.
+         */
+        AdaptiveDomainPlanRecord: {
+            /**
+             * Adaptive Coordinate Ids
+             * @default []
+             */
+            adaptive_coordinate_ids: string[];
+            /** Optimizer Id */
+            optimizer_id: string;
+            /** Per Region Point Limit */
+            per_region_point_limit?: number | null;
+            /**
+             * Scope
+             * @default per_region
+             * @enum {string}
+             */
+            scope: "per_region" | "global";
+            /** Total Point Limit */
+            total_point_limit: number;
+        };
+        /**
          * AdaptiveRegionSpec
          * @description One stable outer-domain region admitted for adaptive extension.
          */
@@ -2465,6 +2591,21 @@ export interface components {
              */
             kind: "dataset";
             output_id: components["schemas"]["_NonEmptyText"];
+        };
+        /**
+         * AnalysisEvidence
+         * @description An exact analysis publication and the index of its retained outputs.
+         */
+        AnalysisEvidence: {
+            /** Contents */
+            contents: components["schemas"]["ContentEntry"][];
+            entry: components["schemas"]["ContentEntry"];
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            record: components["schemas"]["AnalysisRecord"];
         };
         /**
          * AnalysisExecution
@@ -2907,6 +3048,46 @@ export interface components {
             expected_generation: number;
             /** Operation Id */
             operation_id: string;
+        };
+        /** AuthorRevisionBundle */
+        AuthorRevisionBundle: {
+            /** Files */
+            files: {
+                [key: string]: string;
+            };
+            manifest: components["schemas"]["AuthorRevisionManifest"];
+        };
+        /**
+         * AuthorRevisionManifest
+         * @description Local source closure plus the external environment required for recovery.
+         *
+         *     Installed distributions are identified, not archived. Recovery requires this
+         *     same environment; a manifest is not a hermetic environment image.
+         */
+        AuthorRevisionManifest: {
+            /** Files */
+            files: {
+                [key: string]: components["schemas"]["Sha256ContentHash"];
+            };
+            /** Import Packages */
+            import_packages: {
+                [key: string]: string;
+            };
+            /** Installed Authors */
+            installed_authors?: {
+                [key: string]: components["schemas"]["InstalledAuthorPackage"];
+            };
+            maintenance_hash: components["schemas"]["Sha256ContentHash"];
+            /** Packages */
+            packages: {
+                [key: string]: string;
+            };
+            /** Python */
+            python: string;
+            /** Refresh Roots */
+            refresh_roots: string[];
+            /** Source Roots */
+            source_roots: string[];
         };
         /** AuthorRevisionRef */
         AuthorRevisionRef: {
@@ -3406,6 +3587,39 @@ export interface components {
             blocked_by: string[];
             /** Status */
             status: components["schemas"]["CheckStatus"] | "blocked";
+        };
+        /** CaptureImportReceipt */
+        CaptureImportReceipt: {
+            capture: components["schemas"]["CaptureSummary"];
+            /** Created */
+            created: boolean;
+        };
+        /** CaptureRecordingPage */
+        CaptureRecordingPage: {
+            dataset_schema: components["schemas"]["MeasurementDatasetSchema-Output"];
+            /** Items */
+            items: components["schemas"]["MeasurementRecordPreview"][];
+            /** Next Offset */
+            next_offset: number | null;
+            /** Offset */
+            offset: number;
+            /** Record Count */
+            record_count: number;
+            /** Selected Record Count */
+            selected_record_count: number | null;
+            /**
+             * Selection
+             * @enum {string}
+             */
+            selection: "acquired" | "selected";
+        };
+        /** CaptureSummary */
+        CaptureSummary: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Roots */
+            roots: string[];
+            /** Source Project Id */
+            source_project_id: string;
         };
         /** ChangeParameterColumn */
         ChangeParameterColumn: {
@@ -4314,6 +4528,14 @@ export interface components {
         };
         "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        /**
+         * ConfigurationEvidence
+         * @description One retained registry entry and its effective content, without activation.
+         */
+        ConfigurationEvidence: {
+            configuration: components["schemas"]["ConfigProfileSnapshot"];
+            entry: components["schemas"]["ConfigRegistryEntry"];
+        };
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
             actor: components["schemas"]["NonEmptyText"];
@@ -4569,6 +4791,11 @@ export interface components {
              * @default []
              */
             analyses: string[];
+            /**
+             * Captures
+             * @default []
+             */
+            captures: string[];
             /**
              * Parameters
              * @default []
@@ -5350,6 +5577,21 @@ export interface components {
             /** Minimum */
             minimum?: number | null;
         };
+        /**
+         * GridDomainRecord
+         * @description Persisted Cartesian point domain with declaration-ordered axes.
+         *
+         *     An empty axis list denotes the unit point rather than an empty domain.
+         */
+        "GridDomainRecord-Output": {
+            /** Axes */
+            axes?: components["schemas"]["AxisRecord-Output"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grid";
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5379,6 +5621,52 @@ export interface components {
             kind: "inline_samples";
             /** Samples */
             samples: components["schemas"]["SampleBinding"][];
+        };
+        /**
+         * InputRevisionEvidence
+         * @description Exact input revisions; contains no active heads or device registrations.
+         */
+        InputRevisionEvidence: {
+            /**
+             * Authors
+             * @default []
+             */
+            authors: components["schemas"]["AuthorRevisionBundle"][];
+            /**
+             * Configurations
+             * @default []
+             */
+            configurations: components["schemas"]["ConfigurationEvidence"][];
+            /**
+             * Parameters
+             * @default []
+             */
+            parameters: components["schemas"]["ParameterRevision"][];
+            /**
+             * Plans
+             * @default []
+             */
+            plans: components["schemas"]["ExperimentPlanRevision"][];
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleRevision"][];
+            /**
+             * Setup Definitions
+             * @default []
+             */
+            setup_definitions: components["schemas"]["SetupDefinitionRevision"][];
+            /**
+             * Setups
+             * @default []
+             */
+            setups: components["schemas"]["SetupRevision"][];
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["TargetRevision"][];
         };
         /**
          * InsertParameterRows
@@ -5411,6 +5699,17 @@ export interface components {
             rows: {
                 [key: string]: components["schemas"]["ParameterAtomValue"];
             }[];
+        };
+        /**
+         * InstalledAuthorPackage
+         * @description Installed module tree identity; deployment must preserve these exact bytes.
+         */
+        InstalledAuthorPackage: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /** Distribution */
+            distribution: string;
+            /** Version */
+            version: string;
         };
         /**
          * InstrumentAcquisitionEvent
@@ -5996,6 +6295,15 @@ export interface components {
             target: components["schemas"]["_NonEmptyText"];
             /** Title */
             title?: string | null;
+        };
+        /**
+         * InterpretationEvidence
+         * @description A retained judgment and its procedure context, with no execution authority.
+         */
+        InterpretationEvidence: {
+            procedure: components["schemas"]["ProcedureRun"];
+            reference: components["schemas"]["AnalysisInterpretationReference"];
+            step: components["schemas"]["ProcedureStepAttempt"];
         };
         /**
          * InterpretationOutputRef
@@ -6604,6 +6912,25 @@ export interface components {
         MeasurementArrayJson: components["schemas"]["MeasurementArrayJsonItem"][];
         MeasurementArrayJsonItem: components["schemas"]["MeasurementArrayJsonLeaf"] | components["schemas"]["MeasurementArrayJsonItem"][];
         MeasurementArrayJsonLeaf: boolean | number | string | components["schemas"]["MeasurementComplexJson"];
+        /** MeasurementArraySummary */
+        MeasurementArraySummary: {
+            /** Available Sample Count */
+            available_sample_count: number;
+            dtype: components["schemas"]["MeasurementDType"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "array_summary";
+            /** Sample Count */
+            sample_count: number | null;
+            /** Shape */
+            shape: (number | null)[];
+            /** Unavailable Reasons */
+            unavailable_reasons: ("missing" | "invalid" | "overload")[];
+            /** Unit */
+            unit: string | null;
+        };
         /**
          * MeasurementArrayUnavailableGroup
          * @description One reason shared by a sparse set of unavailable array leaves.
@@ -6884,6 +7211,7 @@ export interface components {
              */
             truncated: boolean;
         };
+        MeasurementPreviewValue: components["schemas"]["MeasurementScalar-Output"] | components["schemas"]["MeasurementArray"] | components["schemas"]["MeasurementPartitionedArray"] | components["schemas"]["MeasurementSegmentedArray"] | components["schemas"]["MeasurementUnavailable"] | components["schemas"]["MeasurementArraySummary"];
         /**
          * MeasurementProductGridPointDomain
          * @description A point domain formed from the ordered product of independent axes.
@@ -6908,6 +7236,23 @@ export interface components {
             logical_point_id?: string | null;
             metadata?: components["schemas"]["MeasurementMetadata-Output"];
             observables: components["schemas"]["MeasurementValueMap"];
+            /** Point Index */
+            point_index: number;
+            /** Run Id */
+            run_id: string;
+        };
+        /** MeasurementRecordPreview */
+        MeasurementRecordPreview: {
+            /** Coordinates */
+            coordinates: {
+                [key: string]: components["schemas"]["MeasurementPreviewValue"];
+            };
+            /** Logical Point Id */
+            logical_point_id: string | null;
+            /** Observables */
+            observables: {
+                [key: string]: components["schemas"]["MeasurementPreviewValue"];
+            };
             /** Point Index */
             point_index: number;
             /** Run Id */
@@ -7073,7 +7418,8 @@ export interface components {
          * MeasurementTracePreview
          * @description Bounded numeric series for one selected point/entity-local observable.
          *
-         *     ``selected_series_count`` is the authored domain selection size. It does
+         *     ``selected_series_count`` is the selected domain or retained-record window size
+         *     multiplied by the selected entity count. It does
          *     not promise that every selected point is durable yet or has an available
          *     observable value; ``returned_series_count`` counts response series only.
          */
@@ -7139,7 +7485,7 @@ export interface components {
         };
         /**
          * MeasurementTracePreviewQuery
-         * @description Select one bounded, response-ready point/entity-local trace preview.
+         * @description Select a bounded trace preview within an authored point-domain slice.
          */
         MeasurementTracePreviewQuery: {
             /** Coordinate Id */
@@ -7154,6 +7500,35 @@ export interface components {
             fixed_axis_indices?: {
                 [key: string]: number;
             };
+            /**
+             * Max Samples
+             * @default 4096
+             */
+            max_samples: number;
+            /**
+             * Max Series
+             * @default 32
+             */
+            max_series: number;
+            /** Observable Id */
+            observable_id?: string | null;
+            /** Recording Group Id */
+            recording_group_id?: string | null;
+            value_mode?: components["schemas"]["TraceValueMode"] | null;
+        };
+        /**
+         * MeasurementTraceProjectionQuery
+         * @description Select observable, entities and output budget within supplied records.
+         */
+        MeasurementTraceProjectionQuery: {
+            /** Coordinate Id */
+            coordinate_id?: string | null;
+            /** @default minmax */
+            downsampling: components["schemas"]["TraceDownsampling"];
+            /** Entities */
+            entities?: components["schemas"]["EntityRef"][] | null;
+            /** Entity Indices */
+            entity_indices?: number[] | null;
             /**
              * Max Samples
              * @default 4096
@@ -7818,6 +8193,23 @@ export interface components {
             proposal_fingerprint: string;
             setting: components["schemas"]["InstrumentStateSetting"];
         };
+        /**
+         * PointCloudDomainRecord
+         * @description Persisted ordered point-cloud rows with declaration-ordered columns.
+         */
+        "PointCloudDomainRecord-Output": {
+            /** Columns */
+            columns: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "points";
+            /** Rows */
+            rows: {
+                [key: string]: components["schemas"]["RunRequestScalarValue-Output"];
+            }[];
+        };
         /** @enum {string} */
         PointCoordinateKind: "bool" | "int" | "float" | "string" | "quantity" | "entity";
         /**
@@ -7857,8 +8249,63 @@ export interface components {
             unit?: string | null;
         };
         PointCoordinateValue: boolean | number | string | components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | null;
+        "PointDomainRecord-Output": components["schemas"]["GridDomainRecord-Output"] | components["schemas"]["PointCloudDomainRecord-Output"];
+        /**
+         * PointGroupingRecord
+         * @description Durable named partition without hardware-batch semantics.
+         */
+        PointGroupingRecord: {
+            /** Id */
+            id: string;
+            /**
+             * On Interruption
+             * @default restart_group
+             * @constant
+             */
+            on_interruption: "restart_group";
+            /**
+             * Scheduling
+             * @default prefer_together
+             * @constant
+             */
+            scheduling: "prefer_together";
+            /** Varying Coordinate Ids */
+            varying_coordinate_ids: string[];
+        };
+        /**
+         * PointPlanRecord
+         * @description Persisted base point domain and its execution-independent expansion policy.
+         */
+        "PointPlanRecord-Output": {
+            domain?: components["schemas"]["PointDomainRecord-Output"];
+            /**
+             * Repeat
+             * @default 1
+             */
+            repeat: number;
+            /**
+             * Repeat Mode
+             * @default point
+             * @enum {string}
+             */
+            repeat_mode: "point" | "sweep";
+            schedule?: components["schemas"]["PointScheduleRecord"];
+        };
         /** @enum {string} */
         PointProposalSource: "author" | "optimizer" | "operator";
+        /**
+         * PointScheduleRecord
+         * @description Durable composition of base traversal and related-point grouping.
+         */
+        PointScheduleRecord: {
+            grouping?: components["schemas"]["PointGroupingRecord"] | null;
+            /**
+             * Traversal
+             * @default forward
+             * @enum {string}
+             */
+            traversal: "forward" | "snake";
+        };
         /** PracticeCatalog */
         PracticeCatalog: {
             /** Items */
@@ -9297,6 +9744,30 @@ export interface components {
             values: components["schemas"]["RunPointCoordinateValue"][];
         };
         /**
+         * RunEvidence
+         * @description A run's accepted intent, effective configuration and retained content index.
+         *
+         *     Configuration is historical evidence: its connection descriptions are not
+         *     registrations or authorization to operate devices on the receiving machine.
+         *     Keep the original payload intact so its accepted hash remains checkable.
+         *     Referenced revisions and content bytes belong to the surrounding exchange.
+         */
+        RunEvidence: {
+            /**
+             * Codec
+             * @default scopecat.run-evidence.v1
+             * @constant
+             */
+            codec: "scopecat.run-evidence.v1";
+            configuration: components["schemas"]["ConfigProfileSnapshot"];
+            /** Contents */
+            contents: components["schemas"]["ContentEntry"][];
+            request: components["schemas"]["RunRequest-Output"];
+            snapshot: components["schemas"]["RunSnapshot"];
+            /** Source Project Id */
+            source_project_id: string;
+        };
+        /**
          * RunExecutionSegment
          * @description One immutable interval of continuous executor ownership within a run.
          */
@@ -9603,7 +10074,43 @@ export interface components {
             };
             record: components["schemas"]["ContentEntry"];
         };
-        "RunRequest-Output": unknown;
+        /**
+         * RunRequest
+         * @description Operator request for one structured run.
+         */
+        "RunRequest-Output": {
+            adaptive_domain_plan?: components["schemas"]["AdaptiveDomainPlanRecord"] | null;
+            /** Description */
+            description?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Experiment Id */
+            experiment_id?: string | null;
+            /** Inputs */
+            inputs?: {
+                [key: string]: components["schemas"]["RunRequestValue-Output"];
+            };
+            /** Metadata */
+            metadata?: {
+                [key: string]: components["schemas"]["RunRequestJsonValue-Output"];
+            };
+            /** Operator */
+            operator?: string | null;
+            plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;
+            point_plan?: components["schemas"]["PointPlanRecord-Output"];
+            /** Record Collection */
+            record_collection?: string | null;
+            /**
+             * Samples
+             * @default []
+             */
+            samples: components["schemas"]["SampleSelector"][];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+        };
         /** @enum {string} */
         RunRequestBinaryOperator: "+" | "-" | "*" | "/";
         /** RunRequestBinaryValue */
@@ -9737,6 +10244,9 @@ export interface components {
         RunRequestRangeValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | number;
         "RunRequestScalarValue-Input": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Input"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Input"] | string | boolean | number | null;
         "RunRequestScalarValue-Output": components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["RunRequestEntityRef-Output"] | components["schemas"]["RunRequestComplexValue"] | components["schemas"]["RunRequestExpressionValue-Output"] | string | boolean | number | null;
+        "RunRequestValue-Output": components["schemas"]["RunRequestScalarValue-Output"] | components["schemas"]["RunRequestValue-Output"][] | {
+            [key: string]: components["schemas"]["RunRequestValue-Output"];
+        };
         /**
          * RunRequestView
          * @description The operator request accepted with one run.
@@ -10191,6 +10701,29 @@ export interface components {
              */
             shape: "scalar";
             value: components["schemas"]["ParameterAtomValue"];
+        };
+        /**
+         * ScientificEvidence
+         * @description Scientific documents in one captured source-project namespace.
+         */
+        ScientificEvidence: {
+            /**
+             * Analyses
+             * @default []
+             */
+            analyses: components["schemas"]["AnalysisEvidence"][];
+            inputs?: components["schemas"]["InputRevisionEvidence"];
+            /**
+             * Interpretations
+             * @default []
+             */
+            interpretations: components["schemas"]["InterpretationEvidence"][];
+            /** Roots */
+            roots: string[];
+            /** Runs */
+            runs: components["schemas"]["RunEvidence"][];
+            /** Source Project Id */
+            source_project_id: string;
         };
         /** ScientificSelection */
         "ScientificSelection-Input": {
@@ -11671,6 +12204,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataCleanupPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_captures_api_v1_data_captures_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_capture_api_v1_data_captures_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureImportReceipt"];
+                };
+            };
+        };
+    };
+    download_artifact_api_v1_data_captures__content_hash__analyses__analysis_hash__artifacts__artifact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_hash: string;
+                artifact_id: string;
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_evidence_api_v1_data_captures__content_hash__evidence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScientificEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_capture_api_v1_data_captures__content_hash__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_recording_api_v1_data_captures__content_hash__runs__run_id__recording_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                selection?: "acquired" | "selected";
+            };
+            header?: never;
+            path: {
+                content_hash: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureRecordingPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_traces_api_v1_data_captures__content_hash__runs__run_id__recording_traces_post: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                selection?: "acquired" | "selected";
+            };
+            header?: never;
+            path: {
+                content_hash: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementTraceProjectionQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementTracePreview"];
                 };
             };
             /** @description Validation Error */

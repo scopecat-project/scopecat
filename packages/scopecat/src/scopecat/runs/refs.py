@@ -2,6 +2,8 @@
 
 from pathlib import PurePosixPath
 
+from scopecat.records.content import ContentEntry
+
 ARTIFACTS_DIR = "artifacts"
 DATASETS_DIR = "data"
 RECORDS_DIR = "records"
@@ -9,6 +11,17 @@ EXECUTION_DIR = "execution"
 CONFIG_PROFILE_SNAPSHOT_REF = "config-profile.snapshot.json"
 RUN_REQUEST_REF = "run-request.json"
 SCIENTIFIC_BINDING_REF = "scientific-binding.json"
+
+
+def content_entry_ref(entry: ContentEntry) -> str:
+    """Resolve the canonical payload reference declared by a content index."""
+    match entry.role:
+        case "record":
+            return record_content_ref(record_id=entry.id, kind=entry.kind)
+        case "artifact":
+            return artifact_content_ref(artifact_id=entry.id, kind=entry.kind)
+        case "dataset":
+            return dataset_content_ref(dataset_id=entry.id, kind=entry.kind)
 
 
 def artifact_content_ref(*, artifact_id: str, kind: str) -> str:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Literal, NoReturn
 
 from scopecat.analysis.dataset_wire import DerivedDatasetSchema
@@ -12,7 +13,11 @@ from scopecat.analysis.datasets import (
     DERIVED_DATASET_MEDIA_TYPE,
     DerivedDataset,
 )
-from scopecat.analysis.figure_views import figure_layer_budget, project_figure_layers
+from scopecat.analysis.figure_views import (
+    figure_layer_budget,
+    project_figure_layers,
+    read_figure_preview,
+)
 from scopecat.analysis.repository import (
     AnalysisPublication,
     AnalysisRepository,
@@ -76,6 +81,7 @@ from scopecat.records.analysis import (
     RunAnalysisSubject,
     SampleAnalysisSubject,
     analysis_record_id,
+    published_output_input_identity,
     validate_analysis_output_content_budget,
 )
 from scopecat.records.content import BytesWrite, ContentEntry, ModelWrite
@@ -317,7 +323,9 @@ def prepare_analysis(
         validate_interpretation=validate_interpretation,
     )
     analysis_views = _prepare_analysis_views(
-        outputs, inputs=inputs, services=services, repository=None
+        outputs,
+        inputs=inputs,
+        read_dataset=partial(_read_figure_dataset, services, None),
     )
     output_proposals = tuple(
         output.content
@@ -479,21 +487,6 @@ def prepare_project_analysis(
 ) -> PreparedProjectAnalysis:
     """Prepare one immutable publication over explicit project inputs."""
 
-    if not inputs:
-        _raise_analysis_problem(
-            "project_analysis_input_missing",
-            "project analysis requires at least one explicit input",
-            "inputs",
-        )
-    if any(isinstance(output, AnalysisParameterProposalOutput) for output in outputs):
-        _raise_analysis_problem(
-            "project_analysis_parameter_proposal_unsupported",
-            "project analysis cannot publish parameter proposals yet",
-            "outputs",
-        )
-    _validate_analysis_output_ids(outputs)
-    _validate_analysis_input_ids(inputs)
-    _validate_analysis_execution_outputs(executions, outputs)
     for index, item in enumerate(inputs):
         if isinstance(item, InterpretationAnalysisInput):
             if not isinstance(subject, ProjectAnalysisSubject):
@@ -511,8 +504,64 @@ def prepare_project_analysis(
         repository=repository,
         inputs=inputs,
     )
+    return prepare_independent_analysis(
+        title=title,
+        analysis_key=analysis_key,
+        step_id=step_id,
+        inputs=inputs,
+        executions=executions,
+        outputs=outputs,
+        subject=subject,
+        existing=_latest_project_analysis(
+            repository=repository,
+            analysis_key=analysis_key,
+            subject=subject,
+        ),
+        read_dataset=partial(_read_figure_dataset, services, repository),
+    )
+
+
+def prepare_independent_analysis(
+    *,
+    title: str,
+    analysis_key: str,
+    step_id: str | None,
+    inputs: Sequence[AnalysisInput],
+    executions: Sequence[AnalysisExecution],
+    outputs: Sequence[AnalysisOutput],
+    subject: ProjectAnalysisSubject | SampleAnalysisSubject = _PROJECT_ANALYSIS_SUBJECT,
+    existing: RetainedAnalysis | None,
+    read_dataset: Callable[
+        [AnalysisPublishedDatasetViewSource, AnalysisFigureProjection, int],
+        tuple[DerivedDataset, int],
+    ],
+) -> PreparedProjectAnalysis:
+    """Prepare an independent publication after its owner resolves input evidence.
+
+    Application repositories and portable files share output validation, preview
+    construction, content encoding and revision identity. Each owner validates
+    frozen inputs against its own retained evidence before publishing.
+    """
+
+    if not inputs:
+        _raise_analysis_problem(
+            "project_analysis_input_missing",
+            "project analysis requires at least one explicit input",
+            "inputs",
+        )
+    if any(isinstance(output, AnalysisParameterProposalOutput) for output in outputs):
+        _raise_analysis_problem(
+            "project_analysis_parameter_proposal_unsupported",
+            "project analysis cannot publish parameter proposals yet",
+            "outputs",
+        )
+    _validate_analysis_output_ids(outputs)
+    _validate_analysis_input_ids(inputs)
+    _validate_analysis_execution_outputs(executions, outputs)
     analysis_views = _prepare_analysis_views(
-        outputs, inputs=inputs, services=services, repository=repository
+        outputs,
+        inputs=inputs,
+        read_dataset=read_dataset,
     )
     publication_hash = _analysis_publication_hash(
         title=title,
@@ -521,11 +570,6 @@ def prepare_project_analysis(
         inputs=inputs,
         executions=executions,
         outputs=outputs,
-    )
-    existing = _latest_project_analysis(
-        repository=repository,
-        analysis_key=analysis_key,
-        subject=subject,
     )
     if existing is not None and existing.record.publication_hash == publication_hash:
         return PreparedProjectAnalysis(
@@ -647,7 +691,7 @@ def _prepare_analysis_contents(
 
 
 @dataclass(frozen=True, slots=True)
-class _ExistingAnalysis:
+class RetainedAnalysis:
     entry: ContentEntry
     record: AnalysisRecord
 
@@ -853,39 +897,15 @@ def _validate_published_analysis_output_input(
     source_output: AnalysisRecordOutput | None,
     index: int,
 ) -> None:
-    if input_ref.kind == "analysis_dataset":
-        if not isinstance(source_output, AnalysisDatasetRecordOutput):
-            _raise_analysis_problem(
-                "analysis_input_source_kind_mismatch",
-                "analysis_dataset input source identifies a different output kind",
-                "inputs",
-                index,
-            )
-        target = source_output.content.dataset_id
-        content_hash = source_output.content.content_hash
-        codec = source_output.content.codec
-    elif input_ref.kind == "analysis_fact":
-        if not isinstance(source_output, AnalysisFactRecordOutput):
-            _raise_analysis_problem(
-                "analysis_input_source_kind_mismatch",
-                "analysis_fact input source identifies a different output kind",
-                "inputs",
-                index,
-            )
-        target = source_output.id
-        content_hash = f"sha256:{model_wire_content_hash(source_output.content)}"
-        codec = source_output.content.codec
-    else:
-        if not isinstance(source_output, AnalysisArtifactRecordOutput):
-            _raise_analysis_problem(
-                "analysis_input_source_kind_mismatch",
-                "analysis_artifact input source identifies a different output kind",
-                "inputs",
-                index,
-            )
-        target = source_output.content.artifact_id
-        content_hash = source_output.content.content_hash
-        codec = ANALYSIS_ARTIFACT_CODEC
+    identity = published_output_input_identity(source_output)
+    if identity is None or identity[0] != input_ref.kind:
+        _raise_analysis_problem(
+            "analysis_input_source_kind_mismatch",
+            f"{input_ref.kind} input source identifies a different output kind",
+            "inputs",
+            index,
+        )
+    _, target, content_hash, codec = identity
     if (
         input_ref.target != target
         or input_ref.content_hash != content_hash
@@ -997,13 +1017,13 @@ def _latest_analysis(
     services: ProjectStateServices,
     run_id: str,
     analysis_key: str,
-) -> _ExistingAnalysis | None:
+) -> RetainedAnalysis | None:
     storage = services.runs
     publication = storage.latest_analysis_publication(run_id, analysis_key)
     if publication is None:
         return None
     entry = publication.record
-    return _ExistingAnalysis(
+    return RetainedAnalysis(
         entry=entry,
         record=storage.read_model(
             run_id,
@@ -1018,12 +1038,12 @@ def _latest_project_analysis(
     repository: AnalysisRepository,
     analysis_key: str,
     subject: ProjectAnalysisSubject | SampleAnalysisSubject,
-) -> _ExistingAnalysis | None:
+) -> RetainedAnalysis | None:
     publication = repository.latest_publication(analysis_key, subject=subject)
     if publication is None:
         return None
     entry = publication.record
-    return _ExistingAnalysis(
+    return RetainedAnalysis(
         entry=entry,
         record=repository.read_model(
             entry.id,
@@ -1502,15 +1522,10 @@ def _read_figure_dataset(
         record_id = source.source.analysis_record_id
         entry = repository.read_content(record_id, source.dataset.dataset_id)
         content = repository.read_bytes(record_id, ref)
-    columns = [projection.x, projection.y]
-    if projection.series is not None:
-        columns.append(projection.series)
-    if projection.uncertainty is not None:
-        columns.extend((projection.uncertainty.lower, projection.uncertainty.upper))
-    return DerivedDataset.preview_from_arrow_ipc(
+    return read_figure_preview(
         content,
         schema=DerivedDatasetSchema.model_validate(entry.data_schema),
-        columns=tuple(dict.fromkeys(columns)),
+        projection=projection,
         limit=limit,
     )
 
@@ -1519,8 +1534,10 @@ def _prepare_analysis_views(
     outputs: Sequence[AnalysisOutput],
     *,
     inputs: Sequence[AnalysisInput],
-    services: ProjectStateServices,
-    repository: AnalysisRepository | None,
+    read_dataset: Callable[
+        [AnalysisPublishedDatasetViewSource, AnalysisFigureProjection, int],
+        tuple[DerivedDataset, int],
+    ],
 ) -> Mapping[str, AnalysisTableView | AnalysisFigureView]:
     datasets = {
         output.id: output.content
@@ -1571,9 +1588,7 @@ def _prepare_analysis_views(
                                 "published figure source must match "
                                 "a frozen analysis dataset input"
                             )
-                        dataset, total_points = _read_figure_dataset(
-                            services,
-                            repository,
+                        dataset, total_points = read_dataset(
                             source,
                             layer.projection,
                             figure_layer_budget(

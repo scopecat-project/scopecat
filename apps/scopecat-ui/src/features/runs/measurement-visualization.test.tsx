@@ -19,12 +19,38 @@ import {
   type MeasurementSliceAxis,
 } from "./measurement-visualization";
 import { tracePreview, traceSeries } from "./measurement-trace.test-support";
+import type { components } from "../../api-schema";
 
 vi.mock("../../ui/EChartRuntime", () => ({ EChartRuntime: () => null }));
 
 afterEach(cleanup);
 
 describe("measurement visualization", () => {
+  it("labels array summaries without interpreting them as absent or numeric data", () => {
+    const item: components["schemas"]["MeasurementRecordPreview"] = {
+      run_id: "run",
+      point_index: 0,
+      logical_point_id: null,
+      coordinates: { bias: scalar(0, "V") },
+      observables: {
+        readout: {
+          kind: "array_summary",
+          dtype: "float64",
+          unit: "ratio",
+          shape: [2],
+          sample_count: 2,
+          available_sample_count: 1,
+          unavailable_reasons: ["missing"],
+        },
+      },
+    };
+    const table = measurementTable([item], entityScalarSchema());
+    expect(table.rows[0]!.cells[2]).toBe(
+      "2 samples ratio · 1/2 available · missing · preview summary",
+    );
+    expect(planMeasurementCharts([item], entityScalarSchema())).toEqual([]);
+  });
+
   it("plans a labeled scalar line from point coordinates", () => {
     const schema = scalarSchema();
     const items = [0, 1, 2].map((point) =>

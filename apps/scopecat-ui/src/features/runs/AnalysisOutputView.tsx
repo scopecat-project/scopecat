@@ -12,13 +12,19 @@ export function AnalysisOutputView({
 }) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string>();
+  const [savedPath, setSavedPath] = useState<string>();
 
   async function downloadArtifact() {
     if (output.kind !== "artifact") return;
     setDownloading(true);
     setDownloadError(undefined);
+    setSavedPath(undefined);
     try {
       const download = await getArtifactDownload(output.content.artifact_id);
+      if ("savedPath" in download) {
+        setSavedPath(download.savedPath ?? undefined);
+        return;
+      }
       const url = URL.createObjectURL(download.blob);
       const link = document.createElement("a");
       link.href = url;
@@ -98,6 +104,11 @@ export function AnalysisOutputView({
           >
             {downloading ? "Downloading…" : "Download file"}
           </button>
+          {savedPath && (
+            <span className="ml-2" role="status">
+              Saved to {savedPath}
+            </span>
+          )}
           {downloadError ? (
             <span className="ml-2 text-red" role="alert">
               {downloadError}
@@ -131,7 +142,7 @@ export function AnalysisOutputView({
 
 export type AnalysisArtifactDownloader = (
   selector: string,
-) => Promise<{ blob: Blob; filename: string }>;
+) => Promise<{ blob: Blob; filename: string } | { savedPath: string | null }>;
 
 type TableContent = Extract<AnalysisOutput, { kind: "table" }>["content"];
 

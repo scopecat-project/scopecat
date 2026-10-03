@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Protocol, cast
 import psutil
 from filelock import FileLock
 
-from scopecat.application import LabApplication
 from scopecat.project import open_project
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 from scopecat_server.author_registration import register_author_workspace
@@ -72,9 +71,6 @@ def development_session(
         project = open_project(root)
         try:
             record = start_project(project, static_dir=static_dir)
-            if open_project(source).instrument_backend_spec is not None:
-                with LabApplication().connect(record.base_url) as lab:
-                    lab.devices.update_driver_source(str(source))
             yield record
         finally:
             stop_project(project)

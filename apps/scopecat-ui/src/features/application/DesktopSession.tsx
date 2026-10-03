@@ -1,5 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState } from "react";
+import type { components } from "../../api-schema";
 import {
   dialogBackdrop,
   dialogPopup,
@@ -25,6 +26,16 @@ export interface InstallationStatus {
 }
 
 interface DesktopAPI {
+  set_window_title(title: string): Promise<void>;
+  open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
+  save_capture(contentHash: string): Promise<string | null>;
+  export_run(runId: string): Promise<string | null>;
+  save_captured_artifact(
+    contentHash: string,
+    analysisHash: string,
+    artifactId: string,
+    filename: string,
+  ): Promise<string | null>;
   status(): Promise<ApplicationStatus>;
   retry(): Promise<void>;
   restart(): Promise<void>;
@@ -39,6 +50,7 @@ interface DesktopAPI {
 }
 
 interface ApplicationActivity {
+  file_operations?: number;
   runs: number;
   procedures: number;
   instrument_sessions: number;
@@ -49,6 +61,7 @@ interface ApplicationActivity {
 
 function describeWork(work: ApplicationActivity): string {
   const labels: [keyof ApplicationActivity, string][] = [
+    ["file_operations", "file operation"],
     ["runs", "experiment"],
     ["procedures", "workflow"],
     ["instrument_sessions", "device session"],
@@ -57,7 +70,7 @@ function describeWork(work: ApplicationActivity): string {
     ["scheduled_workflows", "scheduled workflow"],
   ];
   return labels
-    .filter(([key]) => work[key] > 0)
+    .filter(([key]) => (work[key] ?? 0) > 0)
     .map(([key, label]) => `${work[key]} ${label}${work[key] === 1 ? "" : "s"}`)
     .join(", ");
 }
@@ -67,6 +80,16 @@ declare global {
     pywebview?: { api: DesktopAPI };
     scopecatRequestExit?: () => void;
   }
+}
+
+export function useDesktopAvailable() {
+  const [available, setAvailable] = useState(!!window.pywebview);
+  useEffect(() => {
+    const ready = () => setAvailable(true);
+    window.addEventListener("pywebviewready", ready);
+    return () => window.removeEventListener("pywebviewready", ready);
+  }, []);
+  return available;
 }
 
 export function DesktopSession() {
@@ -102,7 +125,22 @@ export function DesktopSession() {
           setProgress(undefined);
         });
     };
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        !window.pywebview ||
+        !event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        event.key.toLowerCase() !== "q"
+      )
+        return;
+      event.preventDefault();
+      if (!event.repeat) window.scopecatRequestExit?.();
+    };
+    window.addEventListener("keydown", keydown);
     return () => {
+      window.removeEventListener("keydown", keydown);
       delete window.scopecatRequestExit;
     };
   }, []);

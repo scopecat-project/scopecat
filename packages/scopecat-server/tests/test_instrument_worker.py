@@ -675,16 +675,20 @@ def test_worker_crash_fails_requests_and_marks_the_endpoint_unhealthy(
     endpoint.shutdown()
 
 
-def test_runtime_releases_project_lock_after_worker_start_failure(
+def test_worker_start_failure_keeps_application_usable_until_normal_close(
     tmp_path: Path,
 ) -> None:
     project = _copy_project(tmp_path)
 
-    with pytest.raises(InstrumentBackendUnavailable, match="failed to start"):
-        LocalDaemonRuntime(
-            project,
-            instrument_backend_spec="worker_fixture.backend:create_failing_backend",
-        )
+    with LocalDaemonRuntime(
+        project,
+        instrument_backend_spec="worker_fixture.backend:create_failing_backend",
+    ) as runtime:
+        assert runtime.application.health().status == "ok"
+        with pytest.raises(InstrumentBackendUnavailable, match="failed to start"):
+            runtime.application.instruments.driver_catalog()
+        assert runtime.application.health().status == "ok"
+        assert runtime.application.devices.list() == ()
 
     with LocalDaemonRuntime(project) as reopened:
         assert reopened.application.health().status == "ok"

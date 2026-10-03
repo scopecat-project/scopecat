@@ -71,6 +71,7 @@ class DataCleanupService:
                 "setup": ("setup_revisions", "revision_id"),
                 "setup_definition": ("setup_definitions", "definition_id"),
                 "parameters": ("parameter_revisions", "revision_id"),
+                "capture": ("imported_captures", "content_hash"),
             }[kind]
             row = cast(
                 "sqlite3.Row | None",
@@ -98,7 +99,7 @@ class DataCleanupService:
                             ),
                         )
                     )
-            if kind in {"run", "analysis"}:
+            if kind in {"run", "analysis", "capture"}:
                 directory = resource_directory(self.store.objects, kind, identity)
                 size += sum(
                     path.stat().st_size
@@ -269,7 +270,7 @@ class DataCleanupService:
                     )
                     self._save(connection, operation)
             for kind, identity in selection_resources(operation.selection):
-                if kind in {"run", "analysis"}:
+                if kind in {"run", "analysis", "capture"}:
                     directory = resource_directory(self.store.objects, kind, identity)
                     if directory.exists():
                         shutil.rmtree(directory)
@@ -279,5 +280,16 @@ class DataCleanupService:
         except Exception as error:
             operation = operation.model_copy(update={"error": str(error)})
         with self.store.sqlite.write_transaction() as connection:
+            if operation.state == "complete":
+                # Imported files may be explicitly opened again after removal.
+                # Keep the fence until owned bytes have been removed successfully.
+                connection.executemany(
+                    "DELETE FROM deleted_resources "
+                    "WHERE kind='capture' AND resource_id=? AND operation_id=?",
+                    [
+                        (identity, operation.id)
+                        for identity in operation.selection.captures
+                    ],
+                )
             self._save(connection, operation)
         return operation

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DataCleanupHistory } from "./DataCleanup";
+import { ImportedCaptures } from "./ImportedCaptures";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
@@ -135,6 +136,7 @@ export function ResearchHistory({
   return (
     <section className="space-y-4 p-4" aria-label="Data">
       <h2 className="text-lg font-semibold">Data</h2>
+      <ImportedCaptures unavailable={daemonUnavailable} />
       <DataCleanupHistory />
       <p className="text-sm text-text-dim">
         Organize retained evidence across projects. Associations do not move data or change

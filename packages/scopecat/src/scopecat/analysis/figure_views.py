@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from scopecat.analysis.dataset_wire import DerivedDatasetSchema
 from scopecat.analysis.datasets import DerivedDataset
 from scopecat.kernel.units import compatible_units, convert_linear_value
 from scopecat.records.analysis import (
@@ -14,9 +15,27 @@ from scopecat.records.analysis import (
     AnalysisFigureAxis,
     AnalysisFigureLayerSpec,
     AnalysisFigureLayerView,
+    AnalysisFigureProjection,
     AnalysisFigureSeries,
     AnalysisFigureView,
 )
+
+
+def read_figure_preview(
+    content: bytes,
+    schema: DerivedDatasetSchema,
+    projection: AnalysisFigureProjection,
+    limit: int,
+) -> tuple[DerivedDataset, int]:
+    """Read the same bounded IPC projection from any retained content source."""
+    columns = [projection.x, projection.y]
+    if projection.series is not None:
+        columns.append(projection.series)
+    if projection.uncertainty is not None:
+        columns.extend((projection.uncertainty.lower, projection.uncertainty.upper))
+    return DerivedDataset.preview_from_arrow_ipc(
+        content, schema=schema, columns=tuple(dict.fromkeys(columns)), limit=limit
+    )
 
 
 def project_figure_layers(

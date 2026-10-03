@@ -39,6 +39,13 @@ def require_retained_resource(
 def delete_selected_records(
     connection: sqlite3.Connection, selection: DataCleanupSelection
 ) -> None:
+    for capture in selection.captures:
+        connection.execute(
+            "DELETE FROM imported_run_identities WHERE capture_hash=?", (capture,)
+        )
+        connection.execute(
+            "DELETE FROM imported_captures WHERE content_hash=?", (capture,)
+        )
     for run_id in selection.runs:
         # Measurement projections reference append rows and recovery groups;
         # remove these indexes before their scheduler and run parents.

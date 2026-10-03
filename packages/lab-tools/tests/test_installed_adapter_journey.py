@@ -330,16 +330,12 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
     assert application.register_source(project) == workspace_id
     assert application.source(project) == workspace_id
     assert not (application.home / "host/services.sqlite").exists()
-    # Qualification invokes metadata in a worker, never bootstrap or acquisition.
-    origins = [json.loads(line) for line in trace.read_text().splitlines()]
-    assert {item["role"] for item in origins} == {"instrument"}
+    # Qualification checks the package without activating its backend.
+    assert not trace.exists()
     try:
         application.start()
         origins = [json.loads(line) for line in trace.read_text().splitlines()]
         bootstrap = next(item for item in origins if item["role"] == "bootstrap")
-        instrument = next(item for item in origins if item["role"] == "instrument")
-        assert bootstrap["pid"] != instrument["pid"]
-        assert all(Path(item["file"]).is_relative_to(site) for item in origins)
         result = json.loads(
             run(
                 [str(python), "-c", _AUTHOR_JOURNEY, str(project)],
@@ -350,6 +346,10 @@ def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
             .splitlines()[-1]
         )
         assert result["original"] != result["changed"]
+        origins = [json.loads(line) for line in trace.read_text().splitlines()]
+        instrument = next(item for item in origins if item["role"] == "instrument")
+        assert bootstrap["pid"] != instrument["pid"]
+        assert all(Path(item["file"]).is_relative_to(site) for item in origins)
         run(
             [
                 str(python),

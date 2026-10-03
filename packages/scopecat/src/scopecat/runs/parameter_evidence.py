@@ -1,6 +1,6 @@
 """Read retained host preparation evidence through the normal run repository."""
 
-from scopecat.kernel.content_identity import content_fingerprint, stable_content_hash
+from scopecat.kernel.content_identity import model_wire_content_hash
 from scopecat.records.content import ContentEntry, ModelWrite
 from scopecat.records.parameter_read import (
     HostParameterEvidence,
@@ -18,7 +18,7 @@ def host_parameter_evidence_publication(
     """Prepare immutable content; the caller must enforce its execution fence."""
 
     record = HostParameterEvidenceRecord(segment_id=segment_id, evidence=evidence)
-    fingerprint = stable_content_hash(content_fingerprint(record))
+    fingerprint = model_wire_content_hash(record)
     entry = ContentEntry(
         role="record",
         id=fingerprint,

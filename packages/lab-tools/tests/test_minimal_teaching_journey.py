@@ -34,7 +34,8 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             ]
             assert session.config.registry().entries == ()
             with pytest.raises(
-                httpx2.HTTPStatusError, match="Select a parameter branch"
+                httpx2.HTTPStatusError,
+                match="Select parameters and an experiment setup",
             ):
                 session.prepare("teaching.rabi")
             params = open_parameters(session)

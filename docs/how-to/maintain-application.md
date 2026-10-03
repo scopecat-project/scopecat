@@ -6,14 +6,19 @@ source folders and data locations. **Devices and drivers** maintains shared devi
 
 ## Daily use
 
+If you only want to inspect or share saved results, start with
+[Open and share recorded data](open-and-share-data.md); no code folder is needed.
+
 1. Open Scopecat, then open your experiment code folder in VS Code.
 2. Select your code folder's `.venv` interpreter for Python and Notebook kernels.
    Choose your code, setup and parameters in the current task.
 3. Save edits and refresh author code. This captures source without rebuilding
    the application or installing dependencies.
-4. Close Scopecat when finished. If it is idle, it exits directly. With unfinished
-   work, choose to wait, stop the work and quit, or continue in the background.
-   Background mode retains a menu-bar/system-tray entry with **Open** and **Quit**.
+4. Closing the last window keeps Scopecat in the background on both Mac and Windows,
+   with a menu-bar/system-tray entry for **Open** and **Quit**. Closing an additional
+   window only closes that view. Choose **Quit** to exit the application: if idle,
+   it exits directly; with unfinished work, choose to wait, stop the work and quit,
+   or continue in the background.
    An idle Python session alone does not prevent quitting.
 
 Reopening restores access to retained records; it never repeats a measurement.
@@ -122,7 +127,8 @@ python -m lab_tools.dev --home /path/to/development --workspace /path/to/author-
 The development environment needs the source dependencies installed first. This
 command starts its own backend and Vite without opening a browser; Ctrl-C stops
 both. It does not install a desktop entry or share the daily application's home.
-Experiment and analysis edits use ordinary author refresh. Driver edits use
+Registering the source folder does not enable its drivers. Experiment and
+analysis edits use ordinary author refresh. Initial driver selection and edits use
 **Update from source** in **Devices and drivers**, after finishing active work and
 releasing manual sessions. Saving a file alone does not replace a live driver.
 Dependency changes require explicit preparation of the development environment.

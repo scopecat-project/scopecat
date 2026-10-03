@@ -15,7 +15,7 @@ function recovery(api: Record<string, unknown>) {
   };
   const button = { disabled: false };
   const context = {
-    window: {},
+    window: Object.assign(new EventTarget(), { pywebview: { api } }),
     pywebview: { api },
     document: {
       getElementById: (id: keyof typeof elements) => elements[id],
@@ -55,4 +55,27 @@ it("keeps explicit stop available if the activity check fails", async () => {
   expect(page.elements["quit-options"].hidden).toBe(false);
   expect(page.elements.error.textContent).toBe("Offline");
   expect(page.button.disabled).toBe(false);
+});
+
+it("requests quit from the recovery page with Ctrl-Q without repeating it", async () => {
+  const request_exit = vi.fn().mockResolvedValue({ file_operations: 1 });
+  const page = recovery({ request_exit });
+  page.invoke("");
+  const key = Object.assign(new Event("keydown", { cancelable: true }), {
+    key: "q",
+    ctrlKey: true,
+    repeat: false,
+  });
+  page.context.window.dispatchEvent(key);
+  page.context.window.dispatchEvent(
+    Object.assign(new Event("keydown"), {
+      key: "q",
+      ctrlKey: true,
+      repeat: true,
+    }),
+  );
+  expect(key.defaultPrevented).toBe(true);
+  expect(request_exit).toHaveBeenCalledTimes(1);
+  await vi.waitFor(() => expect(page.button.disabled).toBe(false));
+  expect(page.elements["quit-options"].hidden).toBe(false);
 });

@@ -232,6 +232,97 @@ def test_workflow_analysis_review_activate_and_rerun_active_config(
     assert next_run.status == "completed"
     assert next_run.config_source == active_source
 
+    from scopecat.data_exchange import ScientificExchange
+
+    from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
+    from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+    from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
+
+    assert isinstance(services.runs, SQLiteRunRepository)
+    store = SQLiteProjectStore(services.runs.sqlite, services.runs.objects.root)
+    destination = tmp_path / "calibrated-run.scopecat"
+    export_scientific_capture(store, (next_run.run_id,), destination)
+    with ScientificExchange(destination) as package:
+        package.verify()
+        from scopecat.data_exchange.proposals import validate_proposal_references
+
+        validate_proposal_references(package.evidence, (candidate.parameter_proposal,))
+        from scopecat.config.candidates import resolve_candidate_config_from_snapshot
+        from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
+        from scopecat.records.config import config_content_hash
+
+        baseline = next(
+            item for item in package.evidence.runs if item.snapshot.run_id == run.run_id
+        )
+        resolved = resolve_candidate_config_from_snapshot(
+            candidate, source_config=baseline.configuration
+        )
+        digest = config_content_hash(resolved)
+        source = AnalysisCandidateRunConfigSource(
+            source_run_id=run.run_id,
+            analysis_record_id=candidate.analysis_record_id,
+            proposal_id=candidate.proposal_id,
+            base_config_content_hash=candidate.base_config_content_hash,
+            content_hash=digest,
+        )
+
+        def with_candidate(content_hash: str):
+            changed = tuple(
+                item.model_copy(
+                    update={
+                        "configuration": resolved,
+                        "snapshot": item.snapshot.model_copy(
+                            update={
+                                "config_source": source.model_copy(
+                                    update={"content_hash": content_hash}
+                                ),
+                                "config_content_hash": content_hash,
+                            }
+                        ),
+                    }
+                )
+                if item.snapshot.run_id == next_run.run_id
+                else item
+                for item in package.evidence.runs
+            )
+            return package.evidence.model_copy(update={"runs": changed})
+
+        validate_proposal_references(
+            with_candidate(digest), (candidate.parameter_proposal,)
+        )
+        with pytest.raises(ValueError, match="candidate configuration differs"):
+            validate_proposal_references(
+                with_candidate("sha256:" + "f" * 64), (candidate.parameter_proposal,)
+            )
+        with pytest.raises(ValueError, match="candidate proposal is missing"):
+            validate_proposal_references(package.evidence, ())
+        with pytest.raises(ValueError, match="proposal baseline run"):
+            validate_proposal_references(
+                package.evidence,
+                (
+                    candidate.parameter_proposal.model_copy(
+                        update={"base_config_id": "different"}
+                    ),
+                ),
+            )
+        with pytest.raises(ValueError, match="proposal publication"):
+            validate_proposal_references(
+                package.evidence,
+                (
+                    candidate.parameter_proposal.model_copy(
+                        update={"analysis_record_id": "missing"}
+                    ),
+                ),
+            )
+        assert {item.snapshot.run_id for item in package.evidence.runs} == {
+            run.run_id,
+            next_run.run_id,
+        }
+        assert (
+            package.recording(run.run_id).selected_content_hash
+            == summary_input.content_hash
+        )
+
 
 def test_analysis_trace_records_its_analysis_dependency(tmp_path: Path) -> None:
     run = execute_signal_run(

@@ -20,18 +20,23 @@ import httpx2
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.author_environment import create_client_environment
 from lab_tools.desktop import DesktopAPI
+from lab_tools.desktop_session import DesktopSession
 from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 selected = runtime.installation()
 assert not (home / "software").exists()
 workspace = home / "authors"
-urls = []
+navigation = []
 api = DesktopAPI(
-    runtime, lambda: SimpleNamespace(load_url=urls.append), threading.Event())
+    DesktopSession(runtime, threading.Event()),
+    lambda: SimpleNamespace(run_js=navigation.append))
 try:
     assert api.create_source(str(home), "authors") == str(workspace)
-    assert "source=" in urls[-1] and urls[-1].endswith("#settings")
+    assert navigation[-1].startswith("window.location.replace(")
+    url = json.loads(
+        navigation[-1].removeprefix("window.location.replace(").removesuffix(");"))
+    assert "source=" in url and url.endswith("#settings")
     client = create_client_environment(runtime, workspace)
     expected_source = {"directory": str(workspace), "python": str(client)}
     assert expected_source in api.status()["sources"]
@@ -41,7 +46,8 @@ try:
     assert {"directory": str(existing), "python": None} in api.status()["sources"]
     base = subprocess.check_output([str(client), "-I", "-c",
         "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
-    assert Path(base).is_relative_to(workspace / ".scopecat-python")
+    assert Path(base).resolve().is_relative_to(
+        (workspace / ".scopecat-python").resolve())
     subprocess.run([str(client), "-I", "-c", '''
 from importlib.util import find_spec
 for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
@@ -89,7 +95,7 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
         assert state["bundle_identifier"] == "org.scopecat.desktop", (
             "Cocoa lost the app identity; menu-bar registration can fail"
         )
-    python = Path(cast("str", state["python"]))
+    python = Path(cast("str", state["python"])).resolve()
     assert python.is_relative_to(relocated)
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
         [str(python), "-I", "-B", "-c", RUNTIME_CHECK, str(home)],

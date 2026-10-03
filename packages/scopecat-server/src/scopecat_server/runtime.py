@@ -63,6 +63,7 @@ from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
 from .http.transport import create_app
 from .instruments.actors import InstrumentActorRegistry
 from .instruments.backend import InstrumentBackendEndpoint
+from .instruments.owner import InstrumentBackendOwner
 from .instruments.service import InstrumentService
 from .instruments.worker import SubprocessInstrumentBackendEndpoint
 
@@ -129,6 +130,7 @@ class LocalDaemonRuntime:
             Callable[[], tuple[ConfigurationTemplate, ...]] | None
         ) = None
         sqlite: SQLiteDatabase | None = None
+        backend = InstrumentBackendOwner(instrument_endpoint)
 
         try:
             startup_stage("initializing project store")
@@ -152,20 +154,31 @@ class LocalDaemonRuntime:
                 )(self.project_root)
                 project_bootstrap = bootstrap
                 configuration_templates = bootstrap.configuration_templates
-            restored_endpoint = restore_driver_source(self.project_root, project_store)
-            if restored_endpoint is not None:
+
+            def activate_backend() -> InstrumentBackendEndpoint | None:
+                restored = restore_driver_source(self.project_root, project_store)
+                if restored is not None:
+                    if instrument_endpoint is not None:
+                        restored.shutdown()
+                        raise ValueError(
+                            "an explicit endpoint conflicts with the retained "
+                            "driver source"
+                        )
+                    return restored
                 if instrument_endpoint is not None:
-                    restored_endpoint.shutdown()
-                    raise ValueError(
-                        "an explicit endpoint conflicts with the retained driver source"
+                    return instrument_endpoint
+                if instrument_backend_spec is not None:
+                    return SubprocessInstrumentBackendEndpoint(
+                        self.project_root,
+                        instrument_backend_spec,
+                        installed_packages=adapter_packages,
+                        startup_timeout=30,
                     )
-                instrument_endpoint = restored_endpoint
-            elif instrument_backend_spec is not None:
-                instrument_endpoint = SubprocessInstrumentBackendEndpoint(
-                    self.project_root,
-                    instrument_backend_spec,
-                    installed_packages=adapter_packages,
-                )
+                return None
+
+            backend = InstrumentBackendOwner(
+                instrument_endpoint, activate=activate_backend
+            )
 
             startup_stage("project store ready; composing services")
             control = SQLiteControlPlane(sqlite)
@@ -223,7 +236,7 @@ class LocalDaemonRuntime:
                 analyses=analysis_service,
             )
             devices = DeviceService(
-                control=control, actors=instrument_actors, endpoint=instrument_endpoint
+                control=control, actors=instrument_actors, backend=backend
             )
             setup_service = SetupService(
                 control=control,
@@ -256,7 +269,7 @@ class LocalDaemonRuntime:
                 control=control,
                 runs=runs,
                 setup=setup_service,
-                endpoint=instrument_endpoint,
+                backend=backend,
                 payloads=payloads,
                 actors=instrument_actors,
                 shutdown_grace_seconds=instrument_shutdown_grace.total_seconds(),
@@ -327,9 +340,10 @@ class LocalDaemonRuntime:
             self.application = application
             self._closed = False
         except BaseException:
-            if instrument_endpoint is not None:
+            endpoint = backend.close()
+            if endpoint is not None:
                 with suppress(Exception):
-                    instrument_endpoint.shutdown()
+                    endpoint.shutdown()
             if sqlite is not None:
                 with suppress(Exception):
                     sqlite.close()

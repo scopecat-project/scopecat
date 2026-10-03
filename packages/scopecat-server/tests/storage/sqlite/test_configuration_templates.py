@@ -23,6 +23,7 @@ from scopecat_testkit.server.runtime import SQLiteTestRunRepository
 
 from scopecat_server.errors import BackendConflict
 from scopecat_server.instruments.actors import InstrumentActorRegistry
+from scopecat_server.instruments.owner import InstrumentBackendOwner
 from scopecat_server.services.devices import DeviceService
 from scopecat_server.services.setup import SetupService
 from scopecat_server.storage.sqlite.config_registry import SQLiteConfigRegistryStore
@@ -55,7 +56,9 @@ def services(root: Path) -> tuple[SetupService, SQLiteConfigRegistryStore]:
         control=control,
         config_registry=registry,
         devices=DeviceService(
-            control=control, actors=actors, endpoint=signal_endpoint()
+            control=control,
+            actors=actors,
+            backend=InstrumentBackendOwner(signal_endpoint()),
         ),
         templates=(template,),
     )

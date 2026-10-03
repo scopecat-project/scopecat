@@ -25,7 +25,11 @@ from pydantic import (
     model_validator,
 )
 
-from scopecat.kernel.content_identity import canonical_json, stable_content_hash
+from scopecat.kernel.content_identity import (
+    canonical_json,
+    model_wire_content_hash,
+    stable_content_hash,
+)
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.metadata import JsonMetadata
@@ -950,6 +954,36 @@ type AnalysisRecordOutput = Annotated[
     | AnalysisParameterProposalRecordOutput,
     Field(discriminator="kind"),
 ]
+
+
+def published_output_input_identity(
+    output: AnalysisRecordOutput | None,
+) -> tuple[str, str, str, str] | None:
+    """Return the exact kind, target, hash and codec accepted by an input."""
+    match output:
+        case AnalysisDatasetRecordOutput():
+            return (
+                "analysis_dataset",
+                output.content.dataset_id,
+                output.content.content_hash,
+                output.content.codec,
+            )
+        case AnalysisFactRecordOutput():
+            return (
+                "analysis_fact",
+                output.id,
+                f"sha256:{model_wire_content_hash(output.content)}",
+                output.content.codec,
+            )
+        case AnalysisArtifactRecordOutput():
+            return (
+                "analysis_artifact",
+                output.content.artifact_id,
+                output.content.content_hash,
+                ANALYSIS_ARTIFACT_CODEC,
+            )
+        case _:
+            return None
 
 
 def validate_analysis_output_content_budget(

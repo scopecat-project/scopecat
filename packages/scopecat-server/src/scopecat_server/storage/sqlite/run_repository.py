@@ -715,16 +715,31 @@ class SQLiteRunRepository:
                 raise _ref_conflict(run_id, item.ref)
 
     def _read_ref(self, run_id: str, ref: str) -> bytes:
+        try:
+            with self.sqlite.read_connection() as connection:
+                return self.read_bytes_in_transaction(connection, run_id, ref)
+        except sqlite3.Error as error:
+            raise _storage_failure(run_id=run_id, ref=ref) from error
+
+    def read_bytes_in_transaction(
+        self, connection: sqlite3.Connection, run_id: str, ref: str
+    ) -> bytes:
+        """Resolve immutable bytes in the caller's captured metadata snapshot."""
         _validate_identity(run_id, ref)
-        digest = self._digest(run_id, ref)
-        if digest is None:
+        row = _one(
+            connection.execute(
+                "SELECT digest FROM run_repository_refs WHERE run_id=? AND ref=?",
+                (run_id, ref),
+            )
+        )
+        if row is None:
             raise _integrity_failure(
                 run_id=run_id,
                 ref=ref,
                 code="run.ref_missing",
                 message="run is missing a referenced durable record",
             )
-        return self._read_object(digest, run_id=run_id, ref=ref)
+        return self._read_object(_text(row, "digest"), run_id=run_id, ref=ref)
 
     def _read_snapshot_with_connection(
         self,
@@ -919,22 +934,6 @@ class SQLiteRunRepository:
                     _encode_model(outcome).decode(),
                 ),
             )
-
-    def _digest(self, run_id: str, ref: str) -> str | None:
-        try:
-            with self.sqlite.read_connection() as connection:
-                row = _one(
-                    connection.execute(
-                        """
-                        SELECT digest FROM run_repository_refs
-                        WHERE run_id = ? AND ref = ?
-                        """,
-                        (run_id, ref),
-                    )
-                )
-        except sqlite3.Error as error:
-            raise _storage_failure(run_id=run_id, ref=ref) from error
-        return None if row is None else _text(row, "digest")
 
     def _read_object(self, digest: str, *, run_id: str, ref: str) -> bytes:
         try:

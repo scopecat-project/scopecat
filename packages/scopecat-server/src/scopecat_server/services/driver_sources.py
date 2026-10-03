@@ -35,6 +35,7 @@ def _start_worker(
         factory,
         code_root=source,
         source_revision=bundle.manifest.ref,
+        startup_timeout=30,
         installed_packages=tuple(
             (name, package.distribution)
             for name, package in bundle.manifest.installed_authors.items()

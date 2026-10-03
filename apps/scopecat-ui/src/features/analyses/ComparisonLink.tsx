@@ -7,11 +7,11 @@ export function ComparisonLink({ runId }: { runId?: string }) {
       onClick={(event) => {
         if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        window.history.pushState(null, "", target);
-        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        navigate(target);
       }}
     >
       Compare retained runs
     </a>
   );
 }
+import { navigate } from "../../lib/navigation";

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import threading
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from collections.abc import Callable
+from dataclasses import dataclass
 from html import escape
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
-from urllib.parse import urlencode
+from typing import TYPE_CHECKING, Literal, cast
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from filelock import FileLock, Timeout
 
@@ -18,9 +19,11 @@ from .application_runtime import ApplicationRuntime
 from .desktop_platform import (
     hide_window,
     install_reopen_handler,
+    install_window_menu,
     show_window,
     start_tray,
 )
+from .desktop_session import DesktopSession
 
 if TYPE_CHECKING:
     import webview
@@ -32,27 +35,24 @@ class DesktopAPI:
 
     def __init__(
         self,
-        runtime: ApplicationRuntime,
+        session: DesktopSession,
         window: Callable[[], webview.Window],
-        closing: threading.Event,
         prepare: Callable[[], None] = lambda: None,
+        new_window: Callable[[], None] = lambda: None,
     ):
-        self._runtime = runtime
+        self._session = session
+        self._runtime = session.runtime
         self._window = window
-        self._closing = closing
-        self._operation_lock = threading.Lock()
-        self._exit_thread: threading.Thread | None = None
         self._prepare = prepare
-        self._waiting = threading.Event()
+        self._new_window = new_window
+        self._file_lock = threading.Lock()
 
-    @contextmanager
-    def _operation(self) -> Generator[None]:
-        if not self._operation_lock.acquire(blocking=False):
-            raise ValueError("应用正在执行另一项操作，请稍候再试")
-        try:
-            yield
-        finally:
-            self._operation_lock.release()
+    def new_window(self) -> None:
+        with self._session.operation(allow_files=True):
+            self._new_window()
+
+    def set_window_title(self, title: str) -> None:
+        self._window().set_title(title)
 
     def status(self) -> dict[str, object]:
         from scopecat.author_workspaces import local_author_workspaces
@@ -78,9 +78,84 @@ class DesktopAPI:
     def choose_directory(self) -> str | None:
         import webview
 
-        with self._operation():
+        with self._session.operation():
             selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
             return selected[0] if selected else None
+
+    def open_capture(self) -> dict[str, object] | None:
+        import webview
+
+        from .desktop_files import import_capture
+
+        with self._file_lock:
+            _ = self._data_url()
+            selected = self._window().create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=False,
+                file_types=("Scopecat (*.scopecat)", "All files (*.*)"),
+            )
+            if not selected:
+                return None
+            with self._session.file_operation() as cancel:
+                return import_capture(
+                    self._data_url(), Path(selected[0]), cancel
+                ).model_dump(mode="json")
+
+    def save_capture(self, content_hash: str) -> str | None:
+        from .desktop_files import save_capture
+
+        return self._save_file(
+            lambda base, path, cancel: save_capture(base, content_hash, path, cancel)
+        )
+
+    def export_run(self, run_id: str) -> str | None:
+        from .desktop_files import export_run
+
+        return self._save_file(
+            lambda base, path, cancel: export_run(base, run_id, path, cancel)
+        )
+
+    def save_captured_artifact(
+        self, content_hash: str, analysis_hash: str, artifact_id: str, filename: str
+    ) -> str | None:
+        from .desktop_files import save_captured_artifact
+
+        return self._save_file(
+            lambda base, path, cancel: save_captured_artifact(
+                base, content_hash, analysis_hash, artifact_id, path, cancel
+            ),
+            filename=Path(filename.replace("\\", "/")).name,
+            file_types=("All files (*.*)",),
+        )
+
+    def _save_file(
+        self,
+        download: Callable[[str, Path, threading.Event], None],
+        *,
+        filename: str = "capture.scopecat",
+        file_types: tuple[str, ...] = ("Scopecat (*.scopecat)",),
+    ) -> str | None:
+        import webview
+
+        with self._file_lock:
+            _ = self._data_url()
+            selected = self._window().create_file_dialog(
+                webview.FileDialog.SAVE,
+                save_filename=filename,
+                file_types=file_types,
+            )
+            if not selected:
+                return None
+            # Cocoa SAVE returns one string; other hosts return a path tuple.
+            destination = Path(selected if isinstance(selected, str) else selected[0])
+            with self._session.file_operation() as cancel:
+                download(self._data_url(), destination, cancel)
+            return str(destination)
+
+    def _data_url(self) -> str:
+        if self._session.base_url is None:
+            raise ValueError("应用尚未准备就绪，请稍后重试")
+        return self._session.base_url
 
     def create_source(self, parent: str, name: str) -> str:
         from scopecat_server.scaffold import write_author_scaffold
@@ -93,7 +168,7 @@ class DesktopAPI:
         if not name.strip() or name in (".", "..") or any(c in name for c in "/\\:"):
             raise ValueError("请输入单个新目录名称")
         path = directory / name
-        with self._operation():
+        with self._session.operation():
             write_author_scaffold(path)
             create_client_environment(self._runtime, path)
             self._register_source(path)
@@ -116,7 +191,7 @@ class DesktopAPI:
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择作者代码目录的完整路径")
-        with self._operation():
+        with self._session.operation():
             # Register the selected folder, not an ancestor discovered by walking up.
             _ = load_project(path / "scopecat.toml", resolve_adapter=False)
             python = (
@@ -127,7 +202,7 @@ class DesktopAPI:
             return self._register_source(path, python)
 
     def restart(self) -> None:
-        with self._operation():
+        with self._session.operation():
             if self._runtime.selection.exists():
                 self._runtime.stop()
             self._start()
@@ -138,7 +213,7 @@ class DesktopAPI:
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择已登记作者目录的完整路径")
-        with self._operation():
+        with self._session.operation():
             self._runtime.source(path)
             python = prepare_execution_environment(self._runtime, path)
             self._runtime.select_source_environment(path, python)
@@ -150,65 +225,39 @@ class DesktopAPI:
         path = Path(directory)
         if not path.is_absolute():
             raise ValueError("请选择作者目录的完整路径")
-        with self._operation():
+        with self._session.operation():
             self._runtime.source(path)
             return str(create_client_environment(self._runtime, path, rebuild=rebuild))
 
     def retry(self) -> None:
-        with self._operation():
+        with self._session.operation():
             self._start()
 
     def _start(self, location: str = "") -> None:
-        if self._closing.is_set():
+        if self._session.closing.is_set():
             return
         self._prepare()
         record = self._runtime.start()
-        self._window().load_url(record.base_url + location)
+        self._session.connected(record.base_url)
+        _replace_location(self._window(), record.base_url + location)
 
     def exit(self, background: bool) -> None:
-        with self._operation():
-            if background:
-                self._waiting.clear()
-                hide_window(self._window())
-                return
-            if self._runtime.selection.exists():
-                self._runtime.stop()
-            self._exit_thread = threading.current_thread()
-            self._closing.set()
+        if background:
+            self._session.keep_running(lambda: hide_window(self._window()))
+        else:
+            self._session.exit()
 
     def request_exit(self) -> dict[str, int] | None:
-        with self._operation():
-            if not self._runtime.selection.exists() or self._runtime.stop_if_idle():
-                self._exit_thread = threading.current_thread()
-                self._closing.set()
-                return None
-            return self._runtime.activity().model_dump()
+        return self._session.request_exit()
 
     def wait_for_idle(self, wait: bool) -> None:
-        with self._operation():
-            if self._closing.is_set():
-                raise ValueError("应用正在关闭，无法更改自动退出")
-            if wait:
-                self._exit_thread = threading.current_thread()
-                self._waiting.set()
-            else:
-                self._waiting.clear()
+        self._session.wait_for_idle(wait)
 
-    def _poll_exit(self) -> None:
-        if self._waiting.is_set() and self._operation_lock.acquire(blocking=False):
-            try:
-                if self._runtime.stop_if_idle():
-                    self._closing.set()
-            finally:
-                self._operation_lock.release()
 
-    def _finish_exit(self) -> None:
-        if self._exit_thread is not None:
-            # pywebview sends the API result back to JavaScript after exit()
-            # returns. Destroying the page before that bridge thread finishes
-            # can leave it waiting forever for a WebKit evaluation callback.
-            self._exit_thread.join()
-        self._window().destroy()
+def _replace_location(window: webview.Window, url: str) -> None:
+    # Startup/recovery and backend reconnection are not user navigation.
+    # Replace the entry itself so native back gestures cannot reach these pages.
+    window.run_js(f"window.location.replace({json.dumps(url)});")
 
 
 def _page(content: str) -> str:
@@ -276,6 +325,160 @@ def _window_close_handlers(
     return request_close, request_quit
 
 
+@dataclass
+class DesktopView:
+    window: webview.Window
+    api: DesktopAPI
+    loaded: threading.Event
+    request_quit: Callable[[], bool]
+
+
+class DesktopWindows:
+    """Native windows share an application but own separate WebView state."""
+
+    def __init__(self, session: DesktopSession, prepare: Callable[[], None]):
+        self._session = session
+        self._prepare = prepare
+        self._views: list[DesktopView] = []
+        self._lock = threading.RLock()
+        session.connection_changed = self._reconnect
+
+    def _reconnect(self, previous: str, current: str) -> None:
+        old, new = urlsplit(previous), urlsplit(current)
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            location = view.window.get_current_url()
+            if location is None:
+                continue
+            url = urlsplit(location)
+            if (url.scheme, url.netloc) == (old.scheme, old.netloc):
+                _replace_location(
+                    view.window,
+                    urlunsplit(
+                        (new.scheme, new.netloc, url.path, url.query, url.fragment)
+                    ),
+                )
+
+    @property
+    def latest(self) -> DesktopView:
+        with self._lock:
+            return self._views[-1]
+
+    def create(self) -> DesktopView:
+        import webview
+
+        with self._lock:
+            api = DesktopAPI(
+                self._session, lambda: window, self._prepare, self.new_window
+            )
+            window = cast(
+                "webview.Window",
+                webview.create_window(  # pyright: ignore[reportUnknownMemberType]
+                    "Scopecat",
+                    url=self._session.base_url,
+                    html=(
+                        None
+                        if self._session.base_url
+                        else _page("<h1>Scopecat</h1><p>正在准备应用，请稍候…</p>")
+                    ),
+                    js_api=api,
+                    width=1280,
+                    height=900,
+                    min_size=(800, 600),
+                    text_select=True,
+                ),
+            )
+            loaded = threading.Event()
+            window.events.loaded += loaded.set
+            hide, request_quit = _window_close_handlers(
+                window, self._session.closing, loaded
+            )
+            view = DesktopView(window, api, loaded, request_quit)
+
+            def close() -> bool:
+                with self._lock:
+                    if self._session.closing.is_set():
+                        return True
+                    if len(self._views) > 1:
+                        # Reserve the close before another window checks whether
+                        # it is the last view keeping the native host alive.
+                        self._views.remove(view)
+                        return True
+                return hide()
+
+            def closed() -> None:
+                with self._lock:
+                    if view in self._views:
+                        self._views.remove(view)
+
+            window.events.closing += close
+            window.events.closed += closed
+            self._views.append(view)
+            return view
+
+    def new_window(self) -> None:
+        if self._session.base_url is None:
+            raise ValueError("应用尚在准备，请稍后新建窗口")
+        self.create()
+
+    def show(self) -> None:
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            show_window(view.window)
+
+    def _command_window(self) -> webview.Window:
+        import webview
+
+        active = webview.active_window()
+        with self._lock:
+            view = next(
+                (view for view in self._views if view.window is active), self.latest
+            )
+        show_window(view.window)
+        return view.window
+
+    def navigate_history(self, *, backward: bool) -> None:
+        window = self._command_window()
+        event = "scopecat:back" if backward else "scopecat:forward"
+        window.run_js(f"window.dispatchEvent(new Event('{event}'));")
+
+    def open_file(self) -> None:
+        window = self._command_window()
+        if self._session.base_url is None:
+            window.create_confirmation_dialog(
+                "暂时无法打开文件", "应用尚未准备就绪，请稍后重试"
+            )
+            return
+        window.run_js("window.dispatchEvent(new Event('scopecat:open-file'));")
+
+    def zoom(self, command: Literal["in", "out", "reset"]) -> None:
+        self._command_window().run_js(
+            f"window.dispatchEvent(new Event('scopecat:zoom-{command}'));"
+        )
+
+    def find(self) -> None:
+        self._command_window().run_js(
+            "window.dispatchEvent(new Event('scopecat:find'));"
+        )
+
+    def hide(self) -> None:
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            hide_window(view.window)
+
+    def request_quit(self) -> None:
+        _ = self.latest.request_quit()
+
+    def destroy(self) -> None:
+        with self._lock:
+            views = tuple(self._views)
+        for view in views:
+            view.window.destroy()
+
+
 def run(
     home: Path,
     source: Path | None = None,
@@ -287,6 +490,7 @@ def run(
     import pystray
     import webview
     from PIL import Image
+    from webview.menu import Menu, MenuAction
 
     home.mkdir(parents=True, exist_ok=True)
     directory = home / "desktop"
@@ -311,30 +515,20 @@ def run(
             if checked != selected or runtime.pending.exists():
                 runtime.select(checked)
 
-        api = DesktopAPI(runtime, lambda: window, closing, prepare or configure)
-        window = cast(
-            "webview.Window",
-            webview.create_window(  # pyright: ignore[reportUnknownMemberType]
-                "Scopecat",
-                html=_page("<h1>Scopecat</h1><p>正在准备应用，请稍候…</p>"),
-                js_api=api,
-                width=1280,
-                height=900,
-                min_size=(800, 600),
-                text_select=True,
-            ),
-        )
-        loaded = threading.Event()
-        window.events.loaded += loaded.set
+        session = DesktopSession(runtime, closing)
+        windows = DesktopWindows(session, prepare or configure)
+        first = windows.create()
+        window, api, loaded = first.window, first.api, first.loaded
 
-        request_close, request_quit = _window_close_handlers(window, closing, loaded)
-        window.events.closing += request_close
-
-        def show() -> None:
-            show_window(window)
-
-        def quit_from_menu() -> None:
-            _ = request_quit()
+        def new_window_from_menu() -> None:
+            try:
+                with session.operation(allow_files=True):
+                    windows.new_window()
+            except ValueError as error:
+                windows.show()
+                windows.latest.window.create_confirmation_dialog(
+                    "暂时无法新建窗口", str(error)
+                )
 
         tray_name = "tray-template.png" if sys.platform == "darwin" else "tray.png"
         with Image.open(Path(__file__).with_name("icons") / tray_name) as image:
@@ -346,11 +540,10 @@ def run(
                 icon_image,
                 "Scopecat",
                 menu=pystray.Menu(
-                    pystray.MenuItem("打开 Scopecat", show, default=True),
-                    pystray.MenuItem(
-                        "隐藏窗口（后台运行）", lambda: hide_window(window)
-                    ),
-                    pystray.MenuItem("退出 Scopecat", quit_from_menu),
+                    pystray.MenuItem("打开 Scopecat", windows.show, default=True),
+                    pystray.MenuItem("隐藏窗口（后台运行）", windows.hide),
+                    pystray.MenuItem("新建窗口", new_window_from_menu),
+                    pystray.MenuItem("退出 Scopecat", windows.request_quit),
                 ),
             )
 
@@ -362,45 +555,88 @@ def run(
                 if closing.is_set():
                     return
             if closing.is_set():
-                api._finish_exit()  # pyright: ignore[reportPrivateUsage]
+                session.finish_exit(windows.destroy)
                 return
             try:
                 # Cocoa status items need the application to have finished
                 # launching; a queued callback before webview.start is too early.
                 stop_tray = start_tray(create_tray)
-                install_reopen_handler(show, quit_from_menu, closing.is_set)
+                install_window_menu()
+                install_reopen_handler(
+                    windows.show, windows.request_quit, closing.is_set
+                )
                 api.retry()
             except Exception as error:
                 logging.getLogger(__name__).exception("Application startup failed")
                 window.load_html(_recovery(error))
             while not closing.wait(0.5):
                 try:
-                    api._poll_exit()  # pyright: ignore[reportPrivateUsage]
+                    session.poll_exit()
                 except Exception as error:
-                    api.wait_for_idle(False)
-                    show()
-                    window.load_html(_recovery(error))
+                    session.wait_for_idle(False)
+                    windows.show()
+                    windows.latest.window.load_html(_recovery(error))
                 if activate.exists():
                     requested_package = activate.read_text(encoding="utf-8")
                     activate.unlink(missing_ok=True)
-                    show()
+                    windows.show()
                     if requested_package != package_identity:
-                        quit_current = window.create_confirmation_dialog(
+                        quit_current = windows.latest.window.create_confirmation_dialog(
                             "Scopecat 已安装其他版本",
                             "当前窗口仍由之前打开的版本运行。"
                             "请退出当前应用，再打开已安装的版本。现在退出？",
                         )
                         if quit_current:
-                            _ = request_quit()
+                            windows.request_quit()
             # Keep the native completion hook out of the exposed JavaScript API.
-            api._finish_exit()  # pyright: ignore[reportPrivateUsage]
+            session.finish_exit(windows.destroy)
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
+        modifier = "⌘" if sys.platform == "darwin" else "Ctrl+"
         try:
             # WinForms otherwise extracts pythonw.exe's icon, not the native
             # launcher's icon. Tray artwork is configured independently above.
             webview.start(
                 supervise,
+                menu=[
+                    Menu(
+                        "文件",
+                        [
+                            MenuAction(f"打开文件…（{modifier}O）", windows.open_file),
+                            MenuAction("新建窗口", new_window_from_menu),
+                            MenuAction(
+                                f"退出 Scopecat（{modifier}Q）", windows.request_quit
+                            ),
+                        ],
+                    ),
+                    Menu(
+                        "视图",
+                        [
+                            MenuAction(f"查找…（{modifier}F）", windows.find),
+                            MenuAction(
+                                f"放大（{modifier}+）", lambda: windows.zoom("in")
+                            ),
+                            MenuAction(
+                                f"缩小（{modifier}-）", lambda: windows.zoom("out")
+                            ),
+                            MenuAction(
+                                f"实际大小 100%（{modifier}0）",
+                                lambda: windows.zoom("reset"),
+                            ),
+                        ],
+                    ),
+                    Menu(
+                        "导航",
+                        [
+                            MenuAction(
+                                "后退", lambda: windows.navigate_history(backward=True)
+                            ),
+                            MenuAction(
+                                "前进", lambda: windows.navigate_history(backward=False)
+                            ),
+                        ],
+                    ),
+                ],
                 icon=(
                     str(Path(__file__).with_name("icons") / "Scopecat.ico")
                     if sys.platform == "win32"

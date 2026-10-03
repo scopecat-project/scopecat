@@ -6,13 +6,17 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
+import httpx2
 import pytest
 from scopecat.application import LabApplication
 from scopecat.application.author_project import AuthorProject
 from scopecat.application.launch import LaunchPreview, LaunchSubmission
 from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.endpoint import read_daemon_endpoint_record
 from scopecat.daemon.preparation import AuthorPreparationFailed
 from scopecat.project import load_project
 from scopecat.records.launch_request import LaunchRequest
@@ -94,24 +98,34 @@ def admit_without_dispatch(root: Path, key: str) -> str:
 
 
 def run_admitted(root: Path, procedure_id: str) -> None:
-    result = subprocess.run(  # noqa: S603 - original intent selects the immutable worker code
-        [
-            sys.executable,
-            "-m",
-            "scopecat_server.procedure_worker",
-            str(root),
-            procedure_id,
-        ],
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
+    endpoint = read_daemon_endpoint_record(root)
+    assert endpoint is not None
+    response = httpx2.post(
+        f"{endpoint.base_url}/api/v1/procedures/{procedure_id}/dispatch",
         timeout=60,
+        trust_env=False,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
+    response.raise_for_status()
+    submission = LaunchSubmission.model_validate_json(response.content)
+    assert submission.dispatch_error is None
+    deadline = time.monotonic() + 60
+    with DaemonClient(endpoint.base_url) as client:
+        while time.monotonic() < deadline:
+            procedure = client.get_procedure(procedure_id)
+            if procedure.closure is not None:
+                assert procedure.closure.status == "succeeded", procedure
+                return
+            assert procedure.state not in {"attention_required", "waiting_for_input"}, (
+                procedure
+            )
+            time.sleep(0.1)
+    pytest.fail(f"Procedure did not finish: {procedure_id}")
 
 
 def test_refresh_freezes_admission_and_analysis_across_restore(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    select_reference_source: Callable[[Path], None],
 ) -> None:
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     root = tmp_path / "project"
@@ -119,6 +133,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_reference_source(root)
     source_path = root / "src/reference_lab_authors/authored/signal.py"
     source = source_path.read_text()
     # Ordinary code is split into adjacent experiment/helper/analysis files.
@@ -259,7 +274,9 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
 
 
 def test_refreshed_pulse_helper_keeps_admitted_recipe_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    select_reference_source: Callable[[Path], None],
 ) -> None:
     """A device-free author run evaluates the retained recipe's expanded amplitude."""
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
@@ -268,6 +285,7 @@ def test_refreshed_pulse_helper_keeps_admitted_recipe_source(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, root / name)
     shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_reference_source(root)
     authored = root / "src/reference_lab_authors/authored"
     example = (
         EXAMPLE_ROOT.parents[1]
