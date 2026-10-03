@@ -183,10 +183,66 @@ No laboratory Python is imported, no experiment runs, and no parameter is writte
 | `unknown` | Evidence is missing, ambiguous, unfinished or not fully inspected. |
 
 A newer negative check supersedes an older passing one. The report never searches
-backward for success. Exact-context filtering means another parameter revision,
-setup, subject or software scenario provides no matching evidence; it is not
-silently reused. An absent requirement returns `no_matching_evidence`. This is
-still conservative exact-revision matching, not parameter-dependency analysis.
+backward for success. By default another parameter revision, setup, subject or
+software scenario provides no matching evidence. Each item's `assessments` also
+explains excluded completed checks, so changing parameters need not hide the reason
+behind `no_matching_evidence`. Expand the explanation in the workbench or notebook.
+
+## Qualify limited reuse after parameter edits
+
+Ordinary parameter edits require no calibration approval. For advisory reuse, a
+laboratory may attach the same `CalibrationDependencies` to the original
+`CalibrationCheckRequest.dependencies` and a requested
+`CalibrationRequirement.dependencies`. This is an explicit scientific contract,
+not a conclusion drawn from captured reads. Without it matching remains exact.
+
+```python
+from scopecat.records.calibration_dependencies import (
+    CalibrationDependencies,
+    DependencyCoverage,
+)
+
+dependencies = CalibrationDependencies(
+    qualification="simulated-resonator-v1",
+    execution=DependencyCoverage(
+        parameters=("resonator",),
+        basis="Reviewed simulator and scan inputs use only the resonator table; "
+        "no external files or mutable globals contribute.",
+    ),
+    analysis=DependencyCoverage(
+        parameters=(),
+        basis="The fit uses only retained measurement arrays.",
+    ),
+    physical=DependencyCoverage(
+        parameters=("resonator",),
+        basis="This simulation has no coupling to other parameters.",
+    ),
+)
+```
+
+Do not copy that physical claim into a real laboratory. Review the full execution
+path (compiler, runtime, scan overlays and completion state), analysis arguments,
+closures, globals, files and physical coupling. Include all parameter dependencies,
+even those not observed in one run. A missing domain means unknown; an explicit
+empty tuple claims independence and needs a basis. Change the qualification and
+scope policy version when code or external assumptions change. The framework
+checks equality of the declaration, not the truth of its scientific assumptions.
+
+The supported comparison is deliberately at whole-parameter granularity. A table
+dependency includes every row and column, catching additions that a previous
+query would newly select. The complete catalog schema, subject, target mapping,
+setup/topology and software scenario remain exact fences. Base/point/segment read
+observations remain separate in their original records; none is promoted to full
+coverage. Unqualified arbitrary Python or external state must remain unknown.
+Candidates cannot use cross-revision comparison.
+
+Reports compare immutable saved revisions in one read snapshot and show compared
+and changed parameter IDs. Changed dependencies need a recheck; missing coverage
+is unknown. Newer negative, unknown or changed-input checks are not skipped to
+recover an older success. Measurement completion, age, missing analysis and
+unresolved executions still apply. Saved profiles retain the declaration, so the
+same policy works from Python and the workbench after reopening the application.
+This feature neither dispatches repairs nor grants permission to publish values.
 
 ## Declare capability prerequisites
 
@@ -259,7 +315,7 @@ actually evaluated. Supply either `profile` or `requirements`, not both.
 
 Profiles belong to the selected project data store, are available through the
 HTTP API without importing author Python, and survive current-format backup and
-restore. Current schema 101 retains their storage; use a fresh development data directory and
+restore. Current schema 108 retains their storage; use a fresh development data directory and
 retain older stores with their original environments. A saved profile is a
 report policy, not an automatic maintenance schedule or complete sample policy.
 
@@ -274,7 +330,9 @@ selection or a failed refresh clears the old result. No experiment is dispatched
 
 ## Bounds and interpretation
 
-`history_limit` defaults to 50 requests **per requirement**, with a range of 1–200.
+`history_limit` defaults to 50 requests **per requirement scope**, across contexts,
+with a range of 1–200. This broader history supplies invalidation explanations;
+an exhausted budget is unknown even if some inspected entries are unrelated.
 A report accepts 1–32 requirements with distinct IDs, and the product of requirement
 count and history limit must not exceed 2,000. A truncated history returns
 `incomplete_history` with `scan_limit`. Any unresolved check in the inspected

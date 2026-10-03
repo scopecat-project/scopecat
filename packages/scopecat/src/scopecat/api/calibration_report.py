@@ -95,6 +95,19 @@ class CalibrationReportView(CalibrationReport):
                 facts.append(
                     f"Unresolved executions: {', '.join(item.unresolved_procedures)}"
                 )
+            for assessment in item.assessments:
+                facts.append(
+                    f"Inspected {assessment.run_id}: {assessment.status}; "
+                    + ", ".join(assessment.reasons)
+                )
+                if assessment.dependencies is not None:
+                    comparison = assessment.dependencies
+                    facts.append(
+                        f"Dependency coverage: {comparison.status}; "
+                        + ", ".join(comparison.reasons)
+                        + "; changed parameters: "
+                        + (", ".join(comparison.changed_parameters) or "none")
+                    )
             details.append(
                 f"<details><summary>{escape(requirement.id)} evidence</summary><ul>"
                 + "".join(f"<li>{escape(fact)}</li>" for fact in facts)

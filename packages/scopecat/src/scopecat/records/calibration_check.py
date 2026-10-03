@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.calibration_dependencies import CalibrationDependencies
 from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.setup import SetupRevisionRef
 
@@ -41,8 +42,9 @@ class CalibrationCheckRequest(BaseModel):
     measurement_step: str = Field(min_length=1)
     analysis_step: str = Field(min_length=1)
     result_output: str = Field(default="check", min_length=1)
+    dependencies: CalibrationDependencies | None = None
 
-    @field_validator("scope", "context", "setup", mode="before")
+    @field_validator("scope", "context", "setup", "dependencies", mode="before")
     @classmethod
     def thaw_retained_intent(cls, value: object) -> object:
         return thaw_json_value(value)

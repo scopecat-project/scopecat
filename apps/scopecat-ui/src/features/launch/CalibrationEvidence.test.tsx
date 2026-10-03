@@ -41,6 +41,7 @@ function report(
         scanned: 2,
         unresolved_procedures: [],
         incomplete_reasons: [],
+        assessments: [],
         selection: {
           status,
           reason: "latest_matching",

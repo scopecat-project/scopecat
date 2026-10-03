@@ -63,20 +63,27 @@ from scopecat.daemon.wire import (
     AnalysisFactOutputPayload,
     AnalysisParameterProposalOutputPayload,
     AnalysisSaveCommand,
+    ExecutorStartRequest,
     ParameterBranchCommitCommand,
     ParameterResolveCommand,
     ParameterSaveCommand,
     RunSubmission,
     SampleCreateCommand,
     SetupImportCommand,
+    TerminalRunCommitCommand,
 )
 from scopecat.kernel.quantity import Quantity
+from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.project import load_project
 from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
     CalibrationScope,
+)
+from scopecat.records.calibration_dependencies import (
+    CalibrationDependencies,
+    DependencyCoverage,
 )
 from scopecat.records.calibration_policy import (
     CalibrationProfile,
@@ -376,6 +383,16 @@ def test_capability_profiles_are_immutable_and_survive_backup(tmp_path: Path) ->
                     id="readout",
                     scope=declaration.scope,
                     max_age=timedelta(hours=1),
+                    dependencies=CalibrationDependencies(
+                        qualification="fixture-v1",
+                        execution=DependencyCoverage(
+                            parameters=("drive_frequency",), basis="Fixed fixture"
+                        ),
+                        analysis=DependencyCoverage(
+                            parameters=(), basis="Retained arrays only"
+                        ),
+                        physical=None,
+                    ),
                 ),
             ),
         )
@@ -1510,6 +1527,32 @@ def test_check_result_registration_rejects_wrong_evidence_and_retains_negative(
     check_case: CheckCase,
 ) -> None:
     runtime, declaration, child = check_case
+    dependencies = CalibrationDependencies(
+        qualification="fixed-test-input-v1",
+        execution=DependencyCoverage(
+            parameters=("drive_frequency",),
+            basis="Fixture input is fixed except declared frequency.",
+        ),
+        analysis=DependencyCoverage(
+            parameters=(), basis="Fixture emits a fixed negative result."
+        ),
+        physical=DependencyCoverage(
+            parameters=(), basis="Software fixture has no physical outputs."
+        ),
+    )
+    declaration = declaration.model_copy(update={"dependencies": dependencies})
+    # This publication/admission fixture has no acquisition program or records.
+    child = child.model_copy(
+        update={
+            "plan": child.plan.model_copy(
+                update={
+                    "point_count": 0,
+                    "initial_point_count": 0,
+                    "point_limit": 0,
+                }
+            )
+        }
+    )
     app = runtime.application
     service = app.automation
     parent = service.submit(_command(declaration)).run
@@ -1673,3 +1716,55 @@ def test_check_result_registration_rejects_wrong_evidence_and_retains_negative(
             assert retained.evidence.measurement.run_id == measured.run_id
             assert retained.evidence.analysis_record_id == saved.record.id
             assert retained.evidence.passed is False
+            assert retained.request.dependencies == dependencies
+            config = child.config
+            revision = app.config.save_parameters(
+                ParameterSaveCommand(
+                    revision_id="same-input-new-revision",
+                    catalog=config.parameter_catalog,
+                    parameters=config.parameter_snapshot,
+                    actor="test",
+                )
+            )
+            requirement = CalibrationRequirement(
+                id="readout",
+                scope=declaration.scope,
+                max_age=timedelta(hours=1),
+                dependencies=dependencies,
+            )
+            report_query = CalibrationReportQuery(
+                context=replace(declaration.context, parameters=revision.ref),
+                requirements=(requirement,),
+            )
+            with TestClient(runtime.app()) as client:
+                response = client.post(
+                    "/api/v1/calibration-checks/report",
+                    json=report_query.model_dump(mode="json"),
+                )
+                assert response.status_code == 200, response.text
+                report = CalibrationReport.model_validate(response.json())
+            comparison = report.items[0].assessments[0].dependencies
+            assert comparison is not None and comparison.status == "unchanged"
+            assert comparison.compared_parameters == ("drive_frequency",)
+            # Input equivalence cannot turn an unfinished measurement into success.
+            assert report.items[0].selection.status == "unknown"
+            assert report.items[0].selection.assessment is not None
+            assert (
+                "measurement_incomplete" in report.items[0].selection.assessment.reasons
+            )
+            executor = app.executor.start_executor(
+                measured.run_id, ExecutorStartRequest(executor_id="fixture")
+            )
+            app.executor.commit_terminal(
+                measured.run_id,
+                TerminalRunCommitCommand(
+                    lease_id=executor.lease_id,
+                    outcome=RunOutcome(
+                        run_id=measured.run_id, result="succeeded", certainty="known"
+                    ),
+                ),
+            )
+            assert (
+                app.calibration_checks.report(report_query).items[0].selection.status
+                == "out_of_spec"
+            )

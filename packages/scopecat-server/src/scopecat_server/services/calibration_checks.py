@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -16,6 +17,7 @@ from scopecat.automation import (
 from scopecat.automation.calibration import (
     CapabilityAvailability,
     CheckEvidence,
+    assess_calibration_check,
     assess_capability_dependencies,
     select_calibration_check,
 )
@@ -47,9 +49,14 @@ from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
 )
+from scopecat.records.calibration_dependencies import (
+    DependencyComparison,
+    compare_calibration_dependencies,
+)
 from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import config_content_hash
 from scopecat.records.measurement_context import MeasurementContext
+from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.run import ParameterRunConfigSource, RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import (
@@ -71,6 +78,9 @@ from scopecat_server.storage.sqlite.automation import (
 from scopecat_server.storage.sqlite.calibration_checks import CalibrationCheckStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.devices import DeviceRepository
+from scopecat_server.storage.sqlite.parameter_revisions import (
+    ParameterRevisionRepository,
+)
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 from scopecat_server.storage.sqlite.target_catalog import TargetCatalogStore
@@ -307,20 +317,81 @@ class CalibrationCheckQueries:
         items: list[CalibrationRequirementStatus] = []
         with self._sqlite.read_transaction() as connection:
             now = datetime.now(UTC)
+            revisions: dict[str, ParameterRevision] = {}
+            parameters = ParameterRevisionRepository(connection)
+
+            def read_parameters(ref: ParameterRevisionRef) -> ParameterRevision:
+                if ref.revision_id not in revisions:
+                    revisions[ref.revision_id] = parameters.get(ref.revision_id)
+                revision = revisions[ref.revision_id]
+                if revision.ref != ref:
+                    raise BackendConflict(
+                        "parameter reference differs from saved content"
+                    )
+                return revision
+
             for requirement in query.requirements:
                 page = self._checks.query_in_transaction(
                     connection,
                     CalibrationCheckQuery(
                         scope=requirement.scope,
-                        context=query.context,
                         limit=query.history_limit,
                     ),
                 )
                 views = tuple(self._view(connection, run) for run in page.items)
+                comparisons: dict[str, DependencyComparison] = {}
+                for view in views:
+                    if (
+                        view.evidence is None
+                        or requirement.dependencies is None
+                        or view.request.context.parameters == query.context.parameters
+                    ):
+                        continue
+                    before = view.request.context.parameters
+                    after = query.context.parameters
+                    comparison = DependencyComparison(
+                        status="unknown",
+                        reasons=("saved_parameter_revisions_required",),
+                    )
+                    if isinstance(before, ParameterRevisionRef) and isinstance(
+                        after, ParameterRevisionRef
+                    ):
+                        try:
+                            original = read_parameters(before)
+                            current = read_parameters(after)
+                            comparison = compare_calibration_dependencies(
+                                view.request.dependencies,
+                                requirement.dependencies,
+                                original,
+                                current,
+                            )
+                        except KeyError:
+                            comparison = DependencyComparison(
+                                status="unknown",
+                                reasons=("parameter_revision_missing",),
+                            )
+                    run_id = view.evidence.measurement.run_id
+                    previous = comparisons.get(run_id)
+                    if previous is not None and previous != comparison:
+                        comparison = DependencyComparison(
+                            status="unknown", reasons=("conflicting_declarations",)
+                        )
+                    comparisons[run_id] = comparison
                 unresolved = tuple(
                     item.execution.procedure_run_id
                     for item in views
                     if item.evidence is None
+                    and (
+                        item.request.context == query.context
+                        or (
+                            requirement.dependencies is not None
+                            and replace(
+                                item.request.context,
+                                parameters=query.context.parameters,
+                            )
+                            == query.context
+                        )
+                    )
                 )
                 reasons: list[Literal["scan_limit", "unresolved_checks"]] = []
                 if page.next_cursor is not None:
@@ -334,6 +405,7 @@ class CalibrationCheckQueries:
                     now=now,
                     max_age=requirement.max_age,
                     history_complete=not reasons,
+                    dependencies=comparisons,
                 )
                 items.append(
                     CalibrationRequirementStatus(
@@ -343,6 +415,22 @@ class CalibrationCheckQueries:
                         scanned=len(views),
                         unresolved_procedures=unresolved,
                         incomplete_reasons=tuple(reasons),
+                        assessments=tuple(
+                            assess_calibration_check(
+                                item.evidence.measurement,
+                                checked_scope=item.evidence.scope,
+                                requested_scope=requirement.scope,
+                                passed=item.evidence.passed,
+                                current=query.context,
+                                now=now,
+                                max_age=requirement.max_age,
+                                dependencies=comparisons.get(
+                                    item.evidence.measurement.run_id
+                                ),
+                            )
+                            for item in views
+                            if item.evidence is not None
+                        ),
                     )
                 )
             availability = assess_capability_dependencies(

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
 import { CalibrationProfiles } from "./CalibrationProfiles";
+import { CalibrationAssessments } from "./CalibrationAssessments";
 
 type TaskView = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-tasks/{task_id}">;
 type Stage = TaskView["task"]["specification"]["plan"]["stages"][number];
@@ -152,6 +153,7 @@ export function CalibrationEvidence({
               <li key={reason}>{reasons[reason] ?? reason.replaceAll("_", " ")}</li>
             ))}
           </ul>
+          <CalibrationAssessments assessments={result.assessments} />
           {evidence && (
             <>
               <p>Measurement created at {evidence.measurement.created_at}.</p>
