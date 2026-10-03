@@ -169,18 +169,28 @@ class SDKProcess:
                 return
             self._closed = True
             failed_before_close = self._failure is not None
-        inspection_error: psutil.Error | None = None
+        inspection_error: psutil.Error | OSError | None = None
         try:
             descendants = self._owner.children(recursive=True)
         except psutil.NoSuchProcess:
             descendants = []
-        except psutil.Error as error:
+        except (psutil.Error, OSError) as error:
             descendants = []
             inspection_error = error
         forced = False
         try:
             if self._process.stdin is not None:
-                self._process.stdin.close()
+                # Windows closing a pipe can wait for an in-flight CRT write.
+                # Release a blocked upload by stopping its reader first; closing
+                # stdin before termination would deadlock the timeout path.
+                if self._write_lock.acquire(blocking=False):
+                    try:
+                        self._process.stdin.close()
+                    finally:
+                        self._write_lock.release()
+                else:
+                    forced = True
+                    self._process.terminate()
             try:
                 self._process.wait(timeout=2)
             except subprocess.TimeoutExpired:
@@ -207,6 +217,8 @@ class SDKProcess:
                     "SDK stopped, but descendant inspection failed"
                 ) from inspection_error
         finally:
+            if self._process.stdin is not None:
+                self._process.stdin.close()
             self._reader.join(timeout=2)
             if self._process.stdout is not None:
                 self._process.stdout.close()
