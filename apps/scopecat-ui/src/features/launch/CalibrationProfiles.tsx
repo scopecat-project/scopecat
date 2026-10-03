@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
+import { CalibrationAssessments } from "./CalibrationAssessments";
 
 type Page = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-profiles">;
 type Report = MethodResponse<typeof apiClient, "post", "/api/v1/calibration-checks/report">;
@@ -194,6 +195,7 @@ export function CalibrationProfiles({
                   ...item.incomplete_reasons,
                 ].join(", ")}
               </p>
+              <CalibrationAssessments assessments={item.assessments} />
               {item.selection.evidence && (
                 <a
                   className="underline"

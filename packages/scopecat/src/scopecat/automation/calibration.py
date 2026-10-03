@@ -12,6 +12,7 @@ from graphlib import TopologicalSorter
 from typing import Literal
 
 from scopecat.records.calibration_check import CalibrationScope
+from scopecat.records.calibration_dependencies import DependencyComparison
 from scopecat.records.measurement_context import MeasurementContext
 from scopecat.records.run import RunSnapshot
 from scopecat.records.scientific_binding import UnboundSubject
@@ -26,6 +27,8 @@ type CheckReason = Literal[
     "conditions_changed",
     "policy_changed",
     "parameters_changed",
+    "dependency_coverage_unknown",
+    "dependency_inputs_changed",
     "subject_changed",
     "target_binding_changed",
     "setup_changed",
@@ -75,6 +78,7 @@ class CheckAssessment:
     run_id: str
     status: CheckStatus
     reasons: tuple[CheckReason, ...]
+    dependencies: DependencyComparison | None = None
 
 
 def assess_calibration_check(
@@ -86,13 +90,16 @@ def assess_calibration_check(
     current: MeasurementContext,
     now: datetime,
     max_age: timedelta,
+    dependencies: DependencyComparison | None = None,
 ) -> CheckAssessment:
-    """Explain reuse under an explicit exact-input and maximum-age policy.
+    """Explain reuse under exact context or qualified dependency comparison.
 
     Use the run's creation time conservatively, never analysis publication
     time: reanalysis does not refresh observations. Negative but applicable checks
     are out-of-spec; stale negative checks require rechecking. Unknown/incomplete
     evidence never grants readiness. No state is changed by this function.
+    A supplied comparison must belong to these saved parameter revisions; the
+    server resolves it from immutable declarations and values, never client verdicts.
     """
     if now.utcoffset() is None or measurement.created_at.utcoffset() is None:
         raise ValueError("check assessment requires timezone-aware times")
@@ -110,7 +117,12 @@ def assess_calibration_check(
     if observed is None:
         unknown.append("parameters_unsaved")
     elif observed.parameters != current.parameters:
-        changed.append("parameters_changed")
+        if dependencies is None:
+            changed.append("parameters_changed")
+        elif dependencies.status == "unknown":
+            unknown.append("dependency_coverage_unknown")
+        elif dependencies.status == "changed":
+            changed.append("dependency_inputs_changed")
     binding = measurement.scientific_binding
     if (isinstance(binding.subject, UnboundSubject) and binding.scenario is None) or (
         isinstance(current.subject, UnboundSubject) and current.scenario is None
@@ -139,13 +151,18 @@ def assess_calibration_check(
     elif age >= max_age:
         changed.append("check_expired")
     if unknown:
-        return CheckAssessment(measurement.run_id, "unknown", tuple(unknown + changed))
+        return CheckAssessment(
+            measurement.run_id, "unknown", tuple(unknown + changed), dependencies
+        )
     if changed:
-        return CheckAssessment(measurement.run_id, "recheck", tuple(changed))
+        return CheckAssessment(
+            measurement.run_id, "recheck", tuple(changed), dependencies
+        )
     return CheckAssessment(
         measurement.run_id,
         "usable" if passed else "out_of_spec",
         ("within_spec" if passed else "out_of_spec",),
+        dependencies,
     )
 
 
@@ -200,6 +217,7 @@ def select_calibration_check(
     now: datetime,
     max_age: timedelta,
     history_complete: bool,
+    dependencies: Mapping[str, DependencyComparison] | None = None,
 ) -> CheckSelection:
     """Select by run creation time, never by success or analysis publication time.
 
@@ -222,6 +240,9 @@ def select_calibration_check(
             current=current,
             now=now,
             max_age=max_age,
+            dependencies=dependencies.get(item.measurement.run_id)
+            if dependencies
+            else None,
         )
         if not _CONTEXT_CHANGES.intersection(assessment.reasons):
             matching.append((item, assessment))

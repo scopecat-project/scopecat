@@ -8,6 +8,7 @@ from graphlib import CycleError, TopologicalSorter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from scopecat.records.calibration_check import CalibrationScope
+from scopecat.records.calibration_dependencies import CalibrationDependencies
 
 
 class CalibrationRequirement(BaseModel):
@@ -18,6 +19,7 @@ class CalibrationRequirement(BaseModel):
     scope: CalibrationScope
     max_age: timedelta = Field(gt=timedelta(0))
     depends_on: tuple[str, ...] = ()
+    dependencies: CalibrationDependencies | None = None
 
 
 class CalibrationRequirements(BaseModel):

@@ -20,7 +20,7 @@ remain distinct. Track the software gate in #610/#616/#671.
 | Scientific context | Common `MeasurementContext` for saved revisions and retained candidates; subject separated from `TargetSetupBinding`; mappings checked at admission and for applicability | Overrides/unsaved inputs remain outside exact contexts; candidates do not inherit saved-revision applicability |
 | Targets | Catalog definitions and a general pure topology mapping checker | Registered execution remains single-member, no target connections, identity mapping |
 | Candidates | Retained proposals, sibling composition, sequential chains, independent verification and fenced branch publication; optional task finalization handoff | Final scientific policy and publication remain explicitly authored |
-| Calibration | Declared checks, indexed history, exact-context applicability, immutable profiles, focused reports and scoped parameter-read evidence | Applicability still uses exact contexts; partial read capture does not enable selective cross-revision reuse |
+| Calibration | Declared checks, indexed history, immutable profiles, per-check applicability explanations and explicit whole-parameter dependency comparison | Cross-revision reuse requires identical complete execution/analysis/physical declarations; partial read capture does not establish independence |
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Candidate edges require passing source checks; no repair-on-failure or general adaptive flow |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
@@ -181,8 +181,12 @@ execution and automatic selective repair are not established by this scenario.
   point scope through state coalescing and segment scope across restart. Successful
   completion state retains a separate base-configuration record. Analysis config
   access retains the complete run snapshot as a validated publication input.
-  Topology/schema/membership and arbitrary runtime/analysis reads remain incomplete;
-  supplement observed reads with declared physical interactions before selective reuse.
+  These observations retain their base/point/segment scope. Explicit reviewed
+  dependency contracts now permit whole-parameter comparison with full table
+  membership, whole-catalog schema and exact setup/subject/scenario fences.
+  Missing execution, analysis or physical declarations remain unknown; arbitrary
+  Python reads are not automatically qualified. Row-selective inferred reuse is
+  outside this bounded contract.
   Track this boundary in [#783](https://github.com/scopecat-project/scopecat/issues/783).
 - Add [bounded check-first repair](https://github.com/scopecat-project/scopecat/issues/784)
   after dependencies can explain invalidation.

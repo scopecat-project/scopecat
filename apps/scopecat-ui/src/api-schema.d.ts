@@ -3400,6 +3400,7 @@ export interface components {
              */
             codec: "scopecat.calibration-check.v1";
             context: components["schemas"]["MeasurementContext"];
+            dependencies?: components["schemas"]["CalibrationDependencies"] | null;
             /** Measurement Step */
             measurement_step: string;
             /**
@@ -3409,6 +3410,21 @@ export interface components {
             result_output: string;
             scope: components["schemas"]["CalibrationScope"];
             setup: components["schemas"]["SetupRevisionRef"];
+        };
+        /**
+         * CalibrationDependencies
+         * @description Versioned author qualification of execution, analysis and physical inputs.
+         *
+         *     Whole catalog schema and complete setup/subject/scenario remain exact fences.
+         *     All table rows are compared, including newly matching selection members.
+         *     Globals, closures, files or unsupported queries left unqualified are unknown.
+         */
+        CalibrationDependencies: {
+            analysis?: components["schemas"]["DependencyCoverage"] | null;
+            execution?: components["schemas"]["DependencyCoverage"] | null;
+            physical?: components["schemas"]["DependencyCoverage"] | null;
+            /** Qualification */
+            qualification: string;
         };
         /**
          * CalibrationProfile
@@ -3484,6 +3500,7 @@ export interface components {
          * @description One explicitly requested capability; no inferred physical dependencies.
          */
         CalibrationRequirement: {
+            dependencies?: components["schemas"]["CalibrationDependencies"] | null;
             /**
              * Depends On
              * @default []
@@ -3500,6 +3517,11 @@ export interface components {
         };
         /** CalibrationRequirementStatus */
         CalibrationRequirementStatus: {
+            /**
+             * Assessments
+             * @default []
+             */
+            assessments: components["schemas"]["CheckAssessment"][];
             availability: components["schemas"]["CapabilityAvailability"];
             /** Incomplete Reasons */
             incomplete_reasons: ("scan_limit" | "unresolved_checks")[];
@@ -3772,6 +3794,7 @@ export interface components {
         };
         /** CheckAssessment */
         CheckAssessment: {
+            dependencies?: components["schemas"]["DependencyComparison"] | null;
             /** Reasons */
             reasons: components["schemas"]["CheckReason"][];
             /** Run Id */
@@ -3795,7 +3818,7 @@ export interface components {
             scope: components["schemas"]["CalibrationScope"];
         };
         /** @enum {string} */
-        CheckReason: "analysis_missing" | "measurement_incomplete" | "parameters_unsaved" | "subject_unbound" | "capability_changed" | "targets_changed" | "conditions_changed" | "policy_changed" | "parameters_changed" | "subject_changed" | "target_binding_changed" | "setup_changed" | "scenario_changed" | "evidence_from_future" | "check_expired" | "within_spec" | "out_of_spec";
+        CheckReason: "analysis_missing" | "measurement_incomplete" | "parameters_unsaved" | "subject_unbound" | "capability_changed" | "targets_changed" | "conditions_changed" | "policy_changed" | "parameters_changed" | "dependency_coverage_unknown" | "dependency_inputs_changed" | "subject_changed" | "target_binding_changed" | "setup_changed" | "scenario_changed" | "evidence_from_future" | "check_expired" | "within_spec" | "out_of_spec";
         /** CheckSelection */
         CheckSelection: {
             assessment?: components["schemas"]["CheckAssessment"] | null;
@@ -4942,6 +4965,40 @@ export interface components {
              */
             kind: "delete_parameter_rows";
             parameter_id: components["schemas"]["_ParameterId"];
+        };
+        /** DependencyComparison */
+        DependencyComparison: {
+            /**
+             * Changed Parameters
+             * @default []
+             */
+            changed_parameters: string[];
+            /**
+             * Compared Parameters
+             * @default []
+             */
+            compared_parameters: string[];
+            /** Reasons */
+            reasons: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unchanged" | "changed" | "unknown";
+        };
+        /**
+         * DependencyCoverage
+         * @description A reviewed, complete set of whole parameters for one dependency domain.
+         *
+         *     Empty parameters explicitly declares independence. Missing coverage instead
+         *     means unknown. The basis must describe code/physical assumptions, including
+         *     external inputs; observed reads alone cannot establish completeness.
+         */
+        DependencyCoverage: {
+            /** Basis */
+            basis: string;
+            /** Parameters */
+            parameters: string[];
         };
         /** DeviceConnection */
         DeviceConnection: {

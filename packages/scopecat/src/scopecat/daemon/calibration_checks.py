@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from scopecat.automation import ProcedureRun
 from scopecat.automation.calibration import (
     CapabilityAvailability,
+    CheckAssessment,
     CheckEvidence,
     CheckSelection,
 )
@@ -62,6 +63,7 @@ class CalibrationRequirementStatus(BaseModel):
     scanned: int
     unresolved_procedures: tuple[str, ...]
     incomplete_reasons: tuple[Literal["scan_limit", "unresolved_checks"], ...]
+    assessments: tuple[CheckAssessment, ...] = ()
 
 
 class CalibrationReport(BaseModel):

@@ -23,6 +23,7 @@ from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.frozen import freeze_json_mapping
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.calibration_check import CalibrationCheckRequest, CalibrationScope
+from scopecat.records.calibration_dependencies import DependencyComparison
 from scopecat.records.calibration_policy import CalibrationRequirement
 from scopecat.records.execution_scenario import SoftwareExecutionScenario
 from scopecat.records.measurement_context import MeasurementContext
@@ -52,6 +53,70 @@ from scopecat.records.target_catalog import TargetRevisionRef
 
 START = datetime(2026, 9, 23, tzinfo=UTC)
 SCOPE = CalibrationScope("drive", ("q0", "q1"), "idle-v1", "residual-v1")
+
+
+def test_declared_reuse_retains_negative_and_unknown_latest(
+    observation: tuple[RunSnapshot, MeasurementContext],
+) -> None:
+    measurement, context = observation
+    current = replace(
+        context,
+        parameters=ParameterRevisionRef(
+            revision_id="new",
+            content_hash="sha256:" + "f" * 64,
+        ),
+    )
+    older = CheckEvidence(measurement, SCOPE, "positive", True)
+    newer = CheckEvidence(
+        measurement.model_copy(
+            update={
+                "run_id": "newer",
+                "created_at": measurement.created_at + timedelta(seconds=1),
+            }
+        ),
+        SCOPE,
+        "negative",
+        False,
+    )
+    comparisons = {
+        item.measurement.run_id: DependencyComparison(
+            status="unchanged", reasons=("declared_dependencies_unchanged",)
+        )
+        for item in (older, newer)
+    }
+
+    def select():
+        return select_calibration_check(
+            (older, newer),
+            requested_scope=SCOPE,
+            current=current,
+            now=measurement.created_at + timedelta(minutes=1),
+            max_age=timedelta(hours=1),
+            history_complete=True,
+            dependencies=comparisons,
+        )
+
+    assert select().status == "out_of_spec"
+    fenced = select_calibration_check(
+        (older, newer),
+        requested_scope=SCOPE,
+        current=replace(current, setup_content_hash="sha256:" + "e" * 64),
+        now=measurement.created_at + timedelta(minutes=1),
+        max_age=timedelta(hours=1),
+        history_complete=True,
+        dependencies=comparisons,
+    )
+    assert fenced.reason == "no_matching_evidence"
+    comparisons["newer"] = DependencyComparison(
+        status="unknown", reasons=("physical_coverage_unknown",)
+    )
+    assert select().status == "unknown"
+    comparisons["newer"] = DependencyComparison(
+        status="changed",
+        reasons=("dependency_values_changed",),
+        changed_parameters=("bias",),
+    )
+    assert select().status == "recheck"
 
 
 def test_notebook_report_escapes_lab_text_and_preserves_typed_data(
