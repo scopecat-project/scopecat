@@ -123,29 +123,6 @@ def test_native_package_selects_its_own_version_before_reporting_ready(native_st
     assert selected.python == Path(sys.executable)
 
 
-def test_native_initializer_failure_retries_without_marking_setup_complete(
-    native_start, monkeypatch
-):
-    bootstrap, args, paths, _selected, _updates = native_start
-    (args.payload / "initialize.py").write_text("# trusted laboratory setup")
-    calls = []
-
-    def run(command):
-        calls.append(command)
-        if len(calls) == 1:
-            raise RuntimeError("setup interrupted")
-
-    monkeypatch.setattr(bootstrap, "_run", run)
-    with pytest.raises(RuntimeError, match="setup interrupted"):
-        bootstrap.launch(args, paths)
-    assert not (paths.state / "native-setup.json").exists()
-    bootstrap.launch(args, paths)
-    bootstrap.launch(args, paths)
-    assert len(calls) == 2
-    assert (paths.state / "native-setup.json").is_file()
-    assert not (paths.state / "native-setup.pending").exists()
-
-
 def test_native_package_refreshes_runtime_at_the_same_install_path(native_start):
     bootstrap, args, paths, selected, updates = native_start
     bootstrap.launch(args, paths)

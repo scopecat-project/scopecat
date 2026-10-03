@@ -1,4 +1,4 @@
-"""Explicit stopped-deployment author registration; never an HTTP path mutation."""
+"""Explicit local author registration, independent of the application lifecycle."""
 
 from __future__ import annotations
 
@@ -14,11 +14,10 @@ from scopecat.author_workspaces import (
     LocalAuthorWorkspace,
     LocalAuthorWorkspaces,
     author_bindings_path,
-    laboratory_adapter,
     local_author_workspaces,
     service_workspace_root,
 )
-from scopecat.project import load_project, open_project
+from scopecat.project import open_project
 from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 
 from scopecat_server.author_environment import capture, check
@@ -34,11 +33,6 @@ def register_author_workspace(
 ) -> LocalAuthorWorkspace:
     owner = open_project(service)
     project = open_project(workspace, resolve_adapter=False)
-    project = load_project(
-        project.manifest,
-        lab_adapter=laboratory_adapter(owner.root) if project.author_only else None,
-        bound_composition=project.author_only,
-    )
     if service_workspace_root(owner.root) != owner.root:
         raise ValueError("Registration requires the deployment service workspace")
     binding = owner.runtime_binding
@@ -47,11 +41,13 @@ def register_author_workspace(
     try:
         with ExitStack() as locks:
             candidates = {
-                binding.deployment_root / "deployment.lock",
-                binding.data_root / "daemon.lock",
-                project.runtime_binding.deployment_root / "deployment.lock",
-                project.runtime_binding.data_root / "daemon.lock",
+                binding.data_root / "author-workspaces.lock",
             }
+            if project.runtime_binding.deployment_root != binding.deployment_root:
+                candidates.add(
+                    project.runtime_binding.deployment_root / "deployment.lock"
+                )
+                candidates.add(project.runtime_binding.data_root / "daemon.lock")
             for path in sorted(candidates):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 locks.enter_context(FileLock(path, timeout=0))
@@ -62,7 +58,7 @@ def register_author_workspace(
             interpreter = python or (
                 previous.python if previous else Path(sys.executable).absolute()
             )
-            candidate = capture(project.root, interpreter, owner=owner.root)
+            candidate = capture(project.root, interpreter)
             check(candidate.manifest, interpreter)
             location = project.root / RUNTIME_BINDING_NAME
             if location.exists() and (
@@ -140,5 +136,5 @@ def register_author_workspace(
             return selected
     except Timeout as error:
         raise ValueError(
-            "Stop the deployment before registering an author workspace"
+            "Source registration is busy or the source owns another running application"
         ) from error

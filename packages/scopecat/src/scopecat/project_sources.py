@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import platform
 import shutil
 import tempfile
@@ -14,7 +13,6 @@ from importlib.metadata import PackageNotFoundError, distributions, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
-from scopecat.author_workspaces import LABORATORY_MANIFEST_NAME
 from scopecat.kernel.content_identity import (
     content_fingerprint,
     sha256_content_hash,
@@ -27,7 +25,7 @@ from scopecat.records.author_revision import (
 )
 
 if TYPE_CHECKING:
-    from scopecat.installed_adapter import AdapterReference
+    pass
 
 
 loading_workspace: ContextVar[str | None] = ContextVar(
@@ -67,31 +65,12 @@ class SourceProject(Protocol):
     @property
     def dependencies(self) -> tuple[str, ...] | None: ...
     @property
-    def author_only(self) -> bool: ...
-    @property
-    def composition_bound(self) -> bool: ...
-    @property
-    def lab_adapter(self) -> AdapterReference | None: ...
-    @property
     def adapter_packages(self) -> tuple[tuple[str, str], ...]: ...
 
 
 def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     """Snapshot all declared roots, including helpers, analysis and local resources."""
     files: dict[str, bytes] = {"scopecat.toml": project.manifest.read_bytes()}
-    if project.author_only:
-        if not project.composition_bound:
-            raise ValueError("Author-only source capture requires a bound application")
-        adapter = project.lab_adapter
-        files[LABORATORY_MANIFEST_NAME] = (
-            (
-                "[lab.adapter]\n"
-                f"distribution = {json.dumps(adapter.distribution)}\n"
-                f"manifest = {json.dumps(adapter.manifest)}\n"
-            )
-            if adapter is not None
-            else "[lab]\n"
-        ).encode()
     for name in (
         ("pyproject.toml",)
         if project.dependencies is not None
@@ -138,7 +117,7 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     authors = cast("dict[str, object]", document.get("authors", {}))
     authors.pop("modules", None)
     maintenance["scopecat.toml"] = sha256_json_hash(content_fingerprint(document))
-    from scopecat.execution_environment import author_packages, execution_packages
+    from scopecat.execution_environment import execution_packages
     from scopecat.installed_authors import capture_installed_authors
 
     installed = capture_installed_authors(project.installed_packages)
@@ -159,15 +138,9 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
         refresh_roots=project.refresh_roots,
         python=platform.python_version(),
         packages=packages,
-        import_packages=(
-            packages
-            if project.dependencies is None
-            else author_packages(
-                (
-                    *project.dependencies,
-                    *(name for _, name in project.installed_packages),
-                )
-            )
+        import_requirements=(
+            *(project.dependencies or ()),
+            *(name for _, name in project.installed_packages),
         ),
         installed_authors=installed,
         maintenance_hash=sha256_json_hash(
@@ -200,13 +173,42 @@ def require_environment(manifest: AuthorRevisionManifest) -> None:
 
 
 def require_import_environment(manifest: AuthorRevisionManifest) -> None:
-    """Check author imports without requiring unrelated backend packages."""
-    _require_environment(manifest, manifest.import_packages)
+    """Validate client declarations without borrowing execution's dependency lock."""
+    from scopecat.execution_environment import author_packages
+
+    _require_installed_authors(manifest)
+    packages = author_packages(manifest.import_requirements)
+    # Pre-stable Scopecat declarations share the recorded API. Third-party
+    # packages follow their declared compatibility ranges in the client, while
+    # execution/recovery below still requires the complete recorded environment.
+    for name, actual in packages.items():
+        if name == "scopecat" or name.startswith("scopecat-"):
+            expected = manifest.packages[name]
+            if actual != expected:
+                raise ValueError(
+                    f"author imports require {name}=={expected}; found {actual}"
+                )
 
 
 def _require_environment(
     manifest: AuthorRevisionManifest, packages: dict[str, str]
 ) -> None:
+    _require_installed_authors(manifest)
+    if manifest.python != platform.python_version():
+        raise ValueError("author revision requires its recorded Python version")
+    for name, expected in packages.items():
+        try:
+            actual_version = version(name)
+        except PackageNotFoundError:
+            actual_version = "not installed"
+        if actual_version != expected:
+            raise ValueError(
+                f"author revision requires installed package {name}=={expected}; "
+                f"found {actual_version}. Restore the recorded execution environment"
+            )
+
+
+def _require_installed_authors(manifest: AuthorRevisionManifest) -> None:
     from scopecat.installed_authors import capture_installed_authors
 
     actual = capture_installed_authors(
@@ -220,18 +222,6 @@ def _require_environment(
             "installed author package content changed; restore the recorded "
             "installed artifacts before recovery"
         )
-    if manifest.python != platform.python_version():
-        raise ValueError("author revision requires its recorded Python version")
-    for name, expected in packages.items():
-        try:
-            actual_version = version(name)
-        except PackageNotFoundError:
-            actual_version = "not installed"
-        if actual_version != expected:
-            raise ValueError(
-                f"author revision requires installed package {name}=={expected}; "
-                f"found {actual_version}. Restore the recorded execution environment"
-            )
 
 
 def verified_source_files(bundle: AuthorRevisionBundle) -> Iterator[tuple[str, bytes]]:

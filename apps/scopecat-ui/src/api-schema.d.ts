@@ -3069,10 +3069,8 @@ export interface components {
             files: {
                 [key: string]: components["schemas"]["Sha256ContentHash"];
             };
-            /** Import Packages */
-            import_packages: {
-                [key: string]: string;
-            };
+            /** Import Requirements */
+            import_requirements: string[];
             /** Installed Authors */
             installed_authors?: {
                 [key: string]: components["schemas"]["InstalledAuthorPackage"];
@@ -5124,6 +5122,8 @@ export interface components {
             code_revision: components["schemas"]["AuthorRevisionRef"];
             /** Factory */
             factory: string;
+            /** Python */
+            python: string;
             request: components["schemas"]["DriverSourceUpdate"];
         };
         /** DriverSourceState */
@@ -5138,6 +5138,8 @@ export interface components {
             expected_previous?: string | null;
             /** Operation Id */
             operation_id: string;
+            /** Python */
+            python?: string | null;
             /** Source Root */
             source_root: string;
         };
@@ -8663,6 +8665,7 @@ export interface components {
              */
             samples: components["schemas"]["SampleSelector"][];
             scientific_binding?: components["schemas"]["ResolvedScientificBinding"] | null;
+            source?: components["schemas"]["ProcedureSource"] | null;
             state: components["schemas"]["ProcedureRunState"];
             /**
              * Updated At
@@ -8685,6 +8688,15 @@ export interface components {
         };
         /** @enum {string} */
         ProcedureRunState: "ready" | "leased" | "waiting_for_input" | "attention_required" | "closed";
+        /**
+         * ProcedureSource
+         * @description Source owner and immutable code used to resume an ordinary procedure.
+         */
+        ProcedureSource: {
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            /** Workspace Id */
+            workspace_id: string;
+        };
         /**
          * ProcedureStepAttempt
          * @description One revisioned attempt at a stable, intent-identified procedure step.

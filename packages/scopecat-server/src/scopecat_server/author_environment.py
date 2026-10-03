@@ -10,8 +10,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
-from scopecat.author_workspaces import laboratory_adapter
-from scopecat.project import load_project, open_project
+from scopecat.project import open_project
 from scopecat.project_sources import capture_sources, require_environment
 from scopecat.records.author_revision import (
     AuthorRevisionBundle,
@@ -44,27 +43,18 @@ def _call(python: Path, action: str, value: str) -> str:
     return result.stdout
 
 
-def _capture(root: Path, owner: Path | None) -> AuthorRevisionBundle:
-    project = open_project(root, resolve_adapter=owner is None)
-    if owner is not None and project.author_only:
-        project = load_project(
-            project.manifest,
-            lab_adapter=laboratory_adapter(owner),
-            bound_composition=True,
-        )
-    return capture_sources(project)
+def _capture(root: Path) -> AuthorRevisionBundle:
+    return capture_sources(open_project(root))
 
 
-def capture(
-    root: Path, python: Path, *, owner: Path | None = None
-) -> AuthorRevisionBundle:
+def capture(root: Path, python: Path) -> AuthorRevisionBundle:
     if python == Path(sys.executable).absolute():
-        return _capture(root, owner)
+        return _capture(root)
     return AuthorRevisionBundle.model_validate_json(
         _call(
             python,
             "capture",
-            json.dumps({"root": str(root), "owner": str(owner) if owner else None}),
+            json.dumps({"root": str(root)}),
         )
     )
 
@@ -84,7 +74,6 @@ def main() -> None:
             assert request["root"] is not None
             output = _capture(
                 Path(request["root"]),
-                Path(request["owner"]) if request["owner"] else None,
             ).model_dump_json()
         elif sys.argv[1] == "check":
             require_environment(AuthorRevisionManifest.model_validate_json(value))

@@ -51,6 +51,7 @@ from scopecat.automation import (
     ProcedureSchedulePage,
     ProcedureScheduleRegistry,
     ProcedureScheduleState,
+    ProcedureSource,
     ProcedureStepAttempt,
     ProcedureStepAttemptListQuery,
     ProcedureStepAttemptPage,
@@ -807,6 +808,7 @@ class LabProcedureOperations:
         "_runner",
         "_schedule_registry",
         "_session",
+        "_source",
         "_worker_id",
     )
 
@@ -820,8 +822,10 @@ class LabProcedureOperations:
         registry: ProcedureRegistry,
         schedule_registry: ProcedureScheduleRegistry[ProcedurePlanningContext],
         worker_id: str | None = None,
+        source: Callable[[], ProcedureSource] | None = None,
     ) -> None:
         self._client = client
+        self._source = source
         self._runner = runner
         self._config = config
         self._session = session
@@ -868,6 +872,7 @@ class LabProcedureOperations:
         expected_manual_preview: ManualPreviewFence | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
+        source: ProcedureSource | None = None,
         scientific_binding: ResolvedScientificBinding | None = None,
         expected_configuration: ProcedureConfigurationFence | None = None,
         sample: str | SampleSelector | None = None,
@@ -882,6 +887,7 @@ class LabProcedureOperations:
         receipt = self._client.submit_procedure(
             ProcedureSubmitCommand(
                 request_key=request_key,
+                source=source or (self._source() if self._source else None),
                 expected_manual_preview=expected_manual_preview,
                 plan_ref=plan_ref,
                 plan_request=plan_request,
@@ -930,6 +936,7 @@ class LabProcedureOperations:
             ProcedureSubmitCommand(
                 request_key=request_key,
                 definition=destination.ref,
+                source=self._source() if self._source else None,
                 intent=destination.encode_intent(plan.intent),
                 samples=plan.samples,
                 scientific_binding=plan.scientific_binding,
@@ -948,13 +955,11 @@ class LabProcedureOperations:
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
     ) -> ProcedureHandle:
-        selected = self._registry.resolve(definition.ref)
-        run = self._worker().execute(
-            selected,
-            intent,
-            request_key,
-            self._worker_id if worker_id is None else worker_id,
-            samples=_procedure_sample_selectors(sample, samples),
+        handle = self.submit(
+            definition, intent, request_key=request_key, sample=sample, samples=samples
+        )
+        run = self._worker().resume(
+            handle.id, self._worker_id if worker_id is None else worker_id
         )
         return ProcedureHandle(self, run.procedure_run_id)
 
@@ -1172,6 +1177,7 @@ class LabProcedureOperations:
         selected = self._registry.resolve(definition.ref)
         receipt = self._client.create_procedure_schedule(
             ProcedureScheduleCreateCommand(
+                source=self._source() if self._source else None,
                 schedule_id=schedule_id,
                 definition=selected.ref,
                 intent=selected.encode_intent(intent),

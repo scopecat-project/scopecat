@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import traceback
 from dataclasses import replace
@@ -26,16 +25,6 @@ class Arguments(Protocol):
     entry: Path | None
 
 
-def _run(command: list[str]) -> None:
-    _ = subprocess.run(  # noqa: S603 - explicit bundled interpreter and module
-        command,
-        check=True,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    )
-
-
 def prepare(args: Arguments, paths: InstallationPaths) -> None:
     runtime = ApplicationRuntime(paths.state)
     with FileLock(paths.state / "native-start.lock"):
@@ -45,24 +34,6 @@ def prepare(args: Arguments, paths: InstallationPaths) -> None:
             python = python.with_name("python.exe")
         if not runtime.selection.exists():
             _ = runtime.configure(python=python, static_dir=payload / "gui")
-        receipt = paths.state / "native-setup.json"
-        if not receipt.exists():
-            initializer = payload / "initialize.py"
-            if initializer.is_file():
-                _run(
-                    [
-                        str(python),
-                        "-I",
-                        "-B",
-                        str(initializer),
-                        "--state",
-                        str(paths.state),
-                        "--workspace",
-                        str(paths.workspace),
-                        *(["--entry", str(paths.entry)] if paths.entry else []),
-                    ]
-                )
-            receipt.write_text("{}\n", encoding="utf-8")
         # The package determines the interpreter, including when an update replaces
         # files at the same path. Never install or choose another environment here.
         candidate = runtime.qualify(python, payload / "gui")

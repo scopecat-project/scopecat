@@ -46,11 +46,13 @@ jobs:
       - name: Build native application and installer
         shell: bash
         run: |
-          uv run --locked --group delivery pytest -q -n 0 \
+          uv run --locked --group delivery pytest -v -n 0 \
             packages/lab-tools/tests/test_acceptance_workspaces.py \
             packages/lab-tools/tests/test_desktop_platform.py \
             packages/lab-tools/tests/test_desktop_session.py \
             packages/lab-tools/tests/test_desktop_files.py \
+            packages/scopecat-instruments/tests/test_sdk_process.py \
+            packages/scopecat-server/tests/test_instrument_worker.py \
             packages/scopecat-server/tests/storage/sqlite/test_run_repository.py::test_capture_import_is_idempotent_and_keeps_execution_tables_empty
           uv run --locked python -m lab_tools.delivery "$RUNNER_TEMP/delivery"
           if [ "$RUNNER_OS" = "Windows" ]; then

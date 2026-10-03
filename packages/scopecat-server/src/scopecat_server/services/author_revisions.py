@@ -79,7 +79,11 @@ class AuthorRevisionService:
                     )
                 )
         manifest = root / "scopecat.toml"
-        self.project = load_project(manifest) if manifest.is_file() else None
+        self.project = (
+            load_project(manifest, resolve_adapter=False)
+            if manifest.is_file()
+            else None
+        )
         self.baseline = (
             self._capture()
             if self.project is not None
@@ -100,6 +104,10 @@ class AuthorRevisionService:
             bundle.manifest.ref.content_hash, AuthorWorkerBinding(self.root, python)
         )
         return bundle
+
+    def current_source(self) -> AuthorRevisionRef:
+        """Inspect source in its execution environment without publishing."""
+        return self._capture().manifest.ref
 
     @property
     def worker_binding(self) -> AuthorWorkerBinding:

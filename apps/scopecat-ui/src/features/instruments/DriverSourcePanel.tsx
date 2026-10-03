@@ -14,6 +14,7 @@ export function DriverSourcePanel({
 }) {
   const client = useQueryClient();
   const [directory, setDirectory] = useState<string>();
+  const [python, setPython] = useState("");
   const attempt = useRef<DriverSourceUpdate | undefined>(undefined);
   const source = useQuery({
     queryKey: ["driver-source"],
@@ -29,6 +30,7 @@ export function DriverSourcePanel({
         source_root: path.trim(),
         expected_previous: source.data?.active?.request.operation_id ?? null,
         actor: "local-operator",
+        ...(python.trim() ? { python: python.trim() } : {}),
       };
       return updateDriverSource(attempt.current);
     },
@@ -82,6 +84,24 @@ export function DriverSourcePanel({
           }}
         />
       </label>
+      <label className="grid gap-1">
+        Driver execution Python (optional override)
+        <input
+          value={python}
+          disabled={update.isPending}
+          placeholder="Use the source folder’s registered execution environment"
+          onChange={(event) => {
+            setPython(event.target.value);
+            attempt.current = undefined;
+            update.reset();
+          }}
+        />
+      </label>
+      {source.data?.active && (
+        <p>
+          Active Python: <code>{source.data.active.python}</code>
+        </p>
+      )}
       <p id="driver-source-help" className="text-sm text-text-dim">
         Use an absolute path on the application computer, containing scopecat.toml. Experiment and
         compiler edits refresh separately when preparing experiments.

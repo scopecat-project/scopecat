@@ -27,11 +27,20 @@ class AuthorWorkspaceServices:
         self.services: dict[str, AuthorRevisionService] = {}
         self.unavailable: dict[str, str] = {}
         self.binding = load_runtime_binding(root)
-        self._roots: dict[str, str] = {}
         self._load_lock = RLock()
         try:
-            for item in local_author_workspaces(root):
-                with store.sqlite.write_transaction() as connection:
+            self._refresh()
+        except BaseException:
+            self.close()
+            raise
+
+    def _refresh(self) -> None:
+        """Discover explicitly registered folders without replacing live services."""
+        with self._load_lock:
+            for item in local_author_workspaces(self.root):
+                if item.id in self.services or item.id in self.unavailable:
+                    continue
+                with self.store.sqlite.write_transaction() as connection:
                     connection.execute(
                         "INSERT INTO author_workspaces VALUES (?, ?) "
                         "ON CONFLICT(workspace_id) DO UPDATE SET name=excluded.name",
@@ -41,9 +50,6 @@ class AuthorWorkspaceServices:
                     self._load(item)
                 except (OSError, ValueError) as error:
                     self.unavailable[item.id] = str(error)
-        except BaseException:
-            self.close()
-            raise
 
     def _load(self, item: LocalAuthorWorkspace) -> AuthorRevisionService:
         binding = load_runtime_binding(item.root)
@@ -54,7 +60,6 @@ class AuthorWorkspaceServices:
             raise ValueError(
                 "Registered author workspace has a different runtime binding"
             )
-        self._roots.setdefault(str(item.root), item.id)
         service = AuthorRevisionService(
             item.root,
             self.store,
@@ -70,7 +75,8 @@ class AuthorWorkspaceServices:
         return service
 
     def catalog(self) -> AuthorWorkspaceCatalog:
-        """List retained owners without reading, importing or publishing source."""
+        """Discover new registrations, then list retained publication owners."""
+        self._refresh()
         with self.store.sqlite.read_connection() as connection:
             rows = cast(
                 "list[tuple[str, str]]",
@@ -99,6 +105,7 @@ class AuthorWorkspaceServices:
         )
 
     def get(self, identity: str) -> AuthorRevisionService:
+        self._refresh()
         with self._load_lock:
             if identity in self.unavailable:
                 for item in local_author_workspaces(self.root):
@@ -125,7 +132,9 @@ class AuthorWorkspaceServices:
 
     @property
     def roots(self) -> dict[str, str]:
-        return dict(self._roots)
+        # Endpoint verification must recognize a new registration before its
+        # first catalog request, without importing source from a health probe.
+        return {str(item.root): item.id for item in local_author_workspaces(self.root)}
 
     def close(self) -> None:
         self.request_stop()

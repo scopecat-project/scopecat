@@ -36,6 +36,15 @@ HTTP author operations require their source identity. Python sessions use
 `project.authoring()` from a registered directory, or pass `workspace_id` explicitly
 to `AuthorProject(url, workspace_id=...)`. Basic history/data clients need no source.
 
+Ordinary procedures submitted through `project.connect()` retain a `ProcedureSource`
+beside their scientific intent: the registered workspace and admitted code revision.
+Continuing after human input or restarting the application restores that exact
+source and its execution Python. Procedure authors do not add deployment identities
+to their own intent models. Source ownership participates in request-key identity;
+the same key cannot silently switch to another source. Notebook live refresh asks
+the execution owner for the current source identity, without capturing server
+dependencies in the user's analysis environment.
+
 Exact parameter/setup selections now admit both procedures and runs against the
 saved maintained setup revision. There is no global setup activation. GUI
 drafts expose a device-context picker beside the parameter choice and preserve it
@@ -46,8 +55,8 @@ application device maintenance uses the same ownership and retirement gates.
 `scopecat.runtime.toml` resolves workspace, data and deployment paths. It is local
 machine configuration, excluded from captured source and snapshots. Runtime paths
 come from the live binding, never a retained manifest. Hardware deployments select
-their maintained owner explicitly. Different dependency environments and remote
-execution remain outside this local qualification.
+their maintained owner explicitly. Local execution and SDK interpreters can have
+different dependencies; remote execution remains outside this local qualification.
 
 ## Ownership and recovery
 
@@ -252,22 +261,24 @@ claims remain enforced; this slice does not qualify cross-deployment physical-de
 aliases or multiple maintained apparatus compositions. Keep full installed/Windows
 and recovery acceptance in the integration closeout tracked by the parent issue.
 
-## Author-only installed-laboratory binding
+## Ordinary source and execution bindings
 
-A manifest with `[authors]` and no `[lab]` is an author-only folder. Discovery without
-adapter resolution can inspect it before registration. Loading or capturing it for
-execution requires explicit registration with a laboratory whose `[lab]` contains
-only an installed adapter reference. It cannot become a second application service.
+A manifest with only `[authors]` is a valid source folder. Its optional
+`[lab.capabilities]` defines its own scientific composition. Registration never
+injects an application-level adapter or a second laboratory manifest into captured
+source. Installed extensions may be declared by the source itself.
 
-Source registration and daemon startup compare the laboratory adapter reference
-and installed adapter content, rather than requiring identical source manifests.
-Each author's maintenance hash still covers its own source boundaries, dependency
-requirements, installed content and non-refreshable files. The service's interpreter,
-data binding and deployment binding remain shared and explicitly checked.
+Registration and interpreter selection validate before atomically updating the
+local registry under its own lock. A running application discovers newly registered
+folders while preserving existing tasks and services. Registration cannot take over
+another active deployment or silently rebind a folder with its own scientific store.
 
-Captured sources include an internal `scopecat.laboratory.toml` containing the exact
-adapter reference. Qualified workers load it from the verified revision, never from
-current local source registration. Installed artifact hashes and environment checks
-remain required. Changing adapter selection requires stopped maintenance/restart;
-old revisions cannot execute under a different maintained baseline. The existing
-combined-project contract remains for project-local bootstrap and driver code.
+The source's selected Python captures and checks dependencies. Prepared tasks retain
+their execution binding; later edits and environment selection affect subsequent
+preparation. Driver updates independently select an interpreter (defaulting to the
+source's registered environment), capture source and replace only idle driver workers.
+The application process does not import private scientific or vendor packages.
+
+Captured source, dependency identities, settings and device ownership remain separate.
+Mutable user environments may invalidate old preparations when changed in place;
+retained environments remain usable until their referencing work is finished.

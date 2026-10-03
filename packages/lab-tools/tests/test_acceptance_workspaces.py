@@ -16,6 +16,43 @@ def load_script(name):
 
 verify_macos_download = load_script("verify_macos_download")
 verify_native_application = load_script("verify_native_application")
+verify_native_replacement = load_script("verify_native_replacement")
+
+
+@pytest.mark.parametrize("keep_work", [False, True])
+@pytest.mark.parametrize("failure", [False, True])
+def test_replacement_reclaims_packages_and_environment(
+    tmp_path, monkeypatch, keep_work, failure
+):
+    previous, current = tmp_path / "previous", tmp_path / "current"
+    previous.mkdir()
+    current.mkdir()
+    reports = tmp_path / "reports"
+
+    def check(old, new, home):
+        assert (old, new) == (previous, current)
+        home.mkdir()
+        (home / "retired-package").mkdir()
+        (home / "authors").mkdir()
+        (home / "before.json").write_text("{}")
+        if failure:
+            raise RuntimeError("replacement failed")
+        (home / "replacement.json").write_text("{}")
+
+    monkeypatch.setattr(verify_native_replacement, "_verify", check)
+    if failure:
+        with pytest.raises(RuntimeError, match="replacement failed"):
+            verify_native_replacement.verify(
+                previous, current, reports, keep_work=keep_work
+            )
+    else:
+        verify_native_replacement.verify(
+            previous, current, reports, keep_work=keep_work
+        )
+    assert previous.is_dir() and current.is_dir()
+    assert (reports / "before.json").is_file()
+    assert (reports / "replacement.json").exists() is not failure
+    assert bool(list(reports.glob("work-*"))) is keep_work
 
 
 @pytest.mark.parametrize("keep_work", [False, True])

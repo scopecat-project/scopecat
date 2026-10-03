@@ -21,10 +21,10 @@ from scopecat.application.launch import (
     LaunchResult,
     validate_launch_control_edits,
 )
+from scopecat.automation.models import ProcedureSource
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.kernel.content_identity import sha256_json_hash
-from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.interaction_timing import record_timing
 from scopecat.project import load_project
 from scopecat.records.author_revision import AuthorRevisionRef
@@ -90,27 +90,24 @@ def run_project_procedure(root: Path, procedure_id: str) -> None:
             with practice_application().connect(resolve_daemon_endpoint(root)) as lab:
                 run_procedure(lab, procedure_id)
             return
-        plan_code = (
-            client.experiment_plan(stored.plan_ref).definition.code_revision
-            if stored.plan_ref is not None
-            else None
-        )
-    identity = stored.intent.get("code_revision")
-    if plan_code is not None:
-        identity = plan_code.model_dump(mode="json")
     record_timing("source_restore_start", procedure_id=procedure_id)
     project = (
-        revision_project(
-            root, AuthorRevisionRef.model_validate(thaw_json_value(identity))
-        )
-        if identity is not None
+        revision_project(root, stored.source.code_revision)
+        if stored.source is not None
         else sc.open_project(root)
     )
     record_timing("application_load_start", procedure_id=procedure_id)
     application = project.load_application()
     record_timing("application_ready", procedure_id=procedure_id)
+
+    def procedure_source() -> ProcedureSource:
+        assert stored.source is not None
+        return stored.source
+
     with application.connect(
-        resolve_daemon_endpoint(root), operator="console-worker"
+        resolve_daemon_endpoint(root),
+        operator="console-worker",
+        procedure_source=procedure_source if stored.source is not None else None,
     ) as lab:
         run_procedure(lab, procedure_id)
     record_timing("procedure_return", procedure_id=procedure_id)

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import Protocol, cast
 
 from lab_tools.bundle import file_hash, inventory
 
@@ -68,7 +71,37 @@ assert runtime.status().state == "stopped"
 """
 
 
-def verify(previous: Path, current: Path, home: Path) -> None:
+def verify(
+    previous: Path, current: Path, home: Path, *, keep_work: bool = False
+) -> None:
+    previous, current, home = previous.resolve(), current.resolve(), home.resolve()
+    if any(home.is_relative_to(app) for app in (previous, current)):
+        raise ValueError("Acceptance reports must be outside the applications")
+    home.mkdir(parents=True, exist_ok=False)
+    with tempfile.TemporaryDirectory(
+        prefix="work-", dir=home, delete=not keep_work
+    ) as directory:
+        workspace = Path(directory) / "replacement"
+        try:
+            _verify(previous, current, workspace)
+        finally:
+            for relative in (
+                "before.json",
+                "after.json",
+                "replacement.json",
+                "data/native-start.log",
+                "data/desktop/desktop.log",
+            ):
+                source = workspace / relative
+                if source.is_file():
+                    target = home / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, target)
+            if keep_work:
+                print(f"Retained replacement workspace: {directory}")
+
+
+def _verify(previous: Path, current: Path, home: Path) -> None:
     previous, current, home = previous.resolve(), current.resolve(), home.resolve()
     resources = Path("Contents/Resources" if sys.platform == "darwin" else "resources")
     manifests = [app / resources / "payload/bundle.json" for app in (previous, current)]
@@ -155,5 +188,18 @@ def verify(previous: Path, current: Path, home: Path) -> None:
     print("PASS: package replacement preserves source, identity and scientific data")
 
 
+class Arguments(Protocol):
+    previous: Path
+    current: Path
+    reports: Path
+    keep_work: bool
+
+
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("previous", type=Path)
+    parser.add_argument("current", type=Path)
+    parser.add_argument("reports", type=Path)
+    parser.add_argument("--keep-work", action="store_true")
+    args = cast("Arguments", cast("object", parser.parse_args()))
+    verify(args.previous, args.current, args.reports, keep_work=args.keep_work)

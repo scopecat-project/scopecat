@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from scopecat.automation.models import (
     ProcedureDefinitionRef,
     ProcedureIntent,
+    ProcedureSource,
     procedure_intent_hash,
 )
 from scopecat.kernel.content_identity import stable_content_hash
@@ -94,6 +95,7 @@ class ProcedureSchedule(_ScheduleModel):
     definition: ProcedureDefinitionRef
     intent: ProcedureIntent
     intent_hash: Sha256ContentHash
+    source: ProcedureSource | None = None
     due_at: datetime
     revision: int = Field(ge=1)
     state: ProcedureScheduleState
@@ -124,7 +126,9 @@ class ProcedureSchedule(_ScheduleModel):
 
     @model_validator(mode="after")
     def validate_schedule(self) -> ProcedureSchedule:
-        if self.intent_hash != procedure_intent_hash(self.definition, self.intent):
+        if self.intent_hash != procedure_intent_hash(
+            self.definition, self.intent, source=self.source
+        ):
             raise ValueError(
                 "procedure schedule intent hash must cover its definition and intent"
             )

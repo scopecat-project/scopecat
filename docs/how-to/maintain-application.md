@@ -51,8 +51,8 @@ cell by cell. The example submits a synthetic scan, analyzes it and reopens the
 saved result. Running the submission again creates another measurement.
 
 For existing Scopecat source, choose **Use existing folder → Browse for code folder…**,
-then **Add code folder**. Select registered folders under **Your code folders**.
-Adding a folder restarts the idle application; finish active work first. Multiple
+enter its **Execution Python**, then **Add code folder**. Select registered folders
+under **Your code folders**. Adding a folder keeps the application running. Multiple
 folders share one service, device registry and data authority.
 
 If an existing folder has no local Python, choose **Create local Python environment**.
@@ -80,13 +80,19 @@ version = "0.1.0"
 dependencies = ["humanize==4.13.0"]
 ```
 
-Expand **Dependencies and environment repair**, choose **Prepare background dependencies**,
+Choose **Prepare execution environment from pyproject.toml**,
 then refresh and preview your experiment.
-Preparation resolves against the fixed delivery's dependencies in a separate managed
+Preparation resolves the source requirements with compatible Scopecat packages in a separate managed
 environment. Conflicting requirements fail without changing the running application
 or the selected source environment. Existing prepared work and plans retain their
 recorded dependency versions; the application remains running. Local pip installs
 alone do not change background execution.
+
+Client imports check the source's declared dependency ranges and the matching
+Scopecat API version. They do not require every analysis-library version or Python
+patch release to match the execution environment. Retained execution and recovery
+still check the exact recorded environment; changing a user environment in place
+can invalidate work prepared with that environment.
 
 For a broken local environment, close its terminals and kernels, then choose
 **Rebuild local Python environment**. The old directory is retained as
@@ -94,10 +100,11 @@ For a broken local environment, close its terminals and kernels, then choose
 selected delivery, so reinstall your local additions afterwards. This operation
 does not alter source files, measurements or managed execution environments.
 
-The initial execution environment can share the immutable delivery with the app.
-Additional environments live under `HOME/environments`; retained environments
-are not disposable caches. Driver-process dependencies still belong to the
-application delivery; this operation changes experiment workers, not connected drivers.
+Managed execution environments live under `HOME/environments`; retained environments
+are not disposable caches. To use an existing environment instead, enter its Python
+and choose **Use this execution Python**; no packages are installed. Driver updates
+use the registered source environment unless explicitly overridden in the driver
+panel. Changing source execution Python does not replace connected drivers.
 
 Maintainers can use the same operations without opening a browser:
 

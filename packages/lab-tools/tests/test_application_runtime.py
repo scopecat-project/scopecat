@@ -134,7 +134,51 @@ def test_unavailable_author_folder_does_not_block_application_update(
     assert not source.exists()
 
 
+def test_select_existing_environment_validates_before_publishing(
+    application, tmp_path, monkeypatch
+):
+    source = tmp_path / "author"
+    (source / "src").mkdir(parents=True)
+    (source / "scopecat.toml").write_text(
+        '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\n'
+        'modules=["experiment"]\ndependencies=[]\n'
+    )
+    (source / "src/experiment.py").write_text('name = "experiment"\n')
+    application.register_source(source)
+    location = author_bindings_path(application.root)
+    original = LocalAuthorWorkspaces.model_validate_json(location.read_bytes()).items[0]
+    python = tmp_path / "environment/python"
+    python.parent.mkdir()
+    python.symlink_to(sys.executable)
+    checked = []
+
+    def capture(root, interpreter):
+        checked.append((root, interpreter))
+
+    monkeypatch.setattr("scopecat_server.author_environment.capture", capture)
+    monkeypatch.chdir(tmp_path)
+    application.select_source_environment(Path("author"), Path("environment/python"))
+    selected = LocalAuthorWorkspaces.model_validate_json(location.read_bytes()).items[0]
+    assert selected.python == python
+    assert selected.retained_pythons == (original.python,)
+    assert checked == [(source, python)]
+    before = location.read_bytes()
+
+    def fail(*args, **kwargs):
+        raise ValueError("incompatible execution environment")
+
+    monkeypatch.setattr("scopecat_server.author_environment.capture", fail)
+    with pytest.raises(ValueError, match="incompatible"):
+        application.select_source_environment(source, tmp_path / "invalid/python")
+    assert location.read_bytes() == before
+
+
 def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
+    import httpx2
+
+    from scopecat.daemon.endpoint import resolve_daemon_endpoint
+
+    running = application.start()
     sources = []
     for name in ("first", "second"):
         root = tmp_path / name
@@ -145,10 +189,16 @@ def test_two_sources_share_empty_application_without_owning_it(application, tmp_
         )
         (root / "src/experiment.py").write_text(f"name = {name!r}\n")
         identity = application.register_source(root)
+        assert resolve_daemon_endpoint(root) == running.base_url
         assert application.source(root) == identity
         sources.append((root, identity))
+        with httpx2.Client(base_url=running.base_url, trust_env=False) as client:
+            response = client.get("/api/v1/author-workspaces")
+            response.raise_for_status()
+            assert identity in {item["id"] for item in response.json()["items"]}
     assert sources[0][1] != sources[1][1]
     record = application.start()
+    assert record.pid == running.pid
     assert application.start() == record
     assert record.project_root == application.root
     assert all(

@@ -80,6 +80,30 @@ def _services(
     )
 
 
+def test_materialization_keeps_the_admitted_source(tmp_path: Path) -> None:
+    from scopecat.automation import ProcedureSource
+    from scopecat.records.author_revision import AuthorRevisionRef
+
+    service, automation, _, _ = _services(tmp_path)
+    source = ProcedureSource(
+        workspace_id="source-one", code_revision=AuthorRevisionRef(content_hash=_HASH)
+    )
+    command = _command(due_at=_START).model_copy(update={"source": source})
+    schedule = service.create(command).schedule
+    with pytest.raises(BackendConflict, match="different specification"):
+        service.create(command.model_copy(update={"source": None}))
+    materialized = service.materialize(
+        ProcedureScheduleMaterializeCommand(
+            schedule_id=schedule.schedule_id,
+            expected_schedule_revision=schedule.revision,
+        )
+    ).schedule
+    assert materialized.materialization is not None
+    assert (
+        automation.get(materialized.materialization.procedure_run_id).source == source
+    )
+
+
 def test_schedule_create_list_cancel_and_terminal_create_replay(
     tmp_path: Path,
 ) -> None:

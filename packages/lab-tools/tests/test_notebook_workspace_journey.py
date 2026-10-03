@@ -24,6 +24,18 @@ def test_notebook_workspace_cells(tmp_path: Path, notebook_imports) -> None:
     create_project(other)
     shell.user_ns["other"] = other
 
+    # The client may have no server and different analysis dependencies.
+    # Only the selected execution interpreter can identify a runnable revision.
+    from scopecat.execution_environment import execution_packages
+
+    def reject_client_execution_capture(*args, **kwargs):
+        raise AssertionError("Client attempted to capture execution dependencies")
+
+    notebook_imports.setattr(
+        "scopecat.execution_environment.execution_packages",
+        reject_client_execution_capture,
+    )
+
     def cell(code: str) -> None:
         result = shell.run_cell(code)
         assert result.error_before_exec is None
@@ -133,6 +145,9 @@ assert sc.notebook(root) is session
 session.close()
 """)
         assert notebook_module._workspace is None
+        notebook_imports.setattr(
+            "scopecat.execution_environment.execution_packages", execution_packages
+        )
         other_project = open_project(other)
         start_project(other_project, timeout=120)
         try:

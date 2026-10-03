@@ -459,6 +459,11 @@ class DaemonClient:
             f"{_API_PREFIX}/experiment-plans/hide", ref, ExperimentPlanRef
         )
 
+    def current_author_source(self) -> AuthorRevisionRef:
+        return self._get_model(
+            f"{_API_PREFIX}/author-revisions/current-source", AuthorRevisionRef
+        )
+
     def author_revision_state(self) -> AuthorRevisionState:
         state = self._get_model(f"{_API_PREFIX}/author-revisions", AuthorRevisionState)
         if state.enabled and state.active is None:

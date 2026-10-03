@@ -9,6 +9,54 @@ from lab_tools import application
 from lab_tools.application_runtime import ApplicationRuntime
 
 
+def test_select_existing_execution_environment_does_not_prepare_or_start(
+    tmp_path, monkeypatch
+):
+    selected = []
+    monkeypatch.setattr(
+        ApplicationRuntime,
+        "select_source_environment",
+        lambda _self, workspace, python: selected.append((workspace, python)),
+    )
+    monkeypatch.setattr(
+        ApplicationRuntime, "start", lambda _: pytest.fail("must not start")
+    )
+    monkeypatch.setattr(
+        "lab_tools.author_environment.prepare_execution_environment",
+        lambda *_args: pytest.fail("must not install dependencies"),
+    )
+    source, python = tmp_path / "authors", tmp_path / "user-env/python"
+    application.main(
+        [
+            "--home",
+            str(tmp_path / "home"),
+            "--action",
+            "select-source-environment",
+            "--workspace",
+            str(source),
+            "--python",
+            str(python),
+        ]
+    )
+    assert selected == [(source, python)]
+
+
+def test_select_environment_requires_explicit_interpreter(tmp_path):
+    with pytest.raises(SystemExit) as failure:
+        application.main(
+            [
+                "--home",
+                str(tmp_path / "home"),
+                "--action",
+                "select-source-environment",
+                "--workspace",
+                str(tmp_path / "authors"),
+            ]
+        )
+    assert failure.value.code == 2
+    assert not (tmp_path / "home").exists()
+
+
 def test_status_before_install_has_no_side_effects(tmp_path, capsys):
     home = tmp_path / "application"
     application.main(["--home", str(home)])

@@ -1,18 +1,19 @@
 """Capture driver source once and activate it with the device connection heads."""
 
+import sys
 from pathlib import Path
 from threading import Lock
 
+from scopecat.author_workspaces import local_author_workspaces
 from scopecat.project import load_project
 from scopecat.project_sources import (
-    capture_sources,
     materialize_sources,
-    require_environment,
 )
 from scopecat.records.author_revision import AuthorRevisionBundle
 from scopecat.records.driver_source import DriverSourceSelection, DriverSourceUpdate
 from scopecat.runtime_binding import load_runtime_binding
 
+from scopecat_server.author_environment import capture, check
 from scopecat_server.errors import BackendConflict
 from scopecat_server.instruments.runtime import InstrumentRuntime
 from scopecat_server.instruments.worker import SubprocessInstrumentBackendEndpoint
@@ -25,14 +26,16 @@ def _start_worker(
     root: Path,
     bundle: AuthorRevisionBundle,
     factory: str,
+    python: Path,
 ) -> SubprocessInstrumentBackendEndpoint:
-    require_environment(bundle.manifest)
+    check(bundle.manifest, python)
     source = materialize_sources(
         bundle, load_runtime_binding(root).data_root / "driver-sources"
     )
     return SubprocessInstrumentBackendEndpoint(
         root,
         factory,
+        python=python,
         code_root=source,
         source_revision=bundle.manifest.ref,
         startup_timeout=30,
@@ -51,7 +54,12 @@ def restore_driver_source(
     selected = repository.current()
     if selected is None:
         return None
-    endpoint = _start_worker(root, repository.bundle(selected), selected.factory)
+    endpoint = _start_worker(
+        root,
+        repository.bundle(selected),
+        selected.factory,
+        Path(selected.python),
+    )
     if endpoint.artifact_hash != selected.artifact_hash:
         endpoint.shutdown()
         raise ValueError("restored driver implementation differs from selected source")
@@ -92,20 +100,33 @@ class DriverSourceService:
                 raise BackendConflict(
                     "driver source changed; inspect the active selection and retry"
                 )
-            project = load_project(
-                Path(request.source_root).resolve() / "scopecat.toml"
-            )
+            source = Path(request.source_root).resolve()
+            project = load_project(source / "scopecat.toml", resolve_adapter=False)
             if not project.source_roots or project.instrument_backend_spec is None:
                 raise BackendConflict(
                     "source project must declare source roots and a driver factory"
                 )
-            bundle = capture_sources(project)
+            python = (
+                Path(request.python)
+                if request.python
+                else next(
+                    (
+                        item.python
+                        for item in local_author_workspaces(self.root)
+                        if item.root == source
+                    ),
+                    Path(sys.executable),
+                )
+            )
+            python = python.absolute()
+            bundle = capture(source, python)
             digest = self.store.objects.put(bundle.model_dump_json().encode()).digest
             replacement = _start_worker(
-                self.root, bundle, project.instrument_backend_spec
+                self.root, bundle, project.instrument_backend_spec, python
             )
             selection = DriverSourceSelection(
                 request=request,
+                python=str(python),
                 code_revision=bundle.manifest.ref,
                 factory=project.instrument_backend_spec,
                 artifact_hash=replacement.artifact_hash,

@@ -69,6 +69,7 @@ class DesktopAPI:
                 {
                     "directory": str(item.root),
                     "python": str(python) if python.is_file() else None,
+                    "execution_python": str(item.python),
                 }
                 for item in local_author_workspaces(self._runtime.root)
                 for python in (environment_python(item.root / ".venv"),)
@@ -160,7 +161,10 @@ class DesktopAPI:
     def create_source(self, parent: str, name: str) -> str:
         from scopecat_server.scaffold import write_author_scaffold
 
-        from .author_environment import create_client_environment
+        from .author_environment import (
+            create_client_environment,
+            prepare_execution_environment,
+        )
 
         directory = Path(parent)
         if not directory.is_absolute() or not directory.is_dir():
@@ -171,22 +175,17 @@ class DesktopAPI:
         with self._session.operation():
             write_author_scaffold(path)
             create_client_environment(self._runtime, path)
-            self._register_source(path)
+            python = prepare_execution_environment(self._runtime, path)
+            self._register_source(path, python)
             return str(path)
 
     def _register_source(self, path: Path, python: Path | None = None) -> str:
-        if not self._runtime.stop_if_idle():
-            raise ValueError(
-                "请先完成或停止当前工作，再添加代码目录；已创建的文件和环境保留"
-            )
         identity = self._runtime.register_source(path, python=python)
         self._start("?" + urlencode({"source": str(path)}) + "#settings")
         return identity
 
-    def register_source(self, directory: str) -> str:
+    def register_source(self, directory: str, interpreter: str) -> str:
         from scopecat.project import load_project
-
-        from .author_environment import prepare_execution_environment
 
         path = Path(directory)
         if not path.is_absolute():
@@ -194,12 +193,18 @@ class DesktopAPI:
         with self._session.operation():
             # Register the selected folder, not an ancestor discovered by walking up.
             _ = load_project(path / "scopecat.toml", resolve_adapter=False)
-            python = (
-                prepare_execution_environment(self._runtime, path)
-                if (path / "pyproject.toml").is_file()
-                else None
-            )
+            python = Path(interpreter)
+            if not python.is_absolute() or not python.is_file():
+                raise ValueError("请选择已有执行环境的 Python 完整路径")
             return self._register_source(path, python)
+
+    def select_source_environment(self, directory: str, interpreter: str) -> str:
+        path, python = Path(directory), Path(interpreter)
+        if not path.is_absolute() or not python.is_absolute() or not python.is_file():
+            raise ValueError("请选择源码目录和已有 Python 的完整路径")
+        with self._session.operation():
+            self._runtime.select_source_environment(path, python)
+        return "执行环境已选择；重新准备使用新环境，已有任务保持原环境。"
 
     def restart(self) -> None:
         with self._session.operation():
@@ -212,12 +217,11 @@ class DesktopAPI:
 
         path = Path(directory)
         if not path.is_absolute():
-            raise ValueError("请选择已登记作者目录的完整路径")
+            raise ValueError("请选择作者目录的完整路径")
         with self._session.operation():
-            self._runtime.source(path)
             python = prepare_execution_environment(self._runtime, path)
-            self._runtime.select_source_environment(path, python)
-            return "后台依赖已准备；重新预览使用新环境，已有任务保持原环境。"
+            self._register_source(path, python)
+            return "执行环境已准备并登记；重新预览使用新环境，已有任务保持原环境。"
 
     def create_author_environment(self, directory: str, rebuild: bool = False) -> str:
         from .author_environment import create_client_environment

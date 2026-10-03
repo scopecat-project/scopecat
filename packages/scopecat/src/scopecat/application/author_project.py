@@ -71,7 +71,7 @@ from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.daemon.views import MeasurementLivePreview, MeasurementPreview
 from scopecat.kernel.errors import SessionClosedError
 from scopecat.kernel.quantity import Quantity
-from scopecat.project_sources import SourceProject, capture_sources
+from scopecat.project_sources import SourceProject
 from scopecat.records.analysis_grouping import AnalysisGrouping
 from scopecat.records.author_revision import (
     AuthorAnalysisGroupReceipt,
@@ -384,7 +384,7 @@ class AuthorProject(DaemonClient):
                 "Author session is closed; create a new live experiment."
             )
         assert self._source_project is not None
-        return capture_sources(self._source_project).manifest.ref
+        return self.current_author_source()
 
     def history(
         self,
