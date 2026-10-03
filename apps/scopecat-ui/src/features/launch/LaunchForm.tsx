@@ -113,7 +113,7 @@ export function LaunchForm({
     event.preventDefault();
     if (!entry.actions.includes("preview") || !supported || !catalogReady) return;
     const revision = draft.revision;
-    update((current) => ({ ...current, pending: true, error: "", rejection: undefined }));
+    update((current) => ({ ...current, pending: "preview", error: "", rejection: undefined }));
     try {
       const next = await apiData<LaunchPreview>(
         apiClient.POST("/api/v1/experiment-launcher/preview", {
@@ -168,7 +168,7 @@ export function LaunchForm({
     update((current) => ({
       ...current,
       requestKey,
-      pending: true,
+      pending: "submit",
       error: "",
       rejection: undefined,
     }));
@@ -255,7 +255,7 @@ export function LaunchForm({
       </p>
       <button
         type="button"
-        disabled={pending}
+        disabled={Boolean(pending)}
         onClick={() => select(entry, true)}
         className="border rounded px-3 py-1"
       >
@@ -266,7 +266,7 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </p>
       )}
-      <fieldset disabled={pending}>
+      <fieldset disabled={Boolean(pending)}>
         <ControlFields
           controls={entry.controls}
           drafts={drafts}
@@ -275,7 +275,7 @@ export function LaunchForm({
           }}
         />
       </fieldset>
-      <fieldset disabled={pending} className="grid grid-cols-2 gap-4">
+      <fieldset disabled={Boolean(pending)} className="grid grid-cols-2 gap-4">
         {fields.map(([name, field]) => (
           <label key={name} className="flex flex-col gap-1">
             {field.title ?? name}
@@ -334,7 +334,7 @@ export function LaunchForm({
         <button
           type="submit"
           disabled={
-            pending ||
+            Boolean(pending) ||
             !supported ||
             !actor.trim() ||
             !catalogReady ||
@@ -343,18 +343,18 @@ export function LaunchForm({
           }
           className="border rounded px-4 py-2"
         >
-          {pending ? "Compiling…" : "Preview"}
+          {pending === "preview" ? "Preparing preview…" : "Preview"}
         </button>
       )}
       {entry.actions.includes("submit") && (
-        <fieldset disabled={pending} className="flex flex-wrap gap-3">
+        <fieldset disabled={Boolean(pending)} className="flex flex-wrap gap-3">
           <button
             type="button"
             disabled={
               !source ||
               !manualReady ||
               !actor.trim() ||
-              pending ||
+              Boolean(pending) ||
               attempt?.status === "unknown" ||
               attempt?.status === "pending"
             }
@@ -363,9 +363,16 @@ export function LaunchForm({
             }}
             className="border rounded px-4 py-2"
           >
-            Start acquisition
+            {pending === "submit" ? "Submitting acquisition…" : "Start acquisition"}
           </button>
         </fieldset>
+      )}
+      {pending && (
+        <p role="status">
+          {pending === "preview"
+            ? "Preparing the experiment preview. Acquisition has not been submitted."
+            : "Waiting for submission confirmation. Acquisition may already have started."}
+        </p>
       )}
       <p className="text-sm">
         Preview compiles only. Start acquisition submits a durable procedure and retains its

@@ -13,6 +13,7 @@ from typing import cast, override
 
 import httpx2
 
+from benchmarks.e2e.author_context import select_reference_context
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.application.author_project import AuthorProject
 from scopecat.daemon.preparation import AuthorPreparationFailed
@@ -59,6 +60,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         with AuthorProject(
             daemon.base_url, project_root=root, transport=transport
         ) as author:
+            select_reference_context(author)
             for index in range(repetitions + 1):
                 started = time.perf_counter()
                 prepared = author.prepare("signal")
@@ -153,7 +155,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
     finally:
         stop_project(project)
     return {
-        **benchmark_record_header(case_id="author-prepare", case_version=2, kind="e2e"),
+        **benchmark_record_header(case_id="author-prepare", case_version=3, kind="e2e"),
         "host": platform.platform(),
         "python": platform.python_version(),
         "daemon_start_seconds": startup,

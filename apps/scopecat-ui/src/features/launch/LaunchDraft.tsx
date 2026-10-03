@@ -45,7 +45,7 @@ export interface LaunchDraft {
   revision: number;
   preview?: LaunchPreview;
   requestKey?: string;
-  pending: boolean;
+  pending: false | "preview" | "submit";
   error: string;
   notice: string;
   admittedProcedureId?: string;

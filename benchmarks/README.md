@@ -193,7 +193,10 @@ uv run --locked python -m benchmarks run author-first-data --repetitions 2
 ```
 
 This virtual signal case records process startup, measurement transport and an
-independent ordinary result reader. See [timing boundaries](../docs/development/author-performance.md#submission-to-first-visible-data)
+independent ordinary result reader, followed by retained analysis and receipt
+reopening. It also records source-refresh duration. All author cases select
+independent parameters and setup explicitly; fixture initialization is outside
+the measured operations. See [timing boundaries](../docs/development/author-performance.md#submission-to-first-visible-data)
 for observer overhead and the distinction from hardware acquisition and GUI rendering.
 
 

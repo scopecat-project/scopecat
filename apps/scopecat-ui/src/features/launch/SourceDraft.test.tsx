@@ -61,7 +61,7 @@ it("switches identical declarations without retaining old inputs or code but pre
       values: { note: "edited" },
       codeRevision: { content_hash: "sha256:old-code" },
       requestKey: "old-key",
-      pending: true,
+      pending: "preview",
       actor: "Ada",
       collection: "archive",
       selection: {

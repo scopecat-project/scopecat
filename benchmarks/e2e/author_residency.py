@@ -15,6 +15,7 @@ from typing import cast
 
 import psutil
 
+from benchmarks.e2e.author_context import select_reference_context
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.application.author_project import AuthorProject
 from scopecat.project import load_project
@@ -92,6 +93,7 @@ def measure(root: Path, *, revisions: int) -> dict[str, object]:
         with AuthorProject(
             daemon.base_url, project_root=root, receipts=root / "receipts"
         ) as author:
+            select_reference_context(author)
             prepared = timed(
                 "prepare_first",
                 lambda: author.prepare("signal", scans={"frequency": [4.7, 4.8, 4.9]}),
@@ -154,7 +156,7 @@ def measure(root: Path, *, revisions: int) -> dict[str, object]:
         raise AssertionError(f"Observed project processes survived stop: {survivors}")
     return {
         **benchmark_record_header(
-            case_id="author-residency", case_version=1, kind="e2e"
+            case_id="author-residency", case_version=2, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),

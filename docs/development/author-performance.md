@@ -6,13 +6,18 @@ Measure the public notebook entry point, not only direct invocation execution:
 uv run --locked python -m benchmarks run author-prepare --repetitions 3
 ```
 
-Run from the public workspace (the `scopecat` submodule in a private checkout).
+Run from the public source checkout.
 The command copies the virtual reference project into a temporary directory,
 starts its daemon, and measures first prepare, repeated prepare, input and scan
 edits, source refresh, and the next two prepares, then unchanged and failed
 refreshes followed by prepare. It does not submit acquisition
 or connect to lab devices. The first call includes initial author validation;
 this is a new-daemon baseline, not an OS filesystem-cache cold-start claim.
+The author cases explicitly save an independent parameter revision and select
+it with the fixture's setup before timing. They do not activate a global
+configuration. This fixture initialization is outside the operation timings;
+the source, dependencies and OS caches already exist. It is not a fresh-install
+or independent vendor-environment benchmark.
 Record results under ignored `.benchmarks/` and compare the same host, Python,
 project and workload. Windows CI correctness does not measure the lab PC.
 
@@ -126,6 +131,11 @@ This benchmark uses the ordinary `prepare().run()` / `job.wait()` APIs on a
 copied virtual signal experiment with three computed points. It measures initial
 and repeated runs, changed input and a run after source refresh. Preparation is
 reported separately; all event offsets share the same submission origin.
+The same journey then times retained analysis and reading the original data
+through a saved job receipt. It verifies the run identity, point count and
+analysis source revision. Receipt reopening uses the running application;
+application restart and portable-file opening are separate qualification paths.
+Source refresh has its own duration instead of disappearing between samples.
 It is a software-path baseline, not a physical trigger/ADC latency measurement.
 The existing scan-execution benchmark remains the lower-level acquisition probe.
 
