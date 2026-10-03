@@ -24,7 +24,7 @@ has been retired. Recording page summaries consume raw records incrementally.
 Native file operations have window-local serialization and application-owned
 wait/cancel accounting, and imported/live waveform results share presentation.
 These changes superseded earlier package and suite evidence for affected paths;
-the relevant checks and native acceptance have since completed. The development store schema is 105;
+the relevant checks and native acceptance have since completed. The development store schema is 106;
 no migration or rewriting of existing stores is performed.
 
 Local checks for this batch: 139 related Python tests passed, followed by the new

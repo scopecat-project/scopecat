@@ -74,8 +74,10 @@ atomic revision/head/receipt rollback, replay and current-format restore.
 The device-session lost-response test now changes driver availability directly,
 without manufacturing an unrelated global configuration activation.
 
-Low-level registry publication/storage and old wire record fixtures still have
-separate consumers; this is not their wholesale retirement. Registry export
+The old publication/activation wire commands, operation receipts and their
+`config_operations` store/table are also retired. Low-level registry entry
+publication and activation history still have separate fixture/provenance
+consumers; this is not their wholesale retirement. Registry export
 coverage constructs retained source evidence without global activation and
 checks that missing or altered decision evidence is rejected. Keep this
 read/provenance contract separate from user editing authority.
@@ -110,7 +112,8 @@ prove that hardware was untouched.
 
 ## Persistence
 
-Development schema 101 retains device registrations, immutable connection
+Development schema 106 retires the unused global configuration operation table.
+It retains device registrations, immutable connection
 revisions, declared access aliases, connection-test evidence, setup definitions
 and exact resolutions with the existing parameter and run records. Current-format
 backup/restore covers these owners together.

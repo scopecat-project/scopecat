@@ -22,19 +22,6 @@ from pydantic import (
 
 from scopecat.analysis.dataset_wire import DerivedDatasetPayload
 from scopecat.config.parameter_updates import ParameterUpdate
-from scopecat.config.registry.records import (
-    CandidateAcceptance,
-    CandidateConfigRegistrySource,
-    ConfigActivationOperation,
-    ConfigContextPublishOperation,
-    ConfigPublishOperation,
-    ConfigRegistryActivationRecord,
-    ConfigRegistryEntry,
-    ContextConfigRegistrySource,
-    CrossRunCandidateAcceptance,
-    config_activation_intent_hash,
-    config_publish_intent_hash,
-)
 from scopecat.config.structure import ParameterStructurePlan
 from scopecat.control.models import RunPlanSummary
 from scopecat.daemon.device_views import DeviceView
@@ -58,7 +45,6 @@ from scopecat.records.analysis import (
     analysis_record_id,
 )
 from scopecat.records.config import (
-    ConfigContentHash,
     ConfigProfileSnapshot,
     InstrumentBindingSpec,
 )
@@ -86,12 +72,10 @@ from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterProposalRef,
-    ParameterValueDelta,
 )
 from scopecat.records.parameter_read import HostParameterEvidence
 from scopecat.records.parameter_revision import (
     ParameterRevision,
-    ParameterRevisionContent,
     ParameterRevisionRef,
 )
 from scopecat.records.plan_ref import ProcedureChildSubmission
@@ -124,8 +108,6 @@ from scopecat.sdk.instruments.execution import RunHardwareBatch
 
 type NonEmptyText = Annotated[str, Field(min_length=1)]
 
-_CONFIG_PUBLISH_SOURCE_INTENT_CODEC = "scopecat.config-publish-source-intent.v1"
-
 
 class _WireModel(BaseModel):
     model_config = ConfigDict(
@@ -135,16 +117,6 @@ class _WireModel(BaseModel):
         frozen=True,
         allow_inf_nan=False,
     )
-
-
-class ConfigDraftCommand(_WireModel):
-    """Typed parameter edits against one observed active registry generation."""
-
-    base_entry_id: NonEmptyText
-    base_content_hash: ConfigContentHash
-    base_generation: int = Field(ge=1)
-    candidate_id: NonEmptyText
-    updates: tuple[ParameterUpdate, ...] = Field(min_length=1)
 
 
 class SampleCreateCommand(_WireModel):
@@ -184,12 +156,6 @@ class SampleMutationReceipt(_WireModel):
     operation_id: NonEmptyText
     record: SampleRecord
     revision: SampleRevision
-
-
-class ParameterConfigRevisionSource(_WireModel):
-    kind: Literal["parameter_revision"] = "parameter_revision"
-    parameters: ParameterRevisionContent
-    setup: SetupRevisionRef
 
 
 class ParameterSaveCommand(_WireModel):
@@ -257,92 +223,6 @@ class ParameterResolveCommand(_WireModel):
     parameters: ParameterRevisionRef
     setup: SetupRevisionRef
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
-
-
-class DirectConfigRevisionSource(_WireModel):
-    kind: Literal["direct_config_profile"] = "direct_config_profile"
-    config: ConfigProfileSnapshot
-
-
-class ManualConfigDraftRevisionSource(_WireModel):
-    kind: Literal["manual_parameter_updates"] = "manual_parameter_updates"
-    draft: ConfigDraftCommand
-    expected_result_content_hash: ConfigContentHash
-
-
-class CandidateConfigRevisionSource(_WireModel):
-    kind: Literal["candidate_config"] = "candidate_config"
-    run_id: NonEmptyText
-    proposal_id: NonEmptyText
-    acceptance: CandidateAcceptance
-
-
-type ConfigPublishSource = Annotated[
-    DirectConfigRevisionSource
-    | ParameterConfigRevisionSource
-    | ManualConfigDraftRevisionSource
-    | CandidateConfigRevisionSource,
-    Field(discriminator="kind"),
-]
-
-type ConfigRevisionSource = Annotated[
-    DirectConfigRevisionSource
-    | ParameterConfigRevisionSource
-    | ManualConfigDraftRevisionSource
-    | CandidateConfigRevisionSource,
-    Field(discriminator="kind"),
-]
-
-
-class ConfigPublishCommand(_WireModel):
-    """Validate, save, and select one revision in a single transaction."""
-
-    operation_id: NonEmptyText
-    source: ConfigPublishSource
-    actor: NonEmptyText
-    expected_generation: int = Field(ge=0)
-    entry_id: NonEmptyText
-    note: str = ""
-
-    @property
-    def source_intent_hash(self) -> Sha256ContentHash:
-        identity = {
-            "codec": _CONFIG_PUBLISH_SOURCE_INTENT_CODEC,
-            "source": self.source.model_dump(mode="json"),
-        }
-        return f"sha256:{stable_content_hash(identity)}"
-
-    @property
-    def intent_hash(self) -> Sha256ContentHash:
-        return config_publish_intent_hash(
-            source_intent_hash=self.source_intent_hash,
-            entry_id=self.entry_id,
-            expected_generation=self.expected_generation,
-            actor=self.actor,
-            note=self.note,
-        )
-
-
-class ConfigPublishReceipt(_WireModel):
-    operation: ConfigPublishOperation
-    entry: ConfigRegistryEntry
-    deltas: tuple[ParameterValueDelta, ...] = ()
-    activation: ConfigRegistryActivationRecord
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> ConfigPublishReceipt:
-        if (
-            self.operation.entry_id != self.entry.id
-            or self.operation.activation_generation != self.activation.generation
-            or self.entry.id != self.activation.entry_id
-            or self.entry.content_hash != self.activation.entry_content_hash
-            or self.operation.actor != self.entry.actor
-            or self.operation.note != self.entry.note
-        ):
-            raise ValueError(
-                "config publish receipt operation, entry, and activation do not match"
-            )
-        return self
 
 
 class ConfigSetupRebindCommand(_WireModel):
@@ -464,41 +344,6 @@ class SetupSaveCommand(_WireModel):
     setup: SetupDefinition
     actor: NonEmptyText
     note: str = ""
-
-
-class ConfigEntryActivationCommand(_WireModel):
-    """Select a saved revision with generation compare-and-swap."""
-
-    operation_id: NonEmptyText
-    entry_id: NonEmptyText
-    actor: NonEmptyText
-    expected_generation: int = Field(ge=0)
-    note: str = ""
-
-    @property
-    def intent_hash(self) -> Sha256ContentHash:
-        return config_activation_intent_hash(
-            entry_id=self.entry_id,
-            expected_generation=self.expected_generation,
-            actor=self.actor,
-            note=self.note,
-        )
-
-
-class ConfigActivationReceipt(_WireModel):
-    operation: ConfigActivationOperation
-    activation: ConfigRegistryActivationRecord
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> ConfigActivationReceipt:
-        if (
-            self.operation.activation_generation != self.activation.generation
-            or self.operation.entry_id != self.activation.entry_id
-        ):
-            raise ValueError(
-                "config activation receipt operation and activation do not match"
-            )
-        return self
 
 
 class _AnalysisInputPayload(_WireModel):
@@ -1395,16 +1240,6 @@ __all__ = [
     "AnalysisTableOutputPayload",
     "AttentionResolutionCommand",
     "AttentionResolutionReceipt",
-    "CandidateConfigRevisionSource",
-    "ConfigActivationReceipt",
-    "ConfigContextPublishCommand",
-    "ConfigContextPublishReceipt",
-    "ConfigDraftCommand",
-    "ConfigEntryActivationCommand",
-    "ConfigPublishCommand",
-    "ConfigPublishReceipt",
-    "ConfigPublishSource",
-    "ConfigRevisionSource",
     "ConfigSetupRebindCommand",
     "ConfigSetupRebindPreviewCommand",
     "ConfigurationAnalysisInputPayload",
@@ -1412,7 +1247,6 @@ __all__ = [
     "ConfigurationTemplateImportResult",
     "ConfigurationTemplateList",
     "ConfigurationTemplateView",
-    "DirectConfigRevisionSource",
     "ExecutorHeartbeat",
     "ExecutorLease",
     "ExecutorStartRequest",
@@ -1426,7 +1260,6 @@ __all__ = [
     "InstrumentSessionLeaseReceipt",
     "InstrumentSessionOpenCommand",
     "InstrumentSessionOpenReceipt",
-    "ManualConfigDraftRevisionSource",
     "MeasurementAnalysisInputPayload",
     "MeasurementFlushCommand",
     "MeasurementFlushReceipt",
@@ -1439,7 +1272,6 @@ __all__ = [
     "ParameterBranchPage",
     "ParameterBranchPublishCommand",
     "ParameterCandidateComposeCommand",
-    "ParameterConfigRevisionSource",
     "ParameterResolveCommand",
     "ParameterRevisionList",
     "ParameterSaveCommand",
@@ -1500,49 +1332,3 @@ class ConfigContextSaveCommand(_WireModel):
 class ConfigContextResolveCommand(_WireModel):
     context: ConfigContextRef
     overrides: tuple[ParameterUpdate, ...] = Field(default=(), max_length=256)
-
-
-class ConfigContextPublishCommand(_WireModel):
-    """Accept a retained verified candidate into one exact working point."""
-
-    operation_id: NonEmptyText
-    base: ConfigContextRef
-    run_id: NonEmptyText
-    proposal_id: NonEmptyText
-    verification: ProjectAnalysisDecisionReference
-    entry_id: NonEmptyText
-    actor: NonEmptyText
-    note: str = ""
-
-    @property
-    def intent_hash(self) -> Sha256ContentHash:
-        identity = {
-            "codec": "scopecat.context-publication.v1",
-            "command": self.model_dump(mode="json", exclude={"operation_id"}),
-        }
-        return f"sha256:{stable_content_hash(identity)}"
-
-
-class ConfigContextPublishReceipt(_WireModel):
-    operation: ConfigContextPublishOperation
-    entry: ConfigRegistryEntry
-    deltas: tuple[ParameterValueDelta, ...] = ()
-
-    @model_validator(mode="after")
-    def validate_identity(self) -> ConfigContextPublishReceipt:
-        source = self.entry.source
-        if (
-            self.operation.entry_id != self.entry.id
-            or self.operation.actor != self.entry.actor
-            or self.operation.note != self.entry.note
-            or not isinstance(source, ContextConfigRegistrySource)
-            or source.context.base != self.operation.base
-            or not isinstance(source.publication, CandidateConfigRegistrySource)
-            or source.publication.base_config_content_hash
-            != self.operation.base.content_hash
-            or not isinstance(
-                source.publication.acceptance, CrossRunCandidateAcceptance
-            )
-        ):
-            raise ValueError("context publication receipt identity mismatch")
-        return self
