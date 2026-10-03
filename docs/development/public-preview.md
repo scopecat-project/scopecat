@@ -66,8 +66,10 @@ uv run --group delivery python -m lab_tools.dev --source .
 ```
 
 This starts a backend and Vite in the foreground, prints URLs and never opens a
-browser. Ctrl-C stops both. Data stays in `.scopecat-dev`; `--home` selects another
-development directory. It does not create a release, desktop entry or installation
+browser. Ctrl-C stops both. Disposable data and generated example source stay in
+`.scopecat-dev` between runs; checkout cleanup removes them. Use `--home` with an
+explicit directory outside the checkout for work you intend to retain, and put
+maintained author code in Git. It does not create a release, desktop entry or installation
 selection. Use `--workspace` to register laboratory author source. Registration
 does not select or activate its driver factory. Use **Update from source** in
 **Devices and drivers** when you want to use that implementation; an unavailable

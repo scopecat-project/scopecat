@@ -78,10 +78,20 @@ A source merge, a release artifact, a consumer pin and human/hardware acceptance
 are separate facts. Update affected issue bodies at closeout, not only comments.
 Do not add a second handoff ledger or depend on ignored local notes.
 
-Use tracked files and explicit source paths when exploring a checkout. Local
-ignored directories can contain retired checkouts, bytecode, environments and
-scientific data; their presence is not maintained implementation. Do not delete
-them as part of a documentation or code refactor.
+Use tracked files and explicit source paths when exploring a checkout. All new
+checkout-local outputs must be disposable; maintained inputs belong in Git and
+retained data/settings/SDKs at explicit external locations. See the
+[output ownership rules](installation-layout.md#development-artifacts-and-retention).
+Do not work around unexplained files by starting another checkout or output tree.
+Historical local files still require owner review before deletion.
+
+After stopping development processes and saving new source, `git clean -ndx`
+previews disposable outputs; `git clean -fdx` removes them, including environments.
+Neither command saves untracked authored work. Do not add a second `-f` to delete
+nested Git repositories; inspect unexpected entries before cleaning. Reconstruct
+with `uv sync --locked` and, for the UI, `pnpm install --frozen-lockfile` from
+`apps/scopecat-ui`, then run the relevant checks above. Dependency caches may be
+shared, but an existing environment, runtime binding or report is not required.
 
 Tests generate .test-results and temporary runtime bindings; these are outputs,
 not checkout prerequisites. A fresh source export plus locked dependency setup

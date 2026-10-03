@@ -84,12 +84,24 @@ def development_session(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--home", type=Path, default=Path.cwd() / ".scopecat-dev")
+    parser.add_argument(
+        "--home",
+        type=Path,
+        default=Path.cwd() / ".scopecat-dev",
+        help="Development data (default: disposable .scopecat-dev in the checkout); "
+        "select a directory outside the checkout for retained work",
+    )
     frontend = parser.add_mutually_exclusive_group()
     frontend.add_argument("--source", type=Path, help="Public checkout for Vite HMR")
     frontend.add_argument("--preview", type=Path, help="Fixed public preview pin")
     parser.add_argument("--workspace", type=Path)
     args = cast("Arguments", cast("object", parser.parse_args()))
+    print(
+        f"Development data: {args.home.resolve()}\n"
+        "Checkout-local data is disposable. Use --home outside the checkout "
+        "for retained work.",
+        flush=True,
+    )
     gui = None
     if args.preview:
         from .preview import fetch_preview, unpack_gui
