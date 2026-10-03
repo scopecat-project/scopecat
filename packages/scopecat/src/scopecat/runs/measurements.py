@@ -20,6 +20,10 @@ from scopecat.records.measurement import (
     MeasurementDatasetSchema,
     MeasurementRecord,
 )
+from scopecat.records.measurement_recording import (
+    CANONICAL_MEASUREMENT_DATASET_REF,
+    MeasurementDatasetHeader,
+)
 from scopecat.runs.access import dataset_storage_ref
 from scopecat.runs.repository import RunRepository
 
@@ -52,20 +56,27 @@ def read_measurement_dataset(
 ) -> MeasurementDataset:
     ref = dataset_storage_ref(dataset)
     records = _read_measurement_records(storage=storage, run_id=run_id, ref=ref)
-    if dataset.data_schema is None:
-        raise _integrity_error(
-            "run.measurement_dataset.schema_missing",
-            f"run measurement dataset ref is missing schema: {ref}",
-            ref=ref,
-        )
-    try:
-        schema = MeasurementDatasetSchema.model_validate(dataset.data_schema)
-    except ValidationError as error:
-        raise _invalid_schema(ref) from error
+    if dataset.kind == "measurement_slice":
+        schema = storage.read_model(
+            run_id,
+            f"{CANONICAL_MEASUREMENT_DATASET_REF}/header.json",
+            MeasurementDatasetHeader,
+        ).dataset_schema
+    else:
+        if dataset.data_schema is None:
+            raise _integrity_error(
+                "run.measurement_dataset.schema_missing",
+                f"run measurement dataset ref is missing schema: {ref}",
+                ref=ref,
+            )
+        try:
+            schema = MeasurementDatasetSchema.model_validate(dataset.data_schema)
+        except ValidationError as error:
+            raise _invalid_schema(ref) from error
     if validate_measurement_records_against_schema(
         records,
         schema,
-        dataset.id,
+        schema.dataset_id if dataset.kind == "measurement_slice" else dataset.id,
         allow_partial=dataset.metadata.get("partial") is True,
     ):
         raise _invalid_schema(ref)

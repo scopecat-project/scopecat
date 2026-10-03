@@ -796,7 +796,7 @@ def _validate_measurement_analysis_input(
             index,
         )
     if (
-        entry.kind != "measurement_dataset"
+        entry.kind not in {"measurement_dataset", "measurement_slice"}
         or entry.content_hash != input_ref.content_hash
         or input_ref.codec != MEASUREMENT_DATASET_CODEC
     ):

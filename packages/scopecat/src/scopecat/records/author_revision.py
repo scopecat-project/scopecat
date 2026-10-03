@@ -6,7 +6,14 @@ from datetime import datetime
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_validator,
+    model_validator,
+)
 
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.records.analysis_grouping import AnalysisGrouping
@@ -129,6 +136,13 @@ class AuthorAnalysisRequest(BaseModel):
     key: str | None = None
     arguments: dict[str, JsonValue] = Field(default_factory=dict)
     grouping: AnalysisGrouping | None = None
+    measurement_slice: str | None = None
+
+    @model_validator(mode="after")
+    def require_slice_grouping(self) -> AuthorAnalysisRequest:
+        if self.measurement_slice is not None and self.grouping is None:
+            raise ValueError("immutable group input requires explicit grouping")
+        return self
 
 
 class AuthorAnalysisGroupReceipt(BaseModel):

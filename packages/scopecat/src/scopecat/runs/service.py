@@ -244,7 +244,13 @@ def _require_content(
     expected_kind: str | None,
 ) -> ContentEntry:
     entry = storage.read_content(run_id, role=role, content_id=selector)
-    if expected_kind is None or entry.kind == expected_kind:
+    if (
+        expected_kind is None
+        or entry.kind == expected_kind
+        or (
+            expected_kind == "measurement_dataset" and entry.kind == "measurement_slice"
+        )
+    ):
         return entry
     raise CheckFailed(
         [

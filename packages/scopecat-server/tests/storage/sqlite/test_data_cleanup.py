@@ -71,6 +71,54 @@ def test_retained_evidence_blocks_deletion_and_explicit_selection_preserves_othe
             )
 
 
+def test_live_analysis_must_stop_before_its_input_is_cleared(tmp_path: Path) -> None:
+    from scopecat.records.analysis_follow import AnalysisFollowRequest
+    from scopecat.records.analysis_grouping import AnalysisGrouping
+    from scopecat.records.author_revision import (
+        AuthorAnalysisRequest,
+        AuthorRevisionRef,
+    )
+
+    from scopecat_server.storage.sqlite.analysis_follow import AnalysisFollowRepository
+
+    with closing(
+        SQLiteProjectStore(SQLiteDatabase(tmp_path / "db"), tmp_path / "objects")
+    ) as store:
+        store.bootstrap()
+        _run(store, "scan", b"{}")
+        follows = AnalysisFollowRepository(store.sqlite)
+        command = AnalysisFollowRequest(
+            id="live",
+            analysis=AuthorAnalysisRequest(
+                workspace_id="authors",
+                code_revision=AuthorRevisionRef(content_hash="sha256:" + "0" * 64),
+                run_id="scan",
+                analysis="authors:fit",
+                grouping=AnalysisGrouping(by=(), fitting="frequency"),
+            ),
+        )
+        follows.create(command)
+        cleanup = DataCleanupService(store)
+        selection = DataCleanupSelection(runs=("scan",))
+        assert any(
+            blocker.owner == "analysis-follow:live"
+            for blocker in cleanup.preview(selection).blockers
+        )
+        follows.set_state("live", "stopped")
+        preview = cleanup.preview(selection)
+        assert not preview.blockers
+        assert (
+            cleanup.execute(
+                DataCleanupCommand(request_key="clear", preview=preview)
+            ).state
+            == "complete"
+        )
+        with pytest.raises(KeyError):
+            follows.get("live")
+        with pytest.raises(BackendConflict, match="cleared"):
+            follows.create(command)
+
+
 def test_file_failure_keeps_resumable_receipt_and_record_fence(tmp_path: Path) -> None:
     with closing(
         SQLiteProjectStore(SQLiteDatabase(tmp_path / "db"), tmp_path / "objects")

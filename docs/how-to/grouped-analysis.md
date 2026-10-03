@@ -88,8 +88,80 @@ Each group retains its exact point indices, measurement hash, source revision,
 arguments and a publication. An exception becomes that group's error receipt;
 other groups continue. Scientific rejection can instead be a normal typed result
 with a status and absent candidate. The parent publication retains the group
-manifest. There is no online scheduling or implied complete-group inference for
-an ongoing run.
+manifest.
+
+For a fixed Cartesian scan, follow complete groups while acquisition continues:
+
+```python
+follow = author.follow_groups_as(
+    run.id,
+    "my_lab.analysis:fit_resonance",
+    ResonanceFit,
+    by=("gain",),
+    fitting="frequency",
+)
+follow_id = follow.id  # retain this alongside your run id
+cursor = 0
+
+# Repeat when you want the next results; each request is bounded.
+page = follow.poll(after=cursor)
+for group in follow.results(page):
+    print(group.receipt.coordinates, group.receipt.error, group.value)
+cursor = page.next_cursor
+print(page.follow.state, page.follow.finished_count, page.follow.group_count)
+```
+
+Drain further pages while `page.has_more` is true, even after the follow completes.
+An empty page while `state == "running"` simply means no new result is available yet.
+
+The same ordinary or context function receives the same group structure as the
+offline call. A group becomes eligible only when every expected logical point has
+a committed acquisition. Received data and execution recovery groups alone do not
+prove this. Instrument-returned frequency arrays remain inside their point; repeated
+T1 groups retain all planned delays. Paired, point-cloud and adaptive domains do not
+yet have a live completion contract and report an explicit error; completed-run
+offline analysis remains available.
+
+Each group fixes a small manifest of exact acquisition identities and hashes,
+referencing the original arrays without copying them. Source revision and arguments
+are fixed when the follow starts. Later data and source edits cannot change an
+existing input or result. Exported `.scopecat` files retain these slices, readable
+with `capture.measurements(run_id, selector=slice_id)`.
+
+The application executes one background group at a time through its existing
+bounded author workers. Defaults limit a follow to 1,000 groups, 4,096 logical points
+per group, 64 MiB of encoded input chunks per group and 60 seconds per invocation.
+These budgets are configurable in `follow_groups_as`; at most eight follows run
+concurrently. Planning reads at most 65,536 values of each grouping axis, including
+duplicates. Groups that fail scientifically remain isolated. Missing points after
+acquisition ends are marked incomplete. `completed` means processing finished;
+inspect `failed_count` and individual receipts before using results.
+
+Closing Python does not cancel acquisition or analysis. Reconnect without rerunning:
+
+```python
+follow = author.reopen_group_follow_as(follow_id, ResonanceFit)
+page = follow.poll(after=cursor)
+# To stop analysis only:
+follow.stop()
+```
+
+Stopping an active invocation requests worker cancellation; poll until it has
+settled. An application interruption during publication is marked `attention` with
+an uncertain result, never silently repeated. Inspect retained publications before
+starting another follow. The run view shows progress and new publications as groups
+finish. Input cleanup is blocked until active analysis stops. These results do not
+automatically gate later acquisition; feedback requires an explicit execution
+dependency. Stateful streaming reducers are a separate capability.
+
+The reference lab's [ordinary trace examples](../../examples/reference_lab/src/reference_lab_authors/authored/group_traces.py)
+provide `power_trace` / `locate_resonance` and `synthetic_t1` / `fit_decay`.
+Use `by=("power",), fitting="trace/frequency"` for the first, and
+`by=(), fitting="delay", repeats="separate"` for the second. The virtual instrument
+returns each full spectrum; the T1 example deliberately uses a known, zero-baseline
+synthetic decay. Its scientific assumptions are visible in the ordinary functions,
+not built into the group scheduler. These software checks do not qualify hardware
+or a physical fitting policy.
 
 After editing the analysis source, call `author.refresh()` and run the same call
 with `source="current"`. The default remains the run's original source. Old

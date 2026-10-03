@@ -63,6 +63,17 @@ driver identity and original-source analysis. Existing preparation stage reporti
 preview diagnostics, admission receipts and typed reopen paths remain authoritative;
 this batch does not add a second progress or result model. Live grouping is batch 3.
 
+Batch 3 implements fixed Cartesian group completion from committed logical-point
+projections, immutable acquisition-reference slices, bounded author-worker execution,
+durable event cursors and restart reads. It reuses ordinary/context analysis and
+existing publications. The run view reports progress and refreshes results; stopping
+analysis leaves acquisition running. Cleanup waits for active analysis, and exported
+captures retain independently readable slices. The reference scenarios cover power
+spectroscopy with instrument-returned frequency arrays and repeated synthetic T1.
+Paired, adaptive and point-cloud live completion, stateful reducers and feedback
+gating remain separate capabilities. Schema 108 remains a prebaseline development
+format. These software scenarios do not replace physical acceptance.
+
 The sections below retain the earlier scientific audit and its evidence inventory;
 current configuration authority is governed by the linked ownership contract.
 

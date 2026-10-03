@@ -16,10 +16,12 @@ from scopecat.daemon.wire import (
 from scopecat.project_state import ProjectStateServices
 from scopecat.runtime_binding import load_runtime_binding
 
+from scopecat_server.services.analysis_follow import AnalysisFollowRunner, AnalyzeGroup
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
 from scopecat_server.services.calibration_profiles import CalibrationProfileService
 from scopecat_server.services.calibration_tasks import CalibrationTaskService
 from scopecat_server.services.measurement_context import MeasurementContextService
+from scopecat_server.storage.sqlite.analysis_follow import AnalysisFollowRepository
 from scopecat_server.storage.sqlite.apparatus_history import ApparatusHistoryStore
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
@@ -90,6 +92,7 @@ class DaemonApplication:
         self.deployment_id = deployment_id
         self._project_store = project_store
         self.data_exchange = DataExchangeService(project_store)
+        self.analysis_follows = AnalysisFollowRepository(project_store.sqlite)
         self.driver_sources = DriverSourceService(
             self.project_root, project_store, devices, instruments
         )
@@ -150,6 +153,15 @@ class DaemonApplication:
 
     def start(self) -> None:
         self._lease_supervisor.start()
+
+    def analysis_follow_runner(self, analyze: AnalyzeGroup) -> AnalysisFollowRunner:
+        return AnalysisFollowRunner(
+            self.analysis_follows,
+            SQLiteRunRepository(
+                self._project_store.sqlite, self._project_store.objects.root
+            ),
+            analyze,
+        )
 
     def close(self) -> None:
         self.author_workspaces.close()

@@ -37,7 +37,12 @@ from scopecat.records.analysis import RunAnalysisSubject
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import MeasurementRecord
-from scopecat.records.measurement_recording import MeasurementDatasetHeader
+from scopecat.records.measurement_recording import (
+    CANONICAL_MEASUREMENT_DATASET_REF,
+    MeasurementDatasetHeader,
+    measurement_record_content_hash,
+)
+from scopecat.records.measurement_slice import MEASUREMENT_SLICE_KIND, MeasurementSlice
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import ResolvedScientificBinding
@@ -568,31 +573,54 @@ class SQLiteRunRepository:
         )
 
         _validate_identity(run_id, ref)
+        selection = (
+            self.read_model(run_id, ref, MeasurementSlice)
+            if ref.startswith(f"data/{MEASUREMENT_SLICE_KIND}/")
+            else None
+        )
         header = self.read_model(
             run_id,
-            f"{ref}/header.json",
+            f"{CANONICAL_MEASUREMENT_DATASET_REF if selection else ref}/header.json",
             MeasurementDatasetHeader,
         )
+        if selection is not None and (
+            selection.run_id != run_id
+            or selection.header_content_hash != header.content_hash
+        ):
+            raise _invalid_ref(run_id, ref)
         dataset_schema_hash = measurement_dataset_schema_hash(header.dataset_schema)
+        selected_indices = (
+            "SELECT acquisition_index FROM execution_measurement_projection "
+            "WHERE run_id=?"
+            if selection is None
+            else "SELECT value FROM json_each(?)"
+        )
+        selection_argument = (
+            run_id
+            if selection is None
+            else json.dumps([point.acquisition_index for point in selection.points])
+        )
         try:
             with self.sqlite.read_connection() as connection:
                 rows = _all(
                     connection.execute(
-                        """
-                        SELECT projection.acquisition_index,
+                        f"""
+                        WITH selected(acquisition_index) AS ({selected_indices})
+                        SELECT record.acquisition_index,
                                record.row_offset,
                                append.ref
-                        FROM execution_measurement_projection AS projection
-                        JOIN execution_measurement_records AS record
-                          ON record.run_id = projection.run_id
-                         AND record.acquisition_index = projection.acquisition_index
+                        FROM selected
+                        -- Drive indexed lookups from the bounded selection;
+                        -- do not scan all physical history to satisfy point order.
+                        CROSS JOIN execution_measurement_records AS record
+                          ON record.run_id = ?
+                         AND record.acquisition_index = selected.acquisition_index
                         JOIN execution_measurement_appends AS append
                           ON append.run_id = record.run_id
                          AND append.acquisition_start = record.acquisition_start
-                        WHERE projection.run_id = ?
-                        ORDER BY projection.point_index
-                        """,
-                        (run_id,),
+                        ORDER BY record.point_index
+                        """,  # noqa: S608 - two fixed internal selection queries
+                        (selection_argument, run_id),
                     )
                 )
         except sqlite3.Error as error:
@@ -618,9 +646,21 @@ class SQLiteRunRepository:
                     strict=True,
                 )
             )
-        return [
+        records = [
             records_by_acquisition[_integer(row, "acquisition_index")] for row in rows
         ]
+        if selection is not None and (
+            tuple(
+                (record.point_index, measurement_record_content_hash(record))
+                for record in records
+            )
+            != tuple(
+                (point.point_index, point.record_content_hash)
+                for point in selection.points
+            )
+        ):
+            raise _invalid_ref(run_id, ref)
+        return records
 
     def read_text(self, run_id: str, ref: str) -> str:
         content = self._read_ref(run_id, ref)

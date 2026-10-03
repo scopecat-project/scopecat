@@ -40,12 +40,21 @@ class Worker:
         self.closed = False
 
     def call(
-        self, command: LaunchRequest, _timeout: float
+        self,
+        command: LaunchRequest,
+        _timeout: float,
+        cancelled: threading.Event | None = None,
     ) -> subprocess.CompletedProcess[str]:
         assert not self.closed
         if command.experiment == "slow":
             self.entered.set()
-            assert self.release.wait(5), "test did not release active worker"
+            for _ in range(500):
+                if cancelled is not None and cancelled.is_set():
+                    self.release.set()
+                    raise InterruptedError("analysis cancelled")
+                if self.release.wait(0.01):
+                    break
+            assert self.release.is_set(), "test did not release active worker"
         return subprocess.CompletedProcess([], 0, self.revision, "")
 
     def receive(self, _timeout: float) -> subprocess.CompletedProcess[str]:
@@ -101,6 +110,31 @@ def test_warm_revision_progresses_while_same_revision_waits(
             assert active.result(timeout=2).stdout == a.revision
         assert pool.call(binding, request("a")).stdout == a.revision
     finally:
+        pool.close()
+
+
+def test_cancelled_analysis_retires_worker_and_releases_its_slot(
+    tmp_path: Path, workers: list[Worker]
+) -> None:
+    binding = AuthorWorkerBinding(tmp_path, Path(sys.executable).absolute())
+    pool = RevisionWorkers()
+    cancelled = threading.Event()
+    pool.call(binding, request("a"))
+    worker = workers[0]
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            active = executor.submit(
+                pool.call, binding, request("a", slow=True), cancelled=cancelled
+            )
+            assert worker.entered.wait(2)
+            cancelled.set()
+            with pytest.raises(InterruptedError):
+                active.result(timeout=2)
+        assert worker.closed
+        pool.call(binding, request("a"))
+        assert len(workers) == 2
+    finally:
+        cancelled.set()
         pool.close()
 
 

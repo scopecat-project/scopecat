@@ -107,6 +107,24 @@ class DataCleanupService:
                     if path.is_file() and not path.is_symlink()
                 )
             if kind == "run":
+                follows = cast(
+                    "list[sqlite3.Row]",
+                    connection.execute(
+                        "SELECT id FROM analysis_follows "
+                        "WHERE run_id=? AND state='running'",
+                        (identity,),
+                    ).fetchall(),
+                )
+                blockers.extend(
+                    DataCleanupBlocker(
+                        owner=f"analysis-follow:{follow[0]}",
+                        reason=(
+                            "Stop the live analysis follow "
+                            "before clearing its input data"
+                        ),
+                    )
+                    for follow in follows
+                )
                 evidence.extend(
                     tuple(item)
                     for item in cast(

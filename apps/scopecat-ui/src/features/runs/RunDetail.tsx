@@ -20,6 +20,7 @@ import type {
 } from "../../types";
 import { RunProposals } from "../proposals/RunProposals";
 import { RunMeasuredCosts } from "./RunMeasuredCosts";
+import { RunAnalysisFollows } from "./RunAnalysisFollows";
 import { RunFailureEvidence } from "./RunFailureEvidence";
 import { RunDomainDecisionCard } from "./RunDomainDecisionCard";
 import type {
@@ -191,6 +192,7 @@ export function RunDetail({
       </header>
       <RunFailureEvidence runId={run.runId} />
       <RunMeasuredCosts runId={run.runId} />
+      <RunAnalysisFollows runId={run.runId} />
 
       {run.samples.length > 0 && (
         <section
