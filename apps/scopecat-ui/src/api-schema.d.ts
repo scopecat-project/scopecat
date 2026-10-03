@@ -3468,6 +3468,16 @@ export interface components {
             /** Requirement Ids */
             requirement_ids?: string[] | null;
         };
+        /** CalibrationRepairBudget */
+        CalibrationRepairBudget: {
+            /**
+             * Elapsed
+             * Format: duration
+             */
+            elapsed: string;
+            /** Max Repairs */
+            max_repairs: number;
+        };
         /**
          * CalibrationReport
          * @description Advisory evidence snapshot for explicit requirements, not sample health.
@@ -3549,6 +3559,17 @@ export interface components {
             /** Targets */
             targets: string[];
         };
+        /** CalibrationStageAttempt */
+        CalibrationStageAttempt: {
+            check: components["schemas"]["CalibrationCheckRequest"];
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: "check" | "repair" | "verify";
+            /** Procedure Run Id */
+            procedure_run_id: string;
+        };
         /** CalibrationStageProgress */
         CalibrationStageProgress: {
             /**
@@ -3563,8 +3584,17 @@ export interface components {
             procedure_run_id?: string | null;
             state: components["schemas"]["CalibrationStageState"];
         };
+        /**
+         * CalibrationStageRepair
+         * @description One bounded fit followed by the original check on its exact candidate.
+         */
+        "CalibrationStageRepair-Output": {
+            call: components["schemas"]["CalibrationTaskCall-Output"];
+            /** Proposal Id */
+            proposal_id: string;
+        };
         /** @enum {string} */
-        CalibrationStageState: "ready" | "waiting" | "blocked" | "queued" | "running" | "attention_required" | "waiting_for_input" | "passed" | "rejected" | "failed" | "cancelled" | "incomplete";
+        CalibrationStageState: "ready" | "repair_ready" | "verification_ready" | "waiting" | "blocked" | "queued" | "running" | "attention_required" | "waiting_for_input" | "passed" | "rejected" | "failed" | "cancelled" | "incomplete";
         /** CalibrationTaskCall */
         "CalibrationTaskCall-Output": {
             definition: components["schemas"]["ProcedureDefinitionRef"];
@@ -3599,6 +3629,11 @@ export interface components {
             };
             finalization?: components["schemas"]["CalibrationTaskCall-Output"] | null;
             plan: components["schemas"]["CalibrationTaskPlan"];
+            repair_budget?: components["schemas"]["CalibrationRepairBudget"] | null;
+            /** Repairs */
+            repairs?: {
+                [key: string]: components["schemas"]["CalibrationStageRepair-Output"];
+            };
             /** Task Id */
             task_id: string;
         };
@@ -3633,6 +3668,10 @@ export interface components {
         };
         /** CalibrationTaskRecord */
         CalibrationTaskRecord: {
+            /** Attempts */
+            attempts?: {
+                [key: string]: components["schemas"]["CalibrationStageAttempt"][];
+            };
             /**
              * Control Revision
              * @default 1
@@ -3647,10 +3686,6 @@ export interface components {
             dispatch_errors?: {
                 [key: string]: string;
             };
-            /** Executions */
-            executions?: {
-                [key: string]: string;
-            };
             /** Finalization Error */
             finalization_error?: string | null;
             /** Finalization Run Id */
@@ -3662,11 +3697,11 @@ export interface components {
              * @enum {string}
              */
             mode: "manual" | "running" | "paused" | "cancelled" | "finished";
-            /** Resolved Checks */
-            resolved_checks?: {
-                [key: string]: components["schemas"]["CalibrationCheckRequest"];
-            };
             specification: components["schemas"]["CalibrationTaskCreate-Output"];
+            /** Started At */
+            started_at?: string | null;
+            /** Stop Reason */
+            stop_reason?: ("repair_budget_exhausted" | "deadline_elapsed") | null;
         };
         /**
          * CalibrationTaskStage
@@ -3688,6 +3723,8 @@ export interface components {
         };
         /** CalibrationTaskView */
         CalibrationTaskView: {
+            /** Admission Deadline */
+            admission_deadline?: string | null;
             finalization?: components["schemas"]["ProcedureRun"] | null;
             progress: components["schemas"]["CalibrationTaskProgress"];
             task: components["schemas"]["CalibrationTaskRecord"];

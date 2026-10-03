@@ -49,6 +49,13 @@ The next budget is five public PRs, distinct from the completed desktop four:
 5. Add bounded check-first repair with explicit budgets, retained partial progress
    and final verification/publication. Start with exact contexts if necessary.
 
+Batch 5 now uses fresh checks, one declared fit and exact candidate verification
+per stage. Tasks retain ordered attempts, total fit budgets and a restart-stable
+admission deadline. Failed execution is not retried as scientific repair. All
+stages must pass before the existing finalizer may verify the combined candidate
+and publish against its captured branch. Historical evidence reuse, iterative
+repair loops and continuous scheduling are outside this first bounded policy.
+
 Prioritize 1–2, then 3. Batches 4–5 are subsequent scientific automation, not new
 prerequisites for supervised hardware acceptance. Private consumers/docs move with
 relevant public capabilities; native/manual checks repeat only for changed contracts.

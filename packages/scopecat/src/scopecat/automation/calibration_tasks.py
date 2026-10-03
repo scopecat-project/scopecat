@@ -33,19 +33,23 @@ class CalibrationTaskInputs(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     task_id: str
     checks: dict[str, CheckEvidence]
+    repairs: dict[str, CheckEvidence] = Field(default_factory=dict)
 
-    @field_validator("checks", mode="before")
+    @field_validator("checks", "repairs", mode="before")
     @classmethod
     def thaw_checks(cls, value: object) -> object:
         return thaw_json_value(value)
 
-    def measurement(self, stage_id: str) -> RunOutputRef:
+    def measurement(self, stage_id: str, *, from_repair: bool = False) -> RunOutputRef:
         """Use a stage's adopted measurement as a durable procedure input."""
-        return RunOutputRef(run_id=self.checks[stage_id].measurement.run_id)
+        evidence = (self.repairs if from_repair else self.checks)[stage_id]
+        return RunOutputRef(run_id=evidence.measurement.run_id)
 
-    def analysis(self, stage_id: str) -> AnalysisPublicationOutputRef:
+    def analysis(
+        self, stage_id: str, *, from_repair: bool = False
+    ) -> AnalysisPublicationOutputRef:
         """Use the exact adopted analysis, never a later analysis of the same run."""
-        evidence = self.checks[stage_id]
+        evidence = (self.repairs if from_repair else self.checks)[stage_id]
         if evidence.analysis_record_id is None:
             raise ValueError(f"stage {stage_id!r} has no adopted analysis")
         return AnalysisPublicationOutputRef(
@@ -102,6 +106,8 @@ class CalibrationTaskPlan(BaseModel):
 
 type CalibrationStageState = Literal[
     "ready",
+    "repair_ready",
+    "verification_ready",
     "waiting",
     "blocked",
     "queued",
@@ -140,6 +146,9 @@ class CalibrationTaskProgress(BaseModel):
 def assess_calibration_task(
     plan: CalibrationTaskPlan,
     executions: Mapping[str, tuple[ProcedureRun, CheckEvidence | None]],
+    *,
+    transitions: Mapping[str, Literal["repair_ready", "verification_ready", "failed"]]
+    | None = None,
 ) -> CalibrationTaskProgress:
     """Evaluate dependencies using exact executions already validated by the server."""
     by_id = {stage.id: stage for stage in plan.stages}
@@ -152,6 +161,8 @@ def assess_calibration_task(
         if bound is not None:
             run, evidence = bound
             state = _execution_state(run, evidence)
+            if transitions and stage_id in transitions:
+                state = transitions[stage_id]
             progress[stage_id] = CalibrationStageProgress(
                 id=stage_id,
                 state=state,
@@ -175,7 +186,10 @@ def assess_calibration_task(
     return CalibrationTaskProgress(
         stages=tuple(progress[stage.id] for stage in plan.stages),
         ready=tuple(
-            stage.id for stage in plan.stages if progress[stage.id].state == "ready"
+            stage.id
+            for stage in plan.stages
+            if progress[stage.id].state
+            in {"ready", "repair_ready", "verification_ready"}
         ),
         complete=all(item.state in _TERMINAL for item in progress.values()),
         successful=all(item.state == "passed" for item in progress.values()),

@@ -39,8 +39,7 @@ function fixture(): View {
       mode: "running",
       control_revision: 4,
       dispatch_errors: { q0: "setup changed" },
-      executions: {},
-      resolved_checks: {},
+      attempts: {},
     },
     progress: {
       stages: [{ id: "q0", state: "ready", blocked_by: [] }],
@@ -63,6 +62,40 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
+});
+
+it("shows budget stop and retains the initial check link", async () => {
+  window.history.replaceState(null, "", "/?task=round%2F1#launch");
+  const view = fixture();
+  view.task.mode = "finished";
+  view.task.stop_reason = "repair_budget_exhausted";
+  view.task.specification.repair_budget = { max_repairs: 0, elapsed: "PT1H" };
+  view.task.attempts = {
+    q0: [
+      {
+        phase: "check",
+        procedure_run_id: "initial-check",
+        check: view.task.specification.plan.stages[0]!.check,
+      },
+    ],
+  };
+  view.progress.stages[0]!.state = "repair_ready";
+  view.progress.stages[0]!.procedure_run_id = "initial-check";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) =>
+      Response.json(
+        new URL(request.url).pathname.endsWith("calibration-tasks")
+          ? { items: [view.task], next_cursor: null }
+          : view,
+      ),
+    ),
+  );
+  const onProcedure = mount();
+  expect(await screen.findByText(/Admission stopped: repair budget exhausted/)).toBeInTheDocument();
+  expect(screen.getByText(/One repair per stage/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Open execution for q0" }));
+  expect(onProcedure).toHaveBeenCalledWith("initial-check");
 });
 
 it("does not show a frozen parameter context before a candidate output is bound", async () => {
