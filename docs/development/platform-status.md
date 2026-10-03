@@ -55,7 +55,8 @@ relevant public capabilities; native/manual checks repeat only for changed contr
 Actual editor, unfamiliar-user and physical observations remain separate in #616.
 
 Batch 1 is merged in [#849](https://github.com/scopecat-project/scopecat/pull/849).
-Batch 2 unifies managed ordinary/context analysis arguments, defaults and
+Batch 2 ([#850](https://github.com/scopecat-project/scopecat/pull/850)) unifies
+managed ordinary/context analysis arguments, defaults and
 publication, and lets both use completed-run groups. The shared two-source journey
 also checks separate stable/trial parameter branches, incompatible units, preserved
 driver identity and original-source analysis. Existing preparation stage reporting,
