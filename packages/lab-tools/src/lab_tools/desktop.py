@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import threading
@@ -238,7 +239,7 @@ class DesktopAPI:
         self._prepare()
         record = self._runtime.start()
         self._session.connected(record.base_url)
-        self._window().load_url(record.base_url + location)
+        _replace_location(self._window(), record.base_url + location)
 
     def exit(self, background: bool) -> None:
         if background:
@@ -251,6 +252,12 @@ class DesktopAPI:
 
     def wait_for_idle(self, wait: bool) -> None:
         self._session.wait_for_idle(wait)
+
+
+def _replace_location(window: webview.Window, url: str) -> None:
+    # Startup/recovery and backend reconnection are not user navigation.
+    # Replace the entry itself so native back gestures cannot reach these pages.
+    window.run_js(f"window.location.replace({json.dumps(url)});")
 
 
 def _page(content: str) -> str:
@@ -346,10 +353,11 @@ class DesktopWindows:
                 continue
             url = urlsplit(location)
             if (url.scheme, url.netloc) == (old.scheme, old.netloc):
-                view.window.load_url(
+                _replace_location(
+                    view.window,
                     urlunsplit(
                         (new.scheme, new.netloc, url.path, url.query, url.fragment)
-                    )
+                    ),
                 )
 
     @property

@@ -76,6 +76,10 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     windows = DesktopWindows(session, prepare)
     first = windows.create()
     first.api.retry()
+    first.window.run_js.assert_called_once_with(
+        'window.location.replace("http://localhost:1234");'
+    )
+    first.window.run_js.reset_mock()
     first.window.get_current_url.return_value = "http://localhost:1234/?run=A#runs"
     first.api.new_window()
     second = windows.latest
@@ -109,8 +113,12 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     runtime.start.assert_called_once()
     second.window.get_current_url.return_value = "http://localhost:1234/?run=B#runs"
     session.connected("http://localhost:4321")
-    first.window.load_url.assert_called_with("http://localhost:4321/?run=A#runs")
-    second.window.load_url.assert_called_with("http://localhost:4321/?run=B#runs")
+    first.window.run_js.assert_called_with(
+        'window.location.replace("http://localhost:4321/?run=A#runs");'
+    )
+    second.window.run_js.assert_called_with(
+        'window.location.replace("http://localhost:4321/?run=B#runs");'
+    )
 
     # Tray hide/open is application-wide: neither retained view may be stranded.
     shown = Mock()
@@ -222,7 +230,7 @@ def test_busy_source_creation_retains_folder_without_interrupting_work(
     assert (tmp_path / "experiments/notebooks/02_edit_scan.py").is_file()
     runtime.stop.assert_not_called()
     runtime.register_source.assert_not_called()
-    window.load_url.assert_not_called()
+    window.run_js.assert_not_called()
 
 
 @pytest.mark.parametrize("name", ["../outside", "..", "C:outside", "nested\\folder"])
@@ -426,7 +434,7 @@ def test_failed_restart_preparation_keeps_window_available():
     runtime.stop.assert_called_once()
     prepare.assert_called_once()
     runtime.start.assert_not_called()
-    window.load_url.assert_not_called()
+    window.run_js.assert_not_called()
     window.destroy.assert_not_called()
     assert not closing.is_set()
 
@@ -445,4 +453,6 @@ def test_interrupted_selection_can_retry_without_closing_window():
     window.destroy.assert_not_called()
     api.retry()
     assert prepare.call_count == 2
-    window.load_url.assert_called_once_with("http://localhost:1234")
+    window.run_js.assert_called_once_with(
+        'window.location.replace("http://localhost:1234");'
+    )

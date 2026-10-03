@@ -380,6 +380,14 @@ and reopening after one view is closed; all 28 session/platform tests passed.
 The earlier single-window human observation does not qualify this correction's
 multi-window native behavior; the next package needs that focused observation.
 
+The first view also retained its startup page in native navigation history:
+entering the workbench used a normal URL load. Startup/retry and backend reconnect
+now use `location.replace` rather than adding a history entry. This addresses
+native back navigation itself instead of relying only on the application's
+guarded Back command. Session regressions cover initial entry, retry and both
+windows reconnecting while retaining their record routes. The replacement package
+needs a focused first-window back check in addition to multi-window restoration.
+
 ## Technology decision
 
 Implement this slice before broad GUI redesign or more host-specific polish.
