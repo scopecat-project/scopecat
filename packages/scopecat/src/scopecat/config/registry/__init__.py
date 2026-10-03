@@ -40,8 +40,6 @@ if TYPE_CHECKING:
         DirectConfigRevisionSource,
         InstrumentInventoryMigrationDelta,
         InstrumentInventoryMigrationPlan,
-        ManualConfigDraftResult,
-        ManualConfigDraftRevisionSource,
         ParameterConfigRevisionSource,
         activate_config_registry_entry,
         load_active_config_registry_snapshot,
@@ -50,7 +48,6 @@ if TYPE_CHECKING:
         load_config_registry_entry_snapshot,
         load_config_registry_page,
         plan_instrument_inventory_migration,
-        preview_manual_config_draft,
         publish_config_revision,
         resolve_config_registry_config_source,
     )
@@ -89,8 +86,6 @@ _SERVICE_EXPORTS = (
     "ParameterConfigRevisionSource",
     "InstrumentInventoryMigrationDelta",
     "InstrumentInventoryMigrationPlan",
-    "ManualConfigDraftResult",
-    "ManualConfigDraftRevisionSource",
     "activate_config_registry_entry",
     "load_active_config_registry_snapshot",
     "load_config_registry_activation",
@@ -98,7 +93,6 @@ _SERVICE_EXPORTS = (
     "load_config_registry_entry_snapshot",
     "load_config_registry_page",
     "plan_instrument_inventory_migration",
-    "preview_manual_config_draft",
     "publish_config_revision",
     "resolve_config_registry_config_source",
 )

@@ -13,13 +13,12 @@ from scopecat.config.parameter_updates import ReplaceParameter
 from scopecat.config.registry import (
     ConfigRevision,
     DirectConfigRevisionSource,
-    load_active_config_registry_snapshot,
-    publish_config_revision,
 )
 from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.config.registry.service import (
     ConfigRegistryEntrySnapshot,
     save_config_context,
+    save_config_revision,
 )
 from scopecat.kernel.errors import CheckFailed
 from scopecat.kernel.quantity import Quantity
@@ -44,12 +43,11 @@ def test_two_samples_two_working_points_are_saved_without_activation(
     uow = sqlite_config_registry_unit_of_work(tmp_path)
     base = load_config()
     initialize_setup(base, unit_of_work=uow)
-    seed = publish_config_revision(
+    seed = save_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"
         ),
         unit_of_work=uow,
-        expected_generation=0,
     )
     base_ref = ConfigContextRef(
         entry_id=seed.entry.id, content_hash=seed.entry.content_hash
@@ -91,10 +89,8 @@ def test_two_samples_two_working_points_are_saved_without_activation(
         assert isinstance(entry.entry.source, ContextConfigRegistrySource)
         assert entry.entry.source.context.sample.sample_id == sample
         saved.append(entry)
-    assert (
-        load_active_config_registry_snapshot(unit_of_work=uow).activation
-        == seed.activation
-    )
+    with uow() as work:
+        assert work.registry.current_generation() == 0
     assert len({item.entry.id for item in saved}) == 4
     assert len({item.entry.content_hash for item in saved}) == 4
 

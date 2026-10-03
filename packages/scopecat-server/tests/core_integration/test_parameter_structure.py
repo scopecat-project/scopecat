@@ -7,12 +7,12 @@ from scopecat.config.parameter_updates import UpdateParameterRows
 from scopecat.config.registry import (
     ConfigRevision,
     DirectConfigRevisionSource,
-    publish_config_revision,
 )
 from scopecat.config.registry.records import ContextConfigRegistrySource
 from scopecat.config.registry.service import (
     load_config_registry_entry_snapshot,
     save_config_context,
+    save_config_revision,
 )
 from scopecat.config.structure import (
     ParameterStructurePlan,
@@ -75,12 +75,11 @@ def test_structure_save_preserves_source_addresses_and_imported_evidence(
         }
     )
     initialize_setup(base, unit_of_work=uow)
-    initial = publish_config_revision(
+    initial = save_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"
         ),
         unit_of_work=uow,
-        expected_generation=0,
     )
     ref = ConfigContextRef(
         entry_id=initial.entry.id, content_hash=initial.entry.content_hash
@@ -247,12 +246,11 @@ def test_cell_patch_round_trip_retains_other_rows_evidence_and_source(
         }
     )
     initialize_setup(base, unit_of_work=uow)
-    initial = publish_config_revision(
+    initial = save_config_revision(
         revision=ConfigRevision(
             source=DirectConfigRevisionSource(base), entry_id="lab", actor="operator"
         ),
         unit_of_work=uow,
-        expected_generation=0,
     )
     sample = SampleBinding(
         role="subject",
