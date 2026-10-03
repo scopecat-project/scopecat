@@ -14,6 +14,7 @@ const stage: components["schemas"]["CalibrationTaskStage"] = {
     result_output: "check",
     measurement_step: "measure",
     analysis_step: "analyze",
+    dependencies: { qualification: "review-v1", physical: null },
     scope: {
       capability: "readout",
       targets: ["q0", "q1"],
@@ -157,7 +158,13 @@ it("requires an explicit age and submits exactly the stage's frozen scope and co
       context: stage.check.context,
       history_limit: 50,
       requirements: [
-        { id: stage.id, scope: stage.check.scope, max_age: "PT7200S", depends_on: [] },
+        {
+          id: stage.id,
+          scope: stage.check.scope,
+          max_age: "PT7200S",
+          depends_on: [],
+          dependencies: stage.check.dependencies,
+        },
       ],
     },
   ]);

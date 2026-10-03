@@ -70,6 +70,7 @@ export function CalibrationEvidence({
                   scope: stage.check.scope,
                   max_age: `PT${seconds}S`,
                   depends_on: [],
+                  dependencies: stage.check.dependencies,
                 },
               ],
             },
