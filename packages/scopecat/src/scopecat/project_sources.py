@@ -117,7 +117,7 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
     authors = cast("dict[str, object]", document.get("authors", {}))
     authors.pop("modules", None)
     maintenance["scopecat.toml"] = sha256_json_hash(content_fingerprint(document))
-    from scopecat.execution_environment import author_packages, execution_packages
+    from scopecat.execution_environment import execution_packages
     from scopecat.installed_authors import capture_installed_authors
 
     installed = capture_installed_authors(project.installed_packages)
@@ -138,15 +138,9 @@ def capture_sources(project: SourceProject) -> AuthorRevisionBundle:
         refresh_roots=project.refresh_roots,
         python=platform.python_version(),
         packages=packages,
-        import_packages=(
-            packages
-            if project.dependencies is None
-            else author_packages(
-                (
-                    *project.dependencies,
-                    *(name for _, name in project.installed_packages),
-                )
-            )
+        import_requirements=(
+            *(project.dependencies or ()),
+            *(name for _, name in project.installed_packages),
         ),
         installed_authors=installed,
         maintenance_hash=sha256_json_hash(
@@ -179,13 +173,42 @@ def require_environment(manifest: AuthorRevisionManifest) -> None:
 
 
 def require_import_environment(manifest: AuthorRevisionManifest) -> None:
-    """Check author imports without requiring unrelated backend packages."""
-    _require_environment(manifest, manifest.import_packages)
+    """Validate client declarations without borrowing execution's dependency lock."""
+    from scopecat.execution_environment import author_packages
+
+    _require_installed_authors(manifest)
+    packages = author_packages(manifest.import_requirements)
+    # Pre-stable Scopecat declarations share the recorded API. Third-party
+    # packages follow their declared compatibility ranges in the client, while
+    # execution/recovery below still requires the complete recorded environment.
+    for name, actual in packages.items():
+        if name == "scopecat" or name.startswith("scopecat-"):
+            expected = manifest.packages[name]
+            if actual != expected:
+                raise ValueError(
+                    f"author imports require {name}=={expected}; found {actual}"
+                )
 
 
 def _require_environment(
     manifest: AuthorRevisionManifest, packages: dict[str, str]
 ) -> None:
+    _require_installed_authors(manifest)
+    if manifest.python != platform.python_version():
+        raise ValueError("author revision requires its recorded Python version")
+    for name, expected in packages.items():
+        try:
+            actual_version = version(name)
+        except PackageNotFoundError:
+            actual_version = "not installed"
+        if actual_version != expected:
+            raise ValueError(
+                f"author revision requires installed package {name}=={expected}; "
+                f"found {actual_version}. Restore the recorded execution environment"
+            )
+
+
+def _require_installed_authors(manifest: AuthorRevisionManifest) -> None:
     from scopecat.installed_authors import capture_installed_authors
 
     actual = capture_installed_authors(
@@ -199,18 +222,6 @@ def _require_environment(
             "installed author package content changed; restore the recorded "
             "installed artifacts before recovery"
         )
-    if manifest.python != platform.python_version():
-        raise ValueError("author revision requires its recorded Python version")
-    for name, expected in packages.items():
-        try:
-            actual_version = version(name)
-        except PackageNotFoundError:
-            actual_version = "not installed"
-        if actual_version != expected:
-            raise ValueError(
-                f"author revision requires installed package {name}=={expected}; "
-                f"found {actual_version}. Restore the recorded execution environment"
-            )
 
 
 def verified_source_files(bundle: AuthorRevisionBundle) -> Iterator[tuple[str, bytes]]:

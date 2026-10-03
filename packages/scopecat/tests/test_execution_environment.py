@@ -81,8 +81,7 @@ def test_scoped_revision_ignores_tools_but_retains_execution_environment(
     project = load_project(manifest)
     original = capture_sources(project).manifest
     assert "scopecat-server" in original.packages
-    assert "scopecat-server" not in original.import_packages
-    assert original.import_packages["trial-helper"] == "1.0"
+    assert original.import_requirements == ("trial-methods",)
     from scopecat import project_sources
 
     def client_version(name: str) -> str:
@@ -105,8 +104,11 @@ def test_scoped_revision_ignores_tools_but_retains_execution_environment(
     )
     with pytest.raises(ValueError, match=r"trial-helper==1\.0"):
         require_environment(original)
-    with pytest.raises(ValueError, match=r"trial-helper==1\.0"):
-        require_import_environment(original)
+    require_import_environment(original)
+    with pytest.raises(ValueError, match="does not accept"):
+        require_import_environment(
+            original.model_copy(update={"import_requirements": ("trial-helper<2",)})
+        )
     helper.unlink()
     helper.parent.rmdir()
     with pytest.raises(ValueError, match="not installed"):

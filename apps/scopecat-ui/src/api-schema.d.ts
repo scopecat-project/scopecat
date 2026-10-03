@@ -3069,10 +3069,8 @@ export interface components {
             files: {
                 [key: string]: components["schemas"]["Sha256ContentHash"];
             };
-            /** Import Packages */
-            import_packages: {
-                [key: string]: string;
-            };
+            /** Import Requirements */
+            import_requirements: string[];
             /** Installed Authors */
             installed_authors?: {
                 [key: string]: components["schemas"]["InstalledAuthorPackage"];

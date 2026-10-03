@@ -390,7 +390,7 @@ def test_retained_author_evidence_is_verified_without_extracting_source(tmp_path
         refresh_roots=(),
         python="3.14",
         packages={},
-        import_packages={},
+        import_requirements=(),
         maintenance_hash="sha256:" + "0" * 64,
     )
     bundle = AuthorRevisionBundle(

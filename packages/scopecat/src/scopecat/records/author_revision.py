@@ -43,7 +43,7 @@ class AuthorRevisionManifest(BaseModel):
     refresh_roots: tuple[str, ...]
     python: str
     packages: dict[str, str]
-    import_packages: dict[str, str]
+    import_requirements: tuple[str, ...]
     installed_authors: dict[str, InstalledAuthorPackage] = Field(default_factory=dict)
     maintenance_hash: Sha256ContentHash
 

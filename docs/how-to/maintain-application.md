@@ -88,6 +88,12 @@ or the selected source environment. Existing prepared work and plans retain thei
 recorded dependency versions; the application remains running. Local pip installs
 alone do not change background execution.
 
+Client imports check the source's declared dependency ranges and the matching
+Scopecat API version. They do not require every analysis-library version or Python
+patch release to match the execution environment. Retained execution and recovery
+still check the exact recorded environment; changing a user environment in place
+can invalidate work prepared with that environment.
+
 For a broken local environment, close its terminals and kernels, then choose
 **Rebuild local Python environment**. The old directory is retained as
 `.venv-retained-…`; a failed rebuild restores it. The replacement starts from the

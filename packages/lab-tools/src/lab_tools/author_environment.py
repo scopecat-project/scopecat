@@ -142,6 +142,8 @@ def prepare_execution_environment(
                 "compile",
                 str(declaration),
                 str(execution),
+                "--project",
+                str(workspace),
                 "--python",
                 str(runtime.installation().python),
                 "--find-links",
