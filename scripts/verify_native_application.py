@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 from lab_tools.bundle import inventory
 from lab_tools.macos_signing import verify as verify_signature
@@ -67,7 +70,40 @@ print("PASS: fixed packaged runtime starts and stops without installation")
 """
 
 
-def verify(app: Path, home: Path, installer: Path | None = None) -> None:
+def verify(
+    app: Path, home: Path, installer: Path | None = None, *, keep_work: bool = False
+) -> None:
+    """Retain reports only; never rename or mutate the caller's package."""
+    app = app.resolve()
+    home = home.resolve()
+    if home.is_relative_to(app):
+        raise ValueError("Acceptance reports must be outside the application")
+    home.mkdir(parents=True, exist_ok=False)
+    with tempfile.TemporaryDirectory(
+        prefix="work-", dir=home, delete=not keep_work
+    ) as directory:
+        work = Path(directory)
+        copied = work / app.name
+        shutil.copytree(app.resolve(), copied, symlinks=True)
+        state = work / "acceptance"
+        try:
+            _verify(copied, state, installer)
+        finally:
+            for relative in (
+                "result.json",
+                "data/native-start.log",
+                "data/desktop/desktop.log",
+            ):
+                source = state / relative
+                if source.is_file():
+                    target = home / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, target)
+            if keep_work:
+                print(f"Retained acceptance workspace: {work}")
+
+
+def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
     app = app.resolve()
     home = home.resolve()
     if home.exists():
@@ -166,9 +202,20 @@ def verify(app: Path, home: Path, installer: Path | None = None) -> None:
     )
 
 
+class Arguments(Protocol):
+    app: Path
+    reports: Path
+    installer: Path | None
+    keep_work: bool
+
+
 if __name__ == "__main__":
-    verify(
-        Path(sys.argv[1]),
-        Path(sys.argv[2]),
-        Path(sys.argv[3]) if len(sys.argv) > 3 else None,
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("app", type=Path)
+    parser.add_argument("reports", type=Path)
+    parser.add_argument("installer", type=Path, nargs="?")
+    parser.add_argument(
+        "--keep-work", action="store_true", help="Retain disposable work for diagnosis"
     )
+    args = cast("Arguments", cast("object", parser.parse_args()))
+    verify(args.app, args.reports, args.installer, keep_work=args.keep_work)

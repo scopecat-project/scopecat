@@ -6,6 +6,58 @@ locations; `InstallationPaths.isolated(home)` keeps validation inside one explic
 directory. Foreground source development continues to use `lab_tools.dev` and
 does not create an installed application.
 
+## Development artifacts and retention
+
+Repository-local outputs have distinct lifetimes:
+
+| Directory | Contents and retention |
+| --- | --- |
+| `/build/` | Rebuildable intermediate files and delivery staging; remove after packaging |
+| `/dist/native/` | One current native candidate at a stable path |
+| `/dist/qualified/` | One latest accepted installer; replace only after a new candidate passes |
+| `/.test-results/` | Small reports and logs; keep the latest successful run and latest failure |
+| `/.scopecat-dev/` | Persistent source-development data; never part of build cleanup |
+
+Tool-owned directories such as frontend `dist`, `.venv` and `node_modules` retain
+their ordinary locations. Share uv/pnpm caches rather than creating another cache
+per build. Cache pruning is separate maintenance, not a broad directory deletion.
+Old `results/` directories are historical local evidence, not a supported new
+output location. Existing stores, source checkouts and SDK environments require
+owner review; ignoring a directory does not make its contents disposable.
+
+Use the same application path, name and bundle identity for repeated native
+checks. Stop that application before replacing its package. Keep test data in an
+explicit isolated home, and use Computer Use only for native interactions that
+automated checks cannot establish. Stable identity aids discovery but does not
+guarantee reuse of every OS or Computer Use permission after rebuilding.
+
+For example, build a delivery into `build/delivery`, then run on macOS:
+
+```sh
+python -m lab_tools.native_package build/delivery dist/native/Scopecat.app \
+  --installer dist/native/Scopecat.dmg
+```
+
+Use `dist/native/Scopecat` and
+`dist/native/Scopecat-Setup.exe` on Windows. Existing outputs are rejected rather
+than silently overwritten or expanded into another timestamped directory.
+
+`verify_native_application.py APP REPORTS [INSTALLER]` now copies the input app
+into disposable work: it never renames the caller's candidate. Both it and
+`verify_macos_download.py INSTALLER REPORTS` remove temporary app/environment
+copies on success or failure, retaining their result JSON and available logs.
+Use `--keep-work` only when diagnosing a failure, and remove the printed workspace
+afterwards. The reports directory must be fresh; remove the previous small report
+after review. CI artifacts have their own bounded retention.
+
+Shared Git ignores cover generated outputs, tool environments and local runtime
+data. They must not hide maintained documentation, assets or editor tasks. A
+machine's retained legacy paths belong in `.git/info/exclude`; do not add a new
+shared ignore for each diagnostic experiment. Document decisions in ordinary
+development docs, not in `AGENTS.md` or an ever-growing generated report archive.
+
+## Installed application directories
+
 | Purpose | macOS | Windows |
 | --- | --- | --- |
 | Native app | User-selected Applications folder | User Programs `Scopecat` |
@@ -73,7 +125,7 @@ the installed runtime; it never selects a separately prepared candidate.
 
 Native startup failures are written to `data-home/native-start.log` and presented
 through a native error dialog. `--home ROOT --check-result FILE` instead performs
-headless setup for acceptance. `scripts/verify_native_application.py APP HOME`
+headless setup for acceptance. `scripts/verify_native_application.py APP REPORTS`
 checks relocation, empty PATH, repeat startup, unchanged app contents, retained
 author Python after the app is moved away, and service start/stop before removal. The
 `native-distribution` acceptance profile builds and runs this on macOS and Windows.
