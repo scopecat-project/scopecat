@@ -5,6 +5,8 @@ from typing import Literal
 from scopecat.automation import RegisteredProcedure
 from scopecat.automation.calibration_tasks import CalibrationTaskPlan
 from scopecat.daemon.calibration_tasks import (
+    CalibrationRepairBudget,
+    CalibrationStageRepair,
     CalibrationTaskCall,
     CalibrationTaskControl,
     CalibrationTaskCreate,
@@ -42,10 +44,17 @@ class LabCalibrationTasks:
         *,
         calls: dict[str, CalibrationTaskCall],
         finalization: CalibrationTaskCall | None = None,
+        repairs: dict[str, CalibrationStageRepair] | None = None,
+        repair_budget: CalibrationRepairBudget | None = None,
     ) -> CalibrationTaskView:
         return self._client.create_calibration_task(
             CalibrationTaskCreate(
-                task_id=task_id, plan=plan, calls=calls, finalization=finalization
+                task_id=task_id,
+                plan=plan,
+                calls=calls,
+                finalization=finalization,
+                repairs=repairs or {},
+                repair_budget=repair_budget,
             )
         )
 
@@ -60,7 +69,7 @@ class LabCalibrationTasks:
         )
 
     def dispatch(self, task_id: str, stage_id: str) -> CalibrationTaskView:
-        """Admit a ready stage once; a registered procedure worker executes it."""
+        """Admit an initial check once; start() advances declared repair phases."""
         return self._client.dispatch_calibration_task(
             CalibrationTaskDispatch(task_id=task_id, stage_id=stage_id)
         )

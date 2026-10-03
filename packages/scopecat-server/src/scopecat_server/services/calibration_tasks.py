@@ -3,8 +3,12 @@
 import sqlite3
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Literal
 
-from scopecat.automation.calibration_tasks import CalibrationTaskInputs
+from scopecat.automation.calibration_tasks import (
+    CalibrationTaskInputs,
+    assess_calibration_task,
+)
 from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_snapshot,
@@ -12,6 +16,7 @@ from scopecat.config.candidates import (
 from scopecat.config.changes import load_parameter_change_proposal
 from scopecat.daemon.calibration_checks import CalibrationTaskPreview
 from scopecat.daemon.calibration_tasks import (
+    CalibrationStageAttempt,
     CalibrationTaskControl,
     CalibrationTaskCreate,
     CalibrationTaskDispatch,
@@ -23,6 +28,7 @@ from scopecat.daemon.calibration_tasks import (
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import ProblemFailure
 from scopecat.project_state import ProjectStateServices
+from scopecat.records.calibration_check import CalibrationCheckRequest
 from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import config_content_hash
 
@@ -107,6 +113,9 @@ class CalibrationTaskService:
             ]
             updated = task.model_copy(
                 update={
+                    "started_at": (task.started_at or datetime.now(UTC))
+                    if command.action == "start"
+                    else task.started_at,
                     "mode": mode,
                     "control_revision": task.control_revision + 1,
                     "last_control": command,
@@ -132,15 +141,27 @@ class CalibrationTaskService:
             view = self._view(connection, task)
             if task.mode != "running":
                 return view
+            if view.finalization is not None:
+                if view.finalization.closure is None:
+                    return view
+                task = task.model_copy(update={"mode": "finished"})
+                self._store.update(connection, task)
+                return self._view(connection, task)
+            if any(
+                stage.state
+                in {"queued", "running", "waiting_for_input", "attention_required"}
+                for stage in view.progress.stages
+            ):
+                return view
+            reason = self._budget_reason(task)
+            if reason is not None:
+                return self._stop(connection, task, reason)
             if view.progress.complete:
                 if (
                     task.specification.finalization is not None
                     and view.progress.successful
                 ):
-                    if view.finalization is not None:
-                        if view.finalization.closure is None:
-                            return view
-                    elif task.finalization_error is not None:
+                    if task.finalization_error is not None:
                         return view
                     else:
                         connection.execute("SAVEPOINT task_finalization")
@@ -158,15 +179,13 @@ class CalibrationTaskService:
                 task = task.model_copy(update={"mode": "finished"})
                 self._store.update(connection, task)
                 return self._view(connection, task)
-            if any(
-                stage.state
-                in {"queued", "running", "waiting_for_input", "attention_required"}
-                for stage in view.progress.stages
-            ):
-                return view
             for stage_id in view.progress.ready:
                 if stage_id in task.dispatch_errors:
                     continue
+                if self._phase(task, stage_id) == "repair":
+                    reason = self._budget_reason(task, repairing=True)
+                    if reason is not None:
+                        return self._stop(connection, task, reason)
                 connection.execute("SAVEPOINT task_stage")
                 try:
                     updated = self._admit(connection, task, stage_id)
@@ -185,7 +204,7 @@ class CalibrationTaskService:
                 finally:
                     connection.execute("RELEASE task_stage")
                 self._store.update(connection, task)
-                if stage_id in task.executions:
+                if stage_id not in task.dispatch_errors:
                     break
             return self._view(connection, task)
 
@@ -201,6 +220,18 @@ class CalibrationTaskService:
                 stage.id: stage.evidence
                 for stage in view.progress.stages
                 if stage.evidence is not None
+            },
+            repairs={
+                key: evidence
+                for key, attempts in task.attempts.items()
+                for attempt in attempts
+                if attempt.phase == "repair"
+                if (
+                    evidence := self._checks.evidence_in_transaction(
+                        connection, attempt.procedure_run_id
+                    )
+                )
+                is not None
             },
         )
         key = "calibration-task-finalization:" + sha256_json_hash(
@@ -233,23 +264,38 @@ class CalibrationTaskService:
             item for item in task.specification.plan.stages if item.id == stage_id
         )
         resolved = stage.check
-        if stage.candidate_from is not None:
-            source_stage = stage.candidate_from
-            progress = self._view(connection, task).progress
-            source = next(
-                item for item in progress.stages if item.id == source_stage.stage_id
+        phase = self._phase(task, stage_id)
+        reason = self._budget_reason(task, repairing=phase == "repair")
+        if reason is not None:
+            raise BackendConflict(reason)
+        source_id: str | None = None
+        proposal_id: str | None = None
+        if phase == "repair":
+            call = task.specification.repairs[stage_id].call
+            resolved = CalibrationCheckRequest.model_validate(
+                call.intent["calibration_check"]
             )
-            evidence = source.evidence
+        elif phase == "verify":
+            source_id = stage_id
+            proposal_id = task.specification.repairs[stage_id].proposal_id
+        elif stage.candidate_from is not None:
+            source_id = stage.candidate_from.stage_id
+            proposal_id = stage.candidate_from.proposal_id
+        if source_id is not None:
+            assert proposal_id is not None
+            evidence = self._checks.evidence_in_transaction(
+                connection, task.executions[source_id]
+            )
             if (
-                source.state != "passed"
-                or evidence is None
+                evidence is None
+                or evidence.passed is not True
                 or evidence.analysis_record_id is None
             ):
                 raise BackendConflict("candidate source stage has no accepted analysis")
             try:
                 proposal = load_parameter_change_proposal(
                     run_id=evidence.measurement.run_id,
-                    selector=source_stage.proposal_id,
+                    selector=proposal_id,
                     services=self._services,
                 )
                 if proposal.analysis_record_id != evidence.analysis_record_id:
@@ -296,7 +342,7 @@ class CalibrationTaskService:
                 }
             )
         key = "calibration-task:" + sha256_json_hash(
-            {"task": task.specification.task_id, "stage": stage_id}
+            {"task": task.specification.task_id, "stage": stage_id, "phase": phase}
         )
         try:
             run = self._automation.submit_in_transaction(
@@ -311,8 +357,18 @@ class CalibrationTaskService:
             raise BackendConflict(str(error)) from error
         return task.model_copy(
             update={
-                "executions": {**task.executions, stage_id: run.procedure_run_id},
-                "resolved_checks": {**task.resolved_checks, stage_id: resolved},
+                "attempts": {
+                    **task.attempts,
+                    stage_id: (
+                        *task.attempts.get(stage_id, ()),
+                        CalibrationStageAttempt(
+                            phase=phase,
+                            procedure_run_id=run.procedure_run_id,
+                            check=resolved,
+                        ),
+                    ),
+                },
+                "started_at": task.started_at or datetime.now(UTC),
                 "dispatch_errors": {
                     key: value
                     for key, value in task.dispatch_errors.items()
@@ -332,18 +388,79 @@ class CalibrationTaskService:
     def _view(
         self, connection: sqlite3.Connection, task: CalibrationTaskRecord
     ) -> CalibrationTaskView:
+        preview = CalibrationTaskPreview(
+            plan=task.resolved_plan, executions=task.executions
+        )
+        executions = self._checks.task_executions_in_transaction(connection, preview)
+        progress = assess_calibration_task(preview.plan, executions)
+        transitions: dict[
+            str, Literal["repair_ready", "verification_ready", "failed"]
+        ] = {}
+        for item in progress.stages:
+            attempts = task.attempts.get(item.id, ())
+            if not attempts or item.id not in task.specification.repairs:
+                continue
+            closure = executions[item.id][0].closure
+            if (
+                closure is not None
+                and closure.status == "failed"
+                and item.state == "rejected"
+            ):
+                transitions[item.id] = "failed"
+            if closure is None or closure.status != "succeeded":
+                continue
+            if attempts[-1].phase == "check" and item.state == "rejected":
+                transitions[item.id] = "repair_ready"
+            elif attempts[-1].phase == "repair" and item.state == "passed":
+                transitions[item.id] = "verification_ready"
         return CalibrationTaskView(
             task=task,
+            admission_deadline=task.started_at
+            + task.specification.repair_budget.elapsed
+            if task.started_at is not None
+            and task.specification.repair_budget is not None
+            else None,
             finalization=SQLiteAutomationStore(self._sqlite).read_run_in_transaction(
                 connection, task.finalization_run_id
             )
             if task.finalization_run_id is not None
             else None,
-            progress=self._checks.preview_in_transaction(
-                connection,
-                CalibrationTaskPreview(
-                    plan=task.resolved_plan,
-                    executions=task.executions,
-                ),
+            progress=assess_calibration_task(
+                preview.plan, executions, transitions=transitions
             ),
         )
+
+    @staticmethod
+    def _phase(
+        task: CalibrationTaskRecord, stage_id: str
+    ) -> Literal["check", "repair", "verify"]:
+        attempts = task.attempts.get(stage_id, ())
+        if not attempts:
+            return "check"
+        return "repair" if attempts[-1].phase == "check" else "verify"
+
+    @staticmethod
+    def _budget_reason(
+        task: CalibrationTaskRecord, *, repairing: bool = False
+    ) -> Literal["deadline_elapsed", "repair_budget_exhausted"] | None:
+        budget = task.specification.repair_budget
+        if budget is None:
+            return None
+        if (
+            task.started_at is not None
+            and datetime.now(UTC) >= task.started_at + budget.elapsed
+        ):
+            return "deadline_elapsed"
+        if repairing and task.repairs_used >= budget.max_repairs:
+            return "repair_budget_exhausted"
+        return None
+
+    def _stop(
+        self,
+        connection: sqlite3.Connection,
+        task: CalibrationTaskRecord,
+        reason: Literal["deadline_elapsed", "repair_budget_exhausted"],
+    ) -> CalibrationTaskView:
+        task = task.model_copy(update={"mode": "finished", "stop_reason": reason})
+        self._store.update(connection, task)
+        return self._view(connection, task)

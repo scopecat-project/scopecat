@@ -116,7 +116,7 @@ authority. No earlier unrelated execution is silently adopted. Ready independent
 stages can be dispatched separately if another stage has an admission problem.
 
 The task and associations survive daemon restarts and current-format backup and
-restore. Current development schema 101 stores task controls and indexes running
+restore. Current development schema 109 stores task controls and indexes running
 tasks; use a fresh data directory
 for this format and retain older stores with their original environments.
 
@@ -252,8 +252,92 @@ The daemon recovers running tasks and admitted worker handoffs after restart;
 paused/cancelled tasks remain so. There is no automatic retry of scientific failures.
 
 Tasks do not switch setups, refresh branches or publish combined readiness.
-A repair or new observation needs a new task specification and ID. Bounded repair
-and scheduling policy remain separate work.
+Repairs must be declared before creating the task, as described below. Changing
+inputs, extending an exhausted budget or requesting another repair requires a new
+task specification and ID; starting again never resets the clock or spent budget.
+
+## Check first and repair only failed checks
+
+Use ordinary check and fit procedures with separate scientific result scopes.
+The check tests the requested capability. The fit reports whether its candidate
+is acceptable for verification, not whether the original capability is already
+valid. Both return the standard check fact; the fit also publishes a named
+parameter proposal. Neither procedure should advance the destination branch.
+
+```python
+from datetime import timedelta
+from scopecat.daemon.calibration_tasks import (
+    CalibrationRepairBudget,
+    CalibrationStageRepair,
+)
+
+task = lab.calibration_tasks.create(
+    "cooldown-7/repair-round-1",
+    plan,
+    calls=check_calls,
+    repairs={
+        "q0-drive": CalibrationStageRepair(
+            call=task_call(fit_drive, fit_intent, samples=samples),
+            proposal_id="frequency",
+        ),
+    },
+    repair_budget=CalibrationRepairBudget(max_repairs=1, elapsed=timedelta(hours=1)),
+    finalization=task_call(finalize_calibration, final_intent, samples=samples),
+)
+```
+
+The fit declaration must have the same saved input context, setup and targets as
+its stage and a **different check scope**. Repair currently requires a fixed
+initial context, not a `candidate_from` template. The worker always makes a fresh
+initial check; it does not silently adopt historical passing evidence. This keeps
+the first repair contract exact even where dependency coverage remains unknown.
+
+Each eligible stage admits at most three durable procedures: initial check, one
+fit after scientific rejection, then the original check on that fit's exact
+candidate. A passing initial check skips the fit. A rejected fit or failed candidate
+verification ends that stage; no second fit is automatically scheduled. Execution
+failure, cancellation, missing evidence and worker attention are not scientific
+rejection and never trigger a replacement fit. Independent stages may continue.
+Missing candidate output stops verification admission visibly; retrying admission
+reuses the completed fit rather than rerunning it.
+
+As with candidate edges, check code must consume the incoming declaration's exact
+parameters. Verification replaces only `intent.calibration_check.context.parameters`;
+copies in other intent fields are not rewritten. Use the retained analysis and
+proposal identified by an `AnalysisCandidateRunConfigSource` to open its
+`candidate_config`, then pass that to `ctx.run`. The ordinary child admission
+rejects accidentally using the original input instead.
+
+`max_repairs` counts admitted fits, including rejected or failed ones. Zero allows
+checks only. The elapsed budget begins at first start/manual dispatch; pauses and
+application restarts do not reset it. The deadline limits **new admission**, not
+execution duration: already admitted work may finish and needs normal procedure
+controls to stop. Final verification is also new work and cannot start after the
+deadline. An already admitted finalizer may finish its original publication.
+Budget exhaustion finishes advancement with `task.task.stop_reason`; partial
+checks never authorize finalization. A finished task cannot extend its budget.
+
+`task.task.attempts[stage_id]` retains each phase, resolved check and procedure ID.
+Python `executions` and `resolved_checks` are derived views of the latest attempts;
+the store and HTTP use the attempt history as their single authority. The workbench
+shows the phase, budget, deadline, stop reason and links to earlier attempts.
+Restart/retry preserves those exact identities and spent budget.
+Use `task.progress` for the repair policy's state. The standalone `preview_task`
+API only assesses the supplied check bindings; it does not infer a repair workflow.
+Manual `dispatch` remains an idempotent initial-check operation; `start` advances
+the declared repair and verification phases.
+
+Finalization still requires all stages to pass. `CalibrationTaskInputs.checks`
+contains their final checks; `CalibrationTaskInputs.repairs` contains only accepted
+fits that were followed by successful verification. Compose those fits' exact
+analysis proposals using `inputs.analysis(stage_id, from_repair=True)`; obtain
+their pre-fit measurements with `inputs.measurement(stage_id, from_repair=True)`.
+Retain passing unmodified targets in the final verification
+scope, and remeasure the aggregate. If nothing needed repair, verify the unchanged
+inputs and return without publishing a redundant revision. Publish only a positive
+joint decision against the originally captured destination. The six-target
+software fixture covers restart, selective repair, no-op, budget stop, rejected
+fit, rejected verification, coupled final failure and concurrent branch edits.
 
 ## Bind a prerequisite's candidate output
 

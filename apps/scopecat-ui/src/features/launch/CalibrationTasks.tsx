@@ -234,6 +234,31 @@ function TaskDetail({
               {view.task.last_control.reason}
             </p>
           )}
+          {view.task.specification.repair_budget && (
+            <p>
+              Repair budget:{" "}
+              {
+                Object.values(view.task.attempts ?? {})
+                  .flat()
+                  .filter((a) => a.phase === "repair").length
+              }
+              {" / "}
+              {view.task.specification.repair_budget.max_repairs}. One repair per stage; the
+              original check must pass on its candidate before successors run.
+            </p>
+          )}
+          {view.admission_deadline && (
+            <p>
+              New work may start until {new Date(view.admission_deadline).toLocaleString()}.
+              Admitted work may finish after this deadline.
+            </p>
+          )}
+          {view.task.stop_reason && (
+            <p role="status">
+              Admission stopped: {view.task.stop_reason.replaceAll("_", " ")}. Retained work is not
+              published as a successful subset.
+            </p>
+          )}
           {view.task.specification.finalization && (
             <section aria-label="Task finalization" className="border rounded p-3 space-y-1">
               <h4 className="font-semibold">Final verification and publication</h4>
@@ -264,7 +289,8 @@ function TaskDetail({
               const specification = view.task.specification.plan.stages.find(
                 (item) => item.id === stage.id,
               )!;
-              const resolved = view.task.resolved_checks?.[stage.id];
+              const attempts = view.task.attempts?.[stage.id] ?? [];
+              const resolved = attempts.at(-1)?.check;
               const pendingBinding = Boolean(specification.candidate_from && !resolved);
               const planned = { ...specification, check: resolved ?? specification.check };
               const admissionError = view.task.dispatch_errors?.[stage.id];
@@ -273,6 +299,22 @@ function TaskDetail({
                   <h4 className="font-semibold">
                     {stage.id} · {stage.state.replaceAll("_", " ")}
                   </h4>
+                  {attempts.length > 0 && <p>Current phase: {attempts.at(-1)!.phase}</p>}
+                  {attempts.length > 1 && (
+                    <details>
+                      <summary>Retained check and repair history</summary>
+                      {attempts.map((attempt) => (
+                        <button
+                          type="button"
+                          className="underline block"
+                          key={attempt.procedure_run_id}
+                          onClick={() => onProcedure(attempt.procedure_run_id)}
+                        >
+                          Open {attempt.phase} for {stage.id}
+                        </button>
+                      ))}
+                    </details>
+                  )}
                   <p>
                     {planned.check.scope.capability} · {planned.check.scope.targets.join(", ")} ·{" "}
                     {planned.check.scope.conditions}

@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **108** is a development format identifier, not the start of a compatibility
+schema **109** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,11 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 109 replaces calibration tasks' overwritten execution/check maps with
+ordered check/repair/verification attempts. Budgets and the original start time
+survive reopening and current-format backup. No schema-108 task reader or migration
+is retained; historical files are not rewritten or removed.
 
 Schema 108 adds bounded live-analysis follows and their append-only progress
 events. Fixed measurement slices retain acquisition references without duplicating

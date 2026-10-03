@@ -455,6 +455,13 @@ class CalibrationCheckQueries:
     def preview_in_transaction(
         self, connection: sqlite3.Connection, preview: CalibrationTaskPreview
     ) -> CalibrationTaskProgress:
+        return assess_calibration_task(
+            preview.plan, self.task_executions_in_transaction(connection, preview)
+        )
+
+    def task_executions_in_transaction(
+        self, connection: sqlite3.Connection, preview: CalibrationTaskPreview
+    ) -> dict[str, tuple[ProcedureRun, CheckEvidence | None]]:
         executions: dict[str, tuple[ProcedureRun, CheckEvidence | None]] = {}
         for stage in preview.plan.stages:
             procedure_id = preview.executions.get(stage.id)
@@ -470,7 +477,15 @@ class CalibrationCheckQueries:
                     f"task stage {stage.id!r} differs from its declared check"
                 )
             executions[stage.id] = (run, view.evidence)
-        return assess_calibration_task(preview.plan, executions)
+        return executions
+
+    def evidence_in_transaction(
+        self, connection: sqlite3.Connection, procedure_id: str
+    ) -> CheckEvidence | None:
+        return self._view(
+            connection,
+            self._procedures.read_run_in_transaction(connection, procedure_id),
+        ).evidence
 
     def observe(
         self, observation: CalibrationCheckObservation

@@ -1,7 +1,8 @@
 """Declared six-channel software plant; no physical device or lease claims."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import timedelta
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -12,19 +13,27 @@ from scopecat.api.calibration_tasks import task_call
 from scopecat.api.lab import LabClient
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.api.run import RunHandle
+from scopecat.automation import AnalysisPublicationOutputRef, RunOutputRef
 from scopecat.automation.calibration_tasks import (
     CalibrationTaskInputs,
     CalibrationTaskPlan,
     CalibrationTaskStage,
 )
-from scopecat.daemon.calibration_tasks import CalibrationTaskCall, CalibrationTaskView
+from scopecat.daemon.calibration_tasks import (
+    CalibrationRepairBudget,
+    CalibrationStageRepair,
+    CalibrationTaskCall,
+    CalibrationTaskView,
+)
 from scopecat.daemon.views import ParameterResolution
 from scopecat.kernel.frozen import thaw_json_value
+from scopecat.records.analysis import RunAnalysisSubject
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
     CalibrationScope,
 )
+from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.parameter_branch import ParameterBranch
 
 TARGETS = tuple(f"q{i}" for i in range(int(os.environ["SCOPECAT_TEST_ARRAY_SIZE"])))
@@ -77,6 +86,8 @@ class CheckIntent(BaseModel):
     calibration_check: CalibrationCheckRequest
     target: str
     failed_group: str | None = None
+    reject_fit: bool = False
+    proposal_shift: float = 0.0
 
     @field_validator("initial", mode="before")
     @classmethod
@@ -86,7 +97,12 @@ class CheckIntent(BaseModel):
 
 @sc.analysis_step(id="maintenance.assess")
 def assess(
-    ctx: sc.AnalysisContext, *, target: str, scope: CalibrationScope
+    ctx: sc.AnalysisContext,
+    *,
+    target: str,
+    scope: CalibrationScope,
+    reject_fit: bool = False,
+    proposal_shift: float = 0.0,
 ) -> sc.Analysis:
     data = ctx.measurements()
     result = ctx.result("Declared array check")
@@ -96,10 +112,11 @@ def assess(
         estimate = cast("float", data["setting"].require_values()[0]) - cast(
             "float", data["residual"].require_values()[0]
         )
-        passed = 0.0 <= estimate <= 1.0
+        passed = 0.0 <= estimate <= 1.0 and not reject_fit
         if passed:
             result = result.propose(
-                "offset", sc.parameter_update(Channel.offset, target, estimate)
+                "offset",
+                sc.parameter_update(Channel.offset, target, estimate + proposal_shift),
             )
     return result.fact(
         "check", CalibrationCheckResult(scope, passed), schema=CHECK_RESULT
@@ -108,21 +125,58 @@ def assess(
 
 @sc.procedure(id="maintenance.check", version="1", intent=CheckIntent)
 def check(ctx: LabProcedureContext, intent: CheckIntent) -> None:
+    run = acquire(ctx, intent)
+    ctx.analyze_run(
+        "assess",
+        run,
+        assess(
+            target=intent.target,
+            scope=intent.calibration_check.scope,
+            reject_fit=intent.reject_fit,
+            proposal_shift=intent.proposal_shift,
+        ),
+    )
+
+
+def acquire(ctx: LabProcedureContext, intent: CheckIntent) -> RunOutputRef:
     invocation = (
         readout.build(intent.target, intent.target == intent.failed_group)
         if intent.target in GROUPS
         else measure.build(intent.target)
     )
-    run = ctx.run(
+    parameters = intent.calibration_check.context.parameters
+    if isinstance(parameters, AnalysisCandidateRunConfigSource):
+        candidate = ctx.published_analysis(
+            AnalysisPublicationOutputRef(
+                subject=RunAnalysisSubject(run_id=parameters.source_run_id),
+                analysis_record_id=parameters.analysis_record_id,
+            )
+        ).candidate_config(parameters.proposal_id)
+        return ctx.run("measure", invocation, config=candidate)
+    return ctx.run(
         "measure",
         invocation,
         config=intent.initial.config,
         config_source=intent.initial.config_source,
     )
+
+
+@sc.analysis_step(id="maintenance.probe-result")
+def probe_result(ctx: sc.AnalysisContext, *, scope: CalibrationScope) -> sc.Analysis:
+    residual = cast("float", ctx.measurements()["residual"].require_values()[0])
+    return ctx.result("Residual check").fact(
+        "check",
+        CalibrationCheckResult(scope, abs(residual) <= 0.01),
+        schema=CHECK_RESULT,
+    )
+
+
+@sc.procedure(id="maintenance.probe", version="1", intent=CheckIntent)
+def probe(ctx: LabProcedureContext, intent: CheckIntent) -> None:
     ctx.analyze_run(
         "assess",
-        run,
-        assess(target=intent.target, scope=intent.calibration_check.scope),
+        acquire(ctx, intent),
+        probe_result(scope=intent.calibration_check.scope),
     )
 
 
@@ -150,7 +204,7 @@ def verify(
         after = ctx.measurements(checks[target], id=f"after-{target}")
         old = abs(cast("float", before["residual"].require_values()[0]))
         error = abs(cast("float", after["residual"].require_values()[0]))
-        if error > 0.01 or error >= old:
+        if error > 0.01 or (old > 0.01 and error >= old):
             rejected.append(target)
         residuals[target] = error
     result = ctx.result("Whole-array verification")
@@ -167,25 +221,45 @@ class FinishIntent(BaseModel):
     destination: ParameterBranch
     drift_target: str | None = None
     revision_name: str
+    repair_mode: bool = False
 
 
 @sc.procedure(id="maintenance.finish", version="1", intent=FinishIntent)
 def finish(ctx: LabProcedureContext, intent: FinishIntent) -> None:
     inputs = intent.calibration_task
     assert inputs is not None
-    composed = ctx.combine_parameter_candidates(
-        "compose",
-        tuple((inputs.analysis(t), "offset") for t in TARGETS),
-        name="array-offsets",
+    sources = (
+        inputs.repairs if intent.repair_mode else {t: inputs.checks[t] for t in TARGETS}
     )
-    candidate = ctx.published_analysis(composed).candidate_config("array-offsets")
-    baselines = {t: inputs.measurement(t) for t in TARGETS}
+    composed = (
+        ctx.combine_parameter_candidates(
+            "compose",
+            tuple(
+                (inputs.analysis(t, from_repair=intent.repair_mode), "offset")
+                for t in sources
+            ),
+            name="array-offsets",
+        )
+        if sources
+        else None
+    )
+    baseline = ctx.run_handle(inputs.measurement(TARGETS[0]))
+    candidate = (
+        ctx.published_analysis(composed).candidate_config("array-offsets")
+        if composed
+        else baseline.config
+    )
+
+    baselines = {
+        t: inputs.measurement(t, from_repair=t in inputs.repairs) for t in TARGETS
+    }
     checks = {
         t: ctx.run(
             f"verify-{t}",
             measure.build(t, 0.04 if t == intent.drift_target else 0.0),
             config=candidate,
-            inputs=(composed,),
+            config_source=None if composed else baseline.snapshot.config_source,
+            inputs=(composed,) if composed else (),
         )
         for t in TARGETS
     }
@@ -200,6 +274,8 @@ def finish(ctx: LabProcedureContext, intent: FinishIntent) -> None:
     decision = ctx.published_analysis(verified).fact_as("decision", DECISION)
     if not decision.accepted:
         raise ValueError(f"array verification rejected: {decision.rejected}")
+    if composed is None:
+        return
     ctx.publish_parameter_candidate(
         "publish",
         composed,
@@ -219,15 +295,24 @@ def create_task(
     *,
     failed_group: str | None = None,
     drift_target: str | None = None,
+    repair_mode: bool = False,
+    max_repairs: int = 6,
+    reject_fit: str | None = None,
+    bad_candidate: str | None = None,
 ) -> CalibrationTaskView:
     context = lab.resolve_context(
         parameters=destination.revision, setup=initial.config_source.setup
     ).context
     stages: list[CalibrationTaskStage] = []
     calls: dict[str, CalibrationTaskCall] = {}
+    repairs: dict[str, CalibrationStageRepair] = {}
     for target in (*GROUPS, *TARGETS):
         scope = CalibrationScope(
-            "array.readout" if target in GROUPS else "array.fit",
+            "array.readout"
+            if target in GROUPS
+            else "array.residual"
+            if repair_mode
+            else "array.fit",
             GROUPS.get(target, (target,)),
             "synthetic-array-v1",
             "health-or-bounded-linear-fit-v1",
@@ -248,7 +333,7 @@ def create_task(
             CalibrationTaskStage(id=target, check=declaration, depends_on=dependencies)
         )
         calls[target] = task_call(
-            check,
+            probe if repair_mode and target in TARGETS else check,
             CheckIntent(
                 initial=initial,
                 calibration_check=declaration,
@@ -256,16 +341,43 @@ def create_task(
                 failed_group=failed_group,
             ),
         )
+        if repair_mode and target in TARGETS:
+            repairs[target] = CalibrationStageRepair(
+                call=task_call(
+                    check,
+                    CheckIntent(
+                        initial=initial,
+                        calibration_check=declaration.model_copy(
+                            update={
+                                "scope": replace(
+                                    declaration.scope, capability="array.fit"
+                                )
+                            }
+                        ),
+                        target=target,
+                        reject_fit=target == reject_fit,
+                        proposal_shift=0.05 if target == bad_candidate else 0.0,
+                    ),
+                ),
+                proposal_id="offset",
+            )
     return lab.calibration_tasks.create(
         "array-round",
         CalibrationTaskPlan(stages=tuple(stages)),
         calls=calls,
+        repairs=repairs,
+        repair_budget=CalibrationRepairBudget(
+            max_repairs=max_repairs, elapsed=timedelta(minutes=10)
+        )
+        if repair_mode
+        else None,
         finalization=task_call(
             finish,
             FinishIntent(
                 destination=destination,
                 drift_target=drift_target,
                 revision_name="verified-array",
+                repair_mode=repair_mode,
             ),
         ),
     )
