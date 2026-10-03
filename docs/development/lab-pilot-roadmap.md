@@ -15,7 +15,8 @@ by the [prebaseline data policy](data-compatibility.md): schema 68–74 exercise
 are retired, and only current-format backup/restore is maintained before a future
 baseline is designated.
 
-Current follow-through is organized around:
+The following follow-through list is historical. Current work ownership is in
+[platform status](platform-status.md); several issues below are already closed.
 
 - the [experiment workbench and session-context direction](architecture/experiment-contexts.md)
   (2026-09-19): clarify scientific context and numbering ownership, then session

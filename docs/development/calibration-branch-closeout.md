@@ -1,5 +1,11 @@
 # Calibration branch integration
 
+This is the historical integration record preceding #849–#853, not the current
+backlog. Explicit whole-parameter qualification was subsequently delivered in
+#852 and bounded repair in #853. See [current status](platform-status.md) and
+#783 for the remaining finer dependency scope. The statements below describe
+that earlier revision and must not override current contracts.
+
 ## Delivery boundary
 
 This integration completes recoverable calibration tasks over independent

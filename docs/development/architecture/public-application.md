@@ -10,7 +10,7 @@ This contract supersedes the first-run laboratory chooser and per-project/per-le
 service topology. Those paths have retired, and shared device ownership and
 same-application practice are delivered. Desktop PR #829 provides ready-to-run
 installation, #837 independent data and bounded Mac/Windows interaction, and #844
-ordinary source with independent execution and SDK environments. PR 4 qualifies
+ordinary source with independent execution and SDK environments. PR #845 qualified
 composition, publication and remaining retirement; physical scientific acceptance
 and unfamiliar-user observation remain separate.
 
@@ -309,7 +309,8 @@ Device/connection ownership, direct entry, contextual maintenance and same-servi
 practice were delivered before the desktop milestone; their old implementation
 sequence is not a pending backlog. The desktop milestone consists of #829
 (installation), #837 (data and desktop), #844 (ordinary source and environments),
-and PR 4 (composition/release/retirement), tracked by #610/#616.
+and #845 (composition/release/retirement), all merged. Remaining observations
+are tracked by #616; application convergence #671 is closed.
 
 The [packaging matrix](desktop-packaging.md#required-comparison) maps composition
 checks to maintained tests and prior evidence. Preserve independent contexts,

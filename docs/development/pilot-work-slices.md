@@ -1,5 +1,11 @@
 # Pilot work slices and acceptance fixtures
 
+Historical pilot tooling: the copied-project/service commands below describe the
+earlier fixture workflow, not the supported application development entry. Use
+[source development](public-preview.md#run-without-installation) for a new checkout
+and [current status](platform-status.md) for work ownership. Do not recreate retired
+per-directory services from this record.
+
 Use the [work-slice template](https://github.com/scopecat-project/scopecat/blob/main/.github/ISSUE_TEMPLATE/work-slice.md) for an
 issue and carry its outcome, owner, paths, contracts, dependencies, checks and
 non-goals into the PR. One primary owner takes a slice through its Python, HTTP

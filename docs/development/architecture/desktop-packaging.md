@@ -4,7 +4,7 @@ PR #829 delivered ready-to-run installation; PR #837 completed the bounded
 multi-window, file and lifecycle product gate on Mac and Windows. The
 [desktop product decision](desktop-product.md#technology-decision) retains the
 Python/WebView host. PR #844 separated author execution and vendor environments.
-PR 4 qualifies these capabilities together and closes obsolete delivery paths;
+PR #845 qualified these capabilities together and closed obsolete delivery paths;
 it does not reopen host selection or expand into a full GUI redesign.
 
 The baseline is a relocatable CPython runtime with dependencies prepared at build
@@ -20,7 +20,7 @@ multiple permanent distribution mechanisms after selection.
 These are the criteria used for the recorded host decision, not a requirement to
 benchmark another host in every release.
 
-PR 4 uses the following composition boundary. Reuse the earlier accepted native
+PR #845 used the following composition boundary. Reuse the earlier accepted native
 window observations; rerun them only for a changed interaction or a new failure.
 
 | Journey | Maintained evidence | Separate observation |
