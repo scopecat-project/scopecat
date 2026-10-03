@@ -14,9 +14,9 @@ from typing import cast
 
 import httpx2
 
+from benchmarks.e2e.author_context import select_reference_context
 from benchmarks.e2e.author_prepare import TimingTransport
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
-from reference_lab_authors.authored.ordinary_analysis import PeakResult
 from scopecat.api.run import RunHandle
 from scopecat.application.author_project import AuthorProject
 from scopecat.kernel.quantity import Quantity
@@ -61,6 +61,9 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                 base_url=daemon.base_url, timeout=60, transport=comparison_transport
             ) as http,
         ):
+            select_reference_context(author)
+            from reference_lab_authors.authored.ordinary_analysis import PeakResult
+
             start = time.perf_counter()
             signal = (
                 author.prepare("signal", scans={"frequency": [4.7, 4.8, 4.9]})
@@ -83,7 +86,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     )
                     .run()
                     .wait()
-                    .result(step="signal")
+                    .result()
                 )
             setup_seconds = time.perf_counter() - start
             name = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"
@@ -150,7 +153,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         stop_project(project)
     return {
         **benchmark_record_header(
-            case_id="author-analysis", case_version=1, kind="e2e"
+            case_id="author-analysis", case_version=2, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),

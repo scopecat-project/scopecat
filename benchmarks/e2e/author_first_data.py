@@ -14,6 +14,7 @@ from pathlib import Path
 from threading import Event
 from typing import cast
 
+from benchmarks.e2e.author_context import select_reference_context
 from benchmarks.e2e.author_prepare import TimingTransport
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.application.author_project import AuthorProject
@@ -73,12 +74,14 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                 ) as author,
                 ThreadPoolExecutor(max_workers=1) as observer,
             ):
+                select_reference_context(author)
                 for operation in [
                     "first",
                     *(["repeat"] * repetitions),
                     "edit_input",
                     "after_refresh",
                 ]:
+                    refresh_seconds: float | None = None
                     if operation == "after_refresh":
                         path = root / "src/reference_lab_authors/authored/signal.py"
                         path.write_text(
@@ -86,7 +89,9 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                             + "\n# benchmark refresh\n",
                             encoding="utf-8",
                         )
+                        refresh_start = time.monotonic_ns()
                         author.refresh()
+                        refresh_seconds = (time.monotonic_ns() - refresh_start) / 1e9
                     prepare_start = time.monotonic_ns()
                     prepared = author.prepare(
                         "signal",
@@ -110,6 +115,24 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                         result = future.result(timeout=60)
                     finally:
                         stop.set()
+                    analysis_start = time.monotonic_ns()
+                    revision = prepared.preview.code_revision
+                    assert revision is not None
+                    analysis = author.analyze(
+                        str(result["run_id"]),
+                        "reference_lab_authors.authored.ordinary_analysis:estimate_peak",
+                        code_revision=revision,
+                    )
+                    analyzed = time.monotonic_ns()
+                    reopened = author.reopen(job.receipt).result()
+                    values = reopened.measurements()["result"].require_values()
+                    if reopened.id != result["run_id"] or len(values) != 3:
+                        raise AssertionError("Receipt did not reopen the original data")
+                    if analysis.code_revision != prepared.preview.code_revision:
+                        raise AssertionError(
+                            "Analysis lost the prepared source revision"
+                        )
+                    read = time.monotonic_ns()
                     samples.append(
                         {
                             "operation": operation,
@@ -123,6 +146,9 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                             "acknowledgement_seconds": (acknowledged - submit_start)
                             / 1e9,
                             "wait_return_seconds": (waited - submit_start) / 1e9,
+                            "analysis_seconds": (analyzed - analysis_start) / 1e9,
+                            "reopen_read_seconds": (read - analyzed) / 1e9,
+                            "refresh_seconds": refresh_seconds,
                         }
                     )
         finally:
@@ -175,7 +201,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         ]
     return {
         **benchmark_record_header(
-            case_id="author-first-data", case_version=1, kind="e2e"
+            case_id="author-first-data", case_version=2, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),

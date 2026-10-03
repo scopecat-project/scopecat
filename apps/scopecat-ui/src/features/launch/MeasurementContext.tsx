@@ -44,19 +44,22 @@ export function MeasurementContext({
     });
   }
   return (
-    <fieldset disabled={draft.pending} className="border border-line rounded p-3 space-y-3">
+    <fieldset
+      disabled={Boolean(draft.pending)}
+      className="border border-line rounded p-3 space-y-3"
+    >
       <legend className="font-semibold">Measurement context · this page</legend>
       <ParameterBranchPicker
         value={configuration}
         projectId={projectId}
-        disabled={draft.pending}
+        disabled={Boolean(draft.pending)}
         onChange={(choice) => onChange({ selection: { configuration: choice } })}
       />
       {configuration.kind === "parameters" && (
         <DeviceContextPicker
           value={configuration}
           projectId={projectId}
-          disabled={draft.pending}
+          disabled={Boolean(draft.pending)}
           onChange={(choice) => onChange({ selection: { configuration: choice } })}
         />
       )}
@@ -95,7 +98,7 @@ export function MeasurementContext({
         value={subject.kind === "registered_target" ? subject.ref : undefined}
         projectId={projectId}
         browse={browse}
-        disabled={draft.pending}
+        disabled={Boolean(draft.pending)}
         onChange={(ref) => {
           setChoosingSubject(false);
           onChange({

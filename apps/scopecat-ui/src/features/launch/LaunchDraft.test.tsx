@@ -51,6 +51,8 @@ let rejectSubmission: boolean;
 let submissions: SubmissionRequest[];
 let previewResponse: ((response: Response) => void) | undefined;
 let deferPreview: boolean;
+let deferSubmission: boolean;
+let submissionResponse: ((response: Response) => void) | undefined;
 let client: QueryClient;
 let lookupMatch: "none" | "original" | "ambiguous" | "unverified" | "different-config";
 function preview() {
@@ -123,6 +125,8 @@ beforeEach(() => {
   submissions = [];
   previewResponse = undefined;
   deferPreview = false;
+  deferSubmission = false;
+  submissionResponse = undefined;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.stubGlobal(
     "fetch",
@@ -197,6 +201,10 @@ beforeEach(() => {
           : Response.json(preview());
       if (path.endsWith("/submit")) {
         submissions.push(await request.json());
+        if (deferSubmission)
+          return new Promise<Response>((resolve) => {
+            submissionResponse = resolve;
+          });
         if (rejectSubmission) return Response.json({ detail: "Rejected input" }, { status: 422 });
         throw new TypeError("response lost");
       }
@@ -222,6 +230,32 @@ async function previewReady() {
     expect(screen.queryByText("Checking relevant instrument changes…")).toBeNull(),
   );
 }
+it("distinguishes preview waiting from submission confirmation without allowing duplicates", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  deferPreview = true;
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  expect(screen.getByRole("button", { name: "Preparing preview…" })).toBeDisabled();
+  expect(screen.getByText(/Acquisition has not been submitted/)).toBeVisible();
+  await act(async () => previewResponse?.(Response.json(preview())));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
+  deferSubmission = true;
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(submissionResponse).toBeDefined());
+  expect(screen.getByRole("button", { name: "Submitting acquisition…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+  expect(screen.getByText(/Waiting for submission confirmation/)).toBeVisible();
+  expect(screen.queryByText(/Acquisition has not been submitted/)).toBeNull();
+  expect(submissions).toHaveLength(1);
+  await act(async () =>
+    submissionResponse?.(Response.json({ detail: "Rejected input" }, { status: 422 })),
+  );
+  await screen.findByRole("alert");
+  expect(screen.queryByText(/Waiting for submission confirmation/)).toBeNull();
+});
 async function returnToLaunch() {
   fireEvent.click(screen.getByRole("button", { name: "launch" }));
   await screen.findByLabelText("Note");
