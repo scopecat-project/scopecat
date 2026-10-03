@@ -1234,23 +1234,30 @@ def test_instrument_startup_timeout_retains_child_phase_and_reaps_process(
     )
     diagnostics = tmp_path / "startup"
     monkeypatch.setenv("SCOPECAT_STARTUP_DIAGNOSTICS", str(diagnostics))
-    stopped: list[tuple[int | None, int | None, bool]] = []
+    stopped: list[WorkerProcess] = []
     terminate = worker._terminate_process_until
 
     def observe_termination(process: WorkerProcess, deadline: float) -> None:
         terminate(process, deadline)
-        stopped.append((process.pid, process.exitcode, process.is_alive()))
+        stopped.append(process)
 
     monkeypatch.setattr(worker, "_terminate_process_until", observe_termination)
     with pytest.raises(InstrumentBackendUnavailable, match="did not start in time"):
         SubprocessInstrumentBackendEndpoint(project, _BACKEND, startup_timeout=10)
     assert len(stopped) == 1
-    pid, exitcode, alive = stopped[0]
-    assert exitcode is not None and not alive
+    process = stopped[0]
+    assert process.exitcode is not None and not process.is_alive()
     [trace] = diagnostics.glob("instrument-startup-*.log")
-    assert trace.name == f"instrument-startup-{pid}.log"
+    # Windows venv python.exe can launch the actual interpreter as a child.
+    # The trace identifies that interpreter; both it and its launcher must stop.
+    worker_pid = int(trace.stem.removeprefix("instrument-startup-"))
+    assert worker_pid in {process.pid, *(child.pid for child in process.descendants)}
+    assert all(
+        not child.is_running() or child.status() == psutil.STATUS_ZOMBIE
+        for child in process.descendants
+    )
     text = trace.read_text(encoding="utf-8")
-    assert "python entry; pid=" in text and "parent=" in text
+    assert f"python entry; pid={worker_pid} " in text and "parent=" in text
     assert "output capture ready; importing RPC runtime" in text
     assert "backend factory loaded; constructing backend" in text
     assert "Timeout (0:00:05)" in text
