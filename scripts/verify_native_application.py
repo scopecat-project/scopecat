@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Protocol, cast
 
-from lab_tools.bundle import inventory
+from lab_tools.bundle import file_hash, inventory
 from lab_tools.macos_signing import verify as verify_signature
 
 RUNTIME_CHECK = r"""
@@ -67,12 +67,98 @@ import pip
     with httpx2.Client(trust_env=False) as http:
         assert http.get(record.base_url + "/api/v1/health").json()["status"] == "ok"
         assert http.get(record.base_url + "/").status_code == 200
-    subprocess.run([str(client), "-I", str(workspace / "notebooks/02_edit_scan.py")],
-        cwd=workspace, check=True)
+    subprocess.run([str(client), "-I", "-c", '''
+import json, runpy, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+result = runpy.run_path(str(root / "notebooks/02_edit_scan.py"))
+(root / "saved-run.json").write_text(json.dumps({"run_id": result["run"].id}))
+''', str(workspace)], cwd=workspace, check=True)
 finally:
     runtime.stop()
 assert runtime.status().state == "stopped"
 print("PASS: fixed packaged runtime starts and stops without installation")
+"""
+
+ANALYSIS_CHECK = r"""
+from dataclasses import dataclass
+from pathlib import Path
+from importlib.util import find_spec
+import sys
+import scopecat as sc
+from scopecat.measurements.dataset import Dataset
+
+for name in ("scopecat_server", "lab_tools", "lab_teaching", "scopecat_lab"):
+    assert find_spec(name) is None, name
+
+@dataclass(frozen=True)
+class Mean:
+    value: float
+
+@sc.analysis_function
+def mean(data: Dataset) -> Mean:
+    values = data["result"].require_values()
+    return Mean(float(sum(values) / len(values)))
+
+root = Path(sys.argv[1])
+with sc.open_capture(
+    root / "raw.scopecat", output=root / "analyzed.scopecat"
+) as capture:
+    publication = capture.analyze(capture.run_ids[0], mean(), key="mean")
+    assert abs(publication.result_as(Mean).value.value - 2 / 3) < 1e-12
+with sc.open_capture(root / "analyzed.scopecat") as capture:
+    saved = capture.published_analysis("mean").result_as(Mean)
+    assert abs(saved.value.value - 2 / 3) < 1e-12
+"""
+
+DATA_CHECK = r"""
+import json, subprocess, sys
+from pathlib import Path
+import httpx2
+from lab_tools.application_runtime import ApplicationRuntime
+from lab_tools.bundle import file_hash
+from lab_tools.desktop_files import export_run, import_capture, save_capture
+
+home = Path(sys.argv[1])
+runtime = ApplicationRuntime(home / "data")
+selected = runtime.installation()
+run_id = json.loads((home / "authors/saved-run.json").read_text())["run_id"]
+try:
+    record = runtime.start()
+    export_run(record.base_url, run_id, home / "raw.scopecat")
+finally:
+    runtime.stop()
+original = file_hash(home / "raw.scopecat")
+analysis = home / "analyze.py"
+analysis.write_text(sys.argv[3], encoding="utf-8")
+# No application is running during external analysis, and the original source
+# is unavailable to the isolated client interpreter.
+subprocess.run([sys.argv[2], "-I", str(analysis), str(home)], check=True)
+assert file_hash(home / "raw.scopecat") == original
+
+viewer = ApplicationRuntime(home / "data-only")
+viewer.configure(static_dir=selected.static_dir)
+try:
+    record = viewer.start()
+    first = import_capture(record.base_url, home / "analyzed.scopecat")
+    assert first.created
+    repeated = import_capture(record.base_url, home / "analyzed.scopecat")
+    assert not repeated.created and repeated.capture == first.capture
+    save_capture(record.base_url, first.capture.content_hash, home / "copy.scopecat")
+    assert file_hash(home / "copy.scopecat") == file_hash(home / "analyzed.scopecat")
+    with httpx2.Client(trust_env=False) as http:
+        assert http.get(record.base_url + "/api/v1/runs").json()["items"] == []
+    assert not (viewer.home / "environments").exists()
+finally:
+    viewer.stop()
+assert runtime.status().state == viewer.status().state == "stopped"
+(home / "data-journey.json").write_text(json.dumps({
+    "export_external_analysis_import": "passed",
+    "original_unchanged": "passed",
+    "data_only_without_execution_environment": "passed",
+    "human_interaction": "not-evaluated",
+}, indent=2) + "\n")
+print("PASS: native export, independent analysis and data-only import")
 """
 
 
@@ -97,6 +183,7 @@ def verify(
         finally:
             for relative in (
                 "result.json",
+                "data-journey.json",
                 "data/native-start.log",
                 "data/desktop/desktop.log",
             ):
@@ -107,6 +194,36 @@ def verify(
                     shutil.copyfile(source, target)
             if keep_work:
                 print(f"Retained acceptance workspace: {work}")
+    if installer is not None:
+        resources = app / (
+            "Contents/Resources" if sys.platform == "darwin" else "resources"
+        )
+        manifest = resources / "payload/bundle.json"
+        bundle = cast("dict[str, object]", json.loads(manifest.read_bytes()))
+        shutil.copyfile(manifest, home / "bundle.json")
+        (home / "native-release.json").write_text(
+            json.dumps(
+                {
+                    "format": 1,
+                    "installer": installer.name,
+                    "sha256": file_hash(installer),
+                    "bundle_sha256": file_hash(manifest),
+                    "sources": bundle["sources"],
+                    "target": bundle["target"],
+                    "runtime": bundle["runtime"],
+                    "build_id": bundle["build_id"],
+                    "distribution": "prerelease; no trusted signing/notarization",
+                    "external": [
+                        "author source and dependencies",
+                        "vendor SDK/firmware",
+                    ],
+                    "native_interaction": "not-evaluated",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
 
 def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
@@ -124,7 +241,13 @@ def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
         "Contents/MacOS/Scopecat" if sys.platform == "darwin" else "Scopecat.exe"
     )
     before = inventory(relocated, (".",))
-    environment = dict(os.environ, PATH="", UV_PYTHON_DOWNLOADS="never")
+    environment = dict(
+        os.environ,
+        PATH="",
+        UV_PYTHON_DOWNLOADS="never",
+        UV_OFFLINE="1",
+        UV_CACHE_DIR=str(home / "empty-cache"),
+    )
     command = [str(executable), "--home", str(home), "--check-result", str(result)]
     _ = subprocess.run(command, env=environment, check=True)  # noqa: S603
     first = result.read_bytes()
@@ -145,14 +268,29 @@ def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Runtime modified application files"
-    if sys.platform == "darwin":
-        verify_signature(relocated)
-    relocated.rename(relocated.with_name("Removed " + app.name))
     client = (
         home
         / "authors/.venv"
         / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     )
+    _ = subprocess.run(  # noqa: S603 - packaged data API and independent client
+        [
+            str(python),
+            "-I",
+            "-B",
+            "-c",
+            DATA_CHECK,
+            str(home),
+            str(client),
+            ANALYSIS_CHECK,
+        ],
+        env=environment,
+        check=True,
+    )
+    assert inventory(relocated, (".",)) == before, "Data journey modified application"
+    if sys.platform == "darwin":
+        verify_signature(relocated)
+    relocated.rename(relocated.with_name("Removed " + app.name))
     client_check = [
         str(client),
         "-I",

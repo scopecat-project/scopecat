@@ -1,7 +1,10 @@
 # Desktop product decision gate
 
-Status: implemented candidate with partial platform acceptance; the complete
-gate below is not yet qualified.
+Status: the bounded product gate was completed in PR #837, including maintainer
+Mac/Windows observations. Retain the Python/WebView host (see Technology decision).
+PR #844 delivered independent execution and SDK environments; PR 4 qualifies their
+composition, release and retirement. The sections below retain the acceptance
+contract and evidence, not a new queue of unimplemented desktop features.
 Data exchange implementation and its current limits are tracked in
 [independent data and analysis](data-exchange.md).
 The existing GUI, daemon topology and pywebview shell are prototypes. Preserve

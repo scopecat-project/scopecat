@@ -27,36 +27,23 @@ The [project charter](docs/development/project-charter.md) defines current
 product priorities. Architecture documents describe present implementation
 choices rather than product requirements.
 
-## Source preview
+## Desktop preview
 
-Scopecat does not yet publish an end-user installation command. From a source
-checkout, build the project console and create the hardware-free starter lab:
+Use the qualified Mac or Windows installer supplied by the maintainer. It includes
+Python and application dependencies; opening saved data requires no source checkout
+or laboratory SDK. See [first steps](docs/getting-started/index.md) and
+[preview artifacts](docs/development/public-preview.md#native-application).
 
-```sh
-cd apps/scopecat-ui
-pnpm install --frozen-lockfile
-pnpm run build
-cd ../..
-
-uv run scopecat init ./my-lab
-uv run scopecat config check ./my-lab
-uv run scopecat start ./my-lab --static-dir apps/scopecat-ui/dist
-uv run scopecat open ./my-lab
-uv run python ./my-lab/notebooks/01_first_run.py
-```
-
-The generated configuration is ordinary version-controlled Python. The local
-daemon owns immutable configuration history, run admission, resource ownership,
-measurements, analysis, and durable results.
-
-For a complete virtual lab, run:
+For framework development without installing the application:
 
 ```sh
-uv run scopecat config check examples/reference_lab
-uv run scopecat start examples/reference_lab --static-dir apps/scopecat-ui/dist
-uv run scopecat open examples/reference_lab
-uv run python examples/reference_lab/notebooks/30_drag_calibration.py
+uv run --locked --group delivery python -m lab_tools.dev --source .
 ```
+
+This uses an isolated development home, prints the preview URL and does not open
+a browser. Ctrl-C stops its owned processes. See [source development](docs/development/public-preview.md#run-without-installation)
+for frontend prerequisites and author source registration. Daily experiment authors
+use their own Python and ordinary code folders with the installed application.
 
 ## Repository
 

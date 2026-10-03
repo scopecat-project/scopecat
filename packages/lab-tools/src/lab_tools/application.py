@@ -11,9 +11,7 @@ from pathlib import Path
 from typing import Protocol, cast
 from urllib.parse import urlencode
 
-from scopecat.installed_adapter import AdapterReference
-
-from .application_runtime import ApplicationRuntime, application_declaration
+from .application_runtime import ApplicationRuntime
 from .bundle import configure_console
 
 
@@ -25,8 +23,6 @@ class Arguments(Protocol):
     home: Path
     source: Path | None
     no_browser: bool
-    distribution: str | None
-    manifest: str | None
 
 
 def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
@@ -82,13 +78,7 @@ def main(argv: list[str] | None = None) -> None:
         "--source", type=Path, help="Framework checkout for development GUI assets"
     )
     parser.add_argument("--no-browser", action="store_true")
-    parser.add_argument(
-        "--distribution", help="Installed capability distribution for initial setup"
-    )
-    parser.add_argument("--manifest", help="Distribution-owned capability manifest")
     args = cast("Arguments", cast("object", parser.parse_args(argv)))
-    if bool(args.distribution) != bool(args.manifest):
-        parser.error("--distribution 与 --manifest 需一起填写")
     if (
         args.action
         in (
@@ -106,22 +96,15 @@ def main(argv: list[str] | None = None) -> None:
     runtime = ApplicationRuntime(args.home)
     try:
         if args.action in ("configure", "update"):
-            adapter = (
-                AdapterReference(args.distribution, args.manifest)
-                if args.distribution is not None and args.manifest is not None
-                else None
-            )
             selected = runtime.configure(
                 python=args.python,
                 static_dir=args.static_dir
                 or (args.source / "apps/scopecat-ui/dist" if args.source else None),
-                adapter=adapter,
             )
             if args.action == "update":
                 selected = runtime.qualify(
                     args.python or Path(sys.executable),
                     args.static_dir,
-                    composition=application_declaration(adapter) if adapter else None,
                 )
                 runtime.select(selected)
             print(selected.model_dump_json(indent=2))

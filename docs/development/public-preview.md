@@ -1,14 +1,37 @@
 # Public previews and source development
 
-Consumers pin published wheels and the workbench from one public commit. They do
-not need a public checkout, Git submodule, Node.js or pnpm to build a laboratory
-delivery. The public repository owns framework wheels, the GUI and delivery tools;
-the consumer owns its dependency lock, laboratory code and delivery recipe.
+Public publishes the desktop application and framework Python artifacts. A
+laboratory supplies ordinary source or extension wheels, its dependency lock and
+site settings; it does not rebuild the desktop. Consumers need no public checkout,
+Git submodule, Node.js or pnpm. Application and author environments update separately.
+
+## Native application
+
+Run **Full acceptance → native-distribution** on the intended commit. Successful
+Mac/Windows jobs publish Actions artifacts named `scopecat-preview-OS-COMMIT`.
+Each contains the installer, `native-release.json` and `bundle.json`: source commit,
+platform/architecture, runtime content identities, installer SHA-256 and the
+dependency inventory. Download the artifact for the target platform; it is retained
+for 14 days. Archive a qualified installer with its two manifests before expiry.
+Do not treat the framework-only `preview-…` release below as an installer.
+
+The native application includes its own Python and dependencies; ordinary startup
+does not download or install them. Author dependencies and vendor SDK/firmware are
+separate deliverables. An offline laboratory deployment must prepare and verify
+those separately on its target platform. An empty PATH is evidence of independence
+from system Python, not by itself evidence that all laboratory work is offline.
+
+See [installation and maintenance](../how-to/maintain-application.md),
+[Mac first open](../how-to/mac-preview.md), and the
+[packaging qualification](architecture/desktop-packaging.md). These are unsigned
+Windows/ad-hoc-signed Mac previews, not notarized production releases.
 
 ## Publish and consume a preview
 
-After CI and self-review, merge the public change and run **Public preview** on
-that commit. The workflow requires successful CI for the exact commit. It builds
+After CI and self-review, merge the public change and run
+**Full acceptance → public-preview** on that commit. This uses the same registered
+workflow as native qualification; the separate undiscoverable preview workflow
+has retired. The job requires successful CI for the exact commit and builds
 from `git archive`, stamps each wheel with a unique development version, and
 publishes a GitHub prerelease named `preview-<full commit SHA>`. `preview.json`
 records wheel versions, the commit and artifact SHA-256 hashes. Published assets
@@ -19,24 +42,24 @@ A consumer's `tool.uv.sources` selects the release's wheel URLs; its committed
 contains the HTTPS `url` and `sha256` of `preview.json`. Keep both pins in the same
 consumer commit and verify wheel hashes against the preview before accepting it.
 
-The laboratory delivery recipe builds only its own packages. Its locked
-`delivery-build` group provides `pip`, `setuptools` and `wheel`. Run the installed
-delivery tool with the recipe and manifest pin:
+For local artifact inspection, use the same build entry. It reads the commit archive,
+not uncommitted worktree changes; publishing remains the workflow's explicit action:
 
 ```sh
-uv run --locked --group delivery python -m lab_tools.delivery \
-  --recipe delivery.toml --preview public-preview.json --output-home builds
+uv run --locked python scripts/build_preview.py build/preview --ref FULL_COMMIT_SHA
 ```
 
-The tool verifies the GUI and public wheels belong to the selected preview, then
-assembles the platform-specific offline delivery. Public previews are reusable
-build inputs, not native application installers. Keep installation acceptance
-separate from source development. Native packaging and platform directory defaults
-remain separate work.
+`build/preview` must be absent before building. Keep only the current candidate and
+useful failure reports; publish before removing it. The low-level recipe builder
+still supports explicit offline environment/teaching bundles. Those are build
+inputs or specialist deliveries, not the normal laboratory desktop installation.
 
 ## Run without installation
 
 From the public root:
+
+Install Python 3.14+, uv, Node.js and pnpm first. The launcher installs the locked
+frontend dependencies on explicit development startup.
 
 ```sh
 uv run --group delivery python -m lab_tools.dev --source .

@@ -5,7 +5,6 @@ from pathlib import Path
 from threading import Lock
 
 from scopecat.author_workspaces import local_author_workspaces
-from scopecat.project import load_project
 from scopecat.project_sources import (
     materialize_sources,
 )
@@ -13,7 +12,7 @@ from scopecat.records.author_revision import AuthorRevisionBundle
 from scopecat.records.driver_source import DriverSourceSelection, DriverSourceUpdate
 from scopecat.runtime_binding import load_runtime_binding
 
-from scopecat_server.author_environment import capture, check
+from scopecat_server.author_environment import capture_driver, check
 from scopecat_server.errors import BackendConflict
 from scopecat_server.instruments.runtime import InstrumentRuntime
 from scopecat_server.instruments.worker import SubprocessInstrumentBackendEndpoint
@@ -101,11 +100,6 @@ class DriverSourceService:
                     "driver source changed; inspect the active selection and retry"
                 )
             source = Path(request.source_root).resolve()
-            project = load_project(source / "scopecat.toml", resolve_adapter=False)
-            if not project.source_roots or project.instrument_backend_spec is None:
-                raise BackendConflict(
-                    "source project must declare source roots and a driver factory"
-                )
             python = (
                 Path(request.python)
                 if request.python
@@ -119,16 +113,15 @@ class DriverSourceService:
                 )
             )
             python = python.absolute()
-            bundle = capture(source, python)
+            captured = capture_driver(source, python)
+            bundle = captured.bundle
             digest = self.store.objects.put(bundle.model_dump_json().encode()).digest
-            replacement = _start_worker(
-                self.root, bundle, project.instrument_backend_spec, python
-            )
+            replacement = _start_worker(self.root, bundle, captured.factory, python)
             selection = DriverSourceSelection(
                 request=request,
                 python=str(python),
                 code_revision=bundle.manifest.ref,
-                factory=project.instrument_backend_spec,
+                factory=captured.factory,
                 artifact_hash=replacement.artifact_hash,
             )
             self.devices.replace_backend(

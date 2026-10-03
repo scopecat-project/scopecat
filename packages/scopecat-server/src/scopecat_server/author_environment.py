@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from pydantic import BaseModel
 from scopecat.project import open_project
 from scopecat.project_sources import capture_sources, require_environment
 from scopecat.records.author_revision import (
@@ -47,6 +48,31 @@ def _capture(root: Path) -> AuthorRevisionBundle:
     return capture_sources(open_project(root))
 
 
+class DriverSourceCapture(BaseModel):
+    bundle: AuthorRevisionBundle
+    factory: str
+
+
+def _capture_driver(root: Path) -> DriverSourceCapture:
+    project = open_project(root)
+    if not project.source_roots or project.instrument_backend_spec is None:
+        raise ValueError(
+            "source project must declare source roots and a driver factory"
+        )
+    return DriverSourceCapture(
+        bundle=capture_sources(project), factory=project.instrument_backend_spec
+    )
+
+
+def capture_driver(root: Path, python: Path) -> DriverSourceCapture:
+    """Resolve installed driver declarations in their owning environment."""
+    if python == Path(sys.executable).absolute():
+        return _capture_driver(root)
+    return DriverSourceCapture.model_validate_json(
+        _call(python, "capture-driver", json.dumps({"root": str(root)}))
+    )
+
+
 def capture(root: Path, python: Path) -> AuthorRevisionBundle:
     if python == Path(sys.executable).absolute():
         return _capture(root)
@@ -69,12 +95,14 @@ def check(manifest: AuthorRevisionManifest, python: Path) -> None:
 def main() -> None:
     value = sys.stdin.read()
     with contextlib.redirect_stdout(sys.stderr):
-        if sys.argv[1] == "capture":
+        if sys.argv[1] in ("capture", "capture-driver"):
             request = cast("dict[str, str | None]", json.loads(value))
             assert request["root"] is not None
-            output = _capture(
-                Path(request["root"]),
-            ).model_dump_json()
+            root = Path(request["root"])
+            captured = (
+                _capture(root) if sys.argv[1] == "capture" else _capture_driver(root)
+            )
+            output = captured.model_dump_json()
         elif sys.argv[1] == "check":
             require_environment(AuthorRevisionManifest.model_validate_json(value))
             output = ""

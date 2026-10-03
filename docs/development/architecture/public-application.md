@@ -7,12 +7,12 @@ direction: multiple independent windows, data-only use without execution startup
 and no commitment to the prototype GUI, shell or daemon/HTTP topology. References
 to one service below express shared resource authority, not a fixed process layout.
 This contract supersedes the first-run laboratory chooser and per-project/per-lesson
-service topology. It is not a claim that the target is implemented. Native desktop
-entry, explicit launch actions and recovery from interpreter mismatch and valid
-stale process records are delivered foundations (#801–#804). The first product
-batch (#812) delivers registered device ownership, canonical physical access,
-independent setup/parameter editing and exact setup admission without a global
-active setup. Same-service practice cleanup remains a separate delivery batch.
+service topology. Those paths have retired, and shared device ownership and
+same-application practice are delivered. Desktop PR #829 provides ready-to-run
+installation, #837 independent data and bounded Mac/Windows interaction, and #844
+ordinary source with independent execution and SDK environments. PR 4 qualifies
+composition, publication and remaining retirement; physical scientific acceptance
+and unfamiliar-user observation remain separate.
 
 The product direction is stronger abstractions within one application, not a
 collection of project services hidden behind one window. The concrete device,
@@ -44,19 +44,19 @@ sharing a maintained physical access key use the same claims across contexts.
 
 The application entry now owns one fixed runtime root under its installation home.
 Author folders register with that owner and do not create endpoints or installations.
-The native window loads the workbench directly. The next desktop lifecycle batch
-replaces service-first startup and invisible background ownership with the
+The native window loads the workbench directly. Window closing, tray restoration
+and explicit whole-application Quit follow the delivered
 [desktop lifecycle contract](desktop-lifecycle.md).
 An empty application can register independent author folders
 without requiring an installed capability package. Captured sources retain their
 bound composition even when the live application changes.
 
-Candidate environments and capability declarations are qualified before selection,
-including driver metadata and content identity without device connection. Selection
-requires stopped process ownership, preserves independently selected source interpreters,
-and retains an interrupted selection for explicit retry. This is
-the application maintenance boundary: software/settings actions live in the
-workbench, and the separate manager and per-directory service registry are removed.
+Application dependencies are built into the native package; updating replaces that
+package after work has stopped. Author dependency preparation and driver selection
+are explicit, independent maintenance actions, with metadata and content checks
+before activation. There is no user-facing candidate application environment switch.
+Software/settings actions live in the workbench; the separate manager and
+per-directory service registry are removed.
 Help now starts an owned software practice in this service. Ordinary selected data
 and practice use the same preview, retained-reference protection, durable cleanup
 receipt and physical-file reclamation. Practice adds software-only admission and
@@ -241,19 +241,18 @@ workers validate that identity before resolving current package declarations.
 Captured local source remains available; historical adapter wheels must be retained
 and restored separately. Recording identity does not archive or reinstall wheels.
 
-Registration probes the selected experiment interpreter, not the host interpreter,
-and records adapter content identity. Startup checks it; changing the adapter
-requires stopping and rechecking. Status and stop parse only the local manifest
-and runtime binding, so removal of an adapter cannot disable service recovery.
-Laboratory maintainers can build that fixed artifact through a TOML delivery
-recipe selecting the reviewed lock project, group and local packages. This reuses
-the public builder, inventory/hash checks and installer rather than introducing
-an adapter-specific installation script. First-run uses an installer-owned attempt
-record, process identity and locks to retain/retry only its own incomplete `.venv`.
-The created environment stays at its final path; the retained artifact owns its GUI.
+Registration probes the selected experiment interpreter, not application Python,
+and captures package identity. The author source owns this declaration; the
+application CLI no longer accepts a distribution/manifest injection. Changing the
+package or execution interpreter requires refreshing the source and explicitly
+updating an idle driver. It does not replace the application. Retained work still
+requires its recorded source/environment identity; an unavailable extension cannot
+prevent opening unrelated data or stopping the application.
 
-This is a same-runtime package contract, not shared device authority across
-heterogeneous environments or a native installation system.
+An extension wheel is optional distribution of ordinary laboratory code. Install
+it in the selected execution environment, never the desktop runtime. Vendor SDKs
+can use their own process/environment while device ownership remains unified.
+Offline environment bundles are separate from the public native installer.
 
 ## Local settings boundary
 

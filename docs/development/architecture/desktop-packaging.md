@@ -1,10 +1,11 @@
 # Ready-to-run desktop packaging
 
-PR #829 delivers ready-to-run installation and runtime foundations. Its current
-GUI and single-window host remain prototypes. Passing packaging and lifecycle
-checks does not qualify the desktop product experience. The next decision gate
-is the [desktop product journey](desktop-product.md), before expanding the host
-or redesigning the full GUI. Changing implementation language is not acceptance.
+PR #829 delivered ready-to-run installation; PR #837 completed the bounded
+multi-window, file and lifecycle product gate on Mac and Windows. The
+[desktop product decision](desktop-product.md#technology-decision) retains the
+Python/WebView host. PR #844 separated author execution and vendor environments.
+PR 4 qualifies these capabilities together and closes obsolete delivery paths;
+it does not reopen host selection or expand into a full GUI redesign.
 
 The baseline is a relocatable CPython runtime with dependencies prepared at build
 time. Rust/Tauri was the preferred alternative evaluated against the existing
@@ -15,6 +16,25 @@ editable author code or vendor environments into the desktop. Do not maintain
 multiple permanent distribution mechanisms after selection.
 
 ## Required comparison
+
+These are the criteria used for the recorded host decision, not a requirement to
+benchmark another host in every release.
+
+PR 4 uses the following composition boundary. Reuse the earlier accepted native
+window observations; rerun them only for a changed interaction or a new failure.
+
+| Journey | Maintained evidence | Separate observation |
+| --- | --- | --- |
+| Install, export, external analysis, import in an empty app, remove application | `verify_native_application.py` on Mac/Windows; empty PATH, empty uv cache and offline dependency preparation for the bundled example | Real file dialogs and window lifecycle accepted in PR #837 |
+| Ordinary source, different SDK Python, manual decisions, source edit, kill/reopen and practice cleanup | PR #844 installed private consumer evidence; repeat affected consumers when the public pin changes | Actual VS Code selection and real vendor SDK/output |
+| Optional extension wheel and execution-environment replacement | Installed-adapter journey: no adapter in application Python, explicit driver activation, retained source/analysis/snapshot, source package loss does not block application | Laboratory-specific extension maintenance |
+| Two distinct app builds, failed replacement/retry and retained measurement | `verify_native_replacement.py`, same current scientific-data format only | User interaction with a changed installer, if applicable |
+| Development preview and exit ownership | Application lifecycle tests; isolated home, no automatic browser launch | No need to reopen the daily app for routine tests |
+
+Unfamiliar-user comprehension and physical scientific correctness remain separate
+acceptance items. Neither headless checks nor maintainer familiarity closes them.
+There is no supported persistent-data baseline yet; these checks add no migration
+or arbitrary old-environment support promise.
 
 - Native window readiness, backend readiness and failure reporting are distinct.
 - Measure first empty-store use separately from reopening; disclose OS cache and
@@ -35,6 +55,13 @@ the intended branch. After each platform passes, its Actions artifacts include
 `scopecat-preview-OS-COMMIT` with `Scopecat.dmg` or `Scopecat-Setup.exe`, retained
 for 14 days. The commit in the artifact name identifies the tested source.
 Failed qualifications retain diagnostics but do not publish an installer artifact.
+Qualified artifacts include `native-release.json` and `bundle.json` alongside the
+installer. They bind its SHA-256 to source, target, runtime identity and inventory;
+archive them together before Actions retention expires. Native acceptance also
+exports a real measurement, analyzes it in the independent client with the
+application stopped, and imports/saves it in a fresh application without author
+code or execution environments. `data-journey.json` records that composition;
+it does not stand in for human file-dialog or editor observations.
 These are development previews. macOS uses ad-hoc signing, without Developer ID
 or notarization; Windows installers are unsigned.
 

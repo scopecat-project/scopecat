@@ -14,15 +14,17 @@ verify the developer, follow the [first-open instructions](../how-to/mac-preview
   Pick a save location and name, then **Create folder and prepare Python**. Open the
   resulting folder in VS Code, select its `.venv`, and run `notebooks/02_edit_scan.py`
   cell by cell. The example needs no devices.
+- To browse a received `.scopecat` file, choose **File → Open**. No author environment
+  is needed; see [open and share recorded data](../how-to/open-and-share-data.md).
 - For existing Scopecat code, choose **Use existing folder**, browse to the folder,
-  and **Add code folder**. Finish active work before adding a folder.
+  enter its **Execution Python**, and **Add code folder**. The application stays running.
 
 The application stores your results independently of the code folder. Creating or
 opening a folder does not acquire data. Submitting the example runs a new synthetic
 measurement; reopening its saved result does not run it again.
 
 - [Learning paths](learning-path.md) separates author, maintainer and extension tasks.
-- [Source preview quickstart](quickstart.md) is the framework-development path.
+- [First experiment](quickstart.md) follows the installed application's example.
 - [Project layout](../reference/project-layout.md) explains the files generated
   by `scopecat init`.
 - [Edit a starter experiment](../tutorials/starter-authoring.md) adds request

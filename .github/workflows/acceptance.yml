@@ -12,14 +12,51 @@ on:
           - local-application
           - service-lifecycle
           - native-distribution
+          - public-preview
 
 run-name: Acceptance (${{ inputs.profile }}) @ ${{ github.ref_name }}
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ inputs.profile }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 jobs:
+  public-preview:
+    if: inputs.profile == 'public-preview'
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require successful CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --workflow ci.yml --commit "$GITHUB_SHA" --json conclusion \
+            --jq 'any(.[]; .conclusion == "success")' | grep -qx true
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          package_json_file: apps/scopecat-ui/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .node-version
+      - name: Build public artifacts
+        run: uv run --locked python scripts/build_preview.py preview
+      - name: Publish immutable preview assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "preview-$GITHUB_SHA" preview/* --target "$GITHUB_SHA" \
+            --draft --prerelease --title "Preview $GITHUB_SHA" \
+            --notes "Public Python wheels and workbench assets from this exact commit. Dependencies remain consumer-locked; this is not a native application installer."
+          gh release edit "preview-$GITHUB_SHA" --draft=false
+
   native-distribution:
     if: inputs.profile == 'native-distribution'
     name: Native distribution (${{ matrix.os }})
@@ -51,6 +88,7 @@ jobs:
             packages/lab-tools/tests/test_desktop_platform.py \
             packages/lab-tools/tests/test_desktop_session.py \
             packages/lab-tools/tests/test_desktop_files.py \
+            packages/lab-tools/tests/test_installed_adapter_journey.py \
             packages/scopecat-instruments/tests/test_sdk_process.py \
             packages/scopecat-server/tests/test_instrument_worker.py \
             packages/scopecat-server/tests/storage/sqlite/test_run_repository.py::test_capture_import_is_idempotent_and_keeps_execution_tables_empty
@@ -81,6 +119,8 @@ jobs:
           path: |
             ${{ runner.temp }}/Scopecat.dmg
             ${{ runner.temp }}/Scopecat-Setup.exe
+            ${{ runner.temp }}/native-acceptance/native-release.json
+            ${{ runner.temp }}/native-acceptance/bundle.json
       - name: Retain native acceptance logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -88,6 +128,7 @@ jobs:
           name: native-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/native-acceptance/result.json
+            ${{ runner.temp }}/native-acceptance/data-journey.json
             ${{ runner.temp }}/native-acceptance/data/native-start.log
             ${{ runner.temp }}/direct-runtime/report.json
             ${{ runner.temp }}/macos-download/report.json
@@ -483,6 +524,7 @@ jobs:
     name: Acceptance gate (${{ inputs.profile }})
     if: ${{ always() }}
     needs:
+      - public-preview
       - native-distribution
       - service-lifecycle
       - python-tests
@@ -498,6 +540,7 @@ jobs:
       - name: Require successful jobs
         env:
           PROFILE: ${{ inputs.profile }}
+          PUBLIC_PREVIEW_RESULT: ${{ needs['public-preview'].result }}
           NATIVE_DISTRIBUTION_RESULT: ${{ needs['native-distribution'].result }}
           SERVICE_LIFECYCLE_RESULT: ${{ needs['service-lifecycle'].result }}
           INSTALLED_PILOT_RESULT: ${{ needs['installed-pilot'].result }}
@@ -508,6 +551,17 @@ jobs:
           UI_RESULT: ${{ needs.ui.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
+          if [ "$PROFILE" = public-preview ]; then
+            test "$PUBLIC_PREVIEW_RESULT" = success
+            for result in "$NATIVE_DISTRIBUTION_RESULT" "$SERVICE_LIFECYCLE_RESULT" \
+              "$INSTALLED_PILOT_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
+              "$PYTHON_TESTS_RESULT" "$BENCHMARK_SMOKE_RESULT" \
+              "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
+              test "$result" = skipped
+            done
+            exit 0
+          fi
+          test "$PUBLIC_PREVIEW_RESULT" = skipped
           if [ "$PROFILE" = native-distribution ]; then
             test "$NATIVE_DISTRIBUTION_RESULT" = success
             for result in "$SERVICE_LIFECYCLE_RESULT" "$INSTALLED_PILOT_RESULT" \
