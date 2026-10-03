@@ -1,8 +1,10 @@
 """Ordinary functions publish real retained evidence and survive source changes."""
 
+import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import httpx2
 import pytest
@@ -99,6 +101,32 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             )
             assert verified.value.accepted
             assert verified.value.tolerance == sc.Quantity(50, "MHz")
+            context_name = name.replace("estimate_peak", "verify_with_context")
+            context_verified = authors.analyze_as(
+                acquired.peaked,
+                context_name,
+                PeakVerification,
+                source="current",
+                arguments={"expected_frequency": first.value.frequency},
+            )
+            assert context_verified.value == verified.value
+            assert json.loads(
+                context_verified.publication.artifact(
+                    "author_analysis_effective_arguments"
+                ).text()
+            ) == {
+                "expected_frequency": {"value": 4.8, "unit": "GHz"},
+                "tolerance": {"value": 50, "unit": "MHz"},
+            }
+            with pytest.raises(httpx2.HTTPStatusError) as invalid_context:
+                authors.analyze_as(
+                    acquired.peaked,
+                    context_name,
+                    PeakVerification,
+                    source="current",
+                    arguments={"expected_frequency": "bad"},
+                )
+            assert "expected_frequency" in str(invalid_context.value.__notes__)
             assert (
                 authors.analyze_as(
                     acquired.peaked,
@@ -160,6 +188,21 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             )
             assert original_typed.value.tolerance == sc.Quantity(50, "MHz")
             assert current_typed.value.tolerance == sc.Quantity(25, "MHz")
+            selected_sources: tuple[Literal["original", "current"], ...] = (
+                "original",
+                "current",
+            )
+            for selected_source in selected_sources:
+                context_result = authors.analyze_as(
+                    managed.id,
+                    context_name,
+                    PeakVerification,
+                    source=selected_source,
+                    arguments={"expected_frequency": sc.Quantity(4.8, "GHz")},
+                )
+                assert context_result.value.tolerance == sc.Quantity(
+                    50 if selected_source == "original" else 25, "MHz"
+                )
             edited = authors.analyze_as(
                 acquired.peaked, name, PeakResult, source="current"
             )
@@ -211,5 +254,12 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
                 .result_as(PeakVerification)
             )
             assert restored.value == verified.value
+            assert (
+                lab.get_run(acquired.peaked)
+                .published_analysis(context_verified.publication.id)
+                .result_as(PeakVerification)
+                .value
+                == context_verified.value
+            )
     finally:
         stop_project(project)

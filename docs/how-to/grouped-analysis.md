@@ -71,6 +71,14 @@ by the fit; it may be a local instrument axis. Each function receives the select
 Dataset with its original dimensions, units and missing-value information. The
 function owns selection, fitting, scientific rejection and uncertainty estimates.
 
+A context-based `@sc.analysis_step` can use the same grouping call:
+`context.measurements()` returns only the selected group. Explicitly reading a
+reference run with `context.measurements(reference_run)` reads that reference's
+measurements without applying the primary run's point selection. Ordinary and
+context functions share typed argument decoding and retained-source defaults.
+Invalid invocation arguments fail before group execution; errors inside an
+individual group remain isolated to that group's receipt.
+
 `repeats="separate"` additionally groups coordinates named `repeat` (including
 qualified names ending in `/repeat`). `repeats="combine"` passes all repetitions
 together **without averaging**. Other unselected coordinates also remain in the

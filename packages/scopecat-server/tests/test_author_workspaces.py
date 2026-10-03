@@ -12,6 +12,8 @@ from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import open_project
+from scopecat.records.launch_rejection import AuthorLaunchRejected
+from scopecat.records.scientific_selection import ParameterConfiguration
 
 from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
@@ -130,6 +132,46 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             assert analysis.publication.fact("author_workspace").value == registered.id
             with pytest.raises(ValueError, match=r"generation|changed"):
                 b.refresh_authors(expected_generation=initial_b.generation)
+            # Source owners and parameter branches are independent selections.
+            configuration = imported.selection.configuration
+            assert isinstance(configuration, ParameterConfiguration)
+            a.parameters.create_branch("stable", revision=configuration.ref)
+            b.parameters.create_branch("trial", revision=configuration.ref)
+            a.use(parameter_branch="stable")
+            b.use(parameter_branch="trial")
+            trial_values = b.params
+            trial_values["response"]["signal"]["scale"] = 4.0
+            trial_revision = trial_values.save(note="Trial response scaling")
+            trial = b.prepare("signal").run().wait(timeout=60).result()
+            assert trial.measurements()["result"].require_values() == (12.0,)
+            assert a.parameters.workspace("stable").version.ref == configuration.ref
+            assert b.parameters.workspace("trial").version == trial_revision
+            # A same-named field is not compatible just because its name matches.
+            parameters_source = source.with_name("parameters.py")
+            good_parameters = parameters_source.read_text()
+            parameters_source.write_text(
+                good_parameters.replace(
+                    "scale: sc.Param[float] = sc.param(default=1.0)",
+                    'scale: sc.Magnitude[float] = sc.quantity(unit="V")',
+                )
+            )
+            b.refresh()
+            with pytest.raises(AuthorLaunchRejected) as incompatible:
+                b.prepare("signal")
+            assert "scale" in str(incompatible.value)
+            assert a.state() == initial_a
+            assert a.devices.drivers() == driver_versions
+            assert a.parameters.workspace("stable").version.ref == configuration.ref
+            assert b.parameters.workspace("trial").version == trial_revision
+            assert a.prepare("signal").run().wait(timeout=60).result().measurements()[
+                "result"
+            ].require_values() == (1.0,)
+            assert (
+                b.analyze_as(
+                    trial.id, "scopecat_lab.authored.signal:summarize", Summary
+                ).value.mean
+                == 12.0
+            )
     finally:
         stop_project(first)
     with pytest.raises(SnapshotError, match="service workspace"):

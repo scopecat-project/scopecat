@@ -470,7 +470,7 @@ def test_analysis_decorator_preserves_configuration_signature() -> None:
     assert signature.return_annotation is AnalysisInvocation
     step = assert_type(readout_fit(qubit="q0"), AnalysisInvocation)
     assert step.id == "readout.fit"
-    assert step.arguments == (("qubit", "q0"),)
+    assert step.arguments == (("qubit", "q0"), ("attempts", 2))
 
     if TYPE_CHECKING:
         readout_fit(qubit=1)  # pyright: ignore[reportArgumentType]

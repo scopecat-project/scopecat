@@ -761,6 +761,8 @@ class AnalysisContext:
         if existing != input_ref:
             raise ValueError(f"analysis input id is already bound: {input_id}")
         self._record_input_value(dataset, target=input_id)
+        if self.point_selection is not None and run is None:
+            dataset = dataset.isel(point=list(self.point_selection))
         return dataset
 
     def analysis_dataset(
@@ -1409,6 +1411,7 @@ class AnalysisDefinition[**P]:
         """Bind analysis configuration without attaching it to a run yet."""
 
         bound = self._signature.bind(*args, **kwargs)
+        bound.apply_defaults()
         return AnalysisInvocation(
             id=self.id,
             _definition=cast("AnalysisFunction", self._definition),
@@ -1433,8 +1436,6 @@ class AnalysisFunctionDefinition[**P, ResultT]:
 
         def execute(context: AnalysisContext, **arguments: object) -> Analysis:
             data = context.measurements()
-            if context.point_selection is not None:
-                data = data.isel(point=list(context.point_selection))
             inputs = {data_name: data, **arguments}
             value = context.trace(fn=definition, inputs=inputs)
             result = context.result(title=self.id)
