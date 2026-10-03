@@ -4,7 +4,9 @@ Status: declared checks, stage previews, durable fixed task specifications,
 dependency-checked dispatch and sequential background advancement with task controls
 are implemented. Bounded capability reports and sample/task workbench consumers
 also exist. Explicit candidate edges now bind a passing prerequisite's adopted
-proposal to a later check. Adaptive repair and large-scale scheduling remain.
+proposal to a later check. #853 adds one declared repair after a fresh scientific
+rejection, followed by exact-candidate verification. General adaptive loops and
+large-scale scheduling remain separate.
 See the [implementation order](../platform-status.md) and
 [parameter-flow contract](task-parameter-flow.md).
 
@@ -133,9 +135,11 @@ Restart recovers running tasks and the admission-to-worker handoff gap.
 
 Pause/cancel stop future admission; already admitted procedures retain their own
 cancellation and uncertainty protocols. Cancelled tasks cannot restart. Completion
-is projected from stage evidence, not from control mode. There are no repair
-attempts or implicit parameter flow. Plans spanning setups do not automatically
-activate equipment. New observations/repairs need explicit new task intent.
+is projected from stage evidence, not from control mode. Ordered attempts retain
+the initial check, optional declared repair and candidate verification. Admission
+budgets survive pause/restart; execution faults do not trigger scientific repair.
+Plans spanning setups do not automatically activate equipment. Repairs beyond the
+declared single attempt require new task intent; there is no implicit parameter flow.
 
 ## Panel requirements
 
@@ -209,14 +213,13 @@ Required next contracts:
 1. Larger-history traversal and panel refresh policies beyond the bounded history
    facade. Pages have read-snapshot consistency and a final batch comparison;
    consumers must still use write-time authority checks when acting on observations.
-2. Exercise a larger synthetic array, then add bounded repair loops. Explicit
-   candidate-output binding, final procedure handoff and the runnable
-   `task-calibration` publication journey are implemented. Partial-completion
-   projections and task controls exist; a rejected source is not yet a repair trigger.
-   Avoid one giant procedure containing every target and an unbounded maintenance loop.
+2. General iterative maintenance remains outside the delivered one-repair policy.
+   The six-target software journey, partial progress, candidate binding and final
+   verification/publication are implemented (#853). Do not repeat them as new work
+   or introduce an unbounded maintenance loop.
 3. Parameter-read contracts, including query membership
-   and physical interactions. Exact revision matching remains conservative until
-   reuse can be explained from complete dependencies.
+   and physical interactions. #852 already qualifies explicit whole-parameter
+   declarations; finer observed coverage remains #783. Unknown coverage stays conservative.
 4. Worker/environment routing, resource/scientific grouping, fairness, task budgets
    and coalescing repeated maintenance requests. Closing a notebook must not own
    or cancel admitted background work.
