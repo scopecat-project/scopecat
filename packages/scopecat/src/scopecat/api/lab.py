@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from types import TracebackType
 from typing import Literal, Self
@@ -29,7 +29,11 @@ from scopecat.api.run import RunHandle, RunHandlePage, run_handle_id
 from scopecat.api.samples import LabSampleOperations, SampleHandle, SampleOperations
 from scopecat.api.setup import LabSetupOperations
 from scopecat.authoring.experiments import Experiment, ExperimentInvocation
-from scopecat.automation import ProcedureRegistry, ProcedureScheduleRegistry
+from scopecat.automation import (
+    ProcedureRegistry,
+    ProcedureScheduleRegistry,
+    ProcedureSource,
+)
 from scopecat.config.candidates import CandidateConfig
 from scopecat.control.models import ControlRunState
 from scopecat.daemon.client import DaemonClient
@@ -184,6 +188,7 @@ class LabClient:
             ProcedureScheduleRegistry[ProcedurePlanningContext] | None
         ) = None,
         operator: str = "operator",
+        procedure_source: Callable[[], ProcedureSource] | None = None,
     ) -> None:
         self._execution_setup = setup.ref if isinstance(setup, SetupRevision) else setup
         self._owns_client = isinstance(daemon, str)
@@ -212,6 +217,7 @@ class LabClient:
         )
         self._runner = _DaemonRunner(self._client, build_experiment_system)
         self._procedures = LabProcedureOperations(
+            source=procedure_source,
             client=self._client,
             runner=self._runner,
             config=self._config,

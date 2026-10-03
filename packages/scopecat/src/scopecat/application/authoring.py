@@ -41,7 +41,11 @@ from scopecat.application.launch_config import (
 )
 from scopecat.authoring.experiments import Experiment
 from scopecat.automation.definition import RegisteredProcedure
-from scopecat.automation.models import ProcedureDefinitionRef, procedure_intent_hash
+from scopecat.automation.models import (
+    ProcedureDefinitionRef,
+    ProcedureSource,
+    procedure_intent_hash,
+)
 from scopecat.daemon.views import ConfigContextResolution, ParameterResolution
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.errors import CheckFailed
@@ -505,6 +509,12 @@ class AuthorExperiments:
                 workspace_id=request.workspace_id,
             ),
             request_key=request.request_key,
+            source=ProcedureSource(
+                workspace_id=request.workspace_id,
+                code_revision=selected.code_revision,
+            )
+            if selected.code_revision is not None
+            else None,
             samples=resolved.reviewed.binding.sample_selectors(),
             scientific_binding=resolved.reviewed.binding,
             expected_manual_preview=request.manual_state,

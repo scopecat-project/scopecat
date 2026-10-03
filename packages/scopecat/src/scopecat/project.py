@@ -166,7 +166,21 @@ class Project:
                 application,
                 build_experiment_system=build_experiment_system,
             )
-        return application.connect(endpoint, operator=operator)
+        from scopecat.automation.models import ProcedureSource
+
+        def procedure_source() -> ProcedureSource:
+            with self.authoring(endpoint) as author:
+                state = author.refresh()
+                assert state.active is not None
+                return ProcedureSource(
+                    workspace_id=author.workspace_id, code_revision=state.active
+                )
+
+        return application.connect(
+            endpoint,
+            operator=operator,
+            procedure_source=procedure_source if self.source_roots else None,
+        )
 
 
 def open_project(start: str | Path = ".", *, resolve_adapter: bool = True) -> Project:

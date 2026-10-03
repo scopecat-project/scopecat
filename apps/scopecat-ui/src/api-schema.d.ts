@@ -8665,6 +8665,7 @@ export interface components {
              */
             samples: components["schemas"]["SampleSelector"][];
             scientific_binding?: components["schemas"]["ResolvedScientificBinding"] | null;
+            source?: components["schemas"]["ProcedureSource"] | null;
             state: components["schemas"]["ProcedureRunState"];
             /**
              * Updated At
@@ -8687,6 +8688,15 @@ export interface components {
         };
         /** @enum {string} */
         ProcedureRunState: "ready" | "leased" | "waiting_for_input" | "attention_required" | "closed";
+        /**
+         * ProcedureSource
+         * @description Source owner and immutable code used to resume an ordinary procedure.
+         */
+        ProcedureSource: {
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            /** Workspace Id */
+            workspace_id: string;
+        };
         /**
          * ProcedureStepAttempt
          * @description One revisioned attempt at a stable, intent-identified procedure step.

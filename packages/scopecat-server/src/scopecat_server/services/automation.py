@@ -32,6 +32,7 @@ from scopecat.automation import (
     ProcedureRunnableQuery,
     ProcedureRunPage,
     ProcedureRunState,
+    ProcedureSource,
     ProcedureStepAttempt,
     ProcedureStepAttemptListQuery,
     ProcedureStepAttemptPage,
@@ -245,6 +246,7 @@ class AutomationService:
                 recovery=command.recovery,
                 plan_ref=command.plan_ref,
                 plan_request=command.plan_request,
+                source=command.source,
             )
         )
 
@@ -562,6 +564,7 @@ class AutomationService:
         recovery: ProcedureRecoverySource | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
+        source: ProcedureSource | None = None,
     ) -> ProcedureRun:
         """Admit one idempotent, version-pinned procedure request."""
 
@@ -583,6 +586,7 @@ class AutomationService:
                 recovery=recovery,
                 plan_ref=plan_ref,
                 plan_request=plan_request,
+                source=source,
             )
 
     def submit_in_transaction(
@@ -599,6 +603,7 @@ class AutomationService:
         recovery: ProcedureRecoverySource | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         plan_request: LaunchRequest | None = None,
+        source: ProcedureSource | None = None,
         at: datetime | None = None,
         require_new: bool = False,
     ) -> ProcedureRun:
@@ -617,6 +622,7 @@ class AutomationService:
             scientific_binding=scientific_binding,
             recovery=recovery,
             plan_ref=plan_ref,
+            source=source,
         )
         existing = self._store.find_run_by_request_in_transaction(
             connection,
@@ -646,7 +652,7 @@ class AutomationService:
             )
         resolved_samples: tuple[SampleSelector, ...]
         if recovery is not None:
-            source = self._store.read_run_in_transaction(
+            recovered = self._store.read_run_in_transaction(
                 connection, recovery.procedure_run_id
             )
             attempts = self._store.all_step_attempts_in_transaction(
@@ -659,20 +665,20 @@ class AutomationService:
                 connection, recovery.retained_run.run_id
             )
             if child.admission.submission_id != procedure_step_operation_id(
-                source.procedure_run_id, recovery.run_step.step_key
+                recovered.procedure_run_id, recovery.run_step.step_key
             ):
                 raise AutomationConflict(
                     "recovery run was not acquired by the source step"
                 )
             try:
-                validate_recovery_source(recovery, source, attempts, retained)
-                if scientific_binding != source.scientific_binding:
+                validate_recovery_source(recovery, recovered, attempts, retained)
+                if scientific_binding != recovered.scientific_binding:
                     raise ValueError("recovery must preserve source scientific binding")
-                if samples != source.samples:
+                if samples != recovered.samples:
                     raise ValueError("recovery must preserve source sample bindings")
             except ValueError as error:
                 raise AutomationConflict(str(error)) from error
-            resolved_samples = source.resolved_samples
+            resolved_samples = recovered.resolved_samples
         else:
             bindings = self._samples.resolve_bindings_in_transaction(
                 connection, samples
@@ -733,6 +739,7 @@ class AutomationService:
             resolved_samples=resolved_samples,
             recovery=recovery,
             plan_ref=plan_ref,
+            source=source,
             revision=1,
             state="ready",
             created_at=now,

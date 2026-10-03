@@ -28,6 +28,8 @@ from scopecat.kernel.content_identity import (
 from scopecat.kernel.frozen import freeze_json_mapping, thaw_json_value
 from scopecat.kernel.run_outcome import utc_now
 from scopecat.records.analysis import AnalysisInterpretationReference, AnalysisSubject
+from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.records.author_workspace import AuthorWorkspaceId
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter_branch import ParameterBranch
@@ -99,6 +101,13 @@ class ProcedureDefinitionRef(_ProcedureModel):
         return value
 
 
+class ProcedureSource(_ProcedureModel):
+    """Source owner and immutable code used to resume an ordinary procedure."""
+
+    workspace_id: AuthorWorkspaceId
+    code_revision: AuthorRevisionRef
+
+
 def procedure_intent_hash(
     definition: ProcedureDefinitionRef,
     intent: Mapping[str, object],
@@ -107,6 +116,7 @@ def procedure_intent_hash(
     scientific_binding: ResolvedScientificBinding | None = None,
     recovery: ProcedureRecoverySource | None = None,
     plan_ref: ExperimentPlanRef | None = None,
+    source: ProcedureSource | None = None,
 ) -> Sha256ContentHash:
     """Hash the exact definition, intent, and sample scope used by a worker."""
 
@@ -121,6 +131,8 @@ def procedure_intent_hash(
         identity["plan_ref"] = plan_ref.model_dump(mode="json")
     if recovery is not None:
         identity["recovery"] = recovery.model_dump(mode="json")
+    if source is not None:
+        identity["source"] = source.model_dump(mode="json")
     return f"sha256:{stable_content_hash(identity)}"
 
 
@@ -270,6 +282,7 @@ class ProcedureRun(_ProcedureModel):
     resource_wait: ProcedureResourceWait | None = None
     recovery: ProcedureRecoverySource | None = None
     plan_ref: ExperimentPlanRef | None = None
+    source: ProcedureSource | None = None
 
     @field_validator("samples", "resolved_samples")
     @classmethod
@@ -318,6 +331,7 @@ class ProcedureRun(_ProcedureModel):
             scientific_binding=self.scientific_binding,
             recovery=self.recovery,
             plan_ref=self.plan_ref,
+            source=self.source,
         )
         if self.intent_hash != expected_intent_hash:
             raise ValueError(

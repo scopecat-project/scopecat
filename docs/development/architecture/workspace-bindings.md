@@ -36,6 +36,15 @@ HTTP author operations require their source identity. Python sessions use
 `project.authoring()` from a registered directory, or pass `workspace_id` explicitly
 to `AuthorProject(url, workspace_id=...)`. Basic history/data clients need no source.
 
+Ordinary procedures submitted through `project.connect()` retain a `ProcedureSource`
+beside their scientific intent: the registered workspace and admitted code revision.
+Continuing after human input or restarting the application restores that exact
+source and its execution Python. Procedure authors do not add deployment identities
+to their own intent models. Source ownership participates in request-key identity;
+the same key cannot silently switch to another source. Notebook live refresh asks
+the execution owner for the current source identity, without capturing server
+dependencies in the user's analysis environment.
+
 Exact parameter/setup selections now admit both procedures and runs against the
 saved maintained setup revision. There is no global setup activation. GUI
 drafts expose a device-context picker beside the parameter choice and preserve it
@@ -46,8 +55,8 @@ application device maintenance uses the same ownership and retirement gates.
 `scopecat.runtime.toml` resolves workspace, data and deployment paths. It is local
 machine configuration, excluded from captured source and snapshots. Runtime paths
 come from the live binding, never a retained manifest. Hardware deployments select
-their maintained owner explicitly. Different dependency environments and remote
-execution remain outside this local qualification.
+their maintained owner explicitly. Local execution and SDK interpreters can have
+different dependencies; remote execution remains outside this local qualification.
 
 ## Ownership and recovery
 

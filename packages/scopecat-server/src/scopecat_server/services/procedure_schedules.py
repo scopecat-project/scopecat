@@ -83,6 +83,7 @@ class ProcedureScheduleService:
                 definition=command.definition,
                 intent=dict(command.intent),
                 intent_hash=command.intent_hash,
+                source=command.source,
                 due_at=command.due_at,
                 revision=1,
                 state="pending",
@@ -215,6 +216,7 @@ class ProcedureScheduleService:
                 definition=schedule.definition,
                 request_key=request_key,
                 intent=schedule.intent,
+                source=schedule.source,
                 at=now,
                 require_new=True,
             )

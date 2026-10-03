@@ -248,7 +248,6 @@ from scopecat.daemon.wire import (
     SetupSaveCommand,
     TerminalRunCommitCommand,
 )
-from scopecat.kernel.frozen import thaw_json_value
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.records.apparatus_history import (
     MAX_APPARATUS_ATTACHMENT_BYTES,
@@ -443,34 +442,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(422, str(error)) from error
 
     def procedure_root(procedure_id: str) -> Path:
-        # Non-author procedures run in the service composition. Author intents
-        # always serialize their explicit workspace owner.
-        owner = application.automation.get(procedure_id).intent.get("workspace_id")
-        if owner is None:
-            return application.project_root
-        return authors(cast("str", owner)).root
+        stored = application.automation.get(procedure_id)
+        return (
+            authors(stored.source.workspace_id).root
+            if stored.source is not None
+            else application.project_root
+        )
 
     def procedure_python(procedure_id: str) -> Path:
         stored = application.automation.get(procedure_id)
-        owner = stored.intent.get("workspace_id")
-        revision = stored.intent.get("code_revision")
-        if stored.plan_ref is not None:
-            definition = application.plans.repository.get(stored.plan_ref).definition
-            owner = definition.workspace_id
-            revision = (
-                definition.code_revision.model_dump(mode="json")
-                if definition.code_revision
-                else None
-            )
-        if owner is None:
+        if stored.source is None:
             return Path(sys.executable).absolute()
-        service = authors(cast("str", owner))
         return (
-            service.binding_for(
-                AuthorRevisionRef.model_validate(thaw_json_value(revision))
-            ).python
-            if revision is not None
-            else service.worker_binding.python
+            authors(stored.source.workspace_id)
+            .binding_for(stored.source.code_revision)
+            .python
         )
 
     project_workers = ProjectProcedureWorkers(
@@ -1876,6 +1862,13 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def submit_procedure(
         command: ProcedureSubmitCommand,
     ) -> ProcedureSubmitReceipt:
+        if command.source is not None:
+            try:
+                authors(command.source.workspace_id).binding_for(
+                    command.source.code_revision
+                )
+            except (KeyError, ValueError) as error:
+                raise HTTPException(422, str(error)) from error
         return application.automation.submit(command)
 
     @app.post(f"{_API_PREFIX}/procedure-schedules", status_code=201)

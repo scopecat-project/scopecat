@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from scopecat.application.authoring import AuthorExperiments
     from scopecat.automation.definition import RegisteredProcedure
     from scopecat.automation.intervals import RegisteredProcedureSchedule
+    from scopecat.automation.models import ProcedureSource
     from scopecat.planning.system import ExperimentSystemBuilder
 
 
@@ -104,6 +105,7 @@ class LabApplication:
         daemon: str,
         *,
         operator: str = "operator",
+        procedure_source: Callable[[], ProcedureSource] | None = None,
     ) -> LabClient:
         """Connect notebook code while retaining locally authored closures."""
 
@@ -115,6 +117,7 @@ class LabApplication:
             procedures=self.procedures,
             procedure_schedules=self.procedure_schedules,
             operator=operator,
+            procedure_source=procedure_source,
         )
 
 

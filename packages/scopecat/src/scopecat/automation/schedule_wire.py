@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from scopecat.automation.models import (
     ProcedureDefinitionRef,
     ProcedureIntent,
+    ProcedureSource,
     procedure_intent_hash,
 )
 from scopecat.automation.schedules import ProcedureSchedule, ProcedureScheduleState
@@ -32,6 +33,7 @@ class ProcedureScheduleCreateCommand(_ScheduleWireModel):
     schedule_id: _NonEmptyText
     definition: ProcedureDefinitionRef
     intent: ProcedureIntent
+    source: ProcedureSource | None = None
     due_at: datetime
 
     @field_validator("schedule_id")
@@ -46,7 +48,7 @@ class ProcedureScheduleCreateCommand(_ScheduleWireModel):
 
     @property
     def intent_hash(self) -> Sha256ContentHash:
-        return procedure_intent_hash(self.definition, self.intent)
+        return procedure_intent_hash(self.definition, self.intent, source=self.source)
 
 
 class ProcedureScheduleCreateReceipt(_ScheduleWireModel):

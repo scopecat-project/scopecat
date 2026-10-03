@@ -113,6 +113,34 @@ def test_procedure_submission_is_idempotent_and_bounded(tmp_path: Path) -> None:
     ).items == (first,)
 
 
+def test_procedure_retry_preserves_source_owner_and_revision(tmp_path: Path) -> None:
+    from scopecat.automation import ProcedureSource
+    from scopecat.records.author_revision import AuthorRevisionRef
+
+    service, _ = _service(tmp_path)
+    source = ProcedureSource(
+        workspace_id="author-one",
+        code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
+    )
+    command = ProcedureSubmitCommand(
+        request_key="same-science",
+        definition=_definition(),
+        intent={"qubits": ["q0"]},
+        source=source,
+    )
+    first = service.submit(command).run
+    assert service.get(first.procedure_run_id).source == source
+    assert service.submit(command).run == first
+    with pytest.raises(BackendConflict, match="different intent"):
+        service.submit(
+            command.model_copy(
+                update={
+                    "source": source.model_copy(update={"workspace_id": "author-two"})
+                }
+            )
+        )
+
+
 def test_runnable_discovery_uses_exact_capabilities_and_server_lease_clock(
     tmp_path: Path,
 ) -> None:

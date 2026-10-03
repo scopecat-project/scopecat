@@ -27,6 +27,7 @@ from scopecat.automation.models import (
     ProcedureRecoverySource,
     ProcedureRun,
     ProcedureRunState,
+    ProcedureSource,
     ProcedureStepAttempt,
     ProcedureStepOperation,
     ProcedureStepOutputRef,
@@ -65,6 +66,7 @@ class ProcedureSubmitCommand(_WireModel):
     recovery: ProcedureRecoverySource | None = None
     plan_ref: ExperimentPlanRef | None = None
     plan_request: LaunchRequest | None = None
+    source: ProcedureSource | None = None
 
     @property
     def intent_hash(self) -> Sha256ContentHash:
@@ -75,6 +77,7 @@ class ProcedureSubmitCommand(_WireModel):
             scientific_binding=self.scientific_binding,
             recovery=self.recovery,
             plan_ref=self.plan_ref,
+            source=self.source,
         )
 
     @field_validator("samples")
