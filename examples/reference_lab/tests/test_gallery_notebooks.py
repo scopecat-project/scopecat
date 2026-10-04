@@ -157,19 +157,3 @@ def test_topology_scaled_ramsey_resolves_one_connected_qubit_set(
         "tree_has_parallel_each": True,
         "status": "completed",
     }
-
-
-def test_ragged_scope_data_survives_daemon_boundaries(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "50_ragged_scope_capture.py"))
-    summary = cast("dict[str, object]", namespace["ragged_scope_summary"])
-
-    assert summary == {
-        "record_lengths": [4, 7, 10],
-        "ragged_shapes": [[4], [7], [10]],
-        "window_shapes": [[2], [2], [2]],
-        "status": "completed",
-    }

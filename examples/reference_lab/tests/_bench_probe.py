@@ -71,7 +71,7 @@ class _ObservedWorld(BenchSignalWorld):
 def create_backend(project_root: Path) -> InstrumentBackend:
     provider = ReferenceLabProvider()
     # Observe the existing simulator, without replacing its drivers or transport.
-    provider._bench = _ObservedWorld(project_root / "xy-emissions.jsonl")
+    provider._bench = _ObservedWorld(project_root / "bench-emissions.jsonl")
     return InstrumentBackend(
         provider=provider,
         driver_catalog=provider.driver_catalog,

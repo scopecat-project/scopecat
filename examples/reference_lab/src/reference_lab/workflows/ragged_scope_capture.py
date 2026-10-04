@@ -150,11 +150,7 @@ def ragged_scope_capture(
     )
 
 
-RAGGED_SCOPE_CAPTURE = ragged_scope_capture.build()
-
-
 __all__ = [
-    "RAGGED_SCOPE_CAPTURE",
     "RECORD_LENGTH",
     "RaggedScopeDataset",
     "ragged_scope_capture",

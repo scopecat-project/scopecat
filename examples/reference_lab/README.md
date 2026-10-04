@@ -75,15 +75,16 @@ list of interfaces to preserve.
 | `29_channel_unavailable.py` | Entity-axis IQ traces, identity selection, provenance, and one unavailable demodulation channel |
 | `31_topology_scaled_ramsey.py` | One connected-qubit-set program reused across chip topology and scale |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
-| `50_ragged_scope_capture.py` | Point-varying oscilloscope record length and ragged waveform slicing |
 
 `tests/test_xy_drive.py` owns shared-LO and signed-IF qualification directly,
 without a gallery script. Its real daemon/instrument-worker journey checks
 positive/negative I/Q samples emitted by the virtual AWG, confirmed LO commands,
 clock readback, exact parameter/setup inputs and retained evidence on reconnect.
-`tests/test_bench_capture.py` replaces the AWG monitor script with complete
+`tests/test_bench_capture.py` replaces the AWG monitor and ragged capture scripts with complete
 time/voltage checks through the real daemon and virtual instrument worker, terminal
 state and reservation release, and retained-data reconnect without acquisition.
+The ragged case checks each 4/7/10-sample trace, continuous-waveform wrapping,
+point-local slicing and the actual per-point scope record-length commands.
 `tests/test_awg_output_monitor.py` retains entityless routing, operation ordering
 and shared physical AWG claim checks.
 The experiment definitions remain compiler/device fixtures; they are not teaching APIs.

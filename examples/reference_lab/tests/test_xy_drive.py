@@ -37,7 +37,7 @@ from reference_lab.payloads import reference_lab_payload_codecs
 from reference_lab.provider import ReferenceLabProvider
 from reference_lab.workflows.xy_drive import xy_lo_sweep
 
-from ._xy_drive_probe import WaveformEmission
+from ._bench_probe import WaveformEmission
 
 
 def test_xy_drive_declares_physical_i_and_q_resources_per_entity() -> None:
@@ -190,15 +190,13 @@ def test_xy_drive_signed_if_crosses_daemon_and_instrument_worker(
     for name in ("src", "config"):
         shutil.copytree(EXAMPLE_ROOT / name, tmp_path / name)
     shutil.copyfile(
-        Path(__file__).with_name("_xy_drive_probe.py"),
-        tmp_path / "src" / "_xy_drive_probe.py",
+        Path(__file__).with_name("_bench_probe.py"),
+        tmp_path / "src" / "_bench_probe.py",
     )
     (tmp_path / "scopecat.toml").write_text(
         (EXAMPLE_ROOT / "scopecat.toml")
         .read_text(encoding="utf-8")
-        .replace(
-            "reference_lab.backend:create_backend", "_xy_drive_probe:create_backend"
-        ),
+        .replace("reference_lab.backend:create_backend", "_bench_probe:create_backend"),
         encoding="utf-8",
     )
     project = load_project(tmp_path / "scopecat.toml")
@@ -264,7 +262,7 @@ def test_xy_drive_signed_if_crosses_daemon_and_instrument_worker(
             assert final["drive-awg", (), "reference_source"] == "external"
             assert final["drive-awg", (), "locked"] is True
 
-            emitted = (tmp_path / "xy-emissions.jsonl").read_text(encoding="utf-8")
+            emitted = (tmp_path / "bench-emissions.jsonl").read_text(encoding="utf-8")
             emissions = [
                 WaveformEmission.model_validate_json(line)
                 for line in emitted.splitlines()
@@ -304,7 +302,7 @@ def test_xy_drive_signed_if_crosses_daemon_and_instrument_worker(
             assert retained.record_json(
                 INSTRUMENT_STATE_EVIDENCE_ID
             ).content == evidence.model_dump(mode="json")
-            assert (tmp_path / "xy-emissions.jsonl").read_text(
+            assert (tmp_path / "bench-emissions.jsonl").read_text(
                 encoding="utf-8"
             ) == emitted
     finally:
