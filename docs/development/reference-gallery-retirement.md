@@ -16,7 +16,8 @@ source; installed historical environments and scientific data are untouched.
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
-| `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31`, `34` | Compiled buffers, channel conflicts, signed IF/LO semantics, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31` | Compiled buffers, channel conflicts, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `34_xy_lo_sweep.py`, `XY_LO_SWEEP` | Shared LO, signed IF, I/Q routes, clocks and carrier records | Retired the presentation script and prebuilt invocation. `tests/test_xy_drive.py` owns compiler assertions and one real daemon/instrument-worker journey; coverage is mapped below. The facade and `xy_lo_sweep.build()` remain necessary device-test inputs. |
 | `30_drag_calibration.py` | DRAG acquisition, fit and uncertainty display, exact candidate lineage and independent verification | Retired. `test_typed_candidates.py` retains the real-device simulation and analysis with independent parameters/setup and no default mutation. Global publication/restore is no longer a required author journey. |
 | `workflows/drag_beta_*` | Independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Acquisition, fit and scientific scoring remain focused integration dependencies. Old freshness, verify-only procedure, semantic-merge publisher and automatic-publication registry are retired. `drag_branch_calibration` and real-daemon tests cover target-complete joint remeasurement, retained rejection, exact branch publication and restart/lost-response recovery. |
 | `drag_beta_calibration_procedure`, `DragBetaProcedureIntent`, active-generation request key | Single-target fit, verify, explicitly publish and use accepted gate values | Retired the default-publishing procedure and later verify-only cohort members. The real DRAG test publishes to an explicit branch and executes the standard-gate fixture with the exact accepted revision. |
@@ -75,6 +76,22 @@ expresses an obsolete requirement before removing it.
   `core_integration/test_run_handle.py::test_run_projects_paged_measurements_into_one_arrow_reader`
   checks durable Arrow pagination and schema. These directly cover the deleted
   workbench's summary counts without acquiring a resonator scan first.
+
+## XY shared-LO and signed-IF evidence
+
+| Removed assertion or input | Maintained evidence |
+| --- | --- |
+| Gallery summary's three LO values and derived q0/q1 carriers | `test_xy_drive_signed_if_crosses_daemon_and_instrument_worker` reads all three LO coordinates and both carrier series from retained measurements, and requires a completed run. |
+| Summary's hard-coded +100/-100 MHz labels | The same test observes all twelve decoded virtual-AWG emissions in a distinct instrument-worker PID: equal I waveforms and opposite Q waveforms at 1 GHz sample rate, with the expected mounts, amplitude, offset, enable and run mode. These are simulated signals, not hardware qualification. |
+| Implicit shared-LO/clock and route claims | Existing `test_xy_drive_composes_shared_awg_state_and_real_dac_operations` retains shared-owner coalescing, I/Q routes and state-before-play ordering. The worker journey adds confirmed LO frequency commands and terminal LO/AWG clock readback. |
+| `gallery_inputs()` setup for this script | The worker journey explicitly saves independent parameters and resolves the initial setup, checks exact run input identities, leaves setup and the combined registry unchanged, then reconnects and reads the same snapshot/state evidence without further emissions. |
+| Notebook presentation, `xy_lo_sweep_summary`, and `XY_LO_SWEEP` constant | Removed without an API replacement. Tests build the existing experiment directly. Its facade, waveform generation and dataset definition remain shared compiler/device fixtures, not dead wrappers. |
+
+The test-only emission observer delegates to the existing virtual signal world;
+the original provider drivers, payload codecs, daemon and instrument transport
+still execute. It copies no notebooks and starts one disposable project with
+explicit endpoint ownership and guaranteed lifecycle teardown. Other gallery
+consumers and current-format recovery coverage remain in place.
 
 ## Configuration-authority retirement evidence
 

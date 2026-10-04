@@ -75,9 +75,14 @@ list of interfaces to preserve.
 | `29_channel_unavailable.py` | Entity-axis IQ traces, identity selection, provenance, and one unavailable demodulation channel |
 | `31_topology_scaled_ramsey.py` | One connected-qubit-set program reused across chip topology and scale |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
-| `34_xy_lo_sweep.py` | Shared LO scan, signed IF waveforms, shared clocks, and derived carrier records |
 | `35_awg_output_monitor.py` | Entityless AWG/scope diagnostic with temporary cable intent |
 | `50_ragged_scope_capture.py` | Point-varying oscilloscope record length and ragged waveform slicing |
+
+`tests/test_xy_drive.py` owns shared-LO and signed-IF qualification directly,
+without a gallery script. Its real daemon/instrument-worker journey checks
+positive/negative I/Q samples emitted by the virtual AWG, confirmed LO commands,
+clock readback, exact parameter/setup inputs and retained evidence on reconnect.
+The experiment definition remains a compiler/device fixture; it is not a teaching API.
 
 The application registers `drag_branch_calibration`, a bounded integration
 procedure over an explicitly requested q0/q1 target list. It captures independent

@@ -344,15 +344,11 @@ def xy_lo_sweep(experiment: sc.ExperimentContext) -> XYLoSweepDataset:
     )
 
 
-XY_LO_SWEEP = xy_lo_sweep.build()
-
-
 __all__ = [
     "DEFAULT_LO_POWER",
     "DEFAULT_REFERENCE_FREQUENCY",
     "Q0",
     "Q1",
-    "XY_LO_SWEEP",
     "XY_QUBITS",
     "XYDriveFrequencies",
     "XYDriveGroup",
