@@ -190,11 +190,7 @@ def awg_output_monitor(
     )
 
 
-AWG_OUTPUT_MONITOR = awg_output_monitor.build()
-
-
 __all__ = [
-    "AWG_OUTPUT_MONITOR",
     "RECORD_LENGTH",
     "SAMPLE_RATE",
     "AwgOutputMonitorDataset",

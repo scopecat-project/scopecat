@@ -27,12 +27,12 @@ from reference_lab.configuration import bootstrap_config
 from reference_lab.payloads import reference_lab_payload_codecs
 from reference_lab.provider import ReferenceLabProvider
 from reference_lab.targets.list_mode import configured_list_mode_target
-from reference_lab.workflows.awg_output_monitor import AWG_OUTPUT_MONITOR
+from reference_lab.workflows.awg_output_monitor import awg_output_monitor
 from reference_lab.workflows.drag_beta_experiment import drag_beta_experiment
 
 
 def test_awg_output_monitor_uses_entityless_bench_resources() -> None:
-    logical = compile_invocation(AWG_OUTPUT_MONITOR).program.program
+    logical = compile_invocation(awg_output_monitor.build()).program.program
 
     assert [port.id for port in logical.resource_ports] == ["source", "monitor"]
     source, monitor = logical.resource_ports
@@ -70,7 +70,7 @@ def test_awg_output_monitor_arms_plays_and_fetches_in_order() -> None:
         provider=provider,
         payload_codecs=reference_lab_payload_codecs(),
     )
-    compiled = compile_invocation(AWG_OUTPUT_MONITOR)
+    compiled = compile_invocation(awg_output_monitor.build())
     bound = bind_program(compiled.program, build_config_environment(config))
     plan = compile_run_program(composition.system, bound=bound)
     operations = [
@@ -150,7 +150,7 @@ def test_monitor_and_quantum_target_claim_the_same_physical_awg() -> None:
         payload_codecs=reference_lab_payload_codecs(),
     )
 
-    monitor_compiled = compile_invocation(AWG_OUTPUT_MONITOR)
+    monitor_compiled = compile_invocation(awg_output_monitor.build())
     monitor_plan = compile_run_program(
         composition.system,
         bound=bind_program(

@@ -47,26 +47,6 @@ def test_multichannel_dc_bias_spans_two_devices_and_four_routes(
     }
 
 
-def test_awg_output_monitor_records_entityless_bench_capture(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "35_awg_output_monitor.py"))
-    summary = cast("dict[str, object]", namespace["awg_output_monitor_summary"])
-
-    assert summary == {
-        "name": "AWG CH1 pulse shape after bench recabling",
-        "tags": ["diagnostic", "awg-monitor"],
-        "description_mentions_wiring": True,
-        "samples": 16,
-        "time_end_ns": 15.0,
-        "peak_mv": 250.0,
-        "minimum_mv": -20.0,
-        "status": "completed",
-    }
-
-
 def test_flux_ramsey_composes_local_bias_and_quantum_channels(
     reference_lab_daemon: _ReferenceLabDaemon,
     reference_lab_notebooks: Path,

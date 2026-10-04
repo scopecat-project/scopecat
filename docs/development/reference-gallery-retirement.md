@@ -14,7 +14,7 @@ source; installed historical environments and scientific data are untouched.
 | `02_session_lifetime.py`, `21_scan_shapes.py`, `40_measurement_workbench.py` | Reattach without acquisition, scan semantics, retained data projections | Retired with duplicate gallery tests. Session closure/reattachment now uses the existing starter restart journey; scan and dataset behaviors have focused core coverage listed below. |
 | `05_sample_workflow.py` | Exact sample revision and analysis provenance | Retired. Dedicated sample binding/restart and sample-analysis isolation tests cover the behavior with equipment-only initialization and an empty parameter registry. |
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
-| `10_direct_control.py`, `33_multichannel_dc_bias.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
+| `10_direct_control.py`, `33_multichannel_dc_bias.py`, `50_ragged_scope_capture.py` | Shared device ownership, physical routes, entityless diagnostics, ragged acquisition | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
 | `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31` | Compiled buffers, channel conflicts, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
 | `34_xy_lo_sweep.py`, `XY_LO_SWEEP` | Shared LO, signed IF, I/Q routes, clocks and carrier records | Retired the presentation script and prebuilt invocation. `tests/test_xy_drive.py` owns compiler assertions and one real daemon/instrument-worker journey; coverage is mapped below. The facade and `xy_lo_sweep.build()` remain necessary device-test inputs. |
@@ -92,6 +92,25 @@ the original provider drivers, payload codecs, daemon and instrument transport
 still execute. It copies no notebooks and starts one disposable project with
 explicit endpoint ownership and guaranteed lifecycle teardown. Other gallery
 consumers and current-format recovery coverage remain in place.
+
+## Waveform capture retirement evidence
+
+`35_awg_output_monitor.py` and the unneeded `AWG_OUTPUT_MONITOR` prebuilt
+invocation are retired. `test_bench_capture.py` builds the retained experiment
+directly, with independently saved parameters and an explicit setup. It checks
+all sixteen time/voltage samples, operator metadata, actual worker emissions,
+terminal AWG/scope state, released reservations, and identical data/evidence on
+reconnect without new emissions. The observer delegates to the original virtual
+bench and uses the same transport as the XY journey; no notebook is copied.
+`test_awg_output_monitor.py` retains entityless capability selection,
+arm/play/fetch ordering, and the physical AWG claim shared with quantum work.
+
+Removing the prebuilt invocation changes captured project source identity.
+Regenerated acceptance preview `config_source_hash` and setup `content_hash` /
+`revision_id` fields follow that source through worker/provider artifact binding;
+scientific values, schemas and other fixture leaves must remain identical.
+This is public source simulation evidence, not an installed-release, private
+consumer or hardware qualification.
 
 ## Configuration-authority retirement evidence
 
