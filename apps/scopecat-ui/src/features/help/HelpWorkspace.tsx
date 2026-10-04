@@ -53,8 +53,8 @@ export function HelpWorkspace({
           <a className="underline" href="#instruments">
             Devices and drivers
           </a>
-          . Setup selects device revisions, topology and routing. Parameter branches and saved
-          working points are independent selections for each task.
+          . Setup selects device revisions, topology and routing. Each task selects independent
+          parameters and setup, or a saved candidate with its retained setup.
         </p>
         <p>
           Finish active measurements and close instrument sessions before changing connections or
@@ -72,10 +72,10 @@ export function HelpWorkspace({
       <section className={section}>
         <h3 className="font-semibold">Finish work or keep it running</h3>
         <p>
-          Save your files. Closing an idle Scopecat stops the application. With unfinished work,
-          choose to wait, stop it, or keep Scopecat in the background. The menu bar or system tray
-          provides Open and Quit. An idle Python session does not prevent quitting. Closing a
-          browser tab only closes that view.
+          Save your files. Closing the last window keeps Scopecat in the background. Use Open in the
+          menu bar or system tray to return, or Quit to exit the application. With unfinished work,
+          choose to wait, stop it, or keep Scopecat in the background. An idle Python session does
+          not prevent quitting. Closing a browser tab only closes that view.
         </p>
         <p>
           Application settings shows software updates, source registration and data locations.
