@@ -101,20 +101,62 @@ repetition semantics are retired, not claimed to have been migrated. Numerical
 test vectors remain useful when chosen for a current contract; historical vector
 values and old result wrappers are not themselves obligations.
 
-The shared provider, bench interfaces/codecs and quantum target remain in use by
+### Scope inventory retirement boundary
+
+The scope-specific inventory is retired with its already-withdrawn recipes:
+`bench-scope`, its monitor binding, scope interfaces/driver, arm/capture state,
+resampling, the unused armed-waveform scope mirror and the AWG
+`captured_by_scope` receipt. Provider catalog registration,
+binding-based description and connection made this inventory dynamically reachable;
+it was not unreachable code. Repository consumers no longer arm/fetch this scope.
+This does not establish the absence of external callers: retirement follows this
+gallery's integration-fixture policy, not a compatibility promise for its simulator.
+These members are deleted rather than moved into a replacement test fixture.
+
+The retained contract is AWG/digitizer/trigger participation and sequencing,
+quantum `capture_queue` delivery, physical shared claims, renderer I/Q values and
+batch semantics. Driver operations retain their non-scope receipts. Scientific
+source identity and current-format backup/restore remain required. Existing quantum
+runner/device-runtime and snapshot journeys own these checks; no scope substitute
+or new compatibility facade is required.
+
+Removing a default device and binding changes the setup structure as well as source
+and implementation identities. Regenerated acceptance must be compared recursively:
+explain removed inventory and every changed value or structure, and distinguish
+derived identity changes from scientific results. Do not assume a hash-only diff.
+
+The shared provider, remaining bench interfaces/codecs and quantum target remain in use by
 `test_quantum_runner.py`, `unit/test_list_mode_device_runtime.py`, acceptance and
-the remaining device inputs. This slice does not redesign their full inventory
+the remaining device inputs. Scope retirement does not redesign the remaining inventory
 or declare every simulator member necessary. It adds no facade, testkit API,
 compatibility layer or replacement application. Broader device/compiler extraction
 remains in #773.
 
-Removing captured source files changes worker/provider artifact identity and the
-resolved device/setup identity. Regenerate acceptance with the official isolated
-generator: the affected leaves are `config_source_hash`, setup `content_hash` and
-setup `revision_id` in `controls_scalar`, `controls_scan` and `launch_preview`.
-Scientific values, schemas and every other fixture leaf must remain identical.
-These tests establish source-level software behavior, not installed-package,
-private-consumer or hardware qualification.
+### Acceptance changes for scope retirement
+
+The default recipe removes exactly the `bench-scope` device and
+`bench-scope-monitor` capability. All remaining recipe values and structure are
+unchanged. This deliberately changes the complete setup/configuration identity;
+source deletion also changes the captured provider implementation identity.
+
+The official isolated generator's fixture differs at 22 leaves:
+
+- `candidate_proposal.items[0].proposal.base_config_content_hash`: the candidate
+  retains the configuration with the reduced device inventory.
+- Each of `controls_scalar`, `controls_scan` and `launch_preview` changes seven
+  leaves: `manual_state.binding.config_source_hash`,
+  `preflight.stages[0].config_content_hash`, `reviewed.binding.config_content_hash`,
+  `reviewed.binding.setup_content_hash`, `reviewed.config_source.content_hash`, and
+  `reviewed.config_source.setup.{content_hash,revision_id}`. These retain the exact
+  configuration, executable setup, resolved device/implementation evidence and
+  derived reviewed source identity.
+
+Recursive comparison finds no other changed leaves, keys, types or array lengths:
+scientific values, units, schemas, acquisition evidence and proposal values remain
+identical. The fixture does not embed the full device inventory; its unchanged
+shape does not mean the setup structure was unchanged. These checks establish
+source-level software behavior, not installed-package, private-consumer or hardware
+qualification. They add no historical-format reader or migration.
 
 ## Configuration-authority retirement evidence
 

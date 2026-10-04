@@ -59,14 +59,11 @@ from reference_lab.bench_devices import (
     VIRTUAL_AWG_DRIVER_SPEC,
     VIRTUAL_DIGITIZER_DRIVER_ID,
     VIRTUAL_DIGITIZER_DRIVER_SPEC,
-    VIRTUAL_OSCILLOSCOPE_DRIVER_ID,
-    VIRTUAL_OSCILLOSCOPE_DRIVER_SPEC,
     VIRTUAL_TIMING_CONTROLLER_DRIVER_ID,
     VIRTUAL_TIMING_CONTROLLER_DRIVER_SPEC,
     BenchSignalWorld,
     VirtualAwg,
     VirtualDigitizer,
-    VirtualOscilloscope,
     VirtualTimingController,
 )
 
@@ -110,7 +107,6 @@ class ReferenceLabProvider:
                 MULTICHANNEL_DC_DRIVER_SPEC,
                 VIRTUAL_AWG_DRIVER_SPEC,
                 VIRTUAL_DIGITIZER_DRIVER_SPEC,
-                VIRTUAL_OSCILLOSCOPE_DRIVER_SPEC,
                 VIRTUAL_TIMING_CONTROLLER_DRIVER_SPEC,
             ),
         )
@@ -179,19 +175,6 @@ class ReferenceLabProvider:
                     for binding in context.bindings
                     if binding.driver_id == VIRTUAL_TIMING_CONTROLLER_DRIVER_ID
                 ),
-                *tuple(
-                    VirtualOscilloscope(
-                        binding.id,
-                        self._bench,
-                        input_count=_channel_count(
-                            binding.connection.options,
-                            "input_count",
-                            default=4,
-                        ),
-                    ).describe()
-                    for binding in context.bindings
-                    if binding.driver_id == VIRTUAL_OSCILLOSCOPE_DRIVER_ID
-                ),
             ),
             problems=stock_description.problems,
         )
@@ -225,16 +208,6 @@ class ReferenceLabProvider:
                     context.binding.connection.options,
                     "input_count",
                     default=2,
-                ),
-            )
-        if context.binding.driver_id == VIRTUAL_OSCILLOSCOPE_DRIVER_ID:
-            return VirtualOscilloscope(
-                context.binding.id,
-                self._bench,
-                input_count=_channel_count(
-                    context.binding.connection.options,
-                    "input_count",
-                    default=4,
                 ),
             )
         if context.binding.driver_id == VIRTUAL_TIMING_CONTROLLER_DRIVER_ID:

@@ -1,4 +1,4 @@
-"""Vendor-neutral bench AWG and oscilloscope capability declarations."""
+"""Vendor-neutral bench AWG, digitizer and trigger capability declarations."""
 
 from __future__ import annotations
 
@@ -32,8 +32,6 @@ from reference_lab.payloads import (
 type AwgRunMode = Literal["once", "continuous"]
 type Coupling = Literal["dc", "ac"]
 type DigitizerTriggerSource = Literal["external", "software"]
-type OscilloscopeImpedance = Literal["50_ohm", "1_megohm"]
-type OscilloscopeTriggerSource = Literal["external"]
 
 
 @instrument_interface(
@@ -107,105 +105,6 @@ class AnalogWaveformOutputInterface(Protocol):
         invalidates=(amplitude, offset, output_enabled),
     )
     def reset(self) -> None: ...
-
-
-@instrument_interface(
-    "reference_lab.oscilloscope_control/v1",
-    label="Oscilloscope acquisition control",
-    description="Instrument-wide timebase, trigger, and acquisition arming.",
-)
-class OscilloscopeControlInterface(Protocol):
-    sample_rate: Member[Quantity] = member(
-        access="read_write",
-        unit="Hz",
-        minimum=1.0,
-        label="Sample rate",
-    )
-    record_length: Member[int] = member(
-        access="read_write",
-        minimum=1,
-        label="Record length",
-    )
-    trigger_source: Member[OscilloscopeTriggerSource] = member(
-        access="read_write",
-        label="Trigger source",
-    )
-    trigger_level: Member[Quantity] = member(
-        access="read_write",
-        unit="V",
-        label="Trigger level",
-    )
-    armed: Member[bool] = member(access="read_only", label="Armed")
-
-    @operation(label="Arm")
-    def arm(self) -> None: ...
-
-
-@result_schema
-class OscilloscopeFetchResults:
-    time = array_result(
-        dtype="float64",
-        role="coordinate",
-        unit="s",
-        axes=("sample",),
-    )
-    voltage = array_result(
-        dtype="float64",
-        unit="V",
-        axes=("sample",),
-    )
-
-
-@instrument_interface(
-    "reference_lab.oscilloscope_input/v1",
-    label="Oscilloscope analog input",
-    description="One physical analog input and its captured voltage trace.",
-)
-class OscilloscopeInputInterface(Protocol):
-    input_enabled: Member[bool] = member(
-        access="read_write",
-        label="Input enabled",
-    )
-    vertical_scale: Member[Quantity] = member(
-        access="read_write",
-        unit="V",
-        minimum=1e-6,
-        label="Vertical scale",
-        description="Volts per division.",
-    )
-    vertical_offset: Member[Quantity] = member(
-        access="read_write",
-        unit="V",
-        label="Vertical offset",
-    )
-    coupling: Member[Coupling] = member(access="read_write", label="Coupling")
-    impedance: Member[OscilloscopeImpedance] = member(
-        access="read_write",
-        label="Input impedance",
-    )
-    bandwidth_limit: Member[Quantity] = member(
-        access="read_write",
-        unit="Hz",
-        minimum=1.0,
-        label="Bandwidth limit",
-    )
-
-    @acquisition(
-        results=OscilloscopeFetchResults,
-        label="Fetch captured waveform",
-        axes={
-            "sample": axis(
-                kind="time",
-                unit="s",
-                coordinate_result="time",
-                description=(
-                    "Actual extent comes from the waveform preamble; requested "
-                    "record length remains instrument state."
-                ),
-            )
-        },
-    )
-    def fetch(self) -> None: ...
 
 
 @instrument_interface(
@@ -357,45 +256,6 @@ ANALOG_WAVEFORM_OUTPUT_WAVEFORM = declared_argument_ref(
 ANALOG_WAVEFORM_OUTPUT_RESET = declared_operation_ref(
     AnalogWaveformOutputInterface, "reset"
 )
-
-_COMPILED_OSCILLOSCOPE_CONTROL = compile_interface(OscilloscopeControlInterface)
-OSCILLOSCOPE_CONTROL_SPEC = _COMPILED_OSCILLOSCOPE_CONTROL.spec
-OSCILLOSCOPE_CONTROL = _COMPILED_OSCILLOSCOPE_CONTROL.ref
-OSCILLOSCOPE_SAMPLE_RATE = declared_property_ref(
-    OscilloscopeControlInterface, "sample_rate"
-)
-OSCILLOSCOPE_RECORD_LENGTH = declared_property_ref(
-    OscilloscopeControlInterface, "record_length"
-)
-OSCILLOSCOPE_TRIGGER_SOURCE = declared_property_ref(
-    OscilloscopeControlInterface, "trigger_source"
-)
-OSCILLOSCOPE_TRIGGER_LEVEL = declared_property_ref(
-    OscilloscopeControlInterface, "trigger_level"
-)
-OSCILLOSCOPE_ARMED = declared_property_ref(OscilloscopeControlInterface, "armed")
-OSCILLOSCOPE_ARM = declared_operation_ref(OscilloscopeControlInterface, "arm")
-
-_COMPILED_OSCILLOSCOPE_INPUT = compile_interface(OscilloscopeInputInterface)
-OSCILLOSCOPE_INPUT_SPEC = _COMPILED_OSCILLOSCOPE_INPUT.spec
-OSCILLOSCOPE_INPUT = _COMPILED_OSCILLOSCOPE_INPUT.ref
-OSCILLOSCOPE_INPUT_ENABLED = declared_property_ref(
-    OscilloscopeInputInterface, "input_enabled"
-)
-OSCILLOSCOPE_VERTICAL_SCALE = declared_property_ref(
-    OscilloscopeInputInterface, "vertical_scale"
-)
-OSCILLOSCOPE_VERTICAL_OFFSET = declared_property_ref(
-    OscilloscopeInputInterface, "vertical_offset"
-)
-OSCILLOSCOPE_COUPLING = declared_property_ref(OscilloscopeInputInterface, "coupling")
-OSCILLOSCOPE_IMPEDANCE = declared_property_ref(OscilloscopeInputInterface, "impedance")
-OSCILLOSCOPE_BANDWIDTH_LIMIT = declared_property_ref(
-    OscilloscopeInputInterface, "bandwidth_limit"
-)
-OSCILLOSCOPE_FETCH = declared_acquisition_ref(OscilloscopeInputInterface, "fetch")
-OSCILLOSCOPE_FETCH_TIME = OSCILLOSCOPE_FETCH.result("time")
-OSCILLOSCOPE_FETCH_VOLTAGE = OSCILLOSCOPE_FETCH.result("voltage")
 
 _COMPILED_DIGITIZER_CONTROL = compile_interface(DigitizerControlInterface)
 DIGITIZER_CONTROL_SPEC = _COMPILED_DIGITIZER_CONTROL.spec

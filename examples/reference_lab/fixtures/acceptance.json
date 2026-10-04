@@ -5,7 +5,7 @@
         "approval": null,
         "proposal": {
           "analysis_record_id": "acceptance-analysis",
-          "base_config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+          "base_config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
           "base_config_id": "acceptance-parameters",
           "composition": null,
           "confidence": null,
@@ -696,7 +696,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b31c137d7ea20f5f473dd7b93e0790344f5c56fc2515feb564464ddfaf22bd88",
+        "config_source_hash": "sha256:ec37f58d93f1ae089ea93cd529538bec99b93e5bd11cddf9b09745bb281d29fd",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -707,7 +707,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -800,16 +800,16 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
         "scenario": null,
-        "setup_content_hash": "sha256:4c94daa4144d07cc5bd371065543ff5a8f8e0bef2a819c08967be373fc766bf7",
+        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -817,8 +817,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1",
-          "revision_id": "resolved:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1"
+          "content_hash": "sha256:ad37a47fa33cf43fac9880ba6f3d2c7cc3c19e1d5fb425354e8e9094409e66da",
+          "revision_id": "resolved:ad37a47fa33cf43fac9880ba6f3d2c7cc3c19e1d5fb425354e8e9094409e66da"
         }
       }
     },
@@ -1089,7 +1089,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b31c137d7ea20f5f473dd7b93e0790344f5c56fc2515feb564464ddfaf22bd88",
+        "config_source_hash": "sha256:ec37f58d93f1ae089ea93cd529538bec99b93e5bd11cddf9b09745bb281d29fd",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1100,7 +1100,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1193,16 +1193,16 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
         "scenario": null,
-        "setup_content_hash": "sha256:4c94daa4144d07cc5bd371065543ff5a8f8e0bef2a819c08967be373fc766bf7",
+        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -1210,8 +1210,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1",
-          "revision_id": "resolved:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1"
+          "content_hash": "sha256:ad37a47fa33cf43fac9880ba6f3d2c7cc3c19e1d5fb425354e8e9094409e66da",
+          "revision_id": "resolved:ad37a47fa33cf43fac9880ba6f3d2c7cc3c19e1d5fb425354e8e9094409e66da"
         }
       }
     },
@@ -1772,7 +1772,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b31c137d7ea20f5f473dd7b93e0790344f5c56fc2515feb564464ddfaf22bd88",
+        "config_source_hash": "sha256:ec37f58d93f1ae089ea93cd529538bec99b93e5bd11cddf9b09745bb281d29fd",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1783,7 +1783,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1892,16 +1892,16 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
         "scenario": null,
-        "setup_content_hash": "sha256:4c94daa4144d07cc5bd371065543ff5a8f8e0bef2a819c08967be373fc766bf7",
+        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:669dadde2e128c5f12b6abcf126e7078b9dc546d2af6e006934cfc5b8429981d",
+        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -1909,8 +1909,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1",
-          "revision_id": "resolved:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1"
+          "content_hash": "sha256:ad37a47fa33cf43fac9880ba6f3d2c7cc3c19e1d5fb425354e8e9094409e66da",
+          "revision_id": "resolved:ad37a47fa33cf43fac9880ba6f3d2c7cc3c19e1d5fb425354e8e9094409e66da"
         }
       }
     },
