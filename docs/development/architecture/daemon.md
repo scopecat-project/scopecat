@@ -1,8 +1,12 @@
 # Lab Daemon
 
-Scopecat uses one long-running local daemon as the durable writer for each lab
-instance. GUIs and Python processes are clients, including notebooks that retain
-local experiment closures.
+Scopecat uses one long-running local daemon as the durable writer for an
+application home. Registered author folders share that application authority;
+they are not separate services. GUIs and Python processes are clients, including
+notebooks that retain local experiment closures. The installed native host and
+its lifetime are described in [application runtime ownership](application-host.md).
+The project CLI remains a development/composition entry; package and process
+owners are mapped in the [repository map](../repository-map.md).
 
 ```text
 GUI ─────────────────┐
@@ -243,22 +247,22 @@ application = "my_lab.application:create_application"
 instrument_backend = "my_lab.backend:create_backend"
 ```
 
-The bootstrap may construct an initial `ConfigProfileSnapshot` in Python. The
-daemon loads only that lightweight composition and invokes its config factory
-only when the registry is empty. Procedure, schedule, calibration, publication,
-and notebook system callbacks belong to the full application loaded by the
-project worker or notebook process, not by the daemon. Once
-bootstrapped, immutable registry entries and their explicit activation
-generations are authoritative. Editing Python source does not mutate an active
-entry; publishing a changed snapshot is an explicit CLI or notebook action.
+The bootstrap supplies separate initial setup and optional parameter-default
+factories when initializing an empty store. Parameters and setups have independent
+immutable revisions and explicit branch/context ownership; combined snapshots
+are exact execution/provenance data, not another editable configuration authority.
+Procedure, schedule, calibration, publication and notebook callbacks belong to the
+full application loaded by the project worker or notebook, not the daemon's
+lightweight bootstrap. Editing Python source does not mutate a saved revision.
+See [configuration ownership](../configuration-ownership.md).
 
 The backend entry is imported only by the instrument worker. The daemon sees its
 serializable catalog and opaque handles.
 
 | Owner | Contents |
 |---|---|
-| User project and Git | Experiment, system, and configuration code; `scopecat.toml`; exported snapshots |
-| Lab daemon | Requests, run state, events, measurements, analysis, proposals, immutable configurations, activation history |
+| User project and Git | Experiment/system code and source manifests; explicitly exported configuration |
+| Lab daemon | Requests, run state, events, measurements, analysis, proposals, parameter/setup revisions, exact contexts and publication history |
 | GUI and notebooks | Views, commands, and transient client-planned computation |
 
 One process-owner lock prevents two daemons from opening the same lab instance.

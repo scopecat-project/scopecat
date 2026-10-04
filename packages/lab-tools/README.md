@@ -1,5 +1,12 @@
 # Scopecat application tools
 
+This package owns the installed `scopecat` console through `lab_tools.public_cli`.
+It composes server commands with application, Notebook and practice operations.
+The separate `scopecat-lab` teaching entry remains supported by existing consumers.
+Native bootstrap, desktop and `ApplicationRuntime` are long-lived runtime code;
+this package also contains delivery and acceptance tools. See the
+[repository map](../../docs/development/repository-map.md) for those boundaries.
+
 Open installed **Scopecat.app** (Mac) or **Scopecat.lnk** (Windows) to enter the
 workbench directly. One application home owns the runtime, scientific data,
 registered devices and author sources. Source folders do not own services.

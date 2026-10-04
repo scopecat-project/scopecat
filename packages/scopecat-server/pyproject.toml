@@ -16,9 +16,6 @@ dependencies = [
   "uvicorn>=0.35",
 ]
 
-[project.scripts]
-scopecat = "scopecat_server.cli:main"
-
 [dependency-groups]
 test = [
   "pytest>=9",

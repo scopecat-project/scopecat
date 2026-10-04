@@ -131,6 +131,7 @@ reportPrivateUsage = "none"
 
 [tool.importlinter]
 root_packages = [
+  "lab_tools",
   "scopecat",
   "scopecat_instruments",
   "scopecat_quantum",
@@ -147,8 +148,15 @@ forbidden_modules = [
   "scopecat_instruments",
   "scopecat_quantum",
   "scopecat_server",
+  "lab_tools",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Server does not depend on application and delivery tools"
+type = "forbidden"
+source_modules = ["scopecat_server"]
+forbidden_modules = ["lab_tools"]
 
 [[tool.importlinter.contracts]]
 name = "Inward layers do not depend on application or storage"

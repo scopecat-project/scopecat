@@ -15,6 +15,20 @@ packaging candidate; evaluate Nuitka only for an identified benefit. Do not comp
 editable author code or vendor environments into the desktop. Do not maintain
 multiple permanent distribution mechanisms after selection.
 
+## Maintained installation entries
+
+| Installation / acceptance owner | Included entry and boundary |
+| --- | --- |
+| Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. No host/runtime process redesign accompanies CLI ownership. |
+| Server-only pilot (`installed-pilot`) | `build_server_distribution.py` retains core/server/instruments/quantum plus GUI; `verify_pilot_bundle.py` uses `python -m scopecat_server.cli` and checks help without application tools. This is retained isolated-installation evidence, not a separate desktop product or a promise to retain this builder indefinitely. |
+| Teaching/offline verification | Existing `scopecat-lab`, generated VS Code tasks and standalone `install.py` remain; `bundle.py` retains manifest/hash checks and offline environment installation. |
+
+CLI ownership has moved from the server wheel to the application-tools wheel.
+A server-only consumer must replace `scopecat COMMAND` with the module entry;
+complete application consumers retain their console commands. Installing only
+server dependencies does not install windows, teaching tools or their commands.
+See the [CLI migration](../../reference/cli.md#entry-ownership-and-migration).
+
 ## Required comparison
 
 These are the criteria used for the recorded host decision, not a requirement to

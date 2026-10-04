@@ -247,7 +247,19 @@ def test_cli_init_prints_copyable_next_steps_at_narrow_width(
 
     assert initialized.exit_code == 0, initialized.output
     assert str(tmp_path / "src/scopecat_lab/configuration.py") in initialized.output
-    assert f"scopecat config check {tmp_path}" in initialized.output
+    entry = "python -m scopecat_server.cli"
+    assert f"{entry} config check {tmp_path}" in initialized.output
+    assert f"{entry} start {tmp_path}" in initialized.output
+    assert f"{entry} open {tmp_path}" in initialized.output
+    assert f"`{entry} start .`" in (tmp_path / "README.md").read_text()
+    checked = subprocess.run(  # noqa: S603 - current interpreter and generated fixture
+        [sys.executable, "-m", "scopecat_server.cli", "config", "check", str(tmp_path)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checked.returncode == 0, checked.stdout + checked.stderr
     assert f"python {tmp_path / 'notebooks/01_first_run.py'}" in initialized.output
 
 

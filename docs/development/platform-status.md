@@ -12,6 +12,13 @@ ordinary sources with independent execution/SDK environments. #845 completed the
 composition and release; actual editor, unfamiliar-user and hardware observations
 remain distinct. Remaining human/editor/physical qualification is tracked in #616; #671 is closed.
 
+PR [#859](https://github.com/scopecat-project/scopecat/pull/859) merged the bounded
+entry Help correction. [#861](https://github.com/scopecat-project/scopecat/pull/861)
+delivered configuration export, inert inspection and atomic editable local copies;
+it did not complete the broader #502 sharing/structured-authoring direction.
+[#862](https://github.com/scopecat-project/scopecat/pull/862) delivered verified
+release change-file tooling, not a first numbered release decision.
+
 ## Delivered boundaries
 
 | Area | Implemented | Current boundary |
@@ -52,19 +59,37 @@ Read each issue's current body before planning; comments retain historical discu
 | Scope | Owner |
 | --- | --- |
 | Remaining reference/device/compiler retirement | [#773](https://github.com/scopecat-project/scopecat/issues/773), audit umbrella [#615](https://github.com/scopecat-project/scopecat/issues/615) |
-| Entry criteria evidence reconciliation | [#675](https://github.com/scopecat-project/scopecat/issues/675) |
+| Entry audit closure decision after merged #859 | [#675](https://github.com/scopecat-project/scopecat/issues/675) |
 | First-use profiling and iteration cost | [#523](https://github.com/scopecat-project/scopecat/issues/523), [#520](https://github.com/scopecat-project/scopecat/issues/520) |
 | Historical Windows startup/endpoint failures | [#465](https://github.com/scopecat-project/scopecat/issues/465), [#553](https://github.com/scopecat-project/scopecat/issues/553); do not infer a fix from later success |
 | Finer observed dependency coverage | [#783](https://github.com/scopecat-project/scopecat/issues/783); unknown reads cannot prove physical independence |
 | Other live domains and stateful analysis | [#561](https://github.com/scopecat-project/scopecat/issues/561) |
 | Symbolic argument typing and target models | [#581](https://github.com/scopecat-project/scopecat/issues/581), [#612](https://github.com/scopecat-project/scopecat/issues/612) |
 | Actual editor, unfamiliar user, physical qualification | [#616](https://github.com/scopecat-project/scopecat/issues/616); accepted native observations are not automatically repeated |
-| Future data baseline and structured authoring | [#574](https://github.com/scopecat-project/scopecat/issues/574), [#502](https://github.com/scopecat-project/scopecat/issues/502) |
+| Future data baseline and remaining structured authoring/sharing | [#574](https://github.com/scopecat-project/scopecat/issues/574), [#502](https://github.com/scopecat-project/scopecat/issues/502) |
 
 The older scientific audit and sequencing are preserved in
 [Git history](https://github.com/scopecat-project/scopecat/blob/11c5fcd3347cb2a9795492d97e9370a7c907e69f/docs/development/platform-status.md),
 not maintained as another backlog. Portable data exchange (#575) and application
 convergence (#671) are delivered; do not recreate them.
+
+## Configuration exchange: delivery and remaining evidence
+
+The #861 source slice exports a saved parameter version with its definitions and
+optional initial values, setup and retained author source. Inspection executes no
+source. Accepted originals, editable local derivations and receipts commit
+atomically; retries are idempotent. Source acceptance retains an inert archive;
+registration, environment preparation, local devices and calibration remain
+separate explicit steps. This is not arbitrary field/schema/control/plan editing.
+
+Remaining #502 work includes the installed configuration-exchange journey,
+source/environment continuation and change-computer guidance distinguishing
+same-store restore from independent derivation. Those paths are not established
+by the headless two-deployment and mocked-native checks recorded in #861. Broader
+structured editor decision gates remain open. No generator retirement follows
+from that merge. Actual Windows editor use, unfamiliar-user observations and
+supervised physical qualification remain #616; they are evidence to obtain,
+not missing software gates or automatic reasons to repeat accepted tests.
 
 ## Taking over work
 

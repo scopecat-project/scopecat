@@ -1,7 +1,30 @@
 # Command-line interface
 
-The `scopecat` command manages one local lab project. Project lifecycle and configuration commands accept a project directory or a
-path to `scopecat.toml`; the current directory is the default.
+The installed `scopecat` command is provided by `scopecat-lab-tools`, which
+composes project/server commands with application, Notebook and practice entry.
+For server-only development, use `python -m scopecat_server.cli`; that module
+has no application/teaching commands or `init --topic` option.
+
+## Entry ownership and migration
+
+| Installation | Entry | Commands |
+| --- | --- | --- |
+| Complete application / `scopecat-lab-tools` | `scopecat` or `python -m lab_tools.public_cli` | Project commands below plus `app`, `notebook`, `teach`, `init --topic` |
+| Server-only / retained server pilot | `python -m scopecat_server.cli` | Project commands below, without application/teaching commands |
+| Existing teaching tools | `scopecat-lab` | Existing generated-project / VS Code lifecycle; unchanged |
+
+The server wheel no longer owns the `scopecat` console script. Server-only scripts
+and users replace `scopecat COMMAND` with `python -m scopecat_server.cli COMMAND`
+using their installed environment's interpreter. Application/teaching callers
+that previously used the server module instead use `scopecat` or the application
+module. There is one console-script owner, with no optional provider discovery.
+Generated server projects print the module commands, which also work in a complete
+application environment. This does not change project files, data or runtime
+ownership; no migration of retained stores is implied.
+
+Project lifecycle and configuration commands accept a project directory or a
+path to `scopecat.toml`; the current directory is the default. In the following
+tables, server-only installations substitute the module entry for `scopecat`.
 
 ## Project lifecycle
 

@@ -142,13 +142,22 @@ def _installed_journey(bundle: Path) -> None:
     assert Path(scopecat.__file__).is_relative_to(Path(sys.prefix))
     assert importlib.util.find_spec("reference_lab") is None
     assert importlib.util.find_spec("scopecat_testkit") is None
+    assert importlib.util.find_spec("lab_tools") is None
+    assert shutil.which("scopecat") is None
     assert shutil.which("node") is None
     manifest = cast("_Manifest", json.loads((bundle / "manifest.json").read_text()))
     for package, expected in manifest["packages"].items():
         assert version(package) == expected
     project_root = Path.cwd() / "project with spaces"
     cli = [sys.executable, "-m", "scopecat_server.cli"]
-    _run([*cli, "init", str(project_root)], cwd=Path.cwd())
+    help_text = _run([*cli, "--help"], cwd=Path.cwd())
+    assert "python -m scopecat_server.cli" in help_text
+    initialized = _run([*cli, "init", str(project_root)], cwd=Path.cwd())
+    assert "python -m scopecat_server.cli config check" in initialized
+    assert (
+        "python -m scopecat_server.cli start ."
+        in (project_root / "README.md").read_text()
+    )
     _run([*cli, "config", "check", str(project_root)], cwd=Path.cwd())
     project_manifest = project_root / "scopecat.toml"
     project_manifest.write_text(
