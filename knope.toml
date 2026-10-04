@@ -24,15 +24,23 @@ help_text = "Internal preparation step; use scripts/release.py prepare (version 
 [[workflows.steps]]
 type = "PrepareRelease"
 
-# Knope 0.23 does not support draft CreatePullRequest. Keep only this gh adapter;
-# the reviewed changelog is already committed, and needs no second notes parser.
 [[workflows]]
 name = "open-release-pr"
-help_text = "Open a draft after the preparation workflow has validated its exact commit"
+help_text = "Open a reviewable PR after CI validates the exact preparation commit"
 
 [[workflows.steps]]
-type = "Command"
-command = "gh pr create --draft --base main --head release/$version --title 'Release $version' --body 'Review the version, native build number and CHANGELOG.md in this PR. The preparation workflow runs CI and documentation checks on this exact commit. After merging, run full acceptance on the merged SHA, then manually dispatch Publish release with that SHA. This PR does not publish artifacts.'"
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "Release $version"
+
+[workflows.steps.body]
+template = """Review the version, native build number and changes below. The preparation workflow has validated this commit with CI and documentation checks.
+
+Merging this PR does not publish a release. After merging, run full acceptance on the merged SHA, then manually dispatch Publish release with that SHA.
+
+$changelog"""
 
 [[workflows]]
 name = "publish-release"

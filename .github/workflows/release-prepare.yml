@@ -12,6 +12,10 @@ on:
         required: true
         type: string
 
+env:
+  # renovate: datasource=github-releases depName=knope-dev/knope extractVersion=^knope/v(?<version>.*)$
+  KNOPE_VERSION: "0.23.0"
+
 permissions:
   contents: read
 
@@ -28,6 +32,7 @@ jobs:
       contents: write
     outputs:
       commit: ${{ steps.prepare.outputs.commit }}
+      branch: ${{ steps.prepare.outputs.branch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,7 +43,7 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
         with:
-          version: 0.23.0
+          version: ${{ env.KNOPE_VERSION }}
       - name: Prepare and push review branch
         id: prepare
         env:
@@ -61,6 +66,7 @@ jobs:
           git commit -m "Prepare release $VERSION"
           git push origin "HEAD:refs/heads/$branch"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
   validate:
     needs: prepare
@@ -83,8 +89,16 @@ jobs:
           persist-credentials: false
       - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
         with:
-          version: 0.23.0
-      - name: Open draft release PR after CI and docs
+          version: ${{ env.KNOPE_VERSION }}
+      - name: Open release PR from the validated branch
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-        run: knope open-release-pr
+          RELEASE_BRANCH: ${{ needs.prepare.outputs.branch }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          # Native CreatePullRequest uses the current branch, not a detached HEAD.
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$RELEASE_BRANCH" --jq .object.sha)" = "$RELEASE_COMMIT"
+          git switch -c "$RELEASE_BRANCH" "$RELEASE_COMMIT"
+          knope open-release-pr

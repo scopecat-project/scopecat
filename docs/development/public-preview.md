@@ -33,7 +33,7 @@ Knope's default 0.x semantics map ordinary feature/fix changes to patch and
 breaking changes to minor. Review the suggested version and notes in the release
 PR; a suggested bump does not itself authorize publication.
 
-The prepare workflow installs Knope 0.23.0 through the official
+The prepare workflow installs the pinned `KNOPE_VERSION` through the official
 `knope-dev/action`, pinned to a full commit SHA. Knope updates only the public
 version and `CHANGELOG.md`. Its
 [versioned files](https://knope.tech/reference/config-file/packages/) can synchronize
@@ -41,22 +41,28 @@ several representations of one version; they are deliberately not used to force
 all internal packages to share a version. The
 [PrepareRelease step](https://knope.tech/reference/config-file/steps/prepare-release/)
 processes change files locally and does not publish or commit by itself.
+Renovate tracks the official action's pinned SHA/version and the CLI's annotated
+`KNOPE_VERSION` separately. The existing `githubActionsVersions` preset recognizes
+the CLI's `knope/v...` release tags. Updates to either require review rather than
+automerge; exercise preparation and native PR/release dry-runs without publishing
+before accepting an upgrade. All workflow references to the CLI must stay aligned.
+
 Knope retains change files during prereleases so the eventual stable release can
 include the full set; it removes them when preparing the stable version.
 
 ### Prepare, review, then publish
 
 1. Commit user-visible change files with ordinary work. From a clean checkout,
-   install Knope 0.23.0 and run
+   install the `KNOPE_VERSION` recorded in the release workflows and run
    `uv run --locked python scripts/release.py prepare --build-number NUMBER`.
    Add `VERSION` after `prepare` to override the suggested version.
    This edits/stages version, build number, changelog and consumed change files.
    It never pushes, tags or publishes. Inspect the diff before committing.
 2. Alternatively dispatch **Prepare release** on main with a strictly increasing
    native build number and, optionally, a version override. It prepares a dedicated branch,
-   explicitly runs CI (including docs) in the same workflow, then opens a draft
-   release PR. A thin `gh` adapter keeps the PR in draft because Knope 0.23.0
-   cannot request a draft PR; release notes are reviewed in `CHANGELOG.md`.
+   explicitly runs CI (including docs) in the same workflow, then opens a normal
+   release PR using Knope's native `CreatePullRequest` and changelog template.
+   The PR is ready for review; creating or merging it does not publish a release.
    The default token cannot be assumed to trigger another workflow.
    Failed validation leaves a reviewable branch without a PR; inspect and resolve
    it before retrying with a fresh branch identity. This automation needs the
