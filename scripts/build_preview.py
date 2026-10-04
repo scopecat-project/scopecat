@@ -9,16 +9,21 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import tomllib
 from pathlib import Path
 from typing import Protocol, cast
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages/lab-tools/src"))
+from lab_tools.release_identity import read_source_identity
+
 
 class Arguments(Protocol):
     destination: Path
     ref: str
+    release: bool
 
 
 PACKAGES = (
@@ -32,7 +37,9 @@ PACKAGES = (
 )
 
 
-def build(repository: Path, destination: Path, ref: str = "HEAD") -> Path:
+def build(
+    repository: Path, destination: Path, ref: str = "HEAD", *, release: bool = False
+) -> Path:
     commit = subprocess.check_output(
         ["git", "rev-parse", f"{ref}^{{commit}}"], cwd=repository, text=True
     ).strip()
@@ -50,6 +57,7 @@ def build(repository: Path, destination: Path, ref: str = "HEAD") -> Path:
         source = root / "source"
         with tarfile.open(archive) as stream:
             stream.extractall(source, filter="data")
+        identity = read_source_identity(source / "release.toml", release=release)
         packages: dict[str, str] = {}
         for directory in PACKAGES:
             project = source / directory / "pyproject.toml"
@@ -57,7 +65,11 @@ def build(repository: Path, destination: Path, ref: str = "HEAD") -> Path:
             metadata = cast("dict[str, dict[str, str]]", tomllib.loads(content))[
                 "project"
             ]
-            version = f"{metadata['version']}.dev{timestamp}+g{commit[:12]}"
+            version = (
+                identity.python_package_version(metadata["version"], commit, timestamp)
+                if release
+                else f"{metadata['version']}.dev{timestamp}+g{commit[:12]}"
+            )
             content = re.sub(
                 r'^version = "[^"]+"$',
                 f'version = "{version}"',
@@ -82,6 +94,15 @@ def build(repository: Path, destination: Path, ref: str = "HEAD") -> Path:
             packages[metadata["name"]] = version
         ui = source / "apps/scopecat-ui"
         subprocess.run(["pnpm", "install", "--frozen-lockfile"], cwd=ui, check=True)
+        ui_project = ui / "package.json"
+        ui_metadata = cast("dict[str, str]", json.loads(ui_project.read_text()))
+        ui_version = (
+            identity.javascript_package_version(ui_metadata["version"], commit)
+            if release
+            else f"{ui_metadata['version']}-dev.{timestamp}.g{commit[:12]}"
+        )
+        ui_metadata["version"] = ui_version
+        ui_project.write_text(json.dumps(ui_metadata, indent=2) + "\n")
         subprocess.run(["pnpm", "run", "build"], cwd=ui, check=True)
         shutil.make_archive(str(destination / "scopecat-ui"), "zip", ui / "dist")
     files = {
@@ -95,6 +116,10 @@ def build(repository: Path, destination: Path, ref: str = "HEAD") -> Path:
             {
                 "format": 1,
                 "commit": commit,
+                "release_version": identity.version,
+                "build_number": identity.build_number,
+                "channel": "release" if release else "preview",
+                "ui_version": ui_version,
                 "packages": packages,
                 "files": files,
             },
@@ -109,5 +134,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("destination", type=Path)
     parser.add_argument("--ref", default="HEAD")
+    parser.add_argument("--release", action="store_true")
     args = cast("Arguments", cast("object", parser.parse_args()))
-    print(build(Path(__file__).resolve().parents[1], args.destination, args.ref))
+    print(
+        build(
+            Path(__file__).resolve().parents[1],
+            args.destination,
+            args.ref,
+            release=args.release,
+        )
+    )

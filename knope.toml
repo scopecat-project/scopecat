@@ -1,0 +1,20 @@
+[package]
+versioned_files = [{ path = "release.toml", regex = 'version = "(?<version>[^"]+)"' }]
+changelog = "CHANGELOG.md"
+
+[changes]
+ignore_conventional_commits = true
+
+[[workflows]]
+name = "document-change"
+help_text = "Record a user-visible change (commit message conventions are not required)"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[[workflows]]
+name = "prepare-release"
+help_text = "Internal preparation step; use scripts/release.py prepare with an explicit version"
+
+[[workflows.steps]]
+type = "PrepareRelease"

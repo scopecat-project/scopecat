@@ -10,10 +10,11 @@ import urllib.request
 import zipfile
 from http.client import HTTPResponse
 from pathlib import Path, PureWindowsPath
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 from urllib.parse import urljoin, urlparse
 
 from .bundle import file_hash
+from .release_identity import ReleaseIdentity
 
 
 class Preview(TypedDict):
@@ -21,6 +22,10 @@ class Preview(TypedDict):
     commit: str
     packages: dict[str, str]
     files: dict[str, str]
+    release_version: NotRequired[str]
+    build_number: NotRequired[int]
+    channel: NotRequired[str]
+    ui_version: NotRequired[str]
 
 
 def download(url: str, digest: str, destination: Path) -> None:
@@ -37,6 +42,16 @@ def read_preview(path: Path) -> Preview:
     document = cast("Preview", json.loads(path.read_text(encoding="utf-8")))
     if document["format"] != 1 or not re.fullmatch(r"[0-9a-f]{40}", document["commit"]):
         raise ValueError("Invalid public preview identity")
+    if "channel" in document:
+        if "release_version" not in document or "build_number" not in document:
+            raise ValueError("Incomplete public release identity")
+        if document["channel"] not in {"preview", "release"}:
+            raise ValueError("Invalid public artifact channel")
+        identity = ReleaseIdentity(
+            document["release_version"], document["build_number"]
+        )
+        if document["channel"] == "release":
+            identity.require_release()
     for name, digest in document["files"].items():
         if (
             Path(name).name != name

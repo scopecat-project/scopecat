@@ -80,6 +80,7 @@ def recipe(tmp_path):
     project(tmp_path, "my-adapter")
     public = tmp_path / "public"
     project(public, "public-workspace")
+    (public / "release.toml").write_text('version="0.3.0-rc.1"\nbuild_number=7\n')
     for directory, name in (
         ("scopecat", "scopecat"),
         ("scopecat-server", "scopecat-server"),
@@ -380,3 +381,70 @@ def test_unverified_completed_build_does_not_replace_current(
     with pytest.raises(ValueError, match="交付文件缺失、被修改"):
         delivery.build_managed_delivery(home, recipe=recipe, gui=gui)
     assert resolve_delivery(home) == first
+
+
+def test_public_release_artifacts_feed_native_delivery(
+    recipe, tmp_path, build_tools, monkeypatch
+):
+    artifacts = tmp_path / "release"
+    artifacts.mkdir()
+    public = tmp_path / "public"
+    for package in delivery._default_recipe(public, False).packages:
+        delivery.run(
+            ["uv", "build", "--out-dir", str(artifacts), str(package)], cwd=public
+        )
+    with zipfile.ZipFile(artifacts / "scopecat-ui.zip", "w") as archive:
+        archive.writestr("index.html", "released workbench")
+    manifest = {
+        "format": 1,
+        "commit": "a" * 40,
+        "release_version": "0.3.0-rc.1",
+        "build_number": 7,
+        "channel": "release",
+        "packages": {
+            delivery.wheel_metadata(path)[0]: "1.0" for path in artifacts.glob("*.whl")
+        },
+        "files": {path.name: delivery.file_hash(path) for path in artifacts.iterdir()},
+    }
+    path = artifacts / "preview.json"
+    path.write_text(json.dumps(manifest))
+    monkeypatch.setattr(
+        delivery.subprocess,
+        "check_output",
+        lambda command, **_: "" if command[1] == "status" else "a" * 40,
+    )
+    build_tools.clear()
+    result = delivery.build_delivery(
+        tmp_path / "release-delivery",
+        source=public,
+        public_artifacts=artifacts,
+        release=True,
+    )
+    assert not any(command[1] == "build" for command, _ in build_tools)
+    metadata = json.loads((result / MANIFEST).read_text())
+    assert metadata["release_version"] == "0.3.0-rc.1"
+    assert metadata["build_number"] == 7
+    assert metadata["sources"]["public"] == "a" * 40
+    from lab_tools.native_package import native_identity
+
+    assert native_identity(result).windows_version == "0.3.0.7"
+    verify_bundle(result)
+    manifest["commit"] = "b" * 40
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="source commit"):
+        delivery.build_delivery(
+            tmp_path / "wrong-commit", source=public, public_artifacts=artifacts
+        )
+    manifest["commit"] = "a" * 40
+    path.write_text(json.dumps(manifest))
+    next(artifacts.glob("*.whl")).write_bytes(b"damaged")
+    with pytest.raises(ValueError, match="checksum"):
+        delivery.build_delivery(
+            tmp_path / "wrong-hash", source=public, public_artifacts=artifacts
+        )
+
+
+def test_historical_source_identity_requires_metadata_only_for_release(tmp_path):
+    assert delivery._public_identity(None, tmp_path)[0].version == "0.0.0"
+    with pytest.raises(FileNotFoundError):
+        delivery._public_identity(None, tmp_path, release=True)

@@ -29,7 +29,12 @@ from lab_tools.bundle import (
     target_identity,
     verify_bundle,
 )
-from lab_tools.preview import Preview, unpack_gui
+from lab_tools.preview import Preview, read_preview, unpack_gui
+from lab_tools.release_identity import (
+    ReleaseIdentity,
+    read_release,
+    read_source_identity,
+)
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
 
 REPOSITORY = Path.cwd()
@@ -49,6 +54,7 @@ class BuildArguments(Protocol):
     gui: Path | None
     recipe: Path | None
     preview: Path | None
+    public_artifacts: Path | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +236,57 @@ def wheel_metadata(path: Path) -> tuple[str, str]:
         return str(message["Name"]), str(message["Version"])
 
 
+def _public_identity(
+    preview_metadata: Preview | None, public: Path | None, *, release: bool = False
+) -> tuple[ReleaseIdentity, str]:
+    if preview_metadata is not None:
+        identity = (
+            ReleaseIdentity(
+                preview_metadata["release_version"], preview_metadata["build_number"]
+            )
+            if "release_version" in preview_metadata
+            and "build_number" in preview_metadata
+            else ReleaseIdentity("0.0.0", 0)
+        )
+        return identity, preview_metadata.get("channel", "preview")
+    assert public is not None
+    return read_source_identity(public / "release.toml", release=release), "source"
+
+
+def _copy_public_wheels(source: Path, wheels: Path, metadata: Preview) -> None:
+    for artifact in source.glob("*.whl"):
+        if file_hash(artifact) != metadata["files"].get(artifact.name):
+            raise ValueError("Public wheel checksum mismatch")
+        shutil.copyfile(artifact, wheels / artifact.name)
+
+
+def _check_public_artifacts(
+    artifacts: Path | None,
+    public: Path | None,
+    preview: Path | None,
+    gui: Path | None,
+    recipe: Path | None,
+) -> None:
+    if artifacts is None:
+        return
+    if preview is not None or gui is not None or recipe is not None or public is None:
+        raise ValueError("public-artifacts requires the default public source recipe")
+    metadata = read_preview(artifacts / "preview.json")
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],  # noqa: S607 - fixed maintainer tool
+        cwd=public,
+        text=True,
+    ).strip()
+    if metadata["commit"] != commit:
+        raise ValueError("Public artifacts do not belong to the source commit")
+    identity = read_release(public / "release.toml")
+    if (
+        metadata.get("release_version") != identity.version
+        or metadata.get("build_number") != identity.build_number
+    ):
+        raise ValueError("Public artifacts do not match source release identity")
+
+
 def build_delivery(
     destination: Path,
     *,
@@ -239,6 +296,7 @@ def build_delivery(
     gui: Path | None = None,
     recipe: Path | None = None,
     preview: Path | None = None,
+    public_artifacts: Path | None = None,
 ) -> Path:
     if recipe is not None and notebook:
         raise ValueError("recipe cannot be combined with notebook override")
@@ -248,6 +306,7 @@ def build_delivery(
         else _default_recipe((source or REPOSITORY).resolve(), notebook)
     )
     public = plan.public_source
+    _check_public_artifacts(public_artifacts, public, preview, gui, recipe)
     if preview is not None and (public is not None or gui is not None):
         raise ValueError("Select either a public preview or public source/GUI")
     if public is None and preview is None:
@@ -272,7 +331,9 @@ def build_delivery(
                 raise ValueError("正式发布要求 public 和实验室锁定仓库工作目录均干净")
     destination.mkdir(parents=True, exist_ok=False)
     pnpm = shutil.which("pnpm")
-    preview_metadata = _prepare_gui(destination, public, gui, preview, pnpm)
+    preview_metadata = _prepare_gui(
+        destination, public, gui, public_artifacts or preview, pnpm
+    )
     wheels = destination / "wheels"
     wheels.mkdir()
     # Export the reviewed repository lock, excluding locally built distributions.
@@ -302,7 +363,7 @@ def build_delivery(
         ],
         cwd=repository,
     )
-    for package in plan.packages:
+    for package in () if public_artifacts is not None else plan.packages:
         run(
             [
                 "uv",
@@ -344,6 +405,9 @@ def build_delivery(
         ],
         cwd=public or repository,
     )
+    if public_artifacts is not None:
+        assert preview_metadata is not None
+        _copy_public_wheels(public_artifacts, wheels, preview_metadata)
     selected_wheels = _unique_wheels(wheels)
     if preview_metadata is not None:
         _check_preview_wheels(preview_metadata, selected_wheels)
@@ -351,7 +415,10 @@ def build_delivery(
         raise ValueError(f"local package wheels missing: {sorted(missing)}")
     if "scopecat-lab-tools" not in selected_wheels:
         raise ValueError("交付缺少 scopecat-lab-tools wheel")
-    release_version = selected_wheels["scopecat-lab-tools"][1]
+    identity, channel = _public_identity(preview_metadata, public, release=release)
+    release_version = (
+        identity.version if channel == "release" else f"{identity.version}-dev"
+    )
     _ = shutil.copyfile(repository / "uv.lock", destination / "build.lock")
     runtime: dict[str, object] = {}
     requirements: list[str] = []
@@ -420,6 +487,9 @@ def build_delivery(
             {
                 "format": 1,
                 "release_version": release_version,
+                "public_version": identity.version,
+                "build_number": identity.build_number,
+                "channel": channel,
                 "release_kind": "release" if release else "development",
                 "build_id": sha256_json_hash(
                     {"sources": sources, "files": files, "target": target_identity()}
@@ -499,6 +569,7 @@ def build_managed_delivery(
     gui: Path | None = None,
     recipe: Path | None = None,
     preview: Path | None = None,
+    public_artifacts: Path | None = None,
 ) -> Path:
     """Retain every attempt, publishing only a verified build to a stable entry."""
     home = home.resolve()
@@ -517,6 +588,7 @@ def build_managed_delivery(
                 gui=gui,
                 recipe=recipe,
                 preview=preview,
+                public_artifacts=public_artifacts,
             )
             verify_bundle(result)
             pointer = managed_path(home, home / CURRENT_DELIVERY)
@@ -561,6 +633,7 @@ def main() -> None:
     _ = parser.add_argument(
         "--preview", type=Path, help="Pinned public preview.json selection file"
     )
+    _ = parser.add_argument("--public-artifacts", type=Path)
     _ = parser.add_argument("--gui", type=Path)
     args = cast("BuildArguments", cast("object", parser.parse_args()))
     if (args.destination is None) == (args.output_home is None):
@@ -586,6 +659,7 @@ def main() -> None:
                     gui=args.gui,
                     recipe=args.recipe,
                     preview=preview,
+                    public_artifacts=args.public_artifacts,
                 )
             )
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
