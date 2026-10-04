@@ -26,6 +26,23 @@ default: patch
 Explain what the user can now do or what was corrected.
 ```
 
+Knope 0.23 treats the first nonempty physical line after the front matter as the
+summary and the remaining lines as details. Keep that summary short, complete and
+on one line; hard-wrapping a sentence can leave an incomplete changelog heading.
+A short change can be one single-line sentence, which becomes a list item. For a
+detailed change, use a short summary, a blank line and the user-facing explanation:
+
+```markdown
+---
+default: patch
+---
+
+Short, complete summary
+
+Explain the final user-visible behavior and any action the user must take.
+Details may wrap across lines and contain examples.
+```
+
 Use `minor` for a feature and `major` for a breaking change. Internal-only work
 need not add a change file. Commit messages have no required convention:
 `[changes].ignore_conventional_commits = true` prevents Knope from reading them.
@@ -51,6 +68,20 @@ Knope retains change files during prereleases so the eventual stable release can
 include the full set; it removes them when preparing the stable version.
 
 ### Prepare, review, then publish
+
+Before preparation, reconcile unreleased change files against the difference
+between the last actually distributed release and the final candidate. Merge
+entries about the same user-facing change, remove reverted changes and obsolete
+intermediate behavior, and reassess the breaking-change category and migration
+instructions. Change files are editable release inputs, not an immutable log of
+every PR. For the first release, describe the final supported behavior without
+asking users to migrate through unpublished intermediate states.
+
+Use the workflow-pinned Knope version to inspect the real generated notes with
+`knope --dry-run prepare-release`; it reports proposed changes without writing
+files or publishing. Check complete headings, body structure, duplication and
+migration guidance. Review the generated changelog again in the release PR;
+automatic version selection does not replace this editorial pass.
 
 1. Commit user-visible change files with ordinary work. From a clean checkout,
    install the `KNOPE_VERSION` recorded in the release workflows and run
