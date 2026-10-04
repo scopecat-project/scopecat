@@ -212,3 +212,60 @@ def test_artifact_save_uses_record_identity_and_native_destination(
         )
     assert target.read_bytes() == b"report"
     assert list(tmp_path.iterdir()) == [target]
+
+
+@pytest.mark.parametrize("source", [False, True], ids=["configuration", "source"])
+@pytest.mark.parametrize("selection_type", [str, tuple], ids=["cocoa", "path-tuple"])
+def test_configuration_native_save_cancel_path_and_failed_transfer(
+    tmp_path, monkeypatch, source, selection_type
+):
+    runtime, window = Mock(), Mock()
+    session = DesktopSession(runtime, threading.Event())
+    session.connected("http://localhost:1234")
+    api = DesktopAPI(session, lambda: window)
+    requests = []
+    fail = False
+    document = '{"label":"shared inputs"}'
+
+    def handle(request):
+        requests.append(request)
+        assert request.method == "POST"
+        if source:
+            assert (
+                request.url.path
+                == f"/api/v1/configuration-exchange/imports/{HASH}/source"
+            )
+            assert request.url.params["accepted"] == "true"
+        else:
+            assert request.url.path == "/api/v1/configuration-exchange/file"
+            assert request.read() == document.encode()
+            assert request.headers["content-type"] == "application/json"
+        if fail:
+            return httpx2.Response(422, json={"detail": "Invalid configuration"})
+        return httpx2.Response(200, content=b"verified complete content")
+
+    _transport(monkeypatch, handle)
+    save = (
+        (lambda: api.save_configuration_source(HASH))
+        if source
+        else (lambda: api.save_configuration(document))
+    )
+    window.create_file_dialog.return_value = None
+    assert save() is None
+    assert not requests
+    target = tmp_path / ("received.zip" if source else "received.json")
+    window.create_file_dialog.return_value = (
+        str(target) if selection_type is str else (str(target),)
+    )
+    assert save() == str(target)
+    assert target.read_bytes() == b"verified complete content"
+    assert window.create_file_dialog.call_args.kwargs["save_filename"] == (
+        "author-source.zip" if source else "configuration.json"
+    )
+    fail = True
+    with pytest.raises(ValueError, match="Invalid configuration"):
+        save()
+    assert target.read_bytes() == b"verified complete content"
+    assert list(tmp_path.iterdir()) == [target]
+    runtime.start.assert_not_called()
+    runtime.stop.assert_not_called()

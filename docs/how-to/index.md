@@ -12,6 +12,7 @@ task:
 - [Resume an interrupted static run](resume-interrupted-runs.md)
 - [Use measurement data](use-measurement-data.md)
 - [Record a human or AI experiment decision](record-experiment-decisions.md)
+- [Share saved configuration from the desktop](share-configuration.md)
 - [Review and publish project configuration](manage-configuration.md)
 - [Automate parameter calibration](automate-parameter-calibration.md)
 

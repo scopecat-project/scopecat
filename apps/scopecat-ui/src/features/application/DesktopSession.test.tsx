@@ -15,6 +15,8 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
     api: {
       set_window_title: vi.fn(),
       open_capture: vi.fn(),
+      save_configuration: vi.fn(),
+      save_configuration_source: vi.fn(),
       save_capture: vi.fn(),
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),
@@ -55,6 +57,8 @@ it("leaves background work running only after the user chooses it", async () => 
     api: {
       set_window_title: vi.fn(),
       open_capture: vi.fn(),
+      save_configuration: vi.fn(),
+      save_configuration_source: vi.fn(),
       save_capture: vi.fn(),
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),
@@ -99,6 +103,8 @@ it("keeps a failed stop recoverable in the current window", async () => {
     api: {
       set_window_title: vi.fn(),
       open_capture: vi.fn(),
+      save_configuration: vi.fn(),
+      save_configuration_source: vi.fn(),
       save_capture: vi.fn(),
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),
@@ -140,6 +146,8 @@ it("shows progress immediately and prevents duplicate quit requests", async () =
     api: {
       set_window_title: vi.fn(),
       open_capture: vi.fn(),
+      save_configuration: vi.fn(),
+      save_configuration_source: vi.fn(),
       save_capture: vi.fn(),
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),

@@ -43,6 +43,7 @@ nav = [
     { "Maintain executable setup" = "how-to/maintain-executable-setup.md" },
     { "Start with dynamic parameters" = "how-to/declare-dynamic-parameters.md" },
     { "Declare parameter models" = "how-to/declare-parameter-models.md" },
+    { "Share saved configuration" = "how-to/share-configuration.md" },
     { "Exchange parameter tables" = "how-to/exchange-parameter-tables.md" },
     { "Back up and restore" = "how-to/backup-and-restore.md" },
   ] },

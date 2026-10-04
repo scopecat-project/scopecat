@@ -12,6 +12,11 @@ import {
   saveParameterRevision,
   type ParameterRevision,
 } from "./parameter-api";
+vi.mock("./ConfigurationExchange", () => ({
+  ConfigurationExchange: ({ onCreated }: { onCreated: (revision: string) => Promise<void> }) => (
+    <button onClick={() => void onCreated("imported")}>Create imported test copy</button>
+  ),
+}));
 vi.mock("./SetupPanel", () => ({ SetupPanel: () => null }));
 vi.mock("./setup-api", () => ({ getSetupDefinitions: vi.fn() }));
 vi.mock("./parameter-api", () => ({
@@ -156,5 +161,15 @@ it("keeps the reviewed branch generation until the operator explicitly refreshes
       expect.objectContaining({ expected_generation: 4 }),
     ),
   );
+  expect(screen.getByLabelText("New version name")).toHaveValue("revised");
+});
+
+it("keeps an unsaved parameter draft when an import creates another copy", async () => {
+  mount();
+  await edit();
+  fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "4.9" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create imported test copy" }));
+  await waitFor(() => expect(getParameterRevisions).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText("frequency")).toHaveValue(4.9);
   expect(screen.getByLabelText("New version name")).toHaveValue("revised");
 });

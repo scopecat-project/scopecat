@@ -4,6 +4,7 @@ import type { components } from "../../api-schema";
 import type { StoredParameterValue, ParameterEntity } from "../../api-contract";
 import { apiClient, apiData, ApiError } from "../../api-client";
 import { errorMessage } from "../../lib/presentation";
+import { ConfigurationExchange } from "./ConfigurationExchange";
 import { SetupPanel } from "./SetupPanel";
 import { ParameterValueField } from "./ParameterValueField";
 import { getSetupDefinitions } from "./setup-api";
@@ -58,6 +59,14 @@ export function ConfigWorkspace({
           <input value={operator} onChange={(event) => setOperator(event.target.value)} />
         </label>
       </header>
+      <ConfigurationExchange
+        operator={operator}
+        onCreated={async (revision) => {
+          await cache.invalidateQueries({ queryKey: ["parameter-revisions"] });
+          await cache.invalidateQueries({ queryKey: ["parameter-branches"] });
+          setSelected(revision);
+        }}
+      />
       <SetupPanel operator={operator} onSelectConfiguration={onSelectConfiguration} />
       <section
         className="grid gap-3 rounded-lg border border-line bg-panel p-4"

@@ -36,7 +36,7 @@ from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 from scopecat_server.storage.sqlite.setup_schema import SETUP_TABLES_SQL
 from scopecat_server.storage.sqlite.target_schema import TARGET_CATALOG_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 109
+PROJECT_SCHEMA_VERSION = 110
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -230,6 +230,18 @@ PROJECT_SCHEMA_SQL = "\n".join(
         DEVICE_TABLES_SQL,
         EXECUTION_TABLES_SQL,
         EXCHANGE_TABLES_SQL,
+        """
+        CREATE TABLE configuration_imports (
+            content_hash TEXT PRIMARY KEY,
+            document_json TEXT NOT NULL
+        );
+        CREATE TABLE configuration_derivations (
+            content_hash TEXT NOT NULL REFERENCES configuration_imports(content_hash),
+            operation_id TEXT PRIMARY KEY,
+            intent_hash TEXT NOT NULL,
+            receipt_json TEXT NOT NULL
+        );
+        """,
         AUTHOR_REVISION_TABLES_SQL,
         AUTHOR_WORKSPACE_TABLES_SQL,
         EXPERIMENT_PLAN_TABLES_SQL,

@@ -193,17 +193,20 @@ class SetupService:
             return work.setups.list_revisions()
 
     def save(self, command: SetupSaveCommand) -> SetupRevision:
+        with self._control.write_transaction() as connection:
+            return self.save_in_transaction(connection, command)
+
+    def save_in_transaction(
+        self, connection: sqlite3.Connection, command: SetupSaveCommand
+    ) -> SetupRevision:
+        """Save through existing validation in an owning atomic transaction."""
         definition = SetupDefinitionRevision(
             id=command.revision_id,
             definition=command.setup,
             actor=command.actor,
             note=command.note,
         )
-        with (
-            self._errors(),
-            self._control.write_transaction() as connection,
-            self._registry.borrowed_unit_of_work(connection) as work,
-        ):
+        with self._errors(), self._registry.borrowed_unit_of_work(connection) as work:
             work.setups.save_definition(definition)
             revision = work.setups.resolve(definition.id)
             self._validate_resolution(connection, revision)

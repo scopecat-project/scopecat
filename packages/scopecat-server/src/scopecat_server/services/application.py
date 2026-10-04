@@ -39,6 +39,7 @@ from .analyses import AnalysisService
 from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
 from .config import ConfigService
+from .configuration_exchange import ConfigurationExchangeService
 from .data_cleanup import DataCleanupService
 from .data_exchange import DataExchangeService
 from .devices import DeviceService
@@ -114,6 +115,9 @@ class DaemonApplication:
             runs=runs,
             authors=self.author_workspaces,
             targets=self.targets,
+        )
+        self.configuration_exchange = ConfigurationExchangeService(
+            project_store, config, setup, self.author_workspaces
         )
         self.config = config
         self.setup = setup
