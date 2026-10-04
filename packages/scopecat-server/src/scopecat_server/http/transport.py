@@ -417,6 +417,7 @@ from ..command_payloads import (
 from ..errors import BackendConflict, BackendNotFound
 from ..instruments.backend import InstrumentBackendError
 from ..services.application import DaemonApplication
+from .configuration_exchange import configuration_exchange_router
 from .data_exchange import data_exchange_router
 
 _API_PREFIX = "/api/v1"
@@ -518,6 +519,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     )
     _install_error_mapping(app)
     app.include_router(data_exchange_router(application))
+    app.include_router(configuration_exchange_router(application))
 
     @app.post("/api/v1/data-cleanup/preview")
     def preview_data_cleanup(selection: DataCleanupSelection) -> DataCleanupPreview:

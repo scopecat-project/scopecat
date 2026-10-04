@@ -4,7 +4,7 @@ import os
 import tempfile
 import threading
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 from urllib.parse import quote
 
 import httpx2
@@ -104,8 +104,45 @@ def save_captured_artifact(
     )
 
 
+def save_configuration(
+    base_url: str,
+    document: str,
+    destination: Path,
+    cancel: threading.Event | None = None,
+) -> None:
+    _download(
+        base_url + "/api/v1/configuration-exchange/file",
+        destination,
+        cancel,
+        method="POST",
+        content=document,
+    )
+
+
+def save_configuration_source(
+    base_url: str,
+    content_hash: str,
+    destination: Path,
+    cancel: threading.Event | None = None,
+) -> None:
+    _download(
+        base_url
+        + "/api/v1/configuration-exchange/imports/"
+        + quote(content_hash, safe="")
+        + "/source?accepted=true",
+        destination,
+        cancel,
+        method="POST",
+    )
+
+
 def _download(
-    url: str, destination: Path, cancel: threading.Event | None = None
+    url: str,
+    destination: Path,
+    cancel: threading.Event | None = None,
+    *,
+    method: Literal["GET", "POST"] = "GET",
+    content: str | None = None,
 ) -> None:
     """Publish only a completed download; native Save owns overwrite confirmation."""
     with tempfile.NamedTemporaryFile(
@@ -118,8 +155,12 @@ def _download(
                     timeout=httpx2.Timeout(30, connect=3), trust_env=False
                 ) as client,
                 client.stream(
-                    "GET",
+                    method,
                     url,
+                    content=content,
+                    headers={"Content-Type": "application/json"}
+                    if content is not None
+                    else None,
                 ) as response,
             ):
                 _check_response(response)

@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **109** is a development format identifier, not the start of a compatibility
+schema **110** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,11 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 110 retains inert configuration exchange originals and atomic derivation
+receipts alongside ordinary parameter branches and setups. Current-format
+snapshots retain these tables. Imported source bytes are verified but never loaded
+by inspection or derivation. No schema-109 reader or migration is added.
 
 Schema 109 replaces calibration tasks' overwritten execution/check maps with
 ordered check/repair/verification attempts. Budgets and the original start time

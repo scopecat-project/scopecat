@@ -117,8 +117,15 @@ class ConfigService:
     def commit_parameter_branch(
         self, command: ParameterBranchCommitCommand
     ) -> ParameterBranch:
+        with self._control.write_transaction() as connection:
+            return self.commit_parameter_branch_in_transaction(connection, command)
+
+    def commit_parameter_branch_in_transaction(
+        self, connection: sqlite3.Connection, command: ParameterBranchCommitCommand
+    ) -> ParameterBranch:
+        """Compose the same branch operation into an owning atomic transaction."""
         intent = sha256_json_hash(command.model_dump(mode="json"))
-        with self._config_errors(), self._control.write_transaction() as connection:
+        with self._config_errors():
             branches = ParameterBranchRepository(connection)
             revisions = ParameterRevisionRepository(connection)
             try:

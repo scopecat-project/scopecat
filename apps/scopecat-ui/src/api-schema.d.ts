@@ -329,6 +329,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/configuration-exchange/derive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Derive */
+        post: operations["derive_api_v1_configuration_exchange_derive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/configuration-exchange/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export */
+        post: operations["export_api_v1_configuration_exchange_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/configuration-exchange/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Imports */
+        get: operations["imports_api_v1_configuration_exchange_imports_get"];
+        put?: never;
+        /** Retain */
+        post: operations["retain_api_v1_configuration_exchange_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/configuration-exchange/imports/{content_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["read_api_v1_configuration_exchange_imports__content_hash__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/configuration-exchange/imports/{content_hash}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Source */
+        post: operations["source_api_v1_configuration_exchange_imports__content_hash__source_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/configuration-exchange/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspect */
+        post: operations["inspect_api_v1_configuration_exchange_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/data-cleanup": {
         parameters: {
             query?: never;
@@ -4667,6 +4770,35 @@ export interface components {
         };
         "ConfigurationChoice-Input": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Input"] | components["schemas"]["CandidateConfiguration"];
         "ConfigurationChoice-Output": components["schemas"]["UnselectedConfiguration"] | components["schemas"]["ParameterConfiguration-Output"] | components["schemas"]["CandidateConfiguration"];
+        /** ConfigurationDerivation */
+        ConfigurationDerivation: {
+            branch: components["schemas"]["ParameterBranch"];
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            setup?: components["schemas"]["SetupRevision"] | null;
+            /** Setup Pending */
+            setup_pending: boolean;
+            /** Source Pending */
+            source_pending: boolean;
+        };
+        /** ConfigurationDerive */
+        ConfigurationDerive: {
+            /** Actor */
+            actor: string;
+            /** Bindings */
+            bindings?: {
+                [key: string]: components["schemas"]["DeviceRevisionRef"];
+            };
+            document: components["schemas"]["ConfigurationExchange"];
+            /**
+             * Include Setup
+             * @default false
+             */
+            include_setup: boolean;
+            /** Name */
+            name: string;
+            /** Operation Id */
+            operation_id: string;
+        };
         /**
          * ConfigurationEvidence
          * @description One retained registry entry and its effective content, without activation.
@@ -4674,6 +4806,70 @@ export interface components {
         ConfigurationEvidence: {
             configuration: components["schemas"]["ConfigProfileSnapshot"];
             entry: components["schemas"]["ConfigRegistryEntry"];
+        };
+        /**
+         * ConfigurationExchange
+         * @description A transfer document, never an executable configuration or store clone.
+         */
+        ConfigurationExchange: {
+            catalog: components["schemas"]["ParameterCatalog"];
+            /**
+             * Format
+             * @default scopecat.configuration-exchange.v1
+             * @constant
+             */
+            format: "scopecat.configuration-exchange.v1";
+            /** Label */
+            label: string;
+            /** Origin Store */
+            origin_store: string;
+            parameter_origin: components["schemas"]["ParameterRevisionRef"];
+            parameters: components["schemas"]["ParameterSnapshot"];
+            setup?: components["schemas"]["SetupDefinitionRevision"] | null;
+            source?: components["schemas"]["AuthorRevisionBundle"] | null;
+            /** Values Included */
+            values_included: boolean;
+        };
+        /** ConfigurationExport */
+        ConfigurationExport: {
+            /**
+             * Include Values
+             * @default true
+             */
+            include_values: boolean;
+            /** Label */
+            label: string;
+            /** Parameter Revision */
+            parameter_revision: string;
+            /** Setup Definition */
+            setup_definition?: string | null;
+            source_revision?: components["schemas"]["Sha256ContentHash"] | null;
+            /** Workspace */
+            workspace?: string | null;
+        };
+        /** ConfigurationImportSummary */
+        ConfigurationImportSummary: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            /**
+             * Derivations
+             * @default []
+             */
+            derivations: components["schemas"]["ConfigurationDerivation"][];
+            /** Label */
+            label: string;
+            /** Origin Store */
+            origin_store: string;
+        };
+        /** ConfigurationInspection */
+        ConfigurationInspection: {
+            content_hash: components["schemas"]["Sha256ContentHash"];
+            document: components["schemas"]["ConfigurationExchange"];
+            /** Notices */
+            notices: string[];
+            /** Requirements */
+            requirements: string[];
+            /** Source Files */
+            source_files: string[];
         };
         /** ConfigurationTemplateImportCommand */
         ConfigurationTemplateImportCommand: {
@@ -12314,6 +12510,196 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    derive_api_v1_configuration_exchange_derive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationDerive"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationDerivation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_api_v1_configuration_exchange_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationExport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationExchange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    imports_api_v1_configuration_exchange_imports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationImportSummary"][];
+                };
+            };
+        };
+    };
+    retain_api_v1_configuration_exchange_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationInspection"];
+                };
+            };
+        };
+    };
+    read_api_v1_configuration_exchange_imports__content_hash__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationInspection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_api_v1_configuration_exchange_imports__content_hash__source_post: {
+        parameters: {
+            query?: {
+                accepted?: boolean;
+            };
+            header?: never;
+            path: {
+                content_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_api_v1_configuration_exchange_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationInspection"];
                 };
             };
         };

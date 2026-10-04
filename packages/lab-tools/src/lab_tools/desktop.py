@@ -129,6 +129,26 @@ class DesktopAPI:
             file_types=("All files (*.*)",),
         )
 
+    def save_configuration(self, document: str) -> str | None:
+        from .desktop_files import save_configuration
+
+        return self._save_file(
+            lambda base, path, cancel: save_configuration(base, document, path, cancel),
+            filename="configuration.json",
+            file_types=("JSON (*.json)",),
+        )
+
+    def save_configuration_source(self, content_hash: str) -> str | None:
+        from .desktop_files import save_configuration_source
+
+        return self._save_file(
+            lambda base, path, cancel: save_configuration_source(
+                base, content_hash, path, cancel
+            ),
+            filename="author-source.zip",
+            file_types=("ZIP (*.zip)",),
+        )
+
     def _save_file(
         self,
         download: Callable[[str, Path, threading.Event], None],
