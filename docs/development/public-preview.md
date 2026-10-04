@@ -10,9 +10,10 @@ Git submodule, Node.js or pnpm. Application and author environments update separ
 Everyday merges run CI and produce evidence; they do not publish a release.
 The public application has one user-facing version in `release.toml`, independent
 of the internal Python and UI package versions. `0.0.0` / build `0` is an
-unreleased bootstrap marker and cannot be published. The first chosen candidate
-is `0.3.0-alpha.1`, build `1`; it has not been published. Merge the tooling first, then prepare that identity in a separate
-release PR. Subsequent versions must also be chosen explicitly.
+unreleased bootstrap marker and cannot be published. The first release version
+will be chosen separately after the tooling is merged. Preparing a release uses
+Knope's suggested change-file bump by default; an explicit version override is
+available when the intended release needs one.
 
 Add a small user-facing Markdown change file under `.changeset/` for a feature,
 fix or breaking change. Run `knope document-change`, or write:
@@ -29,10 +30,12 @@ Use `minor` for a feature and `major` for a breaking change. Internal-only work
 need not add a change file. Commit messages have no required convention:
 `[changes].ignore_conventional_commits = true` prevents Knope from reading them.
 Knope's default 0.x semantics map ordinary feature/fix changes to patch and
-breaking changes to minor. We therefore require an explicit release version;
-change files supply reviewed release notes, not an implicit release decision.
+breaking changes to minor. Review the suggested version and notes in the release
+PR; a suggested bump does not itself authorize publication.
 
-Knope 0.23.0 updates only the public version and `CHANGELOG.md`. Its
+The prepare workflow installs Knope 0.23.0 through the official
+`knope-dev/action`, pinned to a full commit SHA. Knope updates only the public
+version and `CHANGELOG.md`. Its
 [versioned files](https://knope.tech/reference/config-file/packages/) can synchronize
 several representations of one version; they are deliberately not used to force
 all internal packages to share a version. The
@@ -45,13 +48,16 @@ include the full set; it removes them when preparing the stable version.
 
 1. Commit user-visible change files with ordinary work. From a clean checkout,
    install Knope 0.23.0 and run
-   `uv run --locked python scripts/release.py prepare VERSION --build-number NUMBER`.
+   `uv run --locked python scripts/release.py prepare --build-number NUMBER`.
+   Add `VERSION` after `prepare` to override the suggested version.
    This edits/stages version, build number, changelog and consumed change files.
    It never pushes, tags or publishes. Inspect the diff before committing.
-2. Alternatively dispatch **Prepare release** on main with the chosen version and
-   strictly increasing native build number. It prepares a dedicated branch,
+2. Alternatively dispatch **Prepare release** on main with a strictly increasing
+   native build number and, optionally, a version override. It prepares a dedicated branch,
    explicitly runs CI (including docs) in the same workflow, then opens a draft
-   release PR. The default token cannot be assumed to trigger another workflow.
+   release PR. A thin `gh` adapter keeps the PR in draft because Knope 0.23.0
+   cannot request a draft PR; release notes are reviewed in `CHANGELOG.md`.
+   The default token cannot be assumed to trigger another workflow.
    Failed validation leaves a reviewable branch without a PR; inspect and resolve
    it before retrying with a fresh branch identity. This automation needs the
    repository's existing permission to create PRs; it does not create credentials
@@ -61,19 +67,27 @@ include the full set; it removes them when preparing the stable version.
    the normal CI/self-review process. No tag or release is created by that merge.
 4. Run **Full acceptance → full** on the integrated commit, then dispatch
    **Publish release** with its full SHA. It verifies
-   main ancestry and successful full acceptance for that exact commit, re-runs CI,
-   builds framework and native
-   artifacts from that commit, then assembles and verifies the entire release.
-   Only the final job can write a release. It refuses an existing tag or release,
-   creates a draft, uploads verified assets, and only then makes it visible.
+   main ancestry and successful full acceptance for that exact commit, runs CI
+   once in the same workflow (including the docs build), builds framework and
+   native artifacts from that commit, then assembles and verifies the entire
+   release. A prior CI run or Pages deployment is not an additional prerequisite.
+   Only the final job can write a release. After checks reject an existing tag or
+   release, Knope's native `Release` step creates the tag and release using its
+   version, changelog, prerelease handling and configured assets. Knope uploads
+   assets through a draft and publishes after successful uploads.
    If publishing fails after draft creation, stop and inspect that draft; never
-   overwrite assets or reuse the version automatically.
+   overwrite assets or reuse the version automatically. There is no automatic
+   repair or post-upload download verification: the integrity guarantee is the
+   complete local asset verification before handing those files to Knope.
 
 Each candidate, including each alpha/beta/RC, uses a new public version and a
 strictly increasing build number (1–9999; the shared single-field Mac build limit). Versions support `X.Y.Z`,
 `X.Y.Z-alpha.N`, `X.Y.Z-beta.N` and `X.Y.Z-rc.N` with positive N. Public metadata
 suffixes are not used; full commit and artifact hashes carry provenance.
-Historical `preview-<SHA>` tags/releases remain unchanged.
+Application tags use `v<version>`. Version history is selected with `v[0-9]*`
+then strictly validated; future independently released packages may use
+`<pkg>-v<version>`, but no second release line is implemented. Historical
+`preview-<SHA>` and `desktop-<SHA>` tags/releases remain unchanged.
 
 ### Artifact identity and consumer selection
 
@@ -148,8 +162,10 @@ platform for offline use. See [installation and maintenance](../how-to/maintain-
 [Mac first open](../how-to/mac-preview.md), and
 [packaging qualification](architecture/desktop-packaging.md).
 Windows remains unsigned and Mac ad-hoc signed, without trusted signing or
-notarization. A stable-looking numeric triplet does not change that boundary;
-use a prerelease suffix for initial distribution.
+notarization. The application is experimental and is not intended for production
+use. A plain numeric version does not change that status. An alpha/beta/RC suffix
+marks a version as a prerelease; Knope uses that version identity for the GitHub
+prerelease flag. Production suitability is a separate documented claim.
 
 No persistent-data compatibility baseline is designated. A release number is
 not a data schema version or a promise to read prior development stores. Follow

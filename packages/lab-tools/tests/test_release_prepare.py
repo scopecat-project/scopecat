@@ -14,7 +14,6 @@ assert spec is not None and spec.loader is not None
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 check_candidate = release.check_candidate
-release_notes = release.release_notes
 version_key = release.version_key
 
 
@@ -55,7 +54,7 @@ def test_candidate_requires_increasing_version_and_build(tmp_path: Path) -> None
         check_candidate(root, "0.4.0", 5)
 
 
-def test_release_order_and_current_notes(tmp_path: Path) -> None:
+def test_release_order() -> None:
     versions = [
         "0.3.0-alpha.1",
         "0.3.0-beta.1",
@@ -65,12 +64,6 @@ def test_release_order_and_current_notes(tmp_path: Path) -> None:
         "0.3.1",
     ]
     assert all(version_key(a) < version_key(b) for a, b in pairwise(versions))
-    (tmp_path / "CHANGELOG.md").write_text(
-        "# Changelog\n\n## 0.3.0 (2026-10-04)\n\nNew user behavior.\n\n## 0.2.0\nOld.\n"
-    )
-    assert release_notes(tmp_path, "0.3.0") == "New user behavior.\n"
-    with pytest.raises(ValueError, match="changelog"):
-        release_notes(tmp_path, "0.4.0")
 
 
 def test_publication_rejects_older_version_and_native_build(tmp_path: Path) -> None:
@@ -99,3 +92,32 @@ def test_publication_rejects_older_version_and_native_build(tmp_path: Path) -> N
             release.check_publish(root)
     (root / "release.toml").write_text('version = "0.4.0"\nbuild_number = 5\n')
     release.check_publish(root)
+
+
+def test_future_package_tags_do_not_block_application(tmp_path: Path) -> None:
+    root = repository(tmp_path)
+    for tag in ("sdk-v99.0.0", "v99-invalid", "preview-123"):
+        subprocess.run(["git", "tag", tag], cwd=root, check=True)
+    check_candidate(root, "0.3.0-rc.2", 5)
+
+
+@pytest.mark.parametrize("api_result", ["v0.4.0\n", "api-error"])
+def test_remote_draft_or_api_failure_blocks_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, api_result: str
+) -> None:
+    root = repository(tmp_path)
+    (root / "release.toml").write_text('version = "0.4.0"\nbuild_number = 5\n')
+    monkeypatch.setenv("GITHUB_REPOSITORY", "example/repository")
+    original = subprocess.check_output
+
+    def output(command: list[str], *, cwd: Path, text: bool) -> str:
+        if command[0] != "gh":
+            return str(original(command, cwd=cwd, text=text))
+        assert "--paginate" in command
+        if api_result == "api-error":
+            raise subprocess.CalledProcessError(1, command)
+        return api_result
+
+    monkeypatch.setattr(subprocess, "check_output", output)
+    with pytest.raises((ValueError, subprocess.CalledProcessError)):
+        release.check_publish(root, remote=True)

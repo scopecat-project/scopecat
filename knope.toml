@@ -1,6 +1,11 @@
 [package]
 versioned_files = [{ path = "release.toml", regex = 'version = "(?<version>[^"]+)"' }]
 changelog = "CHANGELOG.md"
+assets = "release/*"
+
+[github]
+owner = "scopecat-project"
+repo = "scopecat"
 
 [changes]
 ignore_conventional_commits = true
@@ -14,7 +19,24 @@ type = "CreateChangeFile"
 
 [[workflows]]
 name = "prepare-release"
-help_text = "Internal preparation step; use scripts/release.py prepare with an explicit version"
+help_text = "Internal preparation step; use scripts/release.py prepare (version override optional)"
 
 [[workflows.steps]]
 type = "PrepareRelease"
+
+# Knope 0.23 does not support draft CreatePullRequest. Keep only this gh adapter;
+# the reviewed changelog is already committed, and needs no second notes parser.
+[[workflows]]
+name = "open-release-pr"
+help_text = "Open a draft after the preparation workflow has validated its exact commit"
+
+[[workflows.steps]]
+type = "Command"
+command = "gh pr create --draft --base main --head release/$version --title 'Release $version' --body 'Review the version, native build number and CHANGELOG.md in this PR. The preparation workflow runs CI and documentation checks on this exact commit. After merging, run full acceptance on the merged SHA, then manually dispatch Publish release with that SHA. This PR does not publish artifacts.'"
+
+[[workflows]]
+name = "publish-release"
+help_text = "Publish preverified application assets; only run through the manual publishing workflow"
+
+[[workflows.steps]]
+type = "Release"

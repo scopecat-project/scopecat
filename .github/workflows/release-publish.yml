@@ -37,17 +37,13 @@ jobs:
         with:
           python-version-file: .python-version
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - name: Require main ancestry and successful CI and docs for this commit
+      - name: Require the exact commit on main
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ inputs.commit }}
         run: |
           test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
           git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
-          for workflow in ci.yml docs.yml; do
-            gh run list --workflow "$workflow" --commit "$RELEASE_COMMIT" --event push --limit 100 --json conclusion,headSha \
-              --jq 'any(.[]; .conclusion == "success")' | grep -qx true
-          done
       - name: Require successful manual full acceptance for this commit
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,7 +56,6 @@ jobs:
             "$RUNNER_TEMP/acceptance-runs.json"
       - name: Validate release metadata and monotonic identity
         run: |
-          uv run --locked python scripts/release.py metadata
           git fetch origin --tags
           uv run --locked python scripts/release.py check-publish
 
@@ -234,41 +229,17 @@ jobs:
         with:
           name: release-verified
           path: release
-      - name: Read release metadata
-        id: metadata
-        run: uv run --locked python scripts/release.py metadata --github-output "$GITHUB_OUTPUT" --notes-file release-notes.md
-      - name: Reverify and publish once
+      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
+        with:
+          version: 0.23.0
+      - name: Verify assets and publish through Knope
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ inputs.commit }}
-          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
-          PRERELEASE: ${{ steps.metadata.outputs.prerelease }}
         run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
           uv run --locked python scripts/release_assets.py verify release --commit "$RELEASE_COMMIT"
           git fetch origin --tags
-          uv run --locked python scripts/release.py check-publish
-          # Only an explicit HTTP 404 proves absence; authentication/network errors fail closed.
-          for endpoint in "git/ref/tags/$RELEASE_TAG" "releases/tags/$RELEASE_TAG"; do
-            if gh api "repos/$GITHUB_REPOSITORY/$endpoint" > "$RUNNER_TEMP/existing.json" 2> "$RUNNER_TEMP/api-error"; then
-              echo "Refusing existing tag or release: $RELEASE_TAG" >&2
-              exit 1
-            else
-              grep -q 'HTTP 404' "$RUNNER_TEMP/api-error"
-            fi
-          done
-          # The release-by-tag endpoint can omit drafts; enumerate authenticated releases too.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name' > "$RUNNER_TEMP/release-tags"
-          if grep -Fx -- "$RELEASE_TAG" "$RUNNER_TEMP/release-tags"; then
-            echo "Refusing existing published or draft release: $RELEASE_TAG" >&2
-            exit 1
-          else
-            test "$?" -eq 1
-          fi
-          flags=()
-          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" release/* --target "$RELEASE_COMMIT" --draft --title "Scopecat $RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
-          # A failure leaves a draft for inspection; reruns refuse to overwrite it.
-          uv run --locked python scripts/release_assets.py verify release --commit "$RELEASE_COMMIT"
-          gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/downloaded-release"
-          uv run --locked python scripts/release_assets.py verify "$RUNNER_TEMP/downloaded-release" --commit "$RELEASE_COMMIT"
-          gh release edit "$RELEASE_TAG" --draft=false
+          uv run --locked python scripts/release.py check-publish --remote
+          knope publish-release
