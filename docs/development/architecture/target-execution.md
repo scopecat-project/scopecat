@@ -1,13 +1,13 @@
 # Frozen target selection and admission
 
-Status: concrete implementation contract for [#626](https://github.com/scopecat-project/scopecat/issues/626),
-audited at `3ddaeb27b` after target catalog PR #625. This is the full execution design; the internal run-binding stage below is
-implemented. Authored/session and workbench selection are also implemented as
-described in the later stages below. It refines [experiment contexts](experiment-contexts.md).
-This design follows the [prebaseline data policy](../data-compatibility.md).
-Current format 98 is not a compatibility baseline; no old-format reader or
-migration obligation is introduced here. Coordinate shared source-side files
-with workspace publication.
+The maintained single-member execution contract originates in
+[#626](https://github.com/scopecat-project/scopecat/issues/626). Direct runs,
+authored/session selection, saved plans and the workbench use the same frozen
+scientific binding. Configuration editing and admission fences follow
+[configuration ownership](configuration-ownership.md); remaining multi-member and
+apparatus work belongs to [#612](https://github.com/scopecat-project/scopecat/issues/612).
+No supported persistent-data baseline is designated; the
+[prebaseline data policy](../data-compatibility.md) applies.
 
 ## Subject and setup binding
 
@@ -44,18 +44,16 @@ Further convergence should unify scientific entity addresses and author selectio
 then separate setup resource definitions from execution environment and target
 binding. Capability prerequisite policy remains distinct from task execution order.
 
-## What must change in the existing path
+## Current selection consumers
 
-| Current seam | Observed behavior | Required replacement |
-|---|---|---|
-| `application/session_context.py`, `AuthorProject.use/prepare` | A sample name and separate working point/batch determine future preparation | One subject choice plus configuration choice; validate an atomic selection update |
-| `records/launch_request.py` | `sample`, `sample_binding`, `context`, `configuration`, `config_source` and `batch_id` are parallel fields; request hashing has conditional branches | Separate selection input from the resolved scientific binding; remove replaced fields from the new active input model |
-| `application/launch_config.py` | Working point/candidate/registry branches resolve config, then `launch_sample_selection` separately reconstructs sample intent | One resolver produces configuration and subject evidence together |
-| `api/_runner.py::_plan` | A context source injects its exact sample selector; other selectors may still resolve a head later | Consume the resolved subject projection and reject conflicting caller-supplied samples |
-| `daemon/wire.py::RunSubmission.intent_content_hash` | Hashes submitted config/request/plan; procedure-child identity is deliberately excluded | Include the complete new scientific binding in the new intent codec; retain existing child/parent consistency rules |
-| server `services/admission.py` | Replays first, resolves samples, stages immutable objects, then commits admission/address/sample indexes together | Independently validate exact target evidence and commit its durable association in the same transaction |
-| `records/experiment_plan.py`, server `services/experiment_plans.py` | Recipes retain one exact `SampleBinding` and config/context; child step checks the submission hash | Version new recipe definitions and freeze scientific binding through parent and child |
-| `automation/calibrations.py` | Target has sample/context/batch but no exact sample revision or setup reference | Keep it explicitly outside new target-qualified evidence until the applicability redesign below |
+| Owner | Current responsibility |
+| --- | --- |
+| `records/scientific_selection.py` | One subject/configuration/batch selection and a checked binding/source envelope |
+| `application/session_context.py`, `AuthorProject.use/prepare` | Session-local choices and atomic selection updates; preparation freezes exact inputs |
+| `application/launch_config.py::resolve_launch_config` | Resolve independent parameters/setup or a retained candidate together with subject evidence |
+| `api/_runner.py`, server `services/scientific_binding.py` | Produce and independently reconstruct exact scientific evidence |
+| server `services/admission.py` | Validate retained inputs and check device heads in the resource-reservation transaction |
+| `records/experiment_plan.py`, server plan/procedure services | Retain binding and source identity through saved recipes, replay and child submission |
 
 `TargetCatalogStore.resolve` already rejects a foreign catalog, checks exact revision
 and content hash, and reads immutable content. Use it, not `get(target_id)` followed
@@ -63,19 +61,19 @@ by whatever head is current. No target registration belongs inside `prepare()`.
 
 ## One selection model, followed by one resolved model
 
-Use discriminated variants, not another optional `target_id` beside `sample`.
-The names below specify responsibilities; final Python spelling can follow the
-coordinated source-envelope implementation.
+`records/scientific_selection.py` defines the discriminated choices below;
+`ReviewedScientificSelection` retains the resolved binding and source.
 
 - `SubjectChoice`: `unbound`, `sample(sample_id, revision selector)` or
   `registered_target(TargetRevisionRef)`. The sample choice remains a concise
   authoring input for existing experiments, within the same model; it does not
   manufacture a registered target ID. No subject is legitimate for device-only
   work and carries no sample/target evidence.
-- `ConfigurationChoice`: `registry(selection)`, `working_point(exact ref,
-  overrides)` or `candidate(exact proposal source)`. A candidate cannot also carry
-  independent context overrides. The existing resolved `LaunchConfigSource`
-  variants remain usable as lower-level provenance during this slice.
+- `ConfigurationChoice`: `unselected`, `parameters(exact ref, setup, overrides)`
+  or `candidate(exact proposal source)`. A parameter draft may omit setup while
+  editing, but preview requires it. A candidate retains its own exact setup and
+  cannot also carry independent overrides. `LaunchConfigSource` is the resolved
+  parameter or candidate source; no choice resolves a global registry default.
 - `ScientificSelection`: subject choice, configuration choice and explicit
   `BatchScope`. Session omission means inherit; explicit clearing produces
   `UnscopedBatch`, not an applicability wildcard. Collection and operator remain
@@ -83,8 +81,8 @@ coordinated source-envelope implementation.
 - `ResolvedScientificBinding`: codec version, exact resolved subject, explicit
   batch, resolved configuration provenance/hash, setup-content fingerprint and
   the deterministic runtime projection. It has no unresolved sample head, target
-  head or active-config selector. The reviewed config generation remains an
-  admission fence, not scientific identity.
+  head or active-config selector. Exact parameter/setup references and current
+  device heads provide admission fences; there is no global config generation.
 
 A resolved subject is one of `unbound`, `inline_sample` or `registered_target`.
 The latter retains the qualified exact target ref and its immutable content;
@@ -97,7 +95,7 @@ Selecting a target ID in a menu or Python convenience call resolves its current
 head into a `TargetRevisionRef` when the selection is accepted. Later refresh of
 code does not advance that target reference. Choosing the latest target revision
 is an explicit selection change; failed selection updates leave prior defaults
-intact. Preparing resolves remaining sample/config defaults once and returns a
+intact. Preparing resolves the selected scientific inputs once and returns a
 binding. Submitting that preparation never rereads a target head.
 
 The source-qualified envelope supplied by workspace publication owns code revision,
@@ -128,16 +126,11 @@ Eligibility is deliberately narrower than catalog registration:
    Do not merge sample topology into accepted setup automatically. A missing or
    different topology reports a preparation incompatibility; subset/composition
    policies are a later explicit extension.
-6. Derive the exact `subject` binding with the selected batch. When using an existing
-   working point or candidate, compare exact sample revision/hash, working-point
-   identity and batch before planning; do not relabel its frozen source to fit.
+6. Derive the exact `subject` binding with the selected batch. Independent parameter
+   values do not manufacture scientific acceptance. A candidate retains its source
+   sample, batch and setup; compare that evidence before planning, without relabeling
+   its frozen source to fit a new selection.
 
-Existing working points use `single_sample_applicability`, whose synthetic member
-ID is the run role `subject`, whereas a registered member can be `A`. Do not compare
-those two target-content hashes directly or rename catalog members to make them
-match. For an existing single-sample parameter source, compare the explicit runtime
-projection plus sample/batch/setup conditions; this permits using its values for
-execution without retroactively asserting target-qualified calibration evidence.
 Once a candidate's source run has registered-target evidence, preserve and check
 that exact source binding as well. Selecting a new target is not permission to
 relabel a saved candidate; a scope change requires an explicit estimate copy.
@@ -168,7 +161,7 @@ Admission order:
    replay its retained result before evaluating current fences.
 2. For a new request, validate the binding codec, catalog, immutable target/sample
    refs, config source, deterministic projection and setup fingerprint. Preserve
-   current authoritative inventory/domain-target and generation checks.
+   authoritative inventory/domain-target checks and the transaction-local device-head fence.
 3. Stage immutable binding/config/request/snapshot objects. Publish their repository
    refs, indexes and address together with admission. Failed validation allocates
    no visible run/address; transaction rollback publishes no partial binding.
@@ -177,8 +170,8 @@ Admission order:
    new-format read adapter.
 
 Target head advancement after preparation is allowed: the old immutable revision
-is still the reviewed target. Apparatus/config generation conflicts retain current
-behavior. An exact retry after later head/config changes returns its original run;
+is still the reviewed target. A changed device head requires setup re-resolution
+for new work. An exact retry after later head changes returns its original run;
 the same retry ID with another target ref/content is a content conflict. A renamed
 revision may have the same target-content hash, but its exact reference differs
 and cannot replace the reviewed reference under the same retry key.
@@ -207,64 +200,25 @@ Historical files stay intact for owners' archival arrangements. Do not silently
 reinterpret old scientific content, and do not retain replaced live request fields
 or duplicate session resolvers solely for development-format compatibility.
 
-## Setup and calibration: minimum non-optional boundaries
+## Setup and calibration ownership
 
-`setup_content_hash` currently compares execution structure conservatively for
-parameter rebase. It excludes parameter definitions/values and display metadata;
-that is useful identity input, not a maintained apparatus revision or live physical
-state. Target execution may use that explicit fingerprint with current inventory
-fencing, but must not label it calibrated setup evidence.
+Setup definitions and exact resolutions are maintained independently from parameter
+branches. The complete executable setup hash constrains scientific admission;
+matching it is not proof that hardware is unchanged or calibration remains valid.
+[Configuration ownership](configuration-ownership.md) defines device-head fencing,
+branch publication and retained snapshots. The former working-point editor,
+global activation and intermediate parameter binding are retired.
 
-The following cannot be omitted from the next setup/calibration implementation:
+Calibration applicability compares retained scientific conditions and declared
+dependencies, separately from executable admission. Publication requires the exact
+destination branch head, candidate provenance and verification evidence. Copying
+values does not create a fresh success or target-qualified evidence. The remaining
+scope in [#783](https://github.com/scopecat-project/scopecat/issues/783) concerns finer
+dependency coverage and external inputs; do not rebuild the delivered whole-parameter
+comparison or bounded check/repair pipeline. Multi-member execution and apparatus
+subjects remain separate requirements in #612.
 
-| Boundary | Minimum contract |
-|---|---|
-| Setup ownership | A catalog-qualified immutable setup revision separates topology/routing/driver/connection/lifecycle content from parameter state; retain one complete resolved execution snapshot |
-| Physical exclusion | Logical rename or another workspace must not acquire an already owned physical access domain; existing fencing and unknown-effect quarantine survive resolver changes |
-| Working-point applicability | Exact target scientific content, batch and setup scope are checked before value composition/publication; copying values records estimates, never fresh success |
-| Calibration identity | Use resolved target/member-qualified entity and applicability in new keys/freshness; store the exact target ref as provenance but exclude target label-only changes from scientific validity |
-| Dependencies | Initially require matching declared scope. Single-chip evidence does not automatically satisfy joint calibration; unscoped/foreign setup evidence is not a wildcard |
-| Publication | Recheck expected working-point head and applicability when publishing, and record input/result scope. A stale publication must not become valid by changing the selected target |
-| Evidence boundary | No success may be assigned target/setup evidence it did not record; prebaseline keys/codecs need no new reader |
-
-For registered targets, the new calibration key includes owning catalog, stable
-target ID and member-qualified entity identity. Freshness includes target-content
-hash, declared batch, setup scientific content and exact inputs/dependencies. The
-full target revision ref remains provenance. Thus a label-only revision does not
-expire evidence, while two different target IDs do not accidentally pool successes
-just because their current contents match. Inline-sample identity is a separate
-explicit key variant, not an inferred registered target.
-
-`calibration_freshness_fingerprint` already hashes definition, target, procedure,
-inputs and dependency evidence; changing its target model in place would change
-the format contract. Replace current writers/readers together and give the new
-format an explicit identity; retaining prebaseline validators is not required.
-Do not extend `CalibrationTargetRef` with independent optional target/setup fields and
-assume batch equality completes applicability.
-
-## Delivery and ownership
-
-1. **Pure domain work can proceed now:** extract existing registration member/hash/
-   entity validation into a pure function accepting retained sample revisions and
-   use it from `TargetCatalogStore`; add the deterministic single-member projection
-   and topology compatibility checks with contract fixtures. The projection becomes
-   an execution feature only when the next consumer lands. Avoid an unused parallel
-   registry or a public "ready to execute" claim.
-2. **After source publication contracts land:** one owner replaces scientific live
-   selection fields, integrates the resolver and new prepared/submission identity,
-   including the direct Python runner. Shared files are `author_project.py`,
-   `launch_request.py`, `daemon/client.py`, HTTP transport and generated UI contracts.
-3. **Same coordinated execution feature:** admission, repository, current-format
-   storage, saved recipe codec and procedure-child propagation land together or behind an internal
-   non-user-visible staging boundary. Do not ship a target-enabled preview that
-   drops the target at admission. UI selection follows the same resolver.
-4. **Next feature:** maintained setup and target-qualified working-point/calibration
-   publication. Pure scope comparison tests can proceed independently; changing
-   durable calibration keys before new exact inputs exist cannot.
-
-This design does not designate a compatibility baseline, execute a target, or relax runtime binding, source qualification or resource authority.
-
-## Focused acceptance before claiming target execution
+## Focused acceptance for maintained target execution
 
 | Scenario | Required observation |
 |---|---|
@@ -272,18 +226,17 @@ This design does not designate a compatibility baseline, execute a target, or re
 | Same target ID/hash in another catalog | Preparation and direct admission reject before address allocation |
 | Single member named A, entity q0 | Run role remains subject; frozen evidence maps A/q0 to q0 and retains physical sample identity |
 | Multiple members, or any target-level connection | Explicit unsupported-target error; registration remains available; no silent first-member projection |
-| Missing/different sample topology or mismatched config | Preparation fails without mutating selection, working point or shared active configuration |
+| Missing/different sample topology or mismatched config | Preparation fails without mutating the selection, parameter branch or setup |
 | Change session target, batch, code or collection after preparation | Old preparation remains frozen; new preparation uses new choices; another session is untouched |
-| Exact retry after target/config head changes | Original run, address and binding returned; changed target under the same key conflicts |
+| Exact retry after target/device head changes | Original run, address and binding returned; changed target under the same key conflicts |
 | Fail binding/index commit | No admitted run/address with a missing or mismatched scientific binding |
-| Candidate or working point from another sample/batch | Direct and authored paths reject; an explicit estimate copy remains distinct from evidence reuse |
+| Candidate from another sample/batch | Direct and authored paths reject; an explicit estimate copy remains distinct from evidence reuse |
 | Target-bearing saved recipe produces a procedure child | Parent and child binding/hash agree; session defaults cannot override it |
 | Current-format recovery and unsupported formats | Backup/restore preserves current binding/ref/address; unsupported formats are rejected without rewriting files or inferring target/setup |
-| Label-only target revision; changed scientific target content | Old provenance stays exact; the future applicability comparator distinguishes metadata from scientific changes |
+| Label-only target revision; changed scientific target content | Old provenance stays exact; applicability distinguishes metadata from scientific changes |
 
-These are the complete acceptance requirements for #626, not a claim that the
-internal stage below completes the user workflow. Keep them as short synthetic
-contract/admission journeys during the fast-CI window; installed GUI/Windows and
+These boundaries are exercised through the maintained producers and consumers.
+Keep them as short synthetic contract/admission journeys during the fast-CI window; installed GUI/Windows and
 physical-device qualification remain separate finishing gates.
 
 
@@ -344,7 +297,7 @@ single-member binding. Multi-member execution remains pending; catalog registrat
 and a successful topology check alone do not enable it.
 
 
-## Internal run-binding stage (#639)
+## Run binding and admission
 
 Every live run submission carries a versioned `ResolvedScientificBinding`. It
 records an explicit unbound, catalog-qualified inline-sample, or registered-target
@@ -358,24 +311,21 @@ selectors as its runtime projection. Resume reuses retained evidence. Procedure
 admission also freezes inherited sample selectors in `resolved_samples`, while
 retaining the original selection for request-key identity. Reentering a child
 step therefore does not advance its inherited sample head; explicit per-step
-selection and the full target-bearing recipe contract remain follow-on work. Admission
+selection and target-bearing recipes use the authored contract below. Admission
 checks that evidence against local immutable catalog records, submitted config,
 setup and selectors before allocating a visible run or acquisition address. A
 dedicated repository reference is committed in the existing admission transaction;
-current-format recovery retains the same object and identity. Schema 76 marks this
-new development format, with no migration or earlier-format reader.
+current-format recovery retains the same object and identity. This adds no
+migration or earlier-format reader.
 
 The low-level registered-target variant permits only the reviewed single-member
 projection. Target head movement does not replace an exact reference; foreign
 catalogs, incompatible topology and altered mappings are rejected. This boundary
-is internal staging for #626, not an invitation to manually compose target launch
-payloads. The remaining slice must replace flat scientific selection in author
-sessions, previews, saved recipes and procedure children together before offering
-notebook or GUI target selection. Maintained setup and calibration applicability
-remain separate follow-on work.
+applies to both low-level and authored consumers; catalog registration alone does
+not enable multi-member execution.
 
 
-## Authored selection stage (#641)
+## Authored selection and saved plans
 
 The public launch request now has one `ScientificSelection` and one checked
 `ReviewedScientificSelection` envelope. Preview resolves both configuration and
@@ -390,8 +340,9 @@ scope. The workbench consumes the same contract and preserves target-bearing
 plans. The workbench target picker (#643) now selects exact catalog-qualified
 revisions, resolves reopened references independently from the current head list,
 and retains the selection through author refresh and page navigation. Batch,
-record destination and operator remain separate; working-point compatibility is
-checked by the same preview resolver. List refresh never advances a selection.
+record destination and operator remain separate; exact parameter/setup inputs or
+candidate compatibility are checked by the same preview resolver. List refresh
+never advances a selection.
 
 Authored procedures carry the binding as a typed parent field and each durable
 child is checked against it and its claimed step intent. Generic multi-stage
@@ -399,7 +350,6 @@ procedures may omit a fixed full binding because their configurations can change
 their children still pass normal scientific admission and step checks. Maintained
 multi-stage reference workflows currently support inline sample selection.
 
-Schema 77 supersedes the preceding development format without conversion.
-Target-qualified setup/calibration applicability and assembly execution remain
-separate work. The earlier stage descriptions above record implementation order,
-not additional live APIs or compatibility promises.
+Current-format recovery preserves these exact selections and bindings. Assembly
+execution remains separate work; neither old development formats nor retired
+configuration editing APIs are required for it.

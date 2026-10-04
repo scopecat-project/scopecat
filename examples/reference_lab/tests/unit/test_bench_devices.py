@@ -13,7 +13,6 @@ from scopecat.sdk.instruments import (
 from scopecat_instruments.members import REFERENCE_CLOCK
 
 from reference_lab.bench_devices import (
-    ArmedAwgWaveform,
     BenchSignalWorld,
     VirtualTimingController,
 )
@@ -29,6 +28,8 @@ from reference_lab.bench_interfaces import (
 from reference_lab.interfaces import CLOCK_TIMING
 from reference_lab.payloads import (
     TRIGGER_PROGRAM_PAYLOAD,
+    AwgChannelWaveformDocument,
+    AwgEntryDocument,
     DigitizerProgramDocument,
     DigitizerProgramEntryDocument,
     TriggerProgramDocument,
@@ -40,15 +41,12 @@ from reference_lab.provider import ReferenceLabProvider
 def test_virtual_trigger_programs_execute_complete_device_programs() -> None:
     world = BenchSignalWorld()
     awg_entries = (
-        (
-            ArmedAwgWaveform(
-                component_path=("outputs", "ch1"),
-                normalized_samples=(0.0, 1.0),
-                sample_rate_hz=1.0e9,
-                amplitude_v=0.25,
-                offset_v=0.0,
-                output_enabled=True,
-                repeat=False,
+        AwgEntryDocument(
+            waveforms=(
+                AwgChannelWaveformDocument(
+                    component_path=("outputs", "ch1"),
+                    samples=np.array([0.0, 1.0], dtype=np.float64),
+                ),
             ),
         ),
     )

@@ -178,9 +178,9 @@ Application exit must explain active work and offer an explicit stop or backgrou
 choice; failed shutdown remains actionable without Task Manager. Never kill a process
 on PID alone, replay interrupted tasks or take over an unrelated development home.
 
-The reserved `legacy` service-source identity was removed in #806. The remaining
-work is independent application startup and retirement of project-service topology,
-not another source rename. Every author source uses the same explicit registration,
+The reserved `legacy` service-source identity was removed in #806. Independent
+application startup and retirement of project-service topology are delivered by
+#829, #837, #844 and #845. Every author source uses the same explicit registration,
 publication and execution contract. Keep the execution service itself.
 This is not a rename to `default`, an old-format reader or a data-directory deletion.
 

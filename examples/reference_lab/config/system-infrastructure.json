@@ -84,15 +84,6 @@
         "failure_action": "abort_and_release"
       },
       {
-        "id": "bench-scope",
-        "exclusivity_key": "bench-scope",
-        "driver_id": "reference_lab.virtual.oscilloscope",
-        "connection": {"kind": "virtual", "options": {"input_count": 4}},
-        "run_start": "preserve",
-        "success_action": "release",
-        "failure_action": "abort_and_release"
-      },
-      {
         "id": "flux-dac-a",
         "exclusivity_key": "flux-dac-a",
         "driver_id": "reference_lab.virtual.multichannel_dc_source",
@@ -241,14 +232,6 @@
         "endpoints": [
           {"interface_id": "reference_lab.awg_sequencer/v1"},
           {"interface_id": "reference_lab.analog_waveform_output/v1", "component_path": ["outputs", "ch1"]}
-        ]
-      },
-      {
-        "id": "bench-scope-monitor",
-        "instrument_id": "bench-scope",
-        "endpoints": [
-          {"interface_id": "reference_lab.oscilloscope_control/v1"},
-          {"interface_id": "reference_lab.oscilloscope_input/v1", "component_path": ["inputs", "ch1"]}
         ]
       },
       {

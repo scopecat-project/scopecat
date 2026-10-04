@@ -2,7 +2,7 @@
 
 The reference lab is a retained integration fixture with legacy author code: one four-qubit project
 with virtual RF and DC sources, temperature monitor, VNA, three shared LOs, two
-bare AWGs, a bare digitizer, timing controller, and oscilloscope. Its fourteen
+bare AWGs, a bare digitizer and timing controller. Its thirteen
 devices and six reviewed parameter tables exercise direct control, experiments,
 quantum compilation, measurement analysis, and configuration history through
 the same daemon.
@@ -83,6 +83,8 @@ fixed-IF host/target execution and a minimal entityless-host/shared-AWG claim ch
 No gallery facade or full-application clone is required for those checks. See the
 [contract ownership map](../../docs/development/reference-gallery-retirement.md#waveform-gallery-retirement-contract-owners)
 for retained evidence and intentionally withdrawn simulator-specific assertions.
+The scope driver, interfaces, default binding and AWG-to-scope capture hooks are
+also retired; the quantum capture queue and shared trigger/device paths remain.
 
 The application registers `drag_branch_calibration`, a bounded integration
 procedure over an explicitly requested q0/q1 target list. It captures independent
@@ -111,7 +113,7 @@ independence between logical targets.
 | `src/reference_lab/quantum_compilation/` | Lab pulse recipes and point-effective compiler inputs |
 | `src/reference_lab/targets/list_mode/` | Physical target model, compiler, preparation, runtime, and IQ semantics |
 | `src/reference_lab/physical_policies.py` | Lab-owned IQ-offset coupling and host preparation policy |
-| `src/reference_lab/provider.py` | Bare virtual device provider and coupled AWG/scope world |
+| `src/reference_lab/provider.py` | Bare virtual device provider and shared AWG/digitizer trigger world |
 | `src/reference_lab/virtual_lab/` | Injected deterministic quantum plant adapter |
 | `src/reference_lab/workflows/` | Legacy integration inputs; extract valid behaviors before retirement |
 | `notebooks/` | User-facing recipes and their intent |
@@ -218,7 +220,7 @@ retained storage size remain unknown without a corresponding estimate. Raw
 selected-point inspections remain expandable. Projects can omit detailed
 preflight; the launcher then shows that scope and estimates were not provided,
 never zero. A changed input requires a new preview, and submission still checks
-the frozen request and accepted configuration generation.
+the frozen request, exact parameter/setup inputs and current device heads.
 
 The **Frequency / amplitude model** launcher uses one control declaration for
 notebook edits and forms. It previews fixed or scanned axes, configuration-owned
