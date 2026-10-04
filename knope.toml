@@ -1,0 +1,50 @@
+[package]
+versioned_files = [{ path = "release.toml", regex = 'version = "(?<version>[^"]+)"' }]
+changelog = "CHANGELOG.md"
+assets = "release/*"
+
+[github]
+owner = "scopecat-project"
+repo = "scopecat"
+
+[changes]
+ignore_conventional_commits = true
+
+[[workflows]]
+name = "document-change"
+help_text = "Record a user-visible change (commit message conventions are not required)"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[[workflows]]
+name = "prepare-release"
+help_text = "Internal preparation step; use scripts/release.py prepare (version override optional)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows]]
+name = "open-release-pr"
+help_text = "Open a reviewable PR after CI validates the exact preparation commit"
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "Release $version"
+
+[workflows.steps.body]
+template = """Review the version, native build number and changes below. The preparation workflow has validated this commit with CI and documentation checks.
+
+Merging this PR does not publish a release. After merging, run full acceptance on the merged SHA, then manually dispatch Publish release with that SHA.
+
+$changelog"""
+
+[[workflows]]
+name = "publish-release"
+help_text = "Publish preverified application assets; only run through the manual publishing workflow"
+
+[[workflows.steps]]
+type = "Release"

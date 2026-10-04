@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import plistlib
 import shutil
@@ -14,11 +15,21 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import toolchain
-from .bundle import resolve_delivery, verify_bundle
+from .bundle import MANIFEST, resolve_delivery, verify_bundle
+from .release_identity import ReleaseIdentity
 
 
 def _run(command: list[str]) -> None:
     _ = subprocess.run(command, check=True)  # noqa: S603 - fixed build tools
+
+
+def native_identity(source: Path) -> ReleaseIdentity:
+    document = cast("dict[str, object]", json.loads((source / MANIFEST).read_text()))
+    version = document.get("public_version")
+    number = document.get("build_number")
+    if not isinstance(version, str) or type(number) is not int:
+        raise ValueError("Native builds require public_version and build_number")
+    return ReleaseIdentity(version, number)
 
 
 def build(source: Path, destination: Path) -> Path:
@@ -26,6 +37,7 @@ def build(source: Path, destination: Path) -> Path:
         raise ValueError("原生应用需要在 macOS 或 Windows 上构建")
     source = resolve_delivery(source)
     _ = verify_bundle(source)
+    identity = native_identity(source)
     destination = destination.absolute()
     if destination.exists():
         raise FileExistsError(destination)
@@ -123,8 +135,9 @@ def build(source: Path, destination: Path) -> Path:
                         "CFBundleExecutable": "Scopecat",
                         "CFBundleIconFile": "Scopecat.icns",
                         "CFBundlePackageType": "APPL",
-                        "CFBundleShortVersionString": "0.2.0",
-                        "CFBundleVersion": "1",
+                        "CFBundleShortVersionString": identity.short_version,
+                        "CFBundleVersion": str(identity.build_number),
+                        "ScopecatReleaseVersion": identity.version,
                         "NSHighResolutionCapable": True,
                     },
                     stream,
@@ -212,10 +225,13 @@ def package(app: Path, destination: Path) -> Path:
                 if not candidate.is_file():
                     raise ValueError("构建 Windows 安装程序需要 Inno Setup 6")
                 compiler = str(candidate)
+            identity = native_identity(app / "resources/payload")
             script = staging / "setup.iss"
             _ = script.write_text(
                 "[Setup]\nAppId=org.scopecat.desktop\nAppName=Scopecat\n"
-                "AppVersion=0.2.0\nDefaultDirName={userpf}\\Scopecat\n"
+                f"AppVersion={identity.version}\n"
+                f"VersionInfoVersion={identity.windows_version}\n"
+                "DefaultDirName={userpf}\\Scopecat\n"
                 "PrivilegesRequired=lowest\nUninstallDisplayIcon={app}\\Scopecat.exe\n"
                 f"OutputDir={staging}\nOutputBaseFilename=Scopecat-Setup\n"
                 "Compression=lzma2\nSolidCompression=yes\nDisableProgramGroupPage=yes\n"

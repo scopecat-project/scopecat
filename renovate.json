@@ -25,6 +25,15 @@
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["major", "minor", "patch"],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Review Knope installer and CLI updates separately after a non-publishing release rehearsal",
+      "matchPackageNames": [
+        "knope-dev/action",
+        "knope-dev/knope"
+      ],
+      "groupName": null,
+      "automerge": false
     }
   ]
 }

@@ -32,7 +32,7 @@ choices rather than product requirements.
 Use the qualified Mac or Windows installer supplied by the maintainer. It includes
 Python and application dependencies; opening saved data requires no source checkout
 or laboratory SDK. See [first steps](docs/getting-started/index.md) and
-[preview artifacts](docs/development/public-preview.md#native-application).
+[preview artifacts](docs/development/public-preview.md#artifact-identity-and-consumer-selection).
 
 For framework development without installing the application:
 

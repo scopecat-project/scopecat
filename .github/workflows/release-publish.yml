@@ -1,0 +1,249 @@
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Full 40-character SHA of the merged release preparation commit
+        required: true
+        type: string
+
+env:
+  # renovate: datasource=github-releases depName=knope-dev/knope extractVersion=^knope/v(?<version>.*)$
+  KNOPE_VERSION: "0.23.0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require a full commit SHA
+        env:
+          RELEASE_COMMIT: ${{ inputs.commit }}
+        run: '[[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Require the exact commit on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ inputs.commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+      - name: Require successful manual full acceptance for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ inputs.commit }}
+        run: |
+          gh run list --workflow acceptance.yml --commit "$RELEASE_COMMIT" --event workflow_dispatch --limit 100 \
+            --json conclusion,displayTitle,headSha > "$RUNNER_TEMP/acceptance-runs.json"
+          jq --exit-status --arg commit "$RELEASE_COMMIT" \
+            'any(.[]; .conclusion == "success" and .headSha == $commit and (.displayTitle | startswith("Acceptance (full) @ ")))' \
+            "$RUNNER_TEMP/acceptance-runs.json"
+      - name: Validate release metadata and monotonic identity
+        run: |
+          git fetch origin --tags
+          uv run --locked python scripts/release.py check-publish
+
+  validate:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.commit }}
+
+  preview:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: apps/scopecat-ui/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Build versioned public assets
+        run: uv run --locked python scripts/build_preview.py "$RUNNER_TEMP/preview" --release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-public
+          path: ${{ runner.temp }}/preview/*
+          if-no-files-found: error
+          retention-days: 14
+
+  native:
+    needs: preview
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: apps/scopecat-ui/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: runner.os == 'Windows'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-public
+          path: ${{ runner.temp }}/preview
+      - name: Build and qualify installer from the same public assets
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          uv run --locked --group delivery python -m lab_tools.delivery "$RUNNER_TEMP/delivery" --public-artifacts "$RUNNER_TEMP/preview" --release
+          mkdir "$RUNNER_TEMP/release-native"
+          if [ "$RUNNER_OS" = Windows ]; then
+            native_app="$RUNNER_TEMP/Scopecat"
+            installer="$RUNNER_TEMP/release-native/Scopecat-Setup.exe"
+          else
+            native_app="$RUNNER_TEMP/Scopecat.app"
+            installer="$RUNNER_TEMP/release-native/Scopecat.dmg"
+          fi
+          uv run --locked --group delivery python -m lab_tools.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
+          if [ "$RUNNER_OS" = macOS ]; then
+            uv run --locked python scripts/verify_macos_desktop_exit.py "$native_app"
+          fi
+          uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
+          uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer"
+          if [ "$RUNNER_OS" = macOS ]; then
+            uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
+          fi
+          cp "$RUNNER_TEMP/native-acceptance/native-release.json" "$RUNNER_TEMP/release-native/$PLATFORM-native-release.json"
+          cp "$RUNNER_TEMP/native-acceptance/bundle.json" "$RUNNER_TEMP/release-native/$PLATFORM-bundle.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-native-${{ matrix.platform }}
+          path: ${{ runner.temp }}/release-native/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/native-acceptance
+            ${{ runner.temp }}/direct-runtime
+            ${{ runner.temp }}/macos-download
+          retention-days: 14
+
+  assemble:
+    needs: [preview, native]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-public
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-native-*
+          path: release
+          merge-multiple: true
+      - name: Require complete matching release assets
+        env:
+          RELEASE_COMMIT: ${{ inputs.commit }}
+        run: |
+          uv run --locked python scripts/release_assets.py assemble release --commit "$RELEASE_COMMIT"
+          uv run --locked python scripts/release_assets.py verify release --commit "$RELEASE_COMMIT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-verified
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-verified
+          path: release
+      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
+        with:
+          version: ${{ env.KNOPE_VERSION }}
+      - name: Verify assets and publish through Knope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ inputs.commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          uv run --locked python scripts/release_assets.py verify release --commit "$RELEASE_COMMIT"
+          git fetch origin --tags
+          uv run --locked python scripts/release.py check-publish --remote
+          knope publish-release
