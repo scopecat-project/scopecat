@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 from typer.testing import CliRunner
 
 from lab_tools import practice, project
@@ -62,13 +63,20 @@ def test_public_application_forwards_arguments(monkeypatch: pytest.MonkeyPatch) 
     assert received == arguments
 
 
-def test_public_cli_composition_does_not_mutate_server_commands() -> None:
+@pytest.mark.parametrize("color", [False, True])
+def test_public_cli_composition_does_not_mutate_server_commands(
+    color: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from scopecat_server.cli import app as server_app
 
+    monkeypatch.setattr("typer.rich_utils.FORCE_TERMINAL", color)
+    monkeypatch.setattr("typer.rich_utils.COLOR_SYSTEM", "standard" if color else None)
     runner = CliRunner()
-    assert runner.invoke(app, ["init", "--help"]).exit_code == 0
-    assert "--topic" in runner.invoke(app, ["init", "--help"]).output
-    assert "--topic" not in runner.invoke(server_app, ["init", "--help"]).output
+    application_help = runner.invoke(app, ["init", "--help"])
+    server_help = runner.invoke(server_app, ["init", "--help"])
+    assert application_help.exit_code == server_help.exit_code == 0
+    assert "--topic" in Text.from_ansi(application_help.output).plain
+    assert "--topic" not in Text.from_ansi(server_help.output).plain
     assert runner.invoke(server_app, ["app"]).exit_code == 2
     for command in ("config", "snapshot", "automation", "start", "stop", "status"):
         result = runner.invoke(app, [command, "--help"])
