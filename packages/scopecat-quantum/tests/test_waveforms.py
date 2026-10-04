@@ -89,6 +89,31 @@ def test_zero_duration_constant_preserves_scan_reference_without_output_or_delay
     assert program.duration_seconds == Decimal("8e-9")
 
 
+@pytest.mark.parametrize("frequency_hz", [-125_000_000, 125_000_000])
+def test_signed_if_preserves_i_and_reverses_q_in_rendered_buffers(
+    frequency_hz: float,
+) -> None:
+    program = schedule(
+        PulseProgram(
+            PulseProgramId("signed-if"),
+            Play(
+                PulseEventId("drive"),
+                DRIVE_Q0,
+                Constant(Quantity(8, "ns"), Quantity(0.25, "arb")),
+            ),
+        )
+    )
+    plan = plan_sampled_waveforms(
+        program,
+        bindings=(SampledOutputBinding(DRIVE_Q0, 0, 1, frequency_hz, IDENTITY_IQ),),
+        grid=SampleGrid(1_000_000_000, sample_location="left_edge"),
+    )
+    rendered = Float64ReferenceRenderer().render(plan)
+    phase = 2 * np.pi * frequency_hz * np.arange(8) / 1e9
+    np.testing.assert_allclose(rendered.buffers[0], 0.25 * np.cos(phase), atol=1e-15)
+    np.testing.assert_allclose(rendered.buffers[1], 0.25 * np.sin(phase), atol=1e-15)
+
+
 def _binding(signal: DriveSignal | ReadoutSignal) -> SampledOutputBinding:
     return SampledOutputBinding(
         signal=signal,

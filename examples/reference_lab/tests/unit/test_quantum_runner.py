@@ -33,6 +33,7 @@ from scopecat_testkit.server.in_process_lab import in_process_lab
 import reference_lab.compiler as reference_compiler_module
 from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT,
+    ANALOG_WAVEFORM_OUTPUT_ENABLED,
     ANALOG_WAVEFORM_OUTPUT_RESET,
 )
 from reference_lab.compiler import QuantumLabCompiler
@@ -742,6 +743,52 @@ def test_reviewed_los_prepare_once_without_fragmenting_quantum_batches() -> None
         for job in jobs
         for address in job.execution.setup_state_invalidations
     } == requirement_addresses
+
+
+def test_entityless_host_and_quantum_target_claim_the_same_physical_awg() -> None:
+    # Only the host capability request is specific to this test. The existing
+    # quantum fixture owns the target's compilation and physical device mapping.
+    @sc.experiment
+    def direct(experiment: sc.ExperimentContext) -> None:
+        source = sc.capability_resource(
+            experiment,
+            "source",
+            requires=(ANALOG_WAVEFORM_OUTPUT_ENABLED,),
+        )
+        sc.ensure_state_targets(
+            experiment,
+            (source.state_target({ANALOG_WAVEFORM_OUTPUT_ENABLED: True}),),
+        )
+
+    config = bootstrap_config()
+    provider = ReferenceLabProvider()
+    composition = compose_test_instruments(
+        config=config,
+        provider=provider,
+        domain_compiler=QuantumLabCompiler(target=_configured_target(config, provider)),
+        payload_codecs=reference_lab_payload_codecs(),
+    )
+    local = compile_invocation(direct.build())
+    assert local.program.program.resource_ports[0].selector.entity_inputs == ()
+    local_plan = compile_run_program(
+        composition.system,
+        bound=bind_program(local.program, build_config_environment(config)),
+    )
+    quantum_plan = compile_run_program(
+        composition.system,
+        bound=bind_program(
+            compile_invocation(drag_beta_experiment.build()).program,
+            build_config_environment(config),
+        ),
+    )
+    [physical_owner] = local_plan.resource_requirements
+    assert physical_owner in quantum_plan.resource_requirements
+    assert quantum_plan.domain_target_requirement is not None
+    assert physical_owner.id in quantum_plan.domain_target_requirement.instrument_ids
+    assert local_plan.host is not None
+    assert quantum_plan.host is not None
+    assert physical_owner.id in local_plan.host.resource_order
+    assert physical_owner.id in quantum_plan.host.resource_order
 
 
 def test_guard_reset_invalidates_state_required_by_quantum_domain() -> None:

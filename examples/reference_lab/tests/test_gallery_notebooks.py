@@ -47,45 +47,6 @@ def test_multichannel_dc_bias_spans_two_devices_and_four_routes(
     }
 
 
-def test_xy_lo_sweep_records_carriers_from_signed_if(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "34_xy_lo_sweep.py"))
-    summary = cast("dict[str, object]", namespace["xy_lo_sweep_summary"])
-
-    assert summary == {
-        "requested_lo_ghz": [4.9, 4.91, 4.92],
-        "requested_signed_if_mhz": {"q0": 100.0, "q1": -100.0},
-        "requested_carrier_ghz": {
-            "q0": [5.0, 5.01, 5.02],
-            "q1": [4.8, 4.81, 4.82],
-        },
-        "status": "completed",
-    }
-
-
-def test_awg_output_monitor_records_entityless_bench_capture(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "35_awg_output_monitor.py"))
-    summary = cast("dict[str, object]", namespace["awg_output_monitor_summary"])
-
-    assert summary == {
-        "name": "AWG CH1 pulse shape after bench recabling",
-        "tags": ["diagnostic", "awg-monitor"],
-        "description_mentions_wiring": True,
-        "samples": 16,
-        "time_end_ns": 15.0,
-        "peak_mv": 250.0,
-        "minimum_mv": -20.0,
-        "status": "completed",
-    }
-
-
 def test_flux_ramsey_composes_local_bias_and_quantum_channels(
     reference_lab_daemon: _ReferenceLabDaemon,
     reference_lab_notebooks: Path,
@@ -194,21 +155,5 @@ def test_topology_scaled_ramsey_resolves_one_connected_qubit_set(
         "shape": [3, 3, 64],
         "entities": ["q1", "q0", "q2"],
         "tree_has_parallel_each": True,
-        "status": "completed",
-    }
-
-
-def test_ragged_scope_data_survives_daemon_boundaries(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "50_ragged_scope_capture.py"))
-    summary = cast("dict[str, object]", namespace["ragged_scope_summary"])
-
-    assert summary == {
-        "record_lengths": [4, 7, 10],
-        "ragged_shapes": [[4], [7], [10]],
-        "window_shapes": [[2], [2], [2]],
         "status": "completed",
     }
