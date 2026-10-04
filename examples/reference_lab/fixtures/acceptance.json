@@ -696,7 +696,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:5aefb3d6a8464f3bf3026d9e8fc277df75120b0f34ebfdfa6ae89a752d1af63c",
+        "config_source_hash": "sha256:b31c137d7ea20f5f473dd7b93e0790344f5c56fc2515feb564464ddfaf22bd88",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -817,8 +817,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:dedf95e7215ea132d8aa38e1a49674af5bea1a1ebdac5c48fab5b68e02d83bb2",
-          "revision_id": "resolved:dedf95e7215ea132d8aa38e1a49674af5bea1a1ebdac5c48fab5b68e02d83bb2"
+          "content_hash": "sha256:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1",
+          "revision_id": "resolved:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1"
         }
       }
     },
@@ -1089,7 +1089,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:5aefb3d6a8464f3bf3026d9e8fc277df75120b0f34ebfdfa6ae89a752d1af63c",
+        "config_source_hash": "sha256:b31c137d7ea20f5f473dd7b93e0790344f5c56fc2515feb564464ddfaf22bd88",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1210,8 +1210,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:dedf95e7215ea132d8aa38e1a49674af5bea1a1ebdac5c48fab5b68e02d83bb2",
-          "revision_id": "resolved:dedf95e7215ea132d8aa38e1a49674af5bea1a1ebdac5c48fab5b68e02d83bb2"
+          "content_hash": "sha256:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1",
+          "revision_id": "resolved:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1"
         }
       }
     },
@@ -1772,7 +1772,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:5aefb3d6a8464f3bf3026d9e8fc277df75120b0f34ebfdfa6ae89a752d1af63c",
+        "config_source_hash": "sha256:b31c137d7ea20f5f473dd7b93e0790344f5c56fc2515feb564464ddfaf22bd88",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1909,8 +1909,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:dedf95e7215ea132d8aa38e1a49674af5bea1a1ebdac5c48fab5b68e02d83bb2",
-          "revision_id": "resolved:dedf95e7215ea132d8aa38e1a49674af5bea1a1ebdac5c48fab5b68e02d83bb2"
+          "content_hash": "sha256:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1",
+          "revision_id": "resolved:e6472a29e6aac4dabee38dda53c4ccf1fd29256d959ac352906593337a6703c1"
         }
       }
     },

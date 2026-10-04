@@ -76,18 +76,13 @@ list of interfaces to preserve.
 | `31_topology_scaled_ramsey.py` | One connected-qubit-set program reused across chip topology and scale |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
 
-`tests/test_xy_drive.py` owns shared-LO and signed-IF qualification directly,
-without a gallery script. Its real daemon/instrument-worker journey checks
-positive/negative I/Q samples emitted by the virtual AWG, confirmed LO commands,
-clock readback, exact parameter/setup inputs and retained evidence on reconnect.
-`tests/test_bench_capture.py` replaces the AWG monitor and ragged capture scripts with complete
-time/voltage checks through the real daemon and virtual instrument worker, terminal
-state and reservation release, and retained-data reconnect without acquisition.
-The ragged case checks each 4/7/10-sample trace, continuous-waveform wrapping,
-point-local slicing and the actual per-point scope record-length commands.
-`tests/test_awg_output_monitor.py` retains entityless routing, operation ordering
-and shared physical AWG claim checks.
-The experiment definitions remain compiler/device fixtures; they are not teaching APIs.
+The XY, AWG monitor and ragged scope scripts and their workflow modules are
+retired. Current quantum renderer, core resource/dataset and server worker tests
+own their valid framework contracts. The existing quantum runner fixture retains
+fixed-IF host/target execution and a minimal entityless-host/shared-AWG claim check.
+No gallery facade or full-application clone is required for those checks. See the
+[contract ownership map](../../docs/development/reference-gallery-retirement.md#waveform-gallery-retirement-contract-owners)
+for retained evidence and intentionally withdrawn simulator-specific assertions.
 
 The application registers `drag_branch_calibration`, a bounded integration
 procedure over an explicitly requested q0/q1 target list. It captures independent
@@ -167,16 +162,12 @@ tables, and temporary scan axes belong to experiment invocations.
 - The list-mode runtime uses explicit load, prepare, arm, shared-trigger, and
   fetch batches. Their order is auditable; target docstrings define trigger
   session guarantees, setup invalidation, and acquisition placement.
-- The AWG/scope experiment uses entityless routes because the cable is temporary
-  and no qubit mapping is needed. A completely unregistered diagnostic device
-  uses `lab.devices.open(device_id)` with a registered diagnostic device instead.
 - Instrument snapshots, requested state, intents, and receipts remain run
   evidence. Experiments record only scientifically meaningful values; output
   enable remains an ordinary state that an experiment may vary.
 
-The exact conventions live beside their owners in `physical_policies.py`,
-`workflows/xy_drive.py`, `workflows/awg_output_monitor.py`, and
-`targets/list_mode/`. The README provides the scenario map rather than a second
+The retained target conventions live beside their owners in `physical_policies.py`
+and `targets/list_mode/`. The README provides the scenario map rather than a second
 target specification.
 
 ## Checks

@@ -17,7 +17,7 @@ source; installed historical environments and scientific data are untouched.
 | `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
 | `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31` | Compiled buffers, channel conflicts, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
-| `34_xy_lo_sweep.py`, `XY_LO_SWEEP` | Shared LO, signed IF, I/Q routes, clocks and carrier records | Retired the presentation script and prebuilt invocation. `tests/test_xy_drive.py` owns compiler assertions and one real daemon/instrument-worker journey; coverage is mapped below. The facade and `xy_lo_sweep.build()` remain necessary device-test inputs. |
+| `34_xy_lo_sweep.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` and their workflow modules | Shared owners, signed IF, entityless claims and variable-length acquisition | Retired the scripts, experiments, result wrappers and XY facade. Current contract owners and deliberately withdrawn fixture assertions are mapped below. |
 | `30_drag_calibration.py` | DRAG acquisition, fit and uncertainty display, exact candidate lineage and independent verification | Retired. `test_typed_candidates.py` retains the real-device simulation and analysis with independent parameters/setup and no default mutation. Global publication/restore is no longer a required author journey. |
 | `workflows/drag_beta_*` | Independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Acquisition, fit and scientific scoring remain focused integration dependencies. Old freshness, verify-only procedure, semantic-merge publisher and automatic-publication registry are retired. `drag_branch_calibration` and real-daemon tests cover target-complete joint remeasurement, retained rejection, exact branch publication and restart/lost-response recovery. |
 | `drag_beta_calibration_procedure`, `DragBetaProcedureIntent`, active-generation request key | Single-target fit, verify, explicitly publish and use accepted gate values | Retired the default-publishing procedure and later verify-only cohort members. The real DRAG test publishes to an explicit branch and executes the standard-gate fixture with the exact accepted revision. |
@@ -77,49 +77,44 @@ expresses an obsolete requirement before removing it.
   checks durable Arrow pagination and schema. These directly cover the deleted
   workbench's summary counts without acquiring a resonator scan first.
 
-## XY shared-LO and signed-IF evidence
+## Waveform gallery retirement: contract owners
 
-| Removed assertion or input | Maintained evidence |
-| --- | --- |
-| Gallery summary's three LO values and derived q0/q1 carriers | `test_xy_drive_signed_if_crosses_daemon_and_instrument_worker` reads all three LO coordinates and both carrier series from retained measurements, and requires a completed run. |
-| Summary's hard-coded +100/-100 MHz labels | The same test observes all twelve decoded virtual-AWG emissions in a distinct instrument-worker PID: equal I waveforms and opposite Q waveforms at 1 GHz sample rate, with the expected mounts, amplitude, offset, enable and run mode. These are simulated signals, not hardware qualification. |
-| Implicit shared-LO/clock and route claims | Existing `test_xy_drive_composes_shared_awg_state_and_real_dac_operations` retains shared-owner coalescing, I/Q routes and state-before-play ordering. The worker journey adds confirmed LO frequency commands and terminal LO/AWG clock readback. |
-| `gallery_inputs()` setup for this script | The worker journey explicitly saves independent parameters and resolves the initial setup, checks exact run input identities, leaves setup and the combined registry unchanged, then reconnects and reads the same snapshot/state evidence without further emissions. |
-| Notebook presentation, `xy_lo_sweep_summary`, and `XY_LO_SWEEP` constant | Removed without an API replacement. Tests build the existing experiment directly. Its facade, waveform generation and dataset definition remain shared compiler/device fixtures, not dead wrappers. |
+The three workflow modules had no independent author or scientific consumers.
+The XY facade was used only by its own sweep and tests; the monitor definition
+was used by gallery/compilation tests; ragged capture was used only by its gallery
+and replacement test. Tests calling an old interface do not make it a maintained
+contract. The scripts, prebuilt invocations, experiment/result wrappers and
+`XYDriveGroup` are removed, rather than moving those APIs into a test directory.
 
-The test-only emission observer delegates to the existing virtual signal world;
-the original provider drivers, payload codecs, daemon and instrument transport
-still execute. It copies no notebooks and starts one disposable project with
-explicit endpoint ownership and guaranteed lifecycle teardown. Other gallery
-consumers and current-format recovery coverage remain in place.
+| Current requirement | Evidence owner | Withdrawn gallery assumptions |
+| --- | --- | --- |
+| Signed IF produces the correct physical I/Q buffers | Quantum `tests/test_waveforms.py::test_signed_if_preserves_i_and_reverses_q_in_rendered_buffers` runs `plan_sampled_waveforms` and `Float64ReferenceRenderer` with positive and negative IF. Reference `unit/test_quantum_runner.py::test_fixed_if_lo_sweep_bounds_real_time_batches_with_host_effects` retains actual host/target LO execution and carrier results. | The separate hand-written XY sine renderer, facade API, q0/q1 selection, forty samples and three particular LO values are not compatibility requirements. |
+| Logical demands resolve to physical state owners | Core `execution/test_resource_effect_regressions.py` checks equal-state coalescing and conflicting-state rejection; `planning/test_routing.py` checks route scope and physical endpoints. | Exact facade port names, capability counts and hard-coded reference I/Q channel order. |
+| Entityless direct control and quantum execution share a physical AWG claim | Reference `unit/test_quantum_runner.py::test_entityless_host_and_quantum_target_claim_the_same_physical_awg` uses one local member-capability request and the existing quantum compiler fixture. | The sixteen-sample monitor experiment, temporary-cable narrative, metadata strings and complete scope setup are not needed to prove this relationship. This compilation check does not itself prove runtime exclusion. |
+| Worker transport preserves driver operations, payloads and acquired values | Server `test_instrument_worker.py::test_spawned_worker_executes_closed_driver_requests` uses the dedicated worker project and checks actual subprocess execution. Existing quantum runner and device-runtime tests retain target/device integration. | No new full reference application clone, provider-private emission observer or single-PID topology requirement. |
+| Ragged acquisition survives worker/storage/restart and supports point-local slices | Server `test_instrument_worker.py::test_ragged_point_cloud_run_survives_daemon_and_worker_boundaries` checks worker identity, restart, shapes, numerical values and acquisition evidence. Core `measurements/test_dataset.py::test_ragged_sample_selection_applies_independently_per_point_and_group` owns slicing. | The 4/7/10-point scope experiment and eight-sample repeating waveform are simulator examples, not a separate scientific protocol or required ragged API. |
+| Reopening retained work does not reacquire | The existing starter lifecycle journey listed above and server worker restart coverage retain this contract. | Repeating metadata, input identity and reconnect assertions in three gallery-derived daemons. |
 
-## Waveform capture retirement evidence
+There is no identified uncovered contract requiring the temporary AWG-to-scope
+scenario as another full-system journey. Its exact arm/play/fetch recipe and
+repetition semantics are retired, not claimed to have been migrated. Numerical
+test vectors remain useful when chosen for a current contract; historical vector
+values and old result wrappers are not themselves obligations.
 
-`35_awg_output_monitor.py` and the unneeded `AWG_OUTPUT_MONITOR` prebuilt
-invocation are retired. `test_bench_capture.py` builds the retained experiment
-directly, with independently saved parameters and an explicit setup. It checks
-all sixteen time/voltage samples, operator metadata, actual worker emissions,
-terminal AWG/scope state, released reservations, and identical data/evidence on
-reconnect without new emissions. The observer delegates to the original virtual
-bench and uses the same transport as the XY journey; no notebook is copied.
-`test_awg_output_monitor.py` retains entityless capability selection,
-arm/play/fetch ordering, and the physical AWG claim shared with quantum work.
+The shared provider, bench interfaces/codecs and quantum target remain in use by
+`test_quantum_runner.py`, `unit/test_list_mode_device_runtime.py`, acceptance and
+the remaining device inputs. This slice does not redesign their full inventory
+or declare every simulator member necessary. It adds no facade, testkit API,
+compatibility layer or replacement application. Broader device/compiler extraction
+remains in #773.
 
-`50_ragged_scope_capture.py` and its unused `RAGGED_SCOPE_CAPTURE` constant
-are also retired. The same direct worker journey has a separate ragged case,
-retaining the experiment definition as the device input. It checks every time
-and voltage sample at lengths 4/7/10, including the repeated eight-sample probe's
-tail, point-local two-sample slices, confirmed scope record-length commands and
-terminal continuous-AWG/disarmed-scope state. Reconnect reads all three traces
-and slices without another emission. Generic dataset tests remain complementary;
-they do not stand in for this instrument-worker path.
-
-Removing the prebuilt invocations changes captured project source identity.
-Regenerated acceptance preview `config_source_hash` and setup `content_hash` /
-`revision_id` fields follow that source through worker/provider artifact binding;
-scientific values, schemas and other fixture leaves must remain identical.
-This is public source simulation evidence, not an installed-release, private
-consumer or hardware qualification.
+Removing captured source files changes worker/provider artifact identity and the
+resolved device/setup identity. Regenerate acceptance with the official isolated
+generator: the affected leaves are `config_source_hash`, setup `content_hash` and
+setup `revision_id` in `controls_scalar`, `controls_scan` and `launch_preview`.
+Scientific values, schemas and every other fixture leaf must remain identical.
+These tests establish source-level software behavior, not installed-package,
+private-consumer or hardware qualification.
 
 ## Configuration-authority retirement evidence
 
