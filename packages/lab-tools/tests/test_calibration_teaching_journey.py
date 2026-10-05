@@ -36,8 +36,10 @@ def test_calibration_notebook_resumes_and_retains_rejection(
 # A separate process models a fresh kernel and respects one code root per process.
 _JOURNEY = """
 import json
+import os
 import sys
 from pathlib import Path
+from IPython.core.interactiveshell import InteractiveShell
 import scopecat as sc
 from scopecat_server.lifecycle import start_project, stop_project
 
@@ -46,18 +48,18 @@ notebook = root / "notebooks" / (sys.argv[2] + ".ipynb")
 sys.path.insert(0, str(root / "src"))
 project = sc.open_project(root)
 start_project(project, timeout=120)
+shell = InteractiveShell.instance()
+os.chdir(root)
 try:
-    with project.authoring() as session:
-        namespace = {"sc": sc, "session": session}
+    with shell.builtin_trap:
+        namespace = shell.user_ns
         cells = json.loads(notebook.read_text(encoding="utf-8"))["cells"]
         for cell in cells:
             if cell["cell_type"] != "code":
                 continue
             source = "".join(cell["source"])
-            if "sc.notebook()" in source:
-                # Runtime binding protection has separate application tests.
-                continue
-            exec(compile(source, str(notebook), "exec"), namespace)
+            result = shell.run_cell(source)
+            result.raise_error()
             if "request_id = request.id" in source or "task_ids =" in source:
                 stop_project(project)
                 start_project(project, timeout=120)
@@ -304,6 +306,102 @@ try:
             assert lab.config.registry().entries == ()
             outcomes = {r.summary().outcome for r in lab.procedures.list().items}
             assert outcomes == {"succeeded", "failed"}
+finally:
+    if "session" in shell.user_ns:
+        shell.user_ns["session"].close()
+    stop_project(project)
+"""
+
+
+def test_procedure_capture_preserves_imports_and_checks_changed_source(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "calibration"
+    create_project(root)
+    install_lesson(root, "calibration")
+    environment = dict(os.environ)
+    environment.pop("SCOPECAT_DAEMON_URL", None)
+    result = subprocess.run(  # noqa: S603 - Fixed script and generated test directory.
+        [sys.executable, "-c", _SOURCE_LIFECYCLE, str(root)],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+_SOURCE_LIFECYCLE = """
+import importlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+import pytest
+import scopecat as sc
+from scopecat_server.lifecycle import start_project, stop_project
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "src"))
+project = sc.open_project(root)
+start_project(project, timeout=120)
+try:
+    with project.authoring() as session:
+        namespace = {"sc": sc, "session": session}
+        cells = json.loads((root / "notebooks/calibration.ipynb").read_text())["cells"]
+        exec("".join(cells[2]["source"]), namespace)
+        lab = namespace["lab"]
+        module = importlib.import_module("my_experiment.calibration")
+        intent = module.CalibrationIntent(
+            initial=lab.parameters.resolve(
+                namespace["initial"], setup=namespace["setup"],
+            ),
+            destination=namespace["destination"],
+            revision_name="capture-accepted",
+        )
+        first = lab.procedures.submit(
+            module.calibrate, intent, request_key="first",
+        ).snapshot
+        assert importlib.import_module(module.__name__) is module
+        lab.close()
+        with project.connect() as lab:
+            second = lab.procedures.submit(
+                module.calibrate, intent, request_key="second",
+            )
+            assert second.snapshot.source == first.source
+            source = root / "src/my_experiment/calibration.py"
+            original = source.read_text()
+            source.write_text(original.replace(
+                '    baseline = ctx.run(',
+                '    raise ValueError("changed implementation")\\n'
+                '    baseline = ctx.run(',
+            ))
+            changed = lab.procedures.submit(
+                module.calibrate, intent, request_key="changed",
+            )
+            assert changed.snapshot.source is not None
+            assert first.source is not None
+            assert (changed.snapshot.source.code_revision
+                    != first.source.code_revision)
+            assert importlib.import_module(module.__name__) is module
+            worker = subprocess.run([
+                sys.executable, "-c",
+                "from pathlib import Path; import sys; "
+                "from scopecat_server.launch_worker import run_project_procedure; "
+                "run_project_procedure(Path(sys.argv[1]), sys.argv[2])",
+                str(root), changed.id,
+            ], capture_output=True, text=True, timeout=60)
+            assert worker.returncode == 0, worker.stdout + worker.stderr
+            rejected = changed.snapshot
+            assert rejected.state == "attention_required", rejected
+            assert "fingerprint" in rejected.attention_reason, rejected
+            assert not changed.steps().items
+        # Explicit author refresh still selects new imports and rejects old models.
+        session.refresh()
+        refreshed = importlib.import_module(module.__name__)
+        assert refreshed is not module
+        with pytest.raises(ValueError, match="CalibrationIntent"):
+            refreshed.calibrate.validate_intent(intent)
 finally:
     stop_project(project)
 """

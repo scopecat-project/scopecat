@@ -170,7 +170,9 @@ class Project:
 
         def procedure_source() -> ProcedureSource:
             with self.authoring(endpoint) as author:
-                state = author.refresh()
+                # Admission needs retained source, not new Python module identities
+                # in the caller's kernel. Explicit author/Notebook refresh owns imports.
+                state = author.begin_refresh().wait(timeout=120)
                 assert state.active is not None
                 return ProcedureSource(
                     workspace_id=author.workspace_id, code_revision=state.active
