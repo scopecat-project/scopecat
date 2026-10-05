@@ -2,7 +2,6 @@
 
 import json
 import sys
-from importlib.resources import files
 from pathlib import Path
 
 MANIFEST = """[lab]
@@ -19,16 +18,6 @@ dependencies = []
 [authors.packages]
 lab_teaching = "scopecat-lab-teaching"
 """
-
-APPLICATION = '''"""Initial configuration; edit my_experiment for daily work."""
-from pathlib import Path
-from lab_teaching import application
-
-
-def create_bootstrap(root: Path):
-    return application.create_bootstrap(root)
-'''
-
 
 PYPROJECT = """[project]
 name = "my-experiment"
@@ -87,7 +76,11 @@ def write_editor_files(destination: Path) -> None:
         )
 
 
-def create_project(destination: str | Path) -> Path:
+def create_project(destination: str | Path, *, topic: str | None = None) -> Path:
+    from .lessons import TOPICS, install_lesson
+
+    if topic is not None and topic not in TOPICS:
+        raise ValueError(f"未知专题: {topic}")
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=False)
     _ = (destination / "pyproject.toml").write_text(PYPROJECT, encoding="utf-8")
@@ -95,38 +88,12 @@ def create_project(destination: str | Path) -> Path:
     source = destination / "src/my_experiment"
     source.mkdir(parents=True)
     _ = (source / "__init__.py").write_text("", encoding="utf-8")
-    material = files("lab_teaching.course_material")
-    _ = (source / "teaching.py").write_bytes(
-        material.joinpath("experiment.py").read_bytes()
-    )
-    _ = (source / "group_analysis.py").write_bytes(
-        material.joinpath("group_analysis.py").read_bytes()
-    )
-    _ = (source / "result_types.py").write_bytes(
-        material.joinpath("result_types.py").read_bytes()
-    )
-    _ = (destination / "src/workspace_app.py").write_text(APPLICATION, encoding="utf-8")
-    notebooks = destination / "notebooks"
-    notebooks.mkdir()
-    for name in (
-        "start.ipynb",
-        "reopen.ipynb",
-        "HINTS.md",
-        "REFERENCE.md",
-        "OBSERVATION.md",
-        "EDITING.md",
-        "GROUPS.md",
-        "MAINTENANCE.md",
-    ):
-        _ = (notebooks / name).write_bytes(material.joinpath(name).read_bytes())
-    readme = material.joinpath("README.md").read_text(encoding="utf-8")
-    for name in ("EDITING.md", "GROUPS.md", "MAINTENANCE.md"):
-        readme = readme.replace(f"]({name})", f"](notebooks/{name})")
-    _ = (destination / "README.md").write_text(readme, encoding="utf-8")
     _ = (destination / ".gitignore").write_text(
         ".venv/\n.scopecat/\n.scopecat-notebook/\n**/__pycache__/\n.ipynb_checkpoints/\n",
         encoding="utf-8",
     )
     manifest = destination / "scopecat.toml"
     _ = manifest.write_text(MANIFEST, encoding="utf-8")
+    (destination / "notebooks").mkdir()
+    _ = install_lesson(destination, topic)
     return manifest

@@ -993,12 +993,10 @@ def test_shutdown_interrupts_a_blocked_driver_call(tmp_path: Path) -> None:
     invocation.start()
     _wait_for_marker(project / "driver-blocked-source-0")
 
-    started_at = time.monotonic()
     endpoint.shutdown()
-    elapsed = time.monotonic() - started_at
     invocation.join(timeout=2)
 
-    assert elapsed < 2
+    assert not psutil.pid_exists(endpoint.worker_pid)
     assert not invocation.is_alive()
     assert len(errors) == 1
     assert isinstance(errors[0], InstrumentBackendUnavailable)

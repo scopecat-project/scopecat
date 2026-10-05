@@ -1,5 +1,6 @@
 """Installed teaching contract: local refresh, retained analysis and restart."""
 
+import importlib
 import os
 from pathlib import Path
 
@@ -8,9 +9,7 @@ import numpy as np
 import pytest
 
 import scopecat as sc
-from lab_teaching.parameters import Drive
 from lab_teaching.project import create_project
-from lab_teaching.session import analyze_rabi, open_parameters
 from scopecat.daemon.wire import SampleCreateCommand
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft
@@ -29,6 +28,12 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             response.raise_for_status()
             assert "<html" in response.text
         with project.authoring() as session:
+            session.refresh()
+            Drive = importlib.import_module("my_experiment.parameters").Drive
+            open_parameters = importlib.import_module(
+                "my_experiment.setup"
+            ).open_parameters
+            analyze_rabi = importlib.import_module("my_experiment.session").analyze_rabi
             assert [entry.id for entry in session.catalog().entries] == [
                 "teaching.rabi"
             ]
@@ -87,6 +92,11 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
                 ),
                 encoding="utf-8",
             )
+            analysis = source.with_name("analysis.py")
+            analysis.write_text(
+                analysis.read_text().replace("contrast < 0.05", "contrast < 100"),
+                encoding="utf-8",
+            )
             refreshed = session.refresh()
             assert refreshed.active != state.active
             second = (
@@ -105,14 +115,14 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
             assert analyze_rabi(session, run).pi_amplitude == first_report.pi_amplitude
             current = session.analyze(
                 run.id,
-                "lab_teaching.analysis:rabi_diagnostic",
+                "my_experiment.analysis:rabi_diagnostic",
                 code_revision=refreshed.active,
             )
             assert (
                 run.published_analysis(current.analysis_id)
                 .fact("diagnostic")
                 .value["status"]
-                == "passed"
+                == "fit_failed"
             )
             receipt = job.receipt
             run_id = run.id
@@ -122,6 +132,12 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
     start_project(project, timeout=120, static_dir=static_dir)
     try:
         with project.authoring() as session:
+            session.refresh()
+            Drive = importlib.import_module("my_experiment.parameters").Drive
+            open_parameters = importlib.import_module(
+                "my_experiment.setup"
+            ).open_parameters
+            analyze_rabi = importlib.import_module("my_experiment.session").analyze_rabi
             session.use(parameter_branch="learner-choice")
             assert session.params.version == version
             assert session.params[Drive]["q0"].frequency == 5.148
@@ -152,6 +168,9 @@ def test_live_requests_history_and_failed_refresh(
     try:
         with project.authoring() as session:
             session.refresh()
+            open_parameters = importlib.import_module(
+                "my_experiment.setup"
+            ).open_parameters
             declaration = importlib.import_module(
                 "my_experiment.teaching"
             ).teaching_rabi

@@ -1,4 +1,4 @@
-"""独立专题的官方 Notebook 与源码起点。"""
+"""Fresh editable material shared by default and topic teaching entries."""
 
 import json
 from importlib.resources import files
@@ -16,9 +16,19 @@ TOPICS = {
 }
 
 
-def install_lesson(root: Path, topic: str) -> Path:
-    if topic not in TOPICS:
+def install_lesson(root: Path, topic: str | None = None) -> Path:
+    if topic is not None and topic not in TOPICS:
         raise ValueError(f"未知专题: {topic}; 可选 {', '.join(TOPICS)}")
+    # Only fresh scaffolds are admitted. Never replace an author's edits or notes.
+    source = root / "src/my_experiment"
+    if (
+        any(path.name != "__init__.py" for path in source.iterdir())
+        or any((root / "notebooks").iterdir())
+        or (root / "src/workspace_app.py").exists()
+        or (root / "README.md").exists()
+        or (topic == "refresh" and (root / "examples").exists())
+    ):
+        raise FileExistsError(f"教学目录已有内容，未覆盖：{root}")
     material = files("lab_teaching.course_material")
     lesson = material.joinpath("lessons")
     for name in ("parameters", "setup", "response"):
@@ -31,9 +41,33 @@ def install_lesson(root: Path, topic: str) -> Path:
     _ = (root / "src/my_experiment/teaching.py").write_bytes(
         lesson.joinpath("experiment.py.txt").read_bytes()
     )
-    # create_project has just generated this directory; no user files exist yet.
-    for previous in (root / "notebooks").iterdir():
-        previous.unlink()
+    for name in ("group_analysis", "result_types"):
+        _ = (source / f"{name}.py").write_bytes(
+            material.joinpath(f"{name}.py").read_bytes()
+        )
+    if topic is None:
+        for name in ("analysis", "session"):
+            _ = (source / f"{name}.py").write_bytes(
+                lesson.joinpath(f"{name}.py.txt").read_bytes()
+            )
+        for name in (
+            "start.ipynb",
+            "reopen.ipynb",
+            "HINTS.md",
+            "REFERENCE.md",
+            "OBSERVATION.md",
+            "EDITING.md",
+            "GROUPS.md",
+            "MAINTENANCE.md",
+        ):
+            _ = (root / "notebooks" / name).write_bytes(
+                material.joinpath(name).read_bytes()
+            )
+        readme = material.joinpath("README.md").read_text(encoding="utf-8")
+        for name in ("EDITING.md", "GROUPS.md", "MAINTENANCE.md"):
+            readme = readme.replace(f"]({name})", f"](notebooks/{name})")
+        _ = (root / "README.md").write_text(readme, encoding="utf-8")
+        return root / "notebooks/start.ipynb"
     notebook = root / "notebooks" / f"{topic}.ipynb"
     _ = notebook.write_bytes(lesson.joinpath(f"{topic}.ipynb").read_bytes())
     if topic == "parameters":

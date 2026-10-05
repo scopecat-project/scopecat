@@ -4,12 +4,13 @@ CONNECTION = """\
 import json
 import numpy as np
 import scopecat as sc
-from lab_teaching.parameters import Drive
-from lab_teaching.session import open_parameters
-from my_experiment.group_analysis import CurveSummary
 
 project = sc.open_project()
 session = project.authoring()
+session.refresh()
+from my_experiment.setup import open_parameters
+from my_experiment.parameters import Drive
+from my_experiment.group_analysis import CurveSummary
 """
 
 GROUP_CELLS = (

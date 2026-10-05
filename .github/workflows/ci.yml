@@ -75,6 +75,42 @@ jobs:
           uv run --locked --package scopecat --extra pandas pytest -q
           packages/scopecat/tests/measurements/test_dataset.py
 
+  # Six explicit cases per OS; measured cold/warm in docs/development/platform-smoke.md.
+  platform-smoke:
+    name: Platform smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-suffix: platform-smoke-v1
+      - name: Install smoke dependencies
+        run: uv sync --locked --no-default-groups --group platform-smoke
+      - name: Run exact platform selection (no skips)
+        env:
+          SMOKE_EXPECTED_SHA: ${{ inputs.ref || github.sha }}
+        run: uv run --locked --no-default-groups --group platform-smoke python scripts/platform_smoke.py
+      - name: Retain platform evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: platform-smoke-${{ matrix.os }}
+          path: .test-results/platform-smoke/
+          include-hidden-files: true
+          if-no-files-found: warn
+
   python-quality:
     name: Python quality
     runs-on: ubuntu-latest
@@ -203,6 +239,7 @@ jobs:
     needs:
       - python-tests
       - python-quality
+      - platform-smoke
       - ui
       - docs
     runs-on: ubuntu-latest
@@ -212,10 +249,12 @@ jobs:
         env:
           PYTHON_TESTS_RESULT: ${{ needs['python-tests'].result }}
           PYTHON_QUALITY_RESULT: ${{ needs['python-quality'].result }}
+          PLATFORM_SMOKE_RESULT: ${{ needs['platform-smoke'].result }}
           UI_RESULT: ${{ needs.ui.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           test "$PYTHON_TESTS_RESULT" = success
           test "$PYTHON_QUALITY_RESULT" = success
+          test "$PLATFORM_SMOKE_RESULT" = success
           test "$UI_RESULT" = success
           test "$DOCS_RESULT" = success
