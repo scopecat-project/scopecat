@@ -2,7 +2,7 @@
 default: major
 ---
 
-Unify installed acceptance on standard framework artifacts
+Use standard framework artifacts for installed acceptance.
 
 Retire the internal pilot builder and its GUI-embedded server format. Minimal
 installation checks now use standard wheels and the separately matched GUI.

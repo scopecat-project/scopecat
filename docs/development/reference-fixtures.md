@@ -14,7 +14,7 @@ source temporarily supports integration tests. See the
 | `reference_lab/workflows/drag_beta_*` | Calibration, publication and recovery contracts | Preserve integrated evidence; do not teach these as the first acquisition |
 | `reference_lab/tests/unit` | Local scientific/compiler behavior | Prefer small fixtures without a daemon |
 | Managed author/restart tests | Real process and retained-source contracts | Move generic cases to starter fixtures when they do not require routing/compiler capabilities |
-| `packages/lab-teaching`, `packages/lab-tools` | Runnable generic tutorials and installation/sandbox lifecycle | Public installed CI executes shipped Notebooks; private consumes these packages |
+| `packages/lab-teaching`, `packages/lab-tools` | Runnable generic tutorials and installation/sandbox lifecycle | Installed checks execute the starter/reopen Notebooks plus separate test scenarios; full desktop teaching remains #565 |
 | Private laboratory courses | Lab-specific methods and scientific workflows | Keep real methods and deployment policy; remove duplicated generic tooling |
 
 This is an ownership classification, not a claim that extraction is complete.
@@ -167,6 +167,17 @@ same daemon exercises installed discovery, a local wrapper, original/current
 analysis after refresh, retained analysis after restart, and rejection/restoration
 of changed installed bytes. This extends the installed framework journey instead of adding a
 second full runtime job or a dependency on private laboratory code.
+
+## Teaching capability is not fixture retirement
+
+The reference lab's retired teaching role is distinct from generic teaching in
+`lab-teaching`. Seven topic Notebooks and their editable source remain. Their
+current use as maintained fixtures does not cancel the Notebook/application
+learning journey. Help's single manual-peak practice is only a bounded part of
+that goal. The manager topology is retired; the full learning experience has not
+been absorbed into the desktop. Track that gap in
+[#565](https://github.com/scopecat-project/scopecat/issues/565), with the actual
+[execution and acceptance limits](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits).
 
 ## Retirement sequence
 
