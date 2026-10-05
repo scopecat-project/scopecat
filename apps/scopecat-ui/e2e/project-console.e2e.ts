@@ -522,7 +522,15 @@ test("exact run opens independently in two browser pages while acquisition conti
 }) => {
   const writes: string[] = [];
   context.on("request", (request) => {
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+    // Measurement reads use POST for structured query bodies; they do not acquire data.
+    const measurementRead =
+      request.method() === "POST" &&
+      /^\/api\/v1\/runs\/[^/]+\/measurements\/(?:traces\/)?query$/.test(
+        new URL(request.url()).pathname,
+      );
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method()) && !measurementRead) {
+      writes.push(request.url());
+    }
   });
   await page.goto(daemon.baseUrl);
   const experiment = await startControlledExperiment(daemon.projectRoot);

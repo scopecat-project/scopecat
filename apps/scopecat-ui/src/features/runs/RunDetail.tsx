@@ -128,11 +128,11 @@ export function RunDetail({
   return (
     <>
       <WindowTitle title={`${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`} />
-      <OpenRunWindow key={run.runId} runId={run.runId} />
+      <OpenRunWindow key={`open:${run.runId}`} runId={run.runId} />
       <ComparisonLink runId={run.runId} />
-      <ExportRun key={run.runId} runId={run.runId} />
+      <ExportRun key={`export:${run.runId}`} runId={run.runId} />
       <RunPlanOrigin runId={run.runId} />
-      <ClearData key={run.runId} runs={[run.runId]} />
+      <ClearData key={`cleanup:${run.runId}`} runs={[run.runId]} />
       <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
       <header
         className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-[17px] max-[680px]:block"

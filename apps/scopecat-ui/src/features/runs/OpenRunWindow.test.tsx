@@ -35,7 +35,7 @@ it("uses the native bridge after readiness and reports failures without navigati
     </QueryClientProvider>,
   );
   vi.stubGlobal("pywebview", { api: { open_run_window: open } });
-  await act(() => {
+  act(() => {
     window.dispatchEvent(new Event("pywebviewready"));
   });
   expect(screen.queryByRole("link")).toBeNull();
