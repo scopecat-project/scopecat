@@ -1,7 +1,9 @@
 # Choose a learning path
 
 Start with [Help in the application](../tutorials/teaching-sandboxes.md) for a
-synthetic scan and manual decision. It uses the same workbench and needs no setup.
+synthetic scan and manual decision, or the persistent parameters Notebook. Peak
+practice needs no Python setup; Help prepares the Notebook’s ordinary author
+environment. Both use the same application.
 
 Learn one laboratory task at a time. Installation and a working project are the
 starting conditions for authoring lessons; instrument integration and framework
@@ -11,7 +13,7 @@ internals are separate roles, not prerequisites for writing an experiment.
 
 | Task | Start here | Check your understanding |
 | --- | --- | --- |
-| Retain a first result | [Pilot quickstart](quickstart.md) | Restart and find the same run without acquiring again. |
+| Retain a first result | [First experiment](quickstart.md) | Restart and find the same run without acquiring again. |
 | Change an existing experiment | [Starter authoring](../tutorials/starter-authoring.md) | Change a parameter and scan range; explain which operation starts acquisition. |
 | Calculate and return data | [Compute and typed reads](../how-to/compute-and-read.md), [write an experiment](../how-to/write-an-experiment.md) | Change one returned value and read it; distinguish local array axes from scan axes. |
 | Read and select data | [Measurement data](../how-to/use-measurement-data.md) | Plot selected points and reopen their retained values in a new session. |
@@ -31,7 +33,8 @@ usability evaluation. Each linked guide describes its current API and limits.
 
 ## Laboratory maintainers
 
-Use the quickstart's build section, [project layout](../reference/project-layout.md),
+Use [application maintenance](../how-to/maintain-application.md),
+[project layout](../reference/project-layout.md),
 [configuration management](../how-to/manage-configuration.md), and
 [backup and restore](../how-to/backup-and-restore.md). Practice restoring into a
 new location and reading results. An archive that has never been restored is not

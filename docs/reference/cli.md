@@ -1,15 +1,27 @@
 # Command-line interface
 
-The installed `scopecat` command is provided by `scopecat-lab-tools`, which
-composes project/server commands with application, Notebook and practice entry.
+When installed in a Python environment, the `scopecat-lab-tools` wheel provides
+that environment's `scopecat` console script, composing project/server commands
+with application, Notebook and practice entry. The current native desktop
+installer does not install a global PATH console; do not assume these commands
+are discoverable from a shell after desktop installation. See
+[installation and command identity](../development/installation-layout.md#application-command-and-data-identities)
+for the confirmed application-supplied CLI/launcher target, whose delivery is
+not yet implemented. It will target the same application/data owner; installing
+the complete GUI in each author venv is not the ordinary-user direction.
 For server-only development, use `python -m scopecat_server.cli`; that module
 has no application/teaching commands or `init --topic` option.
+
+Ordinary users start in the desktop application. These commands support optional
+maintenance, automation and retained development/teaching callers; project lifecycle
+commands are not a requirement to open data, use Help or author against the app.
+See the [entry map](../development/architecture/public-application.md#user-journeys-and-entry-ownership).
 
 ## Entry ownership and migration
 
 | Installation | Entry | Commands |
 | --- | --- | --- |
-| Complete application / `scopecat-lab-tools` | `scopecat` or `python -m lab_tools.public_cli` | Project commands below plus `app`, `notebook`, `teach`, `init --topic` |
+| Python environment with `scopecat-lab-tools` | `scopecat` or `python -m lab_tools.public_cli` | Project commands below plus `app`, `notebook`, `teach`, `init --topic` |
 | Server-only / retained server pilot | `python -m scopecat_server.cli` | Project commands below, without application/teaching commands |
 | Existing teaching tools | `scopecat-lab` | Existing generated-project / VS Code lifecycle; unchanged |
 
@@ -82,17 +94,15 @@ JSON file is not a complete backup.
 | Command | Purpose |
 | --- | --- |
 | `scopecat automation work [PROJECT]` | Run the project-owned resident automation worker. |
-| `scopecat automation work [PROJECT] --once` | Finalize, plan, evaluate, materialize, and dispatch one bounded cycle, then exit. |
+| `scopecat automation work [PROJECT] --once` | Plan intervals, materialize due schedules and dispatch runnable procedures for one bounded cycle, then exit. |
 
-The resident worker loads the project's exact publication, calibration,
-schedule, and procedure registries in its own process. It finalizes ready
-calibration cohorts before config-sensitive planning, turns latest-only fixed UTC
-interval occurrences into ordinary exact one-shot schedules, and executes
-compatible procedures; the daemon never executes user-authored closures. A
-remaining publication page temporarily blocks interval and calibration planning
-but not already-frozen due or runnable work. `--once` prints publication and
-procedure counters and exits nonzero for recorded deterministic failures.
-`--poll-seconds` controls the idle polling interval.
+The resident worker uses the project's procedure registry and interval planner in
+its own process. It plans latest-only fixed UTC intervals, materializes due one-shot
+schedules and dispatches compatible runnable procedures. The daemon does not
+execute user-authored closures. `--once` reports interval, schedule and procedure
+outcomes, including failures, drift and conflicts, and exits nonzero when the cycle
+needs review. `--poll-seconds` controls the idle polling interval. This command does
+not perform the retired calibration-cohort/publication planning cycle.
 
 Use `scopecat COMMAND --help` as the authority for all current options. See the
 [configuration how-to](../how-to/manage-configuration.md) for the intended

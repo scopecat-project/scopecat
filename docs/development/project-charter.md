@@ -13,9 +13,12 @@ compilation, reproducibility, and scalable execution.
 The selected application direction is a unified experiment workbench with
 [session-scoped experimental contexts](architecture/experiment-contexts.md):
 sample/assembly, batch, working point, code and operator choices have independent
-ownership. Teaching belongs under Help and uses protected simulated contexts.
-This is a product direction, not a claim that the current teaching host already
-implements shared experimental execution.
+ownership. The desktop is the ordinary user’s daily center, with Notebook/Python
+for author work and optional CLI maintenance. The canonical
+[application journey and ownership map](architecture/public-application.md#user-journeys-and-entry-ownership)
+defines the entries. Help already provides protected peak practice and a persistent
+ordinary parameters Notebook; these have different source and cleanup ownership.
+The broader teaching journey remains open, not retired with the old fixture gallery.
 
 ## Current Stage
 

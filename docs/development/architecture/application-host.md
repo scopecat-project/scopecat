@@ -73,7 +73,10 @@ retain dependencies for prepared work and plans; source refresh selects a revisi
 without introducing another service. Adding dependencies creates a qualified
 environment instead of mutating the application. Version checks do not establish
 compatibility across arbitrary framework protocol changes. Driver dependencies
-still belong to the fixed application delivery.
+belong to the explicitly selected execution environment; vendor SDKs can use an
+independent process/environment. Qualification and idle driver replacement retain
+application-wide device ownership. They do not require modifying desktop Python;
+see [installed laboratory adapters](public-application.md#installed-laboratory-adapters).
 
 Help practice runs in the same service and uses ordinary data cleanup.
 

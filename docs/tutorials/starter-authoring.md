@@ -5,18 +5,12 @@ a save location and create it. Open the new folder in VS Code and select its `.v
 interpreter. Keep Scopecat open and run `notebooks/02_edit_scan.py` cell by cell.
 The example uses synthetic data and needs no devices.
 
-For framework development, you can instead use the project created by `scopecat init`
-in the [source quickstart](../getting-started/quickstart.md):
-
-```sh
-scopecat start ./my-lab
-scopecat open ./my-lab
-python ./my-lab/notebooks/02_edit_scan.py
-```
-
-For a source checkout, use the built GUI directory with `--static-dir` as described
-in the quickstart's build section. Both scripts and GUI discover the project's
-actual daemon endpoint; do not copy an old port number.
+Framework contributors can use the [source development launcher](../development/public-preview.md#run-without-installation)
+with its generated example source or an explicitly registered author folder.
+The separate `scopecat init` starter remains available through the
+[CLI reference](../reference/cli.md#project-lifecycle); it is not required for the
+desktop lesson above. Use the endpoint recorded for the selected application,
+rather than copying a historical port number.
 
 ## Your editable files
 

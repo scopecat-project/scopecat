@@ -23,14 +23,40 @@ selected Python/WebView host. This map describes their existing implementation.
 
 | Role | Implementation / consumer |
 | --- | --- |
-| Installed command line | `scopecat` is owned by `scopecat-lab-tools` (`lab_tools.public_cli`). It composes server project commands with `app`, `notebook`, `teach` and tutorial `init --topic`, loading application implementations only on dispatch. |
+| Wheel-installed command line | Within the installing Python environment, `scopecat` is owned by `scopecat-lab-tools` (`lab_tools.public_cli`). It composes server project commands with `app`, `notebook`, `teach` and tutorial `init --topic`, loading application implementations only on dispatch. |
 | Server-only development | `python -m scopecat_server.cli` retains project init/config, lifecycle, workspace registration, automation, diagnosis and snapshot commands. Installing only the server does not install the application console script. The retained pilot bundle uses this module entry for isolated-installation acceptance; its CI use does not establish a separate product commitment. |
 | Native entry and windows | `lab_tools.native_bootstrap` → `desktop` → `ApplicationRuntime`; window closure does not end retained execution. See [application host](architecture/application-host.md). |
 | Long-lived ownership | `ApplicationRuntime` composes one application home; server lifecycle/runtime owns the durable writer and worker processes. Author folders do not imply per-source daemons. |
 | Author/SDK execution | `author_environment`, execution environment preparation and server worker admission keep user Python/vendor SDKs separate from application Python. Core APIs stay usable without importing the host/server. |
 | Build and delivery | `preview`, `delivery`, `native_package` assemble wheels, GUI and native payloads. `bundle.py` owns manifest/hash verification and offline installation and is copied as standalone `install.py`; it also supplies runtime helpers. It must remain usable without importing the application package. |
 | Acceptance | `lab_tools.verify_*`, native/desktop journey tests and acceptance workflows exercise isolated installations, homes and environments. Software results do not substitute for #616 human/editor/device observations. |
-| Existing tutorial consumers | `scopecat-lab` (`lab_tools.cli`), `project` and generated VS Code tasks remain maintained callers. Retire them only after a demonstrated replacement, not because their names predate desktop entry. |
+| Existing tutorial consumers | `scopecat-lab` (`lab_tools.cli`), `project` and generated VS Code tasks remain callers pending ordinary-author convergence. Their presence in tests does not establish a permanent product entry. Update them together after a demonstrated replacement. |
+
+### Teaching source convergence
+
+Help's parameters route (`parameters_journey.py` → `lab_teaching.lessons.install_lesson`)
+generates an editable Notebook, `teaching.py`, `parameters.py`, `response.py`,
+`setup.py` and `workspace_app.py`; scan definitions also remain editable. Its
+experiment code does not import `lab_teaching` scientific definitions.
+The installed teaching package supplies generation resources, not hidden user
+experiment implementations for that lesson.
+
+The older default `lab_teaching.project.create_project` still copies
+`course_material/start.ipynb`, which imports package `Drive`/session helpers;
+`course_material/experiment.py` imports package parameters and `synthetic.response`,
+and the session helper selects package analysis. This path and its callers have
+not all converged on the editable-source direction recorded in
+[PR #598](https://github.com/scopecat-project/scopecat/pull/598).
+The [teaching work owner #565](https://github.com/scopecat-project/scopecat/issues/565)
+retains the broader learning requirement. Do not delete these resources or VS Code
+tasks because they also serve tests, or call that test use a permanent product
+contract. Replace source ownership and consumers together in a bounded follow-up.
+
+Native installation currently exposes a desktop entry, not a global PATH console.
+The wheel console above is not a requirement to install application ownership in
+every author venv. An application-supplied optional launcher targeting the same
+application/data owner is the confirmed target, not yet implemented; see
+[installation identities](installation-layout.md#application-command-and-data-identities).
 
 The root workspace owns dependency locking and cross-package checks. Each Python
 package owns its build metadata and focused tests. `uv run lint-imports` enforces
