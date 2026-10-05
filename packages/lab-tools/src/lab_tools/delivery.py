@@ -253,11 +253,14 @@ def _public_identity(
     return read_source_identity(public / "release.toml", release=release), "source"
 
 
-def _copy_public_wheels(source: Path, wheels: Path, metadata: Preview) -> None:
+def _copy_public_wheels(
+    source: Path, wheels: Path, metadata: Preview, packages: set[str]
+) -> None:
     for artifact in source.glob("*.whl"):
         if file_hash(artifact) != metadata["files"].get(artifact.name):
             raise ValueError("Public wheel checksum mismatch")
-        shutil.copyfile(artifact, wheels / artifact.name)
+        if wheel_metadata(artifact)[0] in packages:
+            shutil.copyfile(artifact, wheels / artifact.name)
 
 
 def _check_public_artifacts(
@@ -407,7 +410,7 @@ def build_delivery(
     )
     if public_artifacts is not None:
         assert preview_metadata is not None
-        _copy_public_wheels(public_artifacts, wheels, preview_metadata)
+        _copy_public_wheels(public_artifacts, wheels, preview_metadata, local_names)
     selected_wheels = _unique_wheels(wheels)
     if preview_metadata is not None:
         _check_preview_wheels(preview_metadata, selected_wheels)
