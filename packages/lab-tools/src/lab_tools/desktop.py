@@ -178,6 +178,29 @@ class DesktopAPI:
             raise ValueError("应用尚未准备就绪，请稍后重试")
         return self._session.base_url
 
+    def parameters_journey(self) -> dict[str, object] | None:
+        from .parameters_journey import current
+
+        journey = current(self._runtime)
+        return journey.view() if journey else None
+
+    def prepare_parameters_journey(
+        self, parent: str | None = None
+    ) -> dict[str, object]:
+        from .parameters_journey import prepare
+
+        with self._session.operation():
+            return prepare(self._runtime, parent).view()
+
+    def open_parameters_notebook(self) -> None:
+        from .parameters_journey import current, open_editor
+
+        with self._session.operation():
+            journey = current(self._runtime)
+            if journey is None or not journey.ready:
+                raise ValueError("请先从 Help 准备参数与扫描练习")
+            open_editor(journey)
+
     def create_source(self, parent: str, name: str) -> str:
         from scopecat_server.scaffold import write_author_scaffold
 

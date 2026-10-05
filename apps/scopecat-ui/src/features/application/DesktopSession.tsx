@@ -25,7 +25,17 @@ export interface InstallationStatus {
   adapter_identity: string | null;
 }
 
+export interface ParametersJourney {
+  directory: string;
+  notebook: string;
+  python: string;
+  ready: boolean;
+}
+
 interface DesktopAPI {
+  parameters_journey(): Promise<ParametersJourney | null>;
+  prepare_parameters_journey(parent?: string): Promise<ParametersJourney>;
+  open_parameters_notebook(): Promise<void>;
   set_window_title(title: string): Promise<void>;
   open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
   save_configuration(document: string): Promise<string | null>;

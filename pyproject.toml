@@ -19,6 +19,7 @@ dev = [
   "basedpyright>=1.39.6",
   "hypothesis>=6.155.7",
   "import-linter>=2.13",
+  "playwright==1.63.0",
   "psutil>=7.2",
   "pytest>=9",
   "pytest-xdist>=3.8",
@@ -437,6 +438,7 @@ fast_paths = [
   "packages/lab-tools/tests/test_release_assets.py",
   "packages/lab-tools/tests/test_acceptance_workspaces.py",
   "packages/lab-tools/tests/test_author_environment.py",
+  "packages/lab-tools/tests/test_parameters_journey.py",
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [

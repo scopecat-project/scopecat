@@ -60,6 +60,7 @@ Read each issue's current body before planning; comments retain historical discu
 | --- | --- |
 | Remaining reference/device/compiler retirement | [#773](https://github.com/scopecat-project/scopecat/issues/773), audit umbrella [#615](https://github.com/scopecat-project/scopecat/issues/615) |
 | Entry audit closure decision after merged #859 | [#675](https://github.com/scopecat-project/scopecat/issues/675) |
+| Notebook/application parameters learning journey | [#565](https://github.com/scopecat-project/scopecat/issues/565); Help entry and ordinary author continuation, native editor/human acceptance separate |
 | First-use profiling and iteration cost | [#523](https://github.com/scopecat-project/scopecat/issues/523), [#520](https://github.com/scopecat-project/scopecat/issues/520) |
 | Historical Windows startup/endpoint failures | [#465](https://github.com/scopecat-project/scopecat/issues/465), [#553](https://github.com/scopecat-project/scopecat/issues/553); do not infer a fix from later success |
 | Finer observed dependency coverage | [#783](https://github.com/scopecat-project/scopecat/issues/783); unknown reads cannot prove physical independence |
