@@ -1,3 +1,4 @@
+import { OpenRunWindow } from "../runs/OpenRunWindow";
 import type { ProcedureOperatorView } from "../../api-contract";
 import { normalizeRun } from "../runs/run-api";
 import { RunCancellationNotice } from "../runs/RunCancellationNotice";
@@ -24,6 +25,7 @@ export function ProcedureChildRun({
         {run.stateLabel} · {run.progressCompleted ?? 0} completed points · Result:{" "}
         {run.result ?? "pending"} · Certainty: {run.certainty ?? "pending"}
       </p>
+      <OpenRunWindow key={run.runId} runId={run.runId} />
       <RunCancellationNotice run={run} />
       {run.attentionReason && <p>{run.attentionReason}</p>}
       {child.run.resources

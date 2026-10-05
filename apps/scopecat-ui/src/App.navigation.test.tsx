@@ -166,6 +166,20 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
+it("replaces the exact-run opening link without leaving a stale run action", async () => {
+  window.history.replaceState(null, "", "/?run=run-1");
+  renderApp();
+  expect(
+    await screen.findByRole("link", { name: "Open result in new tab or window" }),
+  ).toHaveAttribute("href", "/?run=run-1");
+  fireEvent.click(screen.getByTitle("Inspect run run-2"));
+  await waitFor(() => {
+    const links = screen.getAllByRole("link", { name: "Open result in new tab or window" });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "/?run=run-2");
+  });
+});
+
 it("opens Help through navigation and a direct hash without leaving the workbench", async () => {
   renderApp();
   fireEvent.click(screen.getByRole("button", { name: "Help" }));
