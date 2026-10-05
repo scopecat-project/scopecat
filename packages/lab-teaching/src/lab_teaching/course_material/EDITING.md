@@ -113,15 +113,13 @@ def mean_iq(iq: NDArray[np.complex128]) -> IQ:
     return complex(iq.mean())
 ```
 
-在 `TeachingData` 中把 `iq: sc.ProductRef` 改为 `iq: sc.DataRef[complex]`。
 把实验最后的返回语句改成：
 
 ```python
-return TeachingData(experiment.coordinate(amplitude), mean_iq(cast(sc.ProductRef, iq)))
+return {"amplitude": experiment.coordinate(amplitude), "iq": mean_iq(iq)}
 ```
 
-这里沿用模板已有的原始采集 `cast`；无需另写 `output_type` 参数或新增 cast。
-现阶段显式底层采集的类型接线仍是框架改进项，不要求通过背诵这行来证明理解。
+response 的 shot 形状声明在可编辑的 `src/my_experiment/response.py`。
 `IQ` 在 `src/my_experiment/result_types.py` 只声明一次：
 
 ```python

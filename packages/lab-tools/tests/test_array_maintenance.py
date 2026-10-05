@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from lab_teaching.lessons import install_lesson
 from lab_teaching.project import create_project
 
 
@@ -34,8 +33,7 @@ def test_array_maintenance(tmp_path: Path, case: str) -> None:
 
 def run_array_maintenance(tmp_path: Path, *, case: str, target_count: int) -> None:
     root = tmp_path / "array"
-    create_project(root)
-    install_lesson(root, "task-calibration")
+    create_project(root, topic="task-calibration")
     shutil.copy2(
         Path(__file__).parent / "fixtures/array_maintenance.py",
         root / "src/my_experiment/array_maintenance.py",

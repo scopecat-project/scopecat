@@ -36,12 +36,14 @@ import json
 from pathlib import Path
 import numpy as np
 import scopecat as sc
-from lab_teaching.parameters import Drive
-from lab_teaching.session import analyze_rabi
-from my_experiment.teaching import teaching_rabi
 
 project = sc.open_project()
 session = project.authoring()
+session.refresh()
+from my_experiment.parameters import Drive
+from my_experiment.session import analyze_rabi
+from my_experiment.teaching import teaching_rabi
+
 bookmark = json.loads(
     (project.root / "notebooks/first-run.json").read_text(encoding="utf-8")
 )

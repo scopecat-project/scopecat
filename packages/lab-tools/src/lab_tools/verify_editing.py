@@ -7,10 +7,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 import scopecat as sc
-from lab_teaching.session import open_parameters
 
 project = sc.open_project()
 session = project.authoring()
+session.refresh()
+from my_experiment.setup import open_parameters
 """
 
 READ_TYPES = """\
@@ -75,12 +76,10 @@ from my_experiment.result_types import IQ
 def mean_iq(iq: NDArray[np.complex128]) -> IQ:
     return complex(iq.mean())
 """
-assert "iq: sc.ProductRef" in text
-assert 'cast("sc.ProductRef", iq))' in text
-text = text.replace("from lab_teaching.synthetic import response",
-                    "from lab_teaching.synthetic import response\\n" + helper)
-text = text.replace("iq: sc.ProductRef", "iq: sc.DataRef[complex]")
-text = text.replace('cast("sc.ProductRef", iq))', 'mean_iq(cast("sc.ProductRef", iq)))')
+assert '"iq": iq}' in text
+text = text.replace("from my_experiment.response import response",
+                    "from my_experiment.response import response\\n" + helper)
+text = text.replace('"iq": iq}', '"iq": mean_iq(iq)}')
 # 保留一次真实的作者计算失败,修复后继续使用同一会话。
 from scopecat.application.author_project import AuthorJobFailed
 broken = text.replace("return complex(iq.mean())",

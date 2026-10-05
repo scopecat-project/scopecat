@@ -48,7 +48,7 @@ session = sc.notebook(root)
 assert sc.notebook(root) is session
 import my_experiment.teaching as experiments
 from my_experiment.teaching import teaching_rabi as rabi
-from lab_teaching.session import open_parameters
+from my_experiment.setup import open_parameters
 params = open_parameters(session)
 assert 'branch teaching-table' in repr(session)
 collection = session.create_record_collection("Notebook context")
