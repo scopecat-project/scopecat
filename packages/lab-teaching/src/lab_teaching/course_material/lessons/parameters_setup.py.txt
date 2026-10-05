@@ -1,0 +1,32 @@
+"""场景初始化，用普通公共 API 创建独立参数分支和可编辑参数表。"""
+
+import scopecat as sc
+from scopecat.api.parameter_revisions import BranchParameterEditor
+from scopecat.application.author_project import AuthorProject
+from scopecat.daemon.client import DaemonNotFoundError
+from my_experiment.parameters import Drive
+from workspace_app import initial_setup
+from my_experiment.lesson_identity import IDENTITY
+
+
+def open_parameters(session: AuthorProject) -> BranchParameterEditor:
+    """Open the teaching parameter branch without creating a sample or working point."""
+    try:
+        setup = session.setup.get(f"{IDENTITY}-setup")
+    except DaemonNotFoundError:
+        setup = session.setup.import_recipe(initial_setup(), name=f"{IDENTITY}-setup")
+    name = f"{IDENTITY}-parameters"
+    try:
+        session.use(parameter_branch=name, setup=setup)
+    except DaemonNotFoundError:
+        initial = session.parameters.save(
+            name=f"{IDENTITY}-initial",
+            catalog=sc.parameter_catalog(IDENTITY, Drive),
+            parameters=sc.parameter_snapshot(
+                IDENTITY, tables={Drive: [Drive(id="q0", frequency=5.15)]},
+            ),
+            note="教学输入; 非测量结果",
+        )
+        session.parameters.create_branch(name, revision=initial)
+        session.use(parameter_branch=name, setup=setup)
+    return session.params

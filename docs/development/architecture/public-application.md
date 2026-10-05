@@ -63,6 +63,13 @@ receipt and physical-file reclamation. Practice adds software-only admission and
 an explicit choice to preserve or discard edited files. The former per-lesson
 environment launcher and directory-cleanup command are removed.
 
+Help's parameters Notebook entry prepares persistent ordinary author work through
+the same registration, local SDK and execution-environment operations as Settings.
+Its new directory owns a unique setup/parameter namespace. Continue preserves
+source and environment and never runs cells. This is not a resettable practice
+scope: the supplied code is device-free, but edited Python retains ordinary author
+permissions. Records use ordinary Data cleanup; source files remain user-owned.
+
 ## Installation and everyday use
 
 The target is a platform-standard public application installation, update and

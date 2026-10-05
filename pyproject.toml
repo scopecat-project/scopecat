@@ -19,6 +19,7 @@ dev = [
   "basedpyright>=1.39.6",
   "hypothesis>=6.155.7",
   "import-linter>=2.13",
+  "playwright==1.63.0",
   "psutil>=7.2",
   "pytest>=9",
   "pytest-xdist>=3.8",

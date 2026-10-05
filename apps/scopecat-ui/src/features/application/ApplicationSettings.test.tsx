@@ -19,6 +19,9 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
   const register = vi.fn();
   window.pywebview = {
     api: {
+      parameters_journey: vi.fn(),
+      prepare_parameters_journey: vi.fn(),
+      open_parameters_notebook: vi.fn(),
       set_window_title: vi.fn(),
       open_capture: vi.fn(),
       save_configuration: vi.fn(),
@@ -101,6 +104,9 @@ it("keeps author dependencies independent and uses native application updates", 
   const restart = vi.fn();
   window.pywebview = {
     api: {
+      parameters_journey: vi.fn(),
+      prepare_parameters_journey: vi.fn(),
+      open_parameters_notebook: vi.fn(),
       set_window_title: vi.fn(),
       open_capture: vi.fn(),
       save_configuration: vi.fn(),

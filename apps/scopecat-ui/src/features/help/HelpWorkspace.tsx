@@ -1,4 +1,5 @@
 import type { ProjectHealth } from "../../types";
+import { ParametersJourneyPanel } from "./ParametersJourneyPanel";
 import { PracticePanel } from "./PracticePanel";
 
 const docs = "https://scopecat-project.github.io/scopecat/";
@@ -104,6 +105,7 @@ export function HelpWorkspace({
           Maintain the application
         </a>
       </section>
+      <ParametersJourneyPanel reachable={reachable} />
       <PracticePanel reachable={reachable} />
     </section>
   );

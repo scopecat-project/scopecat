@@ -45,12 +45,48 @@ file reclamation after an interruption. Record removal and file removal are
 reported separately. [Back up scientific records](../how-to/backup-and-restore.md)
 before deleting anything you intend to retain.
 
+## Parameters and scans in a Notebook
+
+In desktop **Help → Start parameters Notebook**, Scopecat creates an ordinary
+code folder and prepares its local Python kernel and registered execution
+environment. It uses a new folder under the application home by default; use
+**Choose another save location…** before starting if you prefer another parent.
+No source-registration or dependency forms are needed for the supplied lesson.
+
+Help opens `notebooks/parameters.ipynb` in VS Code. Install its Python and Jupyter
+extensions and select the displayed `.venv` interpreter as the Notebook kernel.
+If the editor cannot open automatically, Help retains the exact folder, Notebook
+and interpreter paths so you can open them manually. If preparation fails, use
+**Retry preparation**; already-created files and edits are retained.
+
+Run the shipped cells in order: connect with `sc.notebook()`, open the lesson's
+independent parameter branch, preview seven points, then explicitly acquire
+64 shots per point. The result cell links to the same run in this application.
+Save a change from `shots: int = 64` to `32` in `src/my_experiment/teaching.py`,
+then reconstruct the request and run it: the new result has seven points and
+32 shots, while the old result retains its original source and 64 shots.
+Change the scan to five points and update its preview assertion for a five-point
+result. Already prepared requests retain their original code.
+
+**Continue parameters Notebook** opens the same files and environment. Reconnect
+and reopen parameters, or use History to read previous results. Opening Help,
+a Notebook or history does not acquire data; executing the acquisition cell
+explicitly creates a new run. Saved parameter edits and source edits are retained.
+Each newly generated folder has its own setup, initial revision and branch names.
+
+This lesson is persistent ordinary author work, not the resettable peak practice
+scope above. The supplied source computes a synthetic response without devices;
+it has the ordinary author permissions, not a sandbox for arbitrary edited Python.
+Use normal Data cleanup for retained runs and keep or remove your source files
+separately. Other teaching topics remain maintainer material; this entry does not
+create a course manager, a separate application service or an embedded editor.
+
 ## Notebook workspace and saved edits
 
 For your own experiments, open your registered source folder in VS Code and use
 the interpreter shown in Application settings. Python files and notebooks share
 the application service. See the [learning path](../getting-started/learning-path.md)
-for authoring and analysis; the synthetic course sources remain independent
+for authoring and analysis; the other synthetic course sources remain independent
 maintainer fixtures, not separately managed tutorial installations.
 
 The optional command-line entry uses the same installed application:

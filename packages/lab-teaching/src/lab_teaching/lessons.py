@@ -3,6 +3,7 @@
 import json
 from importlib.resources import files
 from pathlib import Path
+from uuid import uuid4
 
 TOPICS = {
     "parameters": "参数与扫描",
@@ -35,6 +36,13 @@ def install_lesson(root: Path, topic: str) -> Path:
         previous.unlink()
     notebook = root / "notebooks" / f"{topic}.ipynb"
     _ = notebook.write_bytes(lesson.joinpath(f"{topic}.ipynb").read_bytes())
+    if topic == "parameters":
+        _ = (root / "src/my_experiment/setup.py").write_bytes(
+            lesson.joinpath("parameters_setup.py.txt").read_bytes()
+        )
+        _ = (root / "src/my_experiment/lesson_identity.py").write_text(
+            f'IDENTITY = "parameters-{uuid4().hex}"\n', encoding="utf-8"
+        )
     if topic == "compute":
         _ = (root / "src/my_experiment/teaching.py").write_bytes(
             lesson.joinpath("compute_experiment.py.txt").read_bytes()
@@ -83,4 +91,14 @@ def install_lesson(root: Path, topic: str) -> Path:
         "重置建立新的副本, 不必合并旧练习。需要留存时手动复制源码和 Notebook。\n",
         encoding="utf-8",
     )
+    if topic == "parameters":
+        _ = (root / "README.md").write_text(
+            "# 参数与扫描\n\n从 Scopecat Help 开始或继续。"
+            "打开 notebooks/parameters.ipynb，"
+            "在外部编辑器选择此目录 .venv 内核。源码在 src/my_experiment。\n"
+            "运行与历史保存在同一应用中；继续不会自动采集，也不会覆盖文件或保存的参数。\n"
+            "这是普通、可编辑的作者目录。应用 Data 管理运行记录；"
+            "删除代码前自行保留修改。\n",
+            encoding="utf-8",
+        )
     return notebook
