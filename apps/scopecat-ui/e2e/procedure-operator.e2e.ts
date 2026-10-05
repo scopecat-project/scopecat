@@ -192,7 +192,24 @@ retainedProcedureTest(
       await expect(page).toHaveURL(new RegExp(`procedure=${submitted.procedure_id}`));
       // This procedure runs a source acquisition, analysis, and a second acquisition.
       // Observe each durable milestone instead of spending one UI wait on all three.
+      const sourceStep = page.getByRole("listitem").filter({
+        has: page.getByText(/^source: (Running|Completed)$/),
+      });
+      // Source and candidate share an experiment name; select the source step
+      // even when it completes before the next browser observation.
+      const sourceRun = page
+        .getByText(/^Current step: source ·/)
+        .locator("..")
+        .getByRole("link", { name: /^Open current child run:/ })
+        .or(sourceStep.getByRole("link", { name: /^Open retained run:/ }));
+      await expect(sourceRun).toBeVisible();
+      const sourceHref = await sourceRun.getAttribute("href");
+      expect(sourceHref).toContain(`procedure=${submitted.procedure_id}`);
       await expect(page.getByText("source: Completed", { exact: true })).toBeVisible();
+      await expect(sourceStep.getByRole("link", { name: /^Open retained run:/ })).toHaveAttribute(
+        "href",
+        sourceHref!,
+      );
       await expect(page.getByText("candidate: Completed", { exact: true })).toBeVisible();
       await expect(
         page.getByRole("status").filter({ hasText: /^Waiting for review$/ }),
