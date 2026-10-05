@@ -48,7 +48,7 @@ def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     configure_console()
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="scopecat app", description=__doc__)
     parser.add_argument(
         "--action",
         choices=(

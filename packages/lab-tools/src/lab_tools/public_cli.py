@@ -18,10 +18,12 @@ _CURRENT_DIRECTORY = Path()
 
 
 @app.command(
-    "app", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+    "app",
+    add_help_option=False,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 def application_command(context: typer.Context) -> None:
-    """Open the workbench service entry; optionally register an existing project."""
+    """Manage the application; show status unless an action is specified."""
     from lab_tools.application import main as application_main
 
     application_main(context.args)
@@ -29,6 +31,7 @@ def application_command(context: typer.Context) -> None:
 
 @app.command(
     "notebook",
+    add_help_option=False,
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 def notebook_command(context: typer.Context) -> None:
@@ -39,7 +42,9 @@ def notebook_command(context: typer.Context) -> None:
 
 
 @app.command(
-    "teach", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+    "teach",
+    add_help_option=False,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 def teach_command(context: typer.Context) -> None:
     """Start or clear a software practice in an installed application."""

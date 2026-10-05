@@ -92,7 +92,7 @@ def launch_notebook(
 
 def main(argv: list[str] | None = None) -> None:
     configure_console()
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="scopecat notebook", description=__doc__)
     parser.add_argument(
         "workspace",
         type=Path,
