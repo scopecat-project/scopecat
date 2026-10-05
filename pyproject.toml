@@ -436,6 +436,7 @@ fast_paths = [
   "packages/lab-tools/tests/test_release_identity.py",
   "packages/lab-tools/tests/test_release_assets.py",
   "packages/lab-tools/tests/test_acceptance_workspaces.py",
+  "packages/lab-tools/tests/test_author_environment.py",
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [
