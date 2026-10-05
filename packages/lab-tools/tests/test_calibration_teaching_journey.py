@@ -345,8 +345,20 @@ root = Path(sys.argv[1])
 sys.path.insert(0, str(root / "src"))
 project = sc.open_project(root)
 start_project(project, timeout=120)
+
+def run_worker(procedure_id):
+    worker = subprocess.run([
+        sys.executable, "-c",
+        "from pathlib import Path; import sys; "
+        "from scopecat_server.launch_worker import run_project_procedure; "
+        "run_project_procedure(Path(sys.argv[1]), sys.argv[2])",
+        str(root), procedure_id,
+    ], capture_output=True, text=True, timeout=60)
+    assert worker.returncode == 0, worker.stdout + worker.stderr
+
 try:
     with project.authoring() as session:
+        session.refresh()
         namespace = {"sc": sc, "session": session}
         cells = json.loads((root / "notebooks/calibration.ipynb").read_text())["cells"]
         exec("".join(cells[2]["source"]), namespace)
@@ -363,6 +375,9 @@ try:
             module.calibrate, intent, request_key="first",
         ).snapshot
         assert importlib.import_module(module.__name__) is module
+        run_worker(first.procedure_run_id)
+        completed = lab.procedures.get(first.procedure_run_id)
+        assert completed.summary().outcome == "succeeded"
         lab.close()
         with project.connect() as lab:
             second = lab.procedures.submit(
@@ -384,14 +399,7 @@ try:
             assert (changed.snapshot.source.code_revision
                     != first.source.code_revision)
             assert importlib.import_module(module.__name__) is module
-            worker = subprocess.run([
-                sys.executable, "-c",
-                "from pathlib import Path; import sys; "
-                "from scopecat_server.launch_worker import run_project_procedure; "
-                "run_project_procedure(Path(sys.argv[1]), sys.argv[2])",
-                str(root), changed.id,
-            ], capture_output=True, text=True, timeout=60)
-            assert worker.returncode == 0, worker.stdout + worker.stderr
+            run_worker(changed.id)
             rejected = changed.snapshot
             assert rejected.state == "attention_required", rejected
             assert "fingerprint" in rejected.attention_reason, rejected
