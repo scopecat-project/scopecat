@@ -2,7 +2,7 @@
 default: patch
 ---
 
-Keep local runtime bindings out of shared source and contain Settings paths.
+Keep local runtime bindings out of shared source and support prepared environments on Windows.
 
 Normalize source-root paths and reject aliases of the whole project directory.
 Retained source excludes local runtime binding files, so application data paths
@@ -12,3 +12,7 @@ Code folders received through configuration sharing remain readable without
 widening the settings page. Installed acceptance now checks configuration file
 exchange, inert source retention, explicit execution-environment preparation,
 analytic execution and reopening in independent data homes.
+
+Keep full execution-environment identities in receipts while allocating short,
+atomic candidate directories so Windows can load native dependencies. Existing
+environment receipts and paths remain reusable.

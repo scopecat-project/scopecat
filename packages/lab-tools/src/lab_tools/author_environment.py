@@ -178,8 +178,10 @@ def prepare_execution_environment(
         if ready.is_file():
             return Path(cast("dict[str, str]", json.loads(ready.read_text()))["python"])
         # Never rename a completed virtual environment: its scripts contain paths.
-        attempt = directory / uuid4().hex
-        attempt.mkdir(parents=True)
+        # Keep the full identity in the receipt, out of native DLL search paths.
+        # Atomic allocation avoids collisions without shortening content hashes.
+        directory.mkdir(parents=True, exist_ok=True)
+        attempt = Path(tempfile.mkdtemp(prefix="e-", dir=directory.parent))
         with ExitStack() as failed:
             failed.callback(shutil.rmtree, attempt)
             lock = attempt / "requirements.lock"

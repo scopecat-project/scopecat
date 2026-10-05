@@ -85,6 +85,7 @@ jobs:
         run: |
           uv run --locked --group delivery pytest -v -n 0 \
             packages/lab-tools/tests/test_acceptance_workspaces.py \
+            packages/lab-tools/tests/test_author_environment.py \
             packages/lab-tools/tests/test_desktop_platform.py \
             packages/lab-tools/tests/test_desktop_session.py \
             packages/lab-tools/tests/test_desktop_files.py \
