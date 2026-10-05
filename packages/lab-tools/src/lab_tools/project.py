@@ -40,11 +40,7 @@ def create_project(destination: Path, *, topic: str | None = None) -> Path:
     environment = environment_identity()
     from lab_teaching.project import create_project as create_teaching
 
-    manifest = create_teaching(destination)
-    if topic is not None:
-        from lab_teaching.lessons import install_lesson
-
-        _ = install_lesson(manifest.parent, topic)
+    manifest = create_teaching(destination, topic=topic)
     _ = (manifest.parent / METADATA).write_text(
         json.dumps(
             {"format": 3, "kind": "teaching", "environment": environment},

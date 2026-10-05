@@ -46,3 +46,10 @@ from my_experiment.teaching import teaching_rabi
 参数保存、扫描/分组与研究目录分题见 [GROUPS.md](GROUPS.md)；
 维护者无 AI 备份恢复专项见 [MAINTENANCE.md](MAINTENANCE.md)。
 旧 A/B 练习项目保持固定；这些题在对应新版交付的新项目中另做。
+
+## 可编辑的课程源码
+
+`src/my_experiment/parameters.py` 声明参数，`setup.py` 初始化参数分支，
+`response.py` 定义合成响应，`teaching.py` 定义实验，`analysis.py` 和 `session.py`
+定义分析与报告。修改后执行 Notebook 的 refresh/import 单元；历史运行保留原始源码。
+新建入口不会覆盖已有目录。旧课程请保留原环境，或手动把自己的修改迁入新目录。

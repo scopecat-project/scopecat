@@ -1,11 +1,11 @@
 """Unknown parameter admission and history need no device/quantum integration."""
 
+import importlib
 from pathlib import Path
 
 import pytest
 
 import scopecat as sc
-from lab_teaching.application import initial_setup
 from lab_teaching.project import create_project
 from scopecat.kernel.errors import CheckFailed
 from scopecat.records.run import ParameterRunConfigSource
@@ -44,6 +44,8 @@ def test_new_table_unknowns_freeze_and_structural_history(
     try:
         with project.connect() as lab:
             assert lab.config.registry().entries == ()
+            notebook_imports.syspath_prepend(str(root / "src"))
+            initial_setup = importlib.import_module("workspace_app").initial_setup
             setup = lab.setup.import_recipe(initial_setup(), name="probe-bench")
             empty = lab.parameters.save(
                 name="author-empty",

@@ -11,7 +11,6 @@ from numpy.typing import NDArray
 
 import scopecat as sc
 from lab_teaching.project import create_project
-from lab_teaching.session import open_parameters
 from scopecat_server.lifecycle import start_project, stop_project
 
 
@@ -33,6 +32,10 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
     start_project(project, timeout=120)
     try:
         with project.authoring() as session:
+            session.refresh()
+            open_parameters = importlib.import_module(
+                "my_experiment.setup"
+            ).open_parameters
             params = open_parameters(session)
             notebook_imports.syspath_prepend(str(root / "src"))
             imported = importlib.import_module("my_experiment.teaching").teaching_rabi
@@ -50,8 +53,8 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
             assert shots.shape == (7, 64)
             source = root / "src/my_experiment/teaching.py"
             text = source.read_text(encoding="utf-8").replace(
-                "from lab_teaching.synthetic import response",
-                "from lab_teaching.synthetic import response\n"
+                "from my_experiment.response import response",
+                "from my_experiment.response import response\n"
                 "from numpy.typing import NDArray\n"
                 "import numpy as np\n\n"
                 "@sc.compute\n"
@@ -60,10 +63,9 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
                 "]:\n"
                 "    return complex(iq.mean())",
             )
-            text = text.replace("iq: sc.ProductRef", "iq: sc.DataRef[complex]")
             text = text.replace(
-                'cast("sc.ProductRef", iq))',
-                'mean_iq(cast("sc.ProductRef", iq)))',
+                '"iq": iq}',
+                '"iq": mean_iq(iq)}',
             )
             source.write_text(text, encoding="utf-8")
             teaching_rabi = session.refresh(teaching_rabi)
@@ -97,6 +99,7 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
     start_project(project, timeout=120)
     try:
         with project.authoring() as session:
+            session.refresh()
             np.testing.assert_array_equal(
                 session.run(raw_id).measurements()["iq"].require_values(), shots
             )

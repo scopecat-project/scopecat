@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from lab_teaching.lessons import install_lesson
 from lab_teaching.project import create_project
 
 
@@ -19,8 +18,7 @@ def test_calibration_notebook_resumes_and_retains_rejection(
     tmp_path: Path, topic: str, expected_runs: int
 ) -> None:
     root = tmp_path / "calibration"
-    create_project(root)
-    install_lesson(root, topic)
+    create_project(root, topic=topic)
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
     result = subprocess.run(  # noqa: S603 - Fixed script and generated test directories.
@@ -317,8 +315,7 @@ def test_procedure_capture_preserves_imports_and_checks_changed_source(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "calibration"
-    create_project(root)
-    install_lesson(root, "calibration")
+    create_project(root, topic="calibration")
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
     result = subprocess.run(  # noqa: S603 - Fixed script and generated test directory.

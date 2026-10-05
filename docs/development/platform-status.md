@@ -34,9 +34,11 @@ At main `1a9bb17bb7f5a86aad9fa6d62d7d8ccea3305970` (2026-10-05):
 The combined main passed [CI 37349016783](https://github.com/scopecat-project/scopecat/actions/runs/37349016783)
 and [docs 37349016802](https://github.com/scopecat-project/scopecat/actions/runs/37349016802).
 These identify that checkpoint, not future document changes. Help parameters is
-persistent ordinary author work; it does not finish all teaching topics. Older
-[teaching generators and callers](repository-map.md#teaching-source-convergence)
-remain to be unified without reinstating per-topic services.
+persistent ordinary author work; it does not finish all teaching topics. Default and topic
+[teaching material generation](repository-map.md#teaching-source-convergence)
+now shares editable author resources; the legacy CLI/VS Code lifecycle callers
+remain explicit standalone tutorial tools, separate from Help's same-application
+parameters journey. This source change establishes no new distribution.
 
 ## Delivered boundaries
 
