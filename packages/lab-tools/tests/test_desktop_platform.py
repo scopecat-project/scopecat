@@ -76,7 +76,7 @@ def test_cocoa_tray_is_created_and_shown_on_the_main_loop(monkeypatch):
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="Cocoa delegate ABI")
 def test_quit_hook_matches_real_pywebview_delegate_signature():
-    cocoa = pytest.importorskip("webview.platforms.cocoa")
+    from webview.platforms import cocoa
     app = cocoa.AppKit.NSApplication.sharedApplication()
     previous = app.delegate()
     delegate = cocoa.BrowserView.AppDelegate.alloc().init()
