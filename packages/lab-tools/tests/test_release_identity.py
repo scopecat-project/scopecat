@@ -128,5 +128,12 @@ def test_preview_build_archives_historical_commit_without_release_file(
     assert metadata["release_version"] == "0.0.0"
     assert metadata["channel"] == "preview"
     assert "scopecat-ui.zip" in metadata["files"]
+    import zipfile
+
+    with zipfile.ZipFile(manifest.parent / "scopecat-ui.zip") as archive:
+        assert json.loads(archive.read("build-info.json")) == {
+            "source_commit": metadata["commit"],
+            "ui_version": metadata["ui_version"],
+        }
     with pytest.raises(FileNotFoundError):
         module.build(repository, tmp_path / "release", release=True)

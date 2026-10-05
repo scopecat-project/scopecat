@@ -356,31 +356,14 @@ jobs:
         if: inputs.profile == 'full'
         run: pnpm run typecheck
 
-      - name: Build UI
-        run: pnpm exec vite build
+      - name: Build standard framework artifacts and matching GUI
+        run: uv run --locked --project ../.. python ../../scripts/build_preview.py ../../dist/framework
 
-      - name: Upload browser build
+      - name: Upload shared framework artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: scopecat-ui-dist
-          path: apps/scopecat-ui/dist
-          retention-days: 7
-
-      - name: Build pinned GUI pilot bundle
-        run: uv run --project ../.. python ../../scripts/build_server_distribution.py
-
-      - name: Upload matching tutorial GUI
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: scopecat-tutorial-gui
-          path: apps/scopecat-ui/dist
-          retention-days: 7
-
-      - name: Upload pilot bundle
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: scopecat-pilot-bundle
-          path: dist/scopecat-server
+          name: scopecat-framework
+          path: dist/framework
           if-no-files-found: error
           retention-days: 7
 
@@ -416,8 +399,10 @@ jobs:
       - run: uv sync --locked --project ../..
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: scopecat-ui-dist
-          path: apps/scopecat-ui/dist
+          name: scopecat-framework
+          path: dist/framework
+      - name: Extract the shared browser GUI
+        run: python -m zipfile -e ../../dist/framework/scopecat-ui.zip dist
       - run: pnpm exec playwright install --with-deps chromium
       - name: Run browser end-to-end shard
         run: pnpm exec playwright test --project=journey-${{ matrix.shard }} --reporter=line,json
@@ -434,8 +419,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  installed-pilot:
-    name: Installed pilot (${{ matrix.os }})
+  installed-artifacts:
+    name: Installed artifacts (${{ matrix.os }})
     needs: ui
     strategy:
       fail-fast: false
@@ -455,25 +440,19 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
-      - name: Download pilot bundle
+      - name: Download standard framework artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: scopecat-pilot-bundle
-          path: dist/scopecat-server
+          name: scopecat-framework
+          path: dist/framework
 
       - name: Install and verify virtual measurement and restart
-        run: python scripts/verify_pilot_bundle.py dist/scopecat-server
-
-      - name: Download matching tutorial GUI
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: scopecat-tutorial-gui
-          path: dist/tutorial-gui
+        run: uv run --locked python scripts/verify_installed_framework.py dist/framework
 
       - name: Build target-platform offline tutorial delivery
         run: >-
           uv run --locked --group delivery python -m lab_tools.delivery
-          dist/tutorial --source . --gui dist/tutorial-gui
+          dist/tutorial --public-artifacts dist/framework
 
       - name: Archive the complete offline delivery
         run: python -m zipfile -c dist/tutorial.zip dist/tutorial
@@ -530,7 +509,7 @@ jobs:
       - python-tests
       - browser-tests
       - benchmark-smoke
-      - installed-pilot
+      - installed-artifacts
       - python-quality
       - ui
       - docs
@@ -543,7 +522,7 @@ jobs:
           PUBLIC_PREVIEW_RESULT: ${{ needs['public-preview'].result }}
           NATIVE_DISTRIBUTION_RESULT: ${{ needs['native-distribution'].result }}
           SERVICE_LIFECYCLE_RESULT: ${{ needs['service-lifecycle'].result }}
-          INSTALLED_PILOT_RESULT: ${{ needs['installed-pilot'].result }}
+          INSTALLED_ARTIFACTS_RESULT: ${{ needs['installed-artifacts'].result }}
           BROWSER_TESTS_RESULT: ${{ needs['browser-tests'].result }}
           PYTHON_TESTS_RESULT: ${{ needs['python-tests'].result }}
           BENCHMARK_SMOKE_RESULT: ${{ needs['benchmark-smoke'].result }}
@@ -554,7 +533,7 @@ jobs:
           if [ "$PROFILE" = public-preview ]; then
             test "$PUBLIC_PREVIEW_RESULT" = success
             for result in "$NATIVE_DISTRIBUTION_RESULT" "$SERVICE_LIFECYCLE_RESULT" \
-              "$INSTALLED_PILOT_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
+              "$INSTALLED_ARTIFACTS_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
               "$PYTHON_TESTS_RESULT" "$BENCHMARK_SMOKE_RESULT" \
               "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
               test "$result" = skipped
@@ -564,7 +543,7 @@ jobs:
           test "$PUBLIC_PREVIEW_RESULT" = skipped
           if [ "$PROFILE" = native-distribution ]; then
             test "$NATIVE_DISTRIBUTION_RESULT" = success
-            for result in "$SERVICE_LIFECYCLE_RESULT" "$INSTALLED_PILOT_RESULT" \
+            for result in "$SERVICE_LIFECYCLE_RESULT" "$INSTALLED_ARTIFACTS_RESULT" \
               "$BROWSER_TESTS_RESULT" "$UI_RESULT" "$PYTHON_TESTS_RESULT" \
               "$BENCHMARK_SMOKE_RESULT" "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
               test "$result" = skipped
@@ -574,14 +553,14 @@ jobs:
           test "$NATIVE_DISTRIBUTION_RESULT" = skipped
           if [ "$PROFILE" = service-lifecycle ]; then
             test "$SERVICE_LIFECYCLE_RESULT" = success
-            for result in "$INSTALLED_PILOT_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
+            for result in "$INSTALLED_ARTIFACTS_RESULT" "$BROWSER_TESTS_RESULT" "$UI_RESULT" \
               "$PYTHON_TESTS_RESULT" "$BENCHMARK_SMOKE_RESULT" "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
               test "$result" = skipped
             done
             exit 0
           fi
           test "$SERVICE_LIFECYCLE_RESULT" = skipped
-          test "$INSTALLED_PILOT_RESULT" = success
+          test "$INSTALLED_ARTIFACTS_RESULT" = success
           test "$BROWSER_TESTS_RESULT" = success
           test "$UI_RESULT" = success
           case "$PROFILE" in

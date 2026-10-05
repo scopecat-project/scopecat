@@ -261,3 +261,124 @@ def test_application_paths_reject_redirected_runtime_directory(tmp_path):
     with pytest.raises(ValueError, match="符号链接"):
         ApplicationRuntime(home)
     assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize("problem", ["relative", "missing", "changed"])
+def test_installer_receipt_never_guesses_a_replacement(delivery, tmp_path, problem):
+    prefix = tmp_path / "environment"
+    prefix.mkdir()
+    root = delivery if problem != "relative" else Path("../delivery")
+    digest = bundle.file_hash(delivery / bundle.MANIFEST)
+    (prefix / bundle.RECEIPT).write_text(
+        json.dumps(
+            {
+                "bundle": str(root),
+                "manifest_sha256": digest,
+            }
+        )
+    )
+    if problem == "missing":
+        delivery.rename(tmp_path / "moved-delivery")
+    elif problem == "changed":
+        (delivery / bundle.MANIFEST).write_text("{}")
+    with pytest.raises(
+        ValueError,
+        match={
+            "relative": "绝对路径",
+            "missing": "资源不存在",
+            "changed": "安装记录不同",
+        }[problem],
+    ):
+        bundle.installed_bundle(prefix)
+
+
+def test_delivery_resources_are_independent_of_gui_location(
+    delivery, tmp_path, monkeypatch
+):
+    from lab_tools import application_runtime, author_environment
+    from lab_tools.application_runtime import ApplicationRuntime
+
+    prefix = tmp_path / "target-environment"
+    prefix.mkdir()
+    digest = bundle.file_hash(delivery / bundle.MANIFEST)
+    (prefix / bundle.RECEIPT).write_text(
+        json.dumps(
+            {
+                "bundle": str(delivery),
+                "manifest_sha256": digest,
+            }
+        )
+    )
+    gui = tmp_path / "separate-workbench"
+    gui.mkdir()
+    (gui / "index.html").write_text("GUI elsewhere")
+    requests = []
+
+    def probe(_python, request):
+        requests.append(request)
+        return {
+            "static_dir": str(gui),
+            "environment": {"prefix": str(prefix)},
+            "settings_identity": None,
+            "adapter_identity": None,
+        }
+
+    monkeypatch.setattr(application_runtime, "runtime_command", probe)
+    runtime = ApplicationRuntime(tmp_path / "home")
+    selected = runtime.configure(static_dir=gui)
+    assert selected.delivery_root == delivery
+    assert selected.delivery_manifest_sha256 == digest
+    assert author_environment._bundle(runtime) == delivery
+    assert "delivery_root" not in requests[0]
+    manifest = delivery / bundle.MANIFEST
+    original = manifest.read_bytes()
+    manifest.write_bytes(original + b" ")
+    with pytest.raises(ValueError, match="安装记录不同"):
+        runtime.qualify(selected.python, gui, delivery_root=delivery)
+    manifest.write_bytes(original)
+    # No installation receipt in the calling/source environment is needed when
+    # the native host explicitly supplies its current payload.
+    (prefix / bundle.RECEIPT).unlink()
+    candidate = runtime.qualify(selected.python, gui, delivery_root=delivery)
+    runtime.select(candidate)
+    assert runtime.installation() == selected
+    # Merely qualifying the GUI must not scan dependency wheels.
+    (delivery / "wheels/example.whl").write_bytes(b"modified")
+    assert runtime.qualify(selected.python, gui, delivery_root=delivery) == selected
+    with pytest.raises(ValueError, match="被修改"):
+        author_environment._bundle(runtime)
+    (delivery / bundle.MANIFEST).write_text("{}")
+    with pytest.raises(ValueError, match="已登记交付清单不同"):
+        author_environment._bundle(runtime)
+
+
+def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_it(
+    tmp_path,
+):
+    import sys
+
+    from lab_tools.application_runtime import ApplicationRuntime, Installation
+    from lab_tools.author_environment import (
+        create_client_environment,
+        environment_python,
+    )
+
+    runtime = ApplicationRuntime(tmp_path / "home")
+    runtime.home.mkdir()
+    runtime.selection.write_text(
+        Installation(
+            python=Path(sys.executable),
+            static_dir=tmp_path / "gui",
+            environment={},
+            composition="[lab]",
+        ).model_dump_json()
+    )
+    workspace = tmp_path / "authors"
+    python = environment_python(workspace / ".venv")
+    python.parent.mkdir(parents=True)
+    python.write_bytes(b"existing interpreter")
+    assert create_client_environment(runtime, workspace) == python
+    with pytest.raises(ValueError, match="未登记作者环境资源"):
+        create_client_environment(runtime, workspace, rebuild=True)
+    assert python.read_bytes() == b"existing interpreter"
+    assert not list(workspace.glob(".venv-retained-*"))

@@ -101,21 +101,22 @@ policy is intentional for the current closed development phase; a supported
 migration or export/import boundary is required before project stores are
 treated as long-lived user data.
 
-The retained server-only pilot is built and checked by the Full acceptance
-workflow. It contains core/server/instruments/quantum wheels and the built GUI,
-not the application host or teaching package. Its commands use the environment's
-`python -m scopecat_server.cli`; `scopecat app`, `notebook`, `teach` and tutorial
-`init --topic` belong to an installation containing `scopecat-lab-tools`.
-Previous server-only callers of `scopecat COMMAND` must change to the module
-entry. Complete application installations keep `scopecat COMMAND`.
+The minimal installed-framework check consumes standard public artifacts but only
+installs core/server/instruments/quantum and their dependencies. It excludes the
+application host, teaching package and testkit. The matching GUI is a separate ZIP,
+served with `--static-dir`; standard server wheels do not embed it. This internal
+dependency check is not a separate desktop product.
 
-For a bundled source-checkout preview:
+Commands use the environment's `python -m scopecat_server.cli`; `scopecat app`,
+`notebook`, `teach` and tutorial `init --topic` belong to an installation containing
+`scopecat-lab-tools`. Previous server-only callers of `scopecat COMMAND` must change
+to the module entry. Complete application installations keep `scopecat COMMAND`.
+
+Build and verify artifacts from the current committed source:
 
 ```console
-cd apps/scopecat-ui
-pnpm run build
-cd ../..
-uv run python scripts/build_server_distribution.py
+uv run --locked python scripts/build_preview.py dist/framework
+uv run --locked python scripts/verify_installed_framework.py dist/framework
 ```
 
 Tests may construct `LocalDaemonRuntime` with a temporary project or pass a

@@ -22,9 +22,9 @@ the launcher; it does not discover or start a daily application.
 
 `pnpm run build` writes only to this application's ignored `dist/` directory.
 Use the complete delivery workflow to install a changed bundle into the application.
-The repository-level `scripts/build_server_distribution.py` assembles the
-server in a temporary directory and verifies that its wheel and source
-distribution contain the same bundle.
+The repository-level `scripts/build_preview.py` builds wheels and a separate GUI
+ZIP from one immutable commit. Browser and installed-artifact checks consume this
+same GUI; `verify_installed_framework.py` checks its served bytes and identity.
 
 `pnpm-workspace.yaml` applies the same 3-day minimum release age as Renovate
 to direct and transitive dependency resolution.

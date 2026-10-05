@@ -20,7 +20,7 @@ multiple permanent distribution mechanisms after selection.
 | Installation / acceptance owner | Included entry and boundary |
 | --- | --- |
 | Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. No host/runtime process redesign accompanies CLI ownership. |
-| Server-only pilot (`installed-pilot`) | `build_server_distribution.py` retains core/server/instruments/quantum plus GUI; `verify_pilot_bundle.py` uses `python -m scopecat_server.cli` and checks help without application tools. This is retained isolated-installation evidence, not a separate desktop product or a promise to retain this builder indefinitely. |
+| Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
 | Teaching/offline verification | Existing `scopecat-lab`, generated VS Code tasks and standalone `install.py` remain; `bundle.py` retains manifest/hash checks and offline environment installation. |
 
 CLI ownership has moved from the server wheel to the application-tools wheel.
@@ -28,6 +28,45 @@ A server-only consumer must replace `scopecat COMMAND` with the module entry;
 complete application consumers retain their console commands. Installing only
 server dependencies does not install windows, teaching tools or their commands.
 See the [CLI migration](../../reference/cli.md#entry-ownership-and-migration).
+
+## Coverage by consumer boundary
+
+Windows desktop is the primary user journey. The current Mac distribution remains
+supported by its existing preview entry; this cleanup does not change platform
+promises or reduce existing platform coverage. Internal validation carriers are
+not additional desktop products.
+
+| Boundary | Current coverage and artifact | Unique failure surface |
+| --- | --- | --- |
+| Source and browser | Regular CI; Linux browser shards in `full` / `local-application` | API, UI interactions and source regressions; not installed-package evidence |
+| Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or lab-tools; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
+| Offline installer and course fixtures | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained notebook and generated editor-task callers, application reopen |
+| Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
+| Public artifact consumer | Immutable `preview.json`, wheels and GUI; downstream consumer pins | Source commit and package/hash identity; a downstream pin is not evidence for a newer framework candidate |
+| Release assembly | `release-publish` builds standard artifacts once, reuses them for platform delivery/native packaging | Matching release identity and qualified installer inventory; not invoked by ordinary CI |
+| Human and hardware observations | Separate outstanding acceptance | Actual editor use, unfamiliar users and physical devices; automated synthetic journeys do not close these gates |
+
+`full` and `native-distribution` are mutually exclusive profiles. The shared
+standard artifact is built once within `full` / `local-application`; browser and
+installed checks consume its GUI, and platform delivery reuses its wheels.
+Independent offline/course checks are internal regression capabilities, not proof
+of demand for a second ZIP product. Existing generated teaching callers are retained;
+retiring them or narrowing their platform matrix requires an explicit consumer
+replacement and supported-platform decision.
+
+The old pilot builder, its four-package `manifest.json` and GUI-embedded server
+wheel/sdist are retired. Standard server wheels remain unchanged: GUI is a separate
+ZIP. Acceptance replaces the old embedded-resource assertions with commit/hash,
+served index and asset byte equality, and `build-info.json` version checks. The
+minimal environment still excludes the other three wheels in the seven-package
+standard artifact. Do not confuse this retired pilot format with the maintained
+`bundle.json` offline payload.
+
+Matching scientific assertions at source and installed boundaries are intentional:
+the latter catches wheel discovery and same-version byte changes. Similarly,
+standalone offline installation and native offline startup fail at different
+boundaries. Neither native data export/import nor these checks qualifies the full
+installed configuration-exchange/source-registration/environment journey.
 
 ## Required comparison
 

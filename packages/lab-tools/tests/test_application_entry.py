@@ -135,3 +135,34 @@ def test_failed_start_retains_windowless_recovery(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as failure:
         application.main(["--home", str(tmp_path), "--action", "open"])
     assert failure.value.code == 2
+
+
+@pytest.mark.parametrize("same_interpreter", [True, False])
+def test_update_resources_follow_actual_selected_interpreter(
+    tmp_path, monkeypatch, same_interpreter
+):
+    import sys
+    from pathlib import Path
+
+    selected = SimpleNamespace(
+        python=Path(sys.executable).absolute()
+        if same_interpreter
+        else tmp_path / "other/python",
+        delivery_root=tmp_path / "payload",
+        model_dump_json=lambda **_kwargs: "{}",
+    )
+    calls = []
+    monkeypatch.setattr(
+        ApplicationRuntime, "configure", lambda *_args, **_kwargs: selected
+    )
+
+    def qualify(_runtime, python, gui, **kwargs):
+        calls.append((python, kwargs["delivery_root"]))
+        return selected
+
+    monkeypatch.setattr(ApplicationRuntime, "qualify", qualify)
+    monkeypatch.setattr(ApplicationRuntime, "select", lambda *_args: None)
+    application.main(["--home", str(tmp_path), "--action", "update"])
+    assert calls == [
+        (Path(sys.executable), selected.delivery_root if same_interpreter else None)
+    ]

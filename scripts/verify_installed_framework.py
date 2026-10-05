@@ -1,7 +1,8 @@
-"""Install a local pilot bundle and exercise its GUI and durable virtual run.
+"""Install standard framework artifacts and exercise their durable virtual run.
 
-Run with workspace Python and uv; the journey itself runs with only the installed
-bundle in a fresh environment, outside the checkout and without Node on PATH.
+Run with workspace Python and uv; the journey itself runs with only the selected
+framework wheels and the matching independent GUI in a fresh environment,
+outside the checkout and without Node on PATH.
 """
 
 from __future__ import annotations
@@ -37,31 +38,71 @@ class _Manifest(TypedDict):
     files: dict[str, str]
     packages: dict[str, str]
     ui_version: str
+    commit: str
 
 
 class _Arguments(argparse.Namespace):
     bundle: Path = Path()
     installed: bool = False
+    gui: Path = Path()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
+    parser.add_argument("--gui", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--installed", action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args(namespace=_Arguments())
     bundle = arguments.bundle.resolve()
     if arguments.installed:
-        _installed_journey(bundle)
+        _installed_journey(bundle, arguments.gui)
         return
     uv = shutil.which("uv")
     if uv is None:
         raise RuntimeError("uv is required to create the isolated installation")
-    manifest = cast("_Manifest", json.loads((bundle / "manifest.json").read_text()))
+    from lab_tools.preview import read_preview, unpack_gui
+
+    _ = read_preview(bundle / "preview.json")
+    manifest = cast("_Manifest", json.loads((bundle / "preview.json").read_text()))
     for name, digest in manifest["files"].items():
         with (bundle / name).open("rb") as stream:
             assert hashlib.file_digest(stream, "sha256").hexdigest() == digest, name
+    repository = Path(__file__).resolve().parents[1]
+    commit = _run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
+    if manifest["commit"] != commit:
+        raise ValueError(
+            "Framework artifacts and verifier lock must use the same commit"
+        )
     with tempfile.TemporaryDirectory(prefix="scopecat-installed-") as temporary:
         root = Path(temporary)
+        gui = root / "gui"
+        _ = unpack_gui(bundle, gui)
+        packages = (
+            "scopecat",
+            "scopecat-server",
+            "scopecat-instruments",
+            "scopecat-quantum",
+        )
+        requirements = _run(
+            [
+                uv,
+                "export",
+                "--locked",
+                "--no-dev",
+                "--no-emit-workspace",
+                "--no-annotate",
+                "--no-header",
+                *[arg for package in packages for arg in ("--package", package)],
+            ],
+            cwd=repository,
+        )
+        for package in packages:
+            [wheel] = bundle.glob(package.replace("-", "_") + "-*.whl")
+            requirements += (
+                f"\n{wheel.as_uri()} --hash=sha256:{manifest['files'][wheel.name]}\n"
+            )
+        lock = root / "requirements.txt"
+        lock.write_text(requirements, encoding="utf-8")
         environment = root / "venv"
         _run([uv, "venv", str(environment), "--python", sys.executable], cwd=root)
         binaries = environment / ("Scripts" if os.name == "nt" else "bin")
@@ -76,7 +117,7 @@ def main() -> None:
                 "--require-hashes",
                 "--only-binary",
                 ":all:",
-                "requirements.txt",
+                str(lock),
             ],
             cwd=bundle,
         )
@@ -103,6 +144,8 @@ def main() -> None:
                     str(Path(__file__).resolve()),
                     str(bundle),
                     "--installed",
+                    "--gui",
+                    str(gui),
                 ],
                 cwd=root,
                 env=env,
@@ -124,7 +167,7 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) ->
     return result.stdout
 
 
-def _installed_journey(bundle: Path) -> None:
+def _installed_journey(bundle: Path, gui: Path) -> None:
     from importlib.metadata import version
 
     import httpx2
@@ -143,11 +186,17 @@ def _installed_journey(bundle: Path) -> None:
     assert importlib.util.find_spec("reference_lab") is None
     assert importlib.util.find_spec("scopecat_testkit") is None
     assert importlib.util.find_spec("lab_tools") is None
+    assert importlib.util.find_spec("lab_teaching") is None
     assert shutil.which("scopecat") is None
     assert shutil.which("node") is None
-    manifest = cast("_Manifest", json.loads((bundle / "manifest.json").read_text()))
-    for package, expected in manifest["packages"].items():
-        assert version(package) == expected
+    manifest = cast("_Manifest", json.loads((bundle / "preview.json").read_text()))
+    for package in (
+        "scopecat",
+        "scopecat-server",
+        "scopecat-instruments",
+        "scopecat-quantum",
+    ):
+        assert version(package) == manifest["packages"][package]
     project_root = Path.cwd() / "project with spaces"
     cli = [sys.executable, "-m", "scopecat_server.cli"]
     help_text = _run([*cli, "--help"], cwd=Path.cwd())
@@ -180,12 +229,16 @@ def _installed_journey(bundle: Path) -> None:
     )
     project = open_project(project_root)
     try:
-        _run([*cli, "start", str(project_root)], cwd=project_root)
+        _run(
+            [*cli, "start", str(project_root), "--static-dir", str(gui)],
+            cwd=project_root,
+        )
         endpoint = read_daemon_endpoint_record(project_root)
         assert endpoint is not None
         with httpx2.Client(base_url=endpoint.base_url, trust_env=False) as http:
             index = http.get("/")
             assert index.status_code == 200
+            assert index.content == (gui / "index.html").read_bytes()
             assets = cast(
                 "list[str]", re.findall(r'(?:src|href)="(/assets/[^"]+)"', index.text)
             )
@@ -194,10 +247,11 @@ def _installed_journey(bundle: Path) -> None:
                 response = http.get(asset)
                 assert response.status_code == 200
                 assert "text/html" not in response.headers["content-type"]
-            assert (
-                http.get("/build-info.json").json()["ui_version"]
-                == manifest["ui_version"]
-            )
+                assert response.content == (gui / asset.lstrip("/")).read_bytes()
+            assert http.get("/build-info.json").json() == {
+                "source_commit": manifest["commit"],
+                "ui_version": manifest["ui_version"],
+            }
         with patch("webbrowser.open", return_value=True) as browser:
             assert open_project_gui(project) == endpoint.base_url
             browser.assert_called_once_with(endpoint.base_url)
@@ -227,7 +281,10 @@ def _installed_journey(bundle: Path) -> None:
         assert scan["points"] == 3 and scan["mean"] == 2 / 3
         shared_run_id = _shared_author_journey(project, str(scan["run_id"]))
         _run([*cli, "stop", str(project_root)], cwd=project_root)
-        _run([*cli, "start", str(project_root)], cwd=project_root)
+        _run(
+            [*cli, "start", str(project_root), "--static-dir", str(gui)],
+            cwd=project_root,
+        )
         restarted = read_daemon_endpoint_record(project_root)
         assert restarted is not None
         with DaemonClient(restarted.base_url) as client:

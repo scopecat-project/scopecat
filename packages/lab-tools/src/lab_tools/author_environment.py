@@ -41,7 +41,18 @@ def _run(command: list[str]) -> None:
 
 
 def _bundle(runtime: ApplicationRuntime) -> Path:
-    return runtime.installation().static_dir.parent
+    selected = runtime.installation()
+    root = selected.delivery_root
+    if root is None or selected.delivery_manifest_sha256 is None:
+        raise ValueError(
+            "当前应用未登记作者环境资源；请使用完整安装包或选择已有执行 Python"
+        )
+    if not (root / MANIFEST).is_file():
+        raise ValueError("作者环境资源不存在；请恢复原安装包，已有作者环境保留")
+    if file_hash(root / MANIFEST) != selected.delivery_manifest_sha256:
+        raise ValueError("作者环境资源与已登记交付清单不同；请重新打开当前应用后重试")
+    _ = verify_bundle(root)
+    return root
 
 
 def _independent_python(bundle: Path, home: Path) -> Path:
@@ -72,17 +83,18 @@ def create_client_environment(
     environment = workspace / ".venv"
     if environment.is_symlink():
         raise ValueError("作者 .venv 必须是独立目录，不能链接到应用环境")
-    bundle = _bundle(runtime)
-    previous: Path | None = None
-    if rebuild and environment.exists():
-        previous = environment.rename(workspace / f".venv-retained-{uuid4().hex}")
-    if environment.exists():
+    if environment.exists() and not rebuild:
         python = environment_python(environment)
         if not python.is_file():
             raise ValueError(
                 f"作者环境不完整，原目录保留，请重建自己的环境：{environment}"
             )
         return python
+    # Validate before moving the old environment; existing environments need no payload.
+    bundle = _bundle(runtime)
+    previous: Path | None = None
+    if rebuild and environment.exists():
+        previous = environment.rename(workspace / f".venv-retained-{uuid4().hex}")
     try:
         base_python = _independent_python(bundle, workspace / ".scopecat-python")
         _ = install_bundle(

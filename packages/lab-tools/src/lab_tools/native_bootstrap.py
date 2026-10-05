@@ -33,10 +33,12 @@ def prepare(args: Arguments, paths: InstallationPaths) -> None:
         if os.name == "nt":
             python = python.with_name("python.exe")
         if not runtime.selection.exists():
-            _ = runtime.configure(python=python, static_dir=payload / "gui")
+            _ = runtime.configure(
+                python=python, static_dir=payload / "gui", delivery_root=payload
+            )
         # The package determines the interpreter, including when an update replaces
         # files at the same path. Never install or choose another environment here.
-        candidate = runtime.qualify(python, payload / "gui")
+        candidate = runtime.qualify(python, payload / "gui", delivery_root=payload)
         # This receipt is derived from the current package, not a source of
         # software selection. Do not require the previous package's receipt
         # format or interpreter to be usable before registering the current one.

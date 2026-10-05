@@ -77,8 +77,9 @@ def native_start(tmp_path, monkeypatch):
         def installation(self):
             return selected
 
-        def qualify(self, python, static_dir):
+        def qualify(self, python, static_dir, *, delivery_root):
             assert static_dir == payload / "gui"
+            assert delivery_root == payload
             return SimpleNamespace(
                 python=python,
                 package=json.loads((payload / "bundle.json").read_text())["build"],
