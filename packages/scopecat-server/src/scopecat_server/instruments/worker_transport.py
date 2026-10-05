@@ -17,6 +17,8 @@ import psutil
 
 class ByteConnection:
     def __init__(self, connection: socket.socket) -> None:
+        # Send frame headers and bodies promptly across the local TCP boundary.
+        connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.connection = connection
 
     def send_bytes(self, buf: bytes | memoryview) -> None:
