@@ -147,14 +147,28 @@ venv. The generated author client environment starts with `scopecat` and
 and declared experiment dependencies; optional SDK processes retain their own
 qualified requirements.
 
-An optional CLI/launcher supplied by the installed application is a **proposal
-awaiting a product decision**. Its intended boundary would keep SDK/client and
-experiment dependencies in author environments while application commands target
-an explicit installed owner/data space. Command discovery, installation selection,
-version negotiation and platform packaging remain to be decided. Compiling Python
-extensions into a desktop host, or installing a host package into a venv, would
-not by itself resolve those ownership questions. No launcher, PATH integration or
-packaging change is delivered by this documentation work. See the canonical
+### Confirmed installation target; CLI delivery remains unimplemented
+
+Ordinary users install the native desktop application. The application owns its
+runtime and persistent data; multiple author venvs contain SDK/client and experiment
+or device dependencies, not another complete GUI application. Deleting an author
+venv must not delete experimental data. This ownership boundary does not remove the
+separately qualified execution/runtime dependencies described above.
+
+The confirmed direction is an optional CLI/launcher distributed by the desktop
+application, controlling or connecting to that same application and its explicit
+data space. It must not silently create another data service. This application-owned
+CLI is **not implemented**: native installation still adds no global PATH console.
+Command discovery, installation selection, version negotiation and platform
+packaging details remain follow-up design work, not a new product-direction choice.
+
+A complete pip-installed GUI, an independently distributed CLI client, and
+portable/headless delivery are not current second primary channels. Reconsider
+them only for an explicit requirement; retained tools and acceptance payloads do
+not establish such a commitment. Compiling Python extensions into a desktop host
+or installing a host package into a venv does not determine data ownership.
+No launcher, PATH integration or packaging change is delivered by this documentation
+work. See the canonical
 [entry map](architecture/public-application.md#user-journeys-and-entry-ownership).
 
 ## Runtime assets and author-environment resources

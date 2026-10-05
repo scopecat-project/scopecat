@@ -54,7 +54,8 @@ contract. Replace source ownership and consumers together in a bounded follow-up
 
 Native installation currently exposes a desktop entry, not a global PATH console.
 The wheel console above is not a requirement to install application ownership in
-every author venv. An application-supplied optional launcher is undecided; see
+every author venv. An application-supplied optional launcher targeting the same
+application/data owner is the confirmed target, not yet implemented; see
 [installation identities](installation-layout.md#application-command-and-data-identities).
 
 The root workspace owns dependency locking and cross-package checks. Each Python

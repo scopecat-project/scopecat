@@ -30,9 +30,14 @@ work, results and shared devices. Help provides teaching with minimal preparatio
 forms. Settings and device maintenance appear when needed, not as an admission
 checklist. CLI commands remain optional maintenance and automation tools. Current native
 installation does not put a console on global PATH; the wheel's console scripts
-are not a completed desktop CLI contract. An application-supplied optional
-CLI/launcher, with author venvs limited to SDK/client and experiment dependencies,
-is a separate pending decision, not an approved implementation. The
+are not a completed desktop CLI contract. The confirmed target is a native
+application with its own runtime and persistent data, supplying an optional
+CLI/launcher that controls or connects to the same application without silently
+creating another data service. Multiple author venvs contain SDK/client and
+experiment/device dependencies, not the complete GUI application; deleting a venv
+must not delete experimental data. The application-owned CLI is not yet implemented.
+Alternative pip GUI, independent CLI-client and portable/headless distribution are
+not current second primary channels; revisit them only for explicit needs. The
 [installation identity boundary](../installation-layout.md#application-command-and-data-identities)
 distinguishes distribution, installed copy, process owner and persistent data.
 

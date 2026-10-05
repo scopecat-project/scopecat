@@ -6,7 +6,9 @@ with application, Notebook and practice entry. The current native desktop
 installer does not install a global PATH console; do not assume these commands
 are discoverable from a shell after desktop installation. See
 [installation and command identity](../development/installation-layout.md#application-command-and-data-identities)
-for the separate, undecided application-supplied CLI/launcher direction.
+for the confirmed application-supplied CLI/launcher target, whose delivery is
+not yet implemented. It will target the same application/data owner; installing
+the complete GUI in each author venv is not the ordinary-user direction.
 For server-only development, use `python -m scopecat_server.cli`; that module
 has no application/teaching commands or `init --topic` option.
 

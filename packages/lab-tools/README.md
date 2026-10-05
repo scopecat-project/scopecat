@@ -2,8 +2,8 @@
 
 This wheel owns its Python environment's `scopecat` console through
 `lab_tools.public_cli`. Native installation does not currently add a global PATH
-console. An optional application-supplied CLI/launcher remains a separate product
-decision; see [installation identities](../../docs/development/installation-layout.md#application-command-and-data-identities).
+console. An optional application-supplied CLI/launcher targeting the same data
+owner is the confirmed direction, not yet implemented; see [installation identities](../../docs/development/installation-layout.md#application-command-and-data-identities).
 It composes server commands with application, Notebook and practice operations.
 The separate `scopecat-lab` teaching entry remains supported by existing consumers.
 Native bootstrap, desktop and `ApplicationRuntime` are long-lived runtime code;
