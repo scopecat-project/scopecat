@@ -8,13 +8,13 @@ source temporarily supports integration tests. See the
 
 | Current content | Responsibility | Direction |
 | --- | --- | --- |
-| Server `scaffold.py`, installed pilot verifier | Minimal public author workspace | Keep runnable without reference-lab installed; generated scripts use current APIs |
+| Server `scaffold.py`, installed framework verifier | Minimal public author workspace | Keep runnable without reference-lab installed; generated scripts use current APIs |
 | `reference_lab/notebooks` | Legacy integration inputs | Extract valid behavior, retire redundant scripts; write new lessons in topic sandboxes |
 | `reference_lab/quantum_compilation`, `quantum_runner`, `virtual_lab` | Quantum-to-device integration | Maintainer-owned fixture; not a mandatory author dependency |
 | `reference_lab/workflows/drag_beta_*` | Calibration, publication and recovery contracts | Preserve integrated evidence; do not teach these as the first acquisition |
 | `reference_lab/tests/unit` | Local scientific/compiler behavior | Prefer small fixtures without a daemon |
 | Managed author/restart tests | Real process and retained-source contracts | Move generic cases to starter fixtures when they do not require routing/compiler capabilities |
-| `packages/lab-teaching`, `packages/lab-tools` | Runnable generic tutorials and installation/sandbox lifecycle | Public installed CI executes shipped Notebooks; private consumes these packages |
+| `packages/lab-teaching`, `packages/lab-tools` | Runnable generic tutorials and installation/sandbox lifecycle | Installed checks execute the starter/reopen Notebooks plus separate test scenarios; full desktop teaching remains #565 |
 | Private laboratory courses | Lab-specific methods and scientific workflows | Keep real methods and deployment policy; remove duplicated generic tooling |
 
 This is an ownership classification, not a claim that extraction is complete.
@@ -161,12 +161,23 @@ intent and actual submission.
 ## Installed author package boundary
 
 `fixtures/installed_author_lab` is a tiny wheel-only consumer fixture, not another
-user workspace template. `scripts/verify_pilot_bundle.py` builds and installs it
-outside the checkout in the clean pilot environment, on both CI platforms. The
+user workspace template. `scripts/verify_installed_framework.py` builds and installs it
+outside the checkout in the minimal framework environment, on both CI platforms. The
 same daemon exercises installed discovery, a local wrapper, original/current
 analysis after refresh, retained analysis after restart, and rejection/restoration
-of changed installed bytes. This extends the installed pilot instead of adding a
+of changed installed bytes. This extends the installed framework journey instead of adding a
 second full runtime job or a dependency on private laboratory code.
+
+## Teaching capability is not fixture retirement
+
+The reference lab's retired teaching role is distinct from generic teaching in
+`lab-teaching`. Seven topic Notebooks and their editable source remain. Their
+current use as maintained fixtures does not cancel the Notebook/application
+learning journey. Help's single manual-peak practice is only a bounded part of
+that goal. The manager topology is retired; the full learning experience has not
+been absorbed into the desktop. Track that gap in
+[#565](https://github.com/scopecat-project/scopecat/issues/565), with the actual
+[execution and acceptance limits](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits).
 
 ## Retirement sequence
 

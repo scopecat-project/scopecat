@@ -393,6 +393,15 @@ def test_public_release_artifacts_feed_native_delivery(
         delivery.run(
             ["uv", "build", "--out-dir", str(artifacts), str(package)], cwd=public
         )
+    # Standard artifacts also serve framework/test consumers. They must not
+    # enlarge the desktop recipe or require dependencies absent from its lock.
+    for name in ("scopecat-quantum", "scopecat-testkit"):
+        with zipfile.ZipFile(
+            artifacts / f"{name.replace('-', '_')}-1.0-py3-none-any.whl", "w"
+        ) as archive:
+            archive.writestr(
+                f"{name}.dist-info/METADATA", f"Name: {name}\nVersion: 1.0\n"
+            )
     with zipfile.ZipFile(artifacts / "scopecat-ui.zip", "w") as archive:
         archive.writestr("index.html", "released workbench")
     manifest = {
@@ -421,6 +430,8 @@ def test_public_release_artifacts_feed_native_delivery(
         release=True,
     )
     assert not any(command[1] == "build" for command, _ in build_tools)
+    assert not list((result / "wheels").glob("scopecat_quantum-*.whl"))
+    assert not list((result / "wheels").glob("scopecat_testkit-*.whl"))
     metadata = json.loads((result / MANIFEST).read_text())
     assert metadata["release_version"] == "0.3.0-rc.1"
     assert metadata["build_number"] == 7

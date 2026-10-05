@@ -25,13 +25,15 @@ from scopecat.daemon.health import ApplicationActivity
 from scopecat.project import open_project
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
-from .bundle import managed_path
+from .bundle import MANIFEST, file_hash, installed_bundle, managed_path, read_bundle
 
 
 class Installation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     python: Path
     static_dir: Path
+    delivery_root: Path | None = None
+    delivery_manifest_sha256: str | None = None
     environment: dict[str, str]
     settings_identity: str | None = None
     adapter_identity: str | None = None
@@ -133,6 +135,7 @@ class ApplicationRuntime:
         static_dir: Path | None,
         *,
         composition: str | None = None,
+        delivery_root: Path | None = None,
     ) -> Installation:
         composition = composition or (self.root / "scopecat.toml").read_text()
         descriptor, name = tempfile.mkstemp(prefix=".candidate-", dir=self.root)
@@ -151,10 +154,21 @@ class ApplicationRuntime:
             )
         finally:
             manifest.unlink(missing_ok=True)
+        environment = cast("dict[str, str]", result["environment"])
+        receipt_root = installed_bundle(Path(environment["prefix"]))
+        if delivery_root is None:
+            delivery_root = receipt_root
+        if delivery_root is not None:
+            delivery_root = delivery_root.resolve()
+            _ = read_bundle(delivery_root)
         return Installation(
             python=python.absolute(),
             static_dir=Path(cast("str", result["static_dir"])),
-            environment=cast("dict[str, str]", result["environment"]),
+            delivery_root=delivery_root,
+            delivery_manifest_sha256=file_hash(delivery_root / MANIFEST)
+            if delivery_root
+            else None,
+            environment=environment,
             settings_identity=cast("str | None", result["settings_identity"]),
             adapter_identity=cast("str | None", result["adapter_identity"]),
             composition=composition,
@@ -165,6 +179,7 @@ class ApplicationRuntime:
         *,
         python: Path | None = None,
         static_dir: Path | None = None,
+        delivery_root: Path | None = None,
     ) -> Installation:
         """Prepare an empty application; never scaffold or load author code."""
         self.home.mkdir(parents=True, exist_ok=True)
@@ -180,6 +195,7 @@ class ApplicationRuntime:
             selected = self.qualify(
                 python or Path(sys.executable),
                 static_dir,
+                delivery_root=delivery_root,
             )
             _write(self.selection, selected.model_dump_json(indent=2))
             return selected
@@ -195,7 +211,12 @@ class ApplicationRuntime:
                     "root": str(self.root),
                     **selected.model_dump(
                         mode="json",
-                        exclude={"python", "composition"},
+                        exclude={
+                            "python",
+                            "composition",
+                            "delivery_root",
+                            "delivery_manifest_sha256",
+                        },
                     ),
                 },
             )
@@ -244,6 +265,7 @@ class ApplicationRuntime:
                 candidate.python,
                 candidate.static_dir,
                 composition=candidate.composition,
+                delivery_root=candidate.delivery_root,
             )
             if qualified != candidate:
                 raise ValueError("应用文件在检查后改变，请重新打开 Scopecat 后重试")
@@ -268,7 +290,12 @@ class ApplicationRuntime:
                     "author_python": str(python.absolute()) if python else None,
                     **selected.model_dump(
                         mode="json",
-                        exclude={"python", "composition"},
+                        exclude={
+                            "python",
+                            "composition",
+                            "delivery_root",
+                            "delivery_manifest_sha256",
+                        },
                     ),
                 },
             )

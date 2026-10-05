@@ -104,6 +104,10 @@ def build(
         ui_metadata["version"] = ui_version
         ui_project.write_text(json.dumps(ui_metadata, indent=2) + "\n")
         subprocess.run(["pnpm", "run", "build"], cwd=ui, check=True)
+        (ui / "dist/build-info.json").write_text(
+            json.dumps({"source_commit": commit, "ui_version": ui_version}) + "\n",
+            encoding="utf-8",
+        )
         shutil.make_archive(str(destination / "scopecat-ui"), "zip", ui / "dist")
     files = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()

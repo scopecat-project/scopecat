@@ -535,7 +535,11 @@ def run(
             selected = runtime.configure(
                 static_dir=source / "apps/scopecat-ui/dist" if source else None
             )
-            checked = runtime.qualify(selected.python, selected.static_dir)
+            checked = runtime.qualify(
+                selected.python,
+                selected.static_dir,
+                delivery_root=selected.delivery_root,
+            )
             if checked != selected or runtime.pending.exists():
                 runtime.select(checked)
 

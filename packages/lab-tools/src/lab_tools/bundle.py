@@ -272,16 +272,28 @@ def install_bundle(
     return destination
 
 
+def installed_bundle(prefix: Path) -> Path | None:
+    """Resolve the existing installer receipt, without searching for moved payloads."""
+    receipt = prefix / RECEIPT
+    if not receipt.is_file():
+        return None
+    info = cast("dict[str, str]", json.loads(receipt.read_text(encoding="utf-8")))
+    root = Path(info["bundle"])
+    if not root.is_absolute():
+        raise ValueError("交付记录必须使用绝对路径；请从原交付包重新准备环境")
+    if not (root / MANIFEST).is_file():
+        raise ValueError("交付记录指向的资源不存在；请保留原环境并恢复原交付包")
+    if file_hash(root / MANIFEST) != info["manifest_sha256"]:
+        raise ValueError("交付清单与安装记录不同; 请保留原环境和原产物")
+    return root.resolve()
+
+
 def gui_directory(bundle_root: Path | None, runtime: dict[str, object]) -> Path:
     """Validate just the small GUI payload at startup, not all dependency wheels."""
     if bundle_root is None:
-        receipt = Path(sys.prefix) / RECEIPT
-        if not receipt.is_file():
+        bundle_root = installed_bundle(Path(sys.prefix))
+        if bundle_root is None:
             raise ValueError("未安装 GUI 交付记录; 请用 install.py 或指定 --bundle")
-        info = cast("dict[str, str]", json.loads(receipt.read_text(encoding="utf-8")))
-        bundle_root = Path(info["bundle"])
-        if file_hash(bundle_root / MANIFEST) != info["manifest_sha256"]:
-            raise ValueError("交付清单与安装记录不同; 请保留原环境和原产物")
     bundle = verify_bundle(bundle_root, gui_only=True)
     if bundle["runtime"] != runtime:
         raise ValueError("GUI 交付包与当前运行时代码不匹配; 拒绝启动旧 GUI")

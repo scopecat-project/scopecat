@@ -105,6 +105,10 @@ def main(argv: list[str] | None = None) -> None:
                 selected = runtime.qualify(
                     args.python or Path(sys.executable),
                     args.static_dir,
+                    delivery_root=selected.delivery_root
+                    if (args.python or Path(sys.executable)).absolute()
+                    == selected.python
+                    else None,
                 )
                 runtime.select(selected)
             print(selected.model_dump_json(indent=2))

@@ -126,6 +126,28 @@ There is no automatic migration from older development homes, nor any probing of
 The native app is relocatable; moving an author's virtual environment independently
 of its base Python is not supported.
 
+## Runtime assets and author-environment resources
+
+The existing application installation record stores `static_dir` independently of
+optional `delivery_root` and `delivery_manifest_sha256`. These reference the
+existing `bundle.json` identity; they do not define another installation format.
+Native startup supplies its current payload explicitly. An ordinary installed
+Python environment obtains the resource root from its own
+`scopecat-lab-delivery.json` receipt, using the selected interpreter's prefix.
+Source-only operation without a receipt does not guess a bundle from the GUI's
+parent directory.
+
+Installer receipts contain absolute resource paths. Relative paths, missing moved
+payloads and a manifest differing from the receipt fail explicitly; no neighboring
+bundle is searched. Native relocation registers the new explicit payload on its
+next normal startup. It retains the existing stopped/idle ownership requirements.
+GUI/runtime qualification does not hash the dependency wheelhouse. Explicit author
+creation or rebuilding checks the recorded manifest and full payload before moving
+an old environment. Reusing an existing author `.venv` needs no delivery resources.
+Older development application records without resources can still serve data;
+reopen the native application or explicitly update its installation to register
+resources before preparing new environments. No scientific data migration is added.
+
 ## Distribution boundary
 
 `python -m lab_tools.toolchain DELIVERY OUTPUT` builds a new platform delivery

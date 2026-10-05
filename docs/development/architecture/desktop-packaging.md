@@ -20,7 +20,7 @@ multiple permanent distribution mechanisms after selection.
 | Installation / acceptance owner | Included entry and boundary |
 | --- | --- |
 | Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. No host/runtime process redesign accompanies CLI ownership. |
-| Server-only pilot (`installed-pilot`) | `build_server_distribution.py` retains core/server/instruments/quantum plus GUI; `verify_pilot_bundle.py` uses `python -m scopecat_server.cli` and checks help without application tools. This is retained isolated-installation evidence, not a separate desktop product or a promise to retain this builder indefinitely. |
+| Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
 | Teaching/offline verification | Existing `scopecat-lab`, generated VS Code tasks and standalone `install.py` remain; `bundle.py` retains manifest/hash checks and offline environment installation. |
 
 CLI ownership has moved from the server wheel to the application-tools wheel.
@@ -28,6 +28,91 @@ A server-only consumer must replace `scopecat COMMAND` with the module entry;
 complete application consumers retain their console commands. Installing only
 server dependencies does not install windows, teaching tools or their commands.
 See the [CLI migration](../../reference/cli.md#entry-ownership-and-migration).
+
+## Coverage by consumer boundary
+
+Windows desktop is the primary user journey. The current Mac distribution remains
+supported by its existing preview entry; this cleanup does not change platform
+promises or reduce existing platform coverage. Internal validation carriers are
+not additional desktop products.
+
+| Boundary | Current coverage and artifact | Unique failure surface |
+| --- | --- | --- |
+| Source and browser | Regular CI; Linux browser shards in `full` / `local-application` | API, UI interactions and source regressions; not installed-package evidence |
+| Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or lab-tools; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
+| Offline installer and teaching consumers | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained notebook and generated editor-task callers, application reopen |
+| Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
+| Public artifact consumer | Immutable `preview.json`, wheels and GUI; downstream consumer pins | Source commit and package/hash identity; a downstream pin is not evidence for a newer framework candidate |
+| Release assembly | `release-publish` builds standard artifacts once, reuses them for platform delivery/native packaging | Matching release identity and qualified installer inventory; not invoked by ordinary CI |
+| Human and hardware observations | Separate outstanding acceptance | Actual editor use, unfamiliar users and physical devices; automated synthetic journeys do not close these gates |
+
+`full` and `native-distribution` are mutually exclusive profiles. The shared
+standard artifact is built once within `full` / `local-application`; browser and
+installed checks consume its GUI, and platform delivery reuses its wheels.
+The offline archive is an internal validation carrier, not an additional desktop
+product commitment. Calling course code a fixture describes its current maintenance
+form; it does not retire the teaching requirement. Existing generated teaching callers are retained;
+retiring them or narrowing their platform matrix requires an explicit consumer
+replacement and supported-platform decision.
+
+The old pilot builder, its four-package `manifest.json` and GUI-embedded server
+wheel/sdist are retired. Standard server wheels remain unchanged: GUI is a separate
+ZIP. Acceptance replaces the old embedded-resource assertions with commit/hash,
+served index and asset byte equality, and `build-info.json` version checks. The
+minimal environment still excludes the other three wheels in the seven-package
+standard artifact. Do not confuse this retired pilot format with the maintained
+`bundle.json` offline payload.
+
+Matching scientific assertions at source and installed boundaries are intentional:
+the latter catches wheel discovery and same-version byte changes. Similarly,
+standalone offline installation and native offline startup fail at different
+boundaries. Neither native data export/import nor these checks qualifies the full
+installed configuration-exchange/source-registration/environment journey.
+
+## Teaching intent and acceptance limits
+
+The teaching goal is Notebook and application collaboration, not management of
+per-course backend services. Removing that manager did not complete or cancel the
+learning journey. Help's manual-peak practice is a delivered bounded capability;
+it does not replace the seven authored topics or their editable source. Follow
+[the existing teaching issue #565](https://github.com/scopecat-project/scopecat/issues/565)
+for the missing continuation, separately from human/device observations in #616.
+
+A proposed next slice is one representative tutorial: enter from the desktop,
+open a real Notebook, edit and run ordinary source, inspect the result in the
+application, then close and reopen to continue. This is a proposal for a subsequent
+bounded decision, not approval to migrate all seven courses, embed a Notebook
+editor, restore the manager or choose a new UI design.
+
+Current automated evidence has distinct boundaries:
+
+- `lab_tools.verify` executes the shipped `start` and `reopen` Notebooks in real
+  separate kernels, adding checks only to retained `verified-*.ipynb` copies.
+  Editing/grouping checks construct parallel test Notebooks from Python strings;
+  they do not execute all seven topic Notebooks.
+- `test_calibration_teaching_journey.py` executes the three calibration topics'
+  code cells, but skips `sc.notebook()`, injects an authoring session and uses
+  `exec`. External checks restart the service and inject faults. This is neither
+  the real kernel-binding entry nor a desktop-to-Notebook journey.
+- `verify_teaching_delivery.py` checks the actual offline installation, public
+  console, generated editor task, wrong-kernel rejection and headless application
+  continuation. It does not exercise a person using VS Code or the full learning
+  journey through desktop UI and Notebook together.
+
+Known baseline: calibration and joint-calibration fail in the existing journey
+with Pydantic `model_type` errors rejecting same-named `CalibrationIntent` and
+`JointIntent` instances during a shipped cell's procedure submission; task-calibration
+passes. Reproduce with `uv run --locked pytest -q -n 0
+packages/lab-tools/tests/test_calibration_teaching_journey.py`. The failure predates
+this delivery change (also reproduced at #865's merged tree). Class identity and
+loading lifecycle need diagnosis; the current evidence does not establish whether
+the harness or the product is responsible. Do not count these tests as passing or
+weaken them to make this packaging change green.
+
+Teaching journeys can share the actual learning material while keeping detailed
+fault injection and infrastructure assertions outside it. They complement, rather
+than replace, negative/fault/platform tests. Existing tests do not define the course
+design or prove that users can understand it.
 
 ## Required comparison
 

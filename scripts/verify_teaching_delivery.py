@@ -50,6 +50,19 @@ def verify(bundle: Path, destination: Path) -> None:
         check=True,
     )
     python = bootstrap / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    console = python.with_name("scopecat.exe" if os.name == "nt" else "scopecat")
+    for command_args in (
+        ("--help",),
+        ("app", "--help"),
+        ("notebook", "--help"),
+        ("teach", "--help"),
+    ):
+        subprocess.run(  # noqa: S603 - installed public entry, no side effects
+            [str(console), *command_args],
+            cwd=destination,
+            env=env,
+            check=True,
+        )
     command = [str(python), "-m", "lab_tools.cli"]
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [*command, "verify", str(destination / "中文 教材")],
