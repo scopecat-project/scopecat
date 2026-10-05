@@ -113,3 +113,43 @@ assert not forbidden.intersection(sys.modules)
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("command", "options"),
+    [
+        ("app", ("--home", "--action", "--workspace", "--no-browser")),
+        ("notebook", ("--home", "workspace", "--no-browser")),
+        ("teach", ("--home", "--list", "--clear", "--files", "--request-key")),
+    ],
+)
+@pytest.mark.parametrize("help_option", ["--help", "-h"])
+def test_public_wrapper_help_is_complete_and_inert(
+    command: str,
+    options: tuple[str, ...],
+    help_option: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lab_tools import application_runtime, author_notebook
+
+    def unexpected_runtime(*args: object, **kwargs: object) -> None:
+        pytest.fail("Help must exit before creating an application runtime")
+
+    def unexpected_notebook(*args: object, **kwargs: object) -> None:
+        pytest.fail("Help must exit before launching a Notebook")
+
+    monkeypatch.setattr(
+        application_runtime.ApplicationRuntime, "__init__", unexpected_runtime
+    )
+    monkeypatch.setattr(author_notebook, "launch_notebook", unexpected_notebook)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    result = CliRunner().invoke(app, [command, help_option], prog_name="scopecat")
+    assert result.exit_code == 0, result.output
+    output = Text.from_ansi(result.output).plain
+    for option in options:
+        assert option in output
+    assert f"usage: scopecat {command}" in output
+    assert list(tmp_path.iterdir()) == []
