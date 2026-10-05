@@ -48,11 +48,22 @@ Read the attached file contents and dependency information before accepting sour
 **Accept source and download** saves an inert ZIP; it does not register or load code.
 
 1. Extract into a new folder.
-2. In the desktop's **Application settings**, use the existing folder registration
-   flow. Choose **Execution Python**, or explicitly prepare the folder's
-   `pyproject.toml` environment. The browser console cannot manage local folders.
-3. In **Experiments**, select that source and your local parameters/setup. Complete
-   trusted loading and obtain a fresh preview before saving a plan or running.
+2. In the desktop's **Application settings**, choose **Use existing folder** and
+   enter the extracted **Author directory**. If you already have its dependencies,
+   choose **Execution Python** and **Add code folder**. Otherwise select
+   **Prepare execution environment from pyproject.toml**; this explicit action
+   prepares an independent execution environment and registers the folder. You do
+   not need to invent an interpreter path first. The browser console cannot manage
+   local folders.
+3. In **Parameter versions**, edit and save your copy, then choose **Use for next
+   experiment** on the desired saved version. In **Experiments**, select the source
+   and the locally derived setup. Entering this page loads trusted author code;
+   the earlier inspection did not load it. Review the execution scenario and obtain
+   a fresh preview before saving a plan or running.
+4. Quit and reopen the application to continue with the retained originals, saved
+   copies, registered source and results. Reopening does not repeat acquisition.
+   Local environment bindings belong to this installation; a different computer
+   needs its own explicit source/environment setup.
 
 No static method reconstruction, dynamic-control evaluation, dependency
 installation or calibration qualification is implied by import. Imported values
@@ -62,3 +73,13 @@ Files are limited to 16 MiB. Current-format application backup/restore retains
 originals and derivation receipts. Schema 110 is a development format, with no
 old-store migration or compatibility promise; see the
 [data compatibility policy](../development/data-compatibility.md).
+
+## Continuing on another computer
+
+Use configuration sharing when you want independent editable inputs in another
+store. It creates new local identities and does not transfer history or physical
+qualification. For the same store and its history, follow the current-format
+[stopped-project backup and restore workflow](backup-and-restore.md), retaining
+external source and dependency artifacts separately. Restore preserves store
+identity; it is not an independently writable clone. Inspect the restored source
+and prepare its local execution environment before trusted loading or new work.

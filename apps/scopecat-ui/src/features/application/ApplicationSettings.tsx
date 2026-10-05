@@ -5,7 +5,8 @@ import { secondaryButton } from "../../ui/styles";
 import { errorMessage } from "../../lib/presentation";
 import type { InstallationStatus } from "./DesktopSession";
 
-const section = "grid gap-3 rounded-lg border border-line bg-panel p-4";
+const section =
+  "grid min-w-0 gap-3 rounded-lg border border-line bg-panel p-4 [overflow-wrap:anywhere]";
 
 export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   const [native, setNative] = useState(window.pywebview?.api);
@@ -66,7 +67,10 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   const selected = status.data?.sources.find((item) => item.directory === source.trim());
   const dataRoot = health?.details.data_root;
   return (
-    <section className="grid max-w-4xl gap-4 p-6" aria-labelledby="application-settings-heading">
+    <section
+      className="grid min-w-0 max-w-4xl gap-4 p-6"
+      aria-labelledby="application-settings-heading"
+    >
       <h2 id="application-settings-heading" className="text-lg font-semibold">
         Application settings
       </h2>
@@ -162,6 +166,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   <label className="grid gap-1">
                     Your code folders
                     <select
+                      className="min-w-0 max-w-full"
                       value={selected ? source.trim() : ""}
                       disabled={busy}
                       onChange={(event) => setSource(event.target.value)}
