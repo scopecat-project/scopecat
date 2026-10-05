@@ -10,6 +10,7 @@ DesktopAPI; only external editor activation/window plumbing is substituted.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import sys
@@ -94,6 +95,25 @@ def verify(work: Path, payload: Path) -> None:
             expect(page.get_by_text(str(journey.notebook), exact=True)).to_be_visible()
             source = journey.directory
             notebook_bytes = journey.notebook.read_bytes()
+            material = (
+                Path(__file__).resolve().parents[1]
+                / "packages/lab-teaching/src/lab_teaching/course_material/lessons"
+            )
+            for packaged, generated in (
+                ("parameters.ipynb", "notebooks/parameters.ipynb"),
+                ("parameters_setup.py.txt", "src/my_experiment/setup.py"),
+                ("parameters.py.txt", "src/my_experiment/parameters.py"),
+                ("response.py.txt", "src/my_experiment/response.py"),
+                ("experiment.py.txt", "src/my_experiment/teaching.py"),
+                ("workspace_app.py.txt", "src/workspace_app.py"),
+            ):
+                assert (source / generated).read_bytes() == (
+                    material / packaged
+                ).read_bytes(), (
+                    "Installed teaching material differs from this checkout; run "
+                    "uv sync --locked --reinstall-package scopecat-lab-teaching"
+                )
+            notebook_sha256 = hashlib.sha256(notebook_bytes).hexdigest()
             shipped = nbformat.read(journey.notebook, as_version=4)
             shipped_cells = cast("list[NotebookNode]", shipped["cells"])
             cells = {cast("str", cell["id"]): cell for cell in shipped_cells}
@@ -206,6 +226,7 @@ def verify(work: Path, payload: Path) -> None:
                 json.dumps(
                     {
                         "result": "passed",
+                        "shipped_notebook_sha256": notebook_sha256,
                         "first_run": first_id,
                         "shapes": [[7, 64], [7, 32], [5, 32]],
                         "retained_runs": len(before),
