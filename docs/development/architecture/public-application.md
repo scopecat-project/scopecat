@@ -28,7 +28,13 @@ platform; macOS remains a supported public desktop with the same product flow.
 Notebook/Python and the SDK own author work, while the application owns durable
 work, results and shared devices. Help provides teaching with minimal preparation
 forms. Settings and device maintenance appear when needed, not as an admission
-checklist. CLI commands remain optional maintenance and automation tools.
+checklist. CLI commands remain optional maintenance and automation tools. Current native
+installation does not put a console on global PATH; the wheel's console scripts
+are not a completed desktop CLI contract. An application-supplied optional
+CLI/launcher, with author venvs limited to SDK/client and experiment dependencies,
+is a separate pending decision, not an approved implementation. The
+[installation identity boundary](../installation-layout.md#application-command-and-data-identities)
+distinguishes distribution, installed copy, process owner and persistent data.
 
 The runtime can isolate multiple application homes for development, acceptance or
 separate deployments. This does not introduce a multiple-space manager, per-topic

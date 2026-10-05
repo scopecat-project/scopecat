@@ -23,7 +23,7 @@ selected Python/WebView host. This map describes their existing implementation.
 
 | Role | Implementation / consumer |
 | --- | --- |
-| Installed command line | `scopecat` is owned by `scopecat-lab-tools` (`lab_tools.public_cli`). It composes server project commands with `app`, `notebook`, `teach` and tutorial `init --topic`, loading application implementations only on dispatch. |
+| Wheel-installed command line | Within the installing Python environment, `scopecat` is owned by `scopecat-lab-tools` (`lab_tools.public_cli`). It composes server project commands with `app`, `notebook`, `teach` and tutorial `init --topic`, loading application implementations only on dispatch. |
 | Server-only development | `python -m scopecat_server.cli` retains project init/config, lifecycle, workspace registration, automation, diagnosis and snapshot commands. Installing only the server does not install the application console script. The retained pilot bundle uses this module entry for isolated-installation acceptance; its CI use does not establish a separate product commitment. |
 | Native entry and windows | `lab_tools.native_bootstrap` → `desktop` → `ApplicationRuntime`; window closure does not end retained execution. See [application host](architecture/application-host.md). |
 | Long-lived ownership | `ApplicationRuntime` composes one application home; server lifecycle/runtime owns the durable writer and worker processes. Author folders do not imply per-source daemons. |
@@ -51,6 +51,11 @@ The [teaching work owner #565](https://github.com/scopecat-project/scopecat/issu
 retains the broader learning requirement. Do not delete these resources or VS Code
 tasks because they also serve tests, or call that test use a permanent product
 contract. Replace source ownership and consumers together in a bounded follow-up.
+
+Native installation currently exposes a desktop entry, not a global PATH console.
+The wheel console above is not a requirement to install application ownership in
+every author venv. An application-supplied optional launcher is undecided; see
+[installation identities](installation-layout.md#application-command-and-data-identities).
 
 The root workspace owns dependency locking and cross-package checks. Each Python
 package owns its build metadata and focused tests. `uv run lint-imports` enforces

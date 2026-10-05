@@ -1,7 +1,12 @@
 # Command-line interface
 
-The installed `scopecat` command is provided by `scopecat-lab-tools`, which
-composes project/server commands with application, Notebook and practice entry.
+When installed in a Python environment, the `scopecat-lab-tools` wheel provides
+that environment's `scopecat` console script, composing project/server commands
+with application, Notebook and practice entry. The current native desktop
+installer does not install a global PATH console; do not assume these commands
+are discoverable from a shell after desktop installation. See
+[installation and command identity](../development/installation-layout.md#application-command-and-data-identities)
+for the separate, undecided application-supplied CLI/launcher direction.
 For server-only development, use `python -m scopecat_server.cli`; that module
 has no application/teaching commands or `init --topic` option.
 
@@ -14,7 +19,7 @@ See the [entry map](../development/architecture/public-application.md#user-journ
 
 | Installation | Entry | Commands |
 | --- | --- | --- |
-| Complete application / `scopecat-lab-tools` | `scopecat` or `python -m lab_tools.public_cli` | Project commands below plus `app`, `notebook`, `teach`, `init --topic` |
+| Python environment with `scopecat-lab-tools` | `scopecat` or `python -m lab_tools.public_cli` | Project commands below plus `app`, `notebook`, `teach`, `init --topic` |
 | Server-only / retained server pilot | `python -m scopecat_server.cli` | Project commands below, without application/teaching commands |
 | Existing teaching tools | `scopecat-lab` | Existing generated-project / VS Code lifecycle; unchanged |
 

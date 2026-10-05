@@ -126,6 +126,37 @@ There is no automatic migration from older development homes, nor any probing of
 The native app is relocatable; moving an author's virtual environment independently
 of its base Python is not supported.
 
+## Application, command and data identities
+
+Keep four identities separate when describing installation:
+
+| Identity | Meaning | Does not determine |
+| --- | --- | --- |
+| Distribution/release | Versioned native payload, wheels and manifest source hashes | Which local data space is in use or whether a consumer upgraded |
+| Installed copy | A concrete native package at a local path, with bundled Python and GUI | Ownership of data merely by containing executable code |
+| Running owner | Processes coordinated for an explicit application home, with lifecycle and locks | A new data space for each window, Notebook kernel or Python environment |
+| Data space | Persistent store identity and scientific history under the selected data home | The package location, author folder or current process ID |
+
+The current native installers provide the desktop application entry, **not a
+global PATH `scopecat` console**. Installing the `scopecat-lab-tools` wheel in a
+Python environment creates that environment's `scopecat` and `scopecat-lab`
+console scripts. This packaging fact is not an implemented application-owned CLI
+contract and does not require installing the whole application in every author
+venv. The generated author client environment starts with `scopecat` and
+`ipykernel`. Execution environments separately include framework/server requirements
+and declared experiment dependencies; optional SDK processes retain their own
+qualified requirements.
+
+An optional CLI/launcher supplied by the installed application is a **proposal
+awaiting a product decision**. Its intended boundary would keep SDK/client and
+experiment dependencies in author environments while application commands target
+an explicit installed owner/data space. Command discovery, installation selection,
+version negotiation and platform packaging remain to be decided. Compiling Python
+extensions into a desktop host, or installing a host package into a venv, would
+not by itself resolve those ownership questions. No launcher, PATH integration or
+packaging change is delivered by this documentation work. See the canonical
+[entry map](architecture/public-application.md#user-journeys-and-entry-ownership).
+
 ## Runtime assets and author-environment resources
 
 The existing application installation record stores `static_dir` independently of
