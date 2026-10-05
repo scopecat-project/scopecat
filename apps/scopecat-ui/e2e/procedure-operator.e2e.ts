@@ -26,11 +26,20 @@ import scopecat as sc
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.scientific_selection import ScientificSelection, ParameterConfiguration
 from scopecat.author_workspaces import author_workspace_id
+from scopecat.daemon.endpoint import resolve_daemon_endpoint
+from scopecat_server.author_worker import revision_project
 project = sc.open_project(sys.argv[1])
-application = project.load_application()
-with project.connect() as lab:
+with project.authoring() as author:
+    catalog = author.catalog()
+assert catalog.code_revision is not None
+# Seed the admission-only boundary with the same immutable composition that the
+# worker restores. The public author submit API also dispatches the procedure.
+application = revision_project(project.root, catalog.code_revision).load_application()
+with application.connect(resolve_daemon_endpoint(project.root)) as lab:
     provider = application.launch_provider
     entry = application.authors.get("reference_lab.temperature_diagnostic").entry
+    catalog_entry = next(item for item in catalog.entries if item.id == entry.id)
+    assert entry == catalog_entry
     parameters = lab.parameters.checkout("browser").head.revision
     setup = lab.setup.get("browser-bench-a")
     request = LaunchRequest(workspace_id=author_workspace_id(project.root), action="preview", experiment=entry.id, version=entry.version, selection=ScientificSelection(configuration=ParameterConfiguration(ref=parameters, setup=setup.ref)))
@@ -38,8 +47,14 @@ with project.connect() as lab:
     admitted = provider(lab, LaunchRequest.model_validate({
         **request.model_dump(), "action": "submit", "request_key": "browser-retained",
         "expected_request_hash": preview.request_hash, "reviewed": preview.reviewed,
-                "manual_state": preview.manual_state,
+        "manual_state": preview.manual_state,
     }))
+    retained = lab.procedures.get(admitted.procedure_id).snapshot
+    assert retained.source is not None
+    assert retained.source.workspace_id == catalog.workspace_id
+    assert retained.source.code_revision == catalog.code_revision
+    assert retained.definition.id == f"scopecat.author:{entry.id}"
+    assert retained.definition.fingerprint == catalog_entry.version
     print(admitted.procedure_id)
 `;
 
@@ -111,11 +126,28 @@ retainedProcedureTest(
         path: reopenedScreenshot,
         contentType: "image/png",
       });
+      const dispatchResponse = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === `/api/v1/procedures/${procedureId}/dispatch` &&
+          response.request().method() === "POST",
+      );
       await page.getByRole("button", { name: "Continue task", exact: true }).click();
+      const dispatch = await dispatchResponse;
+      expect(dispatch.ok(), await dispatch.text()).toBe(true);
+      const receipt = (await dispatch.json()) as { dispatch_error: string | null };
+      expect(receipt.dispatch_error).toBeNull();
+      // Observe the real child-run admission separately from its acquisition,
+      // just as the source/candidate workflow below observes each durable step.
+      const childRun = page.getByRole("link", { name: /^Open (current child|retained) run:/ });
+      await expect(childRun).toBeVisible();
+      const childHref = await childRun.getAttribute("href");
+      expect(childHref).toContain(`procedure=${procedureId}`);
       await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
-      await page.getByRole("link", { name: /^Open retained run:/ }).click();
+      const retainedRun = page.getByRole("link", { name: /^Open retained run:/ });
+      await expect(retainedRun).toHaveAttribute("href", childHref!);
+      await retainedRun.click();
       await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
       await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
 
@@ -259,7 +291,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await page.getByLabel("Frequency start").fill("4700");
     await page.getByLabel("Frequency stop").fill("4900");
     await page.getByLabel("Frequency points").fill("3");
-    for (const destination of ["Configuration", "Instruments", "Runs"]) {
+    for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
         .getByRole("button", { name: destination, exact: true })
