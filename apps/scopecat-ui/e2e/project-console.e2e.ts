@@ -515,6 +515,69 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
   }
 });
 
+test("exact run opens independently in two browser pages while acquisition continues", async ({
+  daemon,
+  page,
+  context,
+}) => {
+  const writes: string[] = [];
+  context.on("request", (request) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.url());
+  });
+  await page.goto(daemon.baseUrl);
+  const experiment = await startControlledExperiment(daemon.projectRoot);
+  try {
+    const runId = await waitForMarker(experiment.acceptedReady, experiment);
+    await page.getByTitle(`Inspect run ${runId}`, { exact: true }).click();
+    await page.setViewportSize({ width: 520, height: 800 });
+    await expect(page.getByTestId("run-detail-header")).toContainText(runId);
+    const open = page
+      .getByRole("region", { name: "Selected run details" })
+      .getByRole("link", { name: "Open result in new tab or window" });
+    await open.focus();
+    await expect(open).toBeFocused();
+    const opened = context.waitForEvent("page");
+    await page.keyboard.press("Enter");
+    const result = await opened;
+    await expect(result.getByTestId("run-detail-header")).toContainText(runId);
+    expect(new URL(result.url()).searchParams.get("run")).toBe(runId);
+    expect(await result.evaluate("window.opener === null")).toBe(true);
+    await expect(result).toHaveTitle(`${LIVE_DISPLAY_NAME} · ${runId} — Scopecat`);
+    const originalUrl = page.url();
+    await page.getByTestId("run-list-item").filter({ hasText: "first_run" }).first().click();
+    await expect(page.getByTestId("run-detail-header")).not.toContainText(runId);
+    await expect(result.getByTestId("run-detail-header")).toContainText(runId);
+    await page.goBack();
+    await expect(page).toHaveURL(originalUrl);
+    await page.goForward();
+    await expect(page.getByTestId("run-detail-header")).not.toContainText(runId);
+    await writeFile(experiment.releaseAccepted, "", "utf8");
+    await waitForMarker(experiment.runningReady, experiment);
+    await writeFile(experiment.releaseRunning, "", "utf8");
+    await waitForMarker(experiment.measurementReady, experiment);
+    await expect(result.getByTestId("run-status")).toHaveText("Running");
+    const resultData = result.getByTestId("data-card");
+    await expect(resultData.getByText(/^1 records/)).toBeVisible();
+    await resultData.getByText("Raw records", { exact: true }).click();
+    await expect(resultData.getByTestId("measurement-preview")).toContainText('"point_index": 0');
+    await page.getByTitle(`Inspect run ${runId}`, { exact: true }).click();
+    await expect(page.getByTestId("measurement-preview")).not.toBeVisible();
+    await expect(resultData.getByTestId("measurement-preview")).toBeVisible();
+    await result.getByRole("button", { name: "Help", exact: true }).click();
+    await result.goBack();
+    await expect(result.getByTestId("run-detail-header")).toContainText(runId);
+    await result.close();
+    await expect(page.getByTestId("run-status")).toHaveText("Running");
+    await writeFile(experiment.releaseMeasurement, "", "utf8");
+    expectProcessOk(await experiment.completion);
+    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByTestId("data-card").getByText(/^15 records/)).toBeVisible();
+    expect(writes).toEqual([]);
+  } finally {
+    await finishControlledExperiment(experiment);
+  }
+});
+
 test("queues a free off-grid scan domain into a running adaptive compiler", async ({
   daemon,
   page,

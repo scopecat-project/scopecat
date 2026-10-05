@@ -1,4 +1,6 @@
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
+import { OpenRunWindow } from "./OpenRunWindow";
+import { WindowTitle } from "../application/WindowTitle";
 import { ExportRun } from "./ExportRun";
 import { RunPlanOrigin } from "../launch/PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
@@ -125,6 +127,8 @@ export function RunDetail({
 }) {
   return (
     <>
+      <WindowTitle title={`${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`} />
+      <OpenRunWindow key={run.runId} runId={run.runId} />
       <ComparisonLink runId={run.runId} />
       <ExportRun key={run.runId} runId={run.runId} />
       <RunPlanOrigin runId={run.runId} />

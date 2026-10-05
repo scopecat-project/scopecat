@@ -38,7 +38,7 @@ class DesktopAPI:
         session: DesktopSession,
         window: Callable[[], webview.Window],
         prepare: Callable[[], None] = lambda: None,
-        new_window: Callable[[], None] = lambda: None,
+        new_window: Callable[[str | None], None] = lambda _run_id: None,
     ):
         self._session = session
         self._runtime = session.runtime
@@ -49,7 +49,14 @@ class DesktopAPI:
 
     def new_window(self) -> None:
         with self._session.operation(allow_files=True):
-            self._new_window()
+            self._new_window(None)
+
+    def open_run_window(self, run_id: object) -> None:
+        """Open one retained run, never a caller-supplied URL or another service."""
+        if not isinstance(run_id, str) or not run_id.strip() or len(run_id) > 512:
+            raise ValueError("无效的 run 标识")
+        with self._session.operation(allow_files=True):
+            self._new_window(run_id)
 
     def set_window_title(self, title: str) -> None:
         self._window().set_title(title)
@@ -412,10 +419,18 @@ class DesktopWindows:
         with self._lock:
             return self._views[-1]
 
-    def create(self) -> DesktopView:
+    def create(self, run_id: str | None = None) -> DesktopView:
         import webview
 
         with self._lock:
+            location = self._session.base_url
+            if run_id is not None:
+                if location is None:
+                    raise ValueError("应用尚在准备，请稍后新建窗口")
+                base = urlsplit(location)
+                location = urlunsplit(
+                    (base.scheme, base.netloc, "/", urlencode({"run": run_id}), "")
+                )
             api = DesktopAPI(
                 self._session, lambda: window, self._prepare, self.new_window
             )
@@ -423,7 +438,7 @@ class DesktopWindows:
                 "webview.Window",
                 webview.create_window(  # pyright: ignore[reportUnknownMemberType]
                     "Scopecat",
-                    url=self._session.base_url,
+                    url=location,
                     html=(
                         None
                         if self._session.base_url
@@ -464,10 +479,10 @@ class DesktopWindows:
             self._views.append(view)
             return view
 
-    def new_window(self) -> None:
+    def new_window(self, run_id: str | None = None) -> None:
         if self._session.base_url is None:
             raise ValueError("应用尚在准备，请稍后新建窗口")
-        self.create()
+        self.create(run_id)
 
     def show(self) -> None:
         with self._lock:

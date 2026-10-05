@@ -81,10 +81,13 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     )
     first.window.run_js.reset_mock()
     first.window.get_current_url.return_value = "http://localhost:1234/?run=A#runs"
-    first.api.new_window()
+    first.api.open_run_window("B &?#/结果")
     second = windows.latest
     assert second is not first
-    assert created[1][1]["url"] == "http://localhost:1234"
+    assert (
+        created[1][1]["url"]
+        == "http://localhost:1234/?run=B+%26%3F%23%2F%E7%BB%93%E6%9E%9C"
+    )
     # A global menu targets the focused window, not the most recently created one.
     monkeypatch.setattr("webview.active_window", lambda: first.window)
     windows.open_file()
@@ -460,3 +463,24 @@ def test_interrupted_selection_can_retry_without_closing_window():
     window.run_js.assert_called_once_with(
         'window.location.replace("http://localhost:1234");'
     )
+
+
+@pytest.mark.parametrize("run_id", ["", "   ", None, 123, "x" * 513])
+def test_run_window_rejects_invalid_bridge_input(run_id):
+    session = DesktopSession(Mock(), threading.Event())
+    create = Mock()
+    api = DesktopAPI(session, Mock(), new_window=create)
+    with pytest.raises(ValueError, match="run"):
+        api.open_run_window(run_id)
+    create.assert_not_called()
+
+
+def test_new_window_keeps_root_and_run_window_requires_ready_service():
+    session = DesktopSession(Mock(), threading.Event())
+    create = Mock()
+    api = DesktopAPI(session, Mock(), new_window=create)
+    api.new_window()
+    create.assert_called_once_with(None)
+    windows = DesktopWindows(session, Mock())
+    with pytest.raises(ValueError, match="准备"):
+        windows.new_window("run-a")

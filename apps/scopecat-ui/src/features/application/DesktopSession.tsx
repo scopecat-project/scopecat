@@ -36,6 +36,7 @@ interface DesktopAPI {
   parameters_journey(): Promise<ParametersJourney | null>;
   prepare_parameters_journey(parent?: string): Promise<ParametersJourney>;
   open_parameters_notebook(): Promise<void>;
+  open_run_window(runId: string): Promise<void>;
   set_window_title(title: string): Promise<void>;
   open_capture(): Promise<components["schemas"]["CaptureImportReceipt"] | null>;
   save_configuration(document: string): Promise<string | null>;
