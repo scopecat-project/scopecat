@@ -73,6 +73,10 @@ and reopen parameters, or use History to read previous results. Opening Help,
 a Notebook or history does not acquire data; executing the acquisition cell
 explicitly creates a new run. Saved parameter edits and source edits are retained.
 Each newly generated folder has its own setup, initial revision and branch names.
+The Notebook and `teaching.py`, `parameters.py`, `response.py`, `setup.py` and
+`workspace_app.py` are editable local source. You can inspect and change the
+parameter declarations, response and scan rather than importing hidden experiment
+definitions from the installed teaching package.
 
 This lesson is persistent ordinary author work, not the resettable peak practice
 scope above. The supplied source computes a synthetic response without devices;

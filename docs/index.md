@@ -1,7 +1,9 @@
 # Scopecat documentation
 
-For a complete runnable Notebook and automatic environment setup, start with
-[tutorial sandboxes](tutorials/teaching-sandboxes.md). Each topic is independent and disposable.
+Start in the desktop application: open received data, use Help for a first lesson,
+or continue your own Python/Notebook work. [Help lessons](tutorials/teaching-sandboxes.md)
+include disposable peak practice and a persistent editable parameters Notebook.
+They share the application; topics do not require separate services.
 
 Scopecat is a local-first Python toolkit for laboratory experiment workflows.
 It connects notebooks, typed experiment authoring, instrument control, live
@@ -24,8 +26,8 @@ is required.
 Use the [learning paths](getting-started/learning-path.md) to choose an author,
 maintainer or extension route. Continue according to what you want to accomplish:
 
-- [Open a tutorial sandbox](tutorials/teaching-sandboxes.md) for focused exercises
-  in parameters, compute, refresh and grouped analysis.
+- [Learn through Help](tutorials/teaching-sandboxes.md) with peak practice or the
+  parameters Notebook; saved code and parameter edits continue across sessions.
 - [Control configured instruments](how-to/control-instruments.md) for direct and
   experiment-time device access.
 - [Run from a notebook](how-to/managed-author-session.md) with parameter edits,
@@ -38,6 +40,8 @@ maintainer or extension route. Continue according to what you want to accomplish
   Arrow, pandas, Polars, and GUI projections.
 - [Open and share data files](how-to/open-and-share-data.md) in the desktop app,
   compare records, or take a file to your own Python environment.
+- [Share saved configuration](how-to/share-configuration.md) as independent local
+  inputs, or [back up and restore](how-to/backup-and-restore.md) the same store/history.
 - [Write ordinary Python analysis](guides/ordinary-analysis.md) with dataclass
   conclusions and retained source provenance.
 - [Publish analysis](concepts/analysis-publication.md) for derived datasets,
@@ -61,5 +65,7 @@ repository details live there so an experiment author does not need to learn
 them before completing a first run.
 
 The [project charter](development/project-charter.md) is the authority for
-current product priorities and scope. These documents describe the present
+current product priorities and scope. The canonical
+[user journey and entry map](development/architecture/public-application.md#user-journeys-and-entry-ownership)
+connects the application, author tools and maintenance boundaries. These documents describe the present
 system, not a compatibility promise or roadmap.

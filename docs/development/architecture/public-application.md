@@ -20,7 +20,75 @@ connection, driver and setup boundaries are defined in
 [device and driver management](device-management.md). Independent device ownership
 replaces setup-owned connection copies; complete resolved snapshots remain evidence.
 
-### Implemented boundary and the next software gate
+## User journeys and entry ownership
+
+The desktop application is the everyday center for ordinary users: one application,
+one data space and multiple editable author folders. Windows is the primary user
+platform; macOS remains a supported public desktop with the same product flow.
+Notebook/Python and the SDK own author work, while the application owns durable
+work, results and shared devices. Help provides teaching with minimal preparation
+forms. Settings and device maintenance appear when needed, not as an admission
+checklist. CLI commands remain optional maintenance and automation tools.
+
+The runtime can isolate multiple application homes for development, acceptance or
+separate deployments. This does not introduce a multiple-space manager, per-topic
+services or cross-home physical-device exclusion. Current local commands accept
+loopback endpoints; LAN authorization and unattended remote service operation are
+not delivered product promises. See [application host](application-host.md).
+
+The table maps current entries to their owners and limits. It is not a claim that
+every source change below has reached an installed release; use
+[platform status](../platform-status.md) for delivery and evidence identities.
+
+| User journey | Default entry | Owned code or data | Present capability and remaining boundary |
+| --- | --- | --- | --- |
+| Receive and inspect data | Desktop **File → Open**, then Data | Portable scientific evidence and imported records; each window owns its selection | [Open/share recorded data](../../how-to/open-and-share-data.md) and independent Python reading work without the original author environment or devices; a capture is not a whole-store backup. |
+| Learn | **Help → Start peak practice** or **Start parameters Notebook** | Practice owns disposable records/notes; parameters owns a persistent ordinary author folder, setup and parameter branch | [Help lessons](../../tutorials/teaching-sandboxes.md) cover manual decisions and one Notebook continuation. Other topics still need a coherent author journey; actual editor and unfamiliar-user observations remain separate. |
+| Write code | Continue the Help Notebook in VS Code; **Settings → Author code** for new/existing ordinary folders | User-owned Python/Notebooks, local SDK and declared dependencies; retained source revisions at submission | [First experiment](../../getting-started/quickstart.md) and [author sessions](../../how-to/managed-author-session.md) use independent environments. Multiple folders share application data, not each other's implicit imports. Older teaching generators still need convergence. |
+| Run, inspect and analyze | Notebook/Python or **Experiments**; **Runs**, **Analyses** and **Decisions** for retained work | Explicit source, setup and parameter references; application-owned tasks/results; author-owned analysis | Preview and explicit submission are distinct. Reopening history does not acquire again. Default entry is Runs history, not persisted last-viewed-task restoration; see #675. |
+| Share configuration or source | **Configuration → Share and import configuration**; ordinary source files/version control for code collaboration | Saved parameter definitions/values, optional setup and retained source; originals and derivation receipts | [Configuration sharing](../../how-to/share-configuration.md) creates editable local inputs. Source acceptance is inert; trust, dependencies, registration and local device binding remain explicit. General graphical authoring is still a proposal. |
+| Back up or change computer | Optional stopped-project snapshot commands and [restore guidance](../../how-to/backup-and-restore.md) | Current-format store/history and captured local files; external source/dependency artifacts retained separately | Restore preserves store identity, not an independently writable clone. No one-click whole-computer backup, cross-version baseline or automatic environment relocation is promised. |
+| Maintain or automate | Contextual **Devices and drivers**, **Settings**, and optional [CLI](../../reference/cli.md) | Installation, registered devices, execution/SDK environments and explicit automation declarations | Controlled updates and work-aware Quit exist. Maintenance is not required to open received data or start Help practice; physical qualification remains separate. |
+
+### Current navigation and proposed hierarchy
+
+`apps/scopecat-ui/src/App.tsx` currently renders eleven peer destinations:
+Experiments, Data, Samples, Runs, Analyses, Decisions, Reviews, Devices and drivers,
+Configuration, Settings and Help. Native File/Open and window commands, external
+Notebook/Python, SDK and CLI are additional entry surfaces, not more data owners.
+The [repository map](../repository-map.md#entries-processes-and-delivery) locates
+these implementations and the retained teaching/server-only callers.
+
+A proposed information hierarchy puts running/browsing/analysis in everyday work,
+keeps Samples, Configuration, Decisions and Reviews reachable from their relevant
+scientific context, and treats Settings/device maintenance as supporting actions.
+Help remains a direct learning entry. This hierarchy is **not implemented** and
+does not prescribe a new order, hide capabilities or rename current GUI labels.
+Any later GUI change must demonstrate the journeys above before replacing entries.
+
+### Bounded follow-up order
+
+1. **Teaching/source convergence (#565):** inventory the remaining generated
+   teaching consumers, carry editable scientific definitions and explanatory
+   Notebooks into ordinary author work, and update their callers together. The
+   parameters lesson is the first slice, not completion of all seven topics.
+   Preserve existing teaching/VS Code tasks until replacement journeys work.
+2. **Entry hierarchy:** evaluate a bounded navigation proposal against receiving
+   data, learning, authoring and returning to results. Measure whether users can
+   find the next action before committing to GUI changes. #675's bounded audit
+   found no remaining software gap; its closure decision does not authorize this
+   redesign or require last-task restoration.
+3. **Sharing and recovery guidance (#502/#574):** keep independent configuration
+   derivation distinct from same-store recovery, identify any concrete usability
+   gap after the merged installed-sharing journey, and retain external dependency
+   requirements. Do not add another archive format or compatibility promise.
+
+Actual editor, unfamiliar-user and supervised device observations remain #616.
+Use the [existing work owners](../platform-status.md#remaining-work-owners); this
+ordering is a limited proposal for subsequent work, not another implementation
+batch, new issues or approval to change product behavior in this documentation PR.
+
+## Implemented application boundary
 
 Explicit source registration now covers GUI, Python, workers, retained plans and
 the optional Notebook launcher. Moving an author source does not move application
@@ -75,8 +143,9 @@ permissions. Records use ordinary Data cleanup; source files remain user-owned.
 The target is a platform-standard public application installation, update and
 uninstall. Python environments, GUI assets and worker processes are application
 implementation details. Uninstalling software must not delete scientific data.
-Launch opens the workbench directly, restoring the last task or history; first use
-shows useful experiment and tutorial actions there. It never requires choosing a
+Launch opens the workbench directly into Runs history, with experiment and Help
+actions available. The #675 audit distinguishes this from persisted restoration
+of the last-viewed task; no such restoration is claimed. It never requires choosing a
 laboratory, service or device context first. Missing capabilities or unresolved
 physical choices are explained at the affected action, with inline setup/recovery.
 Opening the application, history or code must not initialize devices or replay work.
@@ -88,9 +157,9 @@ device contexts do not create separate application services, ports or installati
 Qualified workers may use different processes; one service does not mean one Python
 process. Heterogeneous runtime support is not a prerequisite for this first target.
 
-The old host's service registration and setup UI are retirement targets, not an
-alternative product entry. Its remaining teaching/installation consumers must be
-replaced together with their ownership assertions; see
+The manager and per-source service product topology are retired. Retained
+teaching/installation callers must be replaced together with their ownership
+assertions rather than promoted to another product entry; see
 [application host](application-host.md).
 
 ## Ownership without a laboratory container
@@ -108,7 +177,8 @@ required aggregate that owns code, data, devices, process and user navigation.
 | Resolved physical identity, admission, claims and release | Application-wide resource authority |
 | Sample/target, parameters, accepted calibration and publication | Existing scientific models and explicit task/session references |
 | Records and source/parameter evidence | Persistent data space, independent of code location |
-| Disposable tutorial work | Owned practice scope within the application service |
+| Disposable peak practice | Owned practice scope within the application service |
+| Persistent parameters lesson | Ordinary editable author folder and independent scientific namespace |
 
 A device resolution context is an input to preparation/execution, not another
 service or a second copy of the setup catalog. It must not own a data root, source

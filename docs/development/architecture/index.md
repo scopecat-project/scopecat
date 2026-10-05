@@ -4,8 +4,8 @@ These documents explain the present implementation and clearly marked future
 directions to Scopecat contributors:
 
 - [One application, independent execution contexts](public-application.md) is the
-  canonical product target: direct workbench entry, shared resource authority,
-  same-service practice scopes and retirement of the manager/legacy source path.
+  canonical product target, user journey and entry/ownership map, including
+  current navigation, proposed hierarchy and bounded follow-ups.
 - [Device and driver management](device-management.md) defines the target device
   registry, connection revisions, setup references and shared physical access;
   it distinguishes these from the current setup-copy editor and project backend.

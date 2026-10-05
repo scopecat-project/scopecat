@@ -5,10 +5,12 @@ descriptions.
 
 - [Edit and analyze a starter experiment](starter-authoring.md) continues the
   installed quickstart with parameters, scans, analysis and retained results.
-- [Runnable tutorial sandboxes](teaching-sandboxes.md) provide disposable
-  Notebooks for parameters, compute, source refresh and grouped analysis.
+- [Help lessons](teaching-sandboxes.md) provide resettable peak practice and a
+  persistent parameters Notebook in an ordinary editable author folder.
 
-Advanced device and calibration topics should gain focused sandboxes using the
-current public APIs. The old reference gallery is retired as teaching material;
+Parameters is the first Notebook/application lesson, not the whole teaching scope.
+Compute, refresh, grouped analysis and calibration learning outcomes still need
+coherent ordinary-author continuations; retiring fixture documentation did not
+cancel those needs. The old reference gallery is retired as teaching material;
 its remaining scripts are temporary integration-test inputs, not author examples
 to copy. See the [retirement inventory](../development/reference-gallery-retirement.md).

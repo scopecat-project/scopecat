@@ -13,7 +13,7 @@ nav = [
   { "Getting started" = [
     "getting-started/index.md",
     { "Learning paths" = "getting-started/learning-path.md" },
-    { "Pilot bundle quickstart" = "getting-started/quickstart.md" },
+    { "First experiment" = "getting-started/quickstart.md" },
   ] },
   { "Tutorials" = [
     "tutorials/index.md",
