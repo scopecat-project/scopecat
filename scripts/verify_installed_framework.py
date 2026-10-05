@@ -171,6 +171,7 @@ def _installed_journey(bundle: Path, gui: Path) -> None:
     from importlib.metadata import version
 
     import httpx2
+    from click import unstyle
 
     import scopecat
     from scopecat.daemon.client import DaemonClient
@@ -199,9 +200,9 @@ def _installed_journey(bundle: Path, gui: Path) -> None:
         assert version(package) == manifest["packages"][package]
     project_root = Path.cwd() / "project with spaces"
     cli = [sys.executable, "-m", "scopecat_server.cli"]
-    help_text = _run([*cli, "--help"], cwd=Path.cwd())
+    help_text = unstyle(_run([*cli, "--help"], cwd=Path.cwd()))
     assert "python -m scopecat_server.cli" in help_text
-    initialized = _run([*cli, "init", str(project_root)], cwd=Path.cwd())
+    initialized = unstyle(_run([*cli, "init", str(project_root)], cwd=Path.cwd()))
     assert "python -m scopecat_server.cli config check" in initialized
     assert (
         "python -m scopecat_server.cli start ."
