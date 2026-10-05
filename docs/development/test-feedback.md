@@ -217,3 +217,8 @@ publication endpoint reject another workpoint. Source capture/execution is cover
 by the real journey; this fixture does not claim to validate managed analysis
 execution or source validation. No production deadlines, retry rules or CI
 selection change with this split.
+
+## Thin Windows and macOS smoke
+
+See [platform smoke selection and measurements](platform-smoke.md) for the bounded
+platform checks, exact-SHA/no-skip contract and recorded runner/cache evidence.

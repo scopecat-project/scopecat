@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -2971,6 +2971,11 @@ docs = [
 notebook = [
     { name = "ipykernel" },
 ]
+platform-smoke = [
+    { name = "pytest" },
+    { name = "pytest-xdist" },
+    { name = "scopecat-lab-tools", extra = ["desktop"] },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3015,6 +3020,11 @@ docs = [
     { name = "zensical", specifier = ">=0.0.43,<0.1" },
 ]
 notebook = [{ name = "ipykernel", specifier = ">=6.29" }]
+platform-smoke = [
+    { name = "pytest", specifier = ">=9" },
+    { name = "pytest-xdist", specifier = ">=3.8" },
+    { name = "scopecat-lab-tools", extras = ["desktop"], editable = "packages/lab-tools" },
+]
 
 [[package]]
 name = "send2trash"

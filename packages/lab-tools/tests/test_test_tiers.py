@@ -31,3 +31,30 @@ def test_unclassified_files_require_a_decision(tmp_path: Path, suite: str) -> No
     (tmp_path / "tests/test_new_flow.py").touch()
     with pytest.raises(ValueError, match="Unclassified test file: tests/test_new_flow"):
         select_files(tmp_path, suite)
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("pass", 0),
+        ("import pytest; pytest.skip('missing native dependency')", 1),
+        ("import pytest; pytest.xfail('not coverage')", 1),
+        ("assert False", 1),
+    ],
+)
+def test_platform_smoke_requires_actual_passes(tmp_path, monkeypatch, body, expected):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+    from scripts import platform_smoke
+
+    test = tmp_path / "test_probe.py"
+    test.write_text(f"def test_probe():\n    {body}\n", encoding="utf-8")
+    # Keep the child platform real; only select the probe in the runner parent.
+    monkeypatch.setattr(platform_smoke, "COMMON", [str(test) + "::test_probe"])
+    monkeypatch.setattr(platform_smoke, "PLATFORM", {platform_smoke.sys.platform: []})
+    monkeypatch.delenv("SMOKE_EXPECTED_SHA", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        platform_smoke.subprocess, "check_output", lambda *_a, **_kw: "test-sha"
+    )
+    # This temporary probe has no xdist config; main still supplies -n 0.
+    assert platform_smoke.main() == expected
