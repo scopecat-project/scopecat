@@ -256,7 +256,8 @@ and select its saved version in the workbench Measurement context.
 Keep your environment and source with data backups. Updating Scopecat does not
 rewrite this workspace or migrate its retained database.
 
-For an installed pilot, run `scopecat start .` then `scopecat open .`.
+For an installed server pilot, run `python -m scopecat_server.cli start .`
+then `python -m scopecat_server.cli open .`.
 From a framework source checkout, supply the built GUI using `--static-dir`.
 Use `--api-only` only when you intentionally do not need the GUI.
 """,

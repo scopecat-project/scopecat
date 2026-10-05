@@ -40,6 +40,7 @@ import sys
 import scopecat_server.cli
 
 forbidden = {
+    "lab_tools",
     "fastapi",
     "pandas",
     "pyarrow",

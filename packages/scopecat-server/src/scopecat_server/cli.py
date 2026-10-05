@@ -15,11 +15,6 @@ from rich.console import Console
 
 from scopecat_server.static_assets import select_static_dir as select_static_dir
 
-app = typer.Typer(
-    name="scopecat",
-    help="Manage one local Scopecat lab project.",
-    no_args_is_help=True,
-)
 config_app = typer.Typer(
     help="Inspect project configuration sources.",
     no_args_is_help=True,
@@ -28,13 +23,10 @@ automation_app = typer.Typer(
     help="Run project-owned resident automation.",
     no_args_is_help=True,
 )
-app.add_typer(config_app, name="config")
-app.add_typer(automation_app, name="automation")
 snapshot_app = typer.Typer(
     help="Create, verify, and restore stopped-project snapshots.",
     no_args_is_help=True,
 )
-app.add_typer(snapshot_app, name="snapshot")
 console = Console()
 error_console = Console(stderr=True)
 
@@ -42,7 +34,6 @@ _CURRENT_DIRECTORY = Path()
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
-@app.command("diagnose", context_settings={"ignore_unknown_options": True})
 def diagnose(
     command: Annotated[list[str], typer.Argument(help="Explicit command after --.")],
     output: Annotated[Path, typer.Option(help="Fresh evidence directory.")],
@@ -132,7 +123,6 @@ def _validate_host(value: str) -> str:
     return value
 
 
-@app.command("register-workspace")
 def register_workspace(
     workspace: Path,
     service: Annotated[Path, typer.Option(help="Stopped service workspace")],
@@ -154,71 +144,13 @@ def register_workspace(
     typer.echo(selected.model_dump_json(indent=2))
 
 
-@app.command(
-    "app", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
-)
-def application_command(context: typer.Context) -> None:
-    """Open the workbench service entry; optionally register an existing project."""
-    try:
-        from lab_tools.application import main as application_main
-    except ImportError as error:
-        _fail(RuntimeError("Install scopecat-lab-tools or use the Scopecat delivery."))
-        raise AssertionError("unreachable") from error
-    application_main(context.args)
-
-
-@app.command(
-    "notebook",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-)
-def notebook_command(context: typer.Context) -> None:
-    """Open author code with its registered laboratory's Notebook environment."""
-    try:
-        from lab_tools.author_notebook import main as notebook_main
-    except ImportError as error:
-        _fail(RuntimeError("Install scopecat-lab-tools or use the Scopecat delivery."))
-        raise AssertionError("unreachable") from error
-    notebook_main(context.args)
-
-
-@app.command(
-    "teach", context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
-)
-def teach_command(context: typer.Context) -> None:
-    """Start or clear a software practice in an installed application."""
-    try:
-        from lab_tools.practice import main as teaching_main
-    except ImportError as error:
-        _fail(
-            RuntimeError(
-                "Install scopecat-lab-tools[kernel] or use the tutorial delivery."
-            )
-        )
-        raise AssertionError("unreachable") from error
-    teaching_main(context.args)
-
-
-@app.command("init")
 def init_command(
     project: Annotated[
         Path,
         typer.Argument(help="Directory to initialize."),
     ] = _CURRENT_DIRECTORY,
-    topic: Annotated[
-        str | None, typer.Option(help="Initialize one standalone tutorial topic.")
-    ] = None,
 ) -> None:
     """Initialize a runnable local lab project."""
-
-    if topic is not None:
-        try:
-            from lab_tools.project import create_project
-
-            created = create_project(project, topic=topic)
-        except (ImportError, ValueError, OSError) as error:
-            _fail(error)
-        console.print(f"[green]initialized tutorial[/green] {created.parent}")
-        return
 
     from .lifecycle import DaemonLifecycleError, initialize_project
 
@@ -238,15 +170,15 @@ def init_command(
     project_arg = _shell_quote(str(initialized.root))
     notebook_arg = _shell_quote(str(initialized.root / "notebooks/01_first_run.py"))
     console.print(
-        f"[dim]next[/dim] scopecat config check {project_arg}",
+        f"[dim]next[/dim] python -m scopecat_server.cli config check {project_arg}",
         soft_wrap=True,
     )
     console.print(
-        f"[dim]next[/dim] scopecat start {project_arg}",
+        f"[dim]next[/dim] python -m scopecat_server.cli start {project_arg}",
         soft_wrap=True,
     )
     console.print(
-        f"[dim]next[/dim] scopecat open {project_arg}",
+        f"[dim]next[/dim] python -m scopecat_server.cli open {project_arg}",
         soft_wrap=True,
     )
     console.print(
@@ -414,7 +346,6 @@ def automation_work(
         _fail(error)
 
 
-@app.command()
 def serve(
     project: Annotated[
         Path,
@@ -473,7 +404,6 @@ def serve(
         _fail(error)
 
 
-@app.command()
 def start(
     project: Annotated[
         Path,
@@ -553,7 +483,6 @@ def _lease_ttl(seconds: float | None) -> timedelta | None:
     return None if seconds is None else timedelta(seconds=seconds)
 
 
-@app.command()
 def stop(
     project: Annotated[
         Path,
@@ -577,7 +506,6 @@ def stop(
         console.print("[green]stopped[/green]")
 
 
-@app.command()
 def status(
     project: Annotated[
         Path,
@@ -613,7 +541,6 @@ def status(
     console.print("[dim]stopped[/dim]")
 
 
-@app.command("open")
 def open_command(
     project: Annotated[
         Path,
@@ -634,12 +561,39 @@ def open_command(
     console.print(f"[green]opened[/green] {endpoint}")
 
 
+def create_app(*, include_init: bool = True) -> typer.Typer:
+    """Compose project commands without importing an application host."""
+    application = typer.Typer(
+        name="scopecat",
+        help="Manage one local Scopecat lab project.",
+        no_args_is_help=True,
+    )
+    application.add_typer(config_app, name="config")
+    application.add_typer(automation_app, name="automation")
+    application.add_typer(snapshot_app, name="snapshot")
+    application.command("diagnose", context_settings={"ignore_unknown_options": True})(
+        diagnose
+    )
+    application.command("register-workspace")(register_workspace)
+    if include_init:
+        application.command("init")(init_command)
+    application.command()(serve)
+    application.command()(start)
+    application.command()(stop)
+    application.command()(status)
+    application.command("open")(open_command)
+    return application
+
+
+app = create_app()
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Run the Typer application."""
 
     app(
         args=None if argv is None else list(argv),
-        prog_name="scopecat",
+        prog_name="python -m scopecat_server.cli",
     )
 
 
@@ -673,4 +627,4 @@ if __name__ == "__main__":
     main()
 
 
-__all__ = ["app", "main"]
+__all__ = ["app", "create_app", "init_command", "main"]

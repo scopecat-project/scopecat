@@ -1,5 +1,9 @@
 # Scopecat Server
 
+The installed application console `scopecat` belongs to `scopecat-lab-tools`.
+Server-only development uses `python -m scopecat_server.cli` for project commands;
+the server never imports the application host or delivery tools.
+
 Local FastAPI and SSE transport plus the default SQLite daemon runtime.
 Published distributions include the project GUI; source checkouts may use the
 Vite development server or pass `apps/scopecat-ui/dist` with `--static-dir`.
@@ -7,10 +11,10 @@ Vite development server or pass `apps/scopecat-ui/dist` with `--static-dir`.
 From the repository root:
 
 ```console
-uv run scopecat init ./my-lab
-uv run scopecat config check ./my-lab
-uv run scopecat start ./my-lab --static-dir apps/scopecat-ui/dist
-uv run scopecat open ./my-lab
+uv run python -m scopecat_server.cli init ./my-lab
+uv run python -m scopecat_server.cli config check ./my-lab
+uv run python -m scopecat_server.cli start ./my-lab --static-dir apps/scopecat-ui/dist
+uv run python -m scopecat_server.cli open ./my-lab
 uv run python ./my-lab/notebooks/01_first_run.py
 ```
 
@@ -96,6 +100,14 @@ The daemon never deletes an incompatible store automatically. This rebuild-only
 policy is intentional for the current closed development phase; a supported
 migration or export/import boundary is required before project stores are
 treated as long-lived user data.
+
+The retained server-only pilot is built and checked by the Full acceptance
+workflow. It contains core/server/instruments/quantum wheels and the built GUI,
+not the application host or teaching package. Its commands use the environment's
+`python -m scopecat_server.cli`; `scopecat app`, `notebook`, `teach` and tutorial
+`init --topic` belong to an installation containing `scopecat-lab-tools`.
+Previous server-only callers of `scopecat COMMAND` must change to the module
+entry. Complete application installations keep `scopecat COMMAND`.
 
 For a bundled source-checkout preview:
 

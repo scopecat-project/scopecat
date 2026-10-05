@@ -10,7 +10,7 @@ from filelock import FileLock
 from typer.testing import CliRunner
 
 from lab_tools import author_notebook
-from scopecat_server.cli import app
+from lab_tools.public_cli import app
 
 
 @pytest.fixture
