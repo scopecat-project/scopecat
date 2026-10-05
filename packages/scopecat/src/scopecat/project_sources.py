@@ -47,6 +47,7 @@ _EXCLUDED = frozenset(
         ".ruff_cache",
         ".mypy_cache",
         ".scopecat",
+        "scopecat.runtime.toml",
     }
 )
 

@@ -66,6 +66,12 @@ the supplied path and makes the project's `src` directory importable.
 
 ## Source ownership
 
+Author source and refresh roots are relative subdirectories; equivalent `./src/`
+spellings are normalized. The whole project directory (`.` and its aliases) is
+not a source root. Captures exclude `scopecat.runtime.toml` at every depth: local
+application/data bindings are deployment metadata, not scientific source or
+configuration-sharing attachments. Existing retained originals are not rewritten.
+
 - `application.py` exports the lightweight initial configuration bootstrap.
 - `[lab.capabilities]` declares notebook and worker execution capabilities without
   requiring a custom application factory.

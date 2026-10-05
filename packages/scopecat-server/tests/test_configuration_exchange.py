@@ -130,7 +130,12 @@ def test_source_is_verified_inert_and_explicitly_downloaded(tmp_path: Path) -> N
     (source / "src/never_execute.py").write_text(
         'raise RuntimeError("never execute imported code")\n'
     )
+    for relative in ("scopecat.runtime.toml", "src/scopecat.runtime.toml"):
+        (source / relative).write_text(
+            '[runtime]\ndata_root = "/machine/private/application-data"\n'
+        )
     bundle = capture_sources(open_project(source, resolve_adapter=False))
+    assert not any(name.endswith("scopecat.runtime.toml") for name in bundle.files)
     with (
         LocalDaemonRuntime(tmp_path / "app") as runtime,
         TestClient(runtime.app()) as client,
@@ -149,6 +154,13 @@ def test_source_is_verified_inert_and_explicitly_downloaded(tmp_path: Path) -> N
         accepted = client.post(path + "?accepted=true")
         assert accepted.status_code == 200
         with ZipFile(io.BytesIO(accepted.content)) as archive:
+            assert not any(
+                name.endswith("scopecat.runtime.toml") for name in archive.namelist()
+            )
+            assert all(
+                b"/machine/private/application-data" not in archive.read(name)
+                for name in archive.namelist()
+            )
             assert archive.read("src/never_execute.py").startswith(
                 b"raise RuntimeError"
             )

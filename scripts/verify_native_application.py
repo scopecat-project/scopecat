@@ -184,6 +184,9 @@ def verify(
             for relative in (
                 "result.json",
                 "data-journey.json",
+                "configuration-sharing/result.json",
+                "configuration-sharing/sender-daemon.log",
+                "configuration-sharing/receiver-daemon.log",
                 "data/native-start.log",
                 "data/desktop/desktop.log",
             ):
@@ -288,6 +291,24 @@ def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Data journey modified application"
+    payload = relocated / (
+        "Contents/Resources/payload"
+        if sys.platform == "darwin"
+        else "resources/payload"
+    )
+    subprocess.run(  # noqa: S603 - installed Python, bounded analytic sharing journey
+        [
+            str(python),
+            "-I",
+            "-B",
+            str(Path(__file__).with_name("verify_configuration_sharing.py").resolve()),
+            str(home / "configuration-sharing"),
+            str(payload),
+        ],
+        env=environment,
+        check=True,
+    )
+    assert inventory(relocated, (".",)) == before, "Sharing modified application"
     if sys.platform == "darwin":
         verify_signature(relocated)
     relocated.rename(relocated.with_name("Removed " + app.name))

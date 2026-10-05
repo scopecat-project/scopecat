@@ -2,9 +2,7 @@
 default: patch
 ---
 
-Preserve Notebook procedure imports when preparing source for submission.
+Allow calibration Notebooks to submit follow-up requests without reloading imports.
 
-Calibration and joint-calibration lessons can reconnect and submit follow-up
-requests without replacing their intent model classes. Submissions still retain
-current source, and workers still reject mismatched procedure definitions;
-explicit author refresh and Notebook source-change refresh retain their behavior.
+Calibration and joint-calibration lessons can reconnect and submit again without
+errors caused by replaced Python classes. Requests still use the current source.

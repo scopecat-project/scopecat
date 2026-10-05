@@ -555,3 +555,26 @@ def test_domain_capabilities_cannot_compete_with_global_builder(tmp_path: Path) 
     )
     with pytest.raises(ProjectManifestError, match="exclusive"):
         open_project(tmp_path)
+
+
+@pytest.mark.parametrize("root", [".", "./", "./.", ".//./"])
+@pytest.mark.parametrize("field", ["source_roots", "refresh_roots"])
+def test_author_roots_reject_project_directory_aliases(
+    tmp_path: Path, root: str, field: str
+) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(f'[authors]\n{field} = ["{root}"]\n', encoding="utf-8")
+    with pytest.raises(ProjectManifestError, match="relative subdirectories"):
+        load_project(manifest)
+
+
+def test_author_roots_normalize_local_subdirectories(tmp_path: Path) -> None:
+    manifest = tmp_path / "scopecat.toml"
+    manifest.write_text(
+        '[authors]\nsource_roots = ["./src//."]\n'
+        'refresh_roots = ["./src/./authored/"]\n',
+        encoding="utf-8",
+    )
+    project = load_project(manifest)
+    assert project.source_roots == ("src",)
+    assert project.refresh_roots == ("src/authored",)
