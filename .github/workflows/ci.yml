@@ -75,7 +75,7 @@ jobs:
           uv run --locked --package scopecat --extra pandas pytest -q
           packages/scopecat/tests/measurements/test_dataset.py
 
-  # Candidate only: measure before adding this job to CI gate's needs.
+  # Six explicit cases per OS; measured cold/warm in docs/development/platform-smoke.md.
   platform-smoke:
     name: Platform smoke (${{ matrix.os }})
     strategy:
@@ -239,6 +239,7 @@ jobs:
     needs:
       - python-tests
       - python-quality
+      - platform-smoke
       - ui
       - docs
     runs-on: ubuntu-latest
@@ -248,10 +249,12 @@ jobs:
         env:
           PYTHON_TESTS_RESULT: ${{ needs['python-tests'].result }}
           PYTHON_QUALITY_RESULT: ${{ needs['python-quality'].result }}
+          PLATFORM_SMOKE_RESULT: ${{ needs['platform-smoke'].result }}
           UI_RESULT: ${{ needs.ui.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
         run: |
           test "$PYTHON_TESTS_RESULT" = success
           test "$PYTHON_QUALITY_RESULT" = success
+          test "$PLATFORM_SMOKE_RESULT" = success
           test "$UI_RESULT" = success
           test "$DOCS_RESULT" = success
