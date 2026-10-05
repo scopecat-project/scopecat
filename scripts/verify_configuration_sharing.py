@@ -7,6 +7,7 @@ Only generated analytic source, new data homes and real local files are used.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import threading
@@ -72,7 +73,7 @@ def post(client: httpx2.Client, path: str, command: BaseModel) -> httpx2.Respons
         content=command.model_dump_json(),
         headers={"Content-Type": "application/json"},
     )
-    response.raise_for_status()
+    assert response.is_success, response.text
     return response
 
 
@@ -89,6 +90,16 @@ def verify(home: Path, payload: Path) -> None:
         )
     source = home / "sender-source"
     write_author_scaffold(source)
+    manifest = source / "scopecat.toml"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace(
+            'source_roots = ["src"]', 'source_roots = ["./src/."]'
+        ),
+        encoding="utf-8",
+    )
+    (source / "src/scopecat.runtime.toml").write_text(
+        '[runtime]\ndata_root = "/machine-only/application-data"\n', encoding="utf-8"
+    )
     (source / "pyproject.toml").write_text(
         '[project]\nname = "sharing-acceptance"\nversion = "0.0.0"\n'
         'requires-python = ">=3.14"\ndependencies = []\n',
@@ -107,7 +118,7 @@ def verify(home: Path, payload: Path) -> None:
                 "/api/v1/experiment-launcher",
                 headers={"X-Scopecat-Workspace": workspace},
             )
-            catalog_response.raise_for_status()
+            assert catalog_response.is_success, catalog_response.text
             catalog = LaunchCatalog.model_validate_json(catalog_response.content)
             assert catalog.code_revision is not None
             document = ConfigurationExchange.model_validate_json(
@@ -124,6 +135,11 @@ def verify(home: Path, payload: Path) -> None:
                 ).content
             )
             assert client.get("/api/v1/runs").json()["items"] == []
+        assert document.source is not None
+        assert document.source.manifest.source_roots == ("src",)
+        assert not any(
+            name.endswith("scopecat.runtime.toml") for name in document.source.files
+        )
         file = home / "configuration.json"
         save_configuration(sender_url, document.model_dump_json(), file)
         sender.stop()
@@ -166,7 +182,7 @@ def verify(home: Path, payload: Path) -> None:
                     "actor": "sharing-acceptance",
                 },
             )
-            edited_response.raise_for_status()
+            assert edited_response.is_success, edited_response.text
             edited = ParameterRevision.model_validate_json(edited_response.content)
             archive = home / "author-source.zip"
             save_configuration_source(receiver_url, receipt.content_hash, archive)
@@ -195,7 +211,7 @@ def verify(home: Path, payload: Path) -> None:
                 "/api/v1/experiment-launcher",
                 headers={"X-Scopecat-Workspace": workspace},
             )
-            catalog_response.raise_for_status()
+            assert catalog_response.is_success, catalog_response.text
             catalog = LaunchCatalog.model_validate_json(catalog_response.content)
             entry = next(item for item in catalog.entries if item.id == "signal")
             request = LaunchRequest(
@@ -295,7 +311,7 @@ def verify(home: Path, payload: Path) -> None:
                         "inspection cancellation",
                         "configuration derivation and idempotent retry",
                         "ordinary parameter edit",
-                        "inert source archive",
+                        "inert source archive without local runtime bindings",
                         "Settings environment preparation and registration",
                         "trusted catalog load",
                         "fresh preview and one analytic run",
@@ -307,9 +323,19 @@ def verify(home: Path, payload: Path) -> None:
             + "\n",
             encoding="utf-8",
         )
+    except Exception as error:
+        (home / "result.json").write_text(
+            json.dumps({"software": "failed", "error": str(error)}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        raise
     finally:
         sender.stop()
         receiver.stop()
+        for name, runtime in (("sender", sender), ("receiver", receiver)):
+            log = runtime.root / ".scopecat/daemon.log"
+            if log.is_file():
+                shutil.copyfile(log, home / f"{name}-daemon.log")
 
 
 if __name__ == "__main__":

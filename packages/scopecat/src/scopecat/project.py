@@ -719,12 +719,12 @@ def _local_roots(value: object) -> tuple[str, ...]:
             or Path(item).is_absolute()
             or ".." in Path(item).parts
             or "\\" in item
-            or item == "."
+            or not Path(item).parts
         ):
             raise ProjectManifestError(
                 "author roots must be nonempty relative subdirectories"
             )
-        selected.append(item)
+        selected.append(Path(item).as_posix())
     return tuple(selected)
 
 

@@ -185,6 +185,8 @@ def verify(
                 "result.json",
                 "data-journey.json",
                 "configuration-sharing/result.json",
+                "configuration-sharing/sender-daemon.log",
+                "configuration-sharing/receiver-daemon.log",
                 "data/native-start.log",
                 "data/desktop/desktop.log",
             ):

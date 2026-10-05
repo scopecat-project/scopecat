@@ -227,3 +227,17 @@ def test_rebinding_rejects_another_projects_author_modules(
             expected_fingerprint="unused",
         )
     assert imported_experiment() is original
+
+
+def test_local_runtime_bindings_do_not_change_retained_source_identity(
+    project_files: Path,
+) -> None:
+    project = load_project(project_files / "scopecat.toml")
+    original = capture_sources(project)
+    # Binding metadata can occur at the workspace root or in nested source folders.
+    for relative in ("scopecat.runtime.toml", "src/scopecat.runtime.toml"):
+        binding = project_files / relative
+        binding.write_text('[runtime]\ndata_root = "/machine/only/data"\n')
+        assert capture_sources(project) == original
+        binding.write_text('[runtime]\ndata_root = "/another/machine/data"\n')
+        assert capture_sources(project) == original

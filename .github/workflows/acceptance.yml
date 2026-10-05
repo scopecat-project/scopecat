@@ -129,7 +129,7 @@ jobs:
           path: |
             ${{ runner.temp }}/native-acceptance/result.json
             ${{ runner.temp }}/native-acceptance/data-journey.json
-            ${{ runner.temp }}/native-acceptance/configuration-sharing/result.json
+            ${{ runner.temp }}/native-acceptance/configuration-sharing/
             ${{ runner.temp }}/native-acceptance/data/native-start.log
             ${{ runner.temp }}/direct-runtime/report.json
             ${{ runner.temp }}/macos-download/report.json
