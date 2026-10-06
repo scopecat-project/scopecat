@@ -756,8 +756,8 @@ function ContextConfigWorkspace({
   return (
     <ConfigWorkspace
       daemonUnavailable={daemonUnavailable}
-      onSelectConfiguration={(ref) => {
-        selectConfiguration(ref);
+      onSelectConfiguration={(ref, workingInput) => {
+        selectConfiguration(ref, workingInput);
         onSelected();
       }}
     />

@@ -217,6 +217,8 @@ for programmatic full-snapshot producers; ordinary authors use `params.save()`.
 The [workbench parameter editor](manage-configuration.md) uses these same
 independent branches without fabricating samples or working points.
 
-The workbench can edit a copy of a parameter version and save it to an explicit
-branch. Branch selection remains explicit.
+The workbench can reopen a recoverable working table for an existing branch,
+explicitly capture its current inputs for an experiment, and optionally save a
+parameter checkpoint. It can also edit an independent copy of a saved version.
+Branch selection remains explicit.
 No prebaseline data migration or historical-file rewriting is introduced.

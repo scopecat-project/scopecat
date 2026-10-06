@@ -288,6 +288,13 @@ class ConfigService:
                 raise BackendNotFound("parameter revision was not found") from error
 
     def save_parameters(self, command: ParameterSaveCommand) -> ParameterRevision:
+        with self._control.write_transaction() as connection:
+            return self.save_parameters_in_transaction(connection, command)
+
+    def save_parameters_in_transaction(
+        self, connection: sqlite3.Connection, command: ParameterSaveCommand
+    ) -> ParameterRevision:
+        """Save scientific input within an owning application transaction."""
         with self._config_errors():
             problems = validate_parameter_snapshot(
                 command.catalog, command.parameters, allow_missing=True
@@ -304,11 +311,10 @@ class ConfigService:
                 actor=command.actor,
                 note=command.note,
             )
-            with self._control.write_transaction() as connection:
-                try:
-                    return ParameterRevisionRepository(connection).save(revision)
-                except ValueError as error:
-                    raise BackendConflict(str(error)) from error
+            try:
+                return ParameterRevisionRepository(connection).save(revision)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
 
     def resolve_context(
         self, command: ConfigContextResolveCommand

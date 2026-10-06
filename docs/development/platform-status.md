@@ -72,6 +72,14 @@ The approved Windows dependency repair is implemented; its native qualification
 is pending a new exact-SHA run. Mac passed that failed-Windows run. OS focus/menu, tray and visual experience remain unverified. Mac notarization was not provided, Gatekeeper rejected the
 package, and Finder first-open was not evaluated.
 
+Parameter working tables now retain raw input in application-owned SQLite history,
+including conflicts and completed/discarded drafts. Explicit adoption captures
+ordinary parameter overrides for a fresh launch preview without creating a revision.
+The source-browser recovery journey covers navigation, concurrent editors, browser
+close and service restart on a different port, and immutable A/B experiment inputs.
+This does not qualify native hosts, installed upgrades or hardware. See
+[parameter draft boundaries](architecture/parameter-drafts.md).
+
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
 [automation tasks](architecture/automation-tasks.md) and

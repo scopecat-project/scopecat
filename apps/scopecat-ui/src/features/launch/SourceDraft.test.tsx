@@ -215,3 +215,43 @@ it("changes only a running draft's parameter selection and invalidates its old p
   expect(state.draft?.requestKey).toBeUndefined();
   expect(state.draft?.selection.configuration.kind).toBe("parameters");
 });
+
+it("keeps adopted inputs through source refresh but detaches a historical handoff", () => {
+  mount();
+  const choice = {
+    kind: "parameters" as const,
+    overrides: [],
+    ref: { revision_id: "trial", content_hash: "sha256:parameters" },
+    setup: { revision_id: "bench", content_hash: "sha256:setup" },
+  };
+  const origin = { draft_id: "working", revision: 7 };
+  act(() => state.selectConfiguration(choice, origin));
+  act(() => state.select(entry));
+  expect(state.draft?.workingInput).toEqual(origin);
+  act(() => state.useCurrentSource());
+  act(() => state.select(entry));
+  expect(state.draft?.workingInput).toEqual(origin);
+  const selection = state.draft!.selection;
+  act(() =>
+    state.importHandoff(entry, {
+      kind: "handoff",
+      source_run: "retained",
+      source_analysis: "fit-r1",
+      source_hash: "sha256:original",
+      request: {
+        workspace_id: "test-source",
+        scan_mode: "cartesian",
+        parameter_sweeps: [],
+        action: "preview",
+        experiment: entry.id,
+        version: "1",
+        request_key: "",
+        actor: "operator",
+        selection,
+        control_edits: {},
+      },
+    }),
+  );
+  expect(state.draft?.handoff?.source_run).toBe("retained");
+  expect(state.draft?.workingInput).toBeUndefined();
+});
