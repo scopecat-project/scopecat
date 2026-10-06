@@ -3,9 +3,10 @@
 Installed software, application data, disposable build caches and editable user
 code have separate owners. `InstallationPaths.current_user()` selects per-user
 locations; `InstallationPaths.isolated(home)` places application-owned validation
-files inside one explicit directory. It does **not** isolate the current native
-Cocoa website store. See [native acceptance safety](native-window-acceptance.md#safety-and-failure-handling)
-and the proposed [home/profile boundary](architecture/draft-recovery.md#home-host-and-privacy-boundaries).
+files inside one explicit directory. Native browser-store isolation additionally
+depends on the packaged backend; an isolated home alone does not prove it. See
+[native acceptance safety](native-window-acceptance.md#safety-and-failure-handling)
+and the [home/host boundary](architecture/draft-recovery.md#home-host-and-privacy-boundaries).
 Foreground source development continues to use `lab_tools.dev` and does not create an installed application.
 
 ## Development artifacts and retention
@@ -28,8 +29,9 @@ must not depend on untracked inputs. Retained scientific data, site settings and
 vendor SDK installations belong outside the checkout, at explicit locations.
 Use `lab_tools.dev --home /absolute/path/outside/checkout` for retained development
 work, separate from the installed application's data. Move useful authored code
-into tracked source before cleaning the generated example. Existing historical
-files still require owner review; this convention does not authorize their deletion.
+into tracked source before cleaning the generated example. Classify existing files
+by their contents and use: a disposable environment can be rebuilt, while retained
+scientific data, SDKs, settings and authored source are not build outputs.
 
 Use the same application path, name and bundle identity for repeated native
 checks. Stop that application before replacing its package. Keep test data in an
@@ -63,8 +65,8 @@ remain untouched. `--keep-work` retains the isolated replacement workspace.
 
 Shared Git ignores cover disposable outputs, rebuildable tool environments and
 temporary runtime bindings. They must not hide maintained source, documentation,
-assets or editor tasks. Do not hide retained inputs with `.git/info/exclude`, or
-create sibling directories to bypass unexplained checkout state. Reuse the fixed
+assets or editor tasks. Retained inputs should have explicit locations rather
+than being hidden by `.git/info/exclude`. Reuse the fixed
 output locations; after stopping their processes, remove obsolete outputs before
 rebuilding. Incompatible development stores are explicitly reset, not migrated or
 silently replaced by a new directory. Diagnostic `--keep-work` directories must

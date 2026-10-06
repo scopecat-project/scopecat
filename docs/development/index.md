@@ -32,75 +32,45 @@ uv run --locked --package scopecat-server --group test pytest packages/scopecat-
 uv run --locked --package reference-lab --group test pytest examples/reference_lab/tests
 ```
 
-## Repository and architecture
+## Find the relevant documentation
 
-- [Current platform status and remaining work](platform-status.md)
-- [Calibration branch integration boundary](calibration-branch-closeout.md)
-- [Multi-target calibration and maintenance](calibration-maintenance.md)
-- [Automation tasks and durable execution](architecture/automation-tasks.md)
-- [Task parameter flow and acceptance](architecture/task-parameter-flow.md)
-- [Repository map](repository-map.md)
-- [Public previews and source development](public-preview.md)
-- [Core workflow evaluations](workflow-evaluations.md)
-- [Everyday Python author contract](everyday-author-contract.md)
-- [Supervised laboratory pilot roadmap](lab-pilot-roadmap.md)
-- [Pilot work slices and acceptance fixtures](pilot-work-slices.md)
-- [Architecture](architecture/index.md)
-- [Experiment workbench and session contexts](architecture/experiment-contexts.md)
-  (implemented boundaries and selected direction)
-- [Structured authoring direction](architecture/structured-authoring.md) (proposal)
-- [Scalability benchmarks](scalability.md)
-- [Project charter](project-charter.md)
+- [Platform status](platform-status.md): current capability boundaries and open work.
+- [Architecture](architecture/index.md): product contracts and design decisions.
+- [Repository map](repository-map.md): package ownership and generated code.
+- [Source development and previews](public-preview.md): run and distribute a checkout.
+- [Test feedback](test-feedback.md): focused checks, CI and acceptance profiles.
+- [Reference fixtures](reference-fixtures.md): shared evidence and fixture ownership.
+- [Workflow evaluations](workflow-evaluations.md): observable cross-surface outcomes.
+- [Data compatibility](data-compatibility.md): persistent-format policy.
+- [Project charter](project-charter.md): product scope.
 
-Package inventories, generated-code rules, and implementation contracts stay in
-package READMEs and docstrings beside the code that owns them.
+Package-specific implementation details stay in package READMEs and docstrings.
 
-Use the workflow evaluations when changing a cross-surface user journey. They
-define the observable outcomes and conceptual burden under review without
-freezing the current UI.
+## Changes and evidence
 
-See the [reference fixture ownership map](reference-fixtures.md) before adding
-another full-laboratory example or journey.
+Public changes use CI, self-review and squash merging. Select local checks for the
+behavior changed; documentation changes need link/build checks, while a changed
+process or installed workflow needs its relevant integration coverage. CI remains
+required. See [test feedback](test-feedback.md) for commands and coverage limits.
 
+Issues describe unresolved scope and acceptance; PRs record delivered changes and
+validation. Update a related issue when a change affects that scope or conclusion.
+Platform status links the work rather than repeating its execution history.
+A source merge, released artifact, consumer upgrade and human/hardware observation
+are distinct evidence. Record the version and kind of evidence actually obtained.
 
-Persistent-format changes follow the [prebaseline data policy](data-compatibility.md).
-Current-format recovery remains tested; old development migration exercises do
-not establish a compatibility baseline or require new readers.
+For an unresolved failure, retain its source/environment identity, reproduction
+command, observed outcome and a sanitized diagnostic excerpt in the issue or a
+durable linked artifact. A temporary path or expiring CI artifact alone is not a
+portable record; identify unavailable logs without claiming fresh verification.
 
-## Handoff and evidence
+## Checkout outputs
 
-The [platform index](platform-status.md) links current work owners. Each issue
-body owns its current scope, remaining conditions and evidence; PRs own delivered
-changes and validation. Architecture describes current contracts. Dated audits
-and old numbered batches are historical, even when they use future tense.
-
-A source merge, a release artifact, a consumer pin and human/hardware acceptance
-are separate facts. Update affected issue bodies at closeout, not only comments.
-Do not add a second handoff ledger or depend on ignored local notes.
-
-Use tracked files and explicit source paths when exploring a checkout. All new
-checkout-local outputs must be disposable; maintained inputs belong in Git and
-retained data/settings/SDKs at explicit external locations. See the
-[output ownership rules](installation-layout.md#development-artifacts-and-retention).
-Do not work around unexplained files by starting another checkout or output tree.
-Historical local files still require owner review before deletion.
-
-After stopping development processes and saving new source, `git clean -ndx`
-previews disposable outputs; `git clean -fdx` removes them, including environments.
-Neither command saves untracked authored work. Do not add a second `-f` to delete
-nested Git repositories; inspect unexpected entries before cleaning. Reconstruct
-with `uv sync --locked` and, for the UI, `pnpm install --frozen-lockfile` from
-`apps/scopecat-ui`, then run the relevant checks above. Dependency caches may be
-shared, but an existing environment, runtime binding or report is not required.
-
-Tests generate .test-results and temporary runtime bindings; these are outputs,
-not checkout prerequisites. A fresh source export plus locked dependency setup
-should reproduce software checks. SDK installations and real-device settings
-are explicit external prerequisites, never implied by a developer's machine.
-
-For an unresolved failure, retain the source/environment identity, exact command,
-observed outcome and diagnostic limits in its issue. Save a sanitized minimal
-log/excerpt in that issue or a durable artifact with an access-controlled link.
-CI artifacts have retention limits; a temporary path or expired artifact alone
-is not a portable evidence record. If an old raw log is unavailable, say so and
-retain its recorded observations without claiming to have reverified them.
+[Installation layout](installation-layout.md#development-artifacts-and-retention)
+distinguishes disposable build/development outputs from retained data, settings,
+SDKs and authored source. After stopping development processes and saving authored
+work, `git clean -ndx` previews ignored and untracked outputs; `git clean -fdx`
+removes them, including local environments. Inspect the preview before cleaning.
+Recreate dependencies with `uv sync --locked` and the UI's
+`pnpm install --frozen-lockfile`. Device SDKs and site settings are explicit
+external prerequisites, not hidden checkout inputs.

@@ -140,5 +140,5 @@ existing maintained provider. Use distinct experiment IDs across both sources.
 
 Changing reusable laboratory semantics belongs to its shared-capability maintainer;
 adding lowering, hardware mappings, device protocols or execution guarantees belongs
-to the compiler/driver maintainer. The [exploration acceptance agreement](../development/pilot-work-slices.md#exploratory-work-roles-and-executable-foundation)
+to the compiler/driver maintainer. The [exploration acceptance agreement](../development/reference-fixtures.md#exploratory-author-fixture)
 keeps those responsibilities distinct from ordinary experiment editing.

@@ -7,13 +7,8 @@ Python/WebView host. PR #844 separated author execution and vendor environments.
 PR #845 qualified these capabilities together and closed obsolete delivery paths;
 it does not reopen host selection or expand into a full GUI redesign.
 
-The baseline is a relocatable CPython runtime with dependencies prepared at build
-time. Rust/Tauri was the preferred alternative evaluated against the existing
-UI and Python scientific components; the delivery decision is below. PyInstaller
-is an optional fixed-component
-packaging candidate; evaluate Nuitka only for an identified benefit. Do not compile
-editable author code or vendor environments into the desktop. Do not maintain
-multiple permanent distribution mechanisms after selection.
+The package contains a relocatable CPython runtime with dependencies prepared at
+build time. Editable author code and vendor environments remain independent.
 
 ## Maintained installation entries
 
@@ -78,43 +73,30 @@ it does not replace the seven authored topics or their editable source. Follow
 [the existing teaching issue #565](https://github.com/scopecat-project/scopecat/issues/565)
 for the missing continuation, separately from human/device observations in #616.
 
-A proposed next slice is one representative tutorial: enter from the desktop,
-open a real Notebook, edit and run ordinary source, inspect the result in the
-application, then close and reopen to continue. This is a proposal for a subsequent
-bounded decision, not approval to migrate all seven courses, embed a Notebook
-editor, restore the manager or choose a new UI design.
+Help parameters now provides the representative desktop → Notebook → editable
+source → application results → restart/Continue journey (#875/#877). Default and
+topic generation share editable resources (#880). The other topics and remaining
+standalone lifecycle consumers are tracked in #565.
 
 Current automated evidence has distinct boundaries:
 
-- `lab_tools.verify` executes the shipped `start` and `reopen` Notebooks in real
-  separate kernels, adding checks only to retained `verified-*.ipynb` copies.
-  Editing/grouping checks construct parallel test Notebooks from Python strings;
-  they do not execute all seven topic Notebooks.
-- `test_calibration_teaching_journey.py` executes the three calibration topics'
-  code cells, but skips `sc.notebook()`, injects an authoring session and uses
-  `exec`. External checks restart the service and inject faults. This is neither
-  the real kernel-binding entry nor a desktop-to-Notebook journey.
-- `verify_teaching_delivery.py` checks the actual offline installation, public
-  console, generated editor task, wrong-kernel rejection and headless application
-  continuation. It does not exercise a person using VS Code or the full learning
-  journey through desktop UI and Notebook together.
+- `lab_tools.verify` executes shipped start/reopen Notebooks in separate kernels,
+  adding checks to evidence copies. Editing/grouping use parallel test Notebooks.
+- `test_calibration_teaching_journey.py` runs shipped binding/cells through IPython
+  and restarts the service. #870 fixed the implicit import refresh that rejected
+  retained intent classes; calibration/joint-calibration also passed real ipykernel
+  execution. That resolved defect is documented in the PR, not a current blocker.
+- `verify_teaching_delivery.py` checks offline installation, console/editor-task
+  entry, wrong-kernel rejection and headless continuation.
+- `verify_parameters_journey.py` uses real browser/kernel execution and verifies
+  generated material identity, edits, restart and Continue without reacquisition.
+  External editor/window activation is substituted; actual native editor use and
+  unfamiliar-user comprehension remain separate observations in #616.
 
-Known baseline: calibration and joint-calibration fail in the existing journey
-with Pydantic `model_type` errors rejecting same-named `CalibrationIntent` and
-`JointIntent` instances during a shipped cell's procedure submission; task-calibration
-passes. Reproduce with `uv run --locked pytest -q -n 0
-packages/lab-tools/tests/test_calibration_teaching_journey.py`. The failure predates
-this delivery change (also reproduced at #865's merged tree). Class identity and
-loading lifecycle need diagnosis; the current evidence does not establish whether
-the harness or the product is responsible. Do not count these tests as passing or
-weaken them to make this packaging change green.
+Teaching checks complement fault/recovery/platform checks. They do not establish
+that a person can understand the material or operate real devices.
 
-Teaching journeys can share the actual learning material while keeping detailed
-fault injection and infrastructure assertions outside it. They complement, rather
-than replace, negative/fault/platform tests. Existing tests do not define the course
-design or prove that users can understand it.
-
-## Required comparison
+## Composition evidence
 
 These are the criteria used for the recorded host decision, not a requirement to
 benchmark another host in every release.
@@ -196,8 +178,8 @@ its existing packaging checks.
 
 This probe uses the existing lifecycle controller and does not prove the final
 host has no controller process. It does not exercise the native window, prove
-offline dependency isolation, qualify user environments or replace the full PR 1
-acceptance. A ready backend alone is not a finished desktop application.
+offline dependency isolation, qualify user environments or replace native
+installation acceptance. A ready backend alone is not a finished desktop application.
 
 To qualify replacement rather than reinstalling one artifact, provide two different
 native builds with the same current scientific-data format:
@@ -234,14 +216,9 @@ dependency setup.
 
 ## Implementation boundary
 
-For this delivery, retain the CPython/pywebview host and the existing web UI.
-Direct packaged startup and independent author Python address the demonstrated
-installation coupling without a new host protocol. The disposable Tauri prototype
-establishes feasibility, but has not qualified Windows window/tray interaction,
-active-work shutdown or failure recovery. It therefore does not justify replacing
-the functioning lifecycle implementation in this batch. Do not ship both hosts.
-Reconsider Tauri for a measured native-integration limitation; Python scientific
-execution remains a separate boundary whichever host is used.
+The [host decision](desktop-product.md#technology-decision) retains CPython,
+pywebview and the existing web UI. It records the reasons and reconsideration
+criteria; packaging uses that single selected runtime.
 
 The installed package owns one fixed application runtime. Its executable starts
 that runtime directly; a previous installation's selected interpreter must not
@@ -262,8 +239,8 @@ An author environment is a separate resource with an explicit interpreter and
 dependencies. Its base interpreter must survive replacement or removal of the
 desktop package. Registering ordinary source must not install it into application
 Python. Explicit author dependency preparation may install packages in the author
-environment; ordinary application launch may not. Vendor runtime isolation builds
-on this boundary in PR 3.
+environment; ordinary application launch may not. Vendor runtime isolation uses
+the [SDK process protocol](sdk-process.md).
 
 Generated user environments install only `scopecat`, `ipykernel` and their
 dependency closure from the verified offline wheels, constrained to the delivery's
@@ -273,83 +250,9 @@ notebook refresh checks the former; backend recovery still checks the latter.
 Explicit author dependencies remain required on both sides. Workspaces without
 an explicit dependency declaration retain their full captured environment contract.
 
-The packaged-CPython qualification passes on both native distribution runners.
-A disposable macOS Tauri prototype also exercised explicit backend start,
-hide/reopen with the same endpoint, and clean quit. These establish feasibility,
-not production qualification for Tauri. Keep the prototype outside product code;
-do not introduce a second user-selectable launch mode. Final qualification of the
-retained host must still cover native interaction, active-work handling, recovery
-and full source workflows for the completed product batch.
+## Historical packaging observations
 
-### Native interaction evidence (2026-10-01)
-
-The macOS packaged host was exercised through its actual window and JavaScript
-bridge using an isolated qualification copy. Only its bundle identifier/name and
-bootstrap's fixed test home differed from the built application; the host and UI
-implementation were unchanged. The native folder picker opened and cancelled,
-then created a device-free author folder and independent Python. Registration
-restarted the backend and returned to Settings with that folder selected.
-
-A three-point synthetic experiment, with a 30-second delay per point, exercised
-the active-work close dialog. Keep running in background returned successfully;
-subsequent window interaction and the system Quit command remained responsive.
-Cancel and Quit when work finishes worked. The client completed acquisition,
-analysis and retained-result reopening, after which the host, backend and workers
-exited without remaining qualification processes.
-
-The UI inspection tool can reactivate hidden windows. This run therefore does
-not independently prove hidden-window visibility or menu-bar/tray reopening.
-Those interactions and Windows native interaction remain unqualified. CI's
-macOS/Windows native distribution checks qualify packaging and runtime behavior,
-not these UI interactions. A transient disconnection during source registration
-also exposed obsolete daemon-start instructions; the UI now explains waiting for
-an in-progress restart or using the application's recovery action.
-
-### Follow-up observations (2026-10-02)
-
-The user confirmed that macOS **Open Anyway** permits opening the downloaded
-preview, and subsequently confirmed menu-bar icon visibility. These observations
-do not qualify every macOS version or the full hide/reopen sequence. The Mac menu
-bar now uses a dedicated monochrome Cocoa template; the application/Dock icon
-remains colored. macOS window close hides; application Quit checks active work.
-
-The Windows report of minimizing, hiding through the tray and then failing to
-reopen led to window-state normalization before hiding and after showing. Actual
-Windows validation of that correction is still required. The startup/recovery
-pages share operation feedback and duplicate-action suppression. Workbench tests
-cover slow quit, failed stop and failed cancellation of automatic quit. These are
-behavioral checks, not a claim that native platform interaction is complete.
-
-A subsequent user report exposed a Cocoa delegate ABI mismatch while installing
-the Quit handler. That exception killed the startup supervisor before preparation.
-The hook now preserves pywebview's existing Objective-C method signature, and
-initialization failures enter the recovery page. A local isolated, hidden native
-window reached the workbench, invoked the actual application-termination delegate,
-and exited with its backend stopped. This checks native integration without
-claiming physical menu clicks. Native distribution CI now runs the Cocoa ABI and
-desktop session regressions before packaging.
-
-Window close now hides on **both** platforms, preserving experimental work.
-Explicit Quit from the tray/application menu remains the work-aware stop action.
-
-The later missing-menu-bar report was reproduced in a packaged app: replacing
-the launcher with `execve` of the embedded Python preserved the running-app name
-but lost `NSBundle.mainBundle`'s bundle identifier. The status item reported
-visible while its native window retained zero height after layout. The Mac host
-now calls CPython's stable `Py_BytesMain` entry point in the native process and
-links the bundled library through an app-relative rpath. Python subprocesses
-still use the bundled interpreter. With the same image and tray code, the native
-window received a real screen position and 34-point height, and the user
-confirmed the icon was visible. Closing and reopening the isolated application
-returned to the same backend; Cmd-Q stopped it. The distribution check now
-asserts the Cocoa bundle identifier after relocation, in addition to checking
-the runtime path. Object creation or `isVisible` alone is not display evidence.
-
-The first embedded host still crashed after stopping its backend: an outer
-native autorelease pool drained after `Py_BytesMain` finalized Python, invoking
-PyObjC deallocation against the destroyed interpreter. The launcher's path-setup
-pool now ends before Python starts; PyObjC owns pools during Python execution.
-The native exit qualification creates and destroys a hidden Cocoa window through
-the packaged executable and checks the complete process exit twice. This probe
-reproduced SIGSEGV with the old pool scope and exit code zero with the correction.
-Backend shutdown alone does not qualify desktop process teardown.
+The [original packaging record](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/architecture/desktop-packaging.md#native-interaction-evidence-2026-10-01)
+retains the native host/tray/exit investigations, failures and dated observations.
+Current interaction evidence is linked from the [desktop product contract](desktop-product.md#evidence)
+and [native window acceptance](../native-window-acceptance.md).

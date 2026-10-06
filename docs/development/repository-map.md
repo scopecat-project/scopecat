@@ -89,3 +89,16 @@ See [daemon architecture](architecture/daemon.md) for durable ownership and
 [installation layout](installation-layout.md) for installed files, user data,
 environments and disposable build/test outputs. This mapping does not prescribe
 another package split or a different native host.
+
+## Generated contracts
+
+| Producer | Verification / regeneration |
+| --- | --- |
+| Python HTTP models and routes | `pnpm --dir apps/scopecat-ui run check:api`; use `generate:api` to update `src/api-schema.d.ts` |
+| Measurement Arrow codec and testkit fixture | `uv run python scripts/generate_ui_measurement_arrow_fixture.py --check` |
+| Instrument declarations and client generator | `uv run python scripts/generate_instrument_clients.py --check` |
+| Reference acceptance producer | `uv run python scripts/generate_reference_lab_acceptance.py --check` |
+
+Omit `--check` to regenerate the Python-produced fixtures. Review changes against
+the producer; resolve generated-file conflicts by regenerating from the resolved
+source. The [fixture map](reference-fixtures.md) describes their coverage.

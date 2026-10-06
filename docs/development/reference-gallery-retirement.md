@@ -204,7 +204,8 @@ do not treat its removal as a pending prerequisite for current task development.
    the generic teaching journeys. The focused DRAG fixture still owns actual
    simulated device acquisition and accepted-gate execution. Remove other
    replaced consumers and unused dependencies as their coverage is accounted for.
-   Selective applicability, automatic repair and continuous freshness remain work.
+   Finer dependency coverage remains in #783. Bounded check-first repair is
+   implemented in #853; continuous scheduling is outside that delivered scope.
 5. Remove legacy bootstrap and combined-config APIs once valid behaviors have
    new owners. An obsolete gallery consumer is a retirement task, not a reason
    to retain a compatibility layer.

@@ -409,7 +409,7 @@ sequence is not a pending backlog. The desktop milestone consists of #829
 and #845 (composition/release/retirement), all merged. Remaining observations
 are tracked by #616; application convergence #671 is closed.
 
-The [packaging matrix](desktop-packaging.md#required-comparison) maps composition
+The [packaging matrix](desktop-packaging.md#composition-evidence) maps composition
 checks to maintained tests and prior evidence. Preserve independent contexts,
 resource exclusion, source/environment identity, manual continuation, cleanup and
 restart without replay when retiring an old entry or fixture. Ordinary-user

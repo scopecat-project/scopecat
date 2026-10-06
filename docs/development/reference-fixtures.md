@@ -209,3 +209,53 @@ or through `reference_lab_notebooks`; pure compiler/scientific unit tests do not
 start a service. Journeys that own a cloned workspace use their own lifecycle
 fixture rather than starting an unrelated reference daemon as well. Keep process
 ownership explicit when adding tests.
+
+## Shared generated acceptance
+
+`reference_lab/acceptance.py` produces the shared
+`examples/reference_lab/fixtures/acceptance.json` from production client responses.
+Python checks rerun the HTTP journey; UI tests consume the same records.
+Regenerate with `uv run python scripts/generate_reference_lab_acceptance.py`,
+or add `--check` to compare against the committed fixture.
+
+Capture uses equipment-only initialization and explicitly saved parameters/setup.
+It covers diagnostic acquisition, complex scalar IQ, candidate proposals,
+resource wait/cancel and entity-indexed results. Candidate acquisition is not
+approval. Scientific values and hashes remain generated output; only the capture's
+explicit volatile identity fields are normalized. The scalar IQ comparison uses
+`1e-12` absolute/relative tolerance for platform reduction roundoff; other fields
+remain exact. Review generated differences when changing producers.
+
+## Exploratory author fixture
+
+| Owner | Responsibility |
+| --- | --- |
+| Experiment author | Scientific helpers, experiment inputs/scans and retained-data analysis |
+| Laboratory maintainer | Shared operations, parameter schemas and fixture composition |
+| Compiler/driver maintainer | Hardware mapping, acquisition modes, SDK and connection/fault semantics |
+
+Scientific choices (frequency, amplitude, timing, point/shot shape and retained
+products) remain visible to the author. Worker leases, compiler IR and SDK buffers
+are supporting diagnostics for the same frozen plan and data.
+
+`reference_lab/workflows/exploratory_signal.py` and `reference_lab/exploration.py`
+provide four analytic runs: two synthetic samples with local `q0`, each in parked
+and shifted contexts. Known carrier values are fixture inputs, not discovered
+calibration. `tests/test_exploration.py` checks retained identities, independent
+analysis over the same data, missing-input rejection and reconnection. Context
+labels describe provenance; they do not resolve parameters or prove validity.
+Source refresh and transitive source retention are separately covered by the
+[author revision journey](../how-to/refresh-author-code.md).
+
+This fixture provides no instrument or physical evidence. Unknown-sample tests
+must expose a missing response instead of silently recentering on the fixture's
+known answer. Current user-facing outcomes are described in
+[workflow evaluations](workflow-evaluations.md).
+
+## Historical planning records
+
+The retired [pilot roadmap](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/lab-pilot-roadmap.md),
+[work-slice plan](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/pilot-work-slices.md) and
+[calibration integration record](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/calibration-branch-closeout.md)
+remain in Git history. Current fixture ownership is described above; current
+commands are in the [contributor guide](index.md).
