@@ -33,22 +33,30 @@ Review each workflow against these questions:
 | Repeatability | Can the user rerun the work and explain why results or configuration differ? |
 | Traceability | Can a result be followed back to its run, inputs, configuration, and evidence? |
 
-## 1. Create a project and complete the first run
+## 1. Learn, edit and complete the first run
 
-**Target journey:** initialize a project, start it, run the generated first
-experiment, and find the same durable run in the project console without
-supplying service locations or internal identities.
+**Target journey:** open the installed application, start the parameters Notebook
+from Help, edit ordinary author code, explicitly run it and inspect the same
+retained result in Runs. Continue in the same folder without repeating preparation
+forms or acquisition.
 
-**Executable evidence:** the generated `notebooks/01_first_run.py` exercised by
-`packages/scopecat-server/tests/test_lifecycle.py`, and the
-[first experiment](../getting-started/quickstart.md).
+**Executable evidence:** `scripts/verify_parameters_journey.py` exercises Help,
+the shipped parameters Notebook in a real independent kernel, source/scan edits,
+application restart and read-only result reopening. See the
+[parameters lesson](../tutorials/teaching-sandboxes.md#parameters-and-scans-in-a-notebook)
+and [first experiment](../getting-started/quickstart.md).
 
-**Success evidence:** terminal `completed` status, one stable run ID, persistent
-run history, and automatic notebook/GUI discovery of the same project daemon.
+**Success evidence:** prepared editable files and a local kernel, retained
+7 × 64 → 7 × 32 → 5 × 32 results, and the same application-owned run after
+restarting and continuing without reacquisition. Reading results is separate
+from the explicit acquisition cell.
 
-**Current design feedback:** source checkout still requires a separate UI build
-and `--static-dir`. This is a distribution gap; it should disappear from the
-end-user journey rather than become a permanent concept.
+**Current boundary:** the native application already includes its runtime and UI;
+source-checkout UI building is a contributor concern, not an ordinary user's
+first-run requirement. Browser verification substitutes native editor activation
+and window plumbing. Actual editor interaction and unfamiliar-user observation
+remain separate acceptance work under #616. Parameters is one delivered lesson,
+not evidence that all teaching topics have converged.
 
 ## 2. Inspect and directly control configured instruments
 

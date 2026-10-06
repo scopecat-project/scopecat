@@ -104,8 +104,8 @@ export function ParametersJourneyPanel({ reachable }: { reachable: boolean }) {
           </p>
           <p>
             Continue preserves edited files and saved parameters. Use the Notebook’s run link or{" "}
-            <a className="underline" href="#history">
-              History
+            <a className="underline" href="#runs">
+              Runs
             </a>{" "}
             to reopen a result without collecting again. Manage retained runs in Data; keep your
             edited files when removing records.
