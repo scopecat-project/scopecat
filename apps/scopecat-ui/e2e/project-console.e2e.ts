@@ -588,6 +588,144 @@ test("exact run opens independently in two browser pages while acquisition conti
   }
 });
 
+test("running A and historical C stay bound while working B is edited and adopted", async ({
+  daemon,
+  page: a,
+  context,
+}, info) => {
+  test.setTimeout(120000);
+  const c = await context.newPage();
+  await c.goto(daemon.baseUrl);
+  await c.getByTestId("run-list-item").filter({ hasText: "first_run" }).first().click();
+  const runC = new URL(c.url()).searchParams.get("run");
+  expect(runC).toBeTruthy();
+  await expect(c.getByTestId("run-status")).toHaveText("Succeeded");
+  const cUrl = c.url();
+  const b = await context.newPage();
+  const scale = b.getByRole("textbox", { name: "response[1].scale", exact: true });
+  const submissions: string[] = [];
+  context.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/(?:experiment-launcher\/submit|runs|procedures(?:\/[^/]+\/dispatch)?)$/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      submissions.push(request.url());
+  });
+  const experiment = await startControlledExperiment(daemon.projectRoot);
+  try {
+    const runA = await waitForMarker(experiment.acceptedReady, experiment);
+    expect(runA).not.toBe(runC);
+    await a.goto(`${daemon.baseUrl}/?run=${runA}`);
+    await writeFile(experiment.releaseAccepted, "", "utf8");
+    await waitForMarker(experiment.runningReady, experiment);
+    await writeFile(experiment.releaseRunning, "", "utf8");
+    await waitForMarker(experiment.measurementReady, experiment);
+    const aUrl = a.url();
+    const assertObservers = async () => {
+      // The producer cannot finish until this test releases the measurement gate.
+      expect(await processResultWithin(experiment, 0)).toBeUndefined();
+      await expect(a).toHaveURL(aUrl);
+      await expect(a.getByTestId("run-detail-header")).toContainText(runA);
+      await expect(a.getByTestId("run-status")).toHaveText("Running");
+      await expect(c).toHaveURL(cUrl);
+      await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
+      await expect(c.getByTestId("run-status")).toHaveText("Succeeded");
+    };
+    const retained = () =>
+      JSON.parse(
+        runUv(
+          [
+            "python",
+            "-c",
+            `
+import hashlib,json,sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    page=lab.runs(limit=100)
+    assert page.next_cursor is None
+    bindings={}
+    for identity in sys.argv[2:]:
+        run=lab.get_run(identity)
+        content=json.dumps({"snapshot":run.snapshot.model_dump(mode="json"),"parameters":run.config.parameter_snapshot.model_dump(mode="json")},sort_keys=True)
+        bindings[identity]=hashlib.sha256(content.encode()).hexdigest()
+    print(json.dumps({"bindings":bindings,"run_ids":sorted(run.id for run in page.items),"version_ids":sorted(revision.id for revision in lab.parameters.list()),"branch_generation":lab.parameters.checkout("starter").head.generation}))
+`,
+            daemon.projectRoot,
+            runA,
+            runC!,
+          ],
+          daemon.projectRoot,
+        ).stdout,
+      ) as {
+        bindings: Record<string, string>;
+        run_ids: string[];
+        version_ids: string[];
+        branch_generation: number;
+      };
+    const before = retained();
+    await assertObservers();
+    await b.goto(`${daemon.baseUrl}/#configuration`);
+    await b.getByLabel("Working parameter branch", { exact: true }).fill("starter");
+    await b.getByRole("button", { name: "Open working table", exact: true }).click();
+    await expect(scale).toBeVisible();
+    const previewHashes: string[] = [];
+    for (const value of ["7.25", "8.5"]) {
+      await b.getByRole("button", { name: "Configuration", exact: true }).click();
+      await scale.fill(value);
+      await b
+        .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
+        .click();
+      await b.getByLabel("Experiment", { exact: true }).selectOption("signal");
+      await b.getByLabel("Experiment setup", { exact: true }).selectOption("starter-bench");
+      await expect(
+        b.getByRole("button", { name: "Start acquisition", exact: true }),
+      ).toBeDisabled();
+      const response = b.waitForResponse(
+        (item) =>
+          item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
+      );
+      await b.getByRole("button", { name: "Preview", exact: true }).click();
+      const preview = await response;
+      await expectResponseOk(preview, "POST");
+      const capture = await preview.json();
+      expect(capture.reviewed.config_source.overrides).toHaveLength(1);
+      previewHashes.push(capture.request_hash);
+      await expect(b.getByRole("button", { name: "Start acquisition", exact: true })).toBeEnabled();
+      await assertObservers();
+    }
+    expect(previewHashes[0]).not.toBe(previewHashes[1]);
+    const after = retained();
+    expect(after).toEqual(before);
+    expect(submissions).toEqual([]);
+    await info.attach("simultaneous-a-b-c-bindings", {
+      body: JSON.stringify({
+        runA,
+        runC,
+        aUrl,
+        cUrl,
+        before,
+        after,
+        previewHashes,
+        submissions,
+        aHeldAt: "first-measurement gate",
+      }),
+      contentType: "application/json",
+    });
+    await writeFile(experiment.releaseMeasurement, "", "utf8");
+    expectProcessOk(await experiment.completion);
+    await expect(a.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(c).toHaveURL(cUrl);
+    await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
+    expect(submissions).toEqual([]);
+  } finally {
+    await finishControlledExperiment(experiment);
+    await b.close();
+    await c.close();
+  }
+});
+
 test("queues a free off-grid scan domain into a running adaptive compiler", async ({
   daemon,
   page,
@@ -704,6 +842,17 @@ async function startControlledExperiment(projectRoot: string): Promise<Controlle
   const releaseRunning = join(projectRoot, ".scopecat/e2e-release-running");
   const measurementReady = join(projectRoot, ".scopecat/e2e-measurement-ready");
   const releaseMeasurement = join(projectRoot, ".scopecat/e2e-release-measurement");
+  // This worker can run more than one controlled journey in the same disposable home.
+  await Promise.all(
+    [
+      acceptedReady,
+      releaseAccepted,
+      runningReady,
+      releaseRunning,
+      measurementReady,
+      releaseMeasurement,
+    ].map((path) => rm(path, { force: true })),
+  );
   await writeFile(script, CONTROLLED_EXPERIMENT_SOURCE, "utf8");
 
   const environment = { ...process.env };
