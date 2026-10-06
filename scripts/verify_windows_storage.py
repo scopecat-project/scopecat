@@ -267,6 +267,9 @@ def verify(app: Path, home: Path) -> None:
         def launch(stage: str, base_url: str) -> subprocess.Popen[str]:
             (resources / "bootstrap.py").write_text(
                 "import sys\n"
+                # The Windows launcher does not inherit handles into pythonw.exe.
+                f"sys.stdout = sys.stderr = open({str(reports / (stage + '.log'))!r}, "
+                "'a', encoding='utf-8', buffering=1)\n"
                 f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
                 f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, "
                 f"{origin!r}, {base_url!r}]\n" + HOST,
