@@ -85,13 +85,21 @@ export function useParameterDraft(initial: ParameterDraftView) {
   useEffect(() => {
     s.alive = true;
     const leave = () => void flush();
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (s.generation !== s.ack) {
+        event.preventDefault();
+        void flush();
+      }
+    };
     const hide = () => {
       if (document.visibilityState === "hidden") leave();
     };
+    window.addEventListener("beforeunload", beforeUnload);
     window.addEventListener("pagehide", leave);
     document.addEventListener("visibilitychange", hide);
     return () => {
       s.alive = false;
+      window.removeEventListener("beforeunload", beforeUnload);
       window.removeEventListener("pagehide", leave);
       document.removeEventListener("visibilitychange", hide);
       void flush();
@@ -99,6 +107,19 @@ export function useParameterDraft(initial: ParameterDraftView) {
     // The mounted editor is keyed by draft ID, not the immutable baseline.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const leave = async (): Promise<boolean> => {
+    if (s.busy) return false;
+    s.busy = true;
+    setBusy(true);
+    try {
+      await flush();
+      // A retained conflict is durable too. Failure keeps the editor mounted.
+      return s.generation === s.ack;
+    } finally {
+      s.busy = false;
+      if (s.alive) setBusy(false);
+    }
+  };
   const finish = async (discard: boolean): Promise<ParameterDraftView | undefined> => {
     if (s.busy) return;
     s.busy = true;
@@ -155,6 +176,7 @@ export function useParameterDraft(initial: ParameterDraftView) {
     input,
     edit,
     flush,
+    leave,
     finish,
     capture,
     resolve,

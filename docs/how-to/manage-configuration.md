@@ -16,7 +16,12 @@ saved status before quitting; input not yet acknowledged is not guaranteed after
 forced termination. Closing the editor only hides it. Navigation, reopening the
 application and restarting its service recover acknowledged input. Empty numeric
 text remains unfinished input; use **Mark unknown** to deliberately clear a value.
-Zero is a known value.
+Zero is a known value. Closing the editor or switching its saved version waits for
+saving; if saving fails, the editor stays open with the error and a retry button.
+A service disconnection keeps your input visible. Ordinary browser close/reload
+requests a leave warning while input is unsaved; staying lets you retry. Choosing
+to leave anyway can lose that unconfirmed input. Native application Quit behavior
+has not been separately verified for this warning.
 
 Choose **Use working inputs for next experiment** when ready. This validates and
 captures the current inputs without saving a parameter version or moving a branch.

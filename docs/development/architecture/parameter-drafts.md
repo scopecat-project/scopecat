@@ -11,8 +11,16 @@ Writes use the expected draft revision. Stale writes append a retained conflict
 without replacing the current head. Explicit discard and successful completion
 retain history; close merely hides the editor. Copies can select an exact history
 revision. Per-editor requests are serialized, debounced at 500 ms with a two-second
-maximum wait, and flushed on navigation/page hiding. Only acknowledged writes are
-durable; abrupt termination can lose unacknowledged input.
+maximum wait. Internal page navigation keeps the editor mounted. Editor close,
+version selection and editor replacement wait for the latest input to be acknowledged;
+a failed save keeps the editor and its error visible. A retained conflict is durable
+and can be closed. Service unavailability does not unmount the editor.
+
+Page hiding flushes pending edits. With unacknowledged input, `beforeunload` requests
+the browser's native leave warning and attempts a flush. Choosing to leave anyway,
+a browser that suppresses this warning, or abrupt process termination can still lose
+unacknowledged input. Native host Quit handling is not qualified by this browser test.
+Only acknowledged writes are durable.
 
 ## Scientific actions stay explicit
 

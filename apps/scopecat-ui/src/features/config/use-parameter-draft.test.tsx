@@ -122,3 +122,38 @@ it("retries uncertain completion with the same saved revision", async () => {
   ]);
   expect(saveParameterDraft).not.toHaveBeenCalled();
 });
+
+it("protects browser unload and refuses editor departure until latest input is acknowledged", async () => {
+  const { result } = mount();
+  vi.mocked(saveParameterDraft).mockRejectedValueOnce(new Error("offline"));
+  act(() => result.current.edit({ ...input, note: "unconfirmed" }));
+  const leaving = new Event("beforeunload", { cancelable: true });
+  await act(async () => {
+    window.dispatchEvent(leaving);
+  });
+  expect(leaving.defaultPrevented).toBe(true);
+  expect(result.current.status).toBe("failed");
+  vi.mocked(saveParameterDraft).mockRejectedValueOnce(new Error("still offline"));
+  await act(async () => {
+    expect(await result.current.leave()).toBe(false);
+  });
+  expect(result.current.input.note).toBe("unconfirmed");
+  act(() => result.current.edit({ ...input, note: "latest" }));
+  await act(async () => {
+    expect(await result.current.leave()).toBe(true);
+  });
+  expect(vi.mocked(saveParameterDraft).mock.calls.at(-1)?.[1].input.note).toBe("latest");
+  const saved = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(saved);
+  expect(saved.defaultPrevented).toBe(false);
+});
+
+it("permits leaving once a conflicting copy is durably retained", async () => {
+  vi.mocked(saveParameterDraft).mockResolvedValue(receipt("conflict", 2, "conflict"));
+  const { result } = mount();
+  act(() => result.current.edit({ ...input, note: "conflict" }));
+  await act(async () => {
+    expect(await result.current.leave()).toBe(true);
+  });
+  expect(result.current.status).toBe("conflict");
+});

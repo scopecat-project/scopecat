@@ -188,3 +188,70 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await rm(home, { recursive: true, force: true });
   }
 });
+
+test("failed draft saves survive close, version changes, service outage and cancelled browser exit", async ({
+  browser,
+}) => {
+  test.setTimeout(120000);
+  const home = await mkdtemp(join(tmpdir(), "scopecat-working-close-"));
+  try {
+    for (const name of ["src", "config", "scopecat.toml"])
+      await cp(join(ROOT, "examples/reference_lab", name), join(home, name), { recursive: true });
+    uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
+    prepareReferenceContexts(uv, home);
+    const url = JSON.parse(await readFile(join(home, ".scopecat/daemon.json"), "utf8"))
+      .base_url as string;
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await openTable(page, url);
+    await page.route("**/parameter-drafts/*/save", (route) => route.abort("connectionfailed"));
+    const field = page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    await field.fill("1e");
+    await expect(page.getByRole("button", { name: "Retry draft save", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close editor", exact: true }).click();
+    await expect(field).toHaveValue("1e");
+    await page
+      .getByRole("combobox", { name: "Saved parameter version", exact: true })
+      .selectOption({ index: 1 });
+    await expect(
+      page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
+    ).toHaveValue("");
+    await expect(field).toHaveValue("1e");
+    await page.getByRole("navigation").getByRole("button", { name: "Runs", exact: true }).click();
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Configuration", exact: true })
+      .click();
+    await expect(field).toHaveValue("1e");
+    await page.route("**/api/v1/health", (route) => route.abort("connectionfailed"));
+    await page.getByRole("button", { name: "Refresh project data", exact: true }).click();
+    await expect(
+      page.getByText(
+        "Reconnect to save parameter edits. Keep this editor open until its draft is saved.",
+        { exact: true },
+      ),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(field).toHaveValue("1e");
+    const prompt = page.waitForEvent("dialog").then(async (dialog) => {
+      expect(dialog.type()).toBe("beforeunload");
+      await dialog.dismiss();
+    });
+    await page.close({ runBeforeUnload: true });
+    await prompt;
+    expect(page.isClosed()).toBe(false);
+    await expect(field).toHaveValue("1e");
+    await page.unroute("**/api/v1/health");
+    await page.unroute("**/parameter-drafts/*/save");
+    await page.getByRole("button", { name: "Refresh project data", exact: true }).click();
+    await field.fill("1e+");
+    await page.getByRole("button", { name: "Close editor", exact: true }).click();
+    await expect(field).not.toBeVisible();
+    await page.getByRole("button", { name: "Open working table", exact: true }).click();
+    await expect(field).toHaveValue("1e+");
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await context.close();
+  } finally {
+    uv(["scopecat", "stop", home]);
+    await rm(home, { recursive: true, force: true });
+  }
+});

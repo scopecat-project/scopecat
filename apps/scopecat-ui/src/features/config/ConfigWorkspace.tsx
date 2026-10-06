@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useImperativeHandle, useRef, useState, type Ref } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
 import type { ParameterEntity } from "../../api-contract";
@@ -27,6 +27,8 @@ const loadBase = (view: ParameterDraftView) =>
     }),
   );
 
+type ParameterEditorHandle = { draftId: string; leave: () => Promise<boolean> };
+
 export function ConfigWorkspace({
   daemonUnavailable,
   onSelectConfiguration,
@@ -41,6 +43,12 @@ export function ConfigWorkspace({
   const [operator, setOperator] = useState("local-operator");
   const [selected, setSelected] = useState("");
   const [editing, setEditing] = useState<{ base: ParameterRevision; view: ParameterDraftView }>();
+  const editor = useRef<ParameterEditorHandle>(null);
+  const replaceEditor = async (next?: { base: ParameterRevision; view: ParameterDraftView }) => {
+    if (editor.current && !(await editor.current.leave())) return false;
+    setEditing(next);
+    return true;
+  };
   const [workingBranch, setWorkingBranch] = useState("");
   const branchHeads = useQuery({
     queryKey: ["parameter-branches", "work-table"],
@@ -64,7 +72,9 @@ export function ConfigWorkspace({
       });
       return { base: await loadBase(view), view };
     },
-    onSuccess: setEditing,
+    onSuccess: async (next) => {
+      await replaceEditor(next);
+    },
   });
   const open = useMutation({
     mutationFn: async (base: ParameterRevision) => ({
@@ -76,7 +86,9 @@ export function ConfigWorkspace({
         actor: operator,
       }),
     }),
-    onSuccess: setEditing,
+    onSuccess: async (next) => {
+      await replaceEditor(next);
+    },
   });
   const versions = useQuery({
     queryKey: ["parameter-revisions"],
@@ -96,10 +108,13 @@ export function ConfigWorkspace({
       ),
     ).values(),
   ];
-  if (daemonUnavailable)
-    return <p>Reconnect to the application to manage setups and parameters.</p>;
   return (
     <section className="grid gap-4">
+      {daemonUnavailable && (
+        <p role="alert">
+          Reconnect to save parameter edits. Keep this editor open until its draft is saved.
+        </p>
+      )}
       <header>
         <h2>Experiment configuration</h2>
         <p>
@@ -160,9 +175,9 @@ export function ConfigWorkspace({
           Saved parameter version
           <select
             value={selected}
-            onChange={(event) => {
-              setSelected(event.target.value);
-              setEditing(undefined);
+            onChange={async (event) => {
+              const next = event.target.value;
+              if (await replaceEditor()) setSelected(next);
             }}
           >
             <option value="">Choose a version</option>
@@ -202,21 +217,27 @@ export function ConfigWorkspace({
         {current && !editing && (
           <ParameterDraftHistory
             base={current}
-            onResume={(view) => setEditing({ base: current, view })}
+            onResume={(view) => void replaceEditor({ base: current, view })}
           />
         )}
         {editing && (
           <ParameterVersionEditor
+            ref={editor}
             key={editing.view.draft.draft_id}
             base={editing.base}
             initial={editing.view}
             onSelectConfiguration={onSelectConfiguration}
-            onFork={(view) => setEditing({ base: editing.base, view })}
+            onFork={(view) => {
+              if (editor.current?.draftId === editing.view.draft.draft_id)
+                void replaceEditor({ base: editing.base, view });
+            }}
             entities={entities}
-            onCancel={() => setEditing(undefined)}
+            onCancel={() => void replaceEditor()}
             onSaved={async (saved) => {
-              setSelected(saved.id);
-              setEditing(undefined);
+              if (editor.current?.draftId === editing.view.draft.draft_id) {
+                setSelected(saved.id);
+                setEditing(undefined);
+              }
               await cache.invalidateQueries({ queryKey: ["parameter-revisions"] });
               await cache.invalidateQueries({ queryKey: ["parameter-branches"] });
             }}
@@ -228,6 +249,7 @@ export function ConfigWorkspace({
 }
 
 function ParameterVersionEditor({
+  ref,
   base,
   entities,
   initial,
@@ -236,6 +258,7 @@ function ParameterVersionEditor({
   onCancel,
   onSaved,
 }: {
+  ref: Ref<ParameterEditorHandle>;
   base: ParameterRevision;
   entities: ParameterEntity[];
   initial: ParameterDraftView;
@@ -248,6 +271,10 @@ function ParameterVersionEditor({
   onSaved: (saved: ParameterRevision) => Promise<void>;
 }) {
   const draft = useParameterDraft(initial);
+  useImperativeHandle(ref, () => ({ draftId: initial.draft.draft_id, leave: draft.leave }), [
+    initial.draft.draft_id,
+    draft.leave,
+  ]);
   const { name, note, branch, actor: operator, values = [] } = draft.input;
   const [review, setReview] = useState<ParameterDraftView>();
   const [actionError, setActionError] = useState<string>();
