@@ -1,5 +1,6 @@
 import type { ComparisonHandoff } from "../analyses/RunComparison";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { navigate, useLocationUrl, type NavigationOptions } from "../../lib/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { definitionKey, invalidateDraft, useLaunchDraft } from "./LaunchDraft";
@@ -57,18 +58,8 @@ export function LaunchWorkspace({
       return result.entries;
     },
   });
-  const [procedureId, setProcedureId] = useState(
-    () =>
-      draft?.admittedProcedureId ??
-      new URLSearchParams(window.location.search).get("procedure") ??
-      "",
-  );
-  function admitted(id: string) {
-    setProcedureId(id);
-    const url = new URL(window.location.href);
-    url.searchParams.set("procedure", id);
-    window.history.replaceState(window.history.state, "", url);
-  }
+  const location = useLocationUrl();
+  const procedureId = location.searchParams.get("procedure") ?? draft?.admittedProcedureId ?? "";
   const entry = draft?.experiment
     ? catalog.data?.find((item) => item.id === draft.experiment)
     : catalog.data?.[0];
@@ -206,10 +197,10 @@ export function LaunchWorkspace({
         </>
       )}
       <OriginalSubmission
-        onOpen={admitted}
+        onOpen={openProcedure}
         catalogReady={sourceAvailable && !handoff && Boolean(entry) && catalog.isSuccess}
       />
-      <ProcedureHistory selectedId={procedureId} onSelect={admitted} />
+      <ProcedureHistory selectedId={procedureId} onSelect={openProcedure} />
       {projectId && (
         <CalibrationTasks
           key={`calibration:${projectId}`}
@@ -220,4 +211,13 @@ export function LaunchWorkspace({
       {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>
   );
+}
+
+function openProcedure(id: string, options?: NavigationOptions) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("procedure", id);
+  navigate(url, options);
+}
+function admitted(id: string) {
+  openProcedure(id, { replace: true });
 }
