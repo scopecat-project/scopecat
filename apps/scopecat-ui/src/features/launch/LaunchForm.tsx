@@ -2,7 +2,7 @@ import { readParameterDraft, freezeParameterDraft } from "../config/parameter-dr
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { reviewedForRequest } from "./scientific-selection";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
@@ -46,6 +46,7 @@ export function LaunchForm({
       mounted.current = false;
     };
   }, []);
+  const workingStatusId = useId();
   const [workingError, setWorkingError] = useState<string>();
   const working = useQuery({
     queryKey: ["launch-working-input", projectId, draft.workingInput?.draft_id],
@@ -61,6 +62,17 @@ export function LaunchForm({
       working.data.head_revision === draft.workingInput.revision &&
       working.data.draft.state === "saved" &&
       !working.data.branch_changed);
+  const workingBlockReason = workingCurrent
+    ? undefined
+    : working.isError
+      ? "Cannot check the source working table. Reconnect and retry; the adopted copy is unchanged."
+      : !working.data
+        ? "Checking the source working table before preview or acquisition…"
+        : working.data.draft.state !== "saved"
+          ? "The source working table is closed or conflicted. Open Configuration to review it and explicitly choose inputs again."
+          : working.data.branch_changed
+            ? "The working table’s branch changed. Review the latest branch head in Configuration, keep your table after review, then use current working inputs and preview again."
+            : "The working table has newer saved edits. Use current working inputs, then preview again before starting. Saved edits do not replace the adopted copy automatically.";
   useEffect(() => {
     if (!draft.workingInput || !working.data || workingCurrent || draft.pending || !draft.preview)
       return;
@@ -290,12 +302,23 @@ export function LaunchForm({
       {draft.workingInput && (
         <section aria-label="Working parameter input" className="border border-line rounded p-3">
           <p>
-            Using working input revision {draft.workingInput.revision}. Preview freezes this copy;
-            saved and running experiments keep their own inputs.
+            <strong>Adopted working-table copy.</strong> Using working input revision{" "}
+            {draft.workingInput.revision}. This is a saved editing step, not a parameter version.
+            Submitted experiments keep the inputs captured when they were started.
           </p>
-          {!workingCurrent && (
-            <p role="status">
-              Working inputs changed or could not be checked. Use current inputs and preview again.
+          <details>
+            <summary>Source working table</summary>
+            <p className="break-all">{draft.workingInput.draft_id}</p>
+          </details>
+          <p id={workingStatusId} role="status">
+            {workingBlockReason ??
+              (result
+                ? "The preview uses this adopted copy."
+                : "The adopted copy matches the saved working table. Preview is required before acquisition.")}
+          </p>
+          {!workingCurrent && working.data && !working.isError && (
+            <p>
+              Working inputs changed or could not be checked. Preview and acquisition are blocked.
             </p>
           )}
           {workingError && <p role="alert">{workingError}</p>}
@@ -329,8 +352,15 @@ export function LaunchForm({
       )}
       {draft.selection.configuration.kind === "parameters" && (
         <p>
-          Using parameter revision {draft.selection.configuration.ref.revision_id}. The checked
-          preview retains the exact setup used. This does not accept calibration or change defaults.
+          Parameter baseline: revision {draft.selection.configuration.ref.revision_id}
+          {draft.selection.configuration.overrides.length > 0
+            ? ` with ${draft.selection.configuration.overrides.length} parameter override(s)`
+            : " with no overrides"}
+          .{" "}
+          {draft.workingInput &&
+            "The adopted working-table values are applied over this baseline. "}
+          The checked preview retains the exact setup used. This does not accept calibration or
+          change defaults.
         </p>
       )}
       {draft.selection.configuration.kind === "unselected" ? (
@@ -424,6 +454,7 @@ export function LaunchForm({
       {entry.actions.includes("preview") && (
         <button
           type="submit"
+          aria-describedby={draft.workingInput ? workingStatusId : undefined}
           disabled={
             Boolean(pending) ||
             !supported ||
@@ -450,6 +481,7 @@ export function LaunchForm({
               attempt?.status === "unknown" ||
               attempt?.status === "pending"
             }
+            aria-describedby={draft.workingInput ? workingStatusId : undefined}
             onClick={() => {
               void start();
             }}
