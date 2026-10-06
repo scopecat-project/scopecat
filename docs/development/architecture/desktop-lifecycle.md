@@ -56,3 +56,10 @@ Qualification must cover fresh installation, package replacement, active work,
 background/reopen, startup failure, failed shutdown and recovery after process
 termination. Native UI checks on macOS and Windows are separate evidence from
 headless process tests. Hardware acceptance follows software lifecycle acceptance.
+
+The bounded [exact-run native window probe](../native-window-acceptance.md) is
+implemented in the manual distribution profile. Candidate `de571550` passed on
+Windows; Mac failed when secondary-window creation cleared saved website data.
+See the linked report for exact identities and unexecuted checks. The approved
+[editing recovery and store isolation target](draft-recovery.md) does not alter
+window-close or Quit behavior and remains separate from that acceptance evidence.

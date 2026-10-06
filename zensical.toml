@@ -88,6 +88,7 @@ nav = [
     { "Pilot work slices and acceptance fixtures" = "development/pilot-work-slices.md" },
     { "Architecture" = [
       "development/architecture/index.md",
+      { "Recoverable editing and native storage" = "development/architecture/draft-recovery.md" },
       { "Experiment workbench contexts" = "development/architecture/experiment-contexts.md" },
       { "Apparatus history and configuration ownership" = "development/architecture/apparatus-history.md" },
       { "Configuration ownership and fences" = "development/architecture/configuration-ownership.md" },

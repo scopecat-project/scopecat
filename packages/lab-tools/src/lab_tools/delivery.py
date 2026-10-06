@@ -411,6 +411,10 @@ def build_delivery(
     if public_artifacts is not None:
         assert preview_metadata is not None
         _copy_public_wheels(public_artifacts, wheels, preview_metadata, local_names)
+    if sys.platform == "darwin" and any(wheels.glob("pywebview-*.whl")):
+        from .cocoa_dependency import patch_wheel
+
+        _ = patch_wheel(wheels)
     selected_wheels = _unique_wheels(wheels)
     if preview_metadata is not None:
         _check_preview_wheels(preview_metadata, selected_wheels)

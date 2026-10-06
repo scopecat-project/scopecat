@@ -99,6 +99,15 @@ Use the [existing work owners](../platform-status.md#remaining-work-owners); thi
 ordering is a limited proposal for subsequent work, not another implementation
 batch, new issues or approval to change product behavior in this documentation PR.
 
+## Recoverable editing
+
+Valuable edits must survive navigation, new windows and restart. Automatic draft
+persistence does not save a parameter version, publish/apply changes or submit an
+experiment. Changed baselines require revalidation while retaining input; concurrent
+edits must not silently overwrite each other. This approved target is not fully
+implemented. The [recovery and native storage contract](draft-recovery.md) separates
+application-owned drafts from the independently required native store repair.
+
 ## Implemented application boundary
 
 Explicit source registration now covers GUI, Python, workers, retained plans and

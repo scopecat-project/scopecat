@@ -1,5 +1,6 @@
 """Acceptance owns disposable copies, not the candidate or retained reports."""
 
+import subprocess
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -65,13 +66,28 @@ def test_native_acceptance_preserves_candidate_and_reports(
     (app / "original").write_text("candidate")
     reports = tmp_path / "reports"
 
-    def check(copied, home, installer):
+    def check(copied, home, installer, *, native_windows):
+        assert not native_windows
         assert copied != app
         copied.rename(copied.with_name("Removed Scopecat.app"))
         home.mkdir()
         (home / "result.json").write_text('{"status": "stopped"}')
         (home / "data").mkdir()
         (home / "data/native-start.log").write_text("diagnostic")
+        (home / "native-windows").mkdir()
+        (home / "native-windows/result.json").write_text('{"status": "failed"}')
+        (home / "cocoa-storage").mkdir()
+        for name in (
+            "result.json",
+            "draft-fixture.json",
+            "A.json",
+            "B.json",
+            "C.json",
+            "A.log",
+            "B.log",
+            "C.log",
+        ):
+            (home / "cocoa-storage" / name).write_text("storage diagnostic")
         (home / "environment").mkdir()
         if failure:
             raise RuntimeError("acceptance failed")
@@ -85,6 +101,19 @@ def test_native_acceptance_preserves_candidate_and_reports(
     assert (app / "original").read_text() == "candidate"
     assert (reports / "result.json").is_file()
     assert (reports / "data/native-start.log").read_text() == "diagnostic"
+    assert (
+        reports / "native-windows/result.json"
+    ).read_text() == '{"status": "failed"}'
+    assert {path.name for path in (reports / "cocoa-storage").iterdir()} == {
+        "result.json",
+        "draft-fixture.json",
+        "A.json",
+        "B.json",
+        "C.json",
+        "A.log",
+        "B.log",
+        "C.log",
+    }
     assert bool(list(reports.glob("work-*"))) is keep_work
 
 
@@ -108,3 +137,11 @@ def test_download_failure_cleans_disposable_app_but_keeps_report(tmp_path, monke
     with pytest.raises(RuntimeError, match="signature"):
         verify_macos_download.verify(tmp_path / "installer.dmg", reports)
     assert list(reports.iterdir()) == [reports / "report.json"]
+
+
+def test_native_window_opt_in_refuses_local_before_copying(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    app, reports = tmp_path / "app", tmp_path / "reports"
+    with pytest.raises(subprocess.CalledProcessError):
+        verify_native_application.verify(app, reports, native_windows=True)
+    assert not reports.exists()

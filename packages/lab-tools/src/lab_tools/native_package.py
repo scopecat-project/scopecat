@@ -62,6 +62,10 @@ def build(source: Path, destination: Path) -> Path:
         else:
             _ = toolchain.build(source, payload)
         _ = verify_bundle(payload)
+        if sys.platform == "darwin":
+            from .cocoa_dependency import verify_wheel
+
+            verify_wheel(payload / "wheels")
         python_home = resources / "python"
         with tarfile.open(payload / "toolchain/python.tar") as archive:
             archive.extractall(python_home, filter="data")
