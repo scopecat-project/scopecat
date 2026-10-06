@@ -1,3 +1,4 @@
+import type { ScientificSelection } from "../launch/scientific-selection";
 import { createPortal } from "react-dom";
 import { ObjectParameterFields } from "./ObjectParameterFields";
 import {
@@ -55,6 +56,7 @@ export function ConfigWorkspace({
   onSelectConfiguration?: (
     choice: components["schemas"]["ConfigurationChoice-Input"],
     workingInput?: WorkingInput,
+    subject?: ScientificSelection["subject"],
   ) => void;
 }) {
   const cache = useQueryClient();
@@ -366,6 +368,7 @@ function ParameterVersionEditor({
   onSelectConfiguration?: (
     choice: components["schemas"]["ConfigurationChoice-Input"],
     workingInput?: WorkingInput,
+    subject?: ScientificSelection["subject"],
   ) => void;
   onCancel: () => void;
   onSaved: (saved: ParameterRevision) => Promise<void>;
@@ -480,6 +483,10 @@ function ParameterVersionEditor({
       : undefined;
   const objectEntity =
     objectContext && destination ? mappedEntity(objectContext, destination.entityId) : undefined;
+  const adoptionContext =
+    destination && objectContext?.resolution.context.subject.kind === "registered_target"
+      ? { subject: objectContext.resolution.context.subject, setup: objectContext.resolution.setup }
+      : undefined;
   const content = (
     <section
       aria-label="Edit parameter version"
@@ -500,6 +507,12 @@ function ParameterVersionEditor({
             Baseline {base.id} · setup{" "}
             {objectContext.setupName ?? objectContext.resolution.setup?.revision_id}
           </p>
+          {adoptionContext && (
+            <p>
+              Experiment target: {adoptionContext.subject.ref.target_id} · revision{" "}
+              {adoptionContext.subject.ref.revision}
+            </p>
+          )}
           <p className="text-sm">
             Current editable inputs. Selecting an object does not change the next experiment.
           </p>
@@ -655,15 +668,24 @@ function ParameterVersionEditor({
           onClick={async () => {
             const frozen = await draft.capture();
             if (frozen)
-              onSelectConfiguration?.(frozen.configuration, {
-                draft_id: frozen.draft_id,
-                revision: frozen.revision,
-              });
+              onSelectConfiguration?.(
+                adoptionContext && frozen.configuration.kind === "parameters"
+                  ? { ...frozen.configuration, setup: adoptionContext.setup }
+                  : frozen.configuration,
+                { draft_id: frozen.draft_id, revision: frozen.revision },
+                adoptionContext
+                  ? { kind: "registered_target", ref: adoptionContext.subject.ref }
+                  : undefined,
+              );
           }}
         >
-          Use working inputs for next experiment
+          {adoptionContext
+            ? "Use working inputs, target and setup for next experiment"
+            : "Use working inputs for next experiment"}
         </button>
         <p>
+          {adoptionContext &&
+            "This also selects the resolved target and setup shown above. The selected map object only filters the editor; it does not narrow the experiment target. "}
           This captures a copy for a fresh preview. Existing previews and submitted runs never adopt
           later edits automatically.
         </p>

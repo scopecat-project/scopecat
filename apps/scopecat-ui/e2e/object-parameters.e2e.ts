@@ -20,7 +20,7 @@ function uv(args: string[]) {
   return result.stdout.trim();
 }
 
-test("sample map edits the same recoverable working table without adopting experiment inputs", async ({
+test("sample map keeps raw edits and explicitly carries its context through a run and next edit", async ({
   page,
 }, testInfo) => {
   test.setTimeout(120000);
@@ -143,6 +143,73 @@ test("sample map edits the same recoverable working table without adopting exper
       await page.request.get(`${url}/api/v1/parameters/branches/browser`)
     ).json();
     expect(branch.generation).toBe(1);
+
+    // Only this explicit action carries the resolved target/setup to Experiments.
+    await field.fill("5.2");
+    await form.getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true }).fill("GHz");
+    await page
+      .getByRole("button", {
+        name: "Use working inputs, target and setup for next experiment",
+        exact: true,
+      })
+      .click();
+    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await expect(page.getByLabel("Experiment setup", { exact: true })).toHaveValue(
+      "browser-bench-a",
+    );
+    await expect(page.getByLabel("Selected registered target")).toContainText(
+      "Registered target object-target, revision 1",
+    );
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    const previewResponse = page.waitForResponse(
+      (item) =>
+        item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    const preview = await previewResponse;
+    expect(preview.status(), await preview.text()).toBe(200);
+    const captured = await preview.json();
+    expect(captured.reviewed.binding.subject.ref.target_id).toBe("object-target");
+    expect(captured.reviewed.config_source.overrides).toHaveLength(1);
+    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    const runLink = page.getByRole("link", { name: /^Open retained run:/ });
+    const runId = new URL((await runLink.getAttribute("href"))!, page.url()).searchParams.get(
+      "run",
+    )!;
+    await runLink.click();
+    await expect(page).toHaveURL(/#runs$/);
+    await page.getByRole("button", { name: "Samples", exact: true }).click();
+    await page
+      .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
+      .click();
+    await page.getByRole("button", { name: "Select object q0", exact: true }).click();
+    await expect(field).toHaveValue("5.2");
+    await field.fill("5.3");
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    // The next editing round cannot rewrite the completed run's inputs.
+    const evidence = uv([
+      "python",
+      "-c",
+      `
+import sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    run = lab.get_run(sys.argv[2])
+    value = run.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
+    assert value.to('GHz') == sc.Quantity(5.2, 'GHz'), value
+    assert lab.parameters.checkout('browser').head.generation == 1
+    print(run.id, value)
+`,
+      home,
+      runId,
+    ]);
+    await testInfo.attach("adopted-context-run", {
+      body: JSON.stringify({ runId, evidence, binding: captured.reviewed.binding }),
+      contentType: "application/json",
+    });
   } finally {
     uv(["scopecat", "stop", home]);
     await rm(home, { recursive: true, force: true });

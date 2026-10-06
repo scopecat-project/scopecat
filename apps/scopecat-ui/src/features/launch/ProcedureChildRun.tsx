@@ -1,3 +1,4 @@
+import { navigate } from "../../lib/navigation";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
 import type { ProcedureOperatorView } from "../../api-contract";
 import { normalizeRun } from "../runs/run-api";
@@ -18,6 +19,18 @@ export function ProcedureChildRun({
       <a
         className="underline"
         href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.runId)}#runs`}
+        onClick={(event) => {
+          if (
+            event.button !== 0 ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.altKey
+          )
+            return;
+          event.preventDefault();
+          navigate(event.currentTarget.href);
+        }}
       >
         Open {current ? "current child run" : "retained run"}: {run.displayName ?? run.experimentId}
       </a>

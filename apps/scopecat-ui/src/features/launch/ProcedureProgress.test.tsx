@@ -196,6 +196,10 @@ it("shows an uncertain current child as attention even when its parent is ready 
     "href",
     "/?run=retained-child",
   );
+  fireEvent.click(screen.getByRole("link", { name: /Open current child run/ }));
+  expect(window.location.search).toBe("?procedure=p1&run=retained-child");
+  expect(window.location.hash).toBe("#runs");
+  expect(window.history.state.scopecatPosition).toBe(1);
 });
 
 it("shows failed closure and its reason without suggesting retry", async () => {

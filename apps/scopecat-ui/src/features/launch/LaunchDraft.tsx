@@ -62,6 +62,7 @@ interface DraftContext {
   selectConfiguration: (
     choice: components["schemas"]["ConfigurationChoice-Input"],
     workingInput?: WorkingInput,
+    subject?: ScientificSelection["subject"],
   ) => void;
   draft: LaunchDraft | undefined;
   openPlan: (plan: PlanRevision, entry: LaunchCatalogEntry) => void;
@@ -165,6 +166,7 @@ function ProjectDraft({
   const currentWorkspace = useRef(workspaceId);
   const [selectedConfiguration, setSelectedConfiguration] =
     useState<components["schemas"]["ConfigurationChoice-Input"]>();
+  const [selectedSubject, setSelectedSubject] = useState<ScientificSelection["subject"]>();
   const [selectedWorkingInput, setSelectedWorkingInput] = useState<WorkingInput>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const latest = useRef(draft);
@@ -218,6 +220,7 @@ function ProjectDraft({
             ? {
                 ...defaultSelection(),
                 configuration: selectedConfiguration,
+                subject: selectedSubject ?? defaultSelection().subject,
               }
             : defaultSelection());
         next.workingInput = current ? current.workingInput : selectedWorkingInput;
@@ -243,7 +246,7 @@ function ProjectDraft({
         return next;
       });
     },
-    [selectedConfiguration, selectedWorkingInput, workspaceId],
+    [selectedConfiguration, selectedWorkingInput, selectedSubject, workspaceId],
   );
   async function submit(request: SubmissionRequest, definition: string) {
     const wasUnknown = attempt?.status === "unknown";
@@ -317,10 +320,11 @@ function ProjectDraft({
                 )
               : current,
           ),
-        selectConfiguration: (choice, workingInput) => {
+        selectConfiguration: (choice, workingInput, subject) => {
           if (!alive.current) return;
           setSelectedConfiguration(choice);
           setSelectedWorkingInput(workingInput);
+          setSelectedSubject(subject);
           setDraft((current) =>
             current
               ? invalidateDraft(
@@ -330,11 +334,15 @@ function ProjectDraft({
                     workingInput,
                     selection: {
                       ...current.selection,
+                      subject: subject ?? current.selection.subject,
                       configuration:
                         workingInput &&
                         choice.kind === "parameters" &&
                         current.selection.configuration.kind === "parameters"
-                          ? { ...choice, setup: current.selection.configuration.setup }
+                          ? {
+                              ...choice,
+                              setup: choice.setup ?? current.selection.configuration.setup,
+                            }
                           : choice,
                     },
                   },

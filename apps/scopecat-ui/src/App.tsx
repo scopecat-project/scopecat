@@ -778,8 +778,8 @@ function ContextConfigWorkspace({
       ref={workspaceRef}
       objectPanel={objectPanel}
       daemonUnavailable={daemonUnavailable}
-      onSelectConfiguration={(ref, workingInput) => {
-        selectConfiguration(ref, workingInput);
+      onSelectConfiguration={(ref, workingInput, subject) => {
+        selectConfiguration(ref, workingInput, subject);
         onSelected();
       }}
     />
