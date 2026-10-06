@@ -1,9 +1,46 @@
 # Exact-run native window acceptance
 
-The real native check for #882 ran on 2026-10-06: **Windows passed; macOS failed**.
+The combined #885/#886 candidate passed its specified **Mac and Windows native
+checks** on 2026-10-06. Qualification is bound to the exact candidate below.
 Linux checks, browser acceptance and platform-smoke are not native passes.
 
-## Recorded candidate
+## Accepted combined candidate
+
+[Manual run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157)
+used `native-distribution` at `4aee5825dbe374f469bc0f1be1e9a981908086c1`, combining
+#885 `0614b0402450751d28b65b7cffba913b4d8a4cbf` and
+#886 `722e195d48c398c5d65385fdf610beb260f8395c`. Both native jobs succeeded;
+independent review read the raw reports and matched commit, bundle and probe hashes.
+This does not claim native execution of a later main or the three-PR #884/#886/#885
+closeout combination. Documentation-only updates do not alter the tested code.
+
+- Mac 26.6.2 arm64, image `20260907.0351.1`, and Windows Server 2025 amd64,
+  image `20260925.250.1`: eight exact-run window checks and host exit/cleanup passed.
+  Full application draft views and the independent marker remained equal across
+  creation, restoration, reads and secondary close.
+- Mac A/B/C storage checks passed: same-host sharing, overlapping same-origin host
+  isolation, actual cookie interfaces/HTTP requests and retained default/NSHTTP
+  sentinels. After host exit and service restart, C had no old marker/cookie at the
+  fixed test origin `http://127.0.0.1:49685`, while the exact procedure form and
+  complete application draft recovered. Service PID changed `17495` to `17863`
+  and port `49687` to `49702`.
+- The Darwin bundle contains `pywebview-6.2.1+scopecat.1`, wheel SHA-256
+  `69e66d40be74245e21569a8f83e98dd1b4013cd703233da19f78942bd0f976a9`.
+  All three hosts verified loaded Cocoa SHA-256
+  `2fe47f99c36beb0bc5d156b3006321ff94c0f101d4fffc1ff49a5d2bad5abd39`.
+  Ordinary source environments and Windows retain upstream pywebview.
+- [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37436328157/artifacts/11399659221),
+  ZIP SHA-256 `8d1df6b36b37f14388394a40200951e9e97caa347440b55ade75edd298249921`;
+  [Windows reports](https://github.com/scopecat-project/scopecat/actions/runs/37436328157/artifacts/11399981013),
+  ZIP SHA-256 `cba90569644107eda3644bd35366ee75f0bab99055d1818893b43bd1c22b293c`.
+
+Windows did not run a corresponding complete host-restart/cookie-isolation check.
+OS focus, menu clicks, tray, native dialogs, visual presentation and complete user
+launch remain unevaluated. Mac signature/tamper checks passed, but notarization was
+not provided, Gatekeeper rejected the package (return code 3), and Finder first-open
+was not evaluated. Installer artifacts were retained without a release/tag/deploy.
+
+## Historical failed candidate
 
 [Manual run 37424157181, attempt 1](https://github.com/scopecat-project/scopecat/actions/runs/37424157181)
 used `native-distribution` at exact commit
@@ -62,7 +99,7 @@ evidence, not a claim about OS title rendering.
 created by the manual job. Never run it on a user's Mac, a retained desktop or a
 self-hosted runner.** Upstream pywebview 6.2.1 Cocoa uses and clears its default
 website store when each private window is created. The candidate's bounded
-production dependency patch has not yet been native-qualified. Neither the application's isolated
+production dependency patch is qualified only for the combined candidate above. Neither the application's isolated
 `--home` nor pywebview `storage_path` isolates that native store. This may affect
 unrelated retained WebKit data under the same host identity. No local override is
 supported, and the probe never replaces the candidate backend or store.
@@ -79,7 +116,7 @@ files. The candidate is unchanged; the copied executable and Mac Info.plist keep
 native host identity and teardown. The probe removes inherited endpoint/Python
 overrides. Its backend/default-store behavior matches production: if window
 creation clears the draft, the check must fail and retain that evidence. The approved
-production dependency repair still requires new platform evidence.
+production dependency repair must remain bound to its recorded platform evidence.
 
 Waits and the host have deadlines. Timeout cleanup uses the existing owned
 process-tree helper. A PID plus creation-time receipt permits acquisition-client
@@ -131,6 +168,8 @@ with an alternate store and call it qualification.
 
 This is native component/bridge acceptance using programmatic DOM actions. It
 does not establish OS focus, actual menu clicks, visual presentation, tray,
-complete production startup, or cross-restart browser persistence. The draft
-check does cover storage survival across window creation within the live process.
+complete production startup, or durable browser persistence. The draft check covers
+window creation within the live process; the separate Mac Cocoa check covers
+browser ephemerality and application-draft recovery across complete host/service
+restart. That restart result is not extended to Windows.
 No real devices, private consumer repositories or retained user data are fixtures.

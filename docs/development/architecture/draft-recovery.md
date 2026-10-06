@@ -70,7 +70,9 @@ retains the upstream license, rewrites METADATA/RECORD, and carries its provenan
 in `scopecat-cocoa-patch.json`. Final requirements and bundle inventory hash the
 transformed artifact. The repository dependency stays pinned to upstream 6.2.1;
 **ordinary source development does not receive this repair**. Windows delivery
-retains the upstream wheel. This implementation is not yet native-qualified.
+retains the upstream wheel. The packaged repair passed the bounded native checks
+on combined candidate `4aee5825dbe374f469bc0f1be1e9a981908086c1` in
+[run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157).
 
 The patch holds one `nonPersistentDataStore` strongly in the Cocoa host class,
 sets it on the configuration before constructing each private WKWebView, and
@@ -147,6 +149,10 @@ combined candidate creates fresh schema-111 fixtures through its own service.
 The probe checks the actual configured store and exact packaged dependency hash;
 it does not replace the backend. All native checks remain hosted-only and outside
 the fast PR matrix. Use one user-triggered manual run for the final reviewed
-candidate. The [previous Mac failure](../native-window-acceptance.md) remains the
-latest native evidence until then. OS focus, actual menus, tray and visual
-presentation remain separate manual boundaries.
+candidate. The [native evidence record](../native-window-acceptance.md) preserves
+the earlier Mac failure and the later combined candidate's successful Mac/Windows
+window checks and Mac A/B/C isolation/restart checks. This does not qualify the
+later three-PR closeout combination as natively executed. Windows complete host
+restart/cookie isolation, OS focus, actual menus, tray and visual presentation remain
+unverified. Mac notarization is not provided; Gatekeeper rejection and unevaluated
+Finder first-open remain explicit distribution boundaries.
