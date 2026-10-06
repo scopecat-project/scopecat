@@ -123,12 +123,16 @@ def isolate_cocoa_store(copied: Path) -> None:
     source = path.read_text(encoding="utf-8")
     constructor = "config = WebKit.WKWebViewConfiguration.alloc().init()"
     default = "self.datastore = WebKit.WKWebsiteDataStore.defaultDataStore()"
-    if source.count(constructor) != 1 or source.count(default) != 1:
+    declaration = "class BrowserView:"
+    if any(source.count(part) != 1 for part in (constructor, default, declaration)):
         raise ValueError("Cocoa store isolation must be reviewed for this backend")
+    source = source.replace(declaration, declaration + "\n    _probe_store = None")
     source = source.replace(
         constructor,
-        constructor + "\n        config.setWebsiteDataStore_("
-        "WebKit.WKWebsiteDataStore.nonPersistentDataStore())",
+        constructor + "\n        if BrowserView._probe_store is None:"
+        "\n            BrowserView._probe_store = "
+        "WebKit.WKWebsiteDataStore.nonPersistentDataStore()"
+        "\n        config.setWebsiteDataStore_(BrowserView._probe_store)",
     )
     source = source.replace(default, "self.datastore = config.websiteDataStore()")
     path.write_text(source, encoding="utf-8")
@@ -323,12 +327,16 @@ def probe(home: Path) -> None:
                     if sys.platform == "darwin":
                         from webview.platforms import cocoa
 
+                        stores: list[object] = []
                         for view in (first, second):
                             native = cocoa.BrowserView.instances[view.window.uid]  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
                             config = native.webview.configuration()  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
                             store = config.websiteDataStore()  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
                             assert not store.isPersistent()  # pyright: ignore[reportUnknownMemberType]
-                        checks.append("both Cocoa WebViews use nonpersistent stores")
+                            if stores:
+                                assert store.isEqual_(stores[0])  # pyright: ignore[reportUnknownMemberType]
+                            stores.append(cast("object", store))
+                        checks.append("both Cocoa WebViews share a nonpersistent store")
                     assert evaluate(second.window, "location.origin") == record.base_url
                     assert (
                         evaluate(

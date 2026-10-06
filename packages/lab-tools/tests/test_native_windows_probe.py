@@ -108,6 +108,8 @@ def test_cocoa_store_isolated_before_webview_construction_or_rejected(tmp_path):
     source = copied.read_text()
     ast.parse(source)
     assert "WKWebsiteDataStore.defaultDataStore()" not in source
+    assert source.count("WKWebsiteDataStore.nonPersistentDataStore()") == 1
+    assert "config.setWebsiteDataStore_(BrowserView._probe_store)" in source
     assert source.index("WKWebsiteDataStore.nonPersistentDataStore()") < source.index(
         "BrowserView.WebKitHost.alloc().initWithFrame_configuration_"
     )

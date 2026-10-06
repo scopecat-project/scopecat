@@ -28,8 +28,10 @@ identity and teardown, unlike running the bundled Python directly.
 
 Current pywebview Cocoa uses and clears its default website store even with
 `private_mode=True`; `storage_path` does not isolate it. Before launching the copied
-host, the probe changes only that copy's Cocoa backend to attach a real
-`nonPersistentDataStore` before constructing each WKWebView. Source-shape guards
+host, the probe changes only that copy's Cocoa backend to attach one shared real
+`nonPersistentDataStore` before constructing each WKWebView. Both windows must
+use the same store, preserving the production shared-storage relationship.
+Source-shape guards
 fail closed if the dependency changes, and both actual native stores must report
 nonpersistent. The original backend is not edited. This test-specific store choice
 means **production browser persistence is not qualified** by this probe.
