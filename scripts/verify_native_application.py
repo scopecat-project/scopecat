@@ -205,6 +205,14 @@ def verify(
                 "native-windows/cleanup.log",
                 "native-windows/acquisition.log",
                 "native-windows/acquisition-process.json",
+                "cocoa-storage/result.json",
+                "cocoa-storage/draft-fixture.json",
+                "cocoa-storage/A.json",
+                "cocoa-storage/B.json",
+                "cocoa-storage/C.json",
+                "cocoa-storage/A.log",
+                "cocoa-storage/B.log",
+                "cocoa-storage/C.log",
                 "configuration-sharing/result.json",
                 "configuration-sharing/sender-daemon.log",
                 "configuration-sharing/receiver-daemon.log",
@@ -308,8 +316,18 @@ def _verify(
             ],
             check=True,
         )
+        if sys.platform == "darwin":
+            subprocess.run(  # noqa: S603 - same live disposable acceptance state
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("verify_cocoa_storage.py").resolve()),
+                    str(relocated),
+                    str(home),
+                ],
+                check=True,
+            )
         assert inventory(relocated, (".",)) == before, (
-            "Window probe modified application"
+            "Native probes modified application"
         )
     client = (
         home

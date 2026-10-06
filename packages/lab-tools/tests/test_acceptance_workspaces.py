@@ -76,6 +76,18 @@ def test_native_acceptance_preserves_candidate_and_reports(
         (home / "data/native-start.log").write_text("diagnostic")
         (home / "native-windows").mkdir()
         (home / "native-windows/result.json").write_text('{"status": "failed"}')
+        (home / "cocoa-storage").mkdir()
+        for name in (
+            "result.json",
+            "draft-fixture.json",
+            "A.json",
+            "B.json",
+            "C.json",
+            "A.log",
+            "B.log",
+            "C.log",
+        ):
+            (home / "cocoa-storage" / name).write_text("storage diagnostic")
         (home / "environment").mkdir()
         if failure:
             raise RuntimeError("acceptance failed")
@@ -92,6 +104,16 @@ def test_native_acceptance_preserves_candidate_and_reports(
     assert (
         reports / "native-windows/result.json"
     ).read_text() == '{"status": "failed"}'
+    assert {path.name for path in (reports / "cocoa-storage").iterdir()} == {
+        "result.json",
+        "draft-fixture.json",
+        "A.json",
+        "B.json",
+        "C.json",
+        "A.log",
+        "B.log",
+        "C.log",
+    }
     assert bool(list(reports.glob("work-*"))) is keep_work
 
 

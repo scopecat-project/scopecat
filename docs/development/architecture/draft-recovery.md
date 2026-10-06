@@ -113,9 +113,12 @@ checks below; an isolated application directory alone is insufficient proof.
 ## Bounded acceptance and independent draft work
 
 Decision draft persistence is implemented independently in draft
-[PR #886](https://github.com/scopecat-project/scopecat/pull/886). It is not included
-in this native branch. Combined recovery evidence must name an actual combined
-candidate; neither branch's checks establish qualification of the other.
+[PR #886](https://github.com/scopecat-project/scopecat/pull/886). Its application
+behavior remains independently owned there. Native draft acceptance now requires
+that API and fails explicitly if absent; it does not fall back to localStorage.
+The acceptance-only `codex/native-draft-acceptance` branch combines reviewed #885
+and #886 heads without merging either PR to main. Each report must identify the
+actual combined commit, not borrow qualification from either component head.
 
 Local checks verify source transformation, wheel integrity and probe contracts;
 they cannot qualify Cocoa. The manual native-distribution profile retains the
@@ -129,9 +132,17 @@ real exact-run/window/independent-marker checks and adds a bounded Cocoa check:
   starts empty; its writes and clear operation do not change A. Default/NSHTTP
   sentinels are neither imported into document cookies, cookie API or actual HTTP
   requests, nor removed by private-window creation or clearing.
-- After A exits, C starts at that same origin and must not recover A's marker or
-  cookie. This tests browser ephemerality, separately from application-owned draft
-  recovery across service restarts and changed ports.
+- After A and B exit, stop the same application service and verify its old process
+  identity is gone, then restart it. C starts at the unchanged test origin and
+  must not recover A's marker/cookie. It then opens the exact procedure in the real
+  restarted application UI (whose service port may change), restores the reviewer,
+  and reads the identical application-owned draft through the API. The browser
+  marker and durable draft remain separate assertions.
+
+The Cocoa restart check runs inside the original disposable application acceptance
+workspace, before its data and relocated package are removed. Its result, fixture
+and A/B/C logs survive workspace cleanup. No retained store is migrated: the
+combined candidate creates fresh schema-111 fixtures through its own service.
 
 The probe checks the actual configured store and exact packaged dependency hash;
 it does not replace the backend. All native checks remain hosted-only and outside

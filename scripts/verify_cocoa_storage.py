@@ -16,12 +16,14 @@ from typing import cast, override
 
 import psutil
 
+from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.bundle import file_hash
 from scopecat_server.validation_process import (  # noqa: TID251 - owned acceptance hosts
     terminate_validation_process_tree,
 )
 from verify_native_windows import (  # pyright: ignore[reportImplicitRelativeImport]
     environment,
+    read_decision_draft,
     require_hosted_runner,
     wait_for,
 )
@@ -31,7 +33,9 @@ from verify_native_windows import (  # pyright: ignore[reportImplicitRelativeImp
 HOST = r"""
 import hashlib, importlib.metadata, json, sys, threading, time, traceback
 from pathlib import Path
-from verify_native_windows import require_hosted_runner
+from urllib.parse import urlencode
+from verify_native_windows import require_hosted_runner, read_decision_draft
+
 require_hosted_runner(Path(sys.argv[2]).parent)
 
 import AppKit, Foundation, WebKit
@@ -40,10 +44,13 @@ import webview
 from webview.platforms import cocoa
 from lab_tools.cocoa_dependency import RESULT_SHA256, VERSION
 
-stage, output, origin = sys.argv[1:]
+stage, output, origin, base_url = sys.argv[1:]
 output = Path(output)
 checks = []
 result = {"stage": stage, "origin": origin, "checks": checks}
+fixture = json.loads((output / "draft-fixture.json").read_text())
+assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
+result["application_draft"] = fixture["view"]
 
 
 def wait(check, label):
@@ -179,6 +186,27 @@ def exercise():
         checks.append("actual private store starts empty; legacy cookies not imported")
         if stage == "C":
             checks.append("same-origin restart does not retain previous host data")
+            # Only after the fixed-origin ephemerality assertion, open the real UI.
+            # Its service may have a new port; recovery must come from application data.
+            query = urlencode({"procedure": fixture["target"]["procedure_run_id"]})
+            first.load_url(base_url + "/?" + query + "#decisions")
+            selector = 'input[placeholder="name, agent id, or service id"]'
+            wait(
+                lambda: (
+                    js(
+                        first,
+                        "document.querySelector(" + json.dumps(selector) + ")?.value",
+                    )
+                    == fixture["actor"]
+                ),
+                "draft restored in restarted native UI",
+            )
+            assert fixture["target"]["procedure_run_id"] in js(
+                first, "document.body.textContent")
+            assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
+            checks.append(
+                "application draft and real form recover after host/service restart"
+            )
         else:
             js(
                 first,
@@ -294,6 +322,28 @@ def verify(app: Path, home: Path) -> None:
         "probe_sha256": file_hash(Path(__file__)),
         "bundle_sha256": file_hash(app / "Contents/Resources/payload/bundle.json"),
     }
+    runtime = ApplicationRuntime(home / "data")
+    prior = cast(
+        "dict[str, object]",
+        json.loads((home / "native-windows/result.json").read_bytes()),
+    )
+    assert prior["status"] == "passed"
+    target = cast("dict[str, str | int]", prior["draft_target"])
+    storage = cast("dict[str, object]", prior["storage"])
+    expected = cast("dict[str, object]", storage["draft_before"])
+    draft = cast("dict[str, object]", expected["draft"])
+    actor = cast("dict[str, object]", draft["input"])["actor"]
+    (reports / "draft-fixture.json").write_text(
+        json.dumps(
+            {
+                "target": target,
+                "view": expected,
+                "actor": actor,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     processes: list[subprocess.Popen[str]] = []
     owners: dict[int, psutil.Process] = {}
     with (
@@ -305,7 +355,7 @@ def verify(app: Path, home: Path) -> None:
         result["origin"] = origin
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
-        def launch(stage: str) -> subprocess.Popen[str]:
+        def launch(stage: str, base_url: str) -> subprocess.Popen[str]:
             contents = Path(temporary) / stage / "Scopecat.app/Contents"
             resources = contents / "Resources"
             resources.mkdir(parents=True)
@@ -319,8 +369,8 @@ def verify(app: Path, home: Path) -> None:
             (resources / "bootstrap.py").write_text(
                 "import sys\n"
                 f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
-                f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, {origin!r}]\n"
-                + HOST,
+                f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, "
+                f"{origin!r}, {base_url!r}]\n" + HOST,
                 encoding="utf-8",
             )
             log = stack.enter_context(
@@ -356,12 +406,30 @@ def verify(app: Path, home: Path) -> None:
             assert document["status"] == "passed"
 
         try:
-            first = launch("A")
+            before = runtime.start()
+            assert read_decision_draft(before.base_url, target) == expected
+            result["service_before"] = {
+                "pid": before.pid,
+                "created": before.process_create_time,
+                "base_url": before.base_url,
+            }
+            first = launch("A", before.base_url)
             gate("A-ready")
-            second = launch("B")
+            second = launch("B", before.base_url)
             finish(second, "B")
             finish(first, "A")
-            finish(launch("C"), "C")
+            runtime.stop()
+            assert not psutil.pid_exists(before.pid) or (
+                psutil.Process(before.pid).create_time() != before.process_create_time
+            )
+            after = runtime.start()
+            result["service_after"] = {
+                "pid": after.pid,
+                "created": after.process_create_time,
+                "base_url": after.base_url,
+            }
+            assert read_decision_draft(after.base_url, target) == expected
+            finish(launch("C", after.base_url), "C")
             result["status"] = "passed"
         except Exception:
             result["error"] = traceback.format_exc()
@@ -376,6 +444,10 @@ def verify(app: Path, home: Path) -> None:
                         )
                     except Exception:
                         cleanup_errors.append(traceback.format_exc())
+            try:
+                runtime.stop()
+            except Exception:
+                cleanup_errors.append(traceback.format_exc())
             server.shutdown()
             if cleanup_errors:
                 result.update(status="failed", cleanup_errors=cleanup_errors)

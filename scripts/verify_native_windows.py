@@ -110,7 +110,7 @@ def review(context: ProcedureContext, intent: Review) -> None:
     )
 
 
-def prepare_decision(base_url: str) -> str:
+def prepare_decision(base_url: str) -> dict[str, str | int]:
     """Create a real waiting interpretation, without starting another acquisition."""
     with DaemonClient(base_url) as client:
         waiting = ProcedureWorker(client).execute(
@@ -123,10 +123,26 @@ def prepare_decision(base_url: str) -> str:
         assert len(page.items) == 1 and page.next_cursor is None
         step = page.items[0]
         assert step.state == "waiting_for_input"
-        return (
-            f"scopecat:decision:{waiting.procedure_run_id}:"
-            f"{step.step_key}:{step.attempt}:{step.intent_hash}"
-        )
+        return {
+            "procedure_run_id": waiting.procedure_run_id,
+            "step_key": step.step_key,
+            "attempt": step.attempt,
+        }
+
+
+def read_decision_draft(
+    base_url: str, target: dict[str, str | int]
+) -> dict[str, object]:
+    """Read the application-owned record; require the combined draft API candidate."""
+    with httpx2.Client(base_url=base_url, trust_env=False, timeout=5) as http:
+        response = http.post("/api/v1/decision-drafts/read", json=target)
+        response.raise_for_status()
+        return cast("dict[str, object]", response.json())
+
+
+def draft_actor(view: dict[str, object]) -> object:
+    draft = cast("dict[str, object] | None", view["draft"])
+    return None if draft is None else cast("dict[str, object]", draft["input"])["actor"]
 
 
 def wait_for(check: Callable[[], bool], message: str, *, timeout: float = 30) -> None:
@@ -268,8 +284,9 @@ def probe(home: Path) -> None:
             assert macos_bundle_identifier() == "org.scopecat.desktop"
         record = runtime.start()
         session.connected(record.base_url)
-        draft_key = prepare_decision(record.base_url)
-        evidence["draft_key"] = draft_key
+        draft_target = prepare_decision(record.base_url)
+        evidence["draft_target"] = draft_target
+        assert read_decision_draft(record.base_url, draft_target)["draft"] is None
         evidence["service"] = {
             "pid": record.pid,
             "base_url": record.base_url,
@@ -385,18 +402,16 @@ def probe(home: Path) -> None:
                         "'value').set.call(e, " + json.dumps(reviewer) + ");"
                         "e.dispatchEvent(new Event('input', {bubbles: true})); })()",
                     )
-                    draft_read = "localStorage.getItem(" + json.dumps(draft_key) + ")"
+
+                    def draft_read() -> dict[str, object]:
+                        return read_decision_draft(record.base_url, draft_target)
+
                     wait_for(
-                        lambda: (
-                            evaluate(
-                                first.window,
-                                "JSON.parse(" + draft_read + " || '{}').actor",
-                            )
-                            == reviewer
-                        ),
-                        "Editing the decision did not save a real draft",
+                        lambda: draft_actor(draft_read()) == reviewer,
+                        "Editing the decision did not save an application-owned draft",
                     )
-                    draft_before = evaluate(first.window, draft_read)
+                    draft_before = draft_read()
+                    assert draft_before["validity"] == "current"
                     marker_key = "scopecat:native-window-storage-marker"
                     marker_read = "localStorage.getItem(" + json.dumps(marker_key) + ")"
                     evaluate(
@@ -434,7 +449,7 @@ def probe(home: Path) -> None:
 
                     def check_storage(stage: str) -> None:
                         observed = {
-                            "draft": evaluate(first.window, draft_read),
+                            "draft": draft_read(),
                             "marker": evaluate(first.window, marker_read),
                         }
                         storage_evidence[stage] = observed
@@ -447,7 +462,7 @@ def probe(home: Path) -> None:
                     # Observe the second window's storage without imposing a new
                     # cross-window sharing contract on the production backend.
                     storage_evidence["secondary"] = {
-                        "draft": evaluate(second.window, draft_read),
+                        "application_draft": draft_read(),
                         "marker": evaluate(second.window, marker_read),
                     }
                     click_text(first.window, "Decisions")
@@ -464,7 +479,7 @@ def probe(home: Path) -> None:
                     )
                     check_storage("after_draft_restoration")
                     checks.append(
-                        "production store retains marker and restores real draft"
+                        "native store retains marker; application restores draft"
                     )
                     # Exercise both actual injected bridges. Window.title tracks
                     # the Python target; this does not qualify OS title rendering.

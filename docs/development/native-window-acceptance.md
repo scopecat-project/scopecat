@@ -47,9 +47,10 @@ run active; releasing the scan must complete that run without another run.
 
 A real ProcedureWorker creates one waiting interpretation through the service,
 without acquiring another run. The real Decisions form saves a reviewer draft.
-The probe then unmounts the form before creating the second window, so its save
-effect cannot repair or hide store clearing. It checks the original draft and an
-independent localStorage marker after creation, restoration, reads and closure;
+The probe waits for the real edit to reach the application-owned draft API, then
+unmounts the form before creating the second window. It compares the full durable
+draft receipt and a separate localStorage marker after creation, restoration,
+reads and closure;
 returning to Decisions must restore the reviewer. The second window's storage is
 also recorded, without imposing a new sharing policy. Both injected JS bridges
 must direct title calls to their own Python Window object; this is bridge ownership
@@ -101,15 +102,22 @@ independent localStorage marker assertions remain unchanged.
 Inspect `cocoa-storage/result.json`, `A.json`, `B.json`, `C.json` and their logs.
 A missing stage, host failure or cleanup error is not a pass. The reports include
 probe/bundle hashes and each host checks the exact installed dependency version
-and Cocoa source hash. This check does not include PR #886's separate draft
-persistence work or qualify a combined candidate before it is actually built.
+and Cocoa source hash. This check now requires PR #886's draft API. After both A/B
+hosts exit, it stops and restarts their application service; C separately verifies
+same-test-origin browser ephemerality and exact-procedure draft restoration in the
+real UI/API. The test origin stays fixed; the application service port may change.
+This runs before the original acceptance workspace is removed, and the wrapper
+retains `draft-fixture.json` plus every stage report/log. A combined candidate uses
+fresh schema-111 data; it never upgrades an old development fixture.
 
 ## Running the final candidate
 
 After ordinary CI and review, use GitHub **Actions → Full acceptance → Run
-workflow**. Select `codex/native-window-acceptance` under **Use workflow from**,
-choose **profile: native-distribution**, and run once for the final candidate.
-Confirm the run's head SHA equals the reviewed draft PR head. Do not choose
+workflow**. Select the reviewed acceptance-only integration branch
+`codex/native-draft-acceptance` under **Use workflow from**, choose
+**profile: native-distribution**, and run once for the final combined candidate.
+Confirm the run's head SHA equals the exact integration SHA in the handoff/#885
+body. #885's uncombined branch lacks #886's required API and is not this candidate. Do not choose
 `public-preview`, which publishes release assets. The native profile builds and
 retains installer artifacts but does not create a release, tag or deployment.
 

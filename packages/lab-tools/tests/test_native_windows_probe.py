@@ -186,8 +186,9 @@ def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path):
     owner = None
     try:
         record = runtime.start()
-        draft_key = probe.prepare_decision(record.base_url)
-        assert draft_key.startswith("scopecat:decision:")
+        target = probe.prepare_decision(record.base_url)
+        assert set(target) == {"procedure_run_id", "step_key", "attempt"}
+        assert target["attempt"] == 1
         probe.run_bounded(
             [sys.executable, "-I", str(authors / "notebooks/02_edit_scan.py")],
             tmp_path / "initial.log",
