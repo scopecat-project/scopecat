@@ -1,3 +1,4 @@
+import { navigate } from "../../lib/navigation";
 import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 import { targetRefKey } from "./target-api";
 import type { SubmissionRequest } from "./launch-submission";
@@ -829,3 +830,60 @@ it("keeps an unknown linked source unavailable instead of selecting default code
   expect(catalogOwners).toEqual([]);
   expect(submissions).toEqual([]);
 });
+
+it("follows an explicit historical procedure without replacing a newer draft", async () => {
+  const fetcher = globalThis.fetch;
+  vi.stubGlobal("fetch", (request: Request) => {
+    const path = new URL(request.url).pathname;
+    if (path.endsWith("/operator"))
+      return Promise.resolve(
+        Response.json({
+          procedure: {
+            procedure_run_id: path.split("/").at(-2),
+            definition: { id: "prepared", version: "1" },
+            state: "ready",
+            revision: 1,
+          },
+          steps: { items: [], next_cursor: null },
+          dispatch: { management: "active", worker_running: false },
+          current_step: null,
+          current_child: null,
+          child_runs: [],
+        }),
+      );
+    return fetcher(request);
+  });
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  deferSubmission = true;
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(submissionResponse).toBeDefined());
+  await act(async () =>
+    submissionResponse?.(Response.json({ procedure_id: "B", dispatch_error: null })),
+  );
+  await waitFor(() =>
+    expect(selectedProcedureLink()).toHaveAttribute("href", "?procedure=B#launch"),
+  );
+  fireEvent.change(screen.getByLabelText("Note"), { target: { value: "unsaved next input" } });
+  act(() => navigate("?procedure=A#launch"));
+  await waitFor(() =>
+    expect(selectedProcedureLink()).toHaveAttribute("href", "?procedure=A#launch"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "results" }));
+  await returnToLaunch();
+  expect(selectedProcedureLink()).toHaveAttribute("href", "?procedure=A#launch");
+  act(() => {
+    window.history.replaceState(null, "", "?procedure=B#launch");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await waitFor(() =>
+    expect(selectedProcedureLink()).toHaveAttribute("href", "?procedure=B#launch"),
+  );
+  expect(screen.getByLabelText("Note")).toHaveValue("unsaved next input");
+  expect(submissions).toHaveLength(1);
+});
+
+function selectedProcedureLink() {
+  return screen.getByRole("link", { name: "Reopen this procedure" });
+}

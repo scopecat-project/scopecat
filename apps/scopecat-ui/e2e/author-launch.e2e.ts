@@ -116,3 +116,152 @@ test("discovers an ordinary author experiment and edits controls before submitti
       });
   }
 });
+
+test("prepares B while A stays pinned in a separate result page", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const project = await mkdtemp(join(tmpdir(), "scopecat-author-ab-"));
+  const release = join(project, "release-a");
+  const submissions: string[] = [];
+  context.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/experiment-launcher/submit"))
+      submissions.push(request.postData() ?? "");
+  });
+  let completed = false;
+  try {
+    for (const name of ["src", "config", "scopecat.toml"])
+      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+        recursive: true,
+      });
+    const sourcePath = join(project, "src/reference_lab_authors/authored/signal.py");
+    const source = (await readFile(sourcePath, "utf8")).replace(
+      "    detuning =",
+      `    import time\n    from pathlib import Path\n    if gain == 2 and frequency.to("GHz").value > 4.7:\n        deadline = time.monotonic() + 90\n        while not Path(${JSON.stringify(release)}).exists():\n            if time.monotonic() > deadline:\n                raise RuntimeError("A was not released")\n            time.sleep(0.05)\n    detuning =`,
+    );
+    await writeFile(sourcePath, source);
+    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    prepareReferenceContexts(uv, project);
+    const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8"));
+    await page.goto(`${endpoint.base_url}/#launch`);
+    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await chooseReferenceContext(page);
+    await page.getByLabel("Gain", { exact: true }).fill("2");
+    await page.getByLabel("Frequency source").selectOption("range");
+    await page.getByLabel("Frequency start").fill("4.7");
+    await page.getByLabel("Frequency stop").fill("4.9");
+    await page.getByLabel("Frequency points").fill("3");
+    const preview = async () => {
+      const response = page.waitForResponse(
+        (r) => r.url().endsWith("/experiment-launcher/preview") && r.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
+      const result = await response;
+      expect(result.status()).toBe(200);
+      return result.json();
+    };
+    const submit = async () => {
+      const response = page.waitForResponse(
+        (r) => r.url().endsWith("/experiment-launcher/submit") && r.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+      const result = await response;
+      expect(result.status()).toBe(200);
+      return result.json();
+    };
+    const previewA = await preview();
+    const receiptA = await submit();
+    const procedureA = new URL(page.url()).searchParams.get("procedure");
+    const opened = context.waitForEvent("page");
+    await page.getByRole("link", { name: "Open result in new tab or window" }).first().click();
+    const resultA = await opened;
+    await expect(resultA.getByTestId("run-status")).toHaveText("Running");
+    const runA = new URL(resultA.url()).searchParams.get("run");
+    const readA = async () => {
+      const response = await context.request.get(`${endpoint.base_url}/api/v1/runs/${runA}`);
+      expect(response.ok()).toBe(true);
+      return response.json();
+    };
+    const acceptedA = await readA();
+    await page.setViewportSize({ width: 520, height: 800 });
+    await page.getByLabel("Gain", { exact: true }).fill("3");
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    await writeFile(sourcePath, source.replace("return gain /", "return 2 * gain /"));
+    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Help", exact: true }).click();
+    await page.goBack();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
+    await page.goForward();
+    await expect(page.getByRole("button", { name: "Experiments", exact: true })).toBeVisible();
+    await page.goBack();
+    const previewB = await preview();
+    expect(previewB.code_revision).not.toEqual(previewA.code_revision);
+    await expect(resultA.getByTestId("run-status")).toHaveText("Running");
+    const receiptB = await submit();
+    expect(receiptB).not.toEqual(receiptA);
+    const procedureB = new URL(page.url()).searchParams.get("procedure");
+    expect(procedureB).not.toBe(procedureA);
+    await writeFile(release, "");
+    await expect(resultA.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(resultA.getByTestId("data-card").getByText(/^3 records/)).toBeVisible();
+    expect(new URL(resultA.url()).searchParams.get("run")).toBe(runA);
+    const finishedA = await readA();
+    expect(finishedA.control.admission).toEqual(acceptedA.control.admission);
+    expect(finishedA.snapshot.config_source).toEqual(acceptedA.snapshot.config_source);
+    expect(finishedA.snapshot.scientific_binding).toEqual(acceptedA.snapshot.scientific_binding);
+    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    await testInfo.attach("A-B identities", {
+      body: JSON.stringify(
+        { previewA, previewB, receiptA, receiptB, runA, procedureA, procedureB },
+        null,
+        2,
+      ),
+      contentType: "application/json",
+    });
+    // A historical selection must survive an ordinary page round trip even after B was admitted.
+    await page.getByText("Retained procedures", { exact: true }).click();
+    const historicalA = page
+      .locator("details")
+      .filter({ has: page.getByText("Retained procedures", { exact: true }) })
+      .getByRole("button")
+      .last();
+    await historicalA.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
+    ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
+    await page.getByRole("button", { name: "Help", exact: true }).click();
+    await page.goBack();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
+    await expect(
+      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
+    ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
+    await page.goBack();
+    await expect(
+      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
+    ).toHaveAttribute("href", `?procedure=${procedureB}#launch`);
+    await page.goForward();
+    await expect(
+      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
+    ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
+    expect(submissions).toHaveLength(2);
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
+    await expect(resultA.getByTestId("run-detail-header")).toContainText(runA!);
+    completed = true;
+  } finally {
+    await writeFile(release, "");
+    uv(["scopecat", "stop", project]);
+    if (completed) await rm(project, { recursive: true, force: true });
+    else
+      await testInfo.attach("Preserved author project", {
+        body: project,
+        contentType: "text/plain",
+      });
+  }
+});
