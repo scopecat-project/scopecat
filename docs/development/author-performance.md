@@ -256,6 +256,46 @@ entry was too late for the sample to occur before the parent's health deadline.
 uv run --locked python -m benchmarks run author-residency --revisions 3
 ```
 
+For a longer, explicitly bounded serial session:
+
+```console
+uv run --locked python -m benchmarks run author-residency --revisions 3 \
+  --rounds 3 --operations-per-revision 10
+```
+
+`--revisions R` includes the original and `R - 1` newly edited revisions per
+round; `--rounds N` repeats that churn with new source hashes and restores the
+original after each round. `--operations-per-revision K` performs K consecutive
+prepare/analysis pairs per visit, including the restored original. The initial
+revision retains the historical first/repeat pair, so it gets `max(2, K)` calls
+of each kind. Defaults remain R=3, N=1, K=1: five prepares, five analyses, two
+refreshes and one virtual run. In general each API gets
+`max(2, K) + N * R * K` calls, with `N * (R - 1)` refreshes and one retained run.
+R must be at least three; N and K must be positive integers. Invalid workloads
+are rejected before copying a project or starting processes.
+
+Case version 3 adds the requested workload, ordered unique revision hashes and
+operation round/revision index/iteration/phase. `visit_phase` distinguishes
+initial, churn and restoration visits even for their subsequent reuse calls. Each operation carries its exact
+source revision; analysis operations also carry the published `analysis_id`.
+The top-level `run_id` identifies their common retained input. Publication may
+reuse a receipt, so receipt counts need not equal operation counts. Samples link
+to the zero-based operation index and retain per-process identity and RSS after
+each completed call. Initial, reuse, churn and restore phases distinguish warm
+calls from revision transitions. Refresh already validates and adopts a prepare
+worker: the first prepare after refresh is not a fresh process construction
+measurement. Refresh, first analysis and original restoration report the ordinary
+API boundary including any eviction/creation cost; they do not isolate those
+internal costs from validation, loading or provider work.
+
+Compare RSS sequences for the same PID **and creation time**, separately from
+new workers after churn/restoration. Repeated calls assert stable pool identities;
+every round asserts replacement of the evicted original in both pools. Stop
+observes all sampled process identities even if an operation fails. Run measured
+sessions serially without heavy tests competing on the same machine. This is a
+synthetic virtual workload, not concurrent laboratory traffic or a memory-leak
+qualification. No RSS or latency pass/fail threshold is introduced.
+
 Run from the public source checkout on the target machine; this benchmark is not
 an installed-wheel command. It uses a copied virtual reference project and makes
 no physical device calls. One real retained signal run supplies analysis input.

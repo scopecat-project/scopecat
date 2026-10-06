@@ -204,11 +204,17 @@ Measure retained author workers across source revisions:
 
 ```console
 uv run --locked python -m benchmarks run author-residency --revisions 3
+uv run --locked python -m benchmarks run author-residency --revisions 3 \
+  --rounds 3 --operations-per-revision 10
 ```
 
 This copies the virtual reference project, prepares and publishes analyses using
 normal APIs, rotates through at least three revisions and revisits the original.
-It records operation latencies and checkpoint PID/creation-time/revision/role/RSS,
+The optional bounded rounds repeat fresh revision churn and original restoration;
+operations-per-revision adds consecutive prepare/analysis calls at each visit.
+The defaults keep the short workload. Case version 3 correlates every operation
+with its revision, round, iteration, phase and analysis receipt, and links
+checkpoints by operation index. It records checkpoint PID/creation-time/role/RSS,
 asserts same-revision reuse and the two-worker limit per pool, and checks observed
 process identities after normal shutdown. Per-process RSS includes shared pages;
 its sum is not unique physical memory. Checkpoints do not capture transient
