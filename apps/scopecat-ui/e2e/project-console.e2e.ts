@@ -396,7 +396,7 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
     .selectOption("browser-adjusted");
   await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "response[1].scale", exact: true })).toHaveValue(
-    "2",
+    "2.0",
   );
 });
 
