@@ -92,7 +92,16 @@ selection controls. It must match the displayed sample revision and the recovere
 working table baseline. Inline sample association alone cannot map objects, and
 same-named entities on different samples are not interchangeable. Historical run
 contexts remain read-only; object selection neither adopts inputs nor changes the
-launch subject. Saving and adoption retain their existing explicit boundaries.
+launch subject. The map editor's explicit “Use working inputs, target and setup”
+action captures the table and selects the displayed resolved target and setup for
+the next experiment, including when Experiments has not yet been opened. Selecting
+a map object only filters parameter rows; it does not narrow that target. The
+Configuration table's parameter-only adoption and Experiments' subsequent “Use
+current working inputs” retain the experiment's chosen subject and setup. Every
+adoption requires a new preview; submitted inputs remain frozen. Opening a current
+or retained child run from Experiments uses window-local navigation, keeping the
+working editor mounted for the next editing round. Modified link clicks retain
+the browser's separate-window behavior.
 
 The first slice groups existing direct-reference rows under their parameter IDs
 and authored descriptions. Composite-key rows remain distinct. Shared rows list

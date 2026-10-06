@@ -414,6 +414,24 @@ it("keeps one raw draft owner across object views and advanced edits without ado
   expect(startParameterDraft).toHaveBeenCalledTimes(1);
   expect(adopted).not.toHaveBeenCalled();
   expect(freezeParameterDraft).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Use working inputs, target and setup for next experiment",
+    }),
+  );
+  await waitFor(() =>
+    expect(adopted).toHaveBeenCalledWith(
+      expect.objectContaining({ setup: context.resolution.setup }),
+      expect.objectContaining({ draft_id: draftView.draft.draft_id }),
+      {
+        kind: "registered_target",
+        ref:
+          context.resolution.context.subject.kind === "registered_target"
+            ? context.resolution.context.subject.ref
+            : undefined,
+      },
+    ),
+  );
   generation = 4;
   await expect(workspace.current!.openObject(context)).rejects.toThrow("branch changed");
   expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("1e");
