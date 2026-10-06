@@ -86,6 +86,7 @@ jobs:
           uv run --locked --group delivery pytest -v -n 0 \
             packages/lab-tools/tests/test_acceptance_workspaces.py \
             packages/lab-tools/tests/test_native_windows_probe.py \
+            packages/lab-tools/tests/test_cocoa_dependency.py \
             packages/lab-tools/tests/test_author_environment.py \
             packages/lab-tools/tests/test_desktop_platform.py \
             packages/lab-tools/tests/test_desktop_session.py \
@@ -109,6 +110,7 @@ jobs:
           uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
           uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer" --native-windows
           if [ "$RUNNER_OS" = "macOS" ]; then
+            uv run --locked python scripts/verify_cocoa_storage.py "$native_app" "$RUNNER_TEMP/native-acceptance"
             uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
           fi
       - name: Retain qualified preview installers
@@ -132,6 +134,7 @@ jobs:
             ${{ runner.temp }}/native-acceptance/result.json
             ${{ runner.temp }}/native-acceptance/data-journey.json
             ${{ runner.temp }}/native-acceptance/native-windows/
+            ${{ runner.temp }}/native-acceptance/cocoa-storage/
             ${{ runner.temp }}/native-acceptance/configuration-sharing/
             ${{ runner.temp }}/native-acceptance/data/native-start.log
             ${{ runner.temp }}/direct-runtime/report.json

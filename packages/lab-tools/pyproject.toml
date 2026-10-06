@@ -11,7 +11,7 @@ scopecat = "lab_tools.public_cli:main"
 scopecat-lab = "lab_tools.cli:main"
 
 [project.optional-dependencies]
-desktop = ["pywebview>=6", "pystray>=0.19.5", "pillow>=11"]
+desktop = ["pywebview==6.2.1", "pystray>=0.19.5", "pillow>=11"]
 kernel = ["ipykernel>=6.30", "nbclient>=0.10", "nbformat>=5.10"]
 notebook = ["scopecat-lab-tools[kernel]", "jupyterlab>=4.4"]
 

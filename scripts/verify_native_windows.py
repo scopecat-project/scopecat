@@ -2,8 +2,8 @@
 
 Run only from verify_native_application against its disposable application/home.
 The probe copies the native host and replaces only its bootstrap. The production
-WebView backend and default store are unchanged: this may clear native browser
-data, so execution requires a disposable GitHub-hosted Mac/Windows runner.
+WebView backend/store is used unchanged, including any production dependency
+repair. Execution requires a disposable GitHub-hosted Mac/Windows runner.
 It is not production startup, focus, menu, tray or human-interaction qualification.
 """
 

@@ -37,7 +37,7 @@ checks and does not open these WebViews. Probe contract/failure tests belong to
 integration, not the fast PR suite.
 
 The probe copies the candidate package and replaces only its bootstrap. It uses
-the real packaged UI, unmodified pywebview backend and production default store,
+the real packaged UI and the candidate's production pywebview backend/store,
 `DesktopWindows`, shared `DesktopSession`/`ApplicationRuntime`, JS bridge and
 service. A real SDK scan pauses after its first ingestion. The main page's opening
 button creates an exact-run window; changing the main selection must leave that
@@ -59,11 +59,12 @@ evidence, not a claim about OS title rendering.
 
 **Run the WebView probe only on the disposable GitHub-hosted macOS/Windows VMs
 created by the manual job. Never run it on a user's Mac, a retained desktop or a
-self-hosted runner.** Current pywebview Cocoa uses and clears its default website
-store when each private window is created. Neither the application's isolated
+self-hosted runner.** Upstream pywebview 6.2.1 Cocoa uses and clears its default
+website store when each private window is created. The candidate's bounded
+production dependency patch has not yet been native-qualified. Neither the application's isolated
 `--home` nor pywebview `storage_path` isolates that native store. This may affect
 unrelated retained WebKit data under the same host identity. No local override is
-supported, and no store/backend monkeypatch is used to avoid discovering a bug.
+supported, and the probe never replaces the candidate backend or store.
 
 Before any opted-in native execution, the verifier requires `GITHUB_ACTIONS=true`,
 `RUNNER_ENVIRONMENT=github-hosted`, a matching macOS/Windows `RUNNER_OS`, and a
@@ -76,14 +77,32 @@ Application data, author files, gates and reports use disposable acceptance
 files. The candidate is unchanged; the copied executable and Mac Info.plist keep
 native host identity and teardown. The probe removes inherited endpoint/Python
 overrides. Its backend/default-store behavior matches production: if window
-creation clears the draft, the check must fail and retain that evidence. A future
-product fix requires the platform evidence and separate semantic review.
+creation clears the draft, the check must fail and retain that evidence. The approved
+production dependency repair still requires new platform evidence.
 
 Waits and the host have deadlines. Timeout cleanup uses the existing owned
 process-tree helper. A PID plus creation-time receipt permits acquisition-client
 cleanup after host crashes; detached service cleanup uses the isolated runtime's
 ownership checks. Host-exit or cleanup failure makes acceptance fail even if UI
 assertions passed. Logs and JSON survive disposable cleanup.
+
+## Cocoa production dependency acceptance
+
+The approved [host-lifetime nonpersistent store repair](architecture/draft-recovery.md#approved-native-store-repair)
+is delivered as a locked Darwin wheel, not a probe monkeypatch. The manual Mac
+job also runs `verify_cocoa_storage.py` against that packaged dependency. It uses
+three instances of the original native launcher and bundle identity, a single
+loopback test server/origin, and real WebKit/NSHTTP cookie sentinels. A/B overlap
+to prove sharing within A and isolation between hosts; C starts after A exits to
+prove same-origin ephemerality. Cookie interface and actual HTTP request checks
+must agree with the constructed WebView's nonpersistent store. The existing
+independent localStorage marker assertions remain unchanged.
+
+Inspect `cocoa-storage/result.json`, `A.json`, `B.json`, `C.json` and their logs.
+A missing stage, host failure or cleanup error is not a pass. The reports include
+probe/bundle hashes and each host checks the exact installed dependency version
+and Cocoa source hash. This check does not include PR #886's separate draft
+persistence work or qualify a combined candidate before it is actually built.
 
 ## Running the final candidate
 

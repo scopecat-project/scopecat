@@ -1,0 +1,61 @@
+--- cocoa.py
++++ cocoa.py
+@@ -61,6 +61,7 @@
+ 
+     cascade_loc = Foundation.NSMakePoint(100.0, 0.0)
+     _shared_app_delegate = None
++    _private_datastore = None
+ 
+     class AppDelegate(AppKit.NSObject):
+         def applicationShouldTerminate_(self, app):
+@@ -606,6 +607,12 @@
+         self.window.setFrame_display_(frame, True)
+ 
+         config = WebKit.WKWebViewConfiguration.alloc().init()
++        if _state['private_mode']:
++            # One in-memory store for this actual host, retained across windows.
++            # Never import or clear the default store to emulate private mode.
++            if BrowserView._private_datastore is None:
++                BrowserView._private_datastore = WebKit.WKWebsiteDataStore.nonPersistentDataStore()
++            config.setWebsiteDataStore_(BrowserView._private_datastore)
+         self.webview = BrowserView.WebKitHost.alloc().initWithFrame_configuration_(rect, config)
+         self.webview.pywebview_window = window
+ 
+@@ -623,27 +630,11 @@
+             self._browserDelegate, 'browserDelegate'
+         )
+ 
+-        self.datastore = WebKit.WKWebsiteDataStore.defaultDataStore()
++        self.datastore = self.webview.configuration().websiteDataStore()
+ 
+         if _state['icon'] and os.path.isfile(_state['icon']):
+             ns_image = AppKit.NSImage.alloc().initByReferencingFile_(_state['icon'])
+             BrowserView.app.setApplicationIconImage_(ns_image)
+-
+-        if _state['private_mode']:
+-            # nonPersisentDataStore preserves cookies for some unknown reason. For this reason we use default datastore
+-            # and clear all the cookies beforehand
+-
+-            def dummy_completion_handler():
+-                pass
+-
+-            data_types = WebKit.WKWebsiteDataStore.allWebsiteDataTypes()
+-            from_start = WebKit.NSDate.dateWithTimeIntervalSince1970_(0)
+-            config.setWebsiteDataStore_(self.datastore)
+-            self.datastore.removeDataOfTypes_modifiedSince_completionHandler_(
+-                data_types, from_start, dummy_completion_handler
+-            )
+-        else:
+-            config.setWebsiteDataStore_(self.datastore)
+ 
+         try:
+             config.preferences().setValue_forKey_(False, 'backspaceKeyNavigationEnabled')
+@@ -851,7 +842,7 @@
+                     'expires': c.expiresDate(),
+                     'secure': c.isSecure(),
+                     'httponly': c.isHTTPOnly(),
+-                    'samesite': c.SameSitePolicy(),
++                    'samesite': c.sameSitePolicy(),
+                 }
+ 
+                 cookie = create_cookie(data)
