@@ -84,8 +84,6 @@ nav = [
     { "Data compatibility policy" = "development/data-compatibility.md" },
     { "Installation layout" = "development/installation-layout.md" },
     { "Core workflow evaluations" = "development/workflow-evaluations.md" },
-    { "Supervised laboratory pilot roadmap" = "development/lab-pilot-roadmap.md" },
-    { "Pilot work slices and acceptance fixtures" = "development/pilot-work-slices.md" },
     { "Architecture" = [
       "development/architecture/index.md",
       { "Recoverable editing and native storage" = "development/architecture/draft-recovery.md" },

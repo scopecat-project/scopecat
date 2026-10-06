@@ -60,24 +60,10 @@ Compare phase totals separately from wall time: parallel worker times add up,
 and shared-fixture setup is charged to the first test that owns it. Do not
 interpret a timing sample as a benchmark or a successful run as hardware evidence.
 
-## CI contract during the architecture transition
+## Coverage and CI
 
-### September 24 calibration qualification split
-
-[Run 35891413427](https://github.com/scopecat-project/scopecat/actions/runs/35891413427)
-at `01f5629b9` took 6m46s from the first job to gate completion. Core's
-3747 tests took 374.47s, including 25.25s for worker startup/collection.
-Summed test phases were 688.06s; worker assignments were 342.86s and 345.21s.
-This is test-phase occupancy, not CPU utilization. Dependency setup and shard
-imbalance were not the dominant costs in this sample.
-
-The four six-target scenarios accounted for 231.18s of summed phases, and the
-installed-adapter journey another 45.17s. Both were implicitly fast. They now
-belong to journey and remain in both Linux and Windows full acceptance. Journey
-shard weights include these measured costs. Core retains a two-target version of
-the same real daemon/worker chain, including restart, exact candidate retention,
-combined remeasurement, verified publication, unchanged setup and empty legacy
-registry. First-use, settings, lifecycle and author-workspace tests remain in core.
+The [historical timing sample](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/test-feedback.md#september-24-calibration-qualification-split)
+records the original tier split; current optimization work belongs to #520.
 
 | Invariant | Ordinary PR coverage | Full qualification |
 | --- | --- | --- |
@@ -87,24 +73,16 @@ registry. First-use, settings, lifecycle and author-workspace tests remain in co
 | Concurrent edits cannot be overwritten | Server parameter-branch tests and API procedure conflict tests | Array branch-conflict scenario |
 | Installed adapter identity, refresh and isolated restoration | Core keeps first-use, settings, author workspace and registration checks; these do not replace wheel isolation | `test_installed_adapter_journey.py` retains the complete installed-package chain |
 
-Moving a qualification test does not establish equivalent wheel/process coverage
-in unit tests. Dispatch full acceptance before qualification/release, and run the
-affected journey directly when modifying these boundaries. No test is deleted,
-no timing timeout is shortened, and plain pytest still includes all scenarios.
-
-The five-minute target requires a new final-head CI measurement after this split;
-subtracting cumulative phase seconds from wall time would overstate the saving.
-
 ### Required gate
 
 [CI](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/ci.yml)
-is the required PR gate during the redesign tracked in
-[#610](https://github.com/scopecat-project/scopecat/issues/610), building on the
-feedback work in [#520](https://github.com/scopecat-project/scopecat/issues/520).
+is the required PR gate. Performance improvements are tracked in
+[#520](https://github.com/scopecat-project/scopecat/issues/520).
 Every PR, merge-group, main push and explicit CI dispatch runs:
 
 - Linux Python `core` (all fast and integration files), with two pytest workers,
   diagnostics and the pandas adapter check;
+- Bounded macOS/Windows [platform smoke](platform-smoke.md);
 - Python typing, import boundaries, lint, formatting and generated instruments;
 - UI API generation, formatting, lint, unit tests, typing and production build;
 - strict documentation/link checks.
@@ -139,50 +117,32 @@ establish the full architecture milestone, a supported data baseline or release
 readiness. Platform artifacts contain the offline bundle, executed notebooks,
 acceptance report and retained lifecycle logs, including on failure.
 
-Run the `full` profile at architecture milestones and before publishing a release. Select the intended branch/ref
-in Actions and record the resulting exact revision and run URL in the parent issue.
-The manual workflow executes that checkout, without changing a private repository's
-Actions settings. A later code change needs corresponding validation; an older
-successful run does not qualify the new revision.
+## Choosing checks
 
-| Change or milestone | Required evidence beyond the common gate |
+Run affected tests directly or select the relevant tier during development.
+Choose additional coverage by the behavior that changed:
+
+| Changed behavior | Relevant evidence |
 | --- | --- |
-| Storage/identity | Focused current-format, rejection-without-mutation and frozen-request checks; actual current-format backup/restore journey before the milestone closes. No prebaseline migration gate; see [data policy](data-compatibility.md). |
-| Worker/code loading/resource ownership | Relevant process, restart, cancellation and resource-exclusion journeys on the PR's revision |
-| Wire/UI consumer | Regenerate from the producer; focused component/payload checks and the affected browser journey |
-| Installation/tutorial changes | Affected installed/offline checks on the changed platform; Windows/Linux installed profile before a bounded experimental trial; full acceptance before release |
-| Architecture milestone or release | Full acceptance on the integrated revision; link results and unresolved limitations |
+| Persistent identity or recovery | Exact retained requests, non-mutating rejection and affected current-format backup/restore paths; see [data policy](data-compatibility.md) |
+| Source loading, workers or resource ownership | Process, restart, cancellation or resource-exclusion journeys exercising that boundary |
+| Wire or UI consumers | Regenerated contracts, focused payload/component checks and affected browser interaction |
+| Installation or tutorial execution | Affected installed/platform/Notebook journey |
+| Documentation | Relative links and strict documentation build |
 
-Scientific data identity, immutable requests, admission idempotency, batch
-applicability, resource exclusion and failure cleanup remain contracts throughout
-this transition. UI text, navigation and old deployment assumptions may be replaced
-with the new design, but name the replacement evidence in the issue/PR. Do not
-delete old integration scenarios merely because they are outside the common gate.
-The parent issue tracks when to reconsider this temporary gate after integration.
+A public dependency update needs the affected private consumer checks; broader
+qualification is useful when it covers a changed integration boundary. Shared
+ports, devices or data directories require coordination, while isolated checks
+can run independently. Full acceptance qualifies an integrated release candidate;
+use the manual profile on the intended revision and record its actual coverage.
+A green fast gate does not stand in for unexecuted acceptance.
 
-## Choosing work during development
-
-Start with affected tests and the appropriate tier, finish implementation and
-self-review, then submit the candidate to the fast PR gate. Record the focused
-checks and any deferred milestone qualification in the PR. Do not run a full
-matrix after every intermediate edit. Re-run relevant broader checks after a
-material change to storage, source isolation, process ownership or execution,
-not merely because a documentation line changed.
-
-Private consumers use the same runner with their own classifications. A public
-pin update normally needs affected consumer tests and a no-acquisition reopen
-check. Cross-cutting runtime/storage changes warrant full private qualification.
-
-The next optimization is to split the expensive author journeys: keep real
-process, persistence and restart coverage in a few representative scenarios;
-move input combinations and policy branches into focused tests. Change-to-risk
-selection is deferred until that mapping is reviewed. Do not shorten normal
-startup budgets, relax assertions, or use retries to hide flaky failures.
-
-Slow journey phases are also product performance signals. Investigate repeated
-prepare, source loading, analysis and reads before replacing them with seeded
-fixtures. The [author performance baseline](author-performance.md) measures the
-actual notebook prepare boundary, which direct scan execution does not cover.
+Measure expensive journeys before decomposing them. Keep representative real
+process/source/resource/persistence/restart chains; move redundant input/policy
+combinations to focused tests. Preserve the observable assertion or explain why
+it is obsolete. Timing observations are measurements, not permission to relax
+correctness checks or conceal failures with retries. See the
+[author performance baseline](author-performance.md) for prepare-boundary costs.
 
 ## Candidate policy assertion placement
 

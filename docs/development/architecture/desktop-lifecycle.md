@@ -1,8 +1,8 @@
 # Desktop application lifecycle
 
-This is the target, not an acceptance report. The current host supports multiple
-views with partial packaged Mac qualification; see the
-[desktop product decision gate](desktop-product.md) for evidence and remaining gaps.
+This describes lifecycle behavior. See the
+[desktop product contract](desktop-product.md) for the host decision and
+[native window acceptance](../native-window-acceptance.md) for tested revisions and limits.
 The installed application owns windows, menus and whole-application exit.
 Windows own independent view state, not device or task lifetimes. Execution has
 one resource authority across windows; that does not require one permanent HTTP
@@ -57,9 +57,6 @@ background/reopen, startup failure, failed shutdown and recovery after process
 termination. Native UI checks on macOS and Windows are separate evidence from
 headless process tests. Hardware acceptance follows software lifecycle acceptance.
 
-The bounded [exact-run native window probe](../native-window-acceptance.md) is
-implemented in the manual distribution profile. Candidate `de571550` passed on
-Windows; Mac failed when secondary-window creation cleared saved website data.
-See the linked report for exact identities and unexecuted checks. The approved
-[editing recovery and store isolation target](draft-recovery.md) does not alter
-window-close or Quit behavior and remains separate from that acceptance evidence.
+The [native window probe](../native-window-acceptance.md) runs in the manual
+distribution profile. [Editing recovery and store isolation](draft-recovery.md)
+share this lifecycle without changing close or Quit behavior.

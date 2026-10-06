@@ -29,21 +29,17 @@ require restoring the last viewed run, changing the default Runs entry, linking
 windows, or introducing a multiple-workspace manager. The existing window-close,
 background and work-aware Quit semantics remain unchanged.
 
-## Two independent repair contracts
+## Application drafts and native storage
 
-1. **Application-owned recovery:** add bounded typed read/save/discard operations
-   for Decision drafts under the existing application data authority. Retain
-   logical target, baseline and a revision for conditional writes; expose conflicts
-   without last-writer-wins loss. Persist current-format valuable drafts as data,
-   not cache or author-environment files. Include them in current-format recovery
-   coverage without introducing prebaseline migrations. Decide the concrete schema
-   and completed/discarded draft retention in that implementation review.
-2. **Native store isolation:** stop window creation from clearing the shared
-   default website store. Every window in one home must use its intended store;
-   another home or host identity must not share it accidentally. Never clear a
-   global/default store to simulate privacy. This repair must pass the independent
-   marker assertion as well as draft recovery; a new backend draft copy must not
-   hide native data destruction.
+Application drafts use typed read/save/discard operations with conditional writes
+under the existing data authority. Their type-specific retention and completion
+policies are documented in [Decision drafts](decision-drafts.md) and
+[parameter drafts](parameter-drafts.md). Current-format recovery includes this
+data without introducing prebaseline migrations.
+
+Native storage separately isolates actual hosts and preserves the intended store
+across windows. Application draft recovery cannot hide browser cookie or marker
+destruction; the native probe checks both independently.
 
 The service binds a loopback port dynamically. localStorage belongs to the
 scheme/host/port origin, not an application home or URL path. Persisting a browser
@@ -147,47 +143,18 @@ state expires with its host; uninstall still must not delete application drafts
 or scientific data. OS framework behavior and cookie isolation need the native
 checks below; an isolated application directory alone is insufficient proof.
 
-## Bounded acceptance and independent draft work
+## Native acceptance
 
-Decision draft persistence is implemented independently in draft
-[PR #886](https://github.com/scopecat-project/scopecat/pull/886). Its application
-behavior remains independently owned there. Native draft acceptance now requires
-that API and fails explicitly if absent; it does not fall back to localStorage.
-The acceptance-only `codex/native-draft-acceptance` branch combines reviewed #885
-and #886 heads without merging either PR to main. Each report must identify the
-actual combined commit, not borrow qualification from either component head.
+[Native window acceptance](../native-window-acceptance.md) owns the exact tested
+candidates, failed observations, pending checks and probe commands. Its independent
+assertions cover same-host windows, overlapping hosts at the same origin, default
+store isolation, full host/service restart and application-owned draft recovery.
+The probe checks the actual configured store and packaged dependency identity;
+source transformation and wheel-integrity tests cannot establish native behavior.
 
-Local checks verify source transformation, wheel integrity and probe contracts;
-they cannot qualify Cocoa. The manual native-distribution profile retains the
-real exact-run/window/independent-marker checks and adds a bounded Cocoa check:
-
-- A seeds and reads back default WK and NSHTTP cookie sentinels before private
-  windows exist. Two native windows share the actual nonpersistent store, write
-  and read each other's markers, and expose the browser cookie through the
-  existing cookie API.
-- B overlaps A at the same fixed test origin and original package identity. B
-  starts empty; its writes and clear operation do not change A. Default/NSHTTP
-  sentinels are neither imported into document cookies, cookie API or actual HTTP
-  requests, nor removed by private-window creation or clearing.
-- After A and B exit, stop the same application service and verify its old process
-  identity is gone, then restart it. C starts at the unchanged test origin and
-  must not recover A's marker/cookie. It then opens the exact procedure in the real
-  restarted application UI (whose service port may change), restores the reviewer,
-  and reads the identical application-owned draft through the API. The browser
-  marker and durable draft remain separate assertions.
-
-The Cocoa restart check runs inside the original disposable application acceptance
-workspace, before its data and relocated package are removed. Its result, fixture
-and A/B/C logs survive workspace cleanup. No retained store is migrated: the
-combined candidate creates fresh schema-111 fixtures through its own service.
-
-The probe checks the actual configured store and exact packaged dependency hash;
-it does not replace the backend. All native checks remain hosted-only and outside
-the fast PR matrix. Use one user-triggered manual run for the final reviewed
-candidate. The [native evidence record](../native-window-acceptance.md) preserves
-the earlier Mac failure and the later combined candidate's successful Mac/Windows
-window checks and Mac A/B/C isolation/restart checks. This does not qualify the
-later three-PR closeout combination as natively executed. Windows complete host
-restart/cookie isolation, OS focus, actual menus, tray and visual presentation remain
-unverified. Mac notarization is not provided; Gatekeeper rejection and unevaluated
-Finder first-open remain explicit distribution boundaries.
+Decision draft persistence is delivered in
+[#886](https://github.com/scopecat-project/scopecat/pull/886). Earlier combined-branch
+qualification records are retained in the acceptance page; they do not imply every
+later merge combination was natively executed. Native probes run in the manual
+distribution profile, separately from fast PR CI. Remaining human/platform and
+physical evidence belongs to [#616](https://github.com/scopecat-project/scopecat/issues/616).
