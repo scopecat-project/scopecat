@@ -10,18 +10,48 @@ import type {
   ProcedureStepInputSubmitReceipt,
 } from "../../api-contract";
 import { DecisionWorkspace } from "./DecisionWorkspace";
-import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
+import {
+  getProcedureSteps,
+  getWaitingProcedures,
+  submitProcedureInput,
+  readDecisionDraft,
+  saveDecisionDraft,
+  getDecisionDraftHistory,
+  type DecisionDraftView,
+} from "./decision-api";
 
 vi.mock("./decision-api", () => ({
   getProcedureSteps: vi.fn(),
   getWaitingProcedures: vi.fn(),
   submitProcedureInput: vi.fn(),
+  readDecisionDraft: vi.fn(),
+  saveDecisionDraft: vi.fn(),
+  getDecisionDraftHistory: vi.fn(),
 }));
 
 const hash = `sha256:${"1".repeat(64)}`;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  let saved: DecisionDraftView = { draft: null, head_revision: 0, validity: "current" };
+  vi.mocked(readDecisionDraft).mockImplementation(async () => saved);
+  vi.mocked(getDecisionDraftHistory).mockResolvedValue({ items: [] });
+  vi.mocked(saveDecisionDraft).mockImplementation(async (command) => {
+    const revision = saved.head_revision + 1;
+    saved = {
+      draft: {
+        revision,
+        target: command.target,
+        baseline: command.baseline,
+        input: command.input,
+        state: command.discard ? "discarded" : "saved",
+        created_at: "2026-10-06T00:00:00Z",
+      },
+      head_revision: revision,
+      validity: "current",
+    };
+    return saved;
+  });
   localStorage.clear();
   window.history.replaceState(null, "", "/#decisions");
   vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [waitingProcedure()] });
@@ -164,7 +194,7 @@ describe("DecisionWorkspace", () => {
     await screen.findByLabelText("outcome");
     expect(screen.queryByLabelText("Structured judgment (JSON)")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add Peak frequency (MHz)" }));
-    expect(screen.getByLabelText("Peak frequency (MHz) 1")).toHaveValue(null);
+    expect(screen.getByLabelText("Peak frequency (MHz) 1")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
     expect(submitProcedureInput).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Peak frequency (MHz) 1"), {
@@ -173,7 +203,7 @@ describe("DecisionWorkspace", () => {
     fireEvent.change(screen.getByLabelText("outcome"), { target: { value: '"selected"' } });
     cleanup();
     renderWorkspace();
-    expect(await screen.findByLabelText("Peak frequency (MHz) 1")).toHaveValue(6500.25);
+    expect(await screen.findByLabelText("Peak frequency (MHz) 1")).toHaveValue("6500.25");
     expect(screen.getByLabelText("Recorded reviewer")).toHaveValue("Alice");
     vi.mocked(getWaitingProcedures).mockResolvedValue({
       items: [{ ...waitingProcedure(), procedure_run_id: "procedure-2" }],

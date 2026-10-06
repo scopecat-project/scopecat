@@ -54,6 +54,21 @@ parameters journey. This source change establishes no new distribution.
 | Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
 | Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent-data baseline is designated |
 
+The [Decision draft implementation](architecture/decision-drafts.md) adds bounded
+application-owned editing history, conditional writes and recovery without scientific
+submission. The separate #885 Darwin packaged-wheel repair and this draft API were
+combined at `4aee5825dbe374f469bc0f1be1e9a981908086c1` for
+[native run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157).
+Mac and Windows exact-run window checks passed; Mac additionally passed host/store
+isolation and complete host/service restart with application-draft restoration.
+The previous Mac storage failure belongs to the earlier candidate and is retained
+in #885's evidence. Ordinary source environments remain unpatched; Windows uses
+upstream pywebview. This does not establish native execution of the subsequent
+#884/#886/#885 closeout combination, a new release or installed-user acceptance.
+Windows full host-restart/cookie isolation, OS focus/menu, tray and visual experience
+remain unverified. Mac notarization was not provided, Gatekeeper rejected the
+package, and Finder first-open was not evaluated.
+
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
 [automation tasks](architecture/automation-tasks.md) and

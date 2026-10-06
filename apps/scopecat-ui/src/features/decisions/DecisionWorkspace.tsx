@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Check, CircleOff, FlaskConical, LoaderCircle, UserRound } from "lucide-react";
 import type {
@@ -6,13 +6,30 @@ import type {
   ProcedureStepAttempt,
   ProcedureStepInputSubmitCommand,
 } from "../../api-contract";
+import { DecisionDraftHistory } from "./DecisionDraftHistory";
+import { useDecisionDraft } from "./use-decision-draft";
+import { readDecisionDraft, type DecisionDraftView } from "./decision-api";
 import { DecisionEvidence } from "./DecisionEvidence";
-import { DecisionFields, decisionFields, decisionValueError } from "./DecisionFields";
+import {
+  DecisionFields,
+  decisionFields,
+  decisionValueError,
+  decisionFormValue,
+} from "./DecisionFields";
 import { errorMessage, formatRelative } from "../../lib/presentation";
 import { classes, primaryButton } from "../../ui/styles";
 import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
 
 export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: boolean }) {
+  return (
+    <>
+      <DecisionDraftHistory />
+      <DecisionWorkspaceBody daemonUnavailable={daemonUnavailable} />
+    </>
+  );
+}
+
+function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boolean }) {
   const [selectedId, setSelectedId] = useState<string | undefined>(
     () => new URLSearchParams(window.location.search).get("procedure") ?? undefined,
   );
@@ -168,7 +185,7 @@ function DecisionCard({
   }
   return (
     <DecisionForm
-      key={`${step.step_key}:${step.revision}`}
+      key={`${step.step_key}:${step.attempt}`}
       procedure={procedure}
       step={step}
       onRecorded={onRecorded}
@@ -176,60 +193,107 @@ function DecisionCard({
   );
 }
 
-function DecisionForm({
-  procedure,
-  step,
-  onRecorded,
-}: {
+function DecisionForm(props: {
   procedure: ProcedureRun;
   step: ProcedureStepAttempt;
   onRecorded: () => void;
 }) {
+  const target = {
+    procedure_run_id: props.procedure.procedure_run_id,
+    step_key: props.step.step_key,
+    attempt: props.step.attempt,
+  };
+  const saved = useQuery({
+    queryKey: ["decision-draft", target],
+    queryFn: () => readDecisionDraft(target),
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  if (saved.isPending) return <WorkspaceMessage title="Loading saved draft" pending compact />;
+  if (saved.isError)
+    return (
+      <WorkspaceMessage
+        title="Draft recovery unavailable"
+        detail={errorMessage(saved.error)}
+        compact
+      />
+    );
+  return <DecisionEditor {...props} initial={saved.data} />;
+}
+
+function DecisionEditor({
+  procedure,
+  step,
+  onRecorded,
+  initial,
+}: {
+  procedure: ProcedureRun;
+  step: ProcedureStepAttempt;
+  onRecorded: () => void;
+  initial: DecisionDraftView;
+}) {
   const request = step.interpretation_request;
   if (!request) throw new Error("waiting interpretation request is missing");
-  const draftKey = `scopecat:decision:${procedure.procedure_run_id}:${step.step_key}:${step.attempt}:${step.intent_hash}`;
-  const [draft] = useState(() => {
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(draftKey) ?? "null");
-      return isRecord(saved) ? saved : {};
-    } catch {
-      return {};
-    }
-  });
-  const [actor, setActor] = useState(
-    typeof draft.actor === "string"
-      ? draft.actor
-      : typeof request.metadata?.reviewer === "string"
-        ? request.metadata.reviewer
-        : "",
-  );
-  const [actorKind, setActorKind] = useState<"ai" | "human" | "service">(
-    draft.actorKind === "ai" || draft.actorKind === "service" ? draft.actorKind : "human",
-  );
-  const [note, setNote] = useState(typeof draft.note === "string" ? draft.note : "");
-  const [valueText, setValueText] = useState(() =>
-    typeof draft.valueText === "string"
-      ? draft.valueText
-      : JSON.stringify(request.response_template ?? initialValue(request.structure), null, 2),
-  );
   const fields = decisionFields(request.structure);
-  const [useJson, setUseJson] = useState(() => {
-    try {
-      return !fields || draft.useJson === true || !isRecord(JSON.parse(valueText));
-    } catch {
-      return true;
-    }
-  });
+  const defaults = {
+    actor: typeof request.metadata?.reviewer === "string" ? request.metadata.reviewer : "",
+    actor_kind: "human" as const,
+    note: "",
+    value_text: JSON.stringify(
+      request.response_template ?? initialValue(request.structure),
+      null,
+      2,
+    ),
+    use_json: !fields,
+  };
+  const draft = useDecisionDraft(
+    {
+      procedure_run_id: procedure.procedure_run_id,
+      step_key: step.step_key,
+      attempt: step.attempt,
+    },
+    {
+      run_revision: procedure.revision,
+      step_revision: step.revision,
+      request_hash: step.intent_hash,
+    },
+    initial,
+    defaults,
+  );
+  const {
+    actor,
+    actor_kind: actorKind,
+    note,
+    value_text: valueText,
+    use_json: requestedJson,
+  } = draft.input;
+  let useJson = requestedJson;
+  try {
+    useJson ||= !isRecord(JSON.parse(valueText));
+  } catch {
+    useJson = true;
+  }
+  const setActor = (text: string) => draft.edit({ ...draft.input, actor: text });
+  const setActorKind = (actor_kind: "human" | "ai" | "service") =>
+    draft.edit({ ...draft.input, actor_kind });
+  const setNote = (text: string) => draft.edit({ ...draft.input, note: text });
+  const setValueText = (value_text: string) => draft.edit({ ...draft.input, value_text });
+  const setUseJson = (use_json: boolean) =>
+    draft.edit({
+      ...draft.input,
+      use_json,
+      value_text:
+        use_json && fields
+          ? JSON.stringify(decisionFormValue(fields, JSON.parse(valueText)), null, 2)
+          : valueText,
+    });
   const [parseError, setParseError] = useState<string>();
   const queryClient = useQueryClient();
   const submit = useMutation({
     mutationFn: submitProcedureInput,
     onSuccess: () => {
-      try {
-        localStorage.removeItem(draftKey);
-      } catch {
-        /* Storage may be disabled. */
-      }
       onRecorded();
     },
     onSettled: async () => {
@@ -242,19 +306,8 @@ function DecisionForm({
     },
   });
 
-  useEffect(() => {
-    if (submit.isSuccess) return;
-    try {
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({ actor, actorKind, note, valueText, useJson }),
-      );
-    } catch {
-      /* The server response remains authoritative when browser storage is unavailable. */
-    }
-  }, [actor, actorKind, note, valueText, useJson, draftKey, submit.isSuccess]);
-
-  const record = () => {
+  const record = async () => {
+    if (draft.invalid) return;
     if (!actor.trim()) {
       setParseError("Identify the person, agent, or service making this judgment.");
       return;
@@ -262,6 +315,7 @@ function DecisionForm({
     let value: unknown;
     try {
       value = JSON.parse(valueText);
+      if (!useJson && fields) value = decisionFormValue(fields, value);
     } catch (error) {
       setParseError(errorMessage(error));
       return;
@@ -286,11 +340,54 @@ function DecisionForm({
       value,
       note,
     };
-    submit.mutate(command);
+    if ((await draft.flush()) && draft.isCurrent(draft.input)) submit.mutate(command);
   };
 
   return (
     <article className="rounded-lg border border-line bg-panel p-4">
+      <div className="mb-3 grid gap-2 text-sm" aria-live="polite">
+        <p>
+          {draft.status === "saved"
+            ? draft.started
+              ? "Draft saved in application data"
+              : "No unsaved edits"
+            : draft.status === "saving"
+              ? "Saving draft…"
+              : draft.status === "unsaved"
+                ? "Draft not yet saved"
+                : draft.status === "conflict"
+                  ? "The current draft revision changed. Your conflicting copy is retained in draft history."
+                  : draft.discardFailed
+                    ? `Discard was not confirmed. Your text is still here; retry discard. ${draft.error ?? ""}`
+                    : `Draft save failed. Keep this window open and retry. ${draft.error ?? ""}`}
+        </p>
+        {draft.invalid && (
+          <p role="alert">
+            The request changed or is no longer waiting. Your input is retained, but cannot be
+            recorded against this baseline. Review the task; discard to start a fresh draft.
+          </p>
+        )}
+        {draft.status === "failed" && (
+          <button
+            type="button"
+            onClick={() => void (draft.discardFailed ? draft.discard() : draft.flush())}
+          >
+            {draft.discardFailed ? "Retry draft discard" : "Retry draft save"}
+          </button>
+        )}
+        {draft.status === "conflict" && (
+          <button type="button" onClick={() => void draft.resolve()}>
+            Use my copy as current draft
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={draft.discarding || draft.status === "saving" || submit.isPending}
+          onClick={() => void draft.discard()}
+        >
+          Discard draft (keep recovery history)
+        </button>
+      </div>
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
         <div>
           <div className="mb-1 text-[0.61rem] font-bold tracking-[0.08em] text-text-dim uppercase">
@@ -327,7 +424,10 @@ function DecisionForm({
             <DecisionEvidence key={JSON.stringify(input)} input={input} />
           ))}
       </div>
-      <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)] gap-4 max-[850px]:grid-cols-1">
+      <fieldset
+        disabled={draft.discarding || submit.isPending || submit.isSuccess}
+        className="grid grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)] gap-4 max-[850px]:grid-cols-1"
+      >
         <div className="grid content-start gap-3">
           {fields && (
             <button
@@ -446,15 +546,21 @@ function DecisionForm({
           )}
           <button
             className={primaryButton}
-            disabled={submit.isPending || submit.isSuccess}
-            onClick={record}
+            disabled={
+              submit.isPending ||
+              submit.isSuccess ||
+              draft.invalid ||
+              draft.status === "conflict" ||
+              draft.status === "saving"
+            }
+            onClick={() => void record()}
             type="button"
           >
             {submit.isPending && <LoaderCircle className="animate-spin" size={14} />}
             Record decision
           </button>
         </div>
-      </div>
+      </fieldset>
     </article>
   );
 }

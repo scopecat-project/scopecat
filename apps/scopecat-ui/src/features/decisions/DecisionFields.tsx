@@ -29,6 +29,36 @@ export function decisionFields(structure: unknown): Record<string, DecisionField
   return fields;
 }
 
+const scalar = (field: ScalarField, item: unknown) => {
+  if ((field.type === "float" || field.type === "int") && typeof item === "string") {
+    if (!/^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(item.trim()))
+      return item;
+    const number = Number(item);
+    return Number.isFinite(number) ? number : item;
+  }
+  return item;
+};
+
+// Raw text remains editing data until explicit form validation/submission.
+export function decisionFormValue(fields: Record<string, DecisionField>, value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([name, item]) => {
+      const field = fields[name];
+      return [
+        name,
+        !field
+          ? item
+          : field.type === "array"
+            ? Array.isArray(item)
+              ? item.map((entry) => scalar(field.items, entry))
+              : item
+            : scalar(field, item),
+      ];
+    }),
+  );
+}
+
 function validScalar(field: ScalarField, value: unknown): boolean {
   if (field.type === "literal") return field.values.includes(value);
   if (field.type === "string") return typeof value === "string";
@@ -101,10 +131,10 @@ function ScalarInput({
     <input
       id={id}
       className={style}
-      type="number"
-      step={field.type === "int" ? 1 : "any"}
-      value={typeof value === "number" ? value : ""}
-      onChange={(event) => onChange(event.target.value === "" ? null : event.target.valueAsNumber)}
+      type="text"
+      inputMode="decimal"
+      value={typeof value === "number" || typeof value === "string" ? value : ""}
+      onChange={(event) => onChange(event.target.value)}
     />
   );
 }

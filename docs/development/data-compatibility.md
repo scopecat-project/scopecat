@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **110** is a development format identifier, not the start of a compatibility
+schema **111** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,12 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 111 adds application-owned Decision draft revisions. Current-format backups
+retain active edits, conflicting copies and discarded history. Drafts are not
+scientific decisions and have no execution authority. No schema-110 reader or
+migration is added; existing development data must be preserved with its pinned
+reader, with a fresh data space for this build.
 
 Schema 110 retains inert configuration exchange originals and atomic derivation
 receipts alongside ordinary parameter branches and setups. Current-format

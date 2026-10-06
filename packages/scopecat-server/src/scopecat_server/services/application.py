@@ -42,6 +42,7 @@ from .config import ConfigService
 from .configuration_exchange import ConfigurationExchangeService
 from .data_cleanup import DataCleanupService
 from .data_exchange import DataExchangeService
+from .decision_drafts import DecisionDraftService
 from .devices import DeviceService
 from .driver_sources import DriverSourceService
 from .executor import ExecutorService
@@ -131,6 +132,7 @@ class DaemonApplication:
         self.payloads = payloads
         self.reviews = reviews
         self.automation = automation
+        self.decision_drafts = DecisionDraftService(project_store.sqlite)
         self.data_cleanup = DataCleanupService(project_store)
         self.practice = PracticeService(project_store, automation, self.data_cleanup)
         self.calibration_checks = CalibrationCheckQueries(
