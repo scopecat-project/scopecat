@@ -24,7 +24,7 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
     store.bootstrap()
     store.bootstrap()
 
-    assert store.schema_version() == 110
+    assert store.schema_version() == 111
     with sqlite3.connect(database) as connection:
         journal_mode = connection.execute("PRAGMA journal_mode").fetchone()
         tables = {
@@ -81,6 +81,7 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         "calibration_check_requests",
         "procedure_step_attempts",
         "procedure_leases",
+        "decision_drafts",
         "procedure_schedules",
         "config_registry_entries",
     } <= tables
@@ -135,7 +136,8 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
         107,
         108,
         109,
-        111,
+        110,
+        112,
     ),
 )
 def test_bootstrap_refuses_a_noncurrent_project_schema(
@@ -374,7 +376,7 @@ def test_bootstrap_refuses_v52_without_execution_segments(
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
     with pytest.raises(
         SchemaVersionError,
-        match="version: 52; expected 110",
+        match="version: 52; expected 111",
     ):
         store.bootstrap()
 
@@ -423,7 +425,7 @@ def test_current_schema_read_keeps_one_snapshot_during_checkpoint(
     def change_version() -> None:
         # Another connection commits and checkpoints between the two schema reads.
         with closing(sqlite3.connect(database.path)) as writer:
-            writer.execute("UPDATE project_schema SET version = 111")
+            writer.execute("UPDATE project_schema SET version = 112")
             writer.commit()
             writer.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
 
@@ -440,8 +442,8 @@ def test_current_schema_read_keeps_one_snapshot_during_checkpoint(
         project_store, "_has_project_schema", checkpoint_after_schema_read
     )
     try:
-        assert store.schema_version() == 110
-        with pytest.raises(SchemaVersionError, match="version: 111"):
+        assert store.schema_version() == 111
+        with pytest.raises(SchemaVersionError, match="version: 112"):
             store.schema_version()
     finally:
         store.close()
@@ -470,7 +472,7 @@ def test_reopening_current_test_store_does_not_copy_disappearing_wal(
         try:
             assert (
                 SQLiteProjectStore(second.sqlite, tmp_path / "objects").schema_version()
-                == 110
+                == 111
             )
             assert copies == []
         finally:

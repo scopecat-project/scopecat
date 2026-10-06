@@ -49,3 +49,26 @@ export async function submitProcedureInput(
     ),
   );
 }
+
+export type DecisionDraftInput =
+  import("../../api-schema").components["schemas"]["DecisionDraftInput"];
+export type DecisionDraftTarget =
+  import("../../api-schema").components["schemas"]["DecisionDraftTarget"];
+export type DecisionDraftBaseline =
+  import("../../api-schema").components["schemas"]["DecisionDraftBaseline"];
+export type DecisionDraftView =
+  import("../../api-schema").components["schemas"]["DecisionDraftView"];
+export type DecisionDraftSave =
+  import("../../api-schema").components["schemas"]["DecisionDraftSave"];
+
+export function readDecisionDraft(target: DecisionDraftTarget) {
+  return apiData(apiClient.POST("/api/v1/decision-drafts/read", { body: target }));
+}
+export function saveDecisionDraft(command: DecisionDraftSave) {
+  return apiData(apiClient.POST("/api/v1/decision-drafts/save", { body: command }));
+}
+export function getDecisionDraftHistory(before?: number) {
+  return apiData(
+    apiClient.GET("/api/v1/decision-drafts", { params: { query: { before, limit: 25 } } }),
+  );
+}
