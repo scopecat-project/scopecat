@@ -38,6 +38,36 @@ silently substitutes an older desktop version.
 Application updates preserve user Python environments and retained task environments.
 Updating client packages is a separate operation; close kernels before rebuilding them.
 
+## When an older data format prevents startup
+
+The native startup error page offers **保留旧数据，重新开始…** (keep old data and
+start again) for an unsupported development data format. It works before the
+backend is available. Review the displayed original location and the native
+confirmation, or cancel without creating a new space.
+
+After confirmation, Scopecat prepares an empty space and checks that it starts
+before remembering it for subsequent launches. Old databases, SQLite sidecars,
+objects, drafts, local source, environments and registration files remain in their
+original locations. External author folders are also unchanged. The new space
+contains none of their experiments, device registrations or queued work; it does
+not import source, connect devices or resume tasks. Register source and configure
+devices explicitly when ready. There is still one everyday application space,
+not a project selector.
+
+If preparation fails, the old selection remains. Retry the same operation after
+resolving the reported problem. An interrupted preparation can retain a partial
+new space; it is reused on confirmed retry and is never mistaken for a migrated
+archive. A rare failure confirming the final selection on disk explicitly says
+that the new space **has already been selected**; retry startup instead of
+assuming the old selection was restored.
+
+This recovery supports the standard desktop layout only. Custom runtime/data
+bindings, custom application composition, uncertain ownership and live workers
+are refused with an explanation. Finish and stop background work first. This is
+not deletion, migration, backup or data downgrade. Retaining original bytes does
+not install the older reader or its dependencies. Scientific File → Open remains
+separate from whole-store backup/restore.
+
 ## Author folders
 
 For your first experiment, open **Settings → Author code → New code folder**.

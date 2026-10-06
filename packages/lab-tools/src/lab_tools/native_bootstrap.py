@@ -28,6 +28,9 @@ class Arguments(Protocol):
 def prepare(args: Arguments, paths: InstallationPaths) -> None:
     runtime = ApplicationRuntime(paths.state)
     with FileLock(paths.state / "native-start.lock"):
+        from .data_spaces import check_format
+
+        check_format(runtime)
         payload = args.payload.resolve()
         python = Path(sys.executable)
         if os.name == "nt":
@@ -84,6 +87,7 @@ def launch(args: Arguments, paths: InstallationPaths) -> None:
         paths.state,
         prepare=lambda: prepare(args, paths),
         package_identity=file_hash(args.payload / MANIFEST),
+        prepare_fresh=lambda home: prepare(args, replace(paths, state=home)),
     )
 
 

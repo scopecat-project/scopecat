@@ -25,6 +25,7 @@ from scopecat.daemon.health import ApplicationActivity
 from scopecat.project import open_project
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
+from .application_paths import selected_home
 from .bundle import MANIFEST, file_hash, installed_bundle, managed_path, read_bundle
 
 
@@ -68,7 +69,7 @@ def runtime_command(python: Path, request: dict[str, object]) -> dict[str, objec
         return response
 
 
-def _write(path: Path, content: str) -> None:
+def write_state(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}-", dir=path.parent)
     staged = Path(name)
@@ -91,18 +92,24 @@ class ApplicationRuntime:
     """
 
     def __init__(self, home: Path):
-        self.home = home.resolve()
+        self.anchor = home.resolve()
+        self.home = selected_home(self.anchor)
         self.root = managed_path(self.home, self.home / "runtime")
         self.selection = managed_path(self.home, self.home / "installation.json")
         self.pending = managed_path(self.home, self.home / "installation-pending.json")
-        self.lock = FileLock(self.home / "application.lock", timeout=30)
+        self.lock = FileLock(self.anchor / "application.lock", timeout=30)
 
     def installation(self) -> Installation:
         if not self.selection.is_file():
             raise ValueError("应用尚未准备就绪，请重新打开 Scopecat 或在启动页面重试")
         return Installation.model_validate_json(self.selection.read_bytes())
 
+    def _require_selected_home(self) -> None:
+        if self.home != selected_home(self.anchor):
+            raise ValueError("当前数据空间已改变，请重新打开应用；原数据保留")
+
     def require_ready(self) -> None:
+        self._require_selected_home()
         if self.pending.exists():
             raise ValueError("应用运行信息登记尚未完成，请在启动页面重试；数据保留")
 
@@ -184,6 +191,7 @@ class ApplicationRuntime:
         """Prepare an empty application; never scaffold or load author code."""
         self.home.mkdir(parents=True, exist_ok=True)
         with self.lock:
+            self._require_selected_home()
             if self.selection.exists():
                 return self.installation()
             manifest = self.root / "scopecat.toml"
@@ -191,13 +199,13 @@ class ApplicationRuntime:
             if manifest.exists() and manifest.read_text() != declaration:
                 raise ValueError("已有应用声明与本次安装不符；原文件保留")
             if not manifest.exists():
-                _write(manifest, declaration)
+                write_state(manifest, declaration)
             selected = self.qualify(
                 python or Path(sys.executable),
                 static_dir,
                 delivery_root=delivery_root,
             )
-            _write(self.selection, selected.model_dump_json(indent=2))
+            write_state(self.selection, selected.model_dump_json(indent=2))
             return selected
 
     def start(self) -> DaemonEndpointRecord:
@@ -248,6 +256,7 @@ class ApplicationRuntime:
     def select(self, candidate: Installation) -> None:
         """Record a verified runtime under the same locks that fence startup."""
         with self.lock, ExitStack() as locks:
+            self._require_selected_home()
             binding = open_project(self.root, resolve_adapter=False).runtime_binding
             try:
                 for path in (
@@ -272,9 +281,9 @@ class ApplicationRuntime:
             # A fully verified current package can supersede an interrupted
             # registration. The journal fences starts; it does not pin an old
             # package that may no longer be installed.
-            _write(self.pending, candidate.model_dump_json(indent=2))
-            _write(self.root / "scopecat.toml", candidate.composition)
-            _write(self.selection, candidate.model_dump_json(indent=2))
+            write_state(self.pending, candidate.model_dump_json(indent=2))
+            write_state(self.root / "scopecat.toml", candidate.composition)
+            write_state(self.selection, candidate.model_dump_json(indent=2))
             self.pending.unlink()
 
     def register_source(self, workspace: Path, *, python: Path | None = None) -> str:
@@ -328,7 +337,7 @@ class ApplicationRuntime:
                     else item
                     for item in registry.items
                 )
-                _write(
+                write_state(
                     path,
                     registry.model_copy(update={"items": items}).model_dump_json(
                         indent=2

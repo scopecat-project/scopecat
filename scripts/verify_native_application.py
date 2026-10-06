@@ -199,6 +199,12 @@ def verify(
             for relative in (
                 "result.json",
                 "data-journey.json",
+                "reset-recovery/result.json",
+                "reset-recovery/reset.json",
+                "reset-recovery/reopen.json",
+                "reset-recovery/reset.log",
+                "reset-recovery/reopen.log",
+                "reset-recovery/cleanup.log",
                 "native-windows/result.json",
                 "native-windows/identity.json",
                 "native-windows/host.log",
@@ -319,6 +325,15 @@ def _verify(
             [
                 sys.executable,
                 str(Path(__file__).with_name("verify_native_windows.py").resolve()),
+                str(relocated),
+                str(home),
+            ],
+            check=True,
+        )
+        subprocess.run(  # noqa: S603 - real host recovery, disposable fixtures only
+            [
+                sys.executable,
+                str(Path(__file__).with_name("verify_native_reset.py").resolve()),
                 str(relocated),
                 str(home),
             ],

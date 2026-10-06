@@ -16,6 +16,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from filelock import FileLock, Timeout
 
 from .application_runtime import ApplicationRuntime
+from .data_spaces import UnsupportedDataSpace, fresh_start
 from .desktop_platform import (
     hide_window,
     install_reopen_handler,
@@ -46,6 +47,7 @@ class DesktopAPI:
         self._prepare = prepare
         self._new_window = new_window
         self._file_lock = threading.Lock()
+        self._unsupported: UnsupportedDataSpace | None = None
 
     def new_window(self) -> None:
         with self._session.operation(allow_files=True):
@@ -290,10 +292,38 @@ class DesktopAPI:
     def _start(self, location: str = "") -> None:
         if self._session.closing.is_set():
             return
-        self._prepare()
-        record = self._runtime.start()
+        self._unsupported = None
+        try:
+            self._prepare()
+            record = self._runtime.start()
+        except UnsupportedDataSpace as error:
+            self._unsupported = error
+            self._window().load_html(
+                _recovery(error, can_reset=self._session.prepare_fresh is not None)
+            )
+            raise
         self._session.connected(record.base_url)
         _replace_location(self._window(), record.base_url + location)
+
+    def reset_data(self) -> bool:
+        """Confirmation belongs to the native host, not the unavailable backend."""
+        with self._session.operation():
+            failure, prepare = self._unsupported, self._session.prepare_fresh
+            if failure is None or prepare is None or self._session.base_url is not None:
+                raise ValueError("只有不支持的数据格式启动失败时可以重新开始")
+            if not self._window().create_confirmation_dialog(
+                "保留旧数据，重新开始？",
+                f"原数据、源码及配置将保留在：{failure.home}\n"
+                "应用将准备并使用一个新空空间。旧实验、草稿和设备登记不会出现在新空间，"
+                "也不会自动运行任务、登记源码或连接设备。不会迁移或删除原件。\n"
+                "确定重新开始？",
+            ):
+                return False
+            record = fresh_start(self._runtime, failure, prepare)
+            self._unsupported = None
+            self._session.connected(record.base_url)
+            _replace_location(self._window(), record.base_url)
+            return True
 
     def exit(self, background: bool) -> None:
         if background:
@@ -334,10 +364,18 @@ def _page(content: str) -> str:
     )
 
 
-def _recovery(error: Exception) -> str:
+def _recovery(error: Exception, *, can_reset: bool = False) -> str:
+    reset = (
+        "<p>此版本无法打开旧数据。可以保留原件并从新空空间重新开始。</p>"
+        f"<p>原数据位置：{escape(str(error.home))}</p>"
+        '<button onclick="resetData()">保留旧数据，重新开始…</button>'
+        if isinstance(error, UnsupportedDataSpace) and can_reset
+        else ""
+    )
     return _page(
         "<h1>启动未完成</h1>"
-        "<p>应用尚未准备就绪。可以重试，或停止本应用的后台后重新启动。"
+        + reset
+        + "<p>应用尚未准备就绪。可以重试，或停止本应用的后台后重新启动。"
         "如果仍无法完成，请将错误详情交给维护者。</p>"
         "<details><summary>查看错误详情</summary>"
         f"<p>{escape(str(error))}</p>"
@@ -547,6 +585,7 @@ def run(
     *,
     prepare: Callable[[], None] | None = None,
     package_identity: str = "source-development",
+    prepare_fresh: Callable[[Path], None] | None = None,
 ) -> None:
     # Optional dependency: command-line/service installations stay headless.
     import pystray
@@ -582,6 +621,7 @@ def run(
                 runtime.select(checked)
 
         session = DesktopSession(runtime, closing)
+        session.prepare_fresh = prepare_fresh
         windows = DesktopWindows(session, prepare or configure)
         first = windows.create()
         window, api, loaded = first.window, first.api, first.loaded
@@ -634,14 +674,16 @@ def run(
                 api.retry()
             except Exception as error:
                 logging.getLogger(__name__).exception("Application startup failed")
-                window.load_html(_recovery(error))
+                window.load_html(_recovery(error, can_reset=prepare_fresh is not None))
             while not closing.wait(0.5):
                 try:
                     session.poll_exit()
                 except Exception as error:
                     session.wait_for_idle(False)
                     windows.show()
-                    windows.latest.window.load_html(_recovery(error))
+                    windows.latest.window.load_html(
+                        _recovery(error, can_reset=prepare_fresh is not None)
+                    )
                 if activate.exists():
                     requested_package = activate.read_text(encoding="utf-8")
                     activate.unlink(missing_ok=True)

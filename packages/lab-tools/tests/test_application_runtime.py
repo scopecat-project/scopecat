@@ -279,7 +279,7 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
         before.static_dir,
         composition=before.composition + "# candidate\n",
     )
-    write = application_runtime._write
+    write = application_runtime.write_state
 
     def fail_selection(path, content):
         if path == application.selection:
@@ -287,7 +287,7 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
         write(path, content)
 
     with monkeypatch.context() as patch:
-        patch.setattr(application_runtime, "_write", fail_selection)
+        patch.setattr(application_runtime, "write_state", fail_selection)
         with pytest.raises(OSError, match="interrupted selection"):
             application.select(candidate)
     assert application.installation() == before

@@ -23,6 +23,13 @@ function retry() {
   return operate("正在重新准备应用，请稍候…", () => pywebview.api.retry());
 }
 
+function resetData() {
+  return operate("正在确认并准备新空间，原数据将保留…", async () => {
+    const changed = await pywebview.api.reset_data();
+    if (!changed) progress("");
+  });
+}
+
 function restart() {
   return operate("正在停止后台并重新启动，请稍候…", () => pywebview.api.restart());
 }

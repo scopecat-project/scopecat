@@ -106,6 +106,11 @@ Current-format backup/restore is not a cross-version upgrade service. It does no
 install environments, make archived Python executable in a new environment, or
 permit independent writable clones to share one acquisition namespace.
 
+The native desktop can offer an explicit fresh start after unsupported-format
+rejection. It preserves the original home and selects a newly prepared empty
+space; it does not relax format rejection or introduce any migration edge.
+See [recovery instructions](../how-to/maintain-application.md#when-an-older-data-format-prevents-startup).
+
 ## Historical archives
 
 Owners may keep original stores, snapshots, exported results, matching old source,

@@ -128,6 +128,39 @@ There is no automatic migration from older development homes, nor any probing of
 The native app is relocatable; moving an author's virtual environment independently
 of its base Python is not supported.
 
+## Explicit fresh-start recovery
+
+The original desktop home remains the stable host anchor: its `desktop/` lock,
+activation endpoint, logs and `native-start.lock` continue to identify one host.
+Without `current-space.json`, that home is also the data home. After an explicitly
+confirmed unsupported-format recovery, the pointer selects exactly one
+`spaces/<random-id>` child. `ApplicationRuntime(anchor)` resolves that selection
+for native preparation, host operations and application CLI callers. An already
+constructed runtime refuses a new start if another operation changed its selection.
+No space browser, automatic migration or garbage collector is introduced.
+
+The old home is not renamed, copied or deleted. This preserves the complete old
+ownership set, including colocated source/configuration, retained environments,
+installation receipts, author bindings, database sidecars and immutable objects.
+The new home receives the current package's installation receipt and an empty
+standard composition; no old execution bindings or device/task authority is copied.
+Explicit external runtime bindings and custom compositions are refused.
+
+A durable `reset-attempt.json` records the candidate before preparation. Under the
+anchor application lock, old deployment/daemon locks and worker ownership checks,
+the host prepares and starts that candidate, then atomically replaces the current
+selection. Before that commit, failure keeps the old selection. After a crash,
+confirmed retry reuses the candidate and stops only its recorded service identity.
+There is no fallible journal cleanup after commit. Unix directory synchronization
+follows publication; a failure there reports that selection already committed.
+Windows uses filesystem atomic replacement; this is not a guarantee against every
+filesystem/power-loss failure. The old content is retained in all cases.
+
+The operation never opens the original SQLite database for writing. Offline
+schema inspection handles a retained WAL/journal in a temporary copy under service
+ownership. These locks coordinate Scopecat owners, not arbitrary third-party
+writers or concurrent manual edits. This is not a consistent backup capture.
+
 ## Application, command and data identities
 
 Keep four identities separate when describing installation:
