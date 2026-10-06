@@ -61,6 +61,7 @@ def test_every_native_report_survives_cleanup_and_is_uploaded(
     relatives = [
         "data/desktop/desktop.log",
         "native-windows/python.log",
+        "native-windows/sequence.json",
         *[
             f"reset-recovery/{name}"
             for name in (
@@ -292,3 +293,85 @@ def test_reset_failure_keeps_report_and_owned_logs(
     assert bool(report["cleanup_error"]) is cleanup_fails
     assert (reports / "desktop.log").read_text() == "desktop failure"
     assert (reports / "candidate-daemon.log").read_text() == "candidate failure"
+
+
+@pytest.mark.parametrize(
+    ("window_code", "reset_code"), [(0, 0), (7, 0), (0, 8), (7, 8)]
+)
+def test_native_sequence_collects_independent_results(
+    tmp_path, monkeypatch, window_code, reset_code
+):
+    import json
+
+    reports = tmp_path / "native-windows"
+    reports.mkdir()
+    calls = []
+
+    def run(command, *, check):
+        calls.append(Path(command[1]).name)
+        if len(calls) == 1:
+            (reports / "result.json").write_text(
+                json.dumps(
+                    {
+                        "host_stopped": True,
+                        "cleanup_completed": True,
+                        "status": "failed" if window_code else "passed",
+                    }
+                )
+            )
+            code = window_code
+        else:
+            assert json.loads((reports / "result.json").read_text())[
+                "cleanup_completed"
+            ]
+            code = reset_code
+        if code:
+            raise subprocess.CalledProcessError(code, command)
+
+    monkeypatch.setattr(verify_native_application.subprocess, "run", run)
+    if window_code or reset_code:
+        with pytest.raises(ExceptionGroup) as error:
+            verify_native_application.verify_recovery_probes(tmp_path / "app", tmp_path)
+        assert [e.returncode for e in error.value.exceptions] == [
+            c for c in (window_code, reset_code) if c
+        ]
+    else:
+        verify_native_application.verify_recovery_probes(tmp_path / "app", tmp_path)
+    assert calls == ["verify_native_windows.py", "verify_native_reset.py"]
+    sequence = json.loads((reports / "sequence.json").read_text())
+    assert sequence["windows"]["exit_code"] == window_code
+    assert sequence["reset"]["exit_code"] == reset_code
+    assert bool(sequence["windows"].get("error")) is bool(window_code)
+    assert bool(sequence["reset"].get("error")) is bool(reset_code)
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        None,
+        {},
+        {"host_stopped": False, "cleanup_completed": True},
+        {"host_stopped": True, "cleanup_completed": False},
+    ],
+)
+def test_native_sequence_refuses_unverified_cleanup(tmp_path, monkeypatch, receipt):
+    import json
+
+    reports = tmp_path / "native-windows"
+    reports.mkdir()
+    calls = []
+
+    def run(command, *, check):
+        calls.append(command)
+        if receipt is not None:
+            (reports / "result.json").write_text(json.dumps(receipt))
+        raise subprocess.CalledProcessError(7, command)
+
+    monkeypatch.setattr(verify_native_application.subprocess, "run", run)
+    with pytest.raises(ExceptionGroup):
+        verify_native_application.verify_recovery_probes(tmp_path / "app", tmp_path)
+    assert len(calls) == 1
+    sequence = json.loads((reports / "sequence.json").read_text())
+    assert sequence["windows"]["exit_code"] == 7
+    assert sequence["reset"]["status"] == "not-run"
+    assert "cleanup" in sequence["reset"]["reason"]

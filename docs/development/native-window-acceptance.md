@@ -341,3 +341,12 @@ check both retention and upload coverage. The updated candidate still needs exac
 SHA native acceptance; no assertion or production behavior was relaxed. Local
 bridge/service and storage fault tests remain separate evidence. No real user
 home, migration or automatic task/device recovery is part of this probe.
+
+The two window/reset probes now collect separate outcomes in
+`native-windows/sequence.json`. Reset runs only after the first probe confirms
+both host termination and service/client cleanup; missing or failed cleanup
+records reset as not run with a reason. A failed window probe with confirmed
+cleanup still permits the isolated reset journey. Either failure keeps the
+aggregate acceptance failed, retaining both exit codes and exceptions. This is
+diagnostic orchestration, not a fix or a retry classification for the unresolved
+Windows bridge startup failure.

@@ -149,8 +149,9 @@ def test_probe_requires_home_below_disposable_runner_temp(tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize("fail_cleanup", [False, True])
+@pytest.mark.parametrize("host_failure", ["exit", "timeout", "teardown"])
 def test_host_failure_overrides_partial_pass_and_retains_reports(
-    tmp_path, monkeypatch, fail_cleanup
+    tmp_path, monkeypatch, fail_cleanup, host_failure
 ):
     hosted_runner(tmp_path, monkeypatch)
     app, home = tmp_path / "app", tmp_path / "home"
@@ -176,15 +177,25 @@ def test_host_failure_overrides_partial_pass_and_retains_reports(
         log.write_text("diagnostic")
         if len(calls) == 1:
             (home / "native-windows/result.json").write_text('{"status":"passed"}')
+            if host_failure == "exit":
+                raise subprocess.CalledProcessError(7, command)
+            if host_failure == "teardown":
+                raise RuntimeError("Validation process cleanup incomplete")
             raise subprocess.TimeoutExpired(command, timeout)
         if fail_cleanup:
             raise subprocess.CalledProcessError(1, command)
 
     monkeypatch.setattr(probe, "run_bounded", run)
-    with pytest.raises((subprocess.TimeoutExpired, subprocess.CalledProcessError)):
+    with pytest.raises(
+        (subprocess.TimeoutExpired, subprocess.CalledProcessError, RuntimeError)
+    ):
         probe.verify(app, home)
     result = json.loads((home / "native-windows/result.json").read_text())
     assert result["status"] == "failed" and result["host_error"]
+    assert result["host_stopped"] is (host_failure != "teardown")
+    assert result["host_exit_code"] == (7 if host_failure == "exit" else None)
+    assert result["cleanup_completed"] is not fail_cleanup
+    assert bool(result["cleanup_error"]) is fail_cleanup
     assert len(calls) == 2 and "--cleanup" in calls[1]
     assert not list((home / "native-windows").glob("host-*"))
     assert (home / "native-windows/host.log").read_text() == "diagnostic"
