@@ -56,9 +56,18 @@ parameters journey. This source change establishes no new distribution.
 
 The [Decision draft implementation](architecture/decision-drafts.md) adds bounded
 application-owned editing history, conditional writes and recovery without scientific
-submission. Its real-browser checks do not repair or qualify the separate macOS
-website-store clearing problem tracked by draft PR #885. No native store policy,
-new release or installed-user acceptance follows from this source change.
+submission. The separate #885 Darwin packaged-wheel repair and this draft API were
+combined at `4aee5825dbe374f469bc0f1be1e9a981908086c1` for
+[native run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157).
+Mac and Windows exact-run window checks passed; Mac additionally passed host/store
+isolation and complete host/service restart with application-draft restoration.
+The previous Mac storage failure belongs to the earlier candidate and is retained
+in #885's evidence. Ordinary source environments remain unpatched; Windows uses
+upstream pywebview. This does not establish native execution of the subsequent
+#884/#886/#885 closeout combination, a new release or installed-user acceptance.
+Windows full host-restart/cookie isolation, OS focus/menu, tray and visual experience
+remain unverified. Mac notarization was not provided, Gatekeeper rejected the
+package, and Finder first-open was not evaluated.
 
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
