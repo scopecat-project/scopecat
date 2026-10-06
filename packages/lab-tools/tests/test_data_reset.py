@@ -4,10 +4,12 @@ import json
 import os
 import sqlite3
 import threading
-from unittest.mock import Mock
+from types import SimpleNamespace
+from unittest.mock import Mock, create_autospec
 
 import psutil
 import pytest
+import webview
 from filelock import FileLock
 
 from lab_tools import data_reset
@@ -104,7 +106,7 @@ def test_host_confirm_reset_and_restart(legacy, backup_first):
     )
     session = DesktopSession(runtime, threading.Event())
     session.prepare_reset = prepare
-    window = Mock()
+    window = create_autospec(webview.Window, instance=True)
     window.create_file_dialog.return_value = (str(backup),)
     api = DesktopAPI(session, lambda: window, lambda: check_format(runtime))
     with pytest.raises(UnsupportedDataSpace):
@@ -126,6 +128,9 @@ def test_host_confirm_reset_and_restart(legacy, backup_first):
     reopened.start()
     reopened.stop()
     if backup_first:
+        window.create_file_dialog.assert_called_with(
+            webview.FileDialog.FOLDER, directory=""
+        )
         (archive,) = backup.iterdir()
         assert (archive / "store/control.sqlite3").read_bytes() == old_db
         assert (archive / "store/control.sqlite3-wal").read_bytes() == old_wal
@@ -264,6 +269,48 @@ def test_folder_cancel_does_not_delete_or_remember_skip(legacy):
     window.create_confirmation_dialog.assert_not_called()
     assert (runtime.root / ".scopecat/control.sqlite3").read_bytes() == before
     assert not (runtime.home / "desktop/reset-backup.json").exists()
+
+
+@pytest.mark.parametrize("cancel", [True, False])
+def test_host_uses_pinned_folder_dialog_contract(legacy, monkeypatch, cancel):
+    """Exercise pywebview's real adapter; only its OS GUI backend is substituted."""
+    runtime, _, prepare, backup = legacy
+    settings = runtime.home / "desktop/reset-backup.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"directory": str(backup)}))
+    selected = backup / "chosen folder"
+    selected.mkdir()
+    session = DesktopSession(runtime, threading.Event())
+    session.prepare_reset = prepare
+    window = create_autospec(webview.Window, instance=True)
+    window.uid = "reset-contract"
+    shown = threading.Event()
+    shown.set()
+    window.events = SimpleNamespace(shown=shown)
+    window.gui = Mock()
+    window.gui.create_file_dialog.return_value = None if cancel else (str(selected),)
+    # The pinned library checks initial-directory existence and supplies defaults.
+    window.create_file_dialog = webview.Window.create_file_dialog.__get__(window)
+    window.create_confirmation_dialog.return_value = True
+    reset = Mock(return_value=SimpleNamespace(base_url="http://localhost:1234"))
+    monkeypatch.setattr("lab_tools.desktop.reset_store", reset)
+    api = DesktopAPI(session, lambda: window, lambda: check_format(runtime))
+    with pytest.raises(UnsupportedDataSpace) as diagnosed:
+        api.retry()
+    html = window.load_html.call_args.args[0]
+    assert '<input id="skip-backup" type="checkbox">' in html
+    assert api.reset_data() is not cancel  # Omitted argument must still select backup.
+    window.gui.create_file_dialog.assert_called_once_with(
+        webview.FileDialog.FOLDER, str(backup), False, "", (), "reset-contract"
+    )
+    if cancel:
+        reset.assert_not_called()
+        window.create_confirmation_dialog.assert_not_called()
+        expected_directory = backup
+    else:
+        reset.assert_called_once_with(runtime, diagnosed.value, prepare, selected)
+        expected_directory = selected
+    assert json.loads(settings.read_text()) == {"directory": str(expected_directory)}
 
 
 @pytest.mark.parametrize("damage", ["archive", "new-object"])
