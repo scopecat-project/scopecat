@@ -224,3 +224,55 @@ def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path):
         if child is not None and child.poll() is None:
             probe.terminate_validation_process_tree(child, owner=owner)
         runtime.stop()
+
+
+@pytest.fixture
+def windows_storage_probe(monkeypatch):
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
+    storage_spec = spec_from_file_location(
+        "verify_windows_storage", SCRIPT.with_name("verify_windows_storage.py")
+    )
+    storage = module_from_spec(storage_spec)
+    storage_spec.loader.exec_module(storage)
+    return storage
+
+
+def test_windows_storage_embedded_host_compiles(windows_storage_probe):
+    compile(windows_storage_probe.HOST, "windows-storage-host", "exec")
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "report", "error"),
+    [
+        (7, {"stage": "A", "status": "passed"}, RuntimeError),
+        (0, None, FileNotFoundError),
+        (0, {"stage": "A", "status": "failed"}, AssertionError),
+        (0, {"stage": "B", "status": "passed"}, AssertionError),
+    ],
+)
+def test_windows_storage_rejects_incomplete_host_evidence(
+    tmp_path, windows_storage_probe, exit_code, report, error
+):
+    """Failure-report validation only; these child processes are not WebViews."""
+    if report is not None:
+        (tmp_path / "A.json").write_text(json.dumps(report))
+    with (
+        subprocess.Popen(  # noqa: S603 - bounded diagnostic child
+            [sys.executable, "-c", f"raise SystemExit({exit_code})"], text=True
+        ) as process,
+        pytest.raises(error),
+    ):
+        windows_storage_probe.finish_host(process, "A", tmp_path, timeout=5)
+
+
+def test_windows_storage_host_wait_is_bounded(tmp_path, windows_storage_probe):
+    with subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], text=True
+    ) as process:
+        owner = psutil.Process(process.pid)
+        try:
+            with pytest.raises(subprocess.TimeoutExpired):
+                windows_storage_probe.finish_host(process, "A", tmp_path, timeout=0.1)
+        finally:
+            probe.terminate_validation_process_tree(process, owner=owner)
+        assert process.poll() is not None

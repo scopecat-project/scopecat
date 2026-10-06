@@ -58,8 +58,9 @@ def test_replacement_reclaims_packages_and_environment(
 
 @pytest.mark.parametrize("keep_work", [False, True])
 @pytest.mark.parametrize("failure", [False, True])
+@pytest.mark.parametrize("storage_reports", ["cocoa-storage", "windows-storage"])
 def test_native_acceptance_preserves_candidate_and_reports(
-    tmp_path, monkeypatch, keep_work, failure
+    tmp_path, monkeypatch, keep_work, failure, storage_reports
 ):
     app = tmp_path / "Scopecat.app"
     app.mkdir()
@@ -76,7 +77,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
         (home / "data/native-start.log").write_text("diagnostic")
         (home / "native-windows").mkdir()
         (home / "native-windows/result.json").write_text('{"status": "failed"}')
-        (home / "cocoa-storage").mkdir()
+        (home / storage_reports).mkdir()
         for name in (
             "result.json",
             "draft-fixture.json",
@@ -87,7 +88,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
             "B.log",
             "C.log",
         ):
-            (home / "cocoa-storage" / name).write_text("storage diagnostic")
+            (home / storage_reports / name).write_text("storage diagnostic")
         (home / "environment").mkdir()
         if failure:
             raise RuntimeError("acceptance failed")
@@ -104,7 +105,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
     assert (
         reports / "native-windows/result.json"
     ).read_text() == '{"status": "failed"}'
-    assert {path.name for path in (reports / "cocoa-storage").iterdir()} == {
+    assert {path.name for path in (reports / storage_reports).iterdir()} == {
         "result.json",
         "draft-fixture.json",
         "A.json",

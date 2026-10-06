@@ -40,6 +40,53 @@ launch remain unevaluated. Mac signature/tamper checks passed, but notarization 
 not provided, Gatekeeper rejected the package (return code 3), and Finder first-open
 was not evaluated. Installer artifacts were retained without a release/tag/deploy.
 
+## Windows lifecycle follow-up (native execution pending)
+
+`verify_windows_storage.py` extends the existing opted-in `--native-windows`
+path on Windows, after the exact-run probe has saved a real Decision draft and
+exited. It runs three original packaged native launchers against the unchanged
+upstream WebView2 backend. Only their acceptance bootstrap is replaced. No
+production patch, alternate profile or new workflow trigger is introduced.
+
+- A and B overlap at one fixed loopback origin, using the same copied executable.
+  Both must start without the other's marker or cookie. B writes and clears its
+  cookie; A must retain its marker and cookie through both operations. Checks
+  compare document cookies, the native cookie API and real HTTP requests.
+- Actual WebView2 profiles must be private, and their observed user-data folders
+  must differ across hosts. The upstream version and loaded backend hashes are
+  recorded. Windows `DeleteAllCookies` must leave B's localStorage marker intact;
+  Cocoa's all-website-data clear semantics are not imposed on Windows.
+- After both hosts exit successfully, the wrapper stops the application service,
+  verifies the old PID/creation-time identity is gone, then starts it again. C
+  first checks absence of A/B browser state at the unchanged test origin, then
+  loads the exact procedure in the real UI and restores its reviewer. The full
+  application-owned draft receipt must equal the earlier real-form edit before
+  and after restart. Browser data is never used as a recovery fallback.
+
+Inspect `windows-storage/result.json`, `draft-fixture.json`, `A.json`, `B.json`,
+`C.json` and their logs alongside `native-windows/identity.json`. Stage reports,
+nonzero exits, deadlines and cleanup failures are required evidence, not optional
+warnings. All eight files survive disposable workspace cleanup. Linux tests only
+validate failure handling and embedded-script syntax; they cannot qualify native
+Windows behavior. The existing eight window checks and independent marker
+assertions remain unchanged.
+
+The scope is host isolation/restart, not a new assertion that Windows cookies
+survive creation of another window within one host. Upstream 6.2.1
+[WebView2 initialization](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/edgechromium.py)
+calls `DeleteAllCookies` for each private WebView; the
+[WinForms backend](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/winforms.py)
+uses a host-level temporary directory. This is a source-level risk requiring
+separate native evidence before proposing any production dependency repair.
+It is not reported as a demonstrated fault or a passed cookie-preservation check.
+
+For this follow-up, dispatch **Full acceptance**, ref
+`codex/windows-native-recovery`, profile **native-distribution**, and match the
+run's head SHA to the reviewed PR head. No native run is yet recorded for this
+follow-up. The accepted `4aee5825` / run `37436328157` remains unchanged and does
+not qualify these new checks. Do not use `public-preview` or modify triggers to
+obtain dispatch access.
+
 ## Historical failed candidate
 
 [Manual run 37424157181, attempt 1](https://github.com/scopecat-project/scopecat/actions/runs/37424157181)

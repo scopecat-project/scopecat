@@ -205,6 +205,14 @@ def verify(
                 "native-windows/cleanup.log",
                 "native-windows/acquisition.log",
                 "native-windows/acquisition-process.json",
+                "windows-storage/result.json",
+                "windows-storage/draft-fixture.json",
+                "windows-storage/A.json",
+                "windows-storage/B.json",
+                "windows-storage/C.json",
+                "windows-storage/A.log",
+                "windows-storage/B.log",
+                "windows-storage/C.log",
                 "cocoa-storage/result.json",
                 "cocoa-storage/draft-fixture.json",
                 "cocoa-storage/A.json",
@@ -321,6 +329,18 @@ def _verify(
                 [
                     sys.executable,
                     str(Path(__file__).with_name("verify_cocoa_storage.py").resolve()),
+                    str(relocated),
+                    str(home),
+                ],
+                check=True,
+            )
+        if sys.platform == "win32":
+            subprocess.run(  # noqa: S603 - same live disposable acceptance state
+                [
+                    sys.executable,
+                    str(
+                        Path(__file__).with_name("verify_windows_storage.py").resolve()
+                    ),
                     str(relocated),
                     str(home),
                 ],

@@ -65,8 +65,10 @@ The previous Mac storage failure belongs to the earlier candidate and is retaine
 in #885's evidence. Ordinary source environments remain unpatched; Windows uses
 upstream pywebview. This does not establish native execution of the subsequent
 #884/#886/#885 closeout combination, a new release or installed-user acceptance.
-Windows full host-restart/cookie isolation, OS focus/menu, tray and visual experience
-remain unverified. Mac notarization was not provided, Gatekeeper rejected the
+Windows full host-restart/cookie isolation remains unverified; the bounded
+[Windows lifecycle follow-up](native-window-acceptance.md#windows-lifecycle-follow-up-native-execution-pending)
+adds an executable check to the existing native-distribution path, pending native
+execution. OS focus/menu, tray and visual experience remain unverified. Mac notarization was not provided, Gatekeeper rejected the
 package, and Finder first-open was not evaluated.
 
 See [configuration ownership](configuration-ownership.md),
