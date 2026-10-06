@@ -124,10 +124,13 @@ identities and their current execution availability; retained sources without a
 qualified local binding remain visible as unavailable. Listing performs no source
 publication, registration or environment installation.
 
-The selected code workspace belongs to the page's draft. Switching it discards
-old experiment inputs, preview and pinned plan/source while preserving scientific
-selection, operator and record collection. Same-name experiment definitions remain
-qualified by their workspace. Refresh operates on that workspace only; completing
+The selected code workspace belongs to the page's draft. Current implementation
+discards old experiment inputs, preview and pinned plan/source when switching it,
+while preserving scientific selection, operator and record collection. This input
+loss is a gap against the approved [recoverable editing target](draft-recovery.md):
+retain scoped input for recovery, but invalidate preview and pinned execution
+authority when changing context. That recovery change is not yet implemented.
+Same-name experiment definitions remain qualified by their workspace. Refresh operates on that workspace only; completing
 an explicitly requested refresh invalidates an unpinned preview even when the
 experiment declaration is unchanged. Saved plans
 and comparison handoffs retain their exact source owner and revision; **Use current

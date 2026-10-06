@@ -6,6 +6,9 @@ directions to Scopecat contributors:
 - [One application, independent execution contexts](public-application.md) is the
   canonical product target, user journey and entry/ownership map, including
   current navigation, proposed hierarchy and bounded follow-ups.
+- [Recoverable editing and native storage](draft-recovery.md) defines the approved
+  recovery target, separate native store repair, isolation decisions and acceptance
+  still required before delivery.
 - [Device and driver management](device-management.md) defines the target device
   registry, connection revisions, setup references and shared physical access;
   it distinguishes these from the current setup-copy editor and project backend.

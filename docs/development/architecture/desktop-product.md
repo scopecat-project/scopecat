@@ -17,7 +17,8 @@ Web rendering is an implementation option; browser access is not a prerequisite.
 | Capability | Owner |
 | --- | --- |
 | Installation, file-open dispatch, windows, menus, shortcuts, whole-app exit | Application |
-| Navigation, filters, selection, comparison and unsaved view state | Each window |
+| Navigation, filters, selection and comparison | Each window |
+| Valuable edit recovery (approved target, pending implementation) | Application data authority; editing remains window-local, with explicit conflict handling. See [draft recovery](draft-recovery.md). |
 | Task execution, physical resource exclusion, cancellation and recovery | Execution runtime, independent of windows |
 | Record reading, export and external analysis | Data capabilities usable without device runtime, private code or original author environment |
 

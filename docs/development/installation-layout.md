@@ -2,9 +2,11 @@
 
 Installed software, application data, disposable build caches and editable user
 code have separate owners. `InstallationPaths.current_user()` selects per-user
-locations; `InstallationPaths.isolated(home)` keeps validation inside one explicit
-directory. Foreground source development continues to use `lab_tools.dev` and
-does not create an installed application.
+locations; `InstallationPaths.isolated(home)` places application-owned validation
+files inside one explicit directory. It does **not** isolate the current native
+Cocoa website store. See [native acceptance safety](native-window-acceptance.md#safety-and-failure-handling)
+and the proposed [home/profile boundary](architecture/draft-recovery.md#home-host-and-privacy-boundaries).
+Foreground source development continues to use `lab_tools.dev` and does not create an installed application.
 
 ## Development artifacts and retention
 

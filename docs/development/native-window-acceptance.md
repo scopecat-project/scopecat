@@ -1,7 +1,34 @@
 # Exact-run native window acceptance
 
-This check is prepared for #882; macOS and Windows execution is **still pending**.
+The real native check for #882 ran on 2026-10-06: **Windows passed; macOS failed**.
 Linux checks, browser acceptance and platform-smoke are not native passes.
+
+## Recorded candidate
+
+[Manual run 37424157181, attempt 1](https://github.com/scopecat-project/scopecat/actions/runs/37424157181)
+used `native-distribution` at exact commit
+`de57155099f8afc1bd50b20b8b48c345fb0cc07f`. Both artifact identity reports match
+that source and probe SHA-256
+`bf31d4c0b58a6e171442113eb463c0bc66bc04a7ddab24534624efbe4e67f7d4`.
+Later documentation changes do not extend this runtime qualification to new code.
+
+| Platform | Evidence and result |
+| --- | --- |
+| Windows Server 2025, image `windows-2025-vs2026` `20260925.250.1` | [Job 112139903864](https://github.com/scopecat-project/scopecat/actions/runs/37424157181/job/112139903864) passed all eight native checks and host exit/cleanup. [Artifact 11394926096](https://github.com/scopecat-project/scopecat/actions/runs/37424157181/artifacts/11394926096), ZIP SHA-256 `c9b7197cc3758a0d88e4b85abaadec0cfc7a4270ba28357d891376cb19834715`. |
+| macOS 26.6.2 arm64, image `macos-26-arm64` `20260907.0351.1` | [Job 112139904049](https://github.com/scopecat-project/scopecat/actions/runs/37424157181/job/112139904049) created and rendered the exact-run secondary, then failed `after_secondary_creation`: both the saved real draft and independent marker became null. [Artifact 11394134805](https://github.com/scopecat-project/scopecat/actions/runs/37424157181/artifacts/11394134805), ZIP SHA-256 `d59e113607f8375efcdcb3605b8074c2802b9f9d3f83ece852ecfca4c72e1ad4`. |
+
+Mac reached only the first named check (real decision edit saved); restoration,
+bidirectional bridge ownership, main-selection independence, read invariants,
+secondary close and original-run completion checks were not reached. Owned
+acquisition cleanup was recorded and there was no `cleanup_error`; the combined
+host-exit/cleanup failure reflects the original nonzero host exit, not proof that
+cleanup itself failed. Earlier headless/Cocoa teardown checks do not erase this
+native failure. No release, tag or deployment was created.
+
+The [approved recovery/store design](architecture/draft-recovery.md) is a follow-up
+contract, not a fix in this candidate. Keep the independent storage assertion.
+
+## Probe contract
 
 The existing manual `Full acceptance` workflow's `native-distribution` profile
 builds both platform packages and explicitly passes `--native-windows` to
