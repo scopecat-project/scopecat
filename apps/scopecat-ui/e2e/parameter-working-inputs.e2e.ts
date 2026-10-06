@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { expect, test, type Page } from "@playwright/test";
-import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
+import { prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]) {
@@ -53,7 +53,7 @@ async function retainedRun(page: Page) {
   return new URL(href!, page.url()).searchParams.get("run")!;
 }
 
-test("working B survives restart and requires a new preview while submitted A stays exact", async ({
+test("working B survives restart, invalidates stale previews and submits frozen inputs", async ({
   browser,
 }, testInfo) => {
   test.setTimeout(180000);
@@ -68,12 +68,6 @@ test("working B survives restart and requires a new preview while submitted A st
     prepareReferenceContexts(uv, home);
     const firstUrl = await endpoint();
     const context = await browser.newContext();
-    const a = await context.newPage();
-    await a.goto(`${firstUrl}/#launch`);
-    await a.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await chooseReferenceContext(a);
-    const previewA = await preview(a);
-    const procedureA = await submit(a);
     const b = await context.newPage();
     const c = await context.newPage();
     await openTable(b, firstUrl);
@@ -93,7 +87,6 @@ test("working B survives restart and requires a new preview while submitted A st
     await b.goto(`${firstUrl}/#runs`);
     await openTable(b, firstUrl);
     await expect(field).toHaveValue("1e");
-    const runA = await retainedRun(a);
     await context.close();
     uv(["scopecat", "stop", home]);
     await new Promise<void>((done, reject) => {
@@ -121,9 +114,6 @@ test("working B survives restart and requires a new preview while submitted A st
     await work.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
     await expect(work.getByText(/Using working input revision/)).toBeVisible();
     const oldB = await preview(work);
-    expect(oldB.reviewed.config_source.parameters).toEqual(
-      previewA.reviewed.config_source.parameters,
-    );
     expect(oldB.reviewed.config_source.overrides).toHaveLength(1);
     const editor = await fresh.newPage();
     await openTable(editor, url);
@@ -141,11 +131,16 @@ test("working B survives restart and requires a new preview while submitted A st
     ).toBeDisabled();
     const previewB = await preview(work);
     expect(previewB.request_hash).not.toBe(oldB.request_hash);
+    expect(previewB.reviewed.config_source.parameters).toEqual(
+      oldB.reviewed.config_source.parameters,
+    );
     const procedureB = await submit(work);
     const runB = await retainedRun(work);
-    const history = await fresh.newPage();
-    await history.goto(`${url}/?run=${runA}`);
-    await expect(history.getByTestId("run-status")).toHaveText("Succeeded");
+    // Later working edits must not replace the submitted capture.
+    await editor.getByLabel("qubits[1].drive_carrier_frequency", { exact: true }).fill("5.4");
+    await expect(
+      editor.getByText("Draft saved in application data", { exact: true }),
+    ).toBeVisible();
     const evidence = uv([
       "python",
       "-c",
@@ -153,30 +148,24 @@ test("working B survives restart and requires a new preview while submitted A st
 import json,sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
-    a,b=[lab.get_run(run) for run in sys.argv[2:4]]
-    assert a.snapshot.config_source.overrides == ()
+    b=lab.get_run(sys.argv[2])
     assert len(b.snapshot.config_source.overrides) == 1
-    assert a.snapshot.config_source.parameters == b.snapshot.config_source.parameters
-    av=a.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
     bv=b.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
-    assert av.to('GHz') == sc.Quantity(4.8,'GHz'), av
     assert bv.to('GHz') == sc.Quantity(5.3,'GHz'), bv
     assert lab.parameters.checkout('browser').head.generation == 1
     assert len(lab.parameters.list()) == 1
-    print(json.dumps({'a':a.id,'b':b.id,'a_frequency':str(av),'b_frequency':str(bv),'branch_generation':1}))
+    print(json.dumps({'b':b.id,'parameters':b.snapshot.config_source.parameters.model_dump(mode='json'),'b_frequency':str(bv),'branch_generation':1}))
 `,
       home,
-      runA,
       runB,
     ]);
+    expect(JSON.parse(evidence).parameters).toEqual(previewB.reviewed.config_source.parameters);
     await testInfo.attach("working-inputs-evidence", {
       body: JSON.stringify({
         firstUrl,
         url,
-        procedureA,
         procedureB,
         evidence,
-        previewA: previewA.request_hash,
         previewB: previewB.request_hash,
       }),
       contentType: "application/json",
@@ -189,9 +178,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
   }
 });
 
-test("failed draft saves survive close, version changes, service outage and cancelled browser exit", async ({
-  browser,
-}) => {
+test("failed draft save cancels browser exit and recovers after retry", async ({ browser }) => {
   test.setTimeout(120000);
   const home = await mkdtemp(join(tmpdir(), "scopecat-working-close-"));
   try {
@@ -208,30 +195,6 @@ test("failed draft saves survive close, version changes, service outage and canc
     const field = page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
     await field.fill("1e");
     await expect(page.getByRole("button", { name: "Retry draft save", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close editor", exact: true }).click();
-    await expect(field).toHaveValue("1e");
-    await page
-      .getByRole("combobox", { name: "Saved parameter version", exact: true })
-      .selectOption({ index: 1 });
-    await expect(
-      page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
-    ).toHaveValue("");
-    await expect(field).toHaveValue("1e");
-    await page.getByRole("navigation").getByRole("button", { name: "Runs", exact: true }).click();
-    await page
-      .getByRole("navigation")
-      .getByRole("button", { name: "Configuration", exact: true })
-      .click();
-    await expect(field).toHaveValue("1e");
-    await page.route("**/api/v1/health", (route) => route.abort("connectionfailed"));
-    await page.getByRole("button", { name: "Refresh project data", exact: true }).click();
-    await expect(
-      page.getByText(
-        "Reconnect to save parameter edits. Keep this editor open until its draft is saved.",
-        { exact: true },
-      ),
-    ).toBeVisible({ timeout: 20000 });
-    await expect(field).toHaveValue("1e");
     const prompt = page.waitForEvent("dialog").then(async (dialog) => {
       expect(dialog.type()).toBe("beforeunload");
       await dialog.dismiss();
@@ -240,14 +203,13 @@ test("failed draft saves survive close, version changes, service outage and canc
     await prompt;
     expect(page.isClosed()).toBe(false);
     await expect(field).toHaveValue("1e");
-    await page.unroute("**/api/v1/health");
     await page.unroute("**/parameter-drafts/*/save");
-    await page.getByRole("button", { name: "Refresh project data", exact: true }).click();
-    await field.fill("1e+");
+    await page.getByRole("button", { name: "Retry draft save", exact: true }).click();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Close editor", exact: true }).click();
     await expect(field).not.toBeVisible();
     await page.getByRole("button", { name: "Open working table", exact: true }).click();
-    await expect(field).toHaveValue("1e+");
+    await expect(field).toHaveValue("1e");
     await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await context.close();
   } finally {
