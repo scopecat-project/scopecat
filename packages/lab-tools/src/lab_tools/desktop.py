@@ -16,7 +16,8 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from filelock import FileLock, Timeout
 
 from .application_runtime import ApplicationRuntime
-from .data_spaces import UnsupportedDataSpace, fresh_start
+from .bundle import managed_path
+from .data_reset import UnsupportedDataSpace, reset_store
 from .desktop_platform import (
     hide_window,
     install_reopen_handler,
@@ -299,27 +300,76 @@ class DesktopAPI:
         except UnsupportedDataSpace as error:
             self._unsupported = error
             self._window().load_html(
-                _recovery(error, can_reset=self._session.prepare_fresh is not None)
+                _recovery(error, can_reset=self._session.prepare_reset is not None)
             )
             raise
         self._session.connected(record.base_url)
         _replace_location(self._window(), record.base_url + location)
 
-    def reset_data(self) -> bool:
+    def reset_data(self, skip_backup: bool = False) -> bool:
         """Confirmation belongs to the native host, not the unavailable backend."""
         with self._session.operation():
-            failure, prepare = self._unsupported, self._session.prepare_fresh
+            failure, prepare = self._unsupported, self._session.prepare_reset
             if failure is None or prepare is None or self._session.base_url is not None:
                 raise ValueError("只有不支持的数据格式启动失败时可以重新开始")
+            import webview
+
+            from .application_runtime import write_state
+
+            settings = managed_path(
+                self._runtime.home, self._runtime.home / "desktop/reset-backup.json"
+            )
+            marker = self._runtime.home / "data-reset.json"
+            prior_backup = (
+                cast("dict[str, str | None]", json.loads(marker.read_bytes())).get(
+                    "backup"
+                )
+                if marker.exists()
+                else None
+            )
+            destination = None
+            if not skip_backup and prior_backup is None:
+                remembered = (
+                    cast("dict[str, str]", json.loads(settings.read_bytes())).get(
+                        "directory", ""
+                    )
+                    if settings.exists()
+                    else ""
+                )
+                selected = self._window().create_file_dialog(
+                    webview.FileDialog.FOLDER, directory=remembered
+                )
+                if not selected:
+                    return False
+                destination = Path(
+                    selected if isinstance(selected, str) else selected[0]
+                )
+            backup_notice = (
+                "本次跳过备份。删除后无法恢复。\n"
+                if skip_backup
+                else f"先将原格式数据备份并校验到：{destination}\n"
+                "备份不保证可由当前版本恢复；失败不会删除。\n"
+            )
+            if prior_backup is not None:
+                backup_notice = (
+                    f"验证此前已完成的备份：{prior_backup}\n不会重新备份到其他目录。\n"
+                )
+            if marker.exists():
+                backup_notice += (
+                    "此前可能已部分删除；本次若新建备份，仅包含当前剩余数据。\n"
+                )
             if not self._window().create_confirmation_dialog(
-                "保留旧数据，重新开始？",
-                f"原数据、源码及配置将保留在：{failure.home}\n"
-                "应用将准备并使用一个新空空间。旧实验、草稿和设备登记不会出现在新空间，"
-                "也不会自动运行任务、登记源码或连接设备。不会迁移或删除原件。\n"
-                "确定重新开始？",
+                "删除应用数据并重新初始化？",
+                backup_notice + f"永久删除：{failure.home / 'runtime/.scopecat'} 下的 "
+                "control.sqlite3、SQLite sidecar 和 objects/。\n"
+                "实验、参数、草稿、设备配置及其存储对象将不可恢复地删除。\n"
+                "保留原始源码、环境、安装文件、作者目录登记及其他内容；不自动运行任务或连接设备。\n"
+                "中断可能造成部分删除，无法回滚。确定永久删除并重新初始化？",
             ):
                 return False
-            record = fresh_start(self._runtime, failure, prepare)
+            if destination is not None:
+                write_state(settings, json.dumps({"directory": str(destination)}))
+            record = reset_store(self._runtime, failure, prepare, destination)
             self._unsupported = None
             self._session.connected(record.base_url)
             _replace_location(self._window(), record.base_url)
@@ -366,9 +416,11 @@ def _page(content: str) -> str:
 
 def _recovery(error: Exception, *, can_reset: bool = False) -> str:
     reset = (
-        "<p>此版本无法打开旧数据。可以保留原件并从新空空间重新开始。</p>"
-        f"<p>原数据位置：{escape(str(error.home))}</p>"
-        '<button onclick="resetData()">保留旧数据，重新开始…</button>'
+        "<p>可明确删除应用实验数据并原位初始化；不可恢复。</p>"
+        f"<p>应用数据位置：{escape(str(error.home))}</p>"
+        '<p><label><input id="skip-backup" type="checkbox">'
+        "本次跳过备份（删除后无法恢复）</label></p>"
+        '<button onclick="resetData()">删除应用数据并重新初始化…</button>'
         if isinstance(error, UnsupportedDataSpace) and can_reset
         else ""
     )
@@ -585,7 +637,7 @@ def run(
     *,
     prepare: Callable[[], None] | None = None,
     package_identity: str = "source-development",
-    prepare_fresh: Callable[[Path], None] | None = None,
+    prepare_reset: Callable[[], None] | None = None,
 ) -> None:
     # Optional dependency: command-line/service installations stay headless.
     import pystray
@@ -621,7 +673,7 @@ def run(
                 runtime.select(checked)
 
         session = DesktopSession(runtime, closing)
-        session.prepare_fresh = prepare_fresh
+        session.prepare_reset = prepare_reset
         windows = DesktopWindows(session, prepare or configure)
         first = windows.create()
         window, api, loaded = first.window, first.api, first.loaded
@@ -674,7 +726,7 @@ def run(
                 api.retry()
             except Exception as error:
                 logging.getLogger(__name__).exception("Application startup failed")
-                window.load_html(_recovery(error, can_reset=prepare_fresh is not None))
+                window.load_html(_recovery(error, can_reset=prepare_reset is not None))
             while not closing.wait(0.5):
                 try:
                     session.poll_exit()
@@ -682,7 +734,7 @@ def run(
                     session.wait_for_idle(False)
                     windows.show()
                     windows.latest.window.load_html(
-                        _recovery(error, can_reset=prepare_fresh is not None)
+                        _recovery(error, can_reset=prepare_reset is not None)
                     )
                 if activate.exists():
                     requested_package = activate.read_text(encoding="utf-8")

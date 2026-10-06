@@ -5,7 +5,6 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from pathlib import Path
 
 from .application_runtime import ApplicationRuntime
 
@@ -16,7 +15,7 @@ class DesktopSession:
     def __init__(self, runtime: ApplicationRuntime, closing: threading.Event):
         self.runtime = runtime
         self.closing = closing
-        self.prepare_fresh: Callable[[Path], None] | None = None
+        self.prepare_reset: Callable[[], None] | None = None
         self.base_url: str | None = None
         self.connection_changed: Callable[[str, str], None] = lambda _old, _new: None
         self._operation_lock = threading.Lock()

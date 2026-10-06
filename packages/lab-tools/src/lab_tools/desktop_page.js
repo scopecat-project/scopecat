@@ -24,8 +24,8 @@ function retry() {
 }
 
 function resetData() {
-  return operate("正在确认并准备新空间，原数据将保留…", async () => {
-    const changed = await pywebview.api.reset_data();
+  return operate("正在确认备份与删除应用数据，请稍候…", async () => {
+    const changed = await pywebview.api.reset_data(document.getElementById("skip-backup").checked);
     if (!changed) progress("");
   });
 }

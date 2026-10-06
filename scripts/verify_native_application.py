@@ -209,7 +209,7 @@ def verify(
                 "reset-recovery/reopen-python.log",
                 "reset-recovery/cleanup.log",
                 "reset-recovery/desktop.log",
-                "reset-recovery/candidate-daemon.log",
+                "reset-recovery/daemon.log",
                 "native-windows/result.json",
                 "native-windows/sequence.json",
                 "native-windows/identity.json",

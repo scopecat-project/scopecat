@@ -25,7 +25,6 @@ from scopecat.daemon.health import ApplicationActivity
 from scopecat.project import open_project
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
-from .application_paths import selected_home
 from .bundle import MANIFEST, file_hash, installed_bundle, managed_path, read_bundle
 
 
@@ -92,24 +91,20 @@ class ApplicationRuntime:
     """
 
     def __init__(self, home: Path):
-        self.anchor = home.resolve()
-        self.home = selected_home(self.anchor)
+        self.home = home.resolve()
         self.root = managed_path(self.home, self.home / "runtime")
         self.selection = managed_path(self.home, self.home / "installation.json")
         self.pending = managed_path(self.home, self.home / "installation-pending.json")
-        self.lock = FileLock(self.anchor / "application.lock", timeout=30)
+        self.lock = FileLock(self.home / "application.lock", timeout=30)
 
     def installation(self) -> Installation:
         if not self.selection.is_file():
             raise ValueError("应用尚未准备就绪，请重新打开 Scopecat 或在启动页面重试")
         return Installation.model_validate_json(self.selection.read_bytes())
 
-    def _require_selected_home(self) -> None:
-        if self.home != selected_home(self.anchor):
-            raise ValueError("当前数据空间已改变，请重新打开应用；原数据保留")
-
     def require_ready(self) -> None:
-        self._require_selected_home()
+        if (self.home / "data-reset.json").exists():
+            raise ValueError("数据删除尚未完成；请在启动页面确认继续，不能直接启动")
         if self.pending.exists():
             raise ValueError("应用运行信息登记尚未完成，请在启动页面重试；数据保留")
 
@@ -191,7 +186,6 @@ class ApplicationRuntime:
         """Prepare an empty application; never scaffold or load author code."""
         self.home.mkdir(parents=True, exist_ok=True)
         with self.lock:
-            self._require_selected_home()
             if self.selection.exists():
                 return self.installation()
             manifest = self.root / "scopecat.toml"
@@ -256,7 +250,6 @@ class ApplicationRuntime:
     def select(self, candidate: Installation) -> None:
         """Record a verified runtime under the same locks that fence startup."""
         with self.lock, ExitStack() as locks:
-            self._require_selected_home()
             binding = open_project(self.root, resolve_adapter=False).runtime_binding
             try:
                 for path in (

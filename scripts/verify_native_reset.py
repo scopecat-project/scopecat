@@ -1,4 +1,4 @@
-"""Bounded fresh-start recovery using the real host, WebView and native dialog."""
+"""Bounded in-place reset recovery using the real host, WebView and native dialog."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from pathlib import Path
 
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.bundle import file_hash
-from lab_tools.data_spaces import ResetAttempt
 from verify_native_windows import (  # pyright: ignore[reportImplicitRelativeImport]
     host_bootstrap,
     require_hosted_runner,
@@ -40,11 +39,6 @@ result = {"stage": stage, "checks": checks}
 def prepare():
     native_bootstrap.prepare(args, paths)
 
-
-def fresh(destination):
-    from dataclasses import replace
-
-    native_bootstrap.prepare(args, replace(paths, state=destination))
 
 
 def wait(check, label):
@@ -75,8 +69,12 @@ if stage == "reset":
         str(p.relative_to(paths.state)): p.read_bytes().hex()
         for p in paths.state.rglob("*")
         if p.is_file() and p.suffix != ".lock"
+        and not p.is_relative_to(data)
     }
     (home / "original.json").write_text(json.dumps(original))
+    old_store = {str(p.relative_to(data)): p.read_bytes().hex()
+                 for p in data.rglob("*") if p.is_file() and p.suffix != ".lock"}
+    (home / "old-store.json").write_text(json.dumps(old_store))
 
 
 # Automate an actual native dialog button; never substitute the dialog or API.
@@ -126,7 +124,7 @@ def answer(accept):
         user.SendMessageW.restype = wintypes.LPARAM
 
         def click():
-            dialog = user.FindWindowW("#32770", "保留旧数据\uff0c重新开始\uff1f")
+            dialog = user.FindWindowW("#32770", "删除应用数据并重新初始化\uff1f")
             if not dialog:
                 return False
             button = user.GetDlgItem(dialog, 1 if accept else 2)
@@ -152,6 +150,7 @@ def observe():
             )
             assert str(paths.state) in window.evaluate_js("document.body.innerText")
             checks.append("unsupported-format recovery page visible before backend")
+            window.evaluate_js("document.getElementById('skip-backup').checked = true")
             window.evaluate_js(
                 "document.querySelector('[onclick=\"resetData()\"]').click(); true"
             )
@@ -162,8 +161,13 @@ def observe():
                 ),
                 "cancel completed",
             )
-            assert not (paths.state / "reset-attempt.json").exists()
-            checks.append("native cancel creates no candidate")
+            assert not (paths.state / "data-reset.json").exists()
+            old_store = json.loads((home / "old-store.json").read_text())
+            for name, content in old_store.items():
+                original_file = paths.state / "runtime/.scopecat" / name
+                assert original_file.read_bytes().hex() == content
+            checks.append("native cancel leaves original store unchanged")
+            window.evaluate_js("document.getElementById('skip-backup').checked = true")
             window.evaluate_js(
                 "document.querySelector('[onclick=\"resetData()\"]').click(); true"
             )
@@ -173,16 +177,23 @@ def observe():
                 window.get_current_url()
                 and window.get_current_url().startswith("http://")
             ),
-            "fresh workbench",
+            "in-place backend navigation",
         )
         runtime = ApplicationRuntime(paths.state)
-        assert runtime.home != paths.state
+        assert runtime.home == paths.state
         assert runtime.status().state == "running"
-        checks.append("fresh workbench running at remembered space")
+        checks.append("in-place backend running")
+        with sqlite3.connect(paths.state / "runtime/.scopecat/control.sqlite3") as db:
+            assert (db.execute("SELECT version FROM project_schema").fetchone()[0]
+                    == PROJECT_SCHEMA_VERSION)
+            assert db.execute(
+                "SELECT name FROM sqlite_master WHERE name='old_science'"
+            ).fetchone() is None
+        checks.append("current empty schema replaced the old database")
         original = json.loads((home / "original.json").read_text())
         for relative, content in original.items():
             assert (paths.state / relative).read_bytes().hex() == content, relative
-        checks.append("all original fixture files unchanged including WAL and source")
+        checks.append("protected source and installation files unchanged")
         result["selected"] = str(runtime.home)
         result["status"] = "passed"
     except BaseException:
@@ -195,7 +206,7 @@ def observe():
 
 
 threading.Thread(target=observe, daemon=True).start()
-desktop.run(paths.state, prepare=prepare, prepare_fresh=fresh)
+desktop.run(paths.state, prepare=prepare, prepare_reset=prepare)
 assert result.get("status") == "passed", result
 """
 
@@ -203,12 +214,7 @@ assert result.get("status") == "passed", result
 def retain_diagnostics(reports: Path) -> None:
     anchor = reports / "fixture/data"
     sources = {"desktop.log": anchor / "desktop/desktop.log"}
-    journal = anchor / "reset-attempt.json"
-    if journal.exists():
-        attempt = ResetAttempt.model_validate_json(journal.read_bytes())
-        sources["candidate-daemon.log"] = (
-            anchor / "spaces" / attempt.space / "runtime/.scopecat/daemon.log"
-        )
+    sources["daemon.log"] = anchor / "runtime/.scopecat/daemon.log"
     for name, source in sources.items():
         if source.is_file():
             shutil.copyfile(source, reports / name)
@@ -259,18 +265,12 @@ def verify(app: Path, home: Path) -> None:
             failure = traceback.format_exc()
             raise
         finally:
-            # The candidate may be detached even when a GUI probe times out.
+            # The backend may be detached even when a GUI probe times out.
             cleanup = (
                 "import json,sys\nfrom pathlib import Path\n"
                 "from lab_tools.application_runtime import ApplicationRuntime\n"
                 "root=Path(sys.argv[1])\nruntime=ApplicationRuntime(root)\n"
                 "runtime.stop()\n"
-                "journal=root/'reset-attempt.json'\n"
-                "if journal.exists():\n"
-                " attempt=json.loads(journal.read_text())\n"
-                " candidate_home=root/'spaces'/attempt['space']\n"
-                " candidate=ApplicationRuntime(candidate_home)\n"
-                " if candidate.selection.exists(): candidate.stop()\n"
             )
             try:
                 run_bounded(

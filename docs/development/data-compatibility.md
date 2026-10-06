@@ -106,11 +106,6 @@ Current-format backup/restore is not a cross-version upgrade service. It does no
 install environments, make archived Python executable in a new environment, or
 permit independent writable clones to share one acquisition namespace.
 
-The native desktop can offer an explicit fresh start after unsupported-format
-rejection. It preserves the original home and selects a newly prepared empty
-space; it does not relax format rejection or introduce any migration edge.
-See [recovery instructions](../how-to/maintain-application.md#when-an-older-data-format-prevents-startup).
-
 ## Historical archives
 
 Owners may keep original stores, snapshots, exported results, matching old source,
@@ -130,3 +125,8 @@ current format, rejection without mutation, frozen scientific intent and actual
 backup/restore. Long-term compatibility work begins only when the future baseline
 is explicitly designated; the scope will be stated then rather than inferred from
 all earlier development formats.
+
+A user-confirmed native reset may delete the standard scientific store in place.
+It defaults to a verified external raw-file archive, with an explicit per-operation
+skip option. This archive preserves the old format without promising current
+restore compatibility. This is not a migration edge or supported historical codec.

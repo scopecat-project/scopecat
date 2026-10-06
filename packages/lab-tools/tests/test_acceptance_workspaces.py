@@ -74,7 +74,7 @@ def test_every_native_report_survives_cleanup_and_is_uploaded(
                 "reopen-python.log",
                 "cleanup.log",
                 "desktop.log",
-                "candidate-daemon.log",
+                "daemon.log",
             )
         ],
     ]
@@ -274,10 +274,7 @@ def test_reset_failure_keeps_report_and_owned_logs(
             anchor = reports / "fixture/data"
             (anchor / "desktop").mkdir(parents=True)
             (anchor / "desktop/desktop.log").write_text("desktop failure")
-            (anchor / "reset-attempt.json").write_text(
-                json.dumps({"source": str(anchor), "space": "a" * 32})
-            )
-            candidate = anchor / "spaces" / ("a" * 32) / "runtime/.scopecat"
+            candidate = anchor / "runtime/.scopecat"
             candidate.mkdir(parents=True)
             (candidate / "daemon.log").write_text("candidate failure")
             raise RuntimeError("original probe failure")
@@ -292,7 +289,7 @@ def test_reset_failure_keeps_report_and_owned_logs(
     assert "original probe failure" in report["error"]
     assert bool(report["cleanup_error"]) is cleanup_fails
     assert (reports / "desktop.log").read_text() == "desktop failure"
-    assert (reports / "candidate-daemon.log").read_text() == "candidate failure"
+    assert (reports / "daemon.log").read_text() == "candidate failure"
 
 
 @pytest.mark.parametrize(
