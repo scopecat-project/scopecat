@@ -134,6 +134,7 @@ jobs:
             ${{ runner.temp }}/native-acceptance/data-journey.json
             ${{ runner.temp }}/native-acceptance/native-windows/
             ${{ runner.temp }}/native-acceptance/cocoa-storage/
+            ${{ runner.temp }}/native-acceptance/windows-storage/
             ${{ runner.temp }}/native-acceptance/configuration-sharing/
             ${{ runner.temp }}/native-acceptance/data/native-start.log
             ${{ runner.temp }}/direct-runtime/report.json

@@ -82,10 +82,33 @@ It is not reported as a demonstrated fault or a passed cookie-preservation check
 
 For this follow-up, dispatch **Full acceptance**, ref
 `codex/windows-native-recovery`, profile **native-distribution**, and match the
-run's head SHA to the reviewed PR head. No native run is yet recorded for this
-follow-up. The accepted `4aee5825` / run `37436328157` remains unchanged and does
-not qualify these new checks. Do not use `public-preview` or modify triggers to
-obtain dispatch access.
+run's head SHA to the reviewed PR head. Do not use `public-preview` or modify
+triggers to obtain dispatch access.
+
+[Run 37446444844](https://github.com/scopecat-project/scopecat/actions/runs/37446444844)
+completed successfully at `0f80eb43941a06f13dc10f4ce9fef604ee42fc43`, but its
+Windows artifact omitted **all eight `windows-storage/` files**. The verifier
+retained those files; the workflow upload allowlist omitted their directory.
+The upload path is now corrected without changing triggers or assertions. A new
+manual run is required to obtain reviewable A/B/C evidence; green jobs alone do
+not qualify those individual checks.
+
+The downloaded [Windows report artifact](https://github.com/scopecat-project/scopecat/actions/runs/37446444844/artifacts/11404192239)
+(SHA-256 `e7dba67a0b5b031849b5e0d9dbd2ada0b9ec7b8dc537a610e7c59dfb5c9c7a38`)
+does confirm all eight existing window checks, unchanged complete draft receipts,
+the same marker in both windows, and host exit/cleanup. Same-host cookie retention
+was not exercised. Full Windows restart/form recovery, cross-host cookie/marker
+isolation, B cookie clearing and A/B/C cleanup remain unqualified because their
+raw reports are missing. This is an evidence-retention defect, not evidence of a
+production storage failure.
+
+The [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37446444844/artifacts/11403733136)
+(SHA-256 `c947b17ed16969efa494108fca2f7573d95128e4026899f8ca9b0f373cccfb62`)
+confirm eight window checks, Cocoa A/B/C isolation and exact draft/form recovery
+across service PID 16852 → 17225 (ports 49645 → 49659), with fixed test origin
+port 49643. Both platforms' report/bundle identities match the exact run SHA.
+Mac notarization, Gatekeeper and Finder-first-open limits remain unchanged.
+The earlier `4aee5825` / run `37436328157` evidence remains separately bound.
 
 ## Historical failed candidate
 
