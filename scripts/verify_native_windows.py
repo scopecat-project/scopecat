@@ -635,6 +635,17 @@ def probe(home: Path) -> None:
             )
 
 
+def host_bootstrap(script: Path, arguments: list[str], log: Path) -> str:
+    """Capture Python/WebView failures even when pythonw inherits no handles."""
+    return (
+        "import runpy, sys\n"
+        f"sys.stdout = sys.stderr = open({str(log)!r}, "
+        "'a', encoding='utf-8', buffering=1)\n"
+        f"sys.argv = {[str(script), *arguments]!r}\n"
+        f"runpy.run_path({str(script)!r}, run_name='__main__')\n"
+    )
+
+
 def verify(app: Path, home: Path) -> None:
     require_hosted_runner(home)
     app, home = app.resolve(), home.resolve()
@@ -671,9 +682,7 @@ def verify(app: Path, home: Path) -> None:
             "Contents/MacOS/Scopecat" if sys.platform == "darwin" else "Scopecat.exe"
         )
         (resources / "bootstrap.py").write_text(
-            "import runpy, sys\n"
-            f"sys.argv = [{str(script)!r}, '--probe', {str(home)!r}]\n"
-            f"runpy.run_path({str(script)!r}, run_name='__main__')\n",
+            host_bootstrap(script, ["--probe", str(home)], reports / "python.log"),
             encoding="utf-8",
         )
         failure: str | None = None

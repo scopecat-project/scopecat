@@ -35,18 +35,74 @@ def assert_reports_uploaded(workflow, relatives):
         assert any(relative.is_relative_to(path) for path in paths), relative
 
 
-def test_native_upload_contract_rejects_missing_windows_directory():
+@pytest.mark.parametrize(
+    "relative",
+    ["windows-storage/", "reset-recovery/", "data/desktop/desktop.log"],
+)
+def test_native_upload_contract_rejects_missing_reports(relative):
     workflow = (
         Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
     ).read_text()
     omitted = workflow.replace(
-        "            ${{ runner.temp }}/native-acceptance/windows-storage/\n", ""
+        f"            ${{{{ runner.temp }}}}/native-acceptance/{relative}\n", ""
     )
     assert omitted != workflow
     with pytest.raises(AssertionError):
         assert_reports_uploaded(
-            omitted, [Path("native-acceptance/windows-storage/C.json")]
+            omitted, [Path("native-acceptance") / relative / "C.json"]
         )
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_every_native_report_survives_cleanup_and_is_uploaded(
+    tmp_path, monkeypatch, failure
+):
+    # Independent inventory of each probe's diagnostics, including early failures.
+    relatives = [
+        "data/desktop/desktop.log",
+        "native-windows/python.log",
+        *[
+            f"reset-recovery/{name}"
+            for name in (
+                "result.json",
+                "reset.json",
+                "reopen.json",
+                "reset.log",
+                "reopen.log",
+                "reset-python.log",
+                "reopen-python.log",
+                "cleanup.log",
+                "desktop.log",
+                "candidate-daemon.log",
+            )
+        ],
+    ]
+    app, reports = tmp_path / "app", tmp_path / "reports"
+    app.mkdir()
+
+    def check(copied, home, installer, *, native_windows):
+        for relative in relatives:
+            path = home / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(relative)
+        if failure:
+            raise RuntimeError("probe failed")
+
+    monkeypatch.setattr(verify_native_application, "_verify", check)
+    if failure:
+        with pytest.raises(RuntimeError, match="probe failed"):
+            verify_native_application.verify(app, reports)
+    else:
+        verify_native_application.verify(app, reports)
+    assert not list(reports.glob("work-*"))
+    for relative in relatives:
+        assert (reports / relative).read_text() == relative
+    workflow = (
+        Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
+    ).read_text()
+    assert_reports_uploaded(
+        workflow, [Path("native-acceptance") / p for p in relatives]
+    )
 
 
 @pytest.mark.parametrize("keep_work", [False, True])
@@ -184,3 +240,55 @@ def test_native_window_opt_in_refuses_local_before_copying(tmp_path, monkeypatch
     with pytest.raises(subprocess.CalledProcessError):
         verify_native_application.verify(app, reports, native_windows=True)
     assert not reports.exists()
+
+
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_reset_failure_keeps_report_and_owned_logs(
+    tmp_path, monkeypatch, cleanup_fails
+):
+    import json
+    from types import SimpleNamespace
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "scripts"))
+    probe = load_script("verify_native_reset")
+    monkeypatch.setattr(probe, "require_hosted_runner", lambda _: None)
+    monkeypatch.setattr(probe.sys, "platform", "win32")
+    monkeypatch.setattr(
+        probe,
+        "ApplicationRuntime",
+        lambda _: SimpleNamespace(
+            installation=lambda: SimpleNamespace(python=Path("unused-python"))
+        ),
+    )
+    app, home = tmp_path / "app", tmp_path / "home"
+    (app / "resources").mkdir(parents=True)
+    home.mkdir()
+    reports = home / "reset-recovery"
+    calls = []
+
+    def run(command, log, *, timeout):
+        calls.append(command)
+        log.write_text("host diagnostic")
+        if len(calls) == 1:
+            anchor = reports / "fixture/data"
+            (anchor / "desktop").mkdir(parents=True)
+            (anchor / "desktop/desktop.log").write_text("desktop failure")
+            (anchor / "reset-attempt.json").write_text(
+                json.dumps({"source": str(anchor), "space": "a" * 32})
+            )
+            candidate = anchor / "spaces" / ("a" * 32) / "runtime/.scopecat"
+            candidate.mkdir(parents=True)
+            (candidate / "daemon.log").write_text("candidate failure")
+            raise RuntimeError("original probe failure")
+        if cleanup_fails:
+            raise RuntimeError("cleanup failure")
+
+    monkeypatch.setattr(probe, "run_bounded", run)
+    with pytest.raises(RuntimeError, match="original probe failure"):
+        probe.verify(app, home)
+    report = json.loads((reports / "result.json").read_text())
+    assert report["status"] == "failed" and report["stages"] == {}
+    assert "original probe failure" in report["error"]
+    assert bool(report["cleanup_error"]) is cleanup_fails
+    assert (reports / "desktop.log").read_text() == "desktop failure"
+    assert (reports / "candidate-daemon.log").read_text() == "candidate failure"

@@ -21,6 +21,27 @@ probe = module_from_spec(spec)
 spec.loader.exec_module(probe)
 
 
+def test_native_bootstrap_captures_failure_without_inherited_output(tmp_path):
+    script = tmp_path / "failure.py"
+    script.write_text(
+        "import logging\n"
+        "logging.error('WebView initialization failed')\n"
+        "raise RuntimeError('early host failure')\n"
+    )
+    log = tmp_path / "python.log"
+    bootstrap = tmp_path / "bootstrap.py"
+    bootstrap.write_text(probe.host_bootstrap(script, [], log))
+    result = subprocess.run(  # noqa: S603 - fixed disposable failure fixture
+        [sys.executable, str(bootstrap)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "WebView initialization failed" in log.read_text()
+    assert "RuntimeError: early host failure" in log.read_text()
+
+
 def test_probe_wait_has_a_deadline():
     with pytest.raises(TimeoutError, match="bridge unavailable"):
         probe.wait_for(lambda: False, "bridge unavailable", timeout=0)

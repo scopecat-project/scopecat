@@ -314,17 +314,30 @@ No real devices, private consumer repositories or retained user data are fixture
 
 ## Preserved-original fresh-start recovery
 
-The native acceptance profile now also runs `scripts/verify_native_reset.py` on
-its disposable hosted application copy. This uses production host startup and
-package preparation, a real WebView recovery button, and actual native dialog
-buttons. It checks unsupported-format startup with no backend, cancellation
-without creating a candidate, explicit fresh start, original database/WAL/source
-bytes unchanged, and a separate host launch selecting the same new space.
-`reset-recovery/` reports and logs survive the acceptance workspace cleanup.
+The native acceptance profile also runs `scripts/verify_native_reset.py` on
+its disposable hosted application copy. Its replacement bootstrap calls production
+`desktop.run` and package preparation, bypassing `native_bootstrap.main/launch`.
+DOM clicks invoke the real WebView reset bridge; programmatic native button clicks
+answer the actual confirmation dialog. It checks unsupported-format preflight
+before a backend starts, cancellation without a candidate, explicit fresh start,
+original synthetic database/WAL/source bytes unchanged, and a separate host
+process selecting the same new space. It checks HTTP navigation and backend
+running status, not workbench rendering, human presentation or the unmodified
+installed entry. Cleanup calls the Python exit API, not an OS Quit action.
 
-This probe has been prepared but its Mac/Windows execution is not established by
-the source change. Local bridge/real-service fixtures and storage fault tests are
-separate evidence. Run the manual native distribution profile on the final
-reviewed SHA; do not borrow cookie/draft acceptance from #888/#889 as reset
-qualification. No real user home, migration or automatic task/device recovery is
-part of this probe.
+[Run 37469798664](https://github.com/scopecat-project/scopecat/actions/runs/37469798664)
+on `3763fb766862e7e60d454c2a10efcb3e52ea7d49` failed overall. Mac completed,
+but its artifact omitted reset stage reports, so the job result alone is not a
+report-level reset qualification. Windows failed in the preceding multi-window
+probe: first-page evaluation raised `WebViewException: Main window failed to
+start`; reset did not execute. The captured host log was empty because the native
+launcher uses `pythonw` without inherited output handles. The underlying WebView
+startup cause is unresolved; this is not evidence of a reset or cookie fault.
+
+The probes now explicitly capture child Python output. Reset desktop/candidate
+logs and aggregate failure reports survive cleanup, including failed cleanup;
+`reset-recovery/` is uploaded by the always-run artifact step. Lightweight tests
+check both retention and upload coverage. The updated candidate still needs exact
+SHA native acceptance; no assertion or production behavior was relaxed. Local
+bridge/service and storage fault tests remain separate evidence. No real user
+home, migration or automatic task/device recovery is part of this probe.

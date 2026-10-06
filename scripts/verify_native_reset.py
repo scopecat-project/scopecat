@@ -6,11 +6,14 @@ import json
 import shutil
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.bundle import file_hash
+from lab_tools.data_spaces import ResetAttempt
 from verify_native_windows import (  # pyright: ignore[reportImplicitRelativeImport]
+    host_bootstrap,
     require_hosted_runner,
     run_bounded,
 )
@@ -197,6 +200,20 @@ assert result.get("status") == "passed", result
 """
 
 
+def retain_diagnostics(reports: Path) -> None:
+    anchor = reports / "fixture/data"
+    sources = {"desktop.log": anchor / "desktop/desktop.log"}
+    journal = anchor / "reset-attempt.json"
+    if journal.exists():
+        attempt = ResetAttempt.model_validate_json(journal.read_bytes())
+        sources["candidate-daemon.log"] = (
+            anchor / "spaces" / attempt.space / "runtime/.scopecat/daemon.log"
+        )
+    for name, source in sources.items():
+        if source.is_file():
+            shutil.copyfile(source, reports / name)
+
+
 def verify(app: Path, home: Path) -> None:
     require_hosted_runner(home)
     if home.is_relative_to(app):
@@ -217,13 +234,16 @@ def verify(app: Path, home: Path) -> None:
         probe.write_text(HOST, encoding="utf-8")
         results = {}
         passed = False
+        failure = None
+        cleanup_error = None
         try:
             for stage in ("reset", "reopen"):
                 (resources / "bootstrap.py").write_text(
-                    "import runpy, sys\n"
-                    f"sys.argv = [{str(probe)!r}, {str(reports)!r}, "
-                    f"{str(resources / 'payload')!r}, {stage!r}]\n"
-                    f"runpy.run_path({str(probe)!r}, run_name='__main__')\n",
+                    host_bootstrap(
+                        probe,
+                        [str(reports), str(resources / "payload"), stage],
+                        reports / f"{stage}-python.log",
+                    ),
                     encoding="utf-8",
                 )
                 run_bounded(
@@ -235,6 +255,9 @@ def verify(app: Path, home: Path) -> None:
                 assert results[stage]["status"] == "passed"
             assert results["reset"]["selected"] == results["reopen"]["selected"]
             passed = True
+        except BaseException:
+            failure = traceback.format_exc()
+            raise
         finally:
             # The candidate may be detached even when a GUI probe times out.
             cleanup = (
@@ -249,29 +272,40 @@ def verify(app: Path, home: Path) -> None:
                 " candidate=ApplicationRuntime(candidate_home)\n"
                 " if candidate.selection.exists(): candidate.stop()\n"
             )
-            run_bounded(
-                [
-                    str(original_package.python),
-                    "-I",
-                    "-B",
-                    "-c",
-                    cleanup,
-                    str(reports / "fixture/data"),
-                ],
-                reports / "cleanup.log",
-                timeout=45,
-            )
-            (reports / "result.json").write_text(
-                json.dumps(
-                    {
-                        "status": "passed" if passed else "failed",
-                        "probe_sha256": file_hash(Path(__file__)),
-                        "stages": results,
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
+            try:
+                run_bounded(
+                    [
+                        str(original_package.python),
+                        "-I",
+                        "-B",
+                        "-c",
+                        cleanup,
+                        str(reports / "fixture/data"),
+                    ],
+                    reports / "cleanup.log",
+                    timeout=45,
+                )
+            except BaseException:
+                cleanup_error = traceback.format_exc()
+                if failure is None:
+                    raise
+            finally:
+                (reports / "result.json").write_text(
+                    json.dumps(
+                        {
+                            "status": "passed"
+                            if passed and not cleanup_error
+                            else "failed",
+                            "error": failure,
+                            "cleanup_error": cleanup_error,
+                            "probe_sha256": file_hash(Path(__file__)),
+                            "stages": results,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                retain_diagnostics(reports)
 
 
 if __name__ == "__main__":
