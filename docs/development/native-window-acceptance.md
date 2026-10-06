@@ -311,3 +311,20 @@ window creation within the live process; the separate Mac Cocoa check covers
 browser ephemerality and application-draft recovery across complete host/service
 restart. That restart result is not extended to Windows.
 No real devices, private consumer repositories or retained user data are fixtures.
+
+## Preserved-original fresh-start recovery
+
+The native acceptance profile now also runs `scripts/verify_native_reset.py` on
+its disposable hosted application copy. This uses production host startup and
+package preparation, a real WebView recovery button, and actual native dialog
+buttons. It checks unsupported-format startup with no backend, cancellation
+without creating a candidate, explicit fresh start, original database/WAL/source
+bytes unchanged, and a separate host launch selecting the same new space.
+`reset-recovery/` reports and logs survive the acceptance workspace cleanup.
+
+This probe has been prepared but its Mac/Windows execution is not established by
+the source change. Local bridge/real-service fixtures and storage fault tests are
+separate evidence. Run the manual native distribution profile on the final
+reviewed SHA; do not borrow cookie/draft acceptance from #888/#889 as reset
+qualification. No real user home, migration or automatic task/device recovery is
+part of this probe.
