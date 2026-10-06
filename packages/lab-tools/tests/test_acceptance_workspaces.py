@@ -72,6 +72,8 @@ def test_native_acceptance_preserves_candidate_and_reports(
         (home / "result.json").write_text('{"status": "stopped"}')
         (home / "data").mkdir()
         (home / "data/native-start.log").write_text("diagnostic")
+        (home / "native-windows").mkdir()
+        (home / "native-windows/result.json").write_text('{"status": "failed"}')
         (home / "environment").mkdir()
         if failure:
             raise RuntimeError("acceptance failed")
@@ -85,6 +87,9 @@ def test_native_acceptance_preserves_candidate_and_reports(
     assert (app / "original").read_text() == "candidate"
     assert (reports / "result.json").is_file()
     assert (reports / "data/native-start.log").read_text() == "diagnostic"
+    assert (
+        reports / "native-windows/result.json"
+    ).read_text() == '{"status": "failed"}'
     assert bool(list(reports.glob("work-*"))) is keep_work
 
 

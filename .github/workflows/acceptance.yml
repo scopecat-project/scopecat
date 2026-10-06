@@ -85,6 +85,7 @@ jobs:
         run: |
           uv run --locked --group delivery pytest -v -n 0 \
             packages/lab-tools/tests/test_acceptance_workspaces.py \
+            packages/lab-tools/tests/test_native_windows_probe.py \
             packages/lab-tools/tests/test_author_environment.py \
             packages/lab-tools/tests/test_desktop_platform.py \
             packages/lab-tools/tests/test_desktop_session.py \
@@ -130,6 +131,7 @@ jobs:
           path: |
             ${{ runner.temp }}/native-acceptance/result.json
             ${{ runner.temp }}/native-acceptance/data-journey.json
+            ${{ runner.temp }}/native-acceptance/native-windows/
             ${{ runner.temp }}/native-acceptance/configuration-sharing/
             ${{ runner.temp }}/native-acceptance/data/native-start.log
             ${{ runner.temp }}/direct-runtime/report.json

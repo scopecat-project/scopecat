@@ -1,4 +1,4 @@
-"""Qualify a built native app in an isolated directory without opening its UI."""
+"""Qualify an isolated native package, including a bounded real WebView probe."""
 
 from __future__ import annotations
 
@@ -184,6 +184,12 @@ def verify(
             for relative in (
                 "result.json",
                 "data-journey.json",
+                "native-windows/result.json",
+                "native-windows/identity.json",
+                "native-windows/host.log",
+                "native-windows/cleanup.log",
+                "native-windows/acquisition.log",
+                "native-windows/acquisition-process.json",
                 "configuration-sharing/result.json",
                 "configuration-sharing/sender-daemon.log",
                 "configuration-sharing/receiver-daemon.log",
@@ -271,6 +277,16 @@ def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Runtime modified application files"
+    subprocess.run(  # noqa: S603 - bounded native probe, disposable home and app copy
+        [
+            sys.executable,
+            str(Path(__file__).with_name("verify_native_windows.py").resolve()),
+            str(relocated),
+            str(home),
+        ],
+        check=True,
+    )
+    assert inventory(relocated, (".",)) == before, "Window probe modified application"
     client = (
         home
         / "authors/.venv"

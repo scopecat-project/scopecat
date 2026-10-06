@@ -56,3 +56,7 @@ Qualification must cover fresh installation, package replacement, active work,
 background/reopen, startup failure, failed shutdown and recovery after process
 termination. Native UI checks on macOS and Windows are separate evidence from
 headless process tests. Hardware acceptance follows software lifecycle acceptance.
+
+The bounded [exact-run native window probe](../native-window-acceptance.md) is
+prepared for the manual distribution profile; Mac/Windows execution remains
+pending and is distinct from the existing headless and browser evidence.
