@@ -264,7 +264,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await page.goto(`${url}/#configuration`);
     await editVersion(page, pythonVersion);
     const frequency = page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
-    await expect(frequency).toHaveValue("5100");
+    await expect(frequency).toHaveValue("5100.0");
     await expect(
       page.getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true }),
     ).toHaveValue("MHz");
