@@ -16,7 +16,8 @@ source; installed historical environments and scientific data are untouched.
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
-| `20_flux_spectroscopy.py`, `24`–`25`, `28`–`29`, `31` | Compiled buffers, channel conflicts, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `20_flux_spectroscopy.py`, `24`–`25`, `29`, `31` | Compiled buffers, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `28_channel_conflict_diagnostic.py` | Logical pulse-overlap diagnostics | Retired with its daemon/gallery test and dedicated `conflicting_drive` / `conflicting_drive_program` wrappers. Existing quantum scheduling and authoring tests own the diagnostic, as detailed below. |
 | `34_xy_lo_sweep.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` and their workflow modules | Shared owners, signed IF, entityless claims and variable-length acquisition | Retired the scripts, experiments, result wrappers and XY facade. Current contract owners and deliberately withdrawn fixture assertions are mapped below. |
 | `30_drag_calibration.py` | DRAG acquisition, fit and uncertainty display, exact candidate lineage and independent verification | Retired. `test_typed_candidates.py` retains the real-device simulation and analysis with independent parameters/setup and no default mutation. Global publication/restore is no longer a required author journey. |
 | `workflows/drag_beta_*` | Independent verification, ownership of edited cells, conflict detection, durable publication/recovery | Acquisition, fit and scientific scoring remain focused integration dependencies. Old freshness, verify-only procedure, semantic-merge publisher and automatic-publication registry are retired. `drag_branch_calibration` and real-daemon tests cover target-complete joint remeasurement, retained rejection, exact branch publication and restart/lost-response recovery. |
@@ -31,6 +32,18 @@ expresses an obsolete requirement before removing it.
 
 ### Retired generic cases: retained evidence
 
+- Quantum `tests/test_pulses.py::test_parallel_intervals_cannot_overlap_on_one_logical_signal`
+  checks `pulse_signal_overlap`, the exact non-q0 logical drive signal, both
+  conflicting instruction identities and the structured offending instruction.
+  Existing `test_program_authoring.py::test_gate_and_pulse_can_bind_in_parallel_before_final_signal_check`
+  keeps the independent authoring boundary: parallel gate and direct pulse bind
+  successfully, then lowering/materialization preserves the signal and both
+  event identities in the scheduling rejection. Neither needs a daemon or lab
+  configuration. The deleted gallery checked only the code and a hard-coded q0
+  substring; its two wrappers had no other repository consumers.
+  This is logical signal validation before physical placement, not evidence of
+  AWG/digitizer conflicts or runtime exclusion. Shared physical claims, compiled
+  multiplexing and real-worker device journeys remain with their existing owners.
 - Reference `tests/unit/test_quantum_runner.py` retains actual bare-instrument
   execution, compiled multiplexing constraints, batch-invariant IQ results and
   selected-point preview across authored/logical/scheduled/physical layers with

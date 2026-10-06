@@ -465,14 +465,15 @@ def test_acquisition_closure_reports_missing_undeclared_and_multiple_uses() -> N
 
 
 def test_parallel_intervals_cannot_overlap_on_one_logical_signal() -> None:
+    signal = DriveSignal(QubitId("spectator-7"))
     program = _program(
         Parallel(
             (
-                _play("first", DRIVE_Q0, 20),
+                _play("first", signal, 20),
                 Sequence(
                     (
                         Delay(PulseEventId("offset"), DRIVE_Q1, Quantity(5, "ns")),
-                        _play("second", DRIVE_Q0, 10),
+                        _play("second", signal, 10),
                     )
                 ),
             )
@@ -482,7 +483,12 @@ def test_parallel_intervals_cannot_overlap_on_one_logical_signal() -> None:
     with pytest.raises(PulseValidationError) as raised:
         schedule(program)
 
-    assert "pulse_signal_overlap" in _issue_codes(raised.value)
+    [issue] = raised.value.issues
+    assert issue.code == "pulse_signal_overlap"
+    assert "('drive', 'qubit', 'spectator-7')" in issue.message
+    assert "'first'" in issue.message
+    assert "'second'" in issue.message
+    assert issue.instruction_id == PulseEventId("second")
 
 
 @given(

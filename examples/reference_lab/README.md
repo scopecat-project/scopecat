@@ -71,10 +71,16 @@ list of interfaces to preserve.
 | `20_flux_spectroscopy.py` | Bias scan, complex traces, fit artifacts, and a parameter proposal |
 | `24_flux_ramsey.py` | Host DC bias composed with a quantum delay scan |
 | `25_entity_routed_ramsey.py` | Point-local entity selection over reusable quantum work |
-| `28_channel_conflict_diagnostic.py` | Precise conflict on an overlapping physical drive route |
 | `29_channel_unavailable.py` | Entity-axis IQ traces, identity selection, provenance, and one unavailable demodulation channel |
 | `31_topology_scaled_ramsey.py` | One connected-qubit-set program reused across chip topology and scale |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
+
+The logical pulse-overlap diagnostic script and its dedicated experiment/program
+wrappers are retired. Quantum pulse tests own the error code, logical signal and
+instruction identities; the existing authoring test retains propagation through
+binding and pulse lowering without a daemon. These checks do not cover physical
+route conflicts or runtime exclusion; shared AWG/digitizer and device journeys
+remain. See the [retained evidence](../../docs/development/reference-gallery-retirement.md#retired-generic-cases-retained-evidence).
 
 The XY, AWG monitor and ragged scope scripts and their workflow modules are
 retired. Current quantum renderer, core resource/dataset and server worker tests
