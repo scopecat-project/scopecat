@@ -78,3 +78,27 @@ page navigation, independently of its save state.
 The browser fixtures use synthetic reference experiments. Native packaging, OS
 window/store behavior, real devices and installed user upgrades require separate
 acceptance.
+
+## Object parameter editing
+
+In Samples, resolve an explicit working branch with a registered single-member
+sample target and setup, then open its working parameters beside the map. Selecting
+an object shows rows directly referencing its mapped entity. Edit non-key values
+there; All parameters retains key and row-structure editing. Both presentations
+share one mounted draft owner and save queue. Switching objects preserves raw input.
+
+The view reuses the existing resolved context rather than adding another set of
+selection controls. It must match the displayed sample revision and the recovered
+working table baseline. Inline sample association alone cannot map objects, and
+same-named entities on different samples are not interchangeable. Historical run
+contexts remain read-only; object selection neither adopts inputs nor changes the
+launch subject. Saving and adoption retain their existing explicit boundaries.
+
+The first slice groups existing direct-reference rows under their parameter IDs
+and authored descriptions. Composite-key rows remain distinct. Shared rows list
+all directly referenced entities without claiming complete dependency or impact
+coverage. String-key routes, inferred dependencies, new grouping metadata, new
+persistent mappings, automatic row creation and multi-member target execution are
+outside this slice. Raw entity references that cannot be read remain accessible in
+the full table. The object form writes back to the original raw row, never its
+filtered display position.

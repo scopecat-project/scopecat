@@ -7,6 +7,7 @@ const identity = (item: { id: string; kind?: string | null }) =>
 
 export function ParameterValueField({
   label,
+  displayLabel,
   origin,
   type,
   value,
@@ -15,6 +16,7 @@ export function ParameterValueField({
   onChange,
 }: {
   label: string;
+  displayLabel?: string;
   origin?: string;
   type: ParameterScalarType;
   value?: ParameterDraftAtom;
@@ -47,7 +49,11 @@ export function ParameterValueField({
   const selected = retained ? identity(retained) : value ? "retained-invalid" : "";
   return (
     <label className="flex flex-wrap items-center gap-2">
-      {label}
+      {displayLabel ? (
+        <span className="w-full font-medium text-text-soft">{displayLabel}</span>
+      ) : (
+        label
+      )}
       {type.type === "bool" ? (
         <select
           aria-label={label}

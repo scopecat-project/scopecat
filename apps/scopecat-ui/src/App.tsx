@@ -1,3 +1,8 @@
+import type {
+  ObjectParameterContext,
+  ObjectParameterPanel,
+  ParameterWorkspaceHandle,
+} from "./features/config/object-parameters";
 import type { ComparisonHandoff } from "./features/analyses/RunComparison";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -97,6 +102,13 @@ export default function App() {
     projectId: string | undefined;
     value: ComparisonHandoff;
   }>();
+  const parameterWorkspace = useRef<ParameterWorkspaceHandle>(null);
+  const [objectPanel, setObjectPanel] = useState<ObjectParameterPanel | null>(null);
+  const editObjectParameters = useCallback(async (context: ObjectParameterContext) => {
+    if (!parameterWorkspace.current)
+      throw new Error("The parameter workspace is still loading. Try again.");
+    await parameterWorkspace.current.openObject(context);
+  }, []);
   const [view, setView] = useState<ProjectView>(projectViewFromLocation);
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>(selectedRunFromUrl);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(
@@ -465,6 +477,8 @@ export default function App() {
               }
             >
               <ContextConfigWorkspace
+                workspaceRef={parameterWorkspace}
+                objectPanel={objectPanel}
                 onSelected={() => selectView("launch")}
                 daemonUnavailable={daemonUnavailable}
               />
@@ -507,6 +521,8 @@ export default function App() {
             }
           >
             <SamplesWorkspace
+              onEditParameters={editObjectParameters}
+              onParameterPanel={setObjectPanel}
               daemonUnavailable={daemonUnavailable}
               onOpenRun={openConfigSourceRun}
               onSelectSample={selectSample}
@@ -746,15 +762,21 @@ function formatClock(value: string): string {
 }
 
 function ContextConfigWorkspace({
+  workspaceRef,
+  objectPanel,
   daemonUnavailable,
   onSelected,
 }: {
   daemonUnavailable: boolean;
   onSelected: () => void;
+  workspaceRef: React.Ref<ParameterWorkspaceHandle>;
+  objectPanel: ObjectParameterPanel | null;
 }) {
   const { selectConfiguration } = useLaunchDraft();
   return (
     <ConfigWorkspace
+      ref={workspaceRef}
+      objectPanel={objectPanel}
       daemonUnavailable={daemonUnavailable}
       onSelectConfiguration={(ref, workingInput) => {
         selectConfiguration(ref, workingInput);
