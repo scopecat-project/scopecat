@@ -40,21 +40,23 @@ launch remain unevaluated. Mac signature/tamper checks passed, but notarization 
 not provided, Gatekeeper rejected the package (return code 3), and Finder first-open
 was not evaluated. Installer artifacts were retained without a release/tag/deploy.
 
-## Windows lifecycle follow-up (native execution pending)
+## Windows lifecycle follow-up (repair acceptance pending)
 
 `verify_windows_storage.py` extends the existing opted-in `--native-windows`
 path on Windows, after the exact-run probe has saved a real Decision draft and
-exited. It runs three original packaged native launchers against the unchanged
-upstream WebView2 backend. Only their acceptance bootstrap is replaced. No
-production patch, alternate profile or new workflow trigger is introduced.
+exited. It runs three original packaged native launchers against the actual
+WebView2 backend selected by the Windows delivery. The acceptance bootstrap
+drives the original launchers; it never patches the loaded backend. The approved
+production wheel repair below is separate from this harness. No alternate profile
+or new workflow trigger is introduced.
 
 - A and B overlap at one fixed loopback origin, using the same copied executable.
   Both must start without the other's marker or cookie. B writes and clears its
   cookie; A must retain its marker and cookie through both operations. Checks
   compare document cookies, the native cookie API and real HTTP requests.
 - Actual WebView2 profiles must be private, and their observed user-data folders
-  must differ across hosts. The upstream version and loaded backend hashes are
-  recorded. Windows `DeleteAllCookies` must leave B's localStorage marker intact;
+  must differ across hosts. The exact packaged version and loaded backend hashes are
+  required and recorded. Windows `DeleteAllCookies` must leave B's localStorage marker intact;
   Cocoa's all-website-data clear semantics are not imposed on Windows.
 - After both hosts exit successfully, the wrapper stops the application service,
   verifies the old PID/creation-time identity is gone, then starts it again. C
@@ -82,14 +84,53 @@ paths, including failure cases, and reject a missing directory. These Linux test
 validate failure handling and evidence retention, not native Windows behavior. The existing eight window checks and independent marker
 assertions remain unchanged.
 
-The same-host check covers the identified source risk: upstream 6.2.1
-[WebView2 initialization](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/edgechromium.py)
-calls `DeleteAllCookies` for each private WebView; the
-[WinForms backend](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/winforms.py)
-uses a host-level temporary directory. Native evidence is still required before
-reporting a demonstrated fault or proposing any production dependency repair.
-The probe never reseeds cookies after opening the peer or adjusts its expectation
-to match deletion. No production storage code or Mac assertion changes.
+The same-host assertion remains strict. It never reseeds cookies after opening
+its peer or changes the expectation to match deletion. Mac assertions and
+application-owned draft persistence remain unchanged.
+
+### Confirmed Windows failure and approved repair
+
+[Run 37451728337](https://github.com/scopecat-project/scopecat/actions/runs/37451728337)
+used `native-distribution` at `0dc08bd3d9d6197013c173330c767a42298d30f2`.
+Windows and the acceptance gate failed; Mac passed. The actual
+[Windows artifact 11406754322](https://github.com/scopecat-project/scopecat/actions/runs/37451728337/artifacts/11406754322)
+contains all eight lifecycle files, ZIP SHA-256
+`df68b8f6b06814a7d605d3537d3b16d50ef8580169a5fcb4ef50f659b307cd1c`.
+A/B passed cross-host isolation and explicit cookie clearing. Both exited 0;
+service PID/port changed `7108:54057` to `8084:56613`. C started empty at fixed
+origin port `54051` and restored the exact procedure form and full application
+draft. Opening C's peer then removed its cookie from native, document and HTTP
+observations while preserving marker C and the complete draft. Both windows used
+the same actual private folder. C exited 1; aggregate failure propagated. Owned
+host/service cleanup passed; the peer-close preservation check was not reached.
+Later Windows data/sharing checks and qualified-installer upload were not reached.
+
+The matching upstream 6.2.1 source calls `DeleteAllCookies` for every private
+WebView initialization against a host-shared folder. This is a confirmed backend
+cookie-lifecycle defect, not an application draft failure. The user approved a
+bounded Windows production wheel repair on 2026-10-06. `windows_dependency`
+transforms the exact upstream wheel into `6.2.1+scopecat.windows.1`, preserving the
+WinForms backend, private mode, host-specific temporary directory and explicit
+`clear_cookies`. Its cookie-only `ClearBrowsingDataAsync` task is shared by actual
+folder/profile identity within the host. Every window waits asynchronously on its
+own UI scheduler before navigation. Concurrent initialization shares one task;
+failure/cancellation stays closed and never triggers a later destructive retry.
+Early URL/HTML requests retain only the last navigation until successful cleanup.
+The native probe requires the exact version and loaded Edge/WinForms hashes.
+See the [repair contract](architecture/draft-recovery.md#windows-cookie-initialization-repair).
+
+This repair still needs a new exact-SHA native run; the failed run above is not
+qualification for the repaired package. Linux sequencing tests do not execute
+Python.NET, STA dispatch or WebView2. Darwin's original patched wheel bytes and
+hash remain unchanged.
+
+The actual [Mac artifact 11407396038](https://github.com/scopecat-project/scopecat/actions/runs/37451728337/artifacts/11407396038)
+was independently checked, ZIP SHA-256
+`3b1a0ccb67abb3f5e49dcb681bff95b5efc161373333d9feaad872d8b221fcb5`.
+All eight native-window checks and Cocoa A/B/C (5/2/3 checks) passed. Original,
+fixture and A/B/C complete draft receipts match, with fixed origin port `49613`
+and service PID/port `17831:49614` to `18801:49628`. Host exit/cleanup passed;
+notarization, Gatekeeper and Finder-first-open limitations remain unchanged.
 
 For this follow-up, dispatch **Full acceptance**, ref
 `codex/windows-native-recovery`, profile **native-distribution**, and match the

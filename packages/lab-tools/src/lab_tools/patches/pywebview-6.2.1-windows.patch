@@ -1,0 +1,119 @@
+--- a/edgechromium.py
++++ b/edgechromium.py
+@@ -4,7 +4,7 @@
+ import shutil
+ import webbrowser
+ import winreg
+-from threading import Semaphore
++from threading import Lock, Semaphore
+ 
+ try:
+     import clr
+@@ -41,6 +41,7 @@
+ clr.AddReference(interop_dll_path('Microsoft.Web.WebView2.WinForms.dll'))
+ 
+ from Microsoft.Web.WebView2.Core import (  # noqa: E402
++    CoreWebView2BrowsingDataKinds,
+     CoreWebView2Cookie,
+     CoreWebView2ServerCertificateErrorAction,
+     CoreWebView2WebResourceContext,
+@@ -56,7 +57,14 @@
+ 
+ 
+ class EdgeChrome:
++    # One initialization task per actual private profile in this host. Keep failed
++    # tasks too: retrying on a later window could erase an already active store.
++    _private_store_tasks = {}
++    _private_store_lock = Lock()
++
+     def __init__(self, form: WinForms.Form, window: Window, cache_dir: str):
++        self._private_store_ready = not _state['private_mode']
++        self._pending_navigation = None
+         self.pywebview_window = window
+         self.webview = WebView2()
+         props = CoreWebView2CreationProperties()
+@@ -207,6 +215,9 @@
+         return self.url
+ 
+     def load_html(self, content, _):
++        if not self._private_store_ready:
++            self._pending_navigation = ('html', content)
++            return
+         self.html = content
+         self.ishtml = True
+ 
+@@ -216,6 +227,9 @@
+             self.webview.EnsureCoreWebView2Async(None)
+ 
+     def load_url(self, url: str):
++        if not self._private_store_ready:
++            self._pending_navigation = ('url', url)
++            return
+         self.ishtml = False
+         self.webview.Source = Uri(url)
+ 
+@@ -299,10 +313,51 @@
+             settings.UserAgent = _state['user_agent']
+ 
+         if _state['private_mode']:
+-            # cookies persist even if UserDataFolder is in memory. We have to delete cookies manually.
+-            sender.CoreWebView2.CookieManager.DeleteAllCookies()
+-
+-        if self.pywebview_window.real_url:
++            self._initialize_private_store()
++        else:
++            self._load_initial_content()
++
++    def _initialize_private_store(self):
++        core = self.webview.CoreWebView2
++        profile = core.Profile
++        key = (os.path.normcase(os.path.abspath(str(core.Environment.UserDataFolder))),
++               str(profile.ProfileName))
++        with self._private_store_lock:
++            if key not in self._private_store_tasks:
++                self._private_store_tasks[key] = None
++                try:
++                    self._private_store_tasks[key] = profile.ClearBrowsingDataAsync(
++                        CoreWebView2BrowsingDataKinds.Cookies)
++                except Exception:
++                    logger.exception('Private cookie initialization could not start')
++                    return
++            task = self._private_store_tasks[key]
++        if task is None:
++            logger.error('Private cookie initialization previously failed to start')
++            return
++        # Never block the STA message pump. Every view navigates on its own UI
++        # scheduler only after the shared cookie-only operation has completed.
++        task.ContinueWith(Action[Task](self._on_private_store_ready),
++                          self.syncContextTaskScheduler)
++
++    def _on_private_store_ready(self, task):
++        if task.IsCanceled or task.IsFaulted:
++            logger.error('Private cookie initialization failed: %s', task.Exception)
++            return
++        if self.webview.IsDisposed:
++            return
++        self._private_store_ready = True
++        self._load_initial_content()
++
++    def _load_initial_content(self):
++        if self._pending_navigation is not None:
++            kind, value = self._pending_navigation
++            self._pending_navigation = None
++            if kind == 'url':
++                self.load_url(value)
++            else:
++                self.load_html(value, '')
++        elif self.pywebview_window.real_url:
+             self.load_url(self.pywebview_window.real_url)
+         elif self.pywebview_window.html:
+             self.html = self.pywebview_window.html
+@@ -311,7 +366,7 @@
+             self.load_html(DEFAULT_HTML, '')
+ 
+         if _state['debug'] and webview_settings['OPEN_DEVTOOLS_IN_DEBUG']:
+-            sender.CoreWebView2.OpenDevToolsWindow()
++            self.webview.CoreWebView2.OpenDevToolsWindow()
+ 
+     def on_download_starting(self, sender, args):
+         if not webview_settings['ALLOW_DOWNLOADS']:

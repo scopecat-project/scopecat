@@ -35,6 +35,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from verify_native_windows import require_hosted_runner, read_decision_draft
 from verify_windows_storage import require_observation
+from lab_tools.windows_dependency import VERSION, RESULT_SHA256, WINFORMS_SHA256
 
 require_hosted_runner(Path(sys.argv[2]).parent)
 assert sys.platform == "win32"
@@ -103,7 +104,9 @@ def observe(window, label):
 
 def exercise():
     try:
-        assert result["pywebview"] == "6.2.1"
+        assert result["pywebview"] == VERSION
+        assert result["edgechromium_sha256"] == RESULT_SHA256
+        assert result["winforms_sha256"] == WINFORMS_SHA256
         first = windows[0]
         assert first.events.loaded.wait(30)
         result["actual_store"] = actual(first)

@@ -62,13 +62,14 @@ combined at `4aee5825dbe374f469bc0f1be1e9a981908086c1` for
 Mac and Windows exact-run window checks passed; Mac additionally passed host/store
 isolation and complete host/service restart with application-draft restoration.
 The previous Mac storage failure belongs to the earlier candidate and is retained
-in #885's evidence. Ordinary source environments remain unpatched; Windows uses
+in #885's evidence. Ordinary source environments remain unpatched; that Windows candidate used
 upstream pywebview. This does not establish native execution of the subsequent
 #884/#886/#885 closeout combination, a new release or installed-user acceptance.
-Windows full host-restart/cookie isolation remains unverified; the bounded
-[Windows lifecycle follow-up](native-window-acceptance.md#windows-lifecycle-follow-up-native-execution-pending)
-adds an executable check to the existing native-distribution path, pending native
-execution. OS focus/menu, tray and visual experience remain unverified. Mac notarization was not provided, Gatekeeper rejected the
+The [Windows lifecycle follow-up](native-window-acceptance.md#windows-lifecycle-follow-up-repair-acceptance-pending)
+passed cross-host isolation and complete restart/draft recovery at `0dc08bd3`
+in run `37451728337`, but proved same-host peer creation deletes cookies.
+The approved Windows dependency repair is implemented; its native qualification
+is pending a new exact-SHA run. Mac passed that failed-Windows run. OS focus/menu, tray and visual experience remain unverified. Mac notarization was not provided, Gatekeeper rejected the
 package, and Finder first-open was not evaluated.
 
 See [configuration ownership](configuration-ownership.md),

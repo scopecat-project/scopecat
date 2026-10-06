@@ -445,6 +445,7 @@ fast_paths = [
 integration_paths = [
   "packages/lab-tools/tests/test_native_windows_probe.py",
   "packages/lab-tools/tests/test_cocoa_dependency.py",
+  "packages/lab-tools/tests/test_windows_dependency.py",
   "packages/lab-tools/tests/test_platform_files.py",
   "packages/scopecat-server/tests",
   "packages/lab-tools/tests/test_application_entry.py",
