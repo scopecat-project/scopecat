@@ -1,4 +1,4 @@
-"""Qualify an isolated native package, including a bounded real WebView probe."""
+"""Qualify a native package; opt into real WebViews only on disposable hosted CI."""
 
 from __future__ import annotations
 
@@ -163,13 +163,28 @@ print("PASS: native export, independent analysis and data-only import")
 
 
 def verify(
-    app: Path, home: Path, installer: Path | None = None, *, keep_work: bool = False
+    app: Path,
+    home: Path,
+    installer: Path | None = None,
+    *,
+    keep_work: bool = False,
+    native_windows: bool = False,
 ) -> None:
     """Retain reports only; never rename or mutate the caller's package."""
     app = app.resolve()
     home = home.resolve()
     if home.is_relative_to(app):
         raise ValueError("Acceptance reports must be outside the application")
+    if native_windows:
+        subprocess.run(  # noqa: S603 - refuse unsafe hosts before any native execution
+            [
+                sys.executable,
+                str(Path(__file__).with_name("verify_native_windows.py").resolve()),
+                "--check-hosted",
+                str(home),
+            ],
+            check=True,
+        )
     home.mkdir(parents=True, exist_ok=False)
     with tempfile.TemporaryDirectory(
         prefix="work-", dir=home, delete=not keep_work
@@ -179,7 +194,7 @@ def verify(
         shutil.copytree(app.resolve(), copied, symlinks=True)
         state = work / "acceptance"
         try:
-            _verify(copied, state, installer)
+            _verify(copied, state, installer, native_windows=native_windows)
         finally:
             for relative in (
                 "result.json",
@@ -235,7 +250,13 @@ def verify(
         )
 
 
-def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
+def _verify(
+    app: Path,
+    home: Path,
+    installer: Path | None = None,
+    *,
+    native_windows: bool = False,
+) -> None:
     app = app.resolve()
     home = home.resolve()
     if home.exists():
@@ -277,16 +298,19 @@ def _verify(app: Path, home: Path, installer: Path | None = None) -> None:
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Runtime modified application files"
-    subprocess.run(  # noqa: S603 - bounded native probe, disposable home and app copy
-        [
-            sys.executable,
-            str(Path(__file__).with_name("verify_native_windows.py").resolve()),
-            str(relocated),
-            str(home),
-        ],
-        check=True,
-    )
-    assert inventory(relocated, (".",)) == before, "Window probe modified application"
+    if native_windows:
+        subprocess.run(  # noqa: S603 - bounded native probe, disposable home and app copy
+            [
+                sys.executable,
+                str(Path(__file__).with_name("verify_native_windows.py").resolve()),
+                str(relocated),
+                str(home),
+            ],
+            check=True,
+        )
+        assert inventory(relocated, (".",)) == before, (
+            "Window probe modified application"
+        )
     client = (
         home
         / "authors/.venv"
@@ -388,6 +412,7 @@ class Arguments(Protocol):
     reports: Path
     installer: Path | None
     keep_work: bool
+    native_windows: bool
 
 
 if __name__ == "__main__":
@@ -398,5 +423,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--keep-work", action="store_true", help="Retain disposable work for diagnosis"
     )
+    parser.add_argument(
+        "--native-windows",
+        action="store_true",
+        help="Real WebViews; disposable GitHub-hosted Mac/Windows runners only",
+    )
     args = cast("Arguments", cast("object", parser.parse_args()))
-    verify(args.app, args.reports, args.installer, keep_work=args.keep_work)
+    verify(
+        args.app,
+        args.reports,
+        args.installer,
+        keep_work=args.keep_work,
+        native_windows=args.native_windows,
+    )

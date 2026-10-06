@@ -107,7 +107,7 @@ jobs:
             uv run --locked python scripts/verify_macos_desktop_exit.py "$native_app"
           fi
           uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
-          uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer"
+          uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer" --native-windows
           if [ "$RUNNER_OS" = "macOS" ]; then
             uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
           fi

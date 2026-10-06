@@ -1,8 +1,6 @@
 """Probe failure handling and real SDK gate contracts; not native UI evidence."""
 
-import ast
 import json
-import shutil
 import subprocess
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
@@ -94,35 +92,46 @@ raise SystemExit(7)
     assert stopped == [True, True]
 
 
-def test_cocoa_store_isolated_before_webview_construction_or_rejected(tmp_path):
-    import webview
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [
+        ("GITHUB_ACTIONS", "false"),
+        ("RUNNER_ENVIRONMENT", "self-hosted"),
+        ("RUNNER_OS", "Linux"),
+        ("RUNNER_TEMP", "relative-home"),
+        ("RUNNER_TEMP", ""),
+    ],
+)
+def test_probe_refuses_local_or_mismatched_runner(
+    tmp_path, monkeypatch, setting, value
+):
+    hosted_runner(tmp_path, monkeypatch)
+    monkeypatch.setenv(setting, value)
+    with pytest.raises(RuntimeError, match="default website store"):
+        probe.require_hosted_runner(tmp_path / "home")
 
-    original = Path(webview.__file__).parent / "platforms/cocoa.py"
-    copied = (
-        tmp_path / "Contents/Resources/python/site-packages/webview/platforms/cocoa.py"
-    )
-    copied.parent.mkdir(parents=True)
-    shutil.copyfile(original, copied)
-    before = original.read_bytes()
-    probe.isolate_cocoa_store(tmp_path)
-    source = copied.read_text()
-    ast.parse(source)
-    assert "WKWebsiteDataStore.defaultDataStore()" not in source
-    assert source.count("WKWebsiteDataStore.nonPersistentDataStore()") == 1
-    assert "config.setWebsiteDataStore_(BrowserView._probe_store)" in source
-    assert source.index("WKWebsiteDataStore.nonPersistentDataStore()") < source.index(
-        "BrowserView.WebKitHost.alloc().initWithFrame_configuration_"
-    )
-    assert original.read_bytes() == before
-    # An updated or already modified backend cannot silently revert to default storage.
-    with pytest.raises(ValueError, match="must be reviewed"):
-        probe.isolate_cocoa_store(tmp_path)
+
+def hosted_runner(tmp_path, monkeypatch):
+    monkeypatch.setattr(probe.sys, "platform", "win32")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("RUNNER_ENVIRONMENT", "github-hosted")
+    monkeypatch.setenv("RUNNER_OS", "Windows")
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+
+
+def test_probe_requires_home_below_disposable_runner_temp(tmp_path, monkeypatch):
+    hosted_runner(tmp_path, monkeypatch)
+    probe.require_hosted_runner(tmp_path / "home")
+    for home in (tmp_path, tmp_path.parent / "outside"):
+        with pytest.raises(RuntimeError, match="RUNNER_TEMP"):
+            probe.require_hosted_runner(home)
 
 
 @pytest.mark.parametrize("fail_cleanup", [False, True])
 def test_host_failure_overrides_partial_pass_and_retains_reports(
     tmp_path, monkeypatch, fail_cleanup
 ):
+    hosted_runner(tmp_path, monkeypatch)
     app, home = tmp_path / "app", tmp_path / "home"
     (app / "resources").mkdir(parents=True)
     bootstrap = app / "resources/bootstrap.py"
@@ -177,6 +186,8 @@ def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path):
     owner = None
     try:
         record = runtime.start()
+        draft_key = probe.prepare_decision(record.base_url)
+        assert draft_key.startswith("scopecat:decision:")
         probe.run_bounded(
             [sys.executable, "-I", str(authors / "notebooks/02_edit_scan.py")],
             tmp_path / "initial.log",

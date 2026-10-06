@@ -1,9 +1,10 @@
 """Bounded native WebView/bridge acceptance, using the headless check's fixtures.
 
 Run only from verify_native_application against its disposable application/home.
-The probe copies the native host, replaces its bootstrap and isolates its Cocoa
-website store. The original package is unchanged. It is
-not production startup, focus, menu, tray or human-interaction qualification.
+The probe copies the native host and replaces only its bootstrap. The production
+WebView backend and default store are unchanged: this may clear native browser
+data, so execution requires a disposable GitHub-hosted Mac/Windows runner.
+It is not production startup, focus, menu, tray or human-interaction qualification.
 """
 
 from __future__ import annotations
@@ -24,9 +25,18 @@ from typing import TYPE_CHECKING, cast
 
 import httpx2
 import psutil
+from pydantic import BaseModel, ConfigDict
 
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.bundle import file_hash
+from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.automation import (
+    InterpretationRequest,
+    ProcedureStepAttemptListQuery,
+    procedure,
+)
+from scopecat.automation.worker import ProcedureContext, ProcedureWorker
+from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import RunDetail, RunSummaryPage
 from scopecat_server.validation_process import (  # noqa: TID251 - acceptance owns its processes
     terminate_validation_process_tree,
@@ -76,6 +86,49 @@ with sc.open_project(root).connect() as lab:
 """
 
 
+class Review(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    answer: str
+
+
+REVIEW_SCHEMA = AnalysisFactSchema("native.window.review.v1", Review)
+
+
+@procedure(id="native.window.review", version="1", intent=Review)
+def review(context: ProcedureContext, intent: Review) -> None:
+    context.interpret(
+        "review",
+        request=InterpretationRequest(
+            title="Native window draft acceptance",
+            instructions="Keep this review as an unsubmitted draft.",
+            schema_id=REVIEW_SCHEMA.id,
+            schema_hash=REVIEW_SCHEMA.schema_hash,
+            structure=REVIEW_SCHEMA.structure,
+            response_template={"answer": intent.answer},
+        ),
+    )
+
+
+def prepare_decision(base_url: str) -> str:
+    """Create a real waiting interpretation, without starting another acquisition."""
+    with DaemonClient(base_url) as client:
+        waiting = ProcedureWorker(client).execute(
+            review, {"answer": "pending"}, "native-window-review", "native-window-probe"
+        )
+        assert waiting.state == "waiting_for_input"
+        page = client.list_procedure_step_attempts(
+            waiting.procedure_run_id, ProcedureStepAttemptListQuery()
+        )
+        assert len(page.items) == 1 and page.next_cursor is None
+        step = page.items[0]
+        assert step.state == "waiting_for_input"
+        return (
+            f"scopecat:decision:{waiting.procedure_run_id}:"
+            f"{step.step_key}:{step.attempt}:{step.intent_hash}"
+        )
+
+
 def wait_for(check: Callable[[], bool], message: str, *, timeout: float = 30) -> None:
     deadline = time.monotonic() + timeout
     while not check():
@@ -107,35 +160,29 @@ def environment() -> dict[str, str]:
     }
 
 
-def isolate_cocoa_store(copied: Path) -> None:
-    """Use real nonpersistent storage only in the disposable probe's backend.
+def require_hosted_runner(home: Path) -> None:
+    """Refuse accidental local execution; environment checks are not attestation.
 
-    Current pywebview clears the default store even in private mode. Set the
-    store before WKWebView construction; fail closed if the backend changes.
-    Production browser persistence is explicitly outside this qualification.
+    --home/storage_path cannot isolate Cocoa's default WebKit store. There is no
+    supported local override: use the manual acceptance job on a disposable VM.
     """
-    candidates = list(
-        copied.glob("Contents/Resources/python/**/webview/platforms/cocoa.py")
-    )
-    if len(candidates) != 1:
-        raise ValueError("Cannot identify the copied Cocoa backend")
-    path = candidates[0]
-    source = path.read_text(encoding="utf-8")
-    constructor = "config = WebKit.WKWebViewConfiguration.alloc().init()"
-    default = "self.datastore = WebKit.WKWebsiteDataStore.defaultDataStore()"
-    declaration = "class BrowserView:"
-    if any(source.count(part) != 1 for part in (constructor, default, declaration)):
-        raise ValueError("Cocoa store isolation must be reviewed for this backend")
-    source = source.replace(declaration, declaration + "\n    _probe_store = None")
-    source = source.replace(
-        constructor,
-        constructor + "\n        if BrowserView._probe_store is None:"
-        "\n            BrowserView._probe_store = "
-        "WebKit.WKWebsiteDataStore.nonPersistentDataStore()"
-        "\n        config.setWebsiteDataStore_(BrowserView._probe_store)",
-    )
-    source = source.replace(default, "self.datastore = config.websiteDataStore()")
-    path.write_text(source, encoding="utf-8")
+    runner_os = {"darwin": "macOS", "win32": "Windows"}.get(sys.platform)
+    temporary = os.environ.get("RUNNER_TEMP", "")
+    if (
+        runner_os is None
+        or os.environ.get("GITHUB_ACTIONS") != "true"
+        or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted"
+        or os.environ.get("RUNNER_OS") != runner_os
+        or not temporary
+        or not Path(temporary).is_absolute()
+        or not home.resolve().is_relative_to(Path(temporary).resolve())
+        or home.resolve() == Path(temporary).resolve()
+    ):
+        raise RuntimeError(
+            "Native window acceptance requires a disposable GitHub-hosted "
+            "Mac/Windows runner and a home below RUNNER_TEMP. Do not run on a "
+            "user machine: production WebKit may clear its default website store."
+        )
 
 
 def cleanup(home: Path) -> None:
@@ -186,6 +233,7 @@ def click_text(window: webview.Window, label: str) -> None:
 
 
 def probe(home: Path) -> None:
+    require_hosted_runner(home)
     import webview
 
     from lab_tools.desktop import DesktopWindows
@@ -207,7 +255,6 @@ def probe(home: Path) -> None:
             "tray",
             "production startup",
             "human presentation",
-            "production persistent browser storage",
         ],
     }
     checks: list[str] = []
@@ -221,6 +268,8 @@ def probe(home: Path) -> None:
             assert macos_bundle_identifier() == "org.scopecat.desktop"
         record = runtime.start()
         session.connected(record.base_url)
+        draft_key = prepare_decision(record.base_url)
+        evidence["draft_key"] = draft_key
         evidence["service"] = {
             "pid": record.pid,
             "base_url": record.base_url,
@@ -311,6 +360,59 @@ def probe(home: Path) -> None:
                         ),
                         "Native bridge did not become ready",
                     )
+                    # Generate the draft through the real React form, then unmount
+                    # it so its effect cannot rewrite a cleared store during creation.
+                    reviewer = "native-window-reviewer"
+                    reviewer_selector = (
+                        'input[placeholder="name, agent id, or service id"]'
+                    )
+                    reviewer_value = (
+                        "document.querySelector("
+                        + json.dumps(reviewer_selector)
+                        + ")?.value"
+                    )
+                    click_text(first.window, "Decisions")
+                    wait_for(
+                        lambda: evaluate(first.window, reviewer_value) == "",
+                        "Real waiting decision form did not render",
+                    )
+                    evaluate(
+                        first.window,
+                        "(() => { const e = document.querySelector("
+                        + json.dumps(reviewer_selector)
+                        + ");"
+                        "Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"
+                        "'value').set.call(e, " + json.dumps(reviewer) + ");"
+                        "e.dispatchEvent(new Event('input', {bubbles: true})); })()",
+                    )
+                    draft_read = "localStorage.getItem(" + json.dumps(draft_key) + ")"
+                    wait_for(
+                        lambda: (
+                            evaluate(
+                                first.window,
+                                "JSON.parse(" + draft_read + " || '{}').actor",
+                            )
+                            == reviewer
+                        ),
+                        "Editing the decision did not save a real draft",
+                    )
+                    draft_before = evaluate(first.window, draft_read)
+                    marker_key = "scopecat:native-window-storage-marker"
+                    marker_read = "localStorage.getItem(" + json.dumps(marker_key) + ")"
+                    evaluate(
+                        first.window,
+                        "localStorage.setItem("
+                        + json.dumps(marker_key)
+                        + ", 'before-secondary')",
+                    )
+                    click_text(first.window, "Runs")
+                    wait_for(
+                        lambda: (
+                            run_id in text_content(first.window, "run-detail-header")
+                        ),
+                        "Main run did not return after saving draft",
+                    )
+                    checks.append("real decision edit saved before secondary creation")
                     click_text(first.window, "Open result in new window")
                     wait_for(
                         lambda: len(webview.windows) == 2,
@@ -324,19 +426,82 @@ def probe(home: Path) -> None:
                         ),
                         "Exact run did not render in secondary window",
                     )
-                    if sys.platform == "darwin":
-                        from webview.platforms import cocoa
+                    storage_evidence: dict[str, object] = {
+                        "draft_before": draft_before,
+                        "marker_before": "before-secondary",
+                    }
+                    evidence["storage"] = storage_evidence
 
-                        stores: list[object] = []
-                        for view in (first, second):
-                            native = cocoa.BrowserView.instances[view.window.uid]  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-                            config = native.webview.configuration()  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-                            store = config.websiteDataStore()  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-                            assert not store.isPersistent()  # pyright: ignore[reportUnknownMemberType]
-                            if stores:
-                                assert store.isEqual_(stores[0])  # pyright: ignore[reportUnknownMemberType]
-                            stores.append(cast("object", store))
-                        checks.append("both Cocoa WebViews share a nonpersistent store")
+                    def check_storage(stage: str) -> None:
+                        observed = {
+                            "draft": evaluate(first.window, draft_read),
+                            "marker": evaluate(first.window, marker_read),
+                        }
+                        storage_evidence[stage] = observed
+                        assert observed == {
+                            "draft": draft_before,
+                            "marker": "before-secondary",
+                        }, f"Production store changed at {stage}: {observed!r}"
+
+                    check_storage("after_secondary_creation")
+                    # Observe the second window's storage without imposing a new
+                    # cross-window sharing contract on the production backend.
+                    storage_evidence["secondary"] = {
+                        "draft": evaluate(second.window, draft_read),
+                        "marker": evaluate(second.window, marker_read),
+                    }
+                    click_text(first.window, "Decisions")
+                    wait_for(
+                        lambda: evaluate(first.window, reviewer_value) == reviewer,
+                        "Real decision draft did not restore after secondary creation",
+                    )
+                    click_text(first.window, "Runs")
+                    wait_for(
+                        lambda: (
+                            run_id in text_content(first.window, "run-detail-header")
+                        ),
+                        "Main run did not return after draft restoration",
+                    )
+                    check_storage("after_draft_restoration")
+                    checks.append(
+                        "production store retains marker and restores real draft"
+                    )
+                    # Exercise both actual injected bridges. Window.title tracks
+                    # the Python target; this does not qualify OS title rendering.
+                    for source, other, title in (
+                        (first, second, "native-probe-main"),
+                        (second, first, "native-probe-secondary"),
+                    ):
+                        original_title, other_title = (
+                            source.window.title,
+                            other.window.title,
+                        )
+                        evaluate(
+                            source.window,
+                            "void window.pywebview.api.set_window_title("
+                            + json.dumps(title)
+                            + ")",
+                        )
+                        wait_for(
+                            lambda source=source, title=title: (
+                                source.window.title == title
+                            ),
+                            "Bridge title call did not reach its owning window",
+                        )
+                        assert other.window.title == other_title
+                        evaluate(
+                            source.window,
+                            "void window.pywebview.api.set_window_title("
+                            + json.dumps(original_title)
+                            + ")",
+                        )
+                        wait_for(
+                            lambda source=source, title=original_title: (
+                                source.window.title == title
+                            ),
+                            "Bridge title restoration failed",
+                        )
+                    checks.append("both injected bridges target their own window")
                     assert evaluate(second.window, "location.origin") == record.base_url
                     assert (
                         evaluate(
@@ -399,6 +564,7 @@ def probe(home: Path) -> None:
                     checks.append(
                         "reads retain run set, snapshot and held acquisition count"
                     )
+                    check_storage("after_reads")
                     second.window.destroy()
                     assert second.window.events.closed.wait(10), (
                         "Secondary native window did not close"
@@ -409,6 +575,7 @@ def probe(home: Path) -> None:
                     assert detail().control.cancellation_requested_at is None
                     assert runtime.status().record == record
                     assert child.poll() is None
+                    check_storage("after_secondary_close")
                     checks.append(
                         "secondary close leaves service and acquisition running"
                     )
@@ -429,9 +596,8 @@ def probe(home: Path) -> None:
                 closing.set()
                 windows.destroy()
 
-        webview.start(
-            exercise, private_mode=True, storage_path=str(reports / "webview")
-        )
+        # Match desktop.main defaults; never patch the backend/store to pass.
+        webview.start(exercise)
         assert evidence["status"] == "passed", evidence.get(
             "error", "GUI exited before checks completed"
         )
@@ -455,8 +621,7 @@ def probe(home: Path) -> None:
 
 
 def verify(app: Path, home: Path) -> None:
-    if sys.platform not in ("darwin", "win32"):
-        raise RuntimeError("Native windows require macOS or Windows")
+    require_hosted_runner(home)
     app, home = app.resolve(), home.resolve()
     if home.is_relative_to(app):
         raise ValueError("Acceptance home must be outside the application")
@@ -484,8 +649,6 @@ def verify(app: Path, home: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="host-", dir=reports) as directory:
         copied = Path(directory) / app.name
         shutil.copytree(app, copied, symlinks=True)
-        if sys.platform == "darwin":
-            isolate_cocoa_store(copied)
         resources = copied / (
             "Contents/Resources" if sys.platform == "darwin" else "resources"
         )
@@ -547,7 +710,9 @@ def verify(app: Path, home: Path) -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "--probe":
+    if sys.argv[1] == "--check-hosted":
+        require_hosted_runner(Path(sys.argv[2]))
+    elif sys.argv[1] == "--probe":
         probe(Path(sys.argv[2]))
     elif sys.argv[1] == "--cleanup":
         cleanup(Path(sys.argv[2]))
