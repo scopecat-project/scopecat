@@ -56,7 +56,10 @@ def _store_ownership(runtime: ApplicationRuntime) -> Generator[Path]:
                 (binding.deployment_root, "deployment.lock"),
                 (binding.data_root, "daemon.lock"),
             ):
-                path = managed_path(runtime.home, root / name)
+                # Ordinary startup also supports explicitly bound external roots.
+                # Fresh start rejects those layouts before entering this guard.
+                owner = runtime.home if root.is_relative_to(runtime.home) else root
+                path = managed_path(owner, root / name)
                 # Existing unsupported stores already have their data directory.
                 locks.enter_context(FileLock(path, timeout=0))
         except Timeout as error:

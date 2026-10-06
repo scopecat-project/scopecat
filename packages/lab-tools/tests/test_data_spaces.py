@@ -241,3 +241,42 @@ def test_published_selection_sync_failure_reports_commit_truthfully(
     with pytest.raises(ValueError, match="新空间已选中"):
         fresh_start(runtime, failure, prepare)
     assert ApplicationRuntime(runtime.anchor).home == runtime.home != failure.home
+
+
+def test_external_store_is_inspected_but_never_reset(legacy, tmp_path):
+    runtime, _, _, _ = legacy
+    external = tmp_path / "external-data"
+    external.mkdir()
+    database = external / "control.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE project_schema(singleton INTEGER, version INTEGER)"
+        )
+        connection.execute(
+            "INSERT INTO project_schema VALUES (1, ?)", (PROJECT_SCHEMA_VERSION,)
+        )
+    before = database.read_bytes()
+    binding = runtime.root / "scopecat.runtime.toml"
+    binding.write_text(
+        "[runtime]\n"
+        + f"data_root={json.dumps(str(external))}\n"
+        + f"deployment_root={json.dumps(str(external))}\n"
+    )
+    try:
+        check_format(runtime)  # Existing valid custom layouts still start normally.
+        assert database.read_bytes() == before
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "UPDATE project_schema SET version=?", (PROJECT_SCHEMA_VERSION - 1,)
+            )
+        before = database.read_bytes()
+        with pytest.raises(UnsupportedDataSpace) as failure:
+            check_format(runtime)
+        prepare = Mock()
+        with pytest.raises(ValueError, match="自定义"):
+            fresh_start(runtime, failure.value, prepare)
+        prepare.assert_not_called()
+        assert database.read_bytes() == before
+        assert not (runtime.anchor / "reset-attempt.json").exists()
+    finally:
+        binding.unlink()
