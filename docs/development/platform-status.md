@@ -54,6 +54,12 @@ parameters journey. This source change establishes no new distribution.
 | Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
 | Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent-data baseline is designated |
 
+The [Decision draft implementation](architecture/decision-drafts.md) adds bounded
+application-owned editing history, conditional writes and recovery without scientific
+submission. Its real-browser checks do not repair or qualify the separate macOS
+website-store clearing problem tracked by draft PR #885. No native store policy,
+new release or installed-user acceptance follows from this source change.
+
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
 [automation tasks](architecture/automation-tasks.md) and

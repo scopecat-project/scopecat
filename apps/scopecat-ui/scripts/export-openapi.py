@@ -13,6 +13,9 @@ from scopecat_server.services.application import DaemonApplication
 OUTPUT = Path(__file__).parent.parent / ".generated" / "ui-api.openapi.json"
 
 _OPERATIONS = {
+    ("/api/v1/decision-drafts", "get"),
+    ("/api/v1/decision-drafts/read", "post"),
+    ("/api/v1/decision-drafts/save", "post"),
     ("/api/v1/configuration-exchange/export", "post"),
     ("/api/v1/configuration-exchange/inspect", "post"),
     ("/api/v1/configuration-exchange/imports", "post"),

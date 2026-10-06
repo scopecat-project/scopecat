@@ -587,6 +587,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/decision-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Decision Draft History */
+        get: operations["decision_draft_history_api_v1_decision_drafts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decision-drafts/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Decision Draft */
+        post: operations["read_decision_draft_api_v1_decision_drafts_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decision-drafts/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Decision Draft */
+        post: operations["save_decision_draft_api_v1_decision_drafts_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -5156,6 +5207,89 @@ export interface components {
              * @default []
              */
             setups: string[];
+        };
+        /** DecisionDraft */
+        DecisionDraft: {
+            baseline: components["schemas"]["DecisionDraftBaseline"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            input: components["schemas"]["DecisionDraftInput"];
+            /** Revision */
+            revision: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "saved" | "conflict" | "discarded";
+            target: components["schemas"]["DecisionDraftTarget"];
+        };
+        /** DecisionDraftBaseline */
+        DecisionDraftBaseline: {
+            /** Request Hash */
+            request_hash: string;
+            /** Run Revision */
+            run_revision: number;
+            /** Step Revision */
+            step_revision: number;
+        };
+        /** DecisionDraftInput */
+        DecisionDraftInput: {
+            /** Actor */
+            actor: string;
+            /**
+             * Actor Kind
+             * @enum {string}
+             */
+            actor_kind: "human" | "ai" | "service";
+            /** Note */
+            note: string;
+            /** Use Json */
+            use_json: boolean;
+            /** Value Text */
+            value_text: string;
+        };
+        /** DecisionDraftPage */
+        DecisionDraftPage: {
+            /** Items */
+            items: components["schemas"]["DecisionDraft"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** DecisionDraftSave */
+        DecisionDraftSave: {
+            baseline: components["schemas"]["DecisionDraftBaseline"];
+            /**
+             * Discard
+             * @default false
+             */
+            discard: boolean;
+            /** Expected Revision */
+            expected_revision: number;
+            input: components["schemas"]["DecisionDraftInput"];
+            target: components["schemas"]["DecisionDraftTarget"];
+        };
+        /** DecisionDraftTarget */
+        DecisionDraftTarget: {
+            /** Attempt */
+            attempt: number;
+            /** Procedure Run Id */
+            procedure_run_id: string;
+            /** Step Key */
+            step_key: string;
+        };
+        /** DecisionDraftView */
+        DecisionDraftView: {
+            draft: components["schemas"]["DecisionDraft"] | null;
+            /** Head Revision */
+            head_revision: number;
+            /**
+             * Validity
+             * @enum {string}
+             */
+            validity: "current" | "baseline_changed" | "no_longer_waiting";
         };
         /** DeclaredBatch */
         DeclaredBatch: {
@@ -13035,6 +13169,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeasurementTracePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decision_draft_history_api_v1_decision_drafts_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionDraftPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_decision_draft_api_v1_decision_drafts_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionDraftTarget"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_decision_draft_api_v1_decision_drafts_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionDraftSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionDraftView"];
                 };
             };
             /** @description Validation Error */

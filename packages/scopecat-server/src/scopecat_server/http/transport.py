@@ -389,6 +389,12 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from scopecat_server.decision_drafts import (
+    DecisionDraftPage,
+    DecisionDraftSave,
+    DecisionDraftTarget,
+    DecisionDraftView,
+)
 from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
@@ -2236,6 +2242,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.attempt,
         )
         return application.automation.wait_step_resources(command)
+
+    @app.get(f"{_API_PREFIX}/decision-drafts")
+    def decision_draft_history(
+        before: Annotated[int | None, Query(ge=1)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> DecisionDraftPage:
+        return application.decision_drafts.history(before=before, limit=limit)
+
+    @app.post(f"{_API_PREFIX}/decision-drafts/read")
+    def read_decision_draft(target: DecisionDraftTarget) -> DecisionDraftView:
+        return application.decision_drafts.read(target)
+
+    @app.post(f"{_API_PREFIX}/decision-drafts/save")
+    def save_decision_draft(command: DecisionDraftSave) -> DecisionDraftView:
+        return application.decision_drafts.save(command)
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/"

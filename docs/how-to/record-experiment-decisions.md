@@ -108,6 +108,33 @@ unknown and must be reconciled. Do not turn an expected scientific choice into
 an execution failure merely to pause the procedure.
 
 
+## Recover unfinished edits
+
+The Decisions editor automatically saves reviewer, reasoning, JSON/form mode and
+raw field text in application data, including incomplete numbers and invalid JSON.
+Wait for **Draft saved in application data** before quitting. A pending or failed
+save is not a durability confirmation. Editing saves never record a scientific
+decision, apply calibration or start work.
+
+The last confirmed draft is restored after navigating away, opening another
+window or restarting with a different service port. Another data home has its own
+drafts. If two windows edit the same request, a conflicting copy is retained in
+history and recording is blocked in that editor. **Use my copy as current draft**
+is an explicit conditional replacement; another concurrent change can conflict
+again. Neither copy is deleted.
+
+**Recover saved Decision drafts** is available even when no task is waiting.
+It shows retained revisions, including completed requests and conflicting or
+explicitly discarded copies, for inspection and copying. History cannot submit a
+decision. A changed baseline blocks recording; review the current request and
+use **Discard draft (keep recovery history)** to start a fresh draft, then
+explicitly copy and revalidate any text you want to reuse. Discard clears only
+that request's current draft; it does not erase retained history or scientific
+records. There is no automatic draft expiry or history deletion.
+
+This does not import old browser-local drafts or repair the separate native Mac
+website-store clearing problem.
+
 ## Retain decisions as analysis inputs
 
 Pass the exact `decision.ref` to a project analysis and consume it with
