@@ -69,8 +69,8 @@ module and resulting wheel each have fixed SHA-256 checks. The transformed wheel
 retains the upstream license, rewrites METADATA/RECORD, and carries its provenance
 in `scopecat-cocoa-patch.json`. Final requirements and bundle inventory hash the
 transformed artifact. The repository dependency stays pinned to upstream 6.2.1;
-**ordinary source development does not receive this repair**. Windows delivery
-retains the upstream wheel. The packaged repair passed the bounded native checks
+**ordinary source development does not receive this repair**. Windows delivery at that checkpoint
+retained the upstream wheel; its later approved repair is described below. The packaged repair passed the bounded native checks
 on combined candidate `4aee5825dbe374f469bc0f1be1e9a981908086c1` in
 [run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157).
 
@@ -96,6 +96,40 @@ Persistent UUID stores, machine tokens and profile directories are not part of
 this repair. Simply disabling private mode would retain shared/default browser
 storage and is not the approved solution. No global storage clearing, test-only
 backend replacement, system security setting or permission change is introduced.
+
+### Windows cookie initialization repair
+
+On 2026-10-06, native run `37451728337` at `0dc08bd3` demonstrated that opening
+another Windows WebView deletes the original window's cookie. Marker and
+application draft survived; cross-host isolation and complete restart/form
+recovery passed. The user then approved a bounded repair to initialize cookies
+once per actual host/profile, preserving private mode and explicit clearing.
+
+Windows delivery transforms the hash-locked upstream wheel into
+`6.2.1+scopecat.windows.1`. The reviewed patch changes only `edgechromium.py`;
+WinForms and its host-specific temporary directory are unchanged. It uses
+[ClearBrowsingDataAsync(Cookies)](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2profile.clearbrowsingdataasync?view=webview2-dotnet-1.0.3856.49)
+to observe completion rather than treating the void `DeleteAllCookies` call as a
+completion barrier. The pinned wheel's WebView2 Core DLL supports this API.
+
+A host-local map keyed by the actual environment folder and profile name retains
+one task, including failure. A lock covers first-task creation, never waiting for
+completion. Each view continues on its own STA UI scheduler after success;
+no UI message pump is blocked and no foreign view's COM object is shared.
+URL/HTML requests before completion queue only their last navigation. Faults,
+cancellation and synchronous initialization errors never navigate or retry a
+later clear. Closing a waiting view does not cause navigation into a disposed
+WebView. Nonprivate navigation, explicit `clear_cookies`, and host cleanup retain
+the upstream behavior. The change does not access default/global user profiles,
+introduce persistent browser storage or alter application draft ownership.
+
+Source module, patch, resulting module, wheel and provenance are hash-checked;
+METADATA/RECORD are rewritten deterministically and licenses retained. Only the
+existing RECORD/ZIP writer is shared with Cocoa; Darwin version, patch and final
+wheel hash remain unchanged. Ordinary source environments still use upstream.
+The strict existing native cookie/marker/restart assertions must pass on the
+repaired exact SHA before claiming Windows qualification. Source-level sequencing
+tests and real wheel-integrity checks are not native acceptance.
 
 ### Home, host and privacy boundaries
 

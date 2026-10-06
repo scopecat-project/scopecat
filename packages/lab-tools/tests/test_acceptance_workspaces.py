@@ -1,5 +1,6 @@
 """Acceptance owns disposable copies, not the candidate or retained reports."""
 
+import re
 import subprocess
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -18,6 +19,34 @@ def load_script(name):
 verify_macos_download = load_script("verify_macos_download")
 verify_native_application = load_script("verify_native_application")
 verify_native_replacement = load_script("verify_native_replacement")
+
+
+def assert_reports_uploaded(workflow, relatives):
+    """Check actual retained files against this workflow's always-upload step."""
+    step = workflow.split("      - name: Retain native acceptance logs\n", 1)[1]
+    step = re.split(r"(?m)^ {2}\S|^ {6}- ", step, maxsplit=1)[0]
+    assert "        if: always()\n" in step
+    paths = {
+        Path(line.strip().removeprefix("${{ runner.temp }}/"))
+        for line in step.splitlines()
+        if line.strip().startswith("${{ runner.temp }}/")
+    }
+    for relative in relatives:
+        assert any(relative.is_relative_to(path) for path in paths), relative
+
+
+def test_native_upload_contract_rejects_missing_windows_directory():
+    workflow = (
+        Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
+    ).read_text()
+    omitted = workflow.replace(
+        "            ${{ runner.temp }}/native-acceptance/windows-storage/\n", ""
+    )
+    assert omitted != workflow
+    with pytest.raises(AssertionError):
+        assert_reports_uploaded(
+            omitted, [Path("native-acceptance/windows-storage/C.json")]
+        )
 
 
 @pytest.mark.parametrize("keep_work", [False, True])
@@ -58,8 +87,9 @@ def test_replacement_reclaims_packages_and_environment(
 
 @pytest.mark.parametrize("keep_work", [False, True])
 @pytest.mark.parametrize("failure", [False, True])
+@pytest.mark.parametrize("storage_reports", ["cocoa-storage", "windows-storage"])
 def test_native_acceptance_preserves_candidate_and_reports(
-    tmp_path, monkeypatch, keep_work, failure
+    tmp_path, monkeypatch, keep_work, failure, storage_reports
 ):
     app = tmp_path / "Scopecat.app"
     app.mkdir()
@@ -76,7 +106,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
         (home / "data/native-start.log").write_text("diagnostic")
         (home / "native-windows").mkdir()
         (home / "native-windows/result.json").write_text('{"status": "failed"}')
-        (home / "cocoa-storage").mkdir()
+        (home / storage_reports).mkdir()
         for name in (
             "result.json",
             "draft-fixture.json",
@@ -87,7 +117,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
             "B.log",
             "C.log",
         ):
-            (home / "cocoa-storage" / name).write_text("storage diagnostic")
+            (home / storage_reports / name).write_text("storage diagnostic")
         (home / "environment").mkdir()
         if failure:
             raise RuntimeError("acceptance failed")
@@ -104,7 +134,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
     assert (
         reports / "native-windows/result.json"
     ).read_text() == '{"status": "failed"}'
-    assert {path.name for path in (reports / "cocoa-storage").iterdir()} == {
+    assert {path.name for path in (reports / storage_reports).iterdir()} == {
         "result.json",
         "draft-fixture.json",
         "A.json",
@@ -115,6 +145,15 @@ def test_native_acceptance_preserves_candidate_and_reports(
         "C.log",
     }
     assert bool(list(reports.glob("work-*"))) is keep_work
+    retained = list((reports / storage_reports).iterdir())
+    assert all(path.read_text() == "storage diagnostic" for path in retained)
+    workflow = (
+        Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
+    ).read_text()
+    assert_reports_uploaded(
+        workflow,
+        [Path("native-acceptance") / path.relative_to(reports) for path in retained],
+    )
 
 
 def test_acceptance_rejects_reports_inside_candidate(tmp_path):

@@ -20,6 +20,7 @@ from uuid import uuid4
 from filelock import FileLock, Timeout
 from packaging.utils import canonicalize_name
 
+from lab_tools import cocoa_dependency, windows_dependency
 from lab_tools.bundle import (
     CURRENT_DELIVERY,
     MANIFEST,
@@ -411,9 +412,11 @@ def build_delivery(
     if public_artifacts is not None:
         assert preview_metadata is not None
         _copy_public_wheels(public_artifacts, wheels, preview_metadata, local_names)
-    if sys.platform == "darwin" and any(wheels.glob("pywebview-*.whl")):
-        from .cocoa_dependency import patch_wheel
-
+    patch_wheel = {
+        "darwin": cocoa_dependency.patch_wheel,
+        "win32": windows_dependency.patch_wheel,
+    }.get(sys.platform)
+    if patch_wheel is not None and any(wheels.glob("pywebview-*.whl")):
         _ = patch_wheel(wheels)
     selected_wheels = _unique_wheels(wheels)
     if preview_metadata is not None:

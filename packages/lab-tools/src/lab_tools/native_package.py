@@ -66,6 +66,10 @@ def build(source: Path, destination: Path) -> Path:
             from .cocoa_dependency import verify_wheel
 
             verify_wheel(payload / "wheels")
+        if sys.platform == "win32":
+            from .windows_dependency import verify_wheel as verify_windows_wheel
+
+            verify_windows_wheel(payload / "wheels")
         python_home = resources / "python"
         with tarfile.open(payload / "toolchain/python.tar") as archive:
             archive.extractall(python_home, filter="data")
