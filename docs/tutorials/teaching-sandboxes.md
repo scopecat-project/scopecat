@@ -61,7 +61,8 @@ and interpreter paths so you can open them manually. If preparation fails, use
 
 Run the shipped cells in order: connect with `sc.notebook()`, open the lesson's
 independent parameter branch, preview seven points, then explicitly acquire
-64 shots per point. The result cell links to the same run in this application.
+64 shots per point. The separate result cell only reads the retained run and
+links to it in this application; you can repeat that cell without acquiring again.
 Save a change from `shots: int = 64` to `32` in `src/my_experiment/teaching.py`,
 then reconstruct the request and run it: the new result has seven points and
 32 shots, while the old result retains its original source and 64 shots.
@@ -69,9 +70,15 @@ Change the scan to five points and update its preview assertion for a five-point
 result. Already prepared requests retain their original code.
 
 **Continue parameters Notebook** opens the same files and environment. Reconnect
-and reopen parameters, or use History to read previous results. Opening Help,
+and reopen parameters, or use **Runs** to read previous results.
+After a kernel restart, copy a run ID from Runs and use
+`run = session.run("your run ID")` before executing the result cell to continue
+analysis in the Notebook. Do not use Run All just to restore results. Opening Help,
 a Notebook or history does not acquire data; executing the acquisition cell
 explicitly creates a new run. Saved parameter edits and source edits are retained.
+Continue does not replace an existing Notebook with newer lesson material. In an
+older copy with acquisition and display together, move the result-reading lines
+to a separate cell before repeating them.
 Each newly generated folder has its own setup, initial revision and branch names.
 The Notebook and `teaching.py`, `parameters.py`, `response.py`, `setup.py` and
 `workspace_app.py` are editable local source. You can inspect and change the

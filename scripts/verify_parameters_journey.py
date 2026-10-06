@@ -163,6 +163,9 @@ def verify(work: Path, payload: Path) -> None:
                     "params.save(note='retained choice')"
                 )
                 first_id = runs()[0].run_id
+                first_runs = runs()
+                execute("parameters-result")
+                assert runs() == first_runs
                 page.goto(endpoint + "/?run=" + first_id)
                 expect(page.get_by_text(first_id, exact=True)).to_be_visible()
                 code = source / "src/my_experiment/teaching.py"
@@ -171,6 +174,7 @@ def verify(work: Path, payload: Path) -> None:
                 )
                 execute("parameters-4")
                 execute("parameters-6")
+                execute("parameters-result")
                 check(
                     "assert shots.shape == (7, 32)\n"
                     "old = session.run(first_id).measurements()['iq']\n"
@@ -185,6 +189,7 @@ def verify(work: Path, payload: Path) -> None:
                 notebook_bytes = journey.notebook.read_bytes()
                 execute("parameters-4")
                 execute("parameters-6")
+                execute("parameters-result")
                 check(
                     "assert shots.shape == (5, 32)\n"
                     "assert params[Drive]['q0'].frequency == 5.152\n"
@@ -213,13 +218,18 @@ def verify(work: Path, payload: Path) -> None:
                 check(
                     "from my_experiment.parameters import Drive\n"
                     "assert params[Drive]['q0'].frequency == 5.152\n"
-                    f"old = session.run({first_id!r}).measurements()['iq']\n"
-                    "assert np.asarray(old.require_values()).shape == (7, 64)\n"
-                    "session.close()"
+                    f"run = session.run({first_id!r})"
                 )
+                execute("parameters-result")
+                check("assert shots.shape == (7, 64)\nsession.close()")
             assert runs() == before
-            page.goto(endpoint + "/?run=" + first_id)
+            page.get_by_role("link", name="Runs", exact=True).click()
+            expect(
+                page.get_by_role("button", name="Runs", exact=True)
+            ).to_have_attribute("aria-current", "page")
+            page.get_by_title(f"Inspect run {first_id}", exact=True).click()
             expect(page.get_by_text(first_id, exact=True)).to_be_visible()
+            assert runs() == before
             page.screenshot(path=str(work / "same-run.png"), full_page=True)
             nbformat.write(evidence, work / "executed-cells.ipynb")
             (work / "acceptance.json").write_text(
@@ -235,6 +245,8 @@ def verify(work: Path, payload: Path) -> None:
                         "native_editor": "not evaluated",
                         "browser_help_and_same_run": "passed",
                         "restart_and_continue_without_acquisition": "passed",
+                        "repeat_result_cell_without_acquisition": "passed",
+                        "help_runs_link_reopens_retained_run": "passed",
                     },
                     indent=2,
                 )

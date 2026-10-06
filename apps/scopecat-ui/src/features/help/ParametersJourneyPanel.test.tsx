@@ -48,6 +48,7 @@ it("prepares without forms and preserves the saved path when opening the editor 
   fireEvent.click(start);
   expect(await screen.findByRole("alert")).toHaveTextContent("Open the Notebook manually");
   expect(screen.getByText(journey.notebook)).toBeVisible();
+  expect(screen.getByRole("link", { name: "Runs" })).toHaveAttribute("href", "#runs");
   expect(prepare).toHaveBeenCalledWith(undefined);
   expect(open).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
