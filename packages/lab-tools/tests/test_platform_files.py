@@ -3,7 +3,7 @@
 import subprocess
 import sys
 
-from lab_tools.application_runtime import ApplicationRuntime, _write
+from lab_tools.application_runtime import ApplicationRuntime, write_state
 
 
 def test_application_lock_excludes_process_and_state_replaces(tmp_path):
@@ -16,8 +16,8 @@ def test_application_lock_excludes_process_and_state_replaces(tmp_path):
     command = [sys.executable, "-I", "-c", child, str(tmp_path / "application.lock")]
     with runtime.lock:
         assert subprocess.run(command, check=False, timeout=30).returncode == 23  # noqa: S603
-        _write(runtime.selection, "original")
-        _write(runtime.selection, "replacement")
+        write_state(runtime.selection, "original")
+        write_state(runtime.selection, "replacement")
         assert runtime.selection.read_text() == "replacement"
     assert subprocess.run(command, check=False, timeout=30).returncode == 0  # noqa: S603
     assert not list(tmp_path.glob(".installation.json-*"))
