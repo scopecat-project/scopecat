@@ -60,6 +60,21 @@ purge policy. Drafts do not add supported credential or secret fields.
 atomic completion/retry, branch fencing, validation and backup/restore.
 `parameter-working-inputs.e2e.ts` exercises raw invalid input, navigation, concurrent
 editors, a fresh browser context after full service restart on another port, explicit
-A/B adoption and unchanged historical A. Its fixture uses synthetic reference
-experiments. Native packaging, OS window/store behavior, real devices and installed
-user upgrades require separate acceptance.
+adoption, preview invalidation and one real submitted B's frozen parameter snapshot.
+`project-console.e2e.ts` owns the simultaneous running A / working B / historical C
+binding check; the recovery journey does not repeat A's acquisition and history
+reopening. Author refresh and historical procedure navigation remain separate
+contracts in `author-launch.e2e.ts` and `LaunchDraft.test.tsx`, not substitutes for
+historical run binding. Decision draft domain contracts are unchanged.
+
+The failed-save browser journey keeps the network-failure display, cancelled native
+browser leave warning and successful retry/reopen. `use-parameter-draft.test.tsx`
+owns save/departure acknowledgements, retry, delayed conflicts and completion;
+`ConfigWorkspace.test.tsx` owns failed close/version replacement and keeping the
+editor mounted during service unavailability. These focused checks retain the
+failure permutations without repeating them through a browser/service fixture.
+`App.navigation.test.tsx` guards the configuration editor remaining mounted across
+page navigation, independently of its save state.
+The browser fixtures use synthetic reference experiments. Native packaging, OS
+window/store behavior, real devices and installed user upgrades require separate
+acceptance.

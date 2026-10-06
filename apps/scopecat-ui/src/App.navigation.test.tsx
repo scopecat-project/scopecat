@@ -362,6 +362,19 @@ describe("config provenance navigation", () => {
     );
   });
 
+  it("keeps the configuration editor mounted across page navigation", async () => {
+    renderApp();
+    // Establish project identity before checking navigation within that project.
+    await screen.findByText("Ok", { exact: true });
+    const editor = await screen.findByText("Experiment configuration");
+    fireEvent.click(screen.getByRole("button", { name: "Runs" }));
+    expect(editor).toBeInTheDocument();
+    expect(editor).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+    expect(screen.getByText("Experiment configuration")).toBe(editor);
+    expect(editor).toBeVisible();
+  });
+
   it("selects the first indexed run when no explicit run was requested", async () => {
     window.history.replaceState(null, "", "/");
 
