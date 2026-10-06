@@ -259,8 +259,8 @@ def test_external_store_is_inspected_but_never_reset(legacy, tmp_path):
     binding = runtime.root / "scopecat.runtime.toml"
     binding.write_text(
         "[runtime]\n"
-        + f"data_root={json.dumps(str(external))}\n"
-        + f"deployment_root={json.dumps(str(external))}\n"
+        f"data_root={json.dumps(str(external))}\n"
+        f"deployment_root={json.dumps(str(external))}\n"
     )
     try:
         check_format(runtime)  # Existing valid custom layouts still start normally.
