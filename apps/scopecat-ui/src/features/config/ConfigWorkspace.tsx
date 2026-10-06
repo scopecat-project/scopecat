@@ -372,7 +372,7 @@ function ParameterVersionEditor({
   return (
     <section aria-label="Edit parameter version" className="grid gap-3 border-t border-line pt-3">
       <p role="status">
-        {draft.status === "saved"
+        {draft.status === "saved" || (draft.status === "failed" && !draft.hasUnsavedChanges)
           ? "Draft saved in application data"
           : draft.status === "saving"
             ? "Saving draft…"
@@ -384,7 +384,7 @@ function ParameterVersionEditor({
       <ParameterDraftHistory base={base} onResume={onFork} />
       {draft.error && <p role="alert">{draft.error}</p>}
       {actionError && <p role="alert">{actionError}</p>}
-      {draft.status === "failed" && (
+      {draft.status === "failed" && draft.hasUnsavedChanges && (
         <button onClick={() => void draft.flush()}>Retry draft save</button>
       )}
       {draft.conflict && (
