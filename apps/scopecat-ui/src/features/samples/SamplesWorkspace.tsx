@@ -1,7 +1,8 @@
+import type { ObjectParameterContext, ObjectParameterPanel } from "../config/object-parameters";
 import { SampleArtifacts } from "./SampleArtifacts";
 import { SampleCapabilities } from "./SampleCapabilities";
 import { CurrentCapabilities } from "./CurrentCapabilities";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -51,12 +52,16 @@ const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
 const EMPTY_SAMPLES: SampleSummary[] = [];
 
 export function SamplesWorkspace({
+  onEditParameters,
+  onParameterPanel,
   selectedSampleId,
   selectedSampleRevision,
   onSelectSample,
   onOpenRun,
   daemonUnavailable,
 }: {
+  onEditParameters?: (context: ObjectParameterContext) => Promise<void>;
+  onParameterPanel?: (panel: ObjectParameterPanel | null) => void;
   selectedSampleId?: string;
   selectedSampleRevision?: number;
   onSelectSample: (sampleId: string, revision?: number) => void;
@@ -218,6 +223,8 @@ export function SamplesWorkspace({
           ) : selectedSampleId ? (
             <SampleDetail
               key={selectedSampleId}
+              onEditParameters={onEditParameters}
+              onParameterPanel={onParameterPanel}
               sampleId={selectedSampleId}
               selectedRevision={selectedSampleRevision}
               summary={selectedSummary}
@@ -243,13 +250,56 @@ export function SamplesWorkspace({
   );
 }
 
+function ObjectPanelSlot({
+  sample,
+  entityId,
+  onPanel,
+}: {
+  sample: SampleView["revision"];
+  entityId?: string;
+  onPanel?: (panel: ObjectParameterPanel | null) => void;
+}) {
+  const { sample_id: sampleId, revision, content_hash: contentHash } = sample;
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      onPanel?.(node ? { node, sampleId, revision, contentHash, entityId } : null);
+    },
+    [onPanel, sampleId, revision, contentHash, entityId],
+  );
+  return (
+    <div className="group/object-panel">
+      <div ref={attach} aria-label="Sample working parameter panel" />
+      <div className="group-has-[section]/object-panel:hidden rounded-lg border border-line bg-panel-soft p-3 text-sm grid gap-2">
+        <strong>Object parameters</strong>
+        <p>
+          Open a working table here, then select an object on the map to edit its directly
+          referenced values.
+        </p>
+        <button
+          onClick={() => {
+            const context = document.getElementById("sample-parameter-context");
+            context?.setAttribute("open", "");
+            context?.scrollIntoView({ block: "center", behavior: "smooth" });
+          }}
+        >
+          Choose working parameter context
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SampleDetail({
+  onEditParameters,
+  onParameterPanel,
   sampleId,
   selectedRevision,
   summary,
   onOpenRun,
   onSelectSample,
 }: {
+  onEditParameters?: (context: ObjectParameterContext) => Promise<void>;
+  onParameterPanel?: (panel: ObjectParameterPanel | null) => void;
   sampleId: string;
   selectedRevision?: number;
   summary?: SampleSummary;
@@ -417,7 +467,10 @@ function SampleDetail({
 
       <div className="grid grid-cols-[minmax(0,1.45fr)_minmax(280px,0.8fr)] gap-4 max-[1120px]:grid-cols-1">
         <section
-          className={classes(detailCard, "min-h-[360px]")}
+          className={classes(
+            detailCard,
+            "min-h-[360px] self-start sticky top-20 max-[1120px]:static",
+          )}
           aria-labelledby="sample-map-heading"
         >
           <SectionHeading
@@ -434,7 +487,12 @@ function SampleDetail({
           />
         </section>
 
-        <div className="grid content-start gap-4">
+        <div className="grid content-start gap-4 min-w-0">
+          <ObjectPanelSlot
+            sample={revision}
+            entityId={selectedEntityId}
+            onPanel={onParameterPanel}
+          />
           <section className={detailCard}>
             <SectionHeading
               icon={<Activity />}
@@ -478,6 +536,8 @@ function SampleDetail({
           key={`current:${sampleId}:${revision.revision}`}
           sampleId={sampleId}
           revision={revision.revision}
+          sample={revision}
+          onEditParameters={onEditParameters}
         />
         <SampleCapabilities
           key={`${sampleId}:${revision.revision}`}
@@ -715,6 +775,8 @@ function SampleMap({
             <g
               key={entity.id}
               role="button"
+              aria-label={`Select object ${entity.id}`}
+              aria-pressed={selected}
               tabIndex={0}
               className="cursor-pointer outline-none"
               onClick={() => onSelectEntity(entity.id)}

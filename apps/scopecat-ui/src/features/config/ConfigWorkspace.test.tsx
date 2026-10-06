@@ -340,3 +340,127 @@ it("distinguishes failed adoption from unsaved edits", async () => {
   expect(screen.getByText("Draft has unsaved changes")).toBeVisible();
   expect(screen.getByRole("button", { name: "Retry draft save" })).toBeVisible();
 });
+
+it("keeps one raw draft owner across object views and advanced edits without adopting launch inputs", async () => {
+  const { createRef } = await import("react");
+  const { objectContext, objectDefinitions, objectValues } =
+    await import("./object-parameters.fixtures");
+  const workspace = createRef<import("./object-parameters").ParameterWorkspaceHandle>();
+  const context = objectContext();
+  const editedBase = { ...base, catalog: { id: "objects", definitions: objectDefinitions } };
+  draftView.draft.working_branch = "daily";
+  draftView.draft.input.branch = "daily";
+  draftView.draft.input.branch_generation = 3;
+  draftView.draft.input.values = objectValues();
+  vi.mocked(getParameterRevisions).mockResolvedValue({ items: [editedBase] });
+  const fetcher = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (request, init) => {
+    if (request instanceof Request && request.url.includes("/parameters/revisions/"))
+      return Response.json(editedBase);
+    return fetcher(request, init);
+  });
+  const node = document.createElement("div");
+  document.body.append(node);
+  const adopted = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const panel = {
+    node,
+    sampleId: "chip-a",
+    revision: 1,
+    contentHash: "sha256:chip-a",
+    entityId: "q0",
+  };
+  const view = (entityId: string, sampleId = "chip-a") => (
+    <QueryClientProvider client={client}>
+      <ConfigWorkspace
+        ref={workspace}
+        daemonUnavailable={false}
+        objectPanel={{ ...panel, entityId, sampleId }}
+        onSelectConfiguration={adopted}
+      />
+    </QueryClientProvider>
+  );
+  const rendered = render(view("q0"));
+  await act(() => workspace.current!.openObject(context));
+  const fields = () => within(node).getByRole("region", { name: "Object parameter values" });
+  const { within } = await import("@testing-library/react");
+  expect(within(fields()).getAllByText(/bias · row/)).toHaveLength(2);
+  fireEvent.change(within(fields()).getByLabelText("bias[2].offset", { exact: true }), {
+    target: { value: "-" },
+  });
+  rendered.rerender(view("q1"));
+  expect(within(fields()).getByLabelText("bias[1].offset", { exact: true })).toHaveValue("10");
+  expect(within(fields()).getByText(/Shared row/)).toBeVisible();
+  fireEvent.change(within(fields()).getByLabelText("bias[3].offset", { exact: true }), {
+    target: { value: "7" },
+  });
+  rendered.rerender(view("q0"));
+  expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("-");
+  expect(within(fields()).getByLabelText("bias[3].offset", { exact: true })).toHaveValue("7");
+  expect(within(fields()).queryByLabelText("bias[2].profile")).toBeNull();
+  fireEvent.click(screen.getByText("All parameters · advanced"));
+  const all = screen.getByText("All parameters · advanced").closest("details")!;
+  fireEvent.change(within(all).getByLabelText("bias[2].offset", { exact: true }), {
+    target: { value: "1e" },
+  });
+  expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("1e");
+  rendered.rerender(view("q0", "chip-b"));
+  expect(node).toBeEmptyDOMElement();
+  rendered.rerender(view("q0"));
+  expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("1e");
+  await waitFor(() => expect(saveParameterDraft).toHaveBeenCalled());
+  const saved = vi.mocked(saveParameterDraft).mock.lastCall![1].input.values!;
+  expect(saved[0]!.rows?.map((row) => row.offset?.text)).toEqual(["10", "1e", "7", "3", "-"]);
+  expect(startParameterDraft).toHaveBeenCalledTimes(1);
+  expect(adopted).not.toHaveBeenCalled();
+  expect(freezeParameterDraft).not.toHaveBeenCalled();
+  generation = 4;
+  await expect(workspace.current!.openObject(context)).rejects.toThrow("branch changed");
+  expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("1e");
+  rendered.unmount();
+  node.remove();
+});
+
+it("cancels an object opening if the editor owner changes during its branch read", async () => {
+  const { createRef } = await import("react");
+  const { objectContext } = await import("./object-parameters.fixtures");
+  const workspace = createRef<import("./object-parameters").ParameterWorkspaceHandle>();
+  draftView.draft.working_branch = "daily";
+  draftView.draft.input.branch = "daily";
+  draftView.draft.input.branch_generation = 3;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <ConfigWorkspace ref={workspace} daemonUnavailable={false} />
+    </QueryClientProvider>,
+  );
+  await screen.findByRole("option", { name: "initial" });
+  fireEvent.change(screen.getByLabelText("Saved parameter version"), {
+    target: { value: "initial" },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Edit a copy" }));
+  await screen.findByLabelText("frequency", { exact: true });
+  const fetcher = vi.mocked(fetch).getMockImplementation()!;
+  let finishRead!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(
+    () =>
+      new Promise<Response>((resolve) => {
+        finishRead = resolve;
+      }),
+  );
+  const result = workspace.current!.openObject(objectContext()).catch((error: Error) => error);
+  await waitFor(() => expect(finishRead).toBeDefined());
+  fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+  await waitFor(() => expect(screen.queryByLabelText("frequency", { exact: true })).toBeNull());
+  draftView.draft.draft_id = "22222222-2222-4222-8222-222222222222";
+  vi.mocked(fetch).mockImplementation(fetcher);
+  fireEvent.click(await screen.findByRole("button", { name: "Edit a copy" }));
+  await screen.findByLabelText("frequency", { exact: true });
+  await act(async () => {
+    finishRead(Response.json(objectContext().resolution.branch));
+    expect(await result).toEqual(
+      expect.objectContaining({ message: expect.stringContaining("editor changed") }),
+    );
+  });
+  expect(screen.getByLabelText("frequency", { exact: true })).toHaveValue("4.8");
+});

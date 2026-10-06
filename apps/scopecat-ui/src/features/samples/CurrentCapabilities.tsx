@@ -1,3 +1,5 @@
+import { objectContextError, type ObjectParameterContext } from "../config/object-parameters";
+import type { SampleView } from "../../api-contract";
 import { useState } from "react";
 import { contextParameterLabel } from "../launch/context-parameters";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -11,9 +13,13 @@ type Resolution = MethodResponse<typeof apiClient, "post", "/api/v1/measurement-
 export function CurrentCapabilities({
   sampleId,
   revision,
+  sample,
+  onEditParameters,
 }: {
   sampleId: string;
   revision: number;
+  sample?: SampleView["revision"];
+  onEditParameters?: (context: ObjectParameterContext) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [branch, setBranch] = useState("");
@@ -25,6 +31,7 @@ export function CurrentCapabilities({
   const [attempt, setAttempt] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [opening, setOpening] = useState(false);
   const setups = useQuery({
     queryKey: ["capability-setup-choices"],
     enabled: expanded,
@@ -100,10 +107,11 @@ export function CurrentCapabilities({
   }
   return (
     <details
-      className="border rounded p-3 space-y-3"
+      id="sample-parameter-context"
+      className="border border-line rounded-lg p-3 space-y-3 min-w-0 break-words"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary>Capability evidence from saved parameters</summary>
+      <summary>Working parameters and capability context</summary>
       <p>
         Choose a parameter branch or saved revision and setup for this exact sample revision.
         Resolving captures their current versions without running an experiment or changing
@@ -116,7 +124,10 @@ export function CurrentCapabilities({
           void resolve();
         }}
       >
-        <fieldset disabled={pending} className="space-y-2">
+        <fieldset
+          disabled={pending}
+          className="grid gap-3 [&_label]:grid [&_label]:gap-1 [&_input]:rounded [&_input]:border [&_input]:border-line [&_input]:bg-bg [&_input]:p-2 [&_select]:rounded [&_select]:border [&_select]:border-line [&_select]:bg-bg [&_select]:p-2 [&_select]:min-w-0"
+        >
           <label>
             Measurement subject
             <select
@@ -231,6 +242,34 @@ export function CurrentCapabilities({
             <summary>Resolved measurement subject</summary>
             <pre>{JSON.stringify(resolution.context.subject, null, 2)}</pre>
           </details>
+          {sample && onEditParameters && (
+            <div className="grid gap-2 rounded border border-line p-3">
+              <p>
+                Edit this branch's working parameters beside the sample map. This does not adopt
+                inputs for an experiment.
+              </p>
+              {objectContextError({ sample, resolution }) ? (
+                <p>{objectContextError({ sample, resolution })}</p>
+              ) : (
+                <button
+                  disabled={opening}
+                  onClick={async () => {
+                    setOpening(true);
+                    setError("");
+                    try {
+                      await onEditParameters({ sample, resolution, setupName: selectedSetup?.id });
+                    } catch (caught) {
+                      setError(caught instanceof Error ? caught.message : String(caught));
+                    } finally {
+                      setOpening(false);
+                    }
+                  }}
+                >
+                  Edit working parameters beside map
+                </button>
+              )}
+            </div>
+          )}
           <CalibrationProfiles
             context={resolution.context}
             contextDescription="Uses the explicitly resolved parameter, setup and sample versions."

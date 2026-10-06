@@ -1,3 +1,13 @@
+import { createPortal } from "react-dom";
+import { ObjectParameterFields } from "./ObjectParameterFields";
+import {
+  mappedEntity,
+  objectContextError,
+  panelMatches,
+  type ObjectParameterContext,
+  type ObjectParameterPanel,
+  type ParameterWorkspaceHandle,
+} from "./object-parameters";
 import { useImperativeHandle, useRef, useState, type Ref } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
@@ -27,12 +37,20 @@ const loadBase = (view: ParameterDraftView) =>
     }),
   );
 
-type ParameterEditorHandle = { draftId: string; leave: () => Promise<boolean> };
+type ParameterEditorHandle = {
+  draftId: string;
+  leave: () => Promise<boolean>;
+  branchGeneration: () => number | null | undefined;
+};
 
 export function ConfigWorkspace({
+  ref,
+  objectPanel,
   daemonUnavailable,
   onSelectConfiguration,
 }: {
+  ref?: Ref<ParameterWorkspaceHandle>;
+  objectPanel?: ObjectParameterPanel | null;
   daemonUnavailable: boolean;
   onSelectConfiguration?: (
     choice: components["schemas"]["ConfigurationChoice-Input"],
@@ -43,12 +61,88 @@ export function ConfigWorkspace({
   const [operator, setOperator] = useState("local-operator");
   const [selected, setSelected] = useState("");
   const [editing, setEditing] = useState<{ base: ParameterRevision; view: ParameterDraftView }>();
+  const [objectContext, setObjectContext] = useState<ObjectParameterContext>();
+  const openingObject = useRef(false);
+  const editorSelection = useRef(0);
   const editor = useRef<ParameterEditorHandle>(null);
   const replaceEditor = async (next?: { base: ParameterRevision; view: ParameterDraftView }) => {
+    const selection = ++editorSelection.current;
     if (editor.current && !(await editor.current.leave())) return false;
+    if (selection !== editorSelection.current) return false;
     setEditing(next);
+    setObjectContext(undefined);
     return true;
   };
+  useImperativeHandle(ref, () => ({
+    openObject: async (context) => {
+      const error = objectContextError(context);
+      if (error) throw new Error(error);
+      if (openingObject.current) throw new Error("A working table is already opening.");
+      openingObject.current = true;
+      const selection = editorSelection.current;
+      const owner = editor.current?.draftId;
+      const requireSameEditor = () => {
+        if (selection !== editorSelection.current || owner !== editor.current?.draftId)
+          throw new Error(
+            "The working editor changed while opening object parameters. Keep the current editor and try again from its context.",
+          );
+      };
+      try {
+        const head = context.resolution.branch!;
+        const currentHead = await apiData(
+          apiClient.GET("/api/v1/parameters/branches/{name}", {
+            params: { path: { name: head.name } },
+          }),
+        );
+        requireSameEditor();
+        if (
+          currentHead.generation !== head.generation ||
+          currentHead.revision.revision_id !== head.revision.revision_id ||
+          currentHead.revision.content_hash !== head.revision.content_hash
+        )
+          throw new Error(
+            "The branch changed after this context was resolved. Resolve the context again; your working input is preserved.",
+          );
+        const matchesBase = (view: ParameterDraftView) =>
+          view.draft.base.revision_id === head.revision.revision_id &&
+          view.draft.base.content_hash === head.revision.content_hash;
+        if (editing?.view.draft.working_branch === head.name) {
+          if (!matchesBase(editing.view) || editor.current?.branchGeneration() !== head.generation)
+            throw new Error(
+              "The open working table has another baseline. Review it in Configuration before resolving an object context.",
+            );
+          setObjectContext(context);
+          return;
+        }
+        if (editor.current && !(await editor.current.leave()))
+          throw new Error(
+            "Save the open working table before replacing it. Its input has been kept in Configuration.",
+          );
+        requireSameEditor();
+        const view = await startParameterDraft({
+          draft_id: crypto.randomUUID(),
+          base: head.revision,
+          actor: operator,
+          working_branch: head.name,
+          branch_generation: head.generation,
+        });
+        requireSameEditor();
+        if (!matchesBase(view) || view.branch_changed)
+          throw new Error(
+            "The recovered working table has an older baseline. Open and review it in Configuration; its input has been preserved.",
+          );
+        const next = { base: await loadBase(view), view };
+        requireSameEditor();
+        if (!(await replaceEditor(next)))
+          throw new Error(
+            "Save the open working table before replacing it. Its input has been kept in Configuration.",
+          );
+        setObjectContext(context);
+      } finally {
+        openingObject.current = false;
+      }
+    },
+  }));
   const [workingBranch, setWorkingBranch] = useState("");
   const branchHeads = useQuery({
     queryKey: ["parameter-branches", "work-table"],
@@ -223,6 +317,8 @@ export function ConfigWorkspace({
         {editing && (
           <ParameterVersionEditor
             ref={editor}
+            objectContext={objectContext}
+            objectPanel={objectPanel}
             key={editing.view.draft.draft_id}
             base={editing.base}
             initial={editing.view}
@@ -249,6 +345,8 @@ export function ConfigWorkspace({
 }
 
 function ParameterVersionEditor({
+  objectContext,
+  objectPanel,
   ref,
   base,
   entities,
@@ -258,6 +356,8 @@ function ParameterVersionEditor({
   onCancel,
   onSaved,
 }: {
+  objectContext?: ObjectParameterContext;
+  objectPanel?: ObjectParameterPanel | null;
   ref: Ref<ParameterEditorHandle>;
   base: ParameterRevision;
   entities: ParameterEntity[];
@@ -271,10 +371,15 @@ function ParameterVersionEditor({
   onSaved: (saved: ParameterRevision) => Promise<void>;
 }) {
   const draft = useParameterDraft(initial);
-  useImperativeHandle(ref, () => ({ draftId: initial.draft.draft_id, leave: draft.leave }), [
-    initial.draft.draft_id,
-    draft.leave,
-  ]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      draftId: initial.draft.draft_id,
+      leave: draft.leave,
+      branchGeneration: () => draft.input.branch_generation,
+    }),
+    [initial.draft.draft_id, draft.leave, draft.input.branch_generation],
+  );
   const { name, note, branch, actor: operator, values = [] } = draft.input;
   const [review, setReview] = useState<ParameterDraftView>();
   const [actionError, setActionError] = useState<string>();
@@ -369,8 +474,37 @@ function ParameterVersionEditor({
       setCopying(false);
     }
   };
-  return (
-    <section aria-label="Edit parameter version" className="grid gap-3 border-t border-line pt-3">
+  const destination =
+    objectContext && objectPanel && panelMatches(objectContext, objectPanel)
+      ? objectPanel
+      : undefined;
+  const objectEntity =
+    objectContext && destination ? mappedEntity(objectContext, destination.entityId) : undefined;
+  const content = (
+    <section
+      aria-label="Edit parameter version"
+      className={
+        destination
+          ? "grid gap-3 rounded-lg border border-line bg-panel p-4 text-sm max-h-[760px] overflow-y-auto [scrollbar-width:thin]"
+          : "grid gap-3 border-t border-line pt-3"
+      }
+    >
+      {destination && objectContext && (
+        <header className="rounded-lg border border-line bg-panel-soft p-3">
+          <h2 className="font-semibold">Working parameters · {initial.draft.working_branch}</h2>
+          <p className="text-sm">
+            {objectContext.sample.content.display_name} · sample revision{" "}
+            {objectContext.sample.revision}
+          </p>
+          <p className="text-xs text-text-dim break-all">
+            Baseline {base.id} · setup{" "}
+            {objectContext.setupName ?? objectContext.resolution.setup?.revision_id}
+          </p>
+          <p className="text-sm">
+            Current editable inputs. Selecting an object does not change the next experiment.
+          </p>
+        </header>
+      )}
       <p role="status">
         {draft.status === "saved" || (draft.status === "failed" && !draft.hasUnsavedChanges)
           ? "Draft saved in application data"
@@ -381,7 +515,6 @@ function ParameterVersionEditor({
               : "Draft has unsaved changes"}
       </p>
       <p>Draft recovery does not save a parameter version, apply changes or run an experiment.</p>
-      <ParameterDraftHistory base={base} onResume={onFork} />
       {draft.error && <p role="alert">{draft.error}</p>}
       {actionError && <p role="alert">{actionError}</p>}
       {draft.status === "failed" && draft.hasUnsavedChanges && (
@@ -419,92 +552,104 @@ function ParameterVersionEditor({
       {closed && <button onClick={onCancel}>Close editor</button>}
       {closed && <button onClick={() => void fork()}>Edit another copy</button>}
       <fieldset disabled={draft.busy || copying || closed} className="contents">
-        <label>
-          Draft operator
-          <input value={operator} onChange={(event) => patch({ actor: event.target.value })} />
-        </label>
-
-        {(base.catalog.definitions ?? []).map((definition) => {
-          const value = values.find((item) => item.id === definition.id);
-          if (definition.value_type.shape === "scalar")
+        {destination && (
+          <ObjectParameterFields
+            definitions={base.catalog.definitions ?? []}
+            values={values}
+            entity={objectEntity}
+            onChange={setValue}
+          />
+        )}
+        <details open={destination ? undefined : true}>
+          <summary>All parameters · advanced</summary>
+          {(base.catalog.definitions ?? []).map((definition) => {
+            const value = values.find((item) => item.id === definition.id);
+            if (definition.value_type.shape === "scalar")
+              return (
+                <ParameterValueField
+                  key={definition.id}
+                  label={definition.id}
+                  type={definition.value_type.atom}
+                  value={value?.shape === "scalar" ? (value.value ?? undefined) : undefined}
+                  entities={entities}
+                  onChange={(atom) =>
+                    setValue(
+                      definition.id,
+                      atom === undefined
+                        ? undefined
+                        : { id: definition.id, shape: "scalar", value: atom },
+                    )
+                  }
+                />
+              );
+            if (definition.value_type.shape !== "table")
+              return (
+                <p key={definition.id}>
+                  {definition.id}: edit this parameter shape through Python.
+                </p>
+              );
+            const table = definition.value_type;
+            const rows = value?.shape === "table" ? (value.rows ?? []) : [];
             return (
-              <ParameterValueField
-                key={definition.id}
-                label={definition.id}
-                type={definition.value_type.atom}
-                value={value?.shape === "scalar" ? (value.value ?? undefined) : undefined}
-                entities={entities}
-                onChange={(atom) =>
-                  setValue(
-                    definition.id,
-                    atom === undefined
-                      ? undefined
-                      : { id: definition.id, shape: "scalar", value: atom },
-                  )
-                }
-              />
-            );
-          if (definition.value_type.shape !== "table")
-            return (
-              <p key={definition.id}>{definition.id}: edit this parameter shape through Python.</p>
-            );
-          const table = definition.value_type;
-          const rows = value?.shape === "table" ? (value.rows ?? []) : [];
-          return (
-            <fieldset key={definition.id} className="grid gap-2 rounded border border-line p-3">
-              <legend>{definition.id}</legend>
-              {value === undefined && <p>Unknown table</p>}
-              {rows.map((row, index) => (
-                <div key={index} className="grid gap-2 border-t border-line py-2">
-                  {table.columns.map((column) => (
-                    <ParameterValueField
-                      key={column.id}
-                      label={`${definition.id}[${index + 1}].${column.id}`}
-                      type={column.value_type}
-                      value={row[column.id]}
-                      entities={entities}
-                      onChange={(atom) => {
-                        const next = { ...row };
-                        if (atom === undefined) delete next[column.id];
-                        else next[column.id] = atom;
+              <fieldset key={definition.id} className="grid gap-2 rounded border border-line p-3">
+                <legend>{definition.id}</legend>
+                {value === undefined && <p>Unknown table</p>}
+                {rows.map((row, index) => (
+                  <div key={index} className="grid gap-2 border-t border-line py-2">
+                    {table.columns.map((column) => (
+                      <ParameterValueField
+                        key={column.id}
+                        label={`${definition.id}[${index + 1}].${column.id}`}
+                        type={column.value_type}
+                        value={row[column.id]}
+                        entities={entities}
+                        onChange={(atom) => {
+                          const next = { ...row };
+                          if (atom === undefined) delete next[column.id];
+                          else next[column.id] = atom;
+                          setValue(definition.id, {
+                            id: definition.id,
+                            shape: "table",
+                            rows: rows.map((item, position) => (position === index ? next : item)),
+                          });
+                        }}
+                      />
+                    ))}
+                    <button
+                      onClick={() =>
                         setValue(definition.id, {
                           id: definition.id,
                           shape: "table",
-                          rows: rows.map((item, position) => (position === index ? next : item)),
-                        });
-                      }}
-                    />
-                  ))}
+                          rows: rows.filter((_, position) => position !== index),
+                        })
+                      }
+                    >
+                      Remove row {index + 1}
+                    </button>
+                  </div>
+                ))}
+                <div className="flex gap-3">
                   <button
                     onClick={() =>
                       setValue(definition.id, {
                         id: definition.id,
                         shape: "table",
-                        rows: rows.filter((_, position) => position !== index),
+                        rows: [...rows, {}],
                       })
                     }
                   >
-                    Remove row {index + 1}
+                    Add row
                   </button>
+                  <button onClick={() => setValue(definition.id)}>Mark table unknown</button>
                 </div>
-              ))}
-              <div className="flex gap-3">
-                <button
-                  onClick={() =>
-                    setValue(definition.id, {
-                      id: definition.id,
-                      shape: "table",
-                      rows: [...rows, {}],
-                    })
-                  }
-                >
-                  Add row
-                </button>
-                <button onClick={() => setValue(definition.id)}>Mark table unknown</button>
-              </div>
-            </fieldset>
-          );
-        })}
+              </fieldset>
+            );
+          })}
+        </details>
+        <label>
+          Draft operator
+          <input value={operator} onChange={(event) => patch({ actor: event.target.value })} />
+        </label>
         <button
           disabled={draft.conflict || !onSelectConfiguration}
           onClick={async () => {
@@ -522,6 +667,7 @@ function ParameterVersionEditor({
           This captures a copy for a fresh preview. Existing previews and submitted runs never adopt
           later edits automatically.
         </p>
+        <ParameterDraftHistory base={base} onResume={onFork} />
         <label>
           Source or reason for changes
           <input value={note} onChange={(event) => setNote(event.target.value)} />
@@ -626,6 +772,8 @@ function ParameterVersionEditor({
       </fieldset>
     </section>
   );
+  // Move the presentation only: this editor and its single save queue stay mounted.
+  return destination ? createPortal(content, destination.node) : content;
 }
 
 function ParameterDraftHistory({

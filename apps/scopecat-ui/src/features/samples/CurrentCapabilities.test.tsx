@@ -52,7 +52,7 @@ it("resolves one saved revision by name without a branch and clears stale result
       <CurrentCapabilities sampleId="chip" revision={2} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Capability evidence from saved parameters"));
+  fireEvent.click(screen.getByText("Working parameters and capability context"));
   fireEvent.change(screen.getByLabelText("Parameter source"), { target: { value: "revision" } });
   expect(screen.getByText("Resolve capability context")).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Saved parameter revision"), {
@@ -128,7 +128,7 @@ it("resolves explicit choices and clears the captured context before a failed re
       <CurrentCapabilities sampleId="chip" revision={2} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Capability evidence from saved parameters"));
+  fireEvent.click(screen.getByText("Working parameters and capability context"));
   expect(screen.getByText("Resolve capability context")).toBeDisabled();
   await screen.findByRole("option", { name: "saved-setup" });
   fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "daily" } });

@@ -79,6 +79,12 @@ The source-browser recovery journey covers navigation, concurrent editors, brows
 close and service restart on a different port, and immutable A/B experiment inputs.
 This does not qualify native hosts, installed upgrades or hardware. See
 [parameter draft boundaries](architecture/parameter-drafts.md).
+Object forms beside the Samples map share that same working draft and require an
+explicitly resolved registered single-member target, setup and branch. They expose
+direct typed entity references; full-table structure edits, scientific adoption and
+historical context inspection retain their separate boundaries. No inferred route
+mapping, persistent mapping schema or new native acceptance is introduced.
+
 
 See [configuration ownership](configuration-ownership.md),
 [target execution](architecture/target-execution.md),
