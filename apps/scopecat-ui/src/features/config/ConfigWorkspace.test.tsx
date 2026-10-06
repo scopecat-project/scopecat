@@ -194,6 +194,8 @@ it("preserves unknown values and retains the draft after validation fails", asyn
     { id: "frequency", shape: "scalar", value: { text: "4.9", unit: "GHz" } },
   ]);
   expect(commitParameterDraft).toHaveBeenCalled();
+  expect(screen.getByText("Draft saved in application data")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Retry draft save" })).not.toBeInTheDocument();
   expect(base.parameters.values).toEqual([
     { id: "frequency", shape: "scalar", value: { value: 4.8, unit: "GHz" } },
   ]);
@@ -316,4 +318,25 @@ it("ignores a completed editor's delayed read after another draft is opened", as
   await waitFor(() => expect(getParameterRevisions).toHaveBeenCalledTimes(2));
   expect(screen.getByLabelText("frequency")).toHaveValue("1e");
   expect(screen.getByLabelText("Saved parameter version")).toHaveValue("initial");
+});
+
+it("distinguishes failed adoption from unsaved edits", async () => {
+  vi.mocked(freezeParameterDraft).mockRejectedValue(new Error("Complete working input"));
+  const selected = mount();
+  await edit();
+  fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e" } });
+  expect(screen.getByText("Draft has unsaved changes")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Use working inputs for next experiment" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Complete working input");
+  expect(screen.getByText("Draft saved in application data")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Retry draft save" })).not.toBeInTheDocument();
+  expect(draftView.draft.input.values?.[0]?.value?.text).toBe("1e");
+  expect(selected).not.toHaveBeenCalled();
+  expect(commitParameterDraft).not.toHaveBeenCalled();
+  vi.mocked(saveParameterDraft).mockRejectedValue(new Error("offline"));
+  fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e+" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use working inputs for next experiment" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("offline");
+  expect(screen.getByText("Draft has unsaved changes")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Retry draft save" })).toBeVisible();
 });

@@ -181,6 +181,7 @@ export function useParameterDraft(initial: ParameterDraftView) {
     capture,
     resolve,
     status,
+    hasUnsavedChanges: s.generation !== s.ack,
     error,
     busy,
     conflict: s.conflict,
