@@ -15,6 +15,7 @@ class DesktopSession:
     def __init__(self, runtime: ApplicationRuntime, closing: threading.Event):
         self.runtime = runtime
         self.closing = closing
+        self.prepare_reset: Callable[[], None] | None = None
         self.base_url: str | None = None
         self.connection_changed: Callable[[str, str], None] = lambda _old, _new: None
         self._operation_lock = threading.Lock()

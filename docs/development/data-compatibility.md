@@ -125,3 +125,8 @@ current format, rejection without mutation, frozen scientific intent and actual
 backup/restore. Long-term compatibility work begins only when the future baseline
 is explicitly designated; the scope will be stated then rather than inferred from
 all earlier development formats.
+
+A user-confirmed native reset may delete the standard scientific store in place.
+It defaults to a verified external raw-file archive, with an explicit per-operation
+skip option. This archive preserves the old format without promising current
+restore compatibility. This is not a migration edge or supported historical codec.

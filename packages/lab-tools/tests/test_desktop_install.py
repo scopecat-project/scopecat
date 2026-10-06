@@ -69,6 +69,8 @@ def native_start(tmp_path, monkeypatch):
 
         def __init__(self, home):
             assert home == paths.state
+            self.home = home
+            self.root = home / "runtime"
 
         def configure(self, **_kwargs):
             self.selection.write_text(receipt())

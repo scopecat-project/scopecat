@@ -21,6 +21,27 @@ probe = module_from_spec(spec)
 spec.loader.exec_module(probe)
 
 
+def test_native_bootstrap_captures_failure_without_inherited_output(tmp_path):
+    script = tmp_path / "failure.py"
+    script.write_text(
+        "import logging\n"
+        "logging.error('WebView initialization failed')\n"
+        "raise RuntimeError('early host failure')\n"
+    )
+    log = tmp_path / "python.log"
+    bootstrap = tmp_path / "bootstrap.py"
+    bootstrap.write_text(probe.host_bootstrap(script, [], log))
+    result = subprocess.run(  # noqa: S603 - fixed disposable failure fixture
+        [sys.executable, str(bootstrap)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "WebView initialization failed" in log.read_text()
+    assert "RuntimeError: early host failure" in log.read_text()
+
+
 def test_probe_wait_has_a_deadline():
     with pytest.raises(TimeoutError, match="bridge unavailable"):
         probe.wait_for(lambda: False, "bridge unavailable", timeout=0)
@@ -128,8 +149,9 @@ def test_probe_requires_home_below_disposable_runner_temp(tmp_path, monkeypatch)
 
 
 @pytest.mark.parametrize("fail_cleanup", [False, True])
+@pytest.mark.parametrize("host_failure", ["exit", "timeout", "teardown"])
 def test_host_failure_overrides_partial_pass_and_retains_reports(
-    tmp_path, monkeypatch, fail_cleanup
+    tmp_path, monkeypatch, fail_cleanup, host_failure
 ):
     hosted_runner(tmp_path, monkeypatch)
     app, home = tmp_path / "app", tmp_path / "home"
@@ -155,15 +177,25 @@ def test_host_failure_overrides_partial_pass_and_retains_reports(
         log.write_text("diagnostic")
         if len(calls) == 1:
             (home / "native-windows/result.json").write_text('{"status":"passed"}')
+            if host_failure == "exit":
+                raise subprocess.CalledProcessError(7, command)
+            if host_failure == "teardown":
+                raise RuntimeError("Validation process cleanup incomplete")
             raise subprocess.TimeoutExpired(command, timeout)
         if fail_cleanup:
             raise subprocess.CalledProcessError(1, command)
 
     monkeypatch.setattr(probe, "run_bounded", run)
-    with pytest.raises((subprocess.TimeoutExpired, subprocess.CalledProcessError)):
+    with pytest.raises(
+        (subprocess.TimeoutExpired, subprocess.CalledProcessError, RuntimeError)
+    ):
         probe.verify(app, home)
     result = json.loads((home / "native-windows/result.json").read_text())
     assert result["status"] == "failed" and result["host_error"]
+    assert result["host_stopped"] is (host_failure != "teardown")
+    assert result["host_exit_code"] == (7 if host_failure == "exit" else None)
+    assert result["cleanup_completed"] is not fail_cleanup
+    assert bool(result["cleanup_error"]) is fail_cleanup
     assert len(calls) == 2 and "--cleanup" in calls[1]
     assert not list((home / "native-windows").glob("host-*"))
     assert (home / "native-windows/host.log").read_text() == "diagnostic"

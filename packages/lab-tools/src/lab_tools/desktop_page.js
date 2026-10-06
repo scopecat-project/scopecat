@@ -23,6 +23,13 @@ function retry() {
   return operate("正在重新准备应用，请稍候…", () => pywebview.api.retry());
 }
 
+function resetData() {
+  return operate("正在确认备份与删除应用数据，请稍候…", async () => {
+    const changed = await pywebview.api.reset_data(document.getElementById("skip-backup").checked);
+    if (!changed) progress("");
+  });
+}
+
 function restart() {
   return operate("正在停止后台并重新启动，请稍候…", () => pywebview.api.restart());
 }

@@ -635,6 +635,17 @@ def probe(home: Path) -> None:
             )
 
 
+def host_bootstrap(script: Path, arguments: list[str], log: Path) -> str:
+    """Capture Python/WebView failures even when pythonw inherits no handles."""
+    return (
+        "import runpy, sys\n"
+        f"sys.stdout = sys.stderr = open({str(log)!r}, "
+        "'a', encoding='utf-8', buffering=1)\n"
+        f"sys.argv = {[str(script), *arguments]!r}\n"
+        f"runpy.run_path({str(script)!r}, run_name='__main__')\n"
+    )
+
+
 def verify(app: Path, home: Path) -> None:
     require_hosted_runner(home)
     app, home = app.resolve(), home.resolve()
@@ -671,23 +682,35 @@ def verify(app: Path, home: Path) -> None:
             "Contents/MacOS/Scopecat" if sys.platform == "darwin" else "Scopecat.exe"
         )
         (resources / "bootstrap.py").write_text(
-            "import runpy, sys\n"
-            f"sys.argv = [{str(script)!r}, '--probe', {str(home)!r}]\n"
-            f"runpy.run_path({str(script)!r}, run_name='__main__')\n",
+            host_bootstrap(script, ["--probe", str(home)], reports / "python.log"),
             encoding="utf-8",
         )
         failure: str | None = None
+        host_stopped = False
+        cleanup_completed = False
+        cleanup_error = None
+        host_exit_code = None
         try:
             # Keep the native executable/bundle identity and finalization path.
             # --check-result only suppresses the launcher's modal failure alert.
             run_bounded(
                 [str(executable), "--check-result"], reports / "host.log", timeout=210
             )
+            host_stopped = True
+            host_exit_code = 0
             result = cast(
                 "dict[str, object]", json.loads((reports / "result.json").read_bytes())
             )
             assert result["status"] == "passed"
-        except Exception:
+        except Exception as error:
+            # These exceptions leave run_bounded only after its host teardown.
+            # Unexpected teardown failures are deliberately not a stopped receipt.
+            if isinstance(
+                error, (subprocess.CalledProcessError, subprocess.TimeoutExpired)
+            ):
+                host_stopped = True
+            if isinstance(error, subprocess.CalledProcessError):
+                host_exit_code = error.returncode
             failure = traceback.format_exc()
             raise
         finally:
@@ -707,9 +730,11 @@ def verify(app: Path, home: Path) -> None:
                     reports / "cleanup.log",
                     timeout=45,
                 )
+                cleanup_completed = True
             except Exception:
-                failure = (failure or "") + traceback.format_exc()
-                raise
+                cleanup_error = traceback.format_exc()
+                if failure is None:
+                    raise
             finally:
                 output = reports / "result.json"
                 result = (
@@ -717,8 +742,12 @@ def verify(app: Path, home: Path) -> None:
                     if output.exists()
                     else {}
                 )
-                result["status"] = "failed" if failure else "passed"
-                result["host_exit_and_cleanup"] = "failed" if failure else "passed"
+                result["status"] = "failed" if failure or cleanup_error else "passed"
+                result["host_exit_and_cleanup"] = result["status"]
+                result["host_stopped"] = host_stopped
+                result["host_exit_code"] = host_exit_code
+                result["cleanup_completed"] = cleanup_completed
+                result["cleanup_error"] = cleanup_error
                 if failure:
                     result["host_error"] = failure
                 output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

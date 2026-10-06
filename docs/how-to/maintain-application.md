@@ -177,3 +177,32 @@ none is designated yet. See [data compatibility](../development/data-compatibili
 and [backup/restore](backup-and-restore.md).
 
 Help practice uses the same application and its ordinary data-cleanup controls.
+
+## Reset data when an unsupported format prevents startup
+
+The native error page offers **删除应用数据并重新初始化…**. By default, choose
+an external backup folder, then confirm the exact data range. The host remembers
+only this folder. Each recovery starts with backup enabled; **本次跳过备份** skips
+it only for this confirmation. Cancelling either dialog deletes nothing. A failed
+backup never falls back to deletion.
+
+The operation deletes only `runtime/.scopecat/control.sqlite3`, its SQLite sidecars
+and `objects/`, then initializes a current empty store at the same path. This
+removes experiments, parameters, drafts, device configuration and stored evidence.
+Original source folders, Python environments, application files, author-folder
+registrations and other files remain. No task runs or device connects automatically.
+This does not free environments, materialized source or unknown auxiliary files.
+There are no new spaces, current-space selection or retained-space manager.
+
+The backup is a uniquely named directory in the chosen folder, containing raw
+store files and a SHA-256 manifest. It preserves the original format; it is **not**
+a current-version snapshot/restore promise and does not include source or Python
+environments. Existing supported-format backup/restore remains a separate command.
+All archive files are copied and verified before deletion. Interrupted deletion
+can be partial and cannot be rolled back automatically. Retry requires explicit
+confirmation; an existing verified archive is reused and its location displayed.
+If an earlier attempt skipped backup, a new backup can contain only what remains.
+
+Recovery refuses custom runtime bindings/composition, uncertain or active owners,
+redirected paths, unknown files inside the object store, and unresolved rollback
+journals. These are explanations to preserve the data, not permission to guess.

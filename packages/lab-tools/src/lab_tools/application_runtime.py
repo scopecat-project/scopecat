@@ -68,7 +68,7 @@ def runtime_command(python: Path, request: dict[str, object]) -> dict[str, objec
         return response
 
 
-def _write(path: Path, content: str) -> None:
+def write_state(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(prefix=f".{path.name}-", dir=path.parent)
     staged = Path(name)
@@ -103,6 +103,8 @@ class ApplicationRuntime:
         return Installation.model_validate_json(self.selection.read_bytes())
 
     def require_ready(self) -> None:
+        if (self.home / "data-reset.json").exists():
+            raise ValueError("数据删除尚未完成；请在启动页面确认继续，不能直接启动")
         if self.pending.exists():
             raise ValueError("应用运行信息登记尚未完成，请在启动页面重试；数据保留")
 
@@ -191,13 +193,13 @@ class ApplicationRuntime:
             if manifest.exists() and manifest.read_text() != declaration:
                 raise ValueError("已有应用声明与本次安装不符；原文件保留")
             if not manifest.exists():
-                _write(manifest, declaration)
+                write_state(manifest, declaration)
             selected = self.qualify(
                 python or Path(sys.executable),
                 static_dir,
                 delivery_root=delivery_root,
             )
-            _write(self.selection, selected.model_dump_json(indent=2))
+            write_state(self.selection, selected.model_dump_json(indent=2))
             return selected
 
     def start(self) -> DaemonEndpointRecord:
@@ -272,9 +274,9 @@ class ApplicationRuntime:
             # A fully verified current package can supersede an interrupted
             # registration. The journal fences starts; it does not pin an old
             # package that may no longer be installed.
-            _write(self.pending, candidate.model_dump_json(indent=2))
-            _write(self.root / "scopecat.toml", candidate.composition)
-            _write(self.selection, candidate.model_dump_json(indent=2))
+            write_state(self.pending, candidate.model_dump_json(indent=2))
+            write_state(self.root / "scopecat.toml", candidate.composition)
+            write_state(self.selection, candidate.model_dump_json(indent=2))
             self.pending.unlink()
 
     def register_source(self, workspace: Path, *, python: Path | None = None) -> str:
@@ -328,7 +330,7 @@ class ApplicationRuntime:
                     else item
                     for item in registry.items
                 )
-                _write(
+                write_state(
                     path,
                     registry.model_copy(update={"items": items}).model_dump_json(
                         indent=2

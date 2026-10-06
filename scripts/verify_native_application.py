@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -199,9 +200,21 @@ def verify(
             for relative in (
                 "result.json",
                 "data-journey.json",
+                "reset-recovery/result.json",
+                "reset-recovery/reset.json",
+                "reset-recovery/reopen.json",
+                "reset-recovery/reset.log",
+                "reset-recovery/reopen.log",
+                "reset-recovery/reset-python.log",
+                "reset-recovery/reopen-python.log",
+                "reset-recovery/cleanup.log",
+                "reset-recovery/desktop.log",
+                "reset-recovery/daemon.log",
                 "native-windows/result.json",
+                "native-windows/sequence.json",
                 "native-windows/identity.json",
                 "native-windows/host.log",
+                "native-windows/python.log",
                 "native-windows/cleanup.log",
                 "native-windows/acquisition.log",
                 "native-windows/acquisition-process.json",
@@ -266,6 +279,79 @@ def verify(
         )
 
 
+def verify_recovery_probes(app: Path, home: Path) -> None:
+    """Collect both bounded journeys, but never cross an uncertain cleanup."""
+    reports = home / "native-windows"
+    sequence: dict[str, object] = {}
+    failures: list[Exception] = []
+    try:
+        try:
+            subprocess.run(  # noqa: S603 - fixed isolated probe
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("verify_native_windows.py").resolve()),
+                    str(app),
+                    str(home),
+                ],
+                check=True,
+            )
+            sequence["windows"] = {"exit_code": 0}
+        except Exception as error:
+            failures.append(error)
+            sequence["windows"] = {
+                "exit_code": error.returncode
+                if isinstance(error, subprocess.CalledProcessError)
+                else None,
+                "error": traceback.format_exc(),
+            }
+        try:
+            result = cast(
+                "dict[str, object]", json.loads((reports / "result.json").read_bytes())
+            )
+            if (
+                result.get("host_stopped") is not True
+                or result.get("cleanup_completed") is not True
+            ):
+                raise RuntimeError("Window host/service cleanup was not confirmed")
+        except Exception as error:
+            failures.append(error)
+            sequence["reset"] = {
+                "status": "not-run",
+                "reason": "Preceding probe cleanup is incomplete or unverified",
+                "error": traceback.format_exc(),
+            }
+        else:
+            try:
+                subprocess.run(  # noqa: S603 - separate reset copy/home after cleanup
+                    [
+                        sys.executable,
+                        str(
+                            Path(__file__).with_name("verify_native_reset.py").resolve()
+                        ),
+                        str(app),
+                        str(home),
+                    ],
+                    check=True,
+                )
+                sequence["reset"] = {"status": "passed", "exit_code": 0}
+            except Exception as error:
+                failures.append(error)
+                sequence["reset"] = {
+                    "status": "failed",
+                    "exit_code": error.returncode
+                    if isinstance(error, subprocess.CalledProcessError)
+                    else None,
+                    "error": traceback.format_exc(),
+                }
+    finally:
+        reports.mkdir(parents=True, exist_ok=True)
+        (reports / "sequence.json").write_text(
+            json.dumps(sequence, indent=2), encoding="utf-8"
+        )
+    if failures:
+        raise ExceptionGroup("Native window/reset qualification failed", failures)
+
+
 def _verify(
     app: Path,
     home: Path,
@@ -315,15 +401,7 @@ def _verify(
     )
     assert inventory(relocated, (".",)) == before, "Runtime modified application files"
     if native_windows:
-        subprocess.run(  # noqa: S603 - bounded native probe, disposable home and app copy
-            [
-                sys.executable,
-                str(Path(__file__).with_name("verify_native_windows.py").resolve()),
-                str(relocated),
-                str(home),
-            ],
-            check=True,
-        )
+        verify_recovery_probes(relocated, home)
         if sys.platform == "darwin":
             subprocess.run(  # noqa: S603 - same live disposable acceptance state
                 [

@@ -465,6 +465,7 @@ integration_paths = [
   "packages/lab-tools/tests/test_teaching_delivery.py",
 ]
 journey_paths = [
+  "packages/lab-tools/tests/test_data_reset.py",
   "packages/lab-tools/tests/test_platform_environment.py",
   "packages/lab-tools/tests/test_array_maintenance.py",
   "packages/lab-tools/tests/test_installed_adapter_journey.py",

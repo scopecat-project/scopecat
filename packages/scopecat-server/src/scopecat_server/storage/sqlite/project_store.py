@@ -25,6 +25,11 @@ class ProjectStoreError(RuntimeError):
 class SchemaVersionError(ProjectStoreError):
     """The database belongs to an unsupported project-store schema."""
 
+    def __init__(self, message: str, *, actual: int | None = None):
+        super().__init__(message)
+        self.actual = actual
+        self.expected = PROJECT_SCHEMA_VERSION
+
 
 class SQLiteProjectStore:
     """Own the one database and object directory used by a project."""
@@ -145,7 +150,8 @@ def require_current_schema(connection: sqlite3.Connection) -> int:
     if version != PROJECT_SCHEMA_VERSION:
         raise SchemaVersionError(
             "unsupported project-store schema version: "
-            f"{version}; expected {PROJECT_SCHEMA_VERSION}. " + _VERSION_GUIDANCE
+            f"{version}; expected {PROJECT_SCHEMA_VERSION}. " + _VERSION_GUIDANCE,
+            actual=version,
         )
     return version
 

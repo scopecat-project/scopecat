@@ -243,3 +243,22 @@ Do not add a second application manager to solve packaging. Native setup and upd
 must use the same application/data ownership, independent author environments and
 explicit stop behavior. Uninstalling software must not erase scientific data or
 author projects. Windows window behavior remains a target-platform acceptance item.
+
+## Confirmed in-place data reset
+
+The native recovery action owns only the standard SQLiteProjectStore database,
+sidecars and object directory. It never deletes the entire home or `.scopecat`.
+Existing application/deployment/daemon and worker fences remain held while taking
+an optional raw backup and deleting the store. An external archive uses a strict
+file inventory, raw DB/WAL capture under SQLite writer reservation, a manifest,
+checksums and publication before deletion; unresolved rollback journals are refused.
+These fences coordinate Scopecat owners, not concurrent manual filesystem edits.
+
+`desktop/reset-backup.json` remembers a selected external directory only. Skip
+backup is not persisted. `data-reset.json` is an interrupted-operation marker,
+not a history registry: it fences normal startup, names any verified archive and
+separates deletion from initialization. Remaining old bytes must be covered by
+that backup before a resumed deletion. The marker is removed after initialization.
+Backup failure never authorizes deletion. Partial deletion is reported truthfully.
+No `spaces/`, selection pointer, automatic migration or backup garbage collector
+is introduced. Installations and source directories stay at their original paths.

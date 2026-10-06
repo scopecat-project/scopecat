@@ -311,3 +311,24 @@ window creation within the live process; the separate Mac Cocoa check covers
 browser ephemerality and application-draft recovery across complete host/service
 restart. That restart result is not extended to Windows.
 No real devices, private consumer repositories or retained user data are fixtures.
+
+## In-place reset recovery probe
+
+`verify_native_reset.py` now targets confirmed deletion and initialization at the
+same path, preserving source and installation files. Its programmatic DOM action
+explicitly selects skip-backup; default backup, picker cancellation, archive
+verification and failures are covered in focused host/storage tests. Native folder
+picker interaction for this reset flow remains unqualified. The probe replaces the
+copied bootstrap, calls production desktop code and operates real confirmation
+buttons; HTTP navigation/running status is not workbench rendering qualification.
+
+The prior run 37475673494 qualified the superseded preserved-space design at
+`1a2e9a7f6583a3e47f530443660ccbca187d5636`; it is not evidence for this destructive
+reset design. Its preceding Windows bridge startup failure remains unexplained.
+The current rewrite requires a separately scoped acceptance decision, not an
+automatic repeat of the full native distribution matrix.
+
+Native probe reports retain child Python output, host logs and cleanup results.
+The window/reset sequence proceeds only after host and background cleanup are
+confirmed, records unexecuted reset reasons, and remains failed if either probe
+fails. No later successful result overwrites an earlier failure.
