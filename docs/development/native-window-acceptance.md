@@ -62,23 +62,34 @@ production patch, alternate profile or new workflow trigger is introduced.
   loads the exact procedure in the real UI and restores its reviewer. The full
   application-owned draft receipt must equal the earlier real-form edit before
   and after restart. Browser data is never used as a recovery fallback.
+- After those independent recovery checks, C returns to the fixed origin, seeds
+  a fresh cookie/marker and opens a second native window in the same host. It
+  records both windows' actual stores, native cookies, document cookies and HTTP
+  echoes before requiring the original window to retain its cookie and marker.
+  Closing the peer must also preserve the original values. Peer values are
+  observations, not a new cross-window sharing policy. A cookie loss fails C and
+  the aggregate; earlier A/B and C recovery observations remain in the reports.
 
 Inspect `windows-storage/result.json`, `draft-fixture.json`, `A.json`, `B.json`,
 `C.json` and their logs alongside `native-windows/identity.json`. Stage reports,
 nonzero exits, deadlines and cleanup failures are required evidence, not optional
-warnings. All eight files survive disposable workspace cleanup. Linux tests only
-validate failure handling and embedded-script syntax; they cannot qualify native
-Windows behavior. The existing eight window checks and independent marker
+warnings. The existing always-run workflow upload collects the entire directory,
+including error reports in the same filenames. Early host/import errors produce
+stage JSON and logs; setup errors produce aggregate JSON. Explicit stage-exit,
+stage-pass, owned-host/service-cleanup and aggregate status lines reach the job
+log. Lightweight tests check actual retained A/B/C reports/logs against the upload
+paths, including failure cases, and reject a missing directory. These Linux tests
+validate failure handling and evidence retention, not native Windows behavior. The existing eight window checks and independent marker
 assertions remain unchanged.
 
-The scope is host isolation/restart, not a new assertion that Windows cookies
-survive creation of another window within one host. Upstream 6.2.1
+The same-host check covers the identified source risk: upstream 6.2.1
 [WebView2 initialization](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/edgechromium.py)
 calls `DeleteAllCookies` for each private WebView; the
 [WinForms backend](https://github.com/r0x0r/pywebview/blob/6.2.1/webview/platforms/winforms.py)
-uses a host-level temporary directory. This is a source-level risk requiring
-separate native evidence before proposing any production dependency repair.
-It is not reported as a demonstrated fault or a passed cookie-preservation check.
+uses a host-level temporary directory. Native evidence is still required before
+reporting a demonstrated fault or proposing any production dependency repair.
+The probe never reseeds cookies after opening the peer or adjusts its expectation
+to match deletion. No production storage code or Mac assertion changes.
 
 For this follow-up, dispatch **Full acceptance**, ref
 `codex/windows-native-recovery`, profile **native-distribution**, and match the
@@ -89,18 +100,34 @@ triggers to obtain dispatch access.
 completed successfully at `0f80eb43941a06f13dc10f4ce9fef604ee42fc43`, but its
 Windows artifact omitted **all eight `windows-storage/` files**. The verifier
 retained those files; the workflow upload allowlist omitted their directory.
-The upload path is now corrected without changing triggers or assertions. A new
-manual run is required to obtain reviewable A/B/C evidence; green jobs alone do
-not qualify those individual checks.
+The upload path is now corrected without changing triggers. A new manual run on
+the final reviewed head is needed for raw A/B/C evidence and the added same-host
+cookie check.
+
+Execution and evidence retention are separate. At the tested SHA, Windows
+unconditionally invokes the lifecycle probe with `check=True` when native checks
+are enabled. Its native launcher waits for `pythonw -I -B` and propagates its exit
+code (`-I` ignores Python optimization environment overrides). The wrapper waits
+for each host and requires its matching stage JSON to say passed; C follows
+successful A/B exit and a verified service stop/start. Exceptions and cleanup
+failures propagate through `verify_native_application.py`, the fail-fast shell
+and the native matrix to the acceptance gate. The outer workflow does not enable
+Python optimization or `continue-on-error`. Consequently the exact-source
+execution chain and successful job support that the then-programmed A/B/C
+assertions executed and returned success. The missing upload is **not evidence
+that they were skipped**. That version emitted no explicit A/B/C completion lines,
+so logs cannot recover the missing values, identities or cleanup details.
 
 The downloaded [Windows report artifact](https://github.com/scopecat-project/scopecat/actions/runs/37446444844/artifacts/11404192239)
 (SHA-256 `e7dba67a0b5b031849b5e0d9dbd2ada0b9ec7b8dc537a610e7c59dfb5c9c7a38`)
 does confirm all eight existing window checks, unchanged complete draft receipts,
 the same marker in both windows, and host exit/cleanup. Same-host cookie retention
-was not exercised. Full Windows restart/form recovery, cross-host cookie/marker
-isolation, B cookie clearing and A/B/C cleanup remain unqualified because their
-raw reports are missing. This is an evidence-retention defect, not evidence of a
-production storage failure.
+was not exercised. The execution chain supports successful full restart/form
+recovery, cross-host cookie/marker isolation and B cookie clearing assertions,
+but their raw observations cannot be independently audited from this artifact.
+Cleanup assertions concern owned hosts, the service and harness temporary copy;
+they do not prove deletion of every WebView2 profile file or browser subprocess.
+This is an evidence-retention defect, not evidence of a production storage failure.
 
 The [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37446444844/artifacts/11403733136)
 (SHA-256 `c947b17ed16969efa494108fca2f7573d95128e4026899f8ca9b0f373cccfb62`)

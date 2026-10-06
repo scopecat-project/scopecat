@@ -34,6 +34,7 @@ import hashlib, importlib.metadata, json, sys, time, traceback
 from pathlib import Path
 from urllib.parse import urlencode
 from verify_native_windows import require_hosted_runner, read_decision_draft
+from verify_windows_storage import require_observation
 
 require_hosted_runner(Path(sys.argv[2]).parent)
 assert sys.platform == "win32"
@@ -85,7 +86,7 @@ def actual(window):
     return values[0]
 
 
-def observe(window, expected, label):
+def observe(window, label):
     # Retain the observed values even when agreement/isolation assertions fail.
     native = cookies(window)
     document = js(window, "document.cookie")
@@ -97,12 +98,6 @@ def observe(window, expected, label):
     observed = {"cookies": native, "document": document,
                 "http": echo, "marker": marker}
     result[label] = observed
-    assert native.get("scopecat_host_cookie") == expected, observed
-    for value in (document, echo):
-        if expected is None:
-            assert "scopecat_host_cookie=" not in value, observed
-        else:
-            assert "scopecat_host_cookie=" + expected in value, observed
     return observed
 
 
@@ -114,8 +109,7 @@ def exercise():
         result["actual_store"] = actual(first)
         assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
         result["application_draft"] = fixture["view"]
-        observe(first, None, "initial")
-        assert result["initial"]["marker"] is None
+        require_observation(observe(first, "initial"), None, None)
         checks.append("actual private WebView2 starts empty at fixed origin")
         if stage == "C":
             checks.append("same-origin restart retains no old marker or cookie")
@@ -129,30 +123,54 @@ def exercise():
                 first, "document.body.textContent")
             assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
             checks.append("exact application draft and real form recover after restart")
+
+            # Run this last so a same-host cookie regression does not prevent the
+            # preceding independent restart/form observations from being retained.
+            first.load_url(origin)
+            wait(lambda: js(first, "location.origin") == origin,
+                 "return to fixed storage-test origin")
+            js(first, "localStorage.setItem('scopecat_host_marker', 'C'); "
+               "document.cookie = 'scopecat_host_cookie=C; path=/; max-age=600'")
+            require_observation(observe(first, "before_peer_creation"), "C", "C")
+            checks.append("same-host cookie and marker seeded before opening peer")
+            peer = webview.create_window("Scopecat storage peer C", origin, hidden=True)
+            windows.append(peer)
+            assert peer.events.loaded.wait(30)
+            result["peer_actual_store"] = actual(peer)
+            # Capture both windows before assertions, including a failing cookie.
+            original = observe(first, "after_peer_creation")
+            observe(peer, "peer_after_creation")
+            result["application_draft_after_peer_creation"] = read_decision_draft(
+                base_url, fixture["target"])
+            assert result["application_draft_after_peer_creation"] == fixture["view"]
+            require_observation(original, "C", "C")
+            checks.append("opening same-host peer preserves original cookie and marker")
+            # The peer's values are observations, not a new sharing policy.
+            peer.destroy()
+            assert peer.events.closed.wait(30)
+            windows.remove(peer)
+            require_observation(observe(first, "after_peer_close"), "C", "C")
+            checks.append("closing same-host peer preserves original cookie and marker")
         else:
             js(first, "localStorage.setItem('scopecat_host_marker', "
                + json.dumps(stage) + "); document.cookie = 'scopecat_host_cookie="
                + stage + "; path=/; max-age=600'")
-            observe(first, stage, "seeded")
-            assert result["seeded"]["marker"] == stage
+            require_observation(observe(first, "seeded"), stage, stage)
             if stage == "A":
                 (output / "A-ready").touch()
                 wait(lambda: (output / "B-ready").exists(), "second host writes")
-                observe(first, "A", "after_other_host_write")
-                assert result["after_other_host_write"]["marker"] == "A"
+                require_observation(observe(first, "after_other_host_write"), "A", "A")
                 (output / "B-clear").touch()
                 wait(lambda: (output / "B-done").exists(), "second host clear")
-                observe(first, "A", "after_other_host_clear")
-                assert result["after_other_host_clear"]["marker"] == "A"
+                require_observation(observe(first, "after_other_host_clear"), "A", "A")
                 checks.append("overlapping same-origin hosts isolate writes and clear")
             else:
                 (output / "B-ready").touch()
                 wait(lambda: (output / "B-clear").exists(), "peer checked isolation")
                 first.clear_cookies()
                 wait(lambda: not cookies(first), "native cookie deletion")
-                observe(first, None, "cleared")
                 # WebView2 DeleteAllCookies does not delete localStorage.
-                assert result["cleared"]["marker"] == "B"
+                require_observation(observe(first, "cleared"), None, "B")
                 checks.append("native cookie clearing preserves WebView2 localStorage")
                 (output / "B-done").touch()
         result["status"] = "passed"
@@ -172,6 +190,49 @@ if failure:
     raise RuntimeError(failure[0])
 
 """
+
+
+def require_observation(
+    observed: dict[str, object], cookie: str | None, marker: str | None
+) -> None:
+    """Require the original window's real cookie surfaces and marker to agree."""
+    native = cast("dict[str, str]", observed["cookies"])
+    assert native.get("scopecat_host_cookie") == cookie, observed
+    for surface in ("document", "http"):
+        pairs = {
+            part.strip()
+            for part in cast("str", observed[surface]).split(";")
+            if part.strip()
+        }
+        expected = None if cookie is None else "scopecat_host_cookie=" + cookie
+        actual = {part for part in pairs if part.startswith("scopecat_host_cookie=")}
+        assert actual == (set() if expected is None else {expected}), observed
+    assert observed["marker"] == marker, observed
+
+
+def host_bootstrap(stage: str, reports: Path, origin: str, base_url: str) -> str:
+    """Capture early Python/import errors despite pythonw's noninherited handles."""
+    return (
+        "import json, sys, traceback\n"
+        "from pathlib import Path\n"
+        f"sys.stdout = sys.stderr = open({str(reports / (stage + '.log'))!r}, "
+        "'a', encoding='utf-8', buffering=1)\n"
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
+        f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, "
+        f"{origin!r}, {base_url!r}]\n"
+        f"print('Windows storage host {stage}: started', flush=True)\n"
+        "try:\n"
+        f"    exec(compile({HOST!r}, 'windows-storage-{stage}', 'exec'))\n"
+        "except BaseException:\n"
+        "    error = traceback.format_exc()\n"
+        f"    report = Path({str(reports / (stage + '.json'))!r})\n"
+        "    document = json.loads(report.read_text()) if report.exists() else {}\n"
+        f"    document.update(stage={stage!r}, status='failed', "
+        "bootstrap_error=error)\n"
+        "    report.write_text(json.dumps(document, indent=2) + '\\n')\n"
+        "    print(error, file=sys.stderr, flush=True)\n"
+        "    raise\n"
+    )
 
 
 class _Page(BaseHTTPRequestHandler):
@@ -198,12 +259,18 @@ def finish_host(
     process: subprocess.Popen[str], stage: str, reports: Path, *, timeout: float = 90
 ) -> dict[str, object]:
     """A process exit is insufficient: require its complete, matching stage report."""
-    if process.wait(timeout=timeout) != 0:
+    code = process.wait(timeout=timeout)
+    print(f"Windows storage host {stage}: exit={code}", flush=True)
+    if code != 0:
         raise RuntimeError(f"Storage host {stage} failed; inspect stage log")
     document = cast(
         "dict[str, object]", json.loads((reports / f"{stage}.json").read_bytes())
     )
     assert document["status"] == "passed" and document["stage"] == stage
+    print(
+        f"Windows storage stage {stage}: passed; checks={document.get('checks')}",
+        flush=True,
+    )
     return document
 
 
@@ -216,16 +283,30 @@ def verify(app: Path, home: Path) -> None:
         raise ValueError("Acceptance home must be outside the application")
     reports = home / "windows-storage"
     reports.mkdir(parents=True, exist_ok=False)
-    result: dict[str, object] = {
-        "status": "failed",
-        "probe_sha256": file_hash(Path(__file__)),
-        "fixture_probe_sha256": file_hash(
-            Path(__file__).with_name("verify_native_windows.py")
-        ),
-        "native_identity": json.loads(
-            (home / "native-windows/identity.json").read_bytes()
-        ),
-    }
+    result: dict[str, object] = {"status": "failed"}
+    try:
+        _verify(app, home, reports, result)
+    except BaseException:
+        result.update(status="failed", error=traceback.format_exc())
+        raise
+    finally:
+        (reports / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        print(f"Windows storage aggregate: {result['status']}", flush=True)
+
+
+def _verify(app: Path, home: Path, reports: Path, result: dict[str, object]) -> None:
+    result.update(
+        {
+            "status": "failed",
+            "probe_sha256": file_hash(Path(__file__)),
+            "fixture_probe_sha256": file_hash(
+                Path(__file__).with_name("verify_native_windows.py")
+            ),
+            "native_identity": json.loads(
+                (home / "native-windows/identity.json").read_bytes()
+            ),
+        }
+    )
     runtime = ApplicationRuntime(home / "data")
     prior = cast(
         "dict[str, object]",
@@ -248,7 +329,7 @@ def verify(app: Path, home: Path) -> None:
         )
         + "\n"
     )
-    processes: list[subprocess.Popen[str]] = []
+    processes: dict[str, subprocess.Popen[str]] = {}
     owners: dict[int, psutil.Process] = {}
     with (
         ThreadingHTTPServer(("127.0.0.1", 0), _Page) as server,
@@ -266,13 +347,7 @@ def verify(app: Path, home: Path) -> None:
 
         def launch(stage: str, base_url: str) -> subprocess.Popen[str]:
             (resources / "bootstrap.py").write_text(
-                "import sys\n"
-                # The Windows launcher does not inherit handles into pythonw.exe.
-                f"sys.stdout = sys.stderr = open({str(reports / (stage + '.log'))!r}, "
-                "'a', encoding='utf-8', buffering=1)\n"
-                f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
-                f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, "
-                f"{origin!r}, {base_url!r}]\n" + HOST,
+                host_bootstrap(stage, reports, origin, base_url),
                 encoding="utf-8",
             )
             log = stack.enter_context(
@@ -285,14 +360,14 @@ def verify(app: Path, home: Path) -> None:
                 env=environment(),
                 text=True,
             )
-            processes.append(process)
+            processes[stage] = process
             with contextlib.suppress(psutil.NoSuchProcess):
                 owners[process.pid] = psutil.Process(process.pid)
             return process
 
         def gate(name: str) -> None:
             def ready() -> bool:
-                if any(process.poll() is not None for process in processes):
+                if any(process.poll() is not None for process in processes.values()):
                     raise RuntimeError(f"Host exited before {name}; inspect stage logs")
                 return (reports / name).exists()
 
@@ -311,7 +386,6 @@ def verify(app: Path, home: Path) -> None:
             second = launch("B", before.base_url)
             second_report = finish_host(second, "B", reports)
             first_report = finish_host(first, "A", reports)
-            result["host_exits"] = {"A": first.returncode, "B": second.returncode}
             stores = [
                 cast("dict[str, object]", report["actual_store"])
                 for report in (first_report, second_report)
@@ -334,11 +408,6 @@ def verify(app: Path, home: Path) -> None:
             )
             third = launch("C", after.base_url)
             third_report = finish_host(third, "C", reports)
-            result["host_exits"] = {
-                "A": first.returncode,
-                "B": second.returncode,
-                "C": third.returncode,
-            }
             restarted = cast("dict[str, object]", third_report["actual_store"])
             assert all(
                 restarted["user_data_folder"] != store["user_data_folder"]
@@ -350,7 +419,7 @@ def verify(app: Path, home: Path) -> None:
             raise
         finally:
             cleanup_errors: list[str] = []
-            for process in processes:
+            for process in processes.values():
                 if process.poll() is None:
                     try:
                         terminate_validation_process_tree(
@@ -365,7 +434,14 @@ def verify(app: Path, home: Path) -> None:
             server.shutdown()
             if cleanup_errors:
                 result.update(status="failed", cleanup_errors=cleanup_errors)
-            (reports / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+            result["host_exits"] = {
+                stage: process.returncode for stage, process in processes.items()
+            }
+            result["cleanup"] = "failed" if cleanup_errors else "passed"
+            print(
+                f"Windows storage owned-host/service cleanup: {result['cleanup']}",
+                flush=True,
+            )
             if cleanup_errors:
                 raise RuntimeError(
                     "WebView2 storage host cleanup failed; inspect result"

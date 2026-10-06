@@ -276,3 +276,55 @@ def test_windows_storage_host_wait_is_bounded(tmp_path, windows_storage_probe):
         finally:
             probe.terminate_validation_process_tree(process, owner=owner)
         assert process.poll() is not None
+
+
+@pytest.mark.parametrize("surface", ["cookies", "document", "http", "marker"])
+def test_windows_storage_cookie_or_marker_loss_fails(windows_storage_probe, surface):
+    """Validate rejection of recorded loss, not native browser behavior."""
+    observed = {
+        "cookies": {"scopecat_host_cookie": "C"},
+        "document": "scopecat_host_cookie=C",
+        "http": "scopecat_host_cookie=C",
+        "marker": "C",
+    }
+    windows_storage_probe.require_observation(observed, "C", "C")
+    observed[surface] = {} if surface == "cookies" else ""
+    with pytest.raises(AssertionError):
+        windows_storage_probe.require_observation(observed, "C", "C")
+
+
+def test_windows_storage_bootstrap_retains_early_failure(
+    tmp_path, monkeypatch, windows_storage_probe
+):
+    # Exercise only bootstrap diagnostics in a real child; no native result is mocked.
+    monkeypatch.setattr(
+        windows_storage_probe, "HOST", "raise ImportError('early host fixture')"
+    )
+    script = tmp_path / "bootstrap.py"
+    script.write_text(
+        windows_storage_probe.host_bootstrap("A", tmp_path, "unused", "unused")
+    )
+    process = subprocess.run(  # noqa: S603 - diagnostic child only
+        [sys.executable, "-I", "-B", str(script)], check=False
+    )
+    assert process.returncode != 0
+    report = json.loads((tmp_path / "A.json").read_text())
+    assert report["stage"] == "A" and report["status"] == "failed"
+    assert "early host fixture" in report["bootstrap_error"]
+    assert "early host fixture" in (tmp_path / "A.log").read_text()
+
+
+def test_windows_storage_aggregate_retains_setup_error(
+    tmp_path, monkeypatch, windows_storage_probe
+):
+    hosted_runner(tmp_path, monkeypatch)
+
+    def fail_setup(*args):
+        raise RuntimeError("fixture setup failed")
+
+    monkeypatch.setattr(windows_storage_probe, "_verify", fail_setup)
+    home = tmp_path / "home"
+    with pytest.raises(RuntimeError, match="fixture setup failed"):
+        windows_storage_probe.verify(tmp_path / "app", home)
+    result = json.loads((home / "windows-storage/result.json").read_text())
+    assert result["status"] == "failed" and "fixture setup failed" in result["error"]
