@@ -49,6 +49,7 @@ from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
 from .leases import OwnershipLeaseSupervisor
 from .manual_previews import ManualPreviewService
+from .parameter_drafts import ParameterDraftService
 from .point_plans import RunPointPlanService
 from .practice import PracticeService
 from .procedure_schedules import ProcedureScheduleService
@@ -133,6 +134,7 @@ class DaemonApplication:
         self.reviews = reviews
         self.automation = automation
         self.decision_drafts = DecisionDraftService(project_store.sqlite)
+        self.parameter_drafts = ParameterDraftService(project_store.sqlite, config)
         self.data_cleanup = DataCleanupService(project_store)
         self.practice = PracticeService(project_store, automation, self.data_cleanup)
         self.calibration_checks = CalibrationCheckQueries(

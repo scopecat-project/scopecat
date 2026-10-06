@@ -27,6 +27,7 @@ from scopecat_server.storage.sqlite.execution_schema import EXECUTION_TABLES_SQL
 from scopecat_server.storage.sqlite.experiment_plan_schema import (
     EXPERIMENT_PLAN_TABLES_SQL,
 )
+from scopecat_server.storage.sqlite.parameter_drafts import PARAMETER_DRAFT_TABLES_SQL
 from scopecat_server.storage.sqlite.practice_schema import PRACTICE_TABLES_SQL
 from scopecat_server.storage.sqlite.procedure_schedule_schema import (
     PROCEDURE_SCHEDULE_TABLES_SQL,
@@ -37,7 +38,7 @@ from scopecat_server.storage.sqlite.sample_schema import SAMPLE_TABLES_SQL
 from scopecat_server.storage.sqlite.setup_schema import SETUP_TABLES_SQL
 from scopecat_server.storage.sqlite.target_schema import TARGET_CATALOG_TABLES_SQL
 
-PROJECT_SCHEMA_VERSION = 111
+PROJECT_SCHEMA_VERSION = 112
 
 _CONTROL_TABLES_SQL = f"""
 CREATE TABLE IF NOT EXISTS project_schema (
@@ -226,6 +227,7 @@ PROJECT_SCHEMA_SQL = "\n".join(
         ANALYSIS_FOLLOW_TABLES_SQL,
         AUTOMATION_TABLES_SQL,
         DECISION_DRAFT_TABLES_SQL,
+        PARAMETER_DRAFT_TABLES_SQL,
         PROCEDURE_SCHEDULE_TABLES_SQL,
         CONFIG_REGISTRY_TABLES_SQL,
         SETUP_TABLES_SQL,

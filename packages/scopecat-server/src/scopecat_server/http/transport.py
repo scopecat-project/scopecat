@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 from threading import Event
 from typing import Annotated, Literal, cast, override
 from urllib.parse import quote
+from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
@@ -397,6 +398,14 @@ from scopecat_server.decision_drafts import (
 )
 from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
+)
+from scopecat_server.parameter_drafts import (
+    ParameterDraftCommit,
+    ParameterDraftFrozen,
+    ParameterDraftPage,
+    ParameterDraftSave,
+    ParameterDraftStart,
+    ParameterDraftView,
 )
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
@@ -2242,6 +2251,40 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.attempt,
         )
         return application.automation.wait_step_resources(command)
+
+    @app.post(f"{_API_PREFIX}/parameter-drafts/start")
+    def start_parameter_draft(command: ParameterDraftStart) -> ParameterDraftView:
+        return application.parameter_drafts.start(command)
+
+    @app.get(f"{_API_PREFIX}/parameter-drafts")
+    def parameter_draft_history(
+        base_id: str,
+        before: Annotated[int | None, Query(ge=1)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> ParameterDraftPage:
+        return application.parameter_drafts.history(base_id, before, limit)
+
+    @app.get(f"{_API_PREFIX}/parameter-drafts/{{draft_id}}")
+    def read_parameter_draft(draft_id: UUID) -> ParameterDraftView:
+        return application.parameter_drafts.read(draft_id)
+
+    @app.post(f"{_API_PREFIX}/parameter-drafts/{{draft_id}}/save")
+    def save_parameter_draft(
+        draft_id: UUID, command: ParameterDraftSave
+    ) -> ParameterDraftView:
+        return application.parameter_drafts.save(draft_id, command)
+
+    @app.post(f"{_API_PREFIX}/parameter-drafts/{{draft_id}}/freeze")
+    def freeze_parameter_draft(
+        draft_id: UUID, command: ParameterDraftCommit
+    ) -> ParameterDraftFrozen:
+        return application.parameter_drafts.freeze(draft_id, command)
+
+    @app.post(f"{_API_PREFIX}/parameter-drafts/{{draft_id}}/commit")
+    def commit_parameter_draft(
+        draft_id: UUID, command: ParameterDraftCommit
+    ) -> ParameterDraftView:
+        return application.parameter_drafts.commit(draft_id, command)
 
     @app.get(f"{_API_PREFIX}/decision-drafts")
     def decision_draft_history(

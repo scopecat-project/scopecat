@@ -1,7 +1,8 @@
+import { readParameterDraft, freezeParameterDraft } from "../config/parameter-draft-api";
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { reviewedForRequest } from "./scientific-selection";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
@@ -27,6 +28,7 @@ export function LaunchForm({
   const supported = fields.length === allFields.length;
   const {
     projectId,
+    selectConfiguration,
     draft: retained,
     update,
     select,
@@ -44,7 +46,34 @@ export function LaunchForm({
       mounted.current = false;
     };
   }, []);
-  const result = catalogReady && !pending ? draft.preview : undefined;
+  const [workingError, setWorkingError] = useState<string>();
+  const working = useQuery({
+    queryKey: ["launch-working-input", projectId, draft.workingInput?.draft_id],
+    enabled: Boolean(draft.workingInput),
+    retry: false,
+    refetchInterval: 1000,
+    queryFn: () => readParameterDraft(draft.workingInput!.draft_id),
+  });
+  const workingCurrent =
+    !draft.workingInput ||
+    (!!working.data &&
+      !working.isError &&
+      working.data.head_revision === draft.workingInput.revision &&
+      working.data.draft.state === "saved" &&
+      !working.data.branch_changed);
+  useEffect(() => {
+    if (!draft.workingInput || !working.data || workingCurrent || draft.pending || !draft.preview)
+      return;
+    update((current) =>
+      current.workingInput?.draft_id === draft.workingInput?.draft_id
+        ? invalidateDraft(
+            current,
+            "Working inputs changed. Use current inputs and preview again before starting.",
+          )
+        : current,
+    );
+  }, [working.data, workingCurrent, draft.workingInput, draft.pending, draft.preview, update]);
+  const result = catalogReady && !pending && workingCurrent ? draft.preview : undefined;
   const fence = result?.manual_state;
   const manual = useQuery({
     queryKey: ["launch-manual-validity", projectId, fence],
@@ -81,6 +110,16 @@ export function LaunchForm({
           ...current,
           ...changes,
           selection: { ...current.selection, ...changes.selection },
+          workingInput:
+            changes.selection?.configuration &&
+            (changes.selection.configuration.kind !== "parameters" ||
+              current.selection.configuration.kind !== "parameters" ||
+              JSON.stringify(changes.selection.configuration.ref) !==
+                JSON.stringify(current.selection.configuration.ref) ||
+              JSON.stringify(changes.selection.configuration.overrides) !==
+                JSON.stringify(current.selection.configuration.overrides))
+              ? undefined
+              : current.workingInput,
           planDirty:
             current.planDirty ||
             (Boolean(current.plan) &&
@@ -111,7 +150,8 @@ export function LaunchForm({
   }
   async function preview(event: React.FormEvent) {
     event.preventDefault();
-    if (!entry.actions.includes("preview") || !supported || !catalogReady) return;
+    if (!entry.actions.includes("preview") || !supported || !catalogReady || !workingCurrent)
+      return;
     const revision = draft.revision;
     update((current) => ({ ...current, pending: "preview", error: "", rejection: undefined }));
     try {
@@ -173,6 +213,17 @@ export function LaunchForm({
       rejection: undefined,
     }));
     try {
+      if (draft.workingInput) {
+        const latest = await readParameterDraft(draft.workingInput.draft_id);
+        if (
+          latest.head_revision !== draft.workingInput.revision ||
+          latest.draft.state !== "saved" ||
+          latest.branch_changed
+        )
+          throw new Error(
+            "Working inputs changed. Use current inputs and preview again before starting.",
+          );
+      }
       const procedureId = await submit(
         {
           scan_mode: "cartesian",
@@ -236,6 +287,46 @@ export function LaunchForm({
           actor,
         })}
       />
+      {draft.workingInput && (
+        <section aria-label="Working parameter input" className="border border-line rounded p-3">
+          <p>
+            Using working input revision {draft.workingInput.revision}. Preview freezes this copy;
+            saved and running experiments keep their own inputs.
+          </p>
+          {!workingCurrent && (
+            <p role="status">
+              Working inputs changed or could not be checked. Use current inputs and preview again.
+            </p>
+          )}
+          {workingError && <p role="alert">{workingError}</p>}
+          <button
+            type="button"
+            disabled={Boolean(pending)}
+            onClick={async () => {
+              const revision = draft.revision;
+              try {
+                const latest = await readParameterDraft(draft.workingInput!.draft_id);
+                const frozen = await freezeParameterDraft(
+                  latest.draft.draft_id,
+                  latest.head_revision,
+                );
+                if (!mounted.current || !isCurrent(revision)) return;
+                selectConfiguration(frozen.configuration, {
+                  draft_id: frozen.draft_id,
+                  revision: frozen.revision,
+                });
+                setWorkingError(undefined);
+                void working.refetch();
+              } catch (failure) {
+                if (mounted.current && isCurrent(revision))
+                  setWorkingError(failure instanceof Error ? failure.message : String(failure));
+              }
+            }}
+          >
+            Use current working inputs
+          </button>
+        </section>
+      )}
       {draft.selection.configuration.kind === "parameters" && (
         <p>
           Using parameter revision {draft.selection.configuration.ref.revision_id}. The checked
@@ -338,6 +429,7 @@ export function LaunchForm({
             !supported ||
             !actor.trim() ||
             !catalogReady ||
+            !workingCurrent ||
             (draft.selection.configuration.kind === "parameters" &&
               !draft.selection.configuration.setup)
           }

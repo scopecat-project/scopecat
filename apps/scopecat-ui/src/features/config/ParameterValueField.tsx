@@ -1,5 +1,9 @@
-import type { ParameterAtom, ParameterEntity, ParameterScalarType } from "../../api-contract";
+import type { ParameterEntity, ParameterScalarType } from "../../api-contract";
+import type { ParameterDraftAtom } from "./parameter-draft-api";
 import { secondaryButton } from "../../ui/styles";
+
+const identity = (item: { id: string; kind?: string | null }) =>
+  JSON.stringify([item.kind ?? null, item.id]);
 
 export function ParameterValueField({
   label,
@@ -13,24 +17,44 @@ export function ParameterValueField({
   label: string;
   origin?: string;
   type: ParameterScalarType;
-  value?: ParameterAtom;
+  value?: ParameterDraftAtom;
   entities: ParameterEntity[];
   disabled?: boolean;
-  onChange: (value?: ParameterAtom) => void;
+  onChange: (value?: ParameterDraftAtom) => void;
 }) {
-  const quantity =
-    value != null && typeof value === "object" && "unit" in value ? value : undefined;
-  const entity = value != null && typeof value === "object" && "id" in value ? value : undefined;
+  let retained: { id: string; kind?: string | null } | undefined;
+  if (type.type === "entity" && value) {
+    try {
+      const parsed: unknown = JSON.parse(value.text);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "id" in parsed &&
+        typeof parsed.id === "string" &&
+        (!("kind" in parsed) || parsed.kind === null || typeof parsed.kind === "string")
+      )
+        retained = {
+          id: parsed.id,
+          kind: "kind" in parsed ? (parsed.kind as string | null) : null,
+        };
+    } catch {
+      /* Raw, incomplete input remains recoverable until explicit validation. */
+    }
+  }
+  const choices = entities.filter(
+    (item) => type.type === "entity" && (!type.entity_kind || item.kind === type.entity_kind),
+  );
+  const selected = retained ? identity(retained) : value ? "retained-invalid" : "";
   return (
     <label className="flex flex-wrap items-center gap-2">
       {label}
       {type.type === "bool" ? (
         <select
           aria-label={label}
-          value={typeof value === "boolean" ? String(value) : ""}
+          value={value?.text ?? ""}
           disabled={disabled}
           onChange={(event) =>
-            onChange(event.target.value === "" ? undefined : event.target.value === "true")
+            onChange(event.target.value === "" ? undefined : { text: event.target.value, unit: "" })
           }
         >
           <option value="">Unknown</option>
@@ -40,52 +64,65 @@ export function ParameterValueField({
       ) : type.type === "entity" ? (
         <select
           aria-label={label}
-          value={entity?.id ?? ""}
+          value={selected}
           disabled={disabled}
-          onChange={(event) => onChange(entities.find((item) => item.id === event.target.value))}
+          onChange={(event) =>
+            onChange(
+              event.target.value
+                ? {
+                    text: JSON.stringify(
+                      choices.find((item) => identity(item) === event.target.value),
+                    ),
+                    unit: "",
+                  }
+                : undefined,
+            )
+          }
         >
           <option value="">Unknown</option>
-          {entities
-            .filter((item) => !type.entity_kind || item.kind === type.entity_kind)
-            .map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.id}
-              </option>
-            ))}
+          {value && !choices.some((item) => identity(item) === selected) && (
+            <option value={selected}>
+              {retained
+                ? `Retained ${retained.kind}: ${retained.id}`
+                : "Incomplete retained entity"}
+            </option>
+          )}
+          {choices.map((item) => (
+            <option key={identity(item)} value={identity(item)}>
+              {item.id}
+            </option>
+          ))}
         </select>
       ) : (
         <input
           aria-label={label}
           placeholder="Unknown"
-          type={type.type === "string" ? "text" : "number"}
-          step="any"
+          type="text"
+          inputMode={type.type === "string" ? undefined : "decimal"}
           disabled={disabled}
-          value={
-            quantity?.value ?? (typeof value === "string" || typeof value === "number" ? value : "")
-          }
+          value={value?.text ?? ""}
           onChange={(event) => {
             const text = event.target.value;
-            if (type.type === "string") onChange(text);
-            else if (text === "") onChange(undefined);
-            else if (type.type === "quantity")
-              onChange({ value: Number(text), unit: quantity?.unit ?? type.unit ?? "" });
-            else onChange(Number(text));
+            onChange({
+              text,
+              unit: value?.unit ?? (type.type === "quantity" ? (type.unit ?? "") : ""),
+            });
           }}
         />
       )}
       {type.type === "quantity" && (
         <input
           aria-label={`${label} unit`}
-          value={quantity?.unit ?? type.unit ?? ""}
-          disabled={disabled || quantity === undefined}
+          value={value?.unit ?? type.unit ?? ""}
+          disabled={disabled || value === undefined}
           onChange={(event) => {
-            if (quantity) onChange({ ...quantity, unit: event.target.value });
+            if (value) onChange({ ...value, unit: event.target.value });
           }}
         />
       )}
       <small>
         {origin ?? (value === undefined ? "Unknown" : "Value set")}
-        {type.type === "quantity" ? ` · ${quantity?.unit ?? type.unit ?? ""}` : ""}
+        {type.type === "quantity" ? ` · ${value?.unit ?? type.unit ?? ""}` : ""}
       </small>
       {!disabled && (
         <button type="button" className={secondaryButton} onClick={() => onChange(undefined)}>

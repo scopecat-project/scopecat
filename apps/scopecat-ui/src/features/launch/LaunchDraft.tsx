@@ -1,3 +1,4 @@
+import type { WorkingInput } from "../config/parameter-draft-api";
 import type { components } from "../../api-schema";
 import {
   defaultSelection,
@@ -28,6 +29,7 @@ import {
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
+  workingInput?: WorkingInput;
   rejection?: LaunchRejection;
   handoff?: ComparisonHandoff;
   plan?: PlanRevision;
@@ -57,7 +59,10 @@ interface DraftContext {
   selectWorkspace: (workspaceId: string) => void;
   useCurrentSource: (workspaceId?: string) => void;
   authorRefreshed: (workspaceId: string) => void;
-  selectConfiguration: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
+  selectConfiguration: (
+    choice: components["schemas"]["ConfigurationChoice-Input"],
+    workingInput?: WorkingInput,
+  ) => void;
   draft: LaunchDraft | undefined;
   openPlan: (plan: PlanRevision, entry: LaunchCatalogEntry) => void;
   importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
@@ -160,6 +165,7 @@ function ProjectDraft({
   const currentWorkspace = useRef(workspaceId);
   const [selectedConfiguration, setSelectedConfiguration] =
     useState<components["schemas"]["ConfigurationChoice-Input"]>();
+  const [selectedWorkingInput, setSelectedWorkingInput] = useState<WorkingInput>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const latest = useRef(draft);
   useEffect(() => {
@@ -180,6 +186,7 @@ function ProjectDraft({
       current
         ? {
             selection: current.selection,
+            workingInput: current.workingInput,
             actor: current.actor,
             collection: current.collection,
             workspaceId: owner,
@@ -213,6 +220,7 @@ function ProjectDraft({
                 configuration: selectedConfiguration,
               }
             : defaultSelection());
+        next.workingInput = current ? current.workingInput : selectedWorkingInput;
         next.collection = current?.collection;
         next.actor = current?.actor ?? "operator";
         if (!reset && current?.workspaceId === owner && current.experiment === entry.id) {
@@ -235,7 +243,7 @@ function ProjectDraft({
         return next;
       });
     },
-    [selectedConfiguration, workspaceId],
+    [selectedConfiguration, selectedWorkingInput, workspaceId],
   );
   async function submit(request: SubmissionRequest, definition: string) {
     const wasUnknown = attempt?.status === "unknown";
@@ -309,16 +317,26 @@ function ProjectDraft({
                 )
               : current,
           ),
-        selectConfiguration: (choice) => {
+        selectConfiguration: (choice, workingInput) => {
           if (!alive.current) return;
           setSelectedConfiguration(choice);
+          setSelectedWorkingInput(workingInput);
           setDraft((current) =>
             current
               ? invalidateDraft(
                   {
                     ...current,
                     planDirty: Boolean(current.plan),
-                    selection: { ...current.selection, configuration: choice },
+                    workingInput,
+                    selection: {
+                      ...current.selection,
+                      configuration:
+                        workingInput &&
+                        choice.kind === "parameters" &&
+                        current.selection.configuration.kind === "parameters"
+                          ? { ...choice, setup: current.selection.configuration.setup }
+                          : choice,
+                    },
                   },
                   "Configuration selected. Preview again before starting.",
                 )
@@ -343,6 +361,7 @@ function ProjectDraft({
             (current?.revision ?? 0) + 1,
             plan.definition.workspace_id,
           );
+          next.workingInput = undefined;
           next.collection = current?.collection;
           const d = plan.definition;
           const imported = importLaunchRequest(next, entry, {
@@ -380,6 +399,7 @@ function ProjectDraft({
             (current?.revision ?? 0) + 1,
             handoff.request.workspace_id,
           );
+          next.workingInput = undefined;
           next.collection = current?.collection;
           try {
             const imported = importLaunchHandoff(next, entry, handoff);

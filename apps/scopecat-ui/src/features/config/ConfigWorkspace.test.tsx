@@ -3,7 +3,6 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ApiError } from "../../api-client";
 import { ConfigWorkspace } from "./ConfigWorkspace";
 import { getSetupDefinitions } from "./setup-api";
 import {
@@ -12,6 +11,23 @@ import {
   saveParameterRevision,
   type ParameterRevision,
 } from "./parameter-api";
+import {
+  startParameterDraft,
+  saveParameterDraft,
+  commitParameterDraft,
+  freezeParameterDraft,
+  parameterDraftHistory,
+  type ParameterDraftView,
+} from "./parameter-draft-api";
+vi.mock("./parameter-draft-api", () => ({
+  startParameterDraft: vi.fn(),
+  saveParameterDraft: vi.fn(),
+  commitParameterDraft: vi.fn(),
+  freezeParameterDraft: vi.fn(),
+  parameterDraftHistory: vi.fn(),
+  readParameterDraft: vi.fn(),
+}));
+let draftView: ParameterDraftView;
 vi.mock("./ConfigurationExchange", () => ({
   ConfigurationExchange: ({ onCreated }: { onCreated: (revision: string) => Promise<void> }) => (
     <button onClick={() => void onCreated("imported")}>Create imported test copy</button>
@@ -48,6 +64,46 @@ let generation = 3;
 beforeEach(() => {
   vi.resetAllMocks();
   generation = 3;
+  draftView = {
+    head_revision: 1,
+    branch_changed: false,
+    draft: {
+      draft_id: "11111111-1111-4111-8111-111111111111",
+      revision: 1,
+      working_branch: "",
+      base: { revision_id: base.id, content_hash: base.content_hash },
+      state: "saved",
+      created_at: "2026-10-06T10:00:00Z",
+      input: {
+        name: "initial (revised)",
+        actor: "author",
+        branch: "",
+        note: "",
+        values: [{ id: "frequency", shape: "scalar", value: { text: "4.8", unit: "GHz" } }],
+      },
+    },
+  };
+  vi.mocked(startParameterDraft).mockImplementation(async () => structuredClone(draftView));
+  vi.mocked(parameterDraftHistory).mockResolvedValue({ items: [] });
+  vi.mocked(saveParameterDraft).mockImplementation(async (_id, command) => {
+    draftView = {
+      ...draftView,
+      head_revision: draftView.head_revision + 1,
+      draft: {
+        ...draftView.draft,
+        input: command.input,
+        revision: draftView.head_revision + 1,
+        state: command.discard ? "discarded" : "saved",
+      },
+    };
+    return structuredClone(draftView);
+  });
+  vi.mocked(commitParameterDraft).mockRejectedValue(new Error("Invalid frequency"));
+  vi.mocked(freezeParameterDraft).mockImplementation(async () => ({
+    draft_id: draftView.draft.draft_id,
+    revision: draftView.head_revision,
+    configuration: { kind: "parameters", ref: draftView.draft.base, overrides: [] },
+  }));
   vi.mocked(getSetupDefinitions).mockResolvedValue({ items: [] });
   vi.mocked(getParameterRevisions).mockResolvedValue({ items: [base] });
   vi.stubGlobal(
@@ -62,7 +118,7 @@ beforeEach(() => {
         note: "",
       };
       if (path.endsWith("/branches")) return Response.json({ items: [branch], next_cursor: null });
-      if (path.endsWith("/branches/daily")) return Response.json(branch);
+      if (path.includes("/branches/")) return Response.json(branch);
       if (path.includes("/parameters/revisions/")) return Response.json({ ...base, id: "revised" });
       throw new Error(`Unexpected request: ${path}`);
     }),
@@ -93,6 +149,7 @@ async function edit() {
     target: { value: "initial" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Edit a copy" }));
+  await screen.findByLabelText("New version name");
   fireEvent.change(screen.getByLabelText("New version name"), { target: { value: "revised" } });
 }
 it("selects exact independent parameters without a device or global default", async () => {
@@ -117,51 +174,29 @@ it("preserves unknown values and retains the draft after validation fails", asyn
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "4.9" } });
   fireEvent.click(screen.getByRole("button", { name: "Save parameter version" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Invalid frequency");
-  expect(screen.getByLabelText("frequency")).toHaveValue(4.9);
-  expect(saveParameterRevision).toHaveBeenCalledWith(
-    expect.objectContaining({
-      revision_id: "revised",
-      parameters: {
-        id: "values",
-        values: [{ id: "frequency", shape: "scalar", value: { value: 4.9, unit: "GHz" } }],
-      },
-    }),
-  );
+  expect(screen.getByLabelText("frequency")).toHaveValue("4.9");
+  expect(draftView.draft.input.name).toBe("revised");
+  expect(draftView.draft.input.values).toEqual([
+    { id: "frequency", shape: "scalar", value: { text: "4.9", unit: "GHz" } },
+  ]);
+  expect(commitParameterDraft).toHaveBeenCalled();
   expect(base.parameters.values).toEqual([
     { id: "frequency", shape: "scalar", value: { value: 4.8, unit: "GHz" } },
   ]);
 });
-it("keeps the reviewed branch generation until the operator explicitly refreshes it", async () => {
-  vi.mocked(commitParameterBranch).mockRejectedValue(
-    new ApiError("Branch changed; review latest head", 409),
-  );
-  mount();
+it("captures working inputs without saving a parameter version", async () => {
+  const selected = mount();
   await edit();
-  fireEvent.change(screen.getByLabelText("Named branch (optional)"), {
-    target: { value: "daily" },
-  });
-  await screen.findByText(/Update daily from generation 3/);
-  generation = 4;
-  const save = screen.getByRole("button", { name: "Save parameter version" });
-  fireEvent.click(save);
-  await screen.findByRole("alert");
-  expect(commitParameterBranch).toHaveBeenLastCalledWith(
-    expect.objectContaining({ name: "daily", expected_generation: 3 }),
+  fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use working inputs for next experiment" }));
+  await waitFor(() => expect(selected).toHaveBeenCalled());
+  expect(draftView.draft.input.values?.[0]?.value?.text).toBe("1e");
+  expect(freezeParameterDraft).toHaveBeenCalledWith(
+    draftView.draft.draft_id,
+    draftView.head_revision,
   );
-  fireEvent.click(save);
-  await waitFor(() => expect(commitParameterBranch).toHaveBeenCalledTimes(2));
-  expect(commitParameterBranch).toHaveBeenLastCalledWith(
-    expect.objectContaining({ expected_generation: 3 }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Review latest branch head" }));
-  await screen.findByText(/Update daily from generation 4/);
-  fireEvent.click(save);
-  await waitFor(() =>
-    expect(commitParameterBranch).toHaveBeenLastCalledWith(
-      expect.objectContaining({ expected_generation: 4 }),
-    ),
-  );
-  expect(screen.getByLabelText("New version name")).toHaveValue("revised");
+  expect(commitParameterDraft).not.toHaveBeenCalled();
+  expect(saveParameterRevision).not.toHaveBeenCalled();
 });
 
 it("keeps an unsaved parameter draft when an import creates another copy", async () => {
@@ -170,6 +205,24 @@ it("keeps an unsaved parameter draft when an import creates another copy", async
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "4.9" } });
   fireEvent.click(screen.getByRole("button", { name: "Create imported test copy" }));
   await waitFor(() => expect(getParameterRevisions).toHaveBeenCalledTimes(2));
-  expect(screen.getByLabelText("frequency")).toHaveValue(4.9);
+  expect(screen.getByLabelText("frequency")).toHaveValue("4.9");
   expect(screen.getByLabelText("New version name")).toHaveValue("revised");
+});
+
+it("does not reuse a reviewed branch head after changing its destination", async () => {
+  mount();
+  await edit();
+  fireEvent.change(screen.getByLabelText("Named branch (optional)"), {
+    target: { value: "daily" },
+  });
+  await screen.findByText(/Latest read generation: 3/);
+  fireEvent.click(screen.getByRole("button", { name: "Review latest branch head" }));
+  await screen.findByRole("button", { name: "Keep my table after branch review" });
+  fireEvent.change(screen.getByLabelText("Named branch (optional)"), {
+    target: { value: "other" },
+  });
+  expect(
+    screen.queryByRole("button", { name: "Keep my table after branch review" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save parameter version" })).toBeDisabled();
 });

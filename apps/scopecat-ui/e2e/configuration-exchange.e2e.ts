@@ -90,7 +90,8 @@ with sc.open_project(root).connect() as lab:
       page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
     ).toHaveValue("My inputs");
     await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
-    await page.getByRole("spinbutton", { name: "response[1].scale", exact: true }).fill("2");
+    await page.getByRole("textbox", { name: "response[1].scale", exact: true }).fill("2");
+    await page.getByText("Save a parameter checkpoint", { exact: true }).click();
     await page.getByLabel("New version name", { exact: true }).fill("My adjusted inputs");
     await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
     await expect(

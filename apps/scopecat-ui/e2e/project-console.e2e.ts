@@ -370,13 +370,15 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
     .getByRole("combobox", { name: "Saved parameter version", exact: true })
     .selectOption("starter-initial");
   await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
-  await page.getByRole("spinbutton", { name: "response[1].scale", exact: true }).fill("2");
+  await page.getByRole("textbox", { name: "response[1].scale", exact: true }).fill("2");
+  await page.getByText("Save a parameter checkpoint", { exact: true }).click();
   await page.getByLabel("New version name", { exact: true }).fill("browser-adjusted");
   await page.getByLabel("Named branch (optional)", { exact: true }).fill("starter");
-  await expect(page.getByText(/Update starter from generation 1/)).toBeVisible();
-  const committed = page.waitForResponse((response) =>
-    response.url().endsWith("/api/v1/parameters/branch-commits"),
-  );
+  await page.getByRole("button", { name: "Review latest branch head", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Keep my table after branch review", exact: true })
+    .click();
+  const committed = page.waitForResponse((response) => response.url().endsWith("/commit"));
   await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
   await expectResponseOk(await committed, "POST");
   const branch = await (
@@ -393,9 +395,9 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
     .getByRole("combobox", { name: "Saved parameter version", exact: true })
     .selectOption("browser-adjusted");
   await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
-  await expect(
-    page.getByRole("spinbutton", { name: "response[1].scale", exact: true }),
-  ).toHaveValue("2");
+  await expect(page.getByRole("textbox", { name: "response[1].scale", exact: true })).toHaveValue(
+    "2",
+  );
 });
 
 test("reviews notebook candidate evidence without changing parameter branches", async ({

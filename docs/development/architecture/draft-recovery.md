@@ -1,9 +1,10 @@
 # Recoverable editing and native storage
 
 The product principle approved on 2026-10-06 is: **valuable edits are recoverable
-by default**. This is an approved target, not a delivered persistence feature.
-The first implementation should be bounded to the existing Decisions draft;
-other draft types need their own lifecycle rather than a generic draft framework.
+by default**. Application-owned recovery is implemented for
+[Decision drafts](decision-drafts.md) and [parameter working tables](parameter-drafts.md).
+Other draft types still need their own lifecycle rather than a generic draft
+framework. The native store contract and its acceptance remain separate below.
 
 ## Editing contract
 

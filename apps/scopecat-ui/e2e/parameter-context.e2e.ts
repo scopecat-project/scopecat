@@ -43,11 +43,11 @@ async function editVersion(page: Page, name: string) {
 }
 
 async function saveVersion(page: Page, name: string) {
+  await page.getByText("Save a parameter checkpoint", { exact: true }).click();
   await page.getByLabel("New version name", { exact: true }).fill(name);
   const response = page.waitForResponse(
     (item) =>
-      new URL(item.url()).pathname === "/api/v1/parameters/revisions" &&
-      item.request().method() === "POST",
+      new URL(item.url()).pathname.endsWith("/commit") && item.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
   const saved = await response;

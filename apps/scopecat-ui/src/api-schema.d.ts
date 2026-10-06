@@ -1271,6 +1271,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parameter-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Parameter Draft History */
+        get: operations["parameter_draft_history_api_v1_parameter_drafts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameter-drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Parameter Draft */
+        get: operations["read_parameter_draft_api_v1_parameter_drafts__draft_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameter-drafts/{draft_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit Parameter Draft */
+        post: operations["commit_parameter_draft_api_v1_parameter_drafts__draft_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameter-drafts/{draft_id}/freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Freeze Parameter Draft */
+        post: operations["freeze_parameter_draft_api_v1_parameter_drafts__draft_id__freeze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameter-drafts/{draft_id}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Parameter Draft */
+        post: operations["save_parameter_draft_api_v1_parameter_drafts__draft_id__save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameter-drafts/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Parameter Draft */
+        post: operations["start_parameter_draft_api_v1_parameter_drafts_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parameters/branch-commits": {
         parameters: {
             query?: never;
@@ -8446,6 +8548,146 @@ export interface components {
             id: string;
             value_type: components["schemas"]["PersistableValueType"];
         };
+        /** ParameterDraft */
+        ParameterDraft: {
+            base: components["schemas"]["ParameterRevisionRef"];
+            /** Completed From */
+            completed_from?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            input: components["schemas"]["ParameterDraftInput"];
+            result?: components["schemas"]["ParameterRevisionRef"] | null;
+            /** Revision */
+            revision: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "saved" | "conflict" | "discarded" | "completed";
+            /**
+             * Working Branch
+             * @default
+             */
+            working_branch: string;
+        };
+        /** ParameterDraftAtom */
+        ParameterDraftAtom: {
+            /** Text */
+            text: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /** ParameterDraftCommit */
+        ParameterDraftCommit: {
+            /** Expected Revision */
+            expected_revision: number;
+        };
+        /** ParameterDraftFrozen */
+        ParameterDraftFrozen: {
+            configuration: components["schemas"]["ParameterConfiguration-Output"];
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            /** Revision */
+            revision: number;
+        };
+        /** ParameterDraftInput */
+        ParameterDraftInput: {
+            /** Actor */
+            actor: string;
+            /**
+             * Branch
+             * @default
+             */
+            branch: string;
+            /** Branch Generation */
+            branch_generation?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Values */
+            values?: components["schemas"]["ParameterDraftValue"][];
+        };
+        /** ParameterDraftPage */
+        ParameterDraftPage: {
+            /** Items */
+            items: components["schemas"]["ParameterDraft"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** ParameterDraftSave */
+        ParameterDraftSave: {
+            /**
+             * Discard
+             * @default false
+             */
+            discard: boolean;
+            /** Expected Revision */
+            expected_revision: number;
+            input: components["schemas"]["ParameterDraftInput"];
+        };
+        /** ParameterDraftStart */
+        ParameterDraftStart: {
+            /** Actor */
+            actor: string;
+            base: components["schemas"]["ParameterRevisionRef"];
+            /** Branch Generation */
+            branch_generation?: number | null;
+            /** Copy From */
+            copy_from?: string | null;
+            /** Copy Revision */
+            copy_revision?: number | null;
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            /**
+             * Working Branch
+             * @default
+             */
+            working_branch: string;
+        };
+        /** ParameterDraftValue */
+        ParameterDraftValue: {
+            /** Id */
+            id: string;
+            /** Rows */
+            rows?: {
+                [key: string]: components["schemas"]["ParameterDraftAtom"];
+            }[];
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "scalar" | "table";
+            value?: components["schemas"]["ParameterDraftAtom"] | null;
+        };
+        /** ParameterDraftView */
+        ParameterDraftView: {
+            /** Branch Changed */
+            branch_changed: boolean;
+            draft: components["schemas"]["ParameterDraft"];
+            /** Head Revision */
+            head_revision: number;
+        };
         /** ParameterProposalComposition */
         ParameterProposalComposition: {
             base: components["schemas"]["ParameterRevisionRef"];
@@ -14565,6 +14807,208 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TargetRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parameter_draft_history_api_v1_parameter_drafts_get: {
+        parameters: {
+            query: {
+                base_id: string;
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_parameter_draft_api_v1_parameter_drafts__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_parameter_draft_api_v1_parameter_drafts__draft_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterDraftCommit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    freeze_parameter_draft_api_v1_parameter_drafts__draft_id__freeze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterDraftCommit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftFrozen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_parameter_draft_api_v1_parameter_drafts__draft_id__save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterDraftSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_parameter_draft_api_v1_parameter_drafts_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterDraftStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftView"];
                 };
             };
             /** @description Validation Error */
