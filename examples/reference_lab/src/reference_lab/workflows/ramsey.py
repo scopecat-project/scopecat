@@ -104,30 +104,7 @@ def topology_scaled_ramsey_program(
     )
 
 
-@q.program(id="reference-lab.conflicting-drive")
-def conflicting_drive_program(qubit: q.Qubit) -> q.QuantumFragment:
-    """Deliberately overlap two branches on one logical drive channel."""
-
-    def pulse(phase: float) -> q.QuantumFragment:
-        return drag_gate_pulse(
-            qubit,
-            beta=Quantity(0.5, "ns"),
-            phase=Quantity(phase, "rad"),
-        )
-
-    capture = q.acquire(
-        qubit,
-        duration=_READOUT_DURATION,
-        result="iq_shots",
-    )
-    return q.sequence(
-        q.parallel(pulse(0.0), pulse(1.0)),
-        q.parallel(drag_readout_pulse(qubit), capture),
-    )
-
-
 __all__ = [
-    "conflicting_drive_program",
     "parallel_two_qubit_ramsey_program",
     "ramsey_program",
     "topology_scaled_ramsey_program",

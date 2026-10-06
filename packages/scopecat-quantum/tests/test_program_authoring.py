@@ -262,14 +262,14 @@ def test_repeat_preserves_one_candidate_call_until_pulse_lowering() -> None:
 
 
 def test_gate_and_pulse_can_bind_in_parallel_before_final_signal_check() -> None:
-    q0 = authoring.qubit("q0")
+    qubit = authoring.qubit("spectator-7")
     x90 = authoring.single_qubit_gate("x90")
     declaration = authoring._close_program(
         "parallel-drive-conflict",
         authoring.parallel(
-            x90(q0),
+            x90(qubit),
             authoring.play(
-                authoring.drive(q0),
+                authoring.drive(qubit),
                 authoring.constant(
                     duration=Quantity(16, "ns"),
                     amplitude=Quantity(0.1, "arb"),
@@ -286,7 +286,7 @@ def test_gate_and_pulse_can_bind_in_parallel_before_final_signal_check() -> None
         if isinstance(operation, GateCall)
     )
     implementation_template = PulseProgram(
-        id=PulseProgramId("x90-q0-template"),
+        id=PulseProgramId("x90-spectator-7-template"),
         body=Play(
             id=PulseEventId("drive"),
             signal=DriveSignal(gate_call.qubits[0]),
@@ -299,7 +299,7 @@ def test_gate_and_pulse_can_bind_in_parallel_before_final_signal_check() -> None
     implementations = ResolvedPulseImplementations(
         gates=(
             GatePulseImplementation(
-                id=PulseImplementationId("x90-q0"),
+                id=PulseImplementationId("x90-spectator-7"),
                 key=GatePulseImplementationKey.from_call(gate_call),
                 pulse_template=implementation_template,
             ),
@@ -312,10 +312,22 @@ def test_gate_and_pulse_can_bind_in_parallel_before_final_signal_check() -> None
         output_id=PulseProgramId("parallel-drive-conflict-pulses"),
     )
 
-    with pytest.raises(PulseValidationError) as caught:
-        schedule(materialize_quantum_pulse_program(plan))
+    pulses = materialize_quantum_pulse_program(plan)
+    leaves = tuple(iter_pulse_leaves(pulses.body))
+    assert len(leaves) == 2
+    assert all(isinstance(leaf, Play) for leaf in leaves)
+    event_ids = {leaf.id for leaf in leaves}
+    assert len(event_ids) == 2
 
-    assert {issue.code for issue in caught.value.issues} == {"pulse_signal_overlap"}
+    with pytest.raises(PulseValidationError) as caught:
+        schedule(pulses)
+
+    [issue] = caught.value.issues
+    assert issue.code == "pulse_signal_overlap"
+    assert "('drive', 'qubit', 'spectator-7')" in issue.message
+    assert issue.instruction_id in event_ids
+    for event_id in event_ids:
+        assert repr(event_id.value) in issue.message
 
 
 def test_gate_implementation_rejects_a_foreign_pulse_qubit() -> None:

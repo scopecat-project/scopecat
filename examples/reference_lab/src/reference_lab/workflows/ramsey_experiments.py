@@ -20,7 +20,6 @@ from reference_lab.quantum_runner import (
     quantum_capture,
 )
 from reference_lab.workflows.ramsey import (
-    conflicting_drive_program,
     parallel_two_qubit_ramsey_program,
     ramsey_program,
     topology_scaled_ramsey_program,
@@ -87,18 +86,6 @@ def q0_fixed_if_lo_sweep(
         signed_if_frequency=signed_if,
         carrier_frequency=lo_frequency + signed_if,
         probabilities=probabilities,
-    )
-
-
-@sc.experiment(id="reference_lab.conflicting_drive")
-def conflicting_drive(experiment: sc.ExperimentContext) -> None:
-    """Author a deliberately invalid same-channel parallel pulse plan."""
-
-    prepare_quantum_hardware(experiment)
-    experiment.use(
-        conflicting_drive_program(qubit="q0").with_compiler_inputs(
-            qubits=sc.parameter_table_ref(QubitParameters)
-        )
     )
 
 
@@ -250,7 +237,6 @@ __all__ = [
     "ParallelRawRamseyDataset",
     "RamseyDataset",
     "TopologyScaledRamseyDataset",
-    "conflicting_drive",
     "entity_routed_ramsey",
     "flux_ramsey",
     "parallel_raw_ramsey",

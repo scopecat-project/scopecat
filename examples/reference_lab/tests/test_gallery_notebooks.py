@@ -77,20 +77,6 @@ def test_entity_routed_ramsey_switches_channel_sets_by_point(
     }
 
 
-def test_channel_conflict_names_the_logical_drive_route(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(
-        str(reference_lab_notebooks / "28_channel_conflict_diagnostic.py")
-    )
-    summary = cast("dict[str, object]", namespace["channel_conflict_summary"])
-
-    assert "pulse_signal_overlap" in cast("list[str]", summary["codes"])
-    assert summary["mentions_drive_q0"] is True
-
-
 def test_entity_axis_preserves_the_available_demod_channel(
     reference_lab_daemon: _ReferenceLabDaemon,
     reference_lab_notebooks: Path,
