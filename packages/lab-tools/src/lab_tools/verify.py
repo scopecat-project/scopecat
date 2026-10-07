@@ -30,7 +30,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
 
     from .project import notebook_command
     from .verify_editing import EDIT_CELLS, REOPEN_CELLS
-    from .verify_groups import GROUP_CELLS, GROUP_REOPEN_CELLS
+    from .verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS, lesson_path
 
     root = destination.resolve()
     _, env = notebook_command(root)
@@ -72,11 +72,15 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
                 cast("list[object]", notebook.cells).append(
                     nbformat.v4.new_code_cell(checks + "session.close()\n")
                 )
+            elif name == "groups":
+                notebook = nbformat.read(lesson_path(root), as_version=4)
+                cast("list[object]", notebook.cells).append(
+                    nbformat.v4.new_code_cell(GROUP_CHECKS)
+                )
             else:
                 cells = {
                     "editing": EDIT_CELLS,
                     "editing-reopen": REOPEN_CELLS,
-                    "groups": GROUP_CELLS,
                     "groups-reopen": GROUP_REOPEN_CELLS,
                 }[name]
                 notebook = nbformat.v4.new_notebook(
@@ -109,7 +113,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
             else:
                 os.environ["JUPYTER_PATH"] = previous
     print(
-        "合成课程、免命名保存、分组与研究目录、统一刷新、新增实验、"
+        "合成课程、免命名保存、分组教材与修改后独立分析、统一刷新、新增实验、"
         "平均 IQ 与 Unit 读取及独立内核重开通过; "
         "不代表实机或真人体验验收",
         flush=True,

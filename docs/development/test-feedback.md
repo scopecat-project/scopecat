@@ -182,3 +182,29 @@ selection change with this split.
 
 See [platform smoke selection and measurements](platform-smoke.md) for the bounded
 platform checks, exact-SHA/no-skip contract and recorded runner/cache evidence.
+
+### Grouping lesson evidence
+
+`test_grouped_teaching_journey.py` executes the generated `groups.ipynb` in a
+real ipykernel, using both the groups-topic scaffold and the default scaffold
+used by the standalone verifier. It checks notebook and author-resource bytes
+against this checkout before execution; reinstall `scopecat-lab-teaching` when
+that non-editable package is stale. The learner's cells are unchanged.
+
+Appended checks retain 42 points, two 21-point groups and their published curves;
+the final amplitude exercise produces a separate 63-point, three-group run.
+After both daemon and kernel restart, the original run/publication, raw IQ and
+analysis values/curves must agree without acquisition. The same reopen checks
+feed `verify_maintenance`, whose additional-analysis cell is also exercised.
+Bookmarks and raw-array copies are verifier evidence, not learner requirements.
+
+This replaces the parallel grouping notebook in `verify_groups`. Its extra
+parameter-save and research-directory exercises are not part of the shipped
+grouping lesson: parameter persistence remains covered by
+`test_minimal_teaching_journey.py`, and research membership/history/restart by
+`test_research_history_associations_and_bench_survive_restart` in
+`test_samples_runtime.py`. The grouping journey no longer claims those as
+learner steps. Standalone `verify` still uses the independently prepared project
+environment and its existing admission failures; source-kernel coverage does not
+establish fresh installed-delivery success, actual editor interaction, Help
+integration of this topic, unfamiliar-user acceptance, or physical-device results.
