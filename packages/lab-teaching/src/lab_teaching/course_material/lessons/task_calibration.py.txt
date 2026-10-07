@@ -15,14 +15,16 @@ from pydantic import BaseModel, ConfigDict, field_validator
 import scopecat as sc
 from scopecat.analysis.calibration import CHECK_RESULT
 from scopecat.api.calibration_tasks import task_call
-from scopecat.api.lab import LabClient
 from scopecat.api.procedures import LabProcedureContext
+from scopecat.application.author_calibration_tasks import PreparedAuthorCalibrationTask
+from scopecat.application.author_project import AuthorProject
 from scopecat.automation.calibration_tasks import (
     CalibrationTaskInputs,
     CalibrationTaskPlan,
     CalibrationTaskStage,
 )
-from scopecat.daemon.calibration_tasks import CalibrationTaskCall, CalibrationTaskView
+from scopecat.daemon.calibration_tasks import CalibrationTaskCall
+from scopecat.daemon.measurement_context import MeasurementContextResolve
 from scopecat.daemon.views import ParameterResolution
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.calibration_check import (
@@ -137,12 +139,14 @@ def finalize(ctx: LabProcedureContext, intent: FinishIntent) -> None:
     )
 
 
-def create_task(
-    lab: LabClient, task_id: str, intent: FinishIntent
-) -> CalibrationTaskView:
-    context = lab.resolve_context(
-        parameters=intent.destination.revision,
-        setup=intent.initial.config_source.setup,
+def prepare_task(
+    session: AuthorProject, task_id: str, intent: FinishIntent
+) -> PreparedAuthorCalibrationTask:
+    context = session.resolve_measurement_context(
+        MeasurementContextResolve(
+            parameters=intent.destination.revision,
+            setup=intent.initial.config_source.setup,
+        )
     ).context
     stages: list[CalibrationTaskStage] = []
     calls: dict[str, CalibrationTaskCall] = {}
@@ -169,7 +173,7 @@ def create_task(
                 coupling=intent.coupling,
             ),
         )
-    return lab.calibration_tasks.create(
+    return session.calibration_tasks.prepare(
         task_id,
         CalibrationTaskPlan(stages=tuple(stages)),
         calls=calls,

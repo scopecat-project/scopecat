@@ -116,6 +116,7 @@ from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevisionRef
 
 if TYPE_CHECKING:
+    from scopecat.application.author_calibration_tasks import AuthorCalibrationTasks
     from scopecat.application.author_procedures import AuthorProcedureOperations
     from scopecat.application.live_experiment import LiveExperiment
     from scopecat.application.run_history import RunHistory
@@ -356,6 +357,13 @@ class AuthorProject(DaemonClient):
         from scopecat.application.author_procedures import AuthorProcedureOperations
 
         return AuthorProcedureOperations(self, self.project_root)
+
+    @property
+    def calibration_tasks(self) -> AuthorCalibrationTasks:
+        """Prepare fixed-source background tasks and read their retained evidence."""
+        from scopecat.application.author_calibration_tasks import AuthorCalibrationTasks
+
+        return AuthorCalibrationTasks(self, self.project_root)
 
     @property
     def calibration_checks(self) -> LabCalibrationChecks:

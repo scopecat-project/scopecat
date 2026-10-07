@@ -157,6 +157,9 @@ def test_editing_verifier_rejects_missing_cell_id(
         ("calibration", "calibration-2"),
         ("calibration", "calibration-5"),
         ("joint-calibration", "joint-5"),
+        ("task-calibration", "task-3"),
+        ("task-calibration", "task-4"),
+        ("task-calibration", "task-9"),
     ],
 )
 def test_calibration_anchors_follow_ids_and_reject_missing_or_duplicate(

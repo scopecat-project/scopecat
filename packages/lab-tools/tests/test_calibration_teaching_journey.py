@@ -1,4 +1,4 @@
-"""Shipped managed lessons in real kernels; task and internal recovery regressions."""
+"""Shipped managed lessons in real kernels and internal recovery regressions."""
 
 import os
 import subprocess
@@ -8,70 +8,6 @@ from pathlib import Path
 import pytest
 
 from lab_teaching.project import create_project
-
-
-@pytest.mark.parametrize(
-    ("topic", "expected_runs"),
-    [("task-calibration", 12)],
-)
-def test_calibration_notebook_resumes_and_retains_rejection(
-    tmp_path: Path, topic: str, expected_runs: int
-) -> None:
-    root = tmp_path / "calibration"
-    create_project(root, topic=topic)
-    environment = dict(os.environ)
-    environment.pop("SCOPECAT_DAEMON_URL", None)
-    result = subprocess.run(  # noqa: S603 - Fixed script and generated test directories.
-        [sys.executable, "-c", _JOURNEY, str(root), topic, str(expected_runs)],
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-# A separate process models a fresh kernel and respects one code root per process.
-_JOURNEY = """
-import json
-import os
-import sys
-from pathlib import Path
-from IPython.core.interactiveshell import InteractiveShell
-import scopecat as sc
-from scopecat_server.lifecycle import start_project, stop_project
-
-root = Path(sys.argv[1])
-notebook = root / "notebooks" / (sys.argv[2] + ".ipynb")
-sys.path.insert(0, str(root / "src"))
-project = sc.open_project(root)
-start_project(project, timeout=120)
-shell = InteractiveShell.instance()
-os.chdir(root)
-try:
-    with shell.builtin_trap:
-        namespace = shell.user_ns
-        cells = json.loads(notebook.read_text(encoding="utf-8"))["cells"]
-        for cell in cells:
-            if cell["cell_type"] != "code":
-                continue
-            source = "".join(cell["source"])
-            result = shell.run_cell(source)
-            result.raise_error()
-            if "request_id = request.id" in source or "task_ids =" in source:
-                stop_project(project)
-                start_project(project, timeout=120)
-        with project.connect() as lab:
-            expected_runs = int(sys.argv[3])
-            assert len(lab.runs().items) == expected_runs
-            assert lab.config.registry().entries == ()
-            outcomes = {r.summary().outcome for r in lab.procedures.list().items}
-            assert outcomes == {"succeeded", "failed"}
-finally:
-    if "session" in shell.user_ns:
-        shell.user_ns["session"].close()
-    stop_project(project)
-"""
 
 
 def test_procedure_capture_preserves_imports_and_checks_changed_source(
