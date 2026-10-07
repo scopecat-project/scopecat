@@ -471,6 +471,7 @@ journey_paths = [
   "packages/lab-tools/tests/test_array_maintenance.py",
   "packages/lab-tools/tests/test_installed_adapter_journey.py",
   "packages/lab-tools/tests/test_calibration_teaching_journey.py",
+  "packages/lab-tools/tests/test_task_calibration_teaching_journey.py",
   "packages/lab-tools/tests/test_application_runtime.py",
   "packages/lab-tools/tests/test_notebook_workspace_journey.py",
   "packages/lab-tools/tests/test_unknown_parameter_authoring.py",
