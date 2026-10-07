@@ -29,7 +29,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
     from scopecat_server.lifecycle import start_project, stop_project
 
     from .project import notebook_command
-    from .verify_editing import EDIT_CELLS, REOPEN_CELLS
+    from .verify_editing import REFRESH_REOPEN_CELLS, editing_notebook, reopen_cells
     from .verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS, lesson_path
 
     root = destination.resolve()
@@ -49,7 +49,9 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
             "reopen",
             "groups",
             "groups-reopen",
-            "editing",
+            "refresh",
+            "refresh-reopen",
+            "compute",
             "editing-reopen",
         ):
             if name in ("start", "reopen"):
@@ -77,12 +79,24 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
                 cast("list[object]", notebook.cells).append(
                     nbformat.v4.new_code_cell(GROUP_CHECKS)
                 )
+            elif name in ("refresh", "compute"):
+                if name == "compute":
+                    # Explicit verifier edit: adopt the shipped compute exercise.
+                    from importlib.resources import files
+
+                    (root / "src/my_experiment/teaching.py").write_bytes(
+                        files("lab_teaching.course_material")
+                        .joinpath("lessons/compute_experiment.py.txt")
+                        .read_bytes()
+                    )
+                notebook = editing_notebook(root, name)
             else:
-                cells = {
-                    "editing": EDIT_CELLS,
-                    "editing-reopen": REOPEN_CELLS,
-                    "groups-reopen": GROUP_REOPEN_CELLS,
-                }[name]
+                if name == "editing-reopen":
+                    cells = reopen_cells(root)
+                elif name == "refresh-reopen":
+                    cells = REFRESH_REOPEN_CELLS
+                else:
+                    cells = GROUP_REOPEN_CELLS
                 notebook = nbformat.v4.new_notebook(
                     cells=[nbformat.v4.new_code_cell(cell) for cell in cells]
                 )
@@ -101,7 +115,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
                 ).execute()
             finally:
                 nbformat.write(notebook, root / f"notebooks/verified-{name}.ipynb")
-            if name in ("start", "groups", "editing"):
+            if name in ("start", "groups", "refresh", "compute"):
                 _ = stop_project(project)
                 _ = start_project(project, static_dir=static_dir, timeout=300)
     finally:

@@ -208,3 +208,29 @@ learner steps. Standalone `verify` still uses the independently prepared project
 environment and its existing admission failures; source-kernel coverage does not
 establish fresh installed-delivery success, actual editor interaction, Help
 integration of this topic, unfamiliar-user acceptance, or physical-device results.
+
+### Editing lesson evidence
+
+`test_shipped_editing_lessons` in `test_teaching_mean_iq_journey.py` executes
+`refresh.ipynb` and `compute.ipynb` with real ipykernels, using both topic scaffolds
+and the default verifier scaffold. Generated notebooks and related author resources
+are compared byte for byte with this checkout before execution; reinstall the
+non-editable teaching package after material changes.
+
+The verifier inserts source edits at the learner's editing stops. Refresh uses
+`sc.notebook()` and the original imported alias without explicit refresh or
+reimport: old requests/preparations retain seed 200, new calls use the edited seed,
+new modules are discovered, live updates can pause/resume, and a syntax error is
+rejected before repair. Compute retains raw 7×64 IQ and matching seven scalar means.
+After daemon and kernel restart, only the shipped connection/history/read cells
+and an explicit recorded-number selection run; repeated reads preserve run count.
+The bookmark and raw array are external evidence, not added learner requirements.
+
+The former parallel editing notebook's deliberate compute failure and incompatible
+scalar read remain external checks in `verify_editing`; repair runs in the same
+session, and failed reads preserve the original shots. The existing source-level
+mean-IQ journey also retains conversion of one experiment from shots to means.
+Standalone `verify` and `verify_maintenance` consume these shipped-cell checks while
+keeping the groups chain. These source-kernel checks do not establish fresh wheel
+installation, Help integration, native editor interaction, unfamiliar-user learning
+or physical-device acceptance.

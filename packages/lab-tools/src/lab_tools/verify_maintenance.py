@@ -52,7 +52,7 @@ def read_copy(root: Path, *, source_id: str, static_dir: Path | None = None) -> 
     from scopecat_server.lifecycle import start_project, stop_project
 
     from .project import notebook_command
-    from .verify_editing import REOPEN_CELLS
+    from .verify_editing import reopen_cells
     from .verify_groups import GROUP_REOPEN_CELLS
 
     _, env = notebook_command(root)
@@ -65,7 +65,7 @@ def read_copy(root: Path, *, source_id: str, static_dir: Path | None = None) -> 
     notebook = nbformat.v4.new_notebook(
         cells=[
             nbformat.v4.new_code_cell(cell)
-            for cell in (*REOPEN_CELLS, *GROUP_REOPEN_CELLS, ADD_ANALYSIS)
+            for cell in (*reopen_cells(root), *GROUP_REOPEN_CELLS, ADD_ANALYSIS)
         ]
     )
     try:
