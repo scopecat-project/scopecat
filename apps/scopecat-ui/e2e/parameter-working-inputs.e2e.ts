@@ -160,11 +160,48 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       runB,
     ]);
     expect(JSON.parse(evidence).parameters).toEqual(previewB.reviewed.config_source.parameters);
+    // Keep the original result selected while another window submits a newer run.
+    await work.getByRole("link", { name: /^Open retained run:/ }).click();
+    await expect(work.getByTitle(runB, { exact: true })).toBeVisible();
+    await editor
+      .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
+      .click();
+    await editor.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await editor.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+    await preview(editor);
+    const procedureC = await submit(editor);
+    const runC = await retainedRun(editor);
+    expect(runC).not.toBe(runB);
+    await editor.getByRole("link", { name: /^Open retained run:/ }).click();
+    await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
+    await work.getByRole("button", { name: "Configuration", exact: true }).click();
+    const continuedField = work.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    // Explicitly reopen the latest shared draft before making a new edit.
+    await work.getByRole("button", { name: "Close editor", exact: true }).click();
+    await work.getByRole("button", { name: "Open working table", exact: true }).click();
+    await expect(continuedField).toHaveValue("5.4");
+    await continuedField.fill("5.5");
+    await expect(work.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await work.getByRole("button", { name: "Runs", exact: true }).click();
+    await expect(work.getByTitle(runB, { exact: true })).toBeVisible();
+    expect(new URL(work.url()).searchParams.get("run")).toBe(runB);
+    await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
+    await work.getByRole("button", { name: "Experiments", exact: true }).click();
+    expect(new URL(work.url()).searchParams.get("procedure")).toBe(procedureB);
+    await expect(work.getByRole("link", { name: /^Open retained run:/ })).toHaveAttribute(
+      "href",
+      `?procedure=${encodeURIComponent(procedureB)}&run=${encodeURIComponent(runB)}#runs`,
+    );
+    await work.getByRole("button", { name: "Configuration", exact: true }).click();
+    await expect(continuedField).toHaveValue("5.5");
     await testInfo.attach("working-inputs-evidence", {
       body: JSON.stringify({
         firstUrl,
         url,
         procedureB,
+        procedureC,
+        runB,
+        runC,
         evidence,
         previewB: previewB.request_hash,
       }),

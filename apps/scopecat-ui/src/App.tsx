@@ -141,11 +141,16 @@ export default function App() {
 
   useEffect(() => {
     const restoreHashRoute = () => {
-      setView(projectViewFromLocation());
-      setSelectedRunId(selectedRunFromUrl());
-      setSelectedAnalysisId(selectedAnalysisFromUrl());
-      setSelectedSampleId(selectedSampleFromUrl());
-      setSelectedSampleRevision(selectedSampleRevisionFromUrl());
+      const nextView = projectViewFromLocation();
+      setView(nextView);
+      // A route describes its own page. Missing parameters on another page
+      // must not erase this window's last selection when returning via navigation.
+      if (nextView === "runs") setSelectedRunId(selectedRunFromUrl());
+      if (nextView === "analyses") setSelectedAnalysisId(selectedAnalysisFromUrl());
+      if (nextView === "samples") {
+        setSelectedSampleId(selectedSampleFromUrl());
+        setSelectedSampleRevision(selectedSampleRevisionFromUrl());
+      }
     };
     window.addEventListener("hashchange", restoreHashRoute);
     window.addEventListener("popstate", restoreHashRoute);
