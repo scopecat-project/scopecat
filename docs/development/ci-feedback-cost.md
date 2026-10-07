@@ -54,3 +54,39 @@ and locked dependencies on hosted Ubuntu with two workers per job. Record cache,
 job, phase, wall and outcome evidence before interpreting a speedup. Hosted-runner
 variation prevents precise causal attribution from a single pair. The five-minute
 target remains a measurement target, not a timeout or a guaranteed result.
+
+## Hosted comparison
+
+A fresh unchanged-main dispatch at `322caf6f` and candidate `71fdf7e5` completed
+on October 7. No production/test source changed between them except the test that
+asserts shard coverage. The lockfile and test selection were unchanged.
+
+| Run | Revision/event | Core jobs | Test steps | Elapsed | Runner seconds |
+| --- | --- | ---: | ---: | ---: | ---: |
+| [37659972306](https://github.com/scopecat-project/scopecat/actions/runs/37659972306) | `322caf6f`, dispatch | 309 | 291 | 315 | 617 |
+| [37660513163](https://github.com/scopecat-project/scopecat/actions/runs/37660513163) | `71fdf7e5`, PR | 233 / 244 | 218 / 231 | 250 | 781 |
+| [37660539960](https://github.com/scopecat-project/scopecat/actions/runs/37660539960) | `71fdf7e5`, exact-head dispatch | 232 / 244 | 217 / 229 | 250 | 914 |
+
+All jobs and CI gates passed. Comparing the fresh baseline and exact-head dispatch
+artifacts gives identical sets of 4057 node IDs and identical setup/call/teardown
+outcomes: 4054 passes and the same three conditional skips. The two file selections
+are disjoint and their union equals the baseline's 416 files. The separate pandas
+adapter check passed all 61 cases. No new skip was accepted as coverage.
+
+Baseline pytest wall time was 285.40 seconds, collection ready 19.13 and summed
+phase time 511.18. Candidate shard walls were 207.53/215.71, collection ready
+19.08/21.62 and phase totals 366.70/380.00. The exact-head run and fresh baseline
+both used Python 3.14.8; the PR's second shard used 3.14.7, so the dispatch is the
+closer comparison. Baseline uv cache hit; both candidate shards missed because
+cost weights changed `pyproject.toml`, which is included in the cache key.
+
+The observed feedback reduction is 65 seconds (20.6%), to 4m10s in both candidate
+runs. Total runner seconds increased by 26.6%/48.1%; core alone increased from
+309 to 477/476 seconds. This is a feedback-latency tradeoff, not a reduction in
+compute cost. A cache miss explains some preparation cost but cannot explain
+all of the larger per-test phase totals. Different hosted runners and duplicated
+session setup may contribute; these samples do not isolate their effects. The
+same-SHA baseline variability above also rules out treating the 65 seconds as a
+precise causal estimate. Two successful observations under five minutes do not
+establish a sustained guarantee. Keep the scope bounded to these two shards;
+further runner-cost work needs separate measurement and review.
