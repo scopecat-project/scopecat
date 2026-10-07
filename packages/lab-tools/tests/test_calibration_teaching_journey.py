@@ -491,6 +491,7 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
                 write(document, root / f"notebooks/verified-{name}.ipynb")
         evidence = json.loads((root / "notebooks/evidence.json").read_text())
         assert evidence["disconnect_state"] == "leased"
+        assert evidence["post_close_state"] in {"ready", "leased"}
         assert evidence["runs"] == (6 if topic == "calibration" else 12)
         if topic == "joint-calibration":
             result = subprocess.run(  # noqa: S603 - fixed regression and test source
@@ -525,11 +526,14 @@ def observe_close():
             break
         assert time.monotonic() < deadline, view
         time.sleep(0.02)
-    global disconnect_state
+    global disconnect_state, post_close_state
     disconnect_state = view.procedure.state
     original_close()
     assert session.is_closed
     with DaemonClient(session.base_url, workspace_id=session.workspace_id) as observer:
+        retained = observer.get_procedure(request_id)
+        assert retained.closure is None, "Need a post-close in-flight observation"
+        post_close_state = retained.state
         deadline = time.monotonic() + 90
         while True:
             retained = observer.get_procedure(request_id)
@@ -653,7 +657,7 @@ evidence = {
     "destination": destination.model_dump(mode="json"),
     "initial": initial.model_dump(mode="json"),
     "baseline_key": baseline_key, "raw": raw,
-    "disconnect_state": disconnect_state,
+    "disconnect_state": disconnect_state, "post_close_state": post_close_state,
 }
 Path("evidence.json").write_text(json.dumps(evidence))
 session.close()
