@@ -512,6 +512,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        application.calibration_tasks.validate_call = validate_task_call
         task_runner = CalibrationTaskRunner(
             application.calibration_tasks, project_workers
         )
@@ -523,6 +524,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         finally:
             follow_runner().stop()
             task_runner.stop()
+            application.calibration_tasks.validate_call = None
             project_workers.stop()
             application.author_workspaces.close()
             retained_workers.close()
@@ -771,8 +773,6 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise BackendConflict(str(error.detail)) from error
         except (KeyError, ValueError) as error:
             raise BackendConflict(str(error)) from error
-
-    application.calibration_tasks.validate_call = validate_task_call
 
     @app.post(f"{_API_PREFIX}/analysis-follows")
     def create_analysis_follow(command: AnalysisFollowRequest) -> AnalysisFollowView:
