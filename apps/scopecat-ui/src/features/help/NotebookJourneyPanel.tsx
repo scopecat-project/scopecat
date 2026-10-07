@@ -17,7 +17,7 @@ const lessons: Record<LessonTopic, { title: string; description: string }> = {
   refresh: {
     title: "Edit and refresh experiments",
     description:
-      "Edit Python source, explicitly refresh it, and add an experiment while keeping earlier runs available.",
+      "Save Python source edits, preview a new request using the updated source, and add an experiment while keeping earlier runs available.",
   },
   compute: {
     title: "Mean IQ and typed results",

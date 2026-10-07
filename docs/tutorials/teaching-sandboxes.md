@@ -117,7 +117,7 @@ The same Help selector also offers these existing capabilities:
 
 | Topic | Explicit new work | Continue after a restart |
 | --- | --- | --- |
-| Edit and refresh experiments | Refresh saved source, preview and run the changed or added experiment | Connect, select a retained run ID from Runs and read its result; source edits stay in the folder |
+| Edit and refresh experiments | Save source edits, preview a new request and run the changed or added experiment | Connect, select a retained run ID from Runs and read its result; source edits stay in the folder |
 | Mean IQ and typed results | Acquire shot and mean-IQ examples | Connect and select the exact saved run number or ID before the typed result cell |
 | Parameter calibration and recovery | Submit a procedure that proposes, verifies and conditionally publishes a correction | Connect and run the read-only lesson history cell |
 | Joint calibration and coupled checks | Propose individual and joint corrections, inspect coupled verification | Connect and run the read-only lesson history cell |
