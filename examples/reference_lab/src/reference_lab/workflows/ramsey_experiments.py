@@ -9,7 +9,6 @@ import scopecat as sc
 from scopecat.kernel.entity import EntityRef
 from scopecat.program.measurement_types import MeasurementArrayData
 from scopecat_instruments import DCSourceTarget, dc_source, rf_source
-from scopecat_quantum import authoring as q
 from scopecat_quantum.measurement_computes import (
     BinaryIqProbabilityProducts,
 )
@@ -22,7 +21,6 @@ from reference_lab.quantum_runner import (
 from reference_lab.workflows.ramsey import (
     parallel_two_qubit_ramsey_program,
     ramsey_program,
-    topology_scaled_ramsey_program,
 )
 
 Q0 = EntityRef(id="q0", kind="logical_qubit")
@@ -161,43 +159,6 @@ class ParallelRawRamseyDataset:
     iq_shots: sc.PerEntity[sc.ProductRef[MeasurementArrayData]]
 
 
-@dataclass(frozen=True, slots=True)
-class TopologyScaledRamseyDataset:
-    delay: sc.CoordinateRef[sc.Quantity]
-    iq_shots: sc.ProductRef[MeasurementArrayData]
-
-
-@sc.experiment(id="reference_lab.topology_scaled_ramsey")
-def topology_scaled_ramsey(
-    experiment: sc.ExperimentContext,
-) -> TopologyScaledRamseyDataset:
-    """Resolve one chip-size-agnostic program onto three connected qubits."""
-
-    delay = experiment.scan("delay", RAMSEY_DELAYS[:3])
-    call = topology_scaled_ramsey_program(
-        targets=q.select_qubits(
-            3,
-            connected=True,
-            anchor="q1",
-            connection_kind="nearest_neighbor",
-        ),
-        delay=delay,
-        phase=sc.Quantity(0.0, "rad"),
-    ).with_shots(RAMSEY_SHOTS)
-    prepare_quantum_hardware(experiment)
-    configured_call = call.with_compiler_inputs(
-        qubits=sc.parameter_table_ref(QubitParameters)
-    )
-    experiment.use(configured_call)
-    return TopologyScaledRamseyDataset(
-        delay=delay,
-        iq_shots=cast(
-            "sc.ProductRef[MeasurementArrayData]",
-            configured_call.results.iq_shots,
-        ),
-    )
-
-
 @sc.experiment(id="reference_lab.parallel_raw_ramsey")
 def parallel_raw_ramsey(experiment: sc.ExperimentContext) -> ParallelRawRamseyDataset:
     """Retain raw per-channel IQ so one unavailable demodulator stays visible."""
@@ -236,10 +197,8 @@ __all__ = [
     "FluxRamseyDataset",
     "ParallelRawRamseyDataset",
     "RamseyDataset",
-    "TopologyScaledRamseyDataset",
     "entity_routed_ramsey",
     "flux_ramsey",
     "parallel_raw_ramsey",
     "q0_fixed_if_lo_sweep",
-    "topology_scaled_ramsey",
 ]

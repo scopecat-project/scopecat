@@ -16,7 +16,7 @@ from scopecat.sdk.domain import (
     DomainResultMapping,
 )
 
-from scopecat_quantum._ids import TargetCompileEntryId
+from scopecat_quantum._ids import QubitId, TargetCompileEntryId
 from scopecat_quantum.acquisitions import (
     QuantumResultContract,
     QuantumResultDimension,
@@ -92,7 +92,7 @@ def map_quantum_target_results(
     """Map acquisitions whose local slot names are logical result IDs.
 
     Recipe lowering preserves those names, including entity-qualified slots.
-    Grouped acquisitions retain target order. Adapters still explicitly bind
+    Grouped acquisitions follow the logical product entity axis. Adapters bind
     entries to points; no positional correspondence is assumed. Targets that
     rename or otherwise regroup results can use the explicit sealing API.
     """
@@ -112,8 +112,21 @@ def map_quantum_target_results(
         for result in preparation.context.call.results
         for product_use in result.product_uses
     )
+    # Resolve the authoritative product axes through the builder, then close a
+    # fresh mapping so its identity includes the reordered acquisition addresses.
+    selected_entries = tuple(entry_bindings)
+    provisional = _map_result_bindings(preparation, batch, selected_entries, bindings)
+    slots = _slots_by_address(batch)
+    ordered = tuple(
+        QuantumTargetResultUseBinding(
+            _entity_ordered_address(result, slots),
+            product_use,
+        )
+        for result in provisional.results
+        for product_use in result.product_uses
+    )
     return seal_quantum_target_result_mapping(
-        preparation, batch, entry_bindings, bindings
+        preparation, batch, selected_entries, ordered
     )
 
 
@@ -125,6 +138,21 @@ def seal_quantum_target_result_mapping(
 ) -> DomainResultMapping[QuantumTargetResultAddress]:
     """Close exact target entry/result coverage against logical outputs."""
 
+    domain_mapping = _map_result_bindings(
+        preparation, batch, entry_bindings, result_bindings
+    )
+    _validate_quantum_result_contracts(
+        preparation.context, batch, domain_mapping.results
+    )
+    return domain_mapping
+
+
+def _map_result_bindings(
+    preparation: DomainPreparationBuilder,
+    batch: PreparedQuantumTargetBatch,
+    entry_bindings: Sequence[QuantumTargetEntryPointBinding],
+    result_bindings: Sequence[QuantumTargetResultUseBinding],
+) -> DomainResultMapping[QuantumTargetResultAddress]:
     selected_entry_bindings = tuple(entry_bindings)
     selected_result_bindings = tuple(result_bindings)
     point_by_entry = {
@@ -157,12 +185,49 @@ def seal_quantum_target_result_mapping(
         raise ValueError(
             "domain mapping must exactly cover prepared acquisition addresses"
         )
-    _validate_quantum_result_contracts(
-        preparation.context,
-        batch,
-        domain_mapping.results,
-    )
     return domain_mapping
+
+
+def _slots_by_address(
+    batch: PreparedQuantumTargetBatch,
+) -> dict[TargetAcquisitionAddress, AcquisitionSlot]:
+    return {
+        TargetAcquisitionAddress(entry.id, slot.id): slot
+        for entry in batch.request.entries
+        for slot in entry.program.acquisition_slots
+    }
+
+
+def _entity_ordered_address(
+    result: DomainMappedResult[QuantumTargetResultAddress],
+    slots: dict[TargetAcquisitionAddress, AcquisitionSlot],
+) -> QuantumTargetResultAddress:
+    entity_ids = _product_entity_ids(result.product)
+    if entity_ids is None:
+        return result.result_address
+    by_entity: dict[str, TargetAcquisitionAddress] = {}
+    for address in result.result_address.acquisitions:
+        owner = slots[address].signal.owner
+        if not isinstance(owner, QubitId) or owner.value in by_entity:
+            raise ValueError("grouped acquisitions require unique qubit owners")
+        by_entity[owner.value] = address
+    if set(by_entity) != set(entity_ids):
+        raise ValueError("grouped acquisitions must exactly cover product entities")
+    return QuantumTargetResultAddress(tuple(by_entity[entity] for entity in entity_ids))
+
+
+def _product_entity_ids(product: ProductDef) -> tuple[str, ...] | None:
+    if not product.axes or product.axes[0].kind != "entity":
+        return None
+    entities = product.axes[0].entities
+    if entities is None or any(entity.kind != "logical_qubit" for entity in entities):
+        raise ValueError(
+            "quantum entity axes require concrete logical qubit identities"
+        )
+    ids = tuple(entity.id for entity in entities)
+    if len(ids) != len(set(ids)):
+        raise ValueError("quantum entity axes require unique qubit identities")
+    return ids
 
 
 def _validate_quantum_result_contracts(
@@ -170,15 +235,13 @@ def _validate_quantum_result_contracts(
     batch: PreparedQuantumTargetBatch,
     results: tuple[DomainMappedResult[QuantumTargetResultAddress], ...],
 ) -> None:
-    slot_by_address = {
-        TargetAcquisitionAddress(entry.id, slot.id): slot
-        for entry in batch.request.entries
-        for slot in entry.program.acquisition_slots
-    }
+    slot_by_address = _slots_by_address(batch)
     point_index_by_identity = {
         id(point): index for index, point in enumerate(context.points)
     }
     for result in results:
+        if _entity_ordered_address(result, slot_by_address) != result.result_address:
+            raise ValueError("grouped acquisitions must follow product entity order")
         source_contract = _source_result_contract(context, result)
         point_index = point_index_by_identity[id(result.point)]
         concrete_contract = _concrete_contract_at_point(
