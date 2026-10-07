@@ -137,8 +137,9 @@ new development and keep original files separately. See the
 ## Register another author workspace
 
 Use this when two codebases should publish and execute against the same local
-service and scientific records. They use the same Python environment; experiments,
-shared helpers and compiler source may differ and use the same Python package names.
+service and scientific records. Each registered author source has a qualified
+execution environment, independent of the application Python. Experiments, shared
+helpers and compiler source may differ and use the same Python package names.
 Register from the service's installed environment while both deployments are stopped:
 
 ```shell
@@ -178,6 +179,49 @@ scopecat register-workspace /new/source/location --service /path/to/service --id
 ```
 
 Use the ID from the original registration. This keeps its publication history and
-revokes the old source location. Unknown IDs and the service owner's reserved
-`legacy` identity cannot be rebound this way. Portable multi-codebase installation
-bundles and different dependency environments require later qualification.
+revokes the old source location. Unknown IDs cannot be rebound this way; every
+source uses an explicit registered identity. Retained execution requires its captured dependency identities, even
+when the application and author environments are separate.
+
+## Submit an ordinary procedure from an author session
+
+Register the procedure in the source manifest's `[lab.capabilities].procedures`,
+using its `module:attribute` name. In a script, explicitly select source before
+importing its definition and intent model:
+
+```python
+with project.authoring() as session:
+    session.refresh()
+    from my_lab.workflow import ReviewIntent, review
+
+    prepared = session.procedures.prepare(
+        review, ReviewIntent(label="Review scan"), request_key="review-scan-1"
+    )
+    task = prepared.submit()
+    print(task.id, task.dispatch_error)
+```
+
+`sc.notebook()` exposes the same `session.procedures` API and selects source at
+cell boundaries. Preparing a procedure never refreshes imports or executes its
+body. Changed source or an old definition/model alias requires an explicit
+refresh and reimport. Intent supplies the procedure's scientific choices; session
+experiment defaults are not implicitly applied.
+
+Retain `prepared` (or its serialized `command`) before submission. After an
+uncertain response, retry that exact command with the same request key; a changed
+command must not reuse the key. `prepared.reconnect(session).submit()` preserves
+its original source and identity. The application validates the exact registered
+definition and canonical intent in the retained revision, then owns dispatch.
+Closing the client or kernel leaves the managed task with the application.
+
+Reconnect with `session.procedures.get(task_id)`, inspect `task.progress()`, or
+request `task.cancel(actor="author", reason="Stop")`. Answer a waiting step using
+`session.submit_procedure_step_input(...)`, then call `task.resume()` to dispatch
+ready work. Existing revision fences and unknown-outcome gates still apply.
+A dispatch error retains the admitted task ID for inspection and explicit resume.
+
+`Project.connect()` and `LabClient.procedures.start/resume` retain their explicit
+local Python execution semantics, including internal worker use. They are not
+aliases for this managed API. Existing calibration, joint and task teaching
+consumers need a separate migration of their source binding and scientific intent;
+this first slice does not change their return values or merge the client classes.

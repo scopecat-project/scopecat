@@ -407,7 +407,11 @@ from scopecat_server.parameter_drafts import (
     ParameterDraftStart,
     ParameterDraftView,
 )
-from scopecat_server.retained_request import AnalysisCall, ComparisonCall
+from scopecat_server.retained_request import (
+    AnalysisCall,
+    ComparisonCall,
+    ProcedureValidationCall,
+)
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
 from scopecat_server.services.project_workers import (
     ProcedureDispatchError,
@@ -706,7 +710,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(404, "Author preparation not found") from error
 
     def retained_call(
-        command: AnalysisCall | ComparisonCall,
+        command: AnalysisCall | ComparisonCall | ProcedureValidationCall,
         response: Response | None = None,
         *,
         started: float,
@@ -714,7 +718,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         cancelled: Event | None = None,
     ) -> str:
         operation = command.kind
-        service = authors(command.request.workspace_id)
+        if isinstance(command, ProcedureValidationCall):
+            assert command.request.source is not None
+            service = authors(command.request.source.workspace_id)
+        else:
+            service = authors(command.request.workspace_id)
         if command.code_revision is not None:
             try:
                 service.get(command.code_revision)
@@ -1029,6 +1037,18 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(422, str(error)) from error
         admitted = LaunchSubmission.model_validate_json(launch_call(command, response))
         return dispatch_procedure(admitted.procedure_id)
+
+    @app.post(f"{_API_PREFIX}/author-procedures/submit")
+    def submit_author_procedure(command: ProcedureSubmitCommand) -> LaunchSubmission:
+        if command.source is None:
+            raise HTTPException(422, "Managed procedures require retained source")
+        # Validate registration, exact fingerprint and intent in the same immutable
+        # environment that execution will load. The daemon never imports user code.
+        retained_call(
+            ProcedureValidationCall(request=command), started=time.perf_counter()
+        )
+        admitted = application.automation.submit(command)
+        return dispatch_procedure(admitted.run.procedure_run_id)
 
     @app.post(f"{_API_PREFIX}/procedures/{{procedure_run_id}}/dispatch")
     def dispatch_project_procedure(procedure_run_id: str) -> LaunchSubmission:

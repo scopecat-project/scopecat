@@ -12,6 +12,14 @@ from scopecat.automation.wire import ProcedureStepAttemptPage
 from scopecat.daemon.views import RunDetail
 
 
+class LaunchSubmission(BaseModel):
+    """Durable procedure identity; existing steps retain its output references."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    procedure_id: str
+    dispatch_error: str | None = None
+
+
 class ProcedureWorkerFailure(BaseModel):
     """Last process-management failure; separate from scientific outcome."""
 

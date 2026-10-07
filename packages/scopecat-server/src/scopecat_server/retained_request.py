@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from scopecat.automation.wire import ProcedureSubmitCommand
 from scopecat.records.author_revision import AuthorAnalysisRequest, AuthorRevisionRef
 from scopecat.records.comparison import ComparisonRequest
 
@@ -29,6 +30,18 @@ class ComparisonCall(BaseModel):
         return self.request.code_revision
 
 
+class ProcedureValidationCall(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: Literal["procedure_validation"] = "procedure_validation"
+    request: ProcedureSubmitCommand
+
+    @property
+    def code_revision(self) -> AuthorRevisionRef:
+        if self.request.source is None:
+            raise ValueError("managed procedures require retained source")
+        return self.request.source.code_revision
+
+
 type RetainedRequest = Annotated[
-    AnalysisCall | ComparisonCall, Field(discriminator="kind")
+    AnalysisCall | ComparisonCall | ProcedureValidationCall, Field(discriminator="kind")
 ]
