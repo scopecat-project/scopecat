@@ -34,10 +34,34 @@ selected Python/WebView host. This map describes their existing implementation.
 
 ### Teaching source convergence
 
-Help's parameters route (`parameters_journey.py` → `lab_teaching.lessons.install_lesson`)
+Help's parameters/groups route (`notebook_journey.py` → `lab_teaching.lessons.install_lesson`)
 generates an editable Notebook, `teaching.py`, `parameters.py`, `response.py`,
 `setup.py` and `workspace_app.py`; scan definitions also remain editable. Its
 experiment code does not import `lab_teaching` scientific definitions.
+
+Help uses one `NotebookJourney` receipt shape and preparation/Continue path,
+keyed by the admitted topic. The original `learning/parameters.json` receipt
+remains valid without rewriting it. Continue checks the registered source and
+existing client Python, then opens the same Notebook; it does not execute cells.
+Each fresh admitted course installs its own named teaching setup/parameter branch
+through editable initialization code. Source, SDK and execution registration remain
+ordinary author work in the existing application.
+
+| Topic | Editable material / registration difference | Help readiness |
+| --- | --- | --- |
+| parameters | Synthetic experiment, response and parameter declarations; independent identity/setup helper | Supported, including existing receipts |
+| groups | Same experiment and independent setup helper; `group_analysis.py` and `result_types.py`; no new procedure registration | Supported; separate preview/acquisition/read cells, saved run and publication IDs for reopen |
+| refresh | Same base experiment plus `examples/extra.py`, copied explicitly by the learner | Not admitted yet: replace shared `teaching-bench` / `teaching-table` initialization |
+| compute | Replaces `teaching.py` with raw/mean IQ experiments and typed results | Not admitted yet: isolate shared inputs and remove the assumed run number `2` in shared history |
+| calibration | `calibration.py`; explicit calibrate/check procedure list replaces the experiment | Not admitted yet: course-specific setup naming and a durable read/continue path |
+| joint-calibration | Adds `joint_calibration.py` and its procedure registration | Same remaining setup/reopen work; independent verification remains explicit |
+| task-calibration | Adds `task_calibration.py`, task-stage/finalization procedures | Managed author-session support delivered by #911; Help setup/reopen work remains |
+
+The remaining topics are not enabled by simply adding selector entries. They need
+the same shared-data and editable-source contract; no independent service,
+per-course state machine or course-scoring system is required. Existing folders
+are never overlaid with new material. This source integration is distinct from
+native editor bridge, installed-distribution and unfamiliar-user acceptance.
 The installed teaching package supplies generation resources, not hidden user
 experiment implementations for that lesson.
 
@@ -67,7 +91,7 @@ For this boundary, `scripts/verify_default_teaching_journey.py` compares freshly
 generated source and original Notebook cells with the checkout before running the
 six legacy course/reopen kernels from a wheel-installed delivery. Run it with
 that delivery's installed Python, a fresh author directory and the delivery path.
-`scripts/verify_parameters_journey.py` separately checks Help's real browser/kernel,
+`scripts/verify_notebook_journey.py` separately checks Help's real browser/kernel,
 source edits and restart/Continue without reacquisition in the same application.
 Both reject stale installed teaching resources; neither qualifies native editor
 clicks or unfamiliar-user observation.

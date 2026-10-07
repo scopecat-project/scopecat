@@ -1,6 +1,6 @@
 """Exercise shipped cells through Help, an independent real kernel and one app.
 
-Usage: uv run --locked python scripts/verify_parameters_journey.py
+Usage: uv run --locked python scripts/verify_notebook_journey.py
        <fresh-work-directory> <toolchain-delivery>
 Uses development dependencies and Playwright Chromium (or SCOPECAT_TEST_CHROMIUM).
 Browser-native bridge calls use
@@ -19,18 +19,20 @@ from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from unittest.mock import patch
 
 import httpx2
 from nbclient import NotebookClient
 from nbformat import NotebookNode
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import Page, expect, sync_playwright
 
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.desktop import DesktopAPI
 from lab_tools.desktop_session import DesktopSession
 from lab_tools.notebook import kernel_command
 from lab_tools.notebook_io import notebook_io
-from lab_tools.parameters_journey import current
+from lab_tools.notebook_journey import LessonTopic, NotebookJourney, current
+from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
 from scopecat.daemon.views import RunSummary, RunSummaryPage
 
 if TYPE_CHECKING:
@@ -64,20 +66,23 @@ def verify(work: Path, payload: Path) -> None:
                 "Callable[[str, Callable[..., object]], object]",
                 page.expose_function,
             )
-            expose("journeyStatus", api.parameters_journey)
-            expose("journeyPrepare", api.prepare_parameters_journey)
+            expose("journeyStatus", api.notebook_journey)
+            expose("journeyPrepare", api.prepare_notebook_journey)
 
-            def editor() -> None:
-                journey = current(runtime)
-                assert journey is not None and journey.notebook.is_file()
-                editor_files.append(str(journey.notebook))
+            def editor(topic: str) -> None:
+                def record(journey: NotebookJourney) -> None:
+                    assert journey.notebook.is_file()
+                    editor_files.append(str(journey.notebook))
+
+                with patch("lab_tools.notebook_journey.open_editor", record):
+                    api.open_lesson_notebook(cast("LessonTopic", topic))
 
             expose("journeyOpen", editor)
             page.add_init_script("""window.pywebview = {api: {
-                parameters_journey: () => window.journeyStatus(),
-                prepare_parameters_journey: (parent) =>
-                    window.journeyPrepare(parent ?? null),
-                open_parameters_notebook: () => window.journeyOpen(),
+                notebook_journey: (topic) => window.journeyStatus(topic),
+                prepare_notebook_journey: (parent, topic) =>
+                    window.journeyPrepare(parent ?? null, topic),
+                open_lesson_notebook: (topic) => window.journeyOpen(topic),
                 set_window_title: async () => {},
             }};""")
             page.goto(endpoint + "/#help")
@@ -252,9 +257,142 @@ def verify(work: Path, payload: Path) -> None:
                 )
                 + "\n"
             )
+            verify_groups(page, runtime, session, work, endpoint)
+            groups = current(runtime, "groups")
+            assert groups is not None
+            assert editor_files == [
+                str(journey.notebook),
+                str(journey.notebook),
+                str(groups.notebook),
+                str(groups.notebook),
+            ]
+            os.environ["JUPYTER_PATH"] = environment["JUPYTER_PATH"]
+            assert current(runtime) == journey
+            assert journey.notebook.read_bytes() == notebook_bytes
+            with client.setup_kernel():
+                execute("parameters-1")
+                execute("parameters-2")
+                check(
+                    "from my_experiment.parameters import Drive\n"
+                    "assert params[Drive]['q0'].frequency == 5.152\n"
+                    "session.close()"
+                )
             browser.close()
     finally:
         runtime.stop()
+
+
+def verify_groups(
+    page: Page,
+    runtime: ApplicationRuntime,
+    desktop: DesktopSession,
+    work: Path,
+    endpoint: str,
+) -> None:
+    """Verify a second course with independent inputs in the same application."""
+    nbformat = notebook_io()
+    page.goto(endpoint + "/#help")
+    page.get_by_role("combobox", name="Course").select_option("groups")
+    page.get_by_role("button", name="Start groups Notebook", exact=True).click()
+    expect(
+        page.get_by_role("button", name="Continue groups Notebook", exact=True)
+    ).to_be_enabled()
+    journey = current(runtime, "groups")
+    parameters = current(runtime)
+    assert journey is not None and parameters is not None and journey.ready
+    source = journey.directory
+    identity = Path("src/my_experiment/lesson_identity.py")
+    assert (source / identity).read_bytes() != (
+        parameters.directory / identity
+    ).read_bytes()
+    material = (
+        Path(__file__).resolve().parents[1]
+        / "packages/lab-teaching/src/lab_teaching/course_material"
+    )
+    for generated, packaged in (
+        ("notebooks/groups.ipynb", "lessons/groups.ipynb"),
+        ("src/my_experiment/setup.py", "lessons/parameters_setup.py.txt"),
+        ("src/my_experiment/teaching.py", "lessons/experiment.py.txt"),
+        ("src/my_experiment/group_analysis.py", "group_analysis.py"),
+    ):
+        assert (source / generated).read_bytes() == (material / packaged).read_bytes()
+    shipped = nbformat.read(journey.notebook, as_version=4)
+    material_hash = hashlib.sha256(journey.notebook.read_bytes()).hexdigest()
+    evidence = deepcopy(shipped)
+    cast("list[NotebookNode]", evidence["cells"]).append(
+        nbformat.v4.new_code_cell(GROUP_CHECKS)
+    )
+    python = str(journey.view()["python"])
+    _, environment = kernel_command(
+        source, python=python, source_path=False, kernel_home=work / "groups-kernel"
+    )
+    os.environ["JUPYTER_PATH"] = environment["JUPYTER_PATH"]
+
+    def run_notebook(document: NotebookNode) -> None:
+        NotebookClient(
+            document,
+            kernel_name="scopecat-lab",
+            timeout=120,
+            resources={"metadata": {"path": str(source / "notebooks")}},
+        ).execute()
+
+    run_notebook(evidence)
+    nbformat.write(evidence, work / "groups-executed.ipynb")
+    code = source / "src/my_experiment/teaching.py"
+    code.write_text(code.read_text().replace("shots: int = 64", "shots: int = 32"))
+    cast("list[NotebookNode]", shipped["cells"]).append(
+        nbformat.v4.new_code_cell("# My retained grouping notes")
+    )
+    nbformat.write(shipped, journey.notebook)
+    retained = journey.notebook.read_bytes()
+    response = httpx2.get(endpoint + "/api/v1/runs", trust_env=False)
+    response.raise_for_status()
+    before = RunSummaryPage.model_validate_json(response.content).items
+    assert len(before) == 5  # Three parameters runs and two groups runs.
+    runtime.stop()
+    endpoint = runtime.start().base_url
+    desktop.connected(endpoint)
+    page.goto(endpoint + "/#help")
+    page.get_by_role("combobox", name="Course").select_option("groups")
+    page.get_by_role("button", name="Continue groups Notebook", exact=True).click()
+    expect(
+        page.get_by_role("button", name="Continue groups Notebook", exact=True)
+    ).to_be_enabled()
+    assert current(runtime, "groups") == journey
+    page.screenshot(path=str(work / "groups-help.png"), full_page=True)
+    assert journey.notebook.read_bytes() == retained
+    assert "shots: int = 32" in code.read_text()
+    reopened = nbformat.v4.new_notebook(
+        cells=[nbformat.v4.new_code_cell(c) for c in GROUP_REOPEN_CELLS]
+    )
+    run_notebook(reopened)
+    nbformat.write(reopened, work / "groups-reopened.ipynb")
+    response = httpx2.get(endpoint + "/api/v1/runs", trust_env=False)
+    response.raise_for_status()
+    assert RunSummaryPage.model_validate_json(response.content).items == before
+    bookmark = cast(
+        "dict[str, str]", json.loads((source / "grouped-run.json").read_text())
+    )
+    page.goto(endpoint + "/?run=" + bookmark["run_id"])
+    expect(page.get_by_text(bookmark["run_id"], exact=True)).to_be_visible()
+    page.screenshot(path=str(work / "groups-same-run.png"), full_page=True)
+    (work / "groups-acceptance.json").write_text(
+        json.dumps(
+            {
+                "result": "passed",
+                "shipped_notebook_sha256": material_hash,
+                "retained_application_runs": len(before),
+                "points": [42, 63],
+                "groups": [2, 3],
+                "restart_continue_and_read_without_acquisition": "passed",
+                "source_and_notebook_edits_preserved": "passed",
+                "parameters_and_groups_independent": "passed",
+                "native_editor": "not evaluated",
+            },
+            indent=2,
+        )
+        + "\n"
+    )
 
 
 if __name__ == "__main__":

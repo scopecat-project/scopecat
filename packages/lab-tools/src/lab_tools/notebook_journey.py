@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from filelock import FileLock
@@ -26,15 +26,24 @@ if TYPE_CHECKING:
     from .application_runtime import ApplicationRuntime
 
 
-class ParametersJourney(BaseModel):
+LessonTopic = Literal["parameters", "groups"]
+
+
+def _validate_topic(topic: str) -> None:
+    if topic not in ("parameters", "groups"):
+        raise ValueError(f"Help 尚不支持此课程：{topic}")
+
+
+class NotebookJourney(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    topic: LessonTopic = "parameters"
     directory: Path
     ready: bool = False
 
     @property
     def notebook(self) -> Path:
-        return self.directory / "notebooks/parameters.ipynb"
+        return self.directory / f"notebooks/{self.topic}.ipynb"
 
     def view(self) -> dict[str, object]:
         return {
@@ -45,44 +54,49 @@ class ParametersJourney(BaseModel):
         }
 
 
-def _receipt(runtime: ApplicationRuntime) -> Path:
-    return runtime.home / "learning/parameters.json"
+def _receipt(runtime: ApplicationRuntime, topic: LessonTopic) -> Path:
+    _validate_topic(topic)
+    return runtime.home / f"learning/{topic}.json"
 
 
-def _save(receipt: Path, journey: ParametersJourney) -> None:
+def _save(receipt: Path, journey: NotebookJourney) -> None:
     staged = receipt.with_suffix(".tmp")
     _ = staged.write_text(journey.model_dump_json(indent=2), encoding="utf-8")
     staged.replace(receipt)
 
 
-def current(runtime: ApplicationRuntime) -> ParametersJourney | None:
-    path = _receipt(runtime)
-    return (
-        ParametersJourney.model_validate_json(path.read_bytes())
-        if path.exists()
-        else None
-    )
+def current(
+    runtime: ApplicationRuntime, topic: LessonTopic = "parameters"
+) -> NotebookJourney | None:
+    path = _receipt(runtime, topic)
+    if not path.exists():
+        return None
+    journey = NotebookJourney.model_validate_json(path.read_bytes())
+    if journey.topic != topic:
+        raise ValueError("课程记录与所选课程不符；请恢复原记录后继续")
+    return journey
 
 
-def create_parameters_source(directory: Path) -> None:
+def create_lesson_source(directory: Path, topic: LessonTopic = "parameters") -> None:
     """Publish one fresh, dependency-light folder; never overlay existing files."""
+    _validate_topic(topic)
     directory.parent.mkdir(parents=True, exist_ok=True)
     if directory.exists():
         raise ValueError(f"代码目录已存在，未覆盖：{directory}")
-    with TemporaryDirectory(prefix=".parameters-", dir=directory.parent) as temporary:
+    with TemporaryDirectory(prefix=f".{topic}-", dir=directory.parent) as temporary:
         staged = Path(temporary) / "source"
         (staged / "src/my_experiment").mkdir(parents=True)
         (staged / "src/my_experiment/__init__.py").touch()
         (staged / "notebooks").mkdir()
-        _ = install_lesson(staged, "parameters")
         (staged / "scopecat.toml").write_text(
             '[lab.capabilities]\nauthor_modules = ["my_experiment"]\n\n'
             '[authors]\nsource_roots = ["src"]\n'
             'refresh_roots = ["src/my_experiment"]\ndependencies = []\n',
             encoding="utf-8",
         )
+        _ = install_lesson(staged, topic)
         (staged / "pyproject.toml").write_text(
-            '[project]\nname = "parameters-lesson"\nversion = "0.1.0"\n'
+            f'[project]\nname = "{topic}-lesson"\nversion = "0.1.0"\n'
             'requires-python = ">=3.14"\ndependencies = ["numpy"]\n',
             encoding="utf-8",
         )
@@ -103,21 +117,23 @@ def create_parameters_source(directory: Path) -> None:
 
 
 def prepare(
-    runtime: ApplicationRuntime, parent: str | None = None
-) -> ParametersJourney:
+    runtime: ApplicationRuntime,
+    parent: str | None = None,
+    topic: LessonTopic = "parameters",
+) -> NotebookJourney:
     """Retry preparation without rewriting source; continue without dependency work."""
-    receipt = _receipt(runtime)
+    receipt = _receipt(runtime, topic)
     receipt.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(receipt.with_suffix(".lock"), timeout=30):
-        journey = current(runtime)
+        journey = current(runtime, topic)
         if journey is None:
             destination = Path(parent) if parent else runtime.home / "authors"
             if not destination.is_absolute() or (parent and not destination.is_dir()):
                 raise ValueError("请选择已有保存目录的完整路径")
-            journey = ParametersJourney(
-                directory=destination / f"parameters-{uuid4().hex[:12]}"
+            journey = NotebookJourney(
+                topic=topic, directory=destination / f"{topic}-{uuid4().hex[:12]}"
             )
-            create_parameters_source(journey.directory)
+            create_lesson_source(journey.directory, topic)
             _save(receipt, journey)
         if not journey.notebook.is_file():
             raise ValueError(
@@ -138,7 +154,7 @@ def prepare(
         return journey
 
 
-def open_editor(journey: ParametersJourney) -> None:
+def open_editor(journey: NotebookJourney) -> None:
     """Open the shipped file and its folder in an external editor, never a kernel."""
     code = shutil.which("code")
     if sys.platform == "win32" and code is not None:

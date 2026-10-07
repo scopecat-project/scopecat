@@ -188,27 +188,33 @@ class DesktopAPI:
             raise ValueError("应用尚未准备就绪，请稍后重试")
         return self._session.base_url
 
-    def parameters_journey(self) -> dict[str, object] | None:
-        from .parameters_journey import current
+    def notebook_journey(
+        self, topic: Literal["parameters", "groups"] = "parameters"
+    ) -> dict[str, object] | None:
+        from .notebook_journey import current
 
-        journey = current(self._runtime)
+        journey = current(self._runtime, topic)
         return journey.view() if journey else None
 
-    def prepare_parameters_journey(
-        self, parent: str | None = None
+    def prepare_notebook_journey(
+        self,
+        parent: str | None = None,
+        topic: Literal["parameters", "groups"] = "parameters",
     ) -> dict[str, object]:
-        from .parameters_journey import prepare
+        from .notebook_journey import prepare
 
         with self._session.operation():
-            return prepare(self._runtime, parent).view()
+            return prepare(self._runtime, parent, topic).view()
 
-    def open_parameters_notebook(self) -> None:
-        from .parameters_journey import current, open_editor
+    def open_lesson_notebook(
+        self, topic: Literal["parameters", "groups"] = "parameters"
+    ) -> None:
+        from .notebook_journey import current, open_editor
 
         with self._session.operation():
-            journey = current(self._runtime)
+            journey = current(self._runtime, topic)
             if journey is None or not journey.ready:
-                raise ValueError("请先从 Help 准备参数与扫描练习")
+                raise ValueError("请先从 Help 准备所选课程")
             open_editor(journey)
 
     def create_source(self, parent: str, name: str) -> str:

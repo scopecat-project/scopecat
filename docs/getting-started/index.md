@@ -12,7 +12,7 @@ verify the developer, follow the [first-open instructions](../how-to/mac-preview
   manual decision and cleanup.
 - To learn parameters and scans, use **Help → Start parameters Notebook**. Help
   prepares an editable folder and Python environment; **Continue** retains your
-  source and saved edits. See [the Notebook lesson](../tutorials/teaching-sandboxes.md#parameters-and-scans-in-a-notebook).
+  source and saved edits. See [the Notebook lesson](../tutorials/teaching-sandboxes.md#learn-with-notebooks).
 - To write your first experiment, choose **Settings → Author code → New code folder**.
   Pick a save location and name, then **Create folder and prepare Python**. Open the
   resulting folder in VS Code, select its `.venv`, and run `notebooks/02_edit_scan.py`

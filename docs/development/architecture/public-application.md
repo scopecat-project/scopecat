@@ -54,7 +54,7 @@ every source change below has reached an installed release; use
 | User journey | Default entry | Owned code or data | Present capability and remaining boundary |
 | --- | --- | --- | --- |
 | Receive and inspect data | Desktop **File → Open**, then Data | Portable scientific evidence and imported records; each window owns its selection | [Open/share recorded data](../../how-to/open-and-share-data.md) and independent Python reading work without the original author environment or devices; a capture is not a whole-store backup. |
-| Learn | **Help → Start peak practice** or **Start parameters Notebook** | Practice owns disposable records/notes; parameters owns a persistent ordinary author folder, setup and parameter branch | [Help lessons](../../tutorials/teaching-sandboxes.md) cover manual decisions and one Notebook continuation. Other topics still need a coherent author journey; actual editor and unfamiliar-user observations remain separate. |
+| Learn | **Help → Start peak practice** or **Learn with Notebooks** | Practice owns disposable records/notes; parameters/groups each retain an ordinary author folder, teaching setup and parameter branch | [Help lessons](../../tutorials/teaching-sandboxes.md) cover manual decisions and parameters/groups Notebook continuation. Other topics still need a coherent author journey; actual editor and unfamiliar-user observations remain separate. |
 | Write code | Continue the Help Notebook in VS Code; **Settings → Author code** for new/existing ordinary folders | User-owned Python/Notebooks, local SDK and declared dependencies; retained source revisions at submission | [First experiment](../../getting-started/quickstart.md) and [author sessions](../../how-to/managed-author-session.md) use independent environments. Multiple folders share application data, not each other's implicit imports. Older teaching generators still need convergence. |
 | Run, inspect and analyze | Notebook/Python or **Experiments**; **Runs**, **Analyses** and **Decisions** for retained work | Explicit source, setup and parameter references; application-owned tasks/results; author-owned analysis | Preview and explicit submission are distinct. Reopening history does not acquire again. Default entry is Runs history, not persisted last-viewed-task restoration; see #675. |
 | Share configuration or source | **Configuration → Share and import configuration**; ordinary source files/version control for code collaboration | Saved parameter definitions/values, optional setup and retained source; originals and derivation receipts | [Configuration sharing](../../how-to/share-configuration.md) creates editable local inputs. Source acceptance is inert; trust, dependencies, registration and local device binding remain explicit. General graphical authoring is still a proposal. |
@@ -82,7 +82,7 @@ Any later GUI change must demonstrate the journeys above before replacing entrie
 1. **Teaching/source convergence (#565):** inventory the remaining generated
    teaching consumers, carry editable scientific definitions and explanatory
    Notebooks into ordinary author work, and update their callers together. The
-   parameters lesson is the first slice, not completion of all seven topics.
+   parameters and groups lessons share Help preparation; five topics remain.
    Preserve existing teaching/VS Code tasks until replacement journeys work.
 2. **Entry hierarchy:** evaluate a bounded navigation proposal against receiving
    data, learning, authoring and returning to results. Measure whether users can

@@ -40,10 +40,13 @@ from Help, edit ordinary author code, explicitly run it and inspect the same
 retained result in Runs. Continue in the same folder without repeating preparation
 forms or acquisition.
 
-**Executable evidence:** `scripts/verify_parameters_journey.py` exercises Help,
-the shipped parameters Notebook in a real independent kernel, source/scan edits,
-application restart and read-only result reopening. See the
-[parameters lesson](../tutorials/teaching-sandboxes.md#parameters-and-scans-in-a-notebook)
+**Executable evidence:** `scripts/verify_notebook_journey.py` exercises Help’s
+parameters and groups courses using their shipped cells in real independent
+kernels, source/scan edits, application restart and read-only result reopening.
+Groups checks cover 42/63 points, 2/3 groups, retained raw/analysis evidence and
+returning to the parameters course’s saved inputs. Assertions are appended by
+the verifier, separately from the grouping lesson. See the
+[parameters lesson](../tutorials/teaching-sandboxes.md#learn-with-notebooks)
 and [first experiment](../getting-started/quickstart.md).
 
 **Success evidence:** prepared editable files and a local kernel, retained
@@ -55,8 +58,8 @@ from the explicit acquisition cell.
 source-checkout UI building is a contributor concern, not an ordinary user's
 first-run requirement. Browser verification substitutes native editor activation
 and window plumbing. Actual editor interaction and unfamiliar-user observation
-remain separate acceptance work under #616. Parameters is one delivered lesson,
-not evidence that all teaching topics have converged.
+remain separate acceptance work under #616. Parameters and groups are the two
+Help Notebook entries; five topics still need the same integration.
 
 ## 2. Inspect and directly control configured instruments
 
