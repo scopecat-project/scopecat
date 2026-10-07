@@ -38,19 +38,28 @@ def lesson_path(root: Path, topic: str) -> Path:
     return path
 
 
+def _cell_index(cells: list[NotebookNode], cell_id: str) -> int:
+    matches = [i for i, cell in enumerate(cells) if cell.get("id") == cell_id]
+    if len(matches) != 1:
+        raise ValueError(f"Expected one lesson cell {cell_id!r}; found {len(matches)}")
+    return matches[0]
+
+
 def editing_notebook(root: Path, topic: str) -> NotebookNode:
     """Retain original cells; automate only the documented source/number edits."""
     nb = notebook_io()
     document = nb.read(lesson_path(root, topic), as_version=4)
     cells = cast("list[NotebookNode]", document.cells)
     if topic == "refresh":
-        cells.insert(5, nb.v4.new_code_cell(REFRESH_EDIT))
+        cells.insert(_cell_index(cells, "refresh-5"), nb.v4.new_code_cell(REFRESH_EDIT))
         cells.append(nb.v4.new_code_cell(REFRESH_CHECKS))
         cells.append(nb.v4.new_code_cell(SYNTAX_CHECK))
         cells.append(nb.v4.new_code_cell(REFRESH_RECOVER))
     elif topic == "compute":
         # The selection is the one learner-edited cell, not an implicit latest run.
-        cells[8] = nb.v4.new_code_cell("number = session.run_number(mean)")
+        cells[_cell_index(cells, "compute-select")]["source"] = (
+            "number = session.run_number(mean)"
+        )
         cells.append(nb.v4.new_code_cell(COMPUTE_CHECKS))
         cells.append(nb.v4.new_code_cell(COMPUTE_FAILURE))
         cells.append(nb.v4.new_code_cell(COMPUTE_RECOVER))
@@ -174,12 +183,12 @@ def reopen_cells(root: Path) -> tuple[str, ...]:
     document = notebook_io().read(lesson_path(root, "compute"), as_version=4)
     cells = cast("list[NotebookNode]", document.cells)
     return (
-        cast("str", cells[1].source),
-        cast("str", cells[7].source),
+        cast("str", cells[_cell_index(cells, "compute-1")].source),
+        cast("str", cells[_cell_index(cells, "compute-history")].source),
         REOPEN_SELECTION,
-        cast("str", cells[9].source),
+        cast("str", cells[_cell_index(cells, "compute-7")].source),
         REOPEN_CHECKS,
-        cast("str", cells[9].source),
+        cast("str", cells[_cell_index(cells, "compute-7")].source),
         (
             "assert {r.run_id for r in session.list_runs().items} == before_runs\n"
             "session.close()\n"
