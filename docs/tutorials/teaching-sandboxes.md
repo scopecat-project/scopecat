@@ -47,8 +47,7 @@ before deleting anything you intend to retain.
 
 ## Learn with Notebooks
 
-In desktop **Help → Learn with Notebooks**, select **Parameters and scans** or
-**Grouped analysis and history**, then choose **Start**. Scopecat creates an ordinary
+In desktop **Help → Learn with Notebooks**, select a topic, then choose **Start**. Scopecat creates an ordinary
 code folder and prepares its local Python kernel and registered execution
 environment. It uses a new folder under the application home by default; use
 **Choose another save location…** before starting if you prefer another parent.
@@ -90,8 +89,7 @@ This lesson is persistent ordinary author work, not the resettable peak practice
 scope above. The supplied source computes a synthetic response without devices;
 it has the ordinary author permissions, not a sandbox for arbitrary edited Python.
 Use normal Data cleanup for retained runs and keep or remove your source files
-separately. The other five teaching topics remain maintainer material; this entry does not
-create a course manager, a separate application service or an embedded editor.
+separately. All supplied topics use this preparation and continuation flow.
 
 ## Grouped analysis and history
 
@@ -113,13 +111,35 @@ run the connection cell, find the retained run and grouped analysis IDs in Runs
 Do not run all cells to reopen results. The application retains both courses’
 runs, while each course’s source and parameter edits remain independent.
 
+## Editing, computation and calibration
+
+The same Help selector also offers these existing capabilities:
+
+| Topic | Explicit new work | Continue after a restart |
+| --- | --- | --- |
+| Edit and refresh experiments | Refresh saved source, preview and run the changed or added experiment | Connect, select a retained run ID from Runs and read its result; source edits stay in the folder |
+| Mean IQ and typed results | Acquire shot and mean-IQ examples | Connect and select the exact saved run number or ID before the typed result cell |
+| Parameter calibration and recovery | Submit a procedure that proposes, verifies and conditionally publishes a correction | Connect and run the read-only lesson history cell |
+| Joint calibration and coupled checks | Propose individual and joint corrections, inspect coupled verification | Connect and run the read-only lesson history cell |
+| Background calibration and publication | Start a bounded task whose finalization verifies and conditionally publishes its result | Connect and inspect the retained task and its history |
+
+Each topic uses its own setup and parameter names in the same application. Starting
+or continuing a Notebook never submits a procedure or task. **Run All** repeats
+explicit scientific work; use the marked connection/history cells to inspect existing
+evidence. Preserve the exact run, procedure or task identity when comparing attempts.
+No topic needs another course's results.
+
+These entries expose existing teaching capabilities. Their ordering, difficulty and
+possible grouping remain teaching-design work; the selector is not a fixed syllabus.
+Actual external-editor interaction and unfamiliar-user learning remain separate
+acceptance observations.
+
 ## Notebook workspace and saved edits
 
 For your own experiments, open your registered source folder in VS Code and use
 the interpreter shown in Application settings. Python files and notebooks share
 the application service. See the [learning path](../getting-started/learning-path.md)
-for authoring and analysis; the other synthetic course sources remain independent
-maintainer fixtures, not separately managed tutorial installations.
+for authoring and analysis.
 
 The optional command-line entry uses the same installed application:
 `python -m lab_tools.practice --home DATA_HOME` starts a practice; add `--list`

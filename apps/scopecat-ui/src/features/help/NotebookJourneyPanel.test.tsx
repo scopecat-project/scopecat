@@ -58,58 +58,63 @@ it("keeps desktop preparation distinct from browser-only Help", () => {
   expect(screen.getByText(/Open Help in the Scopecat desktop/)).toBeVisible();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
-it("selects groups without borrowing the parameters receipt and locks selection during preparation", async () => {
-  const parameters = {
-    directory: "/parameters",
-    notebook: "/parameters/notebooks/parameters.ipynb",
-    python: "/parameters/.venv/bin/python",
-    ready: true,
-  };
-  const groups = {
-    directory: "/groups",
-    notebook: "/groups/notebooks/groups.ipynb",
-    python: "/groups/.venv/bin/python",
-    ready: true,
-  };
-  let finish!: (value: typeof groups) => void;
-  const status = vi
-    .fn()
-    .mockImplementation(async (topic) => (topic === "parameters" ? parameters : null));
-  const prepare = vi.fn().mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  const open = vi.fn().mockResolvedValue(undefined);
-  Object.defineProperty(window, "pywebview", {
-    configurable: true,
-    value: {
-      api: {
-        notebook_journey: status,
-        prepare_notebook_journey: prepare,
-        open_lesson_notebook: open,
+it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "task-calibration"])(
+  "selects %s without borrowing the parameters receipt and locks selection during preparation",
+  async (topic) => {
+    const parameters = {
+      directory: "/parameters",
+      notebook: "/parameters/notebooks/parameters.ipynb",
+      python: "/parameters/.venv/bin/python",
+      ready: true,
+    };
+    const groups = {
+      directory: "/groups",
+      notebook: "/groups/notebooks/groups.ipynb",
+      python: "/groups/.venv/bin/python",
+      ready: true,
+    };
+    let finish!: (value: typeof groups) => void;
+    const status = vi
+      .fn()
+      .mockImplementation(async (selected) => (selected === "parameters" ? parameters : null));
+    const prepare = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const open = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window, "pywebview", {
+      configurable: true,
+      value: {
+        api: {
+          notebook_journey: status,
+          prepare_notebook_journey: prepare,
+          open_lesson_notebook: open,
+        },
       },
-    },
-  });
-  show();
-  expect(await screen.findByText(parameters.notebook)).toBeVisible();
-  fireEvent.change(screen.getByRole("combobox", { name: "Course" }), {
-    target: { value: "groups" },
-  });
-  const start = await screen.findByRole("button", { name: "Start groups Notebook" });
-  await vi.waitFor(() => expect(start).toBeEnabled());
-  expect(screen.queryByText(parameters.notebook)).not.toBeInTheDocument();
-  fireEvent.click(start);
-  await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
-  await vi.waitFor(() => expect(prepare).toHaveBeenCalledWith(undefined, "groups"));
-  status.mockImplementation(async (topic) => (topic === "parameters" ? parameters : groups));
-  finish(groups);
-  expect(await screen.findByText(groups.notebook)).toBeVisible();
-  await vi.waitFor(() => expect(open).toHaveBeenCalledWith("groups"));
-  await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeEnabled());
-  fireEvent.change(screen.getByRole("combobox"), { target: { value: "parameters" } });
-  expect(await screen.findByText(parameters.notebook)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
-  expect(prepare).toHaveBeenCalledTimes(1);
-});
+    });
+    show();
+    expect(await screen.findByText(parameters.notebook)).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Course" }), {
+      target: { value: topic },
+    });
+    const start = await screen.findByRole("button", { name: `Start ${topic} Notebook` });
+    await vi.waitFor(() => expect(start).toBeEnabled());
+    expect(screen.queryByText(parameters.notebook)).not.toBeInTheDocument();
+    fireEvent.click(start);
+    await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalledWith(undefined, topic));
+    status.mockImplementation(async (selected) =>
+      selected === "parameters" ? parameters : groups,
+    );
+    finish(groups);
+    expect(await screen.findByText(groups.notebook)).toBeVisible();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith(topic));
+    await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeEnabled());
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "parameters" } });
+    expect(await screen.findByText(parameters.notebook)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
+    expect(prepare).toHaveBeenCalledTimes(1);
+  },
+);

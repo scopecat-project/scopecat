@@ -25,7 +25,14 @@ export interface InstallationStatus {
   adapter_identity: string | null;
 }
 
-export type LessonTopic = "parameters" | "groups";
+export type LessonTopic =
+  | "parameters"
+  | "groups"
+  | "refresh"
+  | "compute"
+  | "calibration"
+  | "joint-calibration"
+  | "task-calibration";
 
 export interface NotebookJourney {
   directory: string;

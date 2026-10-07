@@ -5,10 +5,11 @@ from unittest.mock import Mock
 
 import pytest
 
+from lab_teaching.lessons import TOPICS
 from lab_tools import notebook_journey as journey
 
 
-@pytest.mark.parametrize("topic", ["parameters", "groups"])
+@pytest.mark.parametrize("topic", TOPICS)
 def test_retry_and_continue_preserve_files_and_environment(
     tmp_path, monkeypatch, topic
 ):
@@ -21,8 +22,8 @@ def test_retry_and_continue_preserve_files_and_environment(
         journey.prepare(runtime, topic=topic)
     pending = journey.current(runtime, topic)
     assert pending is not None and not pending.ready
-    source = pending.directory / "src/my_experiment/teaching.py"
-    source.write_text(source.read_text().replace("shots: int = 64", "shots: int = 32"))
+    source = pending.directory / "src/my_experiment/parameters.py"
+    source.write_text(source.read_text() + "\n# retained learner edit\n")
     original = pending.notebook.read_bytes()
     python = journey.environment_python(pending.directory / ".venv")
     python.parent.mkdir(parents=True)
@@ -35,7 +36,7 @@ def test_retry_and_continue_preserve_files_and_environment(
     client.reset_mock()
     runtime.register_source.reset_mock()
     assert journey.prepare(runtime, topic=topic) == ready
-    assert "shots: int = 32" in source.read_text()
+    assert "# retained learner edit" in source.read_text()
     assert pending.notebook.read_bytes() == original
     execution.assert_not_called()
     client.assert_not_called()
@@ -113,16 +114,17 @@ def test_topics_keep_separate_receipts_and_reject_unknown_topics(tmp_path, monke
     runtime = Mock(home=tmp_path)
     monkeypatch.setattr(journey, "create_client_environment", Mock())
     monkeypatch.setattr(journey, "prepare_execution_environment", Mock())
-    parameters = journey.prepare(runtime)
-    groups = journey.prepare(runtime, topic="groups")
-    assert journey.current(runtime) == parameters
-    assert journey.current(runtime, "groups") == groups
-    assert groups.directory != parameters.directory
-    assert groups.notebook.name == "groups.ipynb"
-    assert (
-        'IDENTITY = "groups-'
-        in (groups.directory / "src/my_experiment/lesson_identity.py").read_text()
-    )
+    saved = {topic: journey.prepare(runtime, topic=topic) for topic in TOPICS}
+    assert len({item.directory for item in saved.values()}) == len(TOPICS)
+    identities = set()
+    for topic, item in saved.items():
+        assert journey.current(Mock(home=tmp_path), topic) == item
+        assert item.notebook.name == f"{topic}.ipynb"
+        identities.add(
+            (item.directory / "src/my_experiment/lesson_identity.py").read_text()
+        )
+    assert len(identities) == len(TOPICS)
+    parameters = saved["parameters"]
     with pytest.raises(ValueError, match="尚不支持"):
         journey.prepare(runtime, topic="../outside")
     receipt = tmp_path / "learning/groups.json"

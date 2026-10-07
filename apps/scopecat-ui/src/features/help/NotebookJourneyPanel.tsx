@@ -3,6 +3,43 @@ import { useState } from "react";
 import { type LessonTopic, useDesktopAvailable } from "../application/DesktopSession";
 import { primaryButton, secondaryButton } from "../../ui/styles";
 
+const lessons: Record<LessonTopic, { title: string; description: string }> = {
+  parameters: {
+    title: "Parameters and scans",
+    description:
+      "Explore a seven-point synthetic scan, edit its Python source and parameters, and compare retained results in this application.",
+  },
+  groups: {
+    title: "Grouped analysis and history",
+    description:
+      "Scan two synthetic curves, analyze each group, and reopen their saved analysis without collecting again.",
+  },
+  refresh: {
+    title: "Edit and refresh experiments",
+    description:
+      "Edit Python source, explicitly refresh it, and add an experiment while keeping earlier runs available.",
+  },
+  compute: {
+    title: "Mean IQ and typed results",
+    description: "Compare synthetic IQ results and reopen retained data with typed result readers.",
+  },
+  calibration: {
+    title: "Parameter calibration and recovery",
+    description:
+      "Submit a synthetic calibration procedure and inspect its correction, verification, and publication result.",
+  },
+  "joint-calibration": {
+    title: "Joint calibration and coupled checks",
+    description:
+      "Compare individual corrections with a joint proposal and inspect coupled verification.",
+  },
+  "task-calibration": {
+    title: "Background calibration and publication",
+    description:
+      "Start a bounded calibration task and inspect its retained evidence and verified publication outcome.",
+  },
+};
+
 export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
   const desktop = useDesktopAvailable();
   const native = desktop ? window.pywebview?.api : undefined;
@@ -54,21 +91,22 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
           }}
           className="rounded border border-line bg-panel p-2"
         >
-          <option value="parameters">Parameters and scans</option>
-          <option value="groups">Grouped analysis and history</option>
+          {Object.entries(lessons).map(([value, lesson]) => (
+            <option key={value} value={value}>
+              {lesson.title}
+            </option>
+          ))}
         </select>
       </label>
       <p>
-        {topic === "parameters"
-          ? "Explore a seven-point synthetic scan, edit its Python source and parameters, and compare retained results in this application."
-          : "Scan two synthetic curves, analyze each group, and reopen their saved analysis without collecting again."}{" "}
-        No devices are needed. Each course keeps its own code folder and teaching parameters in this
-        application’s data space.
+        {lessons[topic].description} No devices are needed. Each course keeps its own code folder
+        and teaching parameters in this application’s data space.
       </p>
       <p>
         Help prepares a code folder and Python environment. Edit the Notebook in VS Code with the
-        Python and Jupyter extensions; choose the folder’s .venv kernel. Only explicitly running the
-        Notebook’s acquisition cell starts a new run.
+        Python and Jupyter extensions; choose the folder’s .venv kernel. Only explicitly running
+        acquisition, procedure, or task cells starts new work. To read existing results after a
+        restart, use the Notebook’s history section.
       </p>
       {!native ? (
         <p>Open Help in the Scopecat desktop application to prepare this Notebook.</p>

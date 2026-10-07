@@ -8,13 +8,13 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from filelock import FileLock
 from pydantic import BaseModel, ConfigDict
 
-from lab_teaching.lessons import install_lesson
+from lab_teaching.lessons import TOPICS, LessonTopic, install_lesson
 
 from .author_environment import (
     create_client_environment,
@@ -26,11 +26,8 @@ if TYPE_CHECKING:
     from .application_runtime import ApplicationRuntime
 
 
-LessonTopic = Literal["parameters", "groups"]
-
-
 def _validate_topic(topic: str) -> None:
-    if topic not in ("parameters", "groups"):
+    if topic not in TOPICS:
         raise ValueError(f"Help 尚不支持此课程：{topic}")
 
 
