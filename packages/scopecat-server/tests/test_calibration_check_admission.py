@@ -110,6 +110,7 @@ from scopecat_testkit.workflow_fixtures import load_config
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.calibration_tasks import PreparedTaskAdmissions
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.calibration_checks import CheckRequestPage
@@ -1340,11 +1341,14 @@ def test_automatic_admission_failure_does_not_block_independent_stage(
     count = 0
 
     def fail_first(
-        connection: sqlite3.Connection, task: CalibrationTaskRecord, stage_id: str
+        connection: sqlite3.Connection,
+        task: CalibrationTaskRecord,
+        stage_id: str,
+        prepared: PreparedTaskAdmissions,
     ) -> CalibrationTaskRecord:
         nonlocal count
         count += 1
-        run = admit(connection, task, stage_id)
+        run = admit(connection, task, stage_id, prepared)
         if count == 1:
             raise BackendConflict("changed setup")
         return run

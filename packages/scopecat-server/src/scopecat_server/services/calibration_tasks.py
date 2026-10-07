@@ -1,10 +1,13 @@
 """Persist fixed task intent and admit one dependency-ready stage atomically."""
 
 import sqlite3
-from dataclasses import replace
+from collections.abc import Callable
+from contextlib import suppress
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
 
+from scopecat.automation import ProcedureRun, ProcedureSubmitCommand
 from scopecat.automation.calibration_tasks import (
     CalibrationTaskInputs,
     assess_calibration_task,
@@ -44,6 +47,12 @@ from scopecat_server.storage.sqlite.calibration_tasks import CalibrationTaskStor
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
 
+@dataclass(frozen=True)
+class PreparedTaskAdmissions:
+    task: CalibrationTaskRecord
+    commands: dict[str, ProcedureSubmitCommand | BackendConflict]
+
+
 class CalibrationTaskService:
     def __init__(
         self,
@@ -57,8 +66,33 @@ class CalibrationTaskService:
         self._checks = checks
         self._store = CalibrationTaskStore()
         self._services = services
+        self.validate_call: Callable[[ProcedureSubmitCommand], None] | None = None
 
     def create(self, specification: CalibrationTaskCreate) -> CalibrationTaskView:
+        with self._sqlite.read_transaction() as connection:
+            existing = self._store.read(connection, specification.task_id)
+            if existing is not None:
+                if existing.specification != specification:
+                    raise BackendConflict(
+                        "task ID already has a different specification"
+                    )
+                return self._view(connection, existing)
+        calls = [
+            *specification.calls.values(),
+            *(r.call for r in specification.repairs.values()),
+        ]
+        if specification.finalization is not None:
+            calls.append(specification.finalization)
+        for call in calls:
+            self._validate(
+                ProcedureSubmitCommand(
+                    request_key="calibration-task-template:" + specification.task_id,
+                    definition=call.definition,
+                    intent=call.intent,
+                    samples=call.samples,
+                    source=specification.source,
+                )
+            )
         with self._sqlite.write_transaction() as connection:
             task = self._store.read(connection, specification.task_id)
             if task is not None:
@@ -82,12 +116,14 @@ class CalibrationTaskService:
             return self._store.list(connection, query)
 
     def dispatch(self, command: CalibrationTaskDispatch) -> CalibrationTaskView:
+        prepared = self._prepare(command.task_id, command.stage_id)
         with self._sqlite.write_transaction() as connection:
             task = self._read(connection, command.task_id)
             if command.stage_id not in task.specification.calls:
                 raise BackendConflict("task stage was not found")
             if command.stage_id in task.executions:
                 return self._view(connection, task)
+            self._require_prepared_task(task, prepared)
             if task.mode in {"paused", "cancelled", "finished"}:
                 raise BackendConflict(
                     f"task is {task.mode}; no new stages may be dispatched"
@@ -95,7 +131,7 @@ class CalibrationTaskService:
             progress = self._view(connection, task).progress
             if command.stage_id not in progress.ready:
                 raise BackendConflict("task stage prerequisites have not passed")
-            updated = self._admit(connection, task, command.stage_id)
+            updated = self._admit(connection, task, command.stage_id, prepared)
             self._store.update(connection, updated)
             return self._view(connection, updated)
 
@@ -136,8 +172,10 @@ class CalibrationTaskService:
 
     def advance(self, task_id: str) -> CalibrationTaskView:
         """Admit at most one stage; retain admission failures until explicit start."""
+        prepared = self._prepare(task_id)
         with self._sqlite.write_transaction() as connection:
             task = self._read(connection, task_id)
+            self._require_prepared_task(task, prepared)
             view = self._view(connection, task)
             if task.mode != "running":
                 return view
@@ -147,11 +185,7 @@ class CalibrationTaskService:
                 task = task.model_copy(update={"mode": "finished"})
                 self._store.update(connection, task)
                 return self._view(connection, task)
-            if any(
-                stage.state
-                in {"queued", "running", "waiting_for_input", "attention_required"}
-                for stage in view.progress.stages
-            ):
+            if self._has_active_stage(view):
                 return view
             reason = self._budget_reason(task)
             if reason is not None:
@@ -166,7 +200,7 @@ class CalibrationTaskService:
                     else:
                         connection.execute("SAVEPOINT task_finalization")
                         try:
-                            task = self._admit_finalization(connection, view)
+                            task = self._admit_finalization(connection, view, prepared)
                         except (BackendConflict, BackendNotFound) as error:
                             connection.execute("ROLLBACK TO task_finalization")
                             task = task.model_copy(
@@ -188,7 +222,7 @@ class CalibrationTaskService:
                         return self._stop(connection, task, reason)
                 connection.execute("SAVEPOINT task_stage")
                 try:
-                    updated = self._admit(connection, task, stage_id)
+                    updated = self._admit(connection, task, stage_id, prepared)
                 except (BackendConflict, BackendNotFound) as error:
                     connection.execute("ROLLBACK TO task_stage")
                     task = task.model_copy(
@@ -208,9 +242,9 @@ class CalibrationTaskService:
                     break
             return self._view(connection, task)
 
-    def _admit_finalization(
+    def _finalization_command(
         self, connection: sqlite3.Connection, view: CalibrationTaskView
-    ) -> CalibrationTaskRecord:
+    ) -> ProcedureSubmitCommand:
         task = view.task
         call = task.specification.finalization
         assert call is not None
@@ -237,28 +271,36 @@ class CalibrationTaskService:
         key = "calibration-task-finalization:" + sha256_json_hash(
             {"task": inputs.task_id}
         )
-        try:
-            run = self._automation.submit_in_transaction(
-                connection,
-                definition=call.definition,
-                intent={
-                    **call.intent,
-                    "calibration_task": inputs.model_dump(mode="json"),
-                },
-                samples=call.samples,
-                request_key=key,
-                require_new=True,
-            )
-        except (AutomationConflict, AutomationNotFound) as error:
-            raise BackendConflict(str(error)) from error
-        return task.model_copy(update={"finalization_run_id": run.procedure_run_id})
+        return ProcedureSubmitCommand(
+            definition=call.definition,
+            intent={**call.intent, "calibration_task": inputs.model_dump(mode="json")},
+            samples=call.samples,
+            request_key=key,
+            source=task.specification.source,
+        )
 
-    def _admit(
+    def _admit_finalization(
+        self,
+        connection: sqlite3.Connection,
+        view: CalibrationTaskView,
+        prepared: PreparedTaskAdmissions,
+    ) -> CalibrationTaskRecord:
+        command = self._finalization_command(connection, view)
+        run = self._submit(connection, command, prepared)
+        return view.task.model_copy(
+            update={"finalization_run_id": run.procedure_run_id}
+        )
+
+    def _stage_command(
         self,
         connection: sqlite3.Connection,
         task: CalibrationTaskRecord,
         stage_id: str,
-    ) -> CalibrationTaskRecord:
+    ) -> tuple[
+        ProcedureSubmitCommand,
+        CalibrationCheckRequest,
+        Literal["check", "repair", "verify"],
+    ]:
         call = task.specification.calls[stage_id]
         stage = next(
             item for item in task.specification.plan.stages if item.id == stage_id
@@ -344,17 +386,27 @@ class CalibrationTaskService:
         key = "calibration-task:" + sha256_json_hash(
             {"task": task.specification.task_id, "stage": stage_id, "phase": phase}
         )
-        try:
-            run = self._automation.submit_in_transaction(
-                connection,
+        return (
+            ProcedureSubmitCommand(
                 definition=call.definition,
                 intent=call.intent,
                 samples=call.samples,
                 request_key=key,
-                require_new=True,
-            )
-        except (AutomationConflict, AutomationNotFound) as error:
-            raise BackendConflict(str(error)) from error
+                source=task.specification.source,
+            ),
+            resolved,
+            phase,
+        )
+
+    def _admit(
+        self,
+        connection: sqlite3.Connection,
+        task: CalibrationTaskRecord,
+        stage_id: str,
+        prepared: PreparedTaskAdmissions,
+    ) -> CalibrationTaskRecord:
+        command, resolved, phase = self._stage_command(connection, task, stage_id)
+        run = self._submit(connection, command, prepared)
         return task.model_copy(
             update={
                 "attempts": {
@@ -376,6 +428,118 @@ class CalibrationTaskService:
                 },
             }
         )
+
+    @staticmethod
+    def _has_active_stage(view: CalibrationTaskView) -> bool:
+        return any(
+            stage.state
+            in {"queued", "running", "waiting_for_input", "attention_required"}
+            for stage in view.progress.stages
+        )
+
+    @staticmethod
+    def _require_prepared_task(
+        task: CalibrationTaskRecord,
+        prepared: PreparedTaskAdmissions,
+    ) -> None:
+        if task.specification.source is not None and task != prepared.task:
+            raise BackendConflict("task changed during retained validation")
+
+    def _validate(self, command: ProcedureSubmitCommand) -> None:
+        if command.source is None:
+            return
+        if self.validate_call is None:
+            raise BackendConflict("retained task validation is unavailable")
+        self.validate_call(command)
+
+    def _prepare(
+        self,
+        task_id: str,
+        stage_id: str | None = None,
+    ) -> PreparedTaskAdmissions:
+        # Resolve evidence under a read snapshot, then release it before waiting
+        # for authored validation. Admission reconstructs the exact command.
+        commands: list[ProcedureSubmitCommand] = []
+        with self._sqlite.read_transaction() as connection:
+            task = self._read(connection, task_id)
+            if task.specification.source is None:
+                return PreparedTaskAdmissions(task, {})
+            view = self._view(connection, task)
+            if stage_id is None and (
+                task.mode != "running"
+                or view.finalization is not None
+                or self._has_active_stage(view)
+                or self._budget_reason(task) is not None
+            ):
+                return PreparedTaskAdmissions(task, {})
+            if stage_id is not None:
+                stages = (
+                    [stage_id]
+                    if stage_id in view.progress.ready
+                    and stage_id not in task.executions
+                    else []
+                )
+            elif task.mode == "running":
+                stages = [
+                    key
+                    for key in view.progress.ready
+                    if key not in task.dispatch_errors
+                ]
+                if (
+                    view.progress.complete
+                    and view.progress.successful
+                    and task.specification.finalization is not None
+                    and task.finalization_run_id is None
+                    and task.finalization_error is None
+                ):
+                    # Rebuild under the write-side savepoint so the ordinary
+                    # finalization error is retained until explicit start.
+                    with suppress(BackendConflict, BackendNotFound):
+                        commands.append(self._finalization_command(connection, view))
+            else:
+                stages = []
+            for key in stages:
+                try:
+                    command, _, _ = self._stage_command(connection, task, key)
+                except BackendConflict, BackendNotFound:
+                    continue  # The write-side admission retains the ordinary error.
+                commands.append(command)
+        prepared: dict[str, ProcedureSubmitCommand | BackendConflict] = {}
+        for command in commands:
+            try:
+                self._validate(command)
+            except BackendConflict as error:
+                prepared[command.request_key] = error
+            else:
+                prepared[command.request_key] = command
+        return PreparedTaskAdmissions(task, prepared)
+
+    def _submit(
+        self,
+        connection: sqlite3.Connection,
+        command: ProcedureSubmitCommand,
+        prepared: PreparedTaskAdmissions,
+    ) -> ProcedureRun:
+        if command.source is not None:
+            validated = prepared.commands.get(command.request_key)
+            if isinstance(validated, BackendConflict):
+                raise validated
+            if validated != command:
+                raise BackendConflict(
+                    "task or evidence changed during retained validation"
+                )
+        try:
+            return self._automation.submit_in_transaction(
+                connection,
+                definition=command.definition,
+                intent=command.intent,
+                samples=command.samples,
+                request_key=command.request_key,
+                source=command.source,
+                require_new=True,
+            )
+        except (AutomationConflict, AutomationNotFound) as error:
+            raise BackendConflict(str(error)) from error
 
     def _read(
         self, connection: sqlite3.Connection, task_id: str

@@ -15,6 +15,7 @@ from scopecat.automation.models import (
     ProcedureDefinitionRef,
     ProcedureIntent,
     ProcedureRun,
+    ProcedureSource,
 )
 from scopecat.records.calibration_check import CalibrationCheckRequest
 from scopecat.records.sample import SampleSelector
@@ -49,8 +50,15 @@ class CalibrationStageAttempt(BaseModel):
 
 
 class CalibrationTaskCreate(BaseModel):
+    """One fixed source for every check, repair, verification and finalization.
+
+    Omitted source retains the explicit local procedure-worker path. A retained
+    source requires authored validation of templates and each resolved invocation.
+    """
+
     model_config = ConfigDict(extra="forbid", frozen=True)
     task_id: str = Field(min_length=1, max_length=200)
+    source: ProcedureSource | None = None
     plan: CalibrationTaskPlan
     calls: dict[str, CalibrationTaskCall]
     finalization: CalibrationTaskCall | None = None

@@ -3877,7 +3877,13 @@ export interface components {
             /** Task Id */
             task_id: string;
         };
-        /** CalibrationTaskCreate */
+        /**
+         * CalibrationTaskCreate
+         * @description One fixed source for every check, repair, verification and finalization.
+         *
+         *     Omitted source retains the explicit local procedure-worker path. A retained
+         *     source requires authored validation of templates and each resolved invocation.
+         */
         "CalibrationTaskCreate-Output": {
             /** Calls */
             calls: {
@@ -3890,6 +3896,7 @@ export interface components {
             repairs?: {
                 [key: string]: components["schemas"]["CalibrationStageRepair-Output"];
             };
+            source?: components["schemas"]["ProcedureSource"] | null;
             /** Task Id */
             task_id: string;
         };
