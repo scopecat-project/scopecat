@@ -90,3 +90,62 @@ def test_generated_material_matches_reviewed_source_and_cannot_overlay_edits(
     }
     with pytest.raises(FileExistsError):
         create_project(root, topic=topic)
+
+
+@pytest.mark.parametrize("topic", ["refresh", "compute"])
+def test_editing_verifier_follows_cell_ids_after_insertions(tmp_path: Path, topic: str):
+    from nbformat import read, v4, write
+
+    from lab_teaching.project import create_project
+    from lab_tools.verify_editing import REFRESH_EDIT, editing_notebook, reopen_cells
+
+    root = create_project(tmp_path / topic, topic=topic).parent
+    path = root / f"notebooks/{topic}.ipynb"
+    original = read(path, as_version=4)
+    original.cells.insert(0, v4.new_markdown_cell("An added introduction"))
+    original.cells.insert(7, v4.new_code_cell("learner_note = 'keep me'"))
+    write(original, path)
+    document = editing_notebook(root, topic)
+    originals = {cell.id: cell.source for cell in original.cells}
+    actual = {cell.id: cell.source for cell in document.cells}
+    if topic == "compute":
+        originals["compute-select"] = "number = session.run_number(mean)"
+        reopened = reopen_cells(root)
+        assert reopened[0] == originals["compute-1"]
+        assert reopened[1] == originals["compute-history"]
+        assert reopened[3] == reopened[5] == originals["compute-7"]
+    else:
+        target = next(i for i, c in enumerate(document.cells) if c.id == "refresh-5")
+        assert document.cells[target - 1].source == REFRESH_EDIT
+    assert {cell_id: actual[cell_id] for cell_id in originals} == originals
+    assert [c.id for c in document.cells if c.id in originals] == list(originals)
+
+
+@pytest.mark.parametrize(
+    ("topic", "cell_id", "reopen"),
+    [
+        ("refresh", "refresh-5", False),
+        ("compute", "compute-select", False),
+        ("compute", "compute-1", True),
+        ("compute", "compute-history", True),
+        ("compute", "compute-7", True),
+    ],
+)
+def test_editing_verifier_rejects_missing_cell_id(
+    tmp_path: Path, topic: str, cell_id: str, reopen: bool
+):
+    from nbformat import read, write
+
+    from lab_teaching.project import create_project
+    from lab_tools.verify_editing import editing_notebook, reopen_cells
+
+    root = create_project(tmp_path / topic, topic=topic).parent
+    path = root / f"notebooks/{topic}.ipynb"
+    document = read(path, as_version=4)
+    document.cells = [cell for cell in document.cells if cell.id != cell_id]
+    write(document, path)
+    with pytest.raises(ValueError, match=cell_id):
+        if reopen:
+            reopen_cells(root)
+        else:
+            editing_notebook(root, topic)

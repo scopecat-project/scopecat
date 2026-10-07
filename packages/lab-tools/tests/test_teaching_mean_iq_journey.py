@@ -115,3 +115,108 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
             np.testing.assert_array_equal([row.iq for row in raw_rows], shots)
     finally:
         stop_project(project)
+
+
+@pytest.mark.parametrize("topic", ["refresh", "compute", None])
+def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, topic):
+    from nbclient import NotebookClient
+    from nbformat import read, v4, write
+
+    from lab_tools.notebook import kernel_command
+    from lab_tools.verify_editing import (
+        REFRESH_REOPEN_CELLS,
+        editing_notebook,
+        lesson_path,
+        reopen_cells,
+    )
+
+    root = create_project(tmp_path / "修改 教材", topic=topic).parent
+    material = (
+        Path(__file__).resolve().parents[2]
+        / "lab-teaching/src/lab_teaching/course_material"
+    )
+    expected = {
+        "src/workspace_app.py": "lessons/workspace_app.py.txt",
+        **{
+            f"src/my_experiment/{name}.py": f"lessons/{name}.py.txt"
+            for name in ("parameters", "setup", "response")
+        },
+        "src/my_experiment/teaching.py": (
+            "lessons/compute_experiment.py.txt"
+            if topic == "compute"
+            else "lessons/experiment.py.txt"
+        ),
+        "src/my_experiment/result_types.py": "result_types.py",
+        "src/my_experiment/group_analysis.py": "group_analysis.py",
+    }
+    for generated, source in expected.items():
+        assert (root / generated).read_bytes() == (material / source).read_bytes(), (
+            f"Reinstall scopecat-lab-teaching: stale {generated}"
+        )
+    topics = ("refresh", "compute") if topic is None else (topic,)
+    for name in topics:
+        assert (
+            lesson_path(root, name).read_bytes()
+            == (material / f"lessons/{name}.ipynb").read_bytes()
+        )
+    if "refresh" in topics:
+        extra = (
+            (material / "lessons/experiment.py.txt")
+            .read_text()
+            .replace('id="teaching.rabi"', 'id="teaching.extra"')
+            .replace("def teaching_rabi(", "def extra_rabi(")
+        )
+        assert (root / "examples/extra.py").read_bytes() == extra.encode()
+    _, environment = kernel_command(root, source_path=False)
+    monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
+    project = sc.open_project(root)
+
+    def execute(name, document):
+        start_project(project, timeout=120)
+        try:
+            NotebookClient(
+                document,
+                timeout=120,
+                kernel_name="scopecat-lab",
+                resources={"metadata": {"path": str(root / "notebooks")}},
+            ).execute()
+        finally:
+            write(document, root / f"notebooks/verified-{name}.ipynb")
+            stop_project(project)
+
+    if topic is None:
+        from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
+        from lab_tools.verify_groups import lesson_path as groups_path
+        from lab_tools.verify_maintenance import ADD_ANALYSIS
+
+        groups = read(groups_path(root), as_version=4)
+        groups.cells.append(v4.new_code_cell(GROUP_CHECKS))
+        execute("groups", groups)
+    for name in topics:
+        if name == "compute" and topic is None:
+            (root / "src/my_experiment/teaching.py").write_bytes(
+                (material / "lessons/compute_experiment.py.txt").read_bytes()
+            )
+        execute(name, editing_notebook(root, name))
+        if name == "refresh":
+            execute(
+                "refresh-reopen",
+                v4.new_notebook(
+                    cells=[v4.new_code_cell(c) for c in REFRESH_REOPEN_CELLS]
+                ),
+            )
+    if "compute" in topics:
+        execute(
+            "editing-reopen",
+            v4.new_notebook(cells=[v4.new_code_cell(c) for c in reopen_cells(root)]),
+        )
+    if topic is None:
+        execute(
+            "maintenance",
+            v4.new_notebook(
+                cells=[
+                    v4.new_code_cell(c)
+                    for c in (*reopen_cells(root), *GROUP_REOPEN_CELLS, ADD_ANALYSIS)
+                ]
+            ),
+        )
