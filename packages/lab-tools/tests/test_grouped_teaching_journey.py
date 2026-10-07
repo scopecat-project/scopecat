@@ -30,7 +30,7 @@ def test_grouped_teaching_restart(tmp_path: Path, monkeypatch, notebook_imports,
             f"src/my_experiment/{name}.py": f"lessons/{template}.py.txt"
             for name, template in (
                 ("parameters", "parameters"),
-                ("setup", "setup"),
+                ("setup", "parameters_setup" if topic == "groups" else "setup"),
                 ("response", "response"),
                 ("teaching", "experiment"),
             )

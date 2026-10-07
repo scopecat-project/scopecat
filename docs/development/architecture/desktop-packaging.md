@@ -88,7 +88,7 @@ Current automated evidence has distinct boundaries:
   execution. That resolved defect is documented in the PR, not a current blocker.
 - `verify_teaching_delivery.py` checks offline installation, console/editor-task
   entry, wrong-kernel rejection and headless continuation.
-- `verify_parameters_journey.py` uses real browser/kernel execution and verifies
+- `verify_notebook_journey.py` uses real browser/kernel execution and verifies
   generated material identity, edits, restart and Continue without reacquisition.
   External editor/window activation is substituted; actual native editor use and
   unfamiliar-user comprehension remain separate observations in #616.

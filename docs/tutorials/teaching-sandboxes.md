@@ -45,21 +45,22 @@ file reclamation after an interruption. Record removal and file removal are
 reported separately. [Back up scientific records](../how-to/backup-and-restore.md)
 before deleting anything you intend to retain.
 
-## Parameters and scans in a Notebook
+## Learn with Notebooks
 
-In desktop **Help → Start parameters Notebook**, Scopecat creates an ordinary
+In desktop **Help → Learn with Notebooks**, select **Parameters and scans** or
+**Grouped analysis and history**, then choose **Start**. Scopecat creates an ordinary
 code folder and prepares its local Python kernel and registered execution
 environment. It uses a new folder under the application home by default; use
 **Choose another save location…** before starting if you prefer another parent.
 No source-registration or dependency forms are needed for the supplied lesson.
 
-Help opens `notebooks/parameters.ipynb` in VS Code. Install its Python and Jupyter
+Help opens the selected course’s Notebook in VS Code. Install its Python and Jupyter
 extensions and select the displayed `.venv` interpreter as the Notebook kernel.
 If the editor cannot open automatically, Help retains the exact folder, Notebook
 and interpreter paths so you can open them manually. If preparation fails, use
 **Retry preparation**; already-created files and edits are retained.
 
-Run the shipped cells in order: connect with `sc.notebook()`, open the lesson's
+For **Parameters and scans**, run the shipped cells in order: connect with `sc.notebook()`, open the lesson's
 independent parameter branch, preview seven points, then explicitly acquire
 64 shots per point. The separate result cell only reads the retained run and
 links to it in this application; you can repeat that cell without acquiring again.
@@ -89,8 +90,28 @@ This lesson is persistent ordinary author work, not the resettable peak practice
 scope above. The supplied source computes a synthetic response without devices;
 it has the ordinary author permissions, not a sandbox for arbitrary edited Python.
 Use normal Data cleanup for retained runs and keep or remove your source files
-separately. Other teaching topics remain maintainer material; this entry does not
+separately. The other five teaching topics remain maintainer material; this entry does not
 create a course manager, a separate application service or an embedded editor.
+
+## Grouped analysis and history
+
+Select **Grouped analysis and history** in Help, then **Start groups Notebook**.
+The same preparation flow opens `notebooks/groups.ipynb` in its own editable
+folder. Its `groups-…-setup` and `groups-…-parameters` names identify this course’s
+synthetic inputs in the shared application; the parameters course retains its
+separate `parameters-…` inputs. Existing course folders and edits are preserved.
+
+Connect, open the teaching parameters, and preview the 42-point scan. The next
+cell explicitly acquires two amplitude groups and publishes their frequency-curve
+analysis. `src/my_experiment/group_analysis.py` is editable. The result cell reads
+the saved analysis; it does not collect again or publish another analysis.
+Add an amplitude to explore three groups and 63 points in a new run.
+
+**Continue groups Notebook** reopens the same files. After restarting the kernel,
+run the connection cell, find the retained run and grouped analysis IDs in Runs
+(or the saved acquisition output), and follow the Notebook’s read-only example.
+Do not run all cells to reopen results. The application retains both courses’
+runs, while each course’s source and parameter edits remain independent.
 
 ## Notebook workspace and saved edits
 
