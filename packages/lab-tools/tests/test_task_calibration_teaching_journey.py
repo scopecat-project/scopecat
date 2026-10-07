@@ -49,7 +49,13 @@ def test_managed_task_calibration_shipped_kernel(tmp_path, monkeypatch):
     notebook.cells.insert(
         _cell_index(notebook.cells, "task-9"), v4.new_code_cell(_CHECKS_AND_SAVE)
     )
-    reopen = v4.new_notebook(cells=[v4.new_code_cell(_REOPEN)])
+    reopen = v4.new_notebook(
+        cells=[
+            v4.new_code_cell("import scopecat as sc\nsession = sc.notebook()"),
+            notebook.cells[_cell_index(notebook.cells, "task-history")],
+            v4.new_code_cell(_REOPEN),
+        ]
+    )
     try:
         start_project(application, timeout=120)
         for name, document in (("managed-task", notebook), ("reopened-task", reopen)):
@@ -230,8 +236,12 @@ import json
 from pathlib import Path
 import scopecat as sc
 
-session = sc.notebook()
 evidence = json.loads(Path("task-evidence.json").read_text())
+assert {item.specification.task_id for item in lesson_history} == {
+    saved["task"]["task_id"] for saved in evidence["tasks"].values()
+}
+assert all(IDENTITY in item.specification.task_id for item in lesson_history)
+assert session.setup.get(f"{IDENTITY}-setup")
 for case, saved in evidence["tasks"].items():
     task_id = saved["task"]["task_id"]
     view = session.calibration_tasks.get(task_id)

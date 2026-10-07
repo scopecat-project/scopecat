@@ -26,12 +26,13 @@ from nbclient import NotebookClient
 from nbformat import NotebookNode
 from playwright.sync_api import Page, expect, sync_playwright
 
+from lab_teaching.lessons import LessonTopic
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.desktop import DesktopAPI
 from lab_tools.desktop_session import DesktopSession
 from lab_tools.notebook import kernel_command
 from lab_tools.notebook_io import notebook_io
-from lab_tools.notebook_journey import LessonTopic, NotebookJourney, current
+from lab_tools.notebook_journey import NotebookJourney, current
 from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
 from scopecat.daemon.views import RunSummary, RunSummaryPage
 

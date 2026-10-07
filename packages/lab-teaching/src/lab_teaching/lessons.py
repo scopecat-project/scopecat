@@ -3,7 +3,18 @@
 import json
 from importlib.resources import files
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
+
+LessonTopic = Literal[
+    "parameters",
+    "groups",
+    "refresh",
+    "compute",
+    "calibration",
+    "joint-calibration",
+    "task-calibration",
+]
 
 TOPICS = {
     "parameters": "参数与扫描",
@@ -70,13 +81,12 @@ def install_lesson(root: Path, topic: str | None = None) -> Path:
         return root / "notebooks/start.ipynb"
     notebook = root / "notebooks" / f"{topic}.ipynb"
     _ = notebook.write_bytes(lesson.joinpath(f"{topic}.ipynb").read_bytes())
-    if topic in ("parameters", "groups"):
-        _ = (root / "src/my_experiment/setup.py").write_bytes(
-            lesson.joinpath("parameters_setup.py.txt").read_bytes()
-        )
-        _ = (root / "src/my_experiment/lesson_identity.py").write_text(
-            f'IDENTITY = "{topic}-{uuid4().hex}"\n', encoding="utf-8"
-        )
+    _ = (root / "src/my_experiment/setup.py").write_bytes(
+        lesson.joinpath("parameters_setup.py.txt").read_bytes()
+    )
+    _ = (root / "src/my_experiment/lesson_identity.py").write_text(
+        f'IDENTITY = "{topic}-{uuid4().hex}"\n', encoding="utf-8"
+    )
     if topic == "compute":
         _ = (root / "src/my_experiment/teaching.py").write_bytes(
             lesson.joinpath("compute_experiment.py.txt").read_bytes()
@@ -119,20 +129,12 @@ def install_lesson(root: Path, topic: str | None = None) -> Path:
             encoding="utf-8",
         )
     _ = (root / "README.md").write_text(
-        f"# {TOPICS[topic]}\n\n打开 [专题 Notebook](notebooks/{topic}.ipynb), "
-        "选择本项目 .venv 内核, 从头运行即可。无需其他课程的结果。\n\n"
-        "这是可重建的合成沙盒, 不连接设备。重复打开保留当前练习; "
-        "重置建立新的副本, 不必合并旧练习。需要留存时手动复制源码和 Notebook。\n",
+        f"# {TOPICS[topic]}\n\n从 Scopecat Help 开始或继续。"
+        f"打开 notebooks/{topic}.ipynb，"
+        "在外部编辑器选择此目录 .venv 内核。源码在 src/my_experiment。\n"
+        "运行与历史保存在同一应用中；继续不会自动采集，也不会覆盖文件或保存的参数。\n"
+        "这是普通、可编辑的作者目录。应用 Data 管理运行记录；"
+        "删除代码前自行保留修改。\n",
         encoding="utf-8",
     )
-    if topic in ("parameters", "groups"):
-        _ = (root / "README.md").write_text(
-            f"# {TOPICS[topic]}\n\n从 Scopecat Help 开始或继续。"
-            f"打开 notebooks/{topic}.ipynb，"
-            "在外部编辑器选择此目录 .venv 内核。源码在 src/my_experiment。\n"
-            "运行与历史保存在同一应用中；继续不会自动采集，也不会覆盖文件或保存的参数。\n"
-            "这是普通、可编辑的作者目录。应用 Data 管理运行记录；"
-            "删除代码前自行保留修改。\n",
-            encoding="utf-8",
-        )
     return notebook

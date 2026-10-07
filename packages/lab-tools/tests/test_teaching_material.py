@@ -15,6 +15,9 @@ def test_lesson_source_is_self_contained_and_never_starts_an_implicit_service(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic: str
 ) -> None:
     from IPython.core.interactiveshell import InteractiveShell
+    from IPython.utils.capture import capture_output
+
+    monkeypatch.setenv("IPYTHONDIR", str(tmp_path / "ipython"))
 
     monkeypatch.setattr(project, "environment_identity", dict)
     shell = InteractiveShell()
@@ -24,7 +27,9 @@ def test_lesson_source_is_self_contained_and_never_starts_an_implicit_service(
     notebook = json.loads((root / f"notebooks/{topic}.ipynb").read_text())
     first = next(cell for cell in notebook["cells"] if cell["cell_type"] == "code")
     monkeypatch.chdir(root / "notebooks")
-    result = shell.run_cell("".join(first["source"]))
+    # The missing endpoint is the expected contract, not a Notebook failure log.
+    with capture_output():
+        result = shell.run_cell("".join(first["source"]))
     assert isinstance(result.error_in_exec, DaemonEndpointError)
     assert "no daemon endpoint" in str(result.error_in_exec)
     assert not (root / ".scopecat/daemon.json").exists()

@@ -417,7 +417,17 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
     )
     notebook.cells.append(v4.new_code_cell(_MANAGED_CHECKS))
     notebook.cells.append(v4.new_code_cell(_SAVE_EVIDENCE))
-    reopen = v4.new_notebook(cells=[v4.new_code_cell(_REOPEN_CHECKS)])
+    history_id = {
+        "calibration": "calibration-history",
+        "joint-calibration": "joint-history",
+    }[topic]
+    reopen = v4.new_notebook(
+        cells=[
+            v4.new_code_cell("import scopecat as sc\nsession = sc.notebook()"),
+            notebook.cells[_cell_index(notebook.cells, history_id)],
+            v4.new_code_cell(_REOPEN_CHECKS),
+        ]
+    )
     try:
         start_project(application, timeout=120)
         for name, document in (("managed", notebook), ("reopened", reopen)):
@@ -612,8 +622,12 @@ import json
 from pathlib import Path
 import scopecat as sc
 
-session = sc.notebook()
 evidence = json.loads(Path("evidence.json").read_text())
+assert {evidence["request"], evidence["rejected"]} <= {
+    item.procedure_run_id for item in lesson_history
+}
+assert all(IDENTITY in item.request_key for item in lesson_history)
+assert session.setup.get(f"{IDENTITY}-setup")
 request = session.procedures.get(evidence["request"])
 assert request.snapshot.closure.status == "succeeded"
 assert request.snapshot.source.model_dump(mode="json") == evidence["source"]

@@ -204,8 +204,8 @@ ids = json.loads((project.root / "editing-runs.json").read_text(encoding="utf-8"
 # Stand in for choosing the previously noted exact number from displayed history.
 number = ids["number"]
 before_runs = {r.run_id for r in session.list_runs().items}
-assert "experiments" not in globals()
-assert "IQ" not in globals()
+for name in ("experiments", "IQ", "MeanRow", "mean", "raw", "params", "result_types"):
+    assert name not in globals(), name
 """
 
 REOPEN_CHECKS = """\

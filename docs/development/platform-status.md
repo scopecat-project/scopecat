@@ -20,14 +20,14 @@ establish an installed upgrade or human/device acceptance.
 | Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent-data baseline is designated |
 | Editing recovery | Application-owned Decision and parameter drafts, conflicts and explicit adoption | See [Decision drafts](architecture/decision-drafts.md), [parameter drafts](architecture/parameter-drafts.md) and [native acceptance](native-window-acceptance.md) for their distinct coverage. |
 | Configuration sharing | Inert inspection, atomic editable derivations and installed continuation | [Data exchange](architecture/data-exchange.md); broader structured authoring remains #502. |
-| Teaching | Same-application manual-peak practice and persistent Help parameters/groups continuation | Five other topics’ Help integration and actual editor/unfamiliar-user evidence remain #565/#616. |
+| Teaching | Same-application manual-peak practice and persistent Help continuation for the supplied Notebook topics | Course design and actual editor/unfamiliar-user evidence remain #565/#616. |
 
 ## Remaining work owners
 
 | Scope | Owner |
 | --- | --- |
 | Remaining reference/device/compiler retirement | [#773](https://github.com/scopecat-project/scopecat/issues/773), audit umbrella [#615](https://github.com/scopecat-project/scopecat/issues/615) |
-| Broader Notebook/application learning journey | [#565](https://github.com/scopecat-project/scopecat/issues/565); Help parameters/groups share ordinary-author preparation; remaining topics/consumers and native editor/human acceptance separate |
+| Broader Notebook/application learning journey | [#565](https://github.com/scopecat-project/scopecat/issues/565); supplied Help topics share ordinary-author preparation; remaining fixture consumers, teaching design and native editor/human acceptance separate |
 | First-use profiling and iteration cost | [#523](https://github.com/scopecat-project/scopecat/issues/523), [#520](https://github.com/scopecat-project/scopecat/issues/520) |
 | Historical Windows startup/endpoint failures | [#465](https://github.com/scopecat-project/scopecat/issues/465), [#553](https://github.com/scopecat-project/scopecat/issues/553); do not infer a fix from later success |
 | Finer observed dependency coverage | [#783](https://github.com/scopecat-project/scopecat/issues/783); unknown reads cannot prove physical independence |

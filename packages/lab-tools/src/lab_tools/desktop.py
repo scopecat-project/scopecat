@@ -15,6 +15,8 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from filelock import FileLock, Timeout
 
+from lab_teaching.lessons import LessonTopic
+
 from .application_runtime import ApplicationRuntime
 from .bundle import managed_path
 from .data_reset import UnsupportedDataSpace, reset_store
@@ -189,7 +191,7 @@ class DesktopAPI:
         return self._session.base_url
 
     def notebook_journey(
-        self, topic: Literal["parameters", "groups"] = "parameters"
+        self, topic: LessonTopic = "parameters"
     ) -> dict[str, object] | None:
         from .notebook_journey import current
 
@@ -199,16 +201,14 @@ class DesktopAPI:
     def prepare_notebook_journey(
         self,
         parent: str | None = None,
-        topic: Literal["parameters", "groups"] = "parameters",
+        topic: LessonTopic = "parameters",
     ) -> dict[str, object]:
         from .notebook_journey import prepare
 
         with self._session.operation():
             return prepare(self._runtime, parent, topic).view()
 
-    def open_lesson_notebook(
-        self, topic: Literal["parameters", "groups"] = "parameters"
-    ) -> None:
+    def open_lesson_notebook(self, topic: LessonTopic = "parameters") -> None:
         from .notebook_journey import current, open_editor
 
         with self._session.operation():
