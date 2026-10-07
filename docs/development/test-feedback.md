@@ -80,8 +80,8 @@ is the required PR gate. Performance improvements are tracked in
 [#520](https://github.com/scopecat-project/scopecat/issues/520).
 Every PR, merge-group, main push and explicit CI dispatch runs:
 
-- Linux Python `core` (all fast and integration files), with two pytest workers,
-  diagnostics and the pandas adapter check;
+- Linux Python `core` (all fast and integration files), split into two required
+  shards with two pytest workers each, diagnostics and one pandas adapter check;
 - Bounded macOS/Windows [platform smoke](platform-smoke.md);
 - Python typing, import boundaries, lint, formatting and generated instruments;
 - UI API generation, formatting, lint, unit tests, typing and production build;
@@ -116,6 +116,9 @@ trial. Record the exact scope and unresolved qualification in #616; it does not
 establish the full architecture milestone, a supported data baseline or release
 readiness. Platform artifacts contain the offline bundle, executed notebooks,
 acceptance report and retained lifecycle logs, including on failure.
+
+See [core feedback cost](ci-feedback-cost.md) for the two-shard measurements and
+runner-cost tradeoff.
 
 ## Choosing checks
 
