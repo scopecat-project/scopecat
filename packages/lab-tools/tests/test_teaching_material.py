@@ -149,3 +149,30 @@ def test_editing_verifier_rejects_missing_cell_id(
             reopen_cells(root)
         else:
             editing_notebook(root, topic)
+
+
+@pytest.mark.parametrize(
+    ("topic", "cell_id"),
+    [
+        ("calibration", "calibration-2"),
+        ("calibration", "calibration-5"),
+        ("joint-calibration", "joint-5"),
+    ],
+)
+def test_calibration_anchors_follow_ids_and_reject_missing_or_duplicate(
+    tmp_path: Path, topic: str, cell_id: str
+) -> None:
+    from lab_teaching.project import create_project
+    from lab_tools.verify_editing import _cell_index
+
+    root = create_project(tmp_path / topic, topic=topic).parent
+    cells = json.loads((root / f"notebooks/{topic}.ipynb").read_text())["cells"]
+    target = cells[_cell_index(cells, cell_id)]
+    cells.insert(0, {"id": "added-introduction", "source": ["A new introduction"]})
+    assert cells[_cell_index(cells, cell_id)] is target
+    cells.remove(target)
+    with pytest.raises(ValueError, match=f"{cell_id!r}; found 0"):
+        _cell_index(cells, cell_id)
+    cells.extend([target, dict(target)])
+    with pytest.raises(ValueError, match=f"{cell_id!r}; found 2"):
+        _cell_index(cells, cell_id)

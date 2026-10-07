@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
+import httpx2
 from pydantic import BaseModel
 
 from scopecat.application.launch import LaunchSubmission
 from scopecat.automation.definition import ProcedureDefinition
-from scopecat.automation.models import ProcedureRun, ProcedureSource
-from scopecat.automation.wire import ProcedureCancelCommand, ProcedureSubmitCommand
+from scopecat.automation.models import (
+    ProcedureRun,
+    ProcedureSource,
+    ProcedureStepOutputRef,
+)
+from scopecat.automation.wire import (
+    ProcedureCancelCommand,
+    ProcedureRunListQuery,
+    ProcedureRunPage,
+    ProcedureStepAttemptListQuery,
+    ProcedureStepAttemptPage,
+    ProcedureSubmitCommand,
+)
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.kernel.errors import SessionClosedError
@@ -57,6 +71,12 @@ class AuthorProcedureOperations:
             ),
             health.project_id,
             health.deployment_id,
+        )
+
+    def list(self, *, limit: int = 50, cursor: int | None = None) -> ProcedureRunPage:
+        """Read a bounded history page without loading source or starting work."""
+        return self.session.list_procedures(
+            ProcedureRunListQuery(limit=limit, cursor=cursor)
         )
 
     def get(self, procedure_id: str) -> AuthorProcedure:
@@ -115,6 +135,64 @@ class AuthorProcedure:
 
     def progress(self) -> ProcedureOperatorView:
         return self.session.procedure_progress(self.id)
+
+    def wait(self, *, timeout: float = 60, interval: float = 0.2) -> ProcedureRun:
+        """Observe until closed, waiting for input or requiring attention.
+
+        A failed scientific decision is a retained closure, not a client exception.
+        Timeout only stops waiting; it neither cancels nor retries the procedure.
+        """
+        if (
+            not isfinite(timeout)
+            or timeout < 0
+            or not isfinite(interval)
+            or interval <= 0
+        ):
+            raise ValueError(
+                "timeout must be finite and nonnegative; "
+                "interval must be finite and positive"
+            )
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                snapshot = self.session.get_procedure(
+                    self.id, timeout=max(0.001, deadline - time.monotonic())
+                )
+            except httpx2.TimeoutException as error:
+                raise TimeoutError("Wait ended; procedure was not cancelled") from error
+            if snapshot.closure is not None or snapshot.state in {
+                "waiting_for_input",
+                "attention_required",
+            }:
+                return snapshot
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Wait ended; procedure was not cancelled")
+            time.sleep(min(interval, remaining))
+
+    def steps(
+        self, *, limit: int = 50, cursor: int | None = None
+    ) -> ProcedureStepAttemptPage:
+        """Read one bounded page of retained step attempts."""
+        return self.session.list_procedure_step_attempts(
+            self.id, ProcedureStepAttemptListQuery(limit=limit, cursor=cursor)
+        )
+
+    def output(self, step_key: str) -> ProcedureStepOutputRef:
+        """Read a step's newest output; reject incomplete attempts without execution."""
+        cursor: int | None = None
+        while True:
+            page = self.steps(limit=200, cursor=cursor)
+            for attempt in page.items:
+                if attempt.step_key == step_key:
+                    if attempt.state != "succeeded" or attempt.output is None:
+                        raise RuntimeError(
+                            f"Step {step_key!r} has no successful output"
+                        )
+                    return attempt.output
+            if page.next_cursor is None:
+                raise KeyError(f"Procedure has no step {step_key!r}")
+            cursor = page.next_cursor
 
     def cancel(self, *, actor: str, reason: str) -> ProcedureRun:
         return self.session.cancel_procedure(

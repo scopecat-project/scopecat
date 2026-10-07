@@ -234,3 +234,24 @@ Standalone `verify` and `verify_maintenance` consume these shipped-cell checks w
 keeping the groups chain. These source-kernel checks do not establish fresh wheel
 installation, Help integration, native editor interaction, unfamiliar-user learning
 or physical-device acceptance.
+
+### Managed calibration lesson evidence
+
+`test_managed_calibration_shipped_kernel` executes the shipped calibration and
+joint-calibration notebooks in real ipykernels against one application data root
+and a separately registered author folder. It checks generated notebook/source
+bytes first. The learner cells keep `sc.notebook()` and use managed submissions.
+An external observer wraps the actual close call: it requires a leased procedure
+and running worker, closes the Notebook session, then observes completion through
+an independent read-only connection while the original session remains closed.
+This is distinct from the later application/kernel restart and history-only reopen,
+which must retain raw measurements, source/intent identity and branch results
+without new acquisitions. No source fingerprint or import check is bypassed.
+
+Scientific rejection, missing-target coverage, history completeness and publication
+assertions live outside the learner cells. The internal source-lifecycle regression
+retains the exact fit checkpoint and replay checks through `should_yield`; it does
+not introduce an ordinary-author pause or confirmation API. Task-calibration
+retains its existing separate journey pending its source-bound admission migration.
+These are source/software journeys, not installed-delivery, native editor, device
+or unfamiliar-user acceptance.

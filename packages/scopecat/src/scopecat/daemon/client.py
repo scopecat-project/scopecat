@@ -815,10 +815,13 @@ class DaemonClient:
             params={} if cursor is None else {"cursor": cursor},
         )
 
-    def get_procedure(self, procedure_run_id: str) -> ProcedureRun:
+    def get_procedure(
+        self, procedure_run_id: str, *, timeout: float | None = None
+    ) -> ProcedureRun:
         return self._get_model(
             f"{_API_PREFIX}/procedures/{quote(procedure_run_id, safe='')}",
             ProcedureRun,
+            timeout=timeout,
         )
 
     def list_runnable_procedures(
