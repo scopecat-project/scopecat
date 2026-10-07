@@ -1,11 +1,14 @@
 """Configuration sharing without runs; originals never become execution authority."""
 
+import asyncio
 import io
+import json
 import sqlite3
 from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from scopecat.daemon.wire import ParameterSaveCommand, SetupSaveCommand
 from scopecat.project import open_project
@@ -17,9 +20,12 @@ from scopecat.records.configuration_exchange import (
 )
 from scopecat_testkit.server.instruments import signal_endpoint
 from scopecat_testkit.workflow_fixtures import load_config
+from starlette.types import Message
 
 from scopecat_server import LocalDaemonRuntime
+from scopecat_server.http.configuration_exchange import MAX_DERIVE_REQUEST_BYTES
 from scopecat_server.scaffold import write_author_scaffold
+from scopecat_server.services.configuration_exchange import MAX_EXCHANGE_BYTES
 
 ROOT = "/api/v1/configuration-exchange"
 
@@ -37,6 +43,180 @@ def seed(runtime: LocalDaemonRuntime) -> ConfigurationExchange:
     return runtime.application.configuration_exchange.export(
         ConfigurationExport(parameter_revision="starting-values", label="Signal inputs")
     )
+
+
+def test_derive_accepts_full_document_and_request_budgets(tmp_path: Path) -> None:
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        document = seed(runtime).model_copy(update={"origin_store": ""})
+        document = document.model_copy(
+            update={
+                "origin_store": "s"
+                * (MAX_EXCHANGE_BYTES - len(document.model_dump_json().encode()))
+            }
+        )
+        assert len(document.model_dump_json().encode()) == MAX_EXCHANGE_BYTES
+        command = ConfigurationDerive(
+            document=document, operation_id="boundary", name="Boundary", actor="接收者"
+        )
+        payload = command.model_dump_json().encode()
+        assert MAX_EXCHANGE_BYTES < len(payload) < MAX_DERIVE_REQUEST_BYTES
+        payload += b" " * (MAX_DERIVE_REQUEST_BYTES - len(payload))
+        response = client.post(
+            ROOT + "/derive",
+            content=payload,
+            headers={"content-type": "application/json"},
+        )
+        assert response.status_code == 200, response.text
+        assert (
+            runtime.application.configuration_exchange.read(
+                document.content_hash
+            ).document
+            == document
+        )
+        assert (
+            client.post(ROOT + "/derive", json=command.model_dump(mode="json")).json()
+            == response.json()
+        )
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [],
+        [(b"transfer-encoding", b"chunked")],
+        [(b"content-length", b"1")],
+        [(b"content-length", str(MAX_DERIVE_REQUEST_BYTES + 1).encode())],
+    ],
+    ids=["no-length", "chunked", "false-length", "actual-length"],
+)
+def test_derive_oversize_stream_stops_before_parsing_or_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, headers: list[tuple[bytes, bytes]]
+) -> None:
+    with LocalDaemonRuntime(tmp_path) as runtime:
+        service = runtime.application.configuration_exchange
+
+        async def unexpected_json(_request: Request) -> object:
+            pytest.fail("Oversized input reached JSON parsing")
+
+        def unexpected_derive(_command: ConfigurationDerive) -> None:
+            pytest.fail("Oversized input reached the service")
+
+        monkeypatch.setattr(Request, "json", unexpected_json)
+        monkeypatch.setattr(service, "derive", unexpected_derive)
+        received = 0
+        sent: list[Message] = []
+
+        async def receive() -> Message:
+            nonlocal received
+            received += 1
+            # Whitespace crosses the budget before even invalid JSON is parsed.
+            # A further unread tail proves we stop consuming on the first excess.
+            assert received <= 33, "Read beyond the first oversized chunk"
+            return {
+                "type": "http.request",
+                "body": b" " * (1024 * 1024) if received <= 32 else b" ",
+                "more_body": True,
+            }
+
+        async def send(message: Message) -> None:
+            sent.append(message)
+
+        asyncio.run(
+            runtime.app()(
+                {
+                    "type": "http",
+                    "asgi": {"version": "3.0"},
+                    "http_version": "1.1",
+                    "method": "POST",
+                    "scheme": "http",
+                    "path": ROOT + "/derive",
+                    "raw_path": (ROOT + "/derive").encode(),
+                    "query_string": b"",
+                    "root_path": "",
+                    "headers": [
+                        (b"host", b"testserver"),
+                        (b"content-type", b"application/json"),
+                        *headers,
+                    ],
+                    "client": ("testclient", 50000),
+                    "server": ("testserver", 80),
+                },
+                receive,
+                send,
+            )
+        )
+        assert received == 33
+        assert sent[0]["status"] == 413
+        assert json.loads(sent[1]["body"])["detail"] == (
+            "Configuration derive request exceeds the 32 MiB limit"
+        )
+        with service._store.sqlite.read_transaction() as connection:
+            counts = connection.execute(
+                "SELECT COUNT(*) FROM configuration_imports UNION ALL "
+                "SELECT COUNT(*) FROM configuration_derivations UNION ALL "
+                "SELECT COUNT(*) FROM parameter_revisions UNION ALL "
+                "SELECT COUNT(*) FROM parameter_branch_commits UNION ALL "
+                "SELECT COUNT(*) FROM setup_definitions UNION ALL "
+                "SELECT COUNT(*) FROM setup_revisions"
+            ).fetchall()
+            assert [row[0] for row in counts] == [0] * 6
+
+
+@pytest.mark.parametrize(
+    ("payload", "error_type", "location"),
+    [(b"{", "json_invalid", ["body", 1]), (b"{}", "missing", ["body", "document"])],
+)
+def test_derive_preserves_fastapi_validation(
+    tmp_path: Path, payload: bytes, error_type: str, location: list[str | int]
+) -> None:
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        response = client.post(
+            ROOT + "/derive",
+            content=payload,
+            headers={"content-type": "application/json"},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["type"] == error_type
+        assert response.json()["detail"][0]["loc"] == location
+        schema = client.get("/openapi.json").json()
+        operation = schema["paths"][ROOT + "/derive"]["post"]
+        assert operation["requestBody"] == {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ConfigurationDerive"}
+                }
+            },
+        }
+        assert "422" in operation["responses"]
+        assert runtime.application.configuration_exchange.list() == ()
+
+
+def test_derive_retains_independent_document_limit(tmp_path: Path) -> None:
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        document = seed(runtime).model_copy(
+            update={"origin_store": "s" * MAX_EXCHANGE_BYTES}
+        )
+        command = ConfigurationDerive(
+            document=document,
+            operation_id="oversize-document",
+            name="Too big",
+            actor="receiver",
+        )
+        payload = command.model_dump_json().encode()
+        assert len(payload) < MAX_DERIVE_REQUEST_BYTES
+        response = client.post(
+            ROOT + "/derive",
+            content=payload,
+            headers={"content-type": "application/json"},
+        )
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]
+            == "Configuration exchange exceeds the 16 MiB limit"
+        )
+        assert runtime.application.configuration_exchange.list() == ()
+        assert len(runtime.application.config.parameter_revisions()) == 1
 
 
 def test_no_run_export_inspect_cancel_derive_edit_and_reopen(tmp_path: Path) -> None:
