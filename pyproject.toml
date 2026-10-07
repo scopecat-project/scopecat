@@ -452,6 +452,7 @@ integration_paths = [
   "packages/lab-tools/tests/test_desktop_install.py",
   "packages/lab-tools/tests/test_desktop_files.py",
   "packages/lab-tools/tests/test_author_notebook.py",
+  "packages/lab-tools/tests/test_notebook_managed_procedure.py",
   "packages/lab-tools/tests/test_calibration_smoke.py",
   "packages/lab-tools/tests/test_delivery_recipe.py",
   "packages/lab-tools/tests/test_entry.py",

@@ -36,7 +36,8 @@ HTTP author operations require their source identity. Python sessions use
 `project.authoring()` from a registered directory, or pass `workspace_id` explicitly
 to `AuthorProject(url, workspace_id=...)`. Basic history/data clients need no source.
 
-Ordinary procedures submitted through `project.connect()` retain a `ProcedureSource`
+Managed ordinary procedures prepared through `session.procedures.prepare()`
+on `sc.notebook()` or `project.authoring()` retain a `ProcedureSource`
 beside their scientific intent: the registered workspace and admitted code revision.
 Continuing after human input or restarting the application restores that exact
 source and its execution Python. Procedure authors do not add deployment identities
@@ -164,9 +165,9 @@ Full installed/Windows and interactive-kernel qualification remains in closeout.
 | Existing data/deployment authority | One data writer, selected driver backend, device claims and fencing | Registration does not replace the backend, active scientific configuration or another workspace |
 | Page/kernel session | Selected workspace plus existing scientific context | Refresh defaults are local; prepared work retains exact source and scientific references |
 
-Registered workspaces share the daemon's qualified Python environment. Their
-scientific helpers, compiler factories and module names may differ and run in
-separate revision workers. All declared source roots are captured and validated;
+Registered workspaces select qualified execution Python independently of the
+application environment. Their scientific helpers, compiler factories and module
+names may differ and run in separate revision workers. All declared source roots are captured and validated;
 dependencies must already be available. A refresh rereads the source manifest,
 so newly declared roots join the next snapshot. Existing tasks and saved plans
 retain their original source revision. Updating the physical driver worker is an
@@ -251,8 +252,10 @@ locations must be rebound before execution after restore.
 
 Own changes to this vertical chain in one coordinated worktree;
 coordinate edits to launch/source records, transport and schema with the target
-and application-host owners. The host registry work can proceed independently;
-it registers a deployment, not an author workspace inside that deployment.
+and application-host owners. Application deployment registration and author
+registration are separate:
+the desktop owns its data/service environment, while each author workspace owns
+its qualified execution environment.
 
 The focused exit journey uses two actual kernels/workspaces with the same package
 name and one qualified composition. It checks independent catalogs and refresh

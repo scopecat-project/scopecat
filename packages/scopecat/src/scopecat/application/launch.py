@@ -17,6 +17,7 @@ from pydantic import (
 from scopecat.application.controls import LaunchControl, LaunchControlValue
 from scopecat.application.inspection import LaunchInspection
 from scopecat.automation.interpretations import InterpretationRequest
+from scopecat.daemon.procedure_views import LaunchSubmission as LaunchSubmission
 from scopecat.kernel.problems import Problem
 from scopecat.planning.preflight import PreflightSummary
 from scopecat.records.author_revision import AuthorRevisionRef
@@ -116,14 +117,6 @@ class LaunchPreview(BaseModel):
     summary: str
     resolved_inputs: dict[str, JsonValue] = Field(default_factory=dict)
     controls: tuple[LaunchControlValue, ...] = ()
-
-
-class LaunchSubmission(BaseModel):
-    """Durable procedure identity; existing steps retain its output references."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    procedure_id: str
-    dispatch_error: str | None = None
 
 
 type LaunchResult = LaunchCatalog | LaunchPreview | LaunchSubmission

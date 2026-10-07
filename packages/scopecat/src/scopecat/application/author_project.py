@@ -113,6 +113,7 @@ from scopecat.records.setup import SetupRevision, SetupRevisionRef
 from scopecat.records.target_catalog import TargetRevisionRef
 
 if TYPE_CHECKING:
+    from scopecat.application.author_procedures import AuthorProcedureOperations
     from scopecat.application.live_experiment import LiveExperiment
     from scopecat.application.run_history import RunHistory
 
@@ -345,6 +346,13 @@ class AuthorProject(DaemonClient):
                 ),
             )
         return selected
+
+    @property
+    def procedures(self) -> AuthorProcedureOperations:
+        """Prepare and submit ordinary procedures to application-owned workers."""
+        from scopecat.application.author_procedures import AuthorProcedureOperations
+
+        return AuthorProcedureOperations(self, self.project_root)
 
     @property
     def apparatus(self) -> LabApparatusOperations:

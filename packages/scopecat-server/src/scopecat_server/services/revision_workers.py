@@ -19,7 +19,11 @@ import psutil
 from scopecat.records.author_revision import AuthorRevisionRef, AuthorRevisionState
 from scopecat.records.launch_request import LaunchRequest
 
-from scopecat_server.retained_request import AnalysisCall, ComparisonCall
+from scopecat_server.retained_request import (
+    AnalysisCall,
+    ComparisonCall,
+    ProcedureValidationCall,
+)
 from scopecat_server.validation_process import terminate_validation_process_tree
 from scopecat_server.worker_diagnostics import diagnostic_excerpt
 
@@ -97,7 +101,10 @@ class _Worker:
 
     def call(
         self,
-        command: LaunchRequest | AnalysisCall | ComparisonCall,
+        command: LaunchRequest
+        | AnalysisCall
+        | ComparisonCall
+        | ProcedureValidationCall,
         timeout: float,
         cancelled: threading.Event | None = None,
     ) -> subprocess.CompletedProcess[str]:
@@ -294,7 +301,10 @@ class RevisionWorkers:
     def call(
         self,
         binding: AuthorWorkerBinding,
-        command: LaunchRequest | AnalysisCall | ComparisonCall,
+        command: LaunchRequest
+        | AnalysisCall
+        | ComparisonCall
+        | ProcedureValidationCall,
         *,
         timeout: float = 60,
         cancelled: threading.Event | None = None,

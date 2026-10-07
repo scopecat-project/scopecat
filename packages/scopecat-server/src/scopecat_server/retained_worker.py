@@ -13,11 +13,17 @@ from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
+from scopecat.kernel.content_identity import canonical_json
+from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.author_revision import AuthorRevisionRef
 
 from scopecat_server.author_worker import analyze, revision_project
 from scopecat_server.comparison_worker import compare
-from scopecat_server.retained_request import AnalysisCall, RetainedRequest
+from scopecat_server.retained_request import (
+    AnalysisCall,
+    ProcedureValidationCall,
+    RetainedRequest,
+)
 from scopecat_server.worker_diagnostics import report_stage, report_validation_error
 
 
@@ -48,6 +54,17 @@ def main() -> None:
             if isinstance(call, AnalysisCall):
                 report_stage("retained analysis")
                 result = analyze(project, application, call.request)
+            elif isinstance(call, ProcedureValidationCall):
+                report_stage("procedure definition validation")
+                definition = application.procedures.resolve(call.request.definition)
+                intent = thaw_json_value(call.request.intent)
+                if canonical_json(definition.encode_intent(intent)) != canonical_json(
+                    intent
+                ):
+                    raise ValueError(
+                        "procedure intent is not canonical for retained source"
+                    )
+                result = call.request
             else:
                 report_stage("retained comparison")
                 result = compare(application, root, call.request)

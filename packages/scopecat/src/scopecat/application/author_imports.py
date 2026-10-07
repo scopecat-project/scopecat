@@ -243,6 +243,43 @@ def select_notebook_experiment[**P, T](
     return cast("Experiment[P, T]", value)
 
 
+def require_procedure_source(
+    definition: object, *, project_root: Path, revision: AuthorRevisionRef
+) -> None:
+    """Require a current retained declaration without replacing any imports."""
+    from scopecat.automation.definition import ProcedureDefinition
+
+    if not isinstance(definition, ProcedureDefinition):
+        raise TypeError(
+            "managed procedures require an importable @procedure definition"
+        )
+    function = definition.__wrapped__
+    finder = next(
+        (
+            item
+            for item in sys.meta_path
+            if isinstance(item, _RevisionImports)
+            and item.project_root == project_root
+            and item.owns(function.__module__)
+        ),
+        None,
+    )
+    if finder is None or finder.revision != revision:
+        raise ValueError(
+            "Procedure imports do not match current source; explicitly refresh "
+            "the session and reimport the definition and intent."
+        )
+    value: object = sys.modules.get(function.__module__)
+    for part in function.__qualname__.split("."):
+        value = getattr(value, part, None)
+    if value is not definition or not Path(
+        inspect.getfile(function)
+    ).resolve().is_relative_to(finder.archive):
+        raise ValueError(
+            "Stale procedure definition; reimport it from the current session source"
+        )
+
+
 def notebook_imports_selected(root: Path, revision: AuthorRevisionRef) -> bool:
     """Historical analysis may have temporarily selected another import revision."""
     return any(

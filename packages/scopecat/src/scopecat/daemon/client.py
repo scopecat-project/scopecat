@@ -113,7 +113,7 @@ from scopecat.daemon.preparation import (
     AuthorPreparationOperation,
     AuthorPreparationSubmissionUncertain,
 )
-from scopecat.daemon.procedure_views import ProcedureOperatorView
+from scopecat.daemon.procedure_views import LaunchSubmission, ProcedureOperatorView
 from scopecat.daemon.reviews import (
     ReviewCompileCommand,
     ReviewCompileReceipt,
@@ -648,6 +648,21 @@ class DaemonClient:
             params={"worker_id": worker_id},
         )
         return ReviewSessionCloseReceipt.model_validate_json(response.content)
+
+    def submit_author_procedure(
+        self, command: ProcedureSubmitCommand
+    ) -> LaunchSubmission:
+        """Validate retained ordinary source, admit once and dispatch server work."""
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/author-procedures/submit", command, LaunchSubmission
+        )
+
+    def dispatch_project_procedure(self, procedure_run_id: str) -> LaunchSubmission:
+        """Explicitly continue ready work in an application-owned worker."""
+        response = self._request(
+            "POST", self._procedure_path(procedure_run_id, "dispatch")
+        )
+        return LaunchSubmission.model_validate_json(response.content)
 
     def submit_procedure(
         self,
