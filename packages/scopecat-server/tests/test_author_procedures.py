@@ -24,14 +24,13 @@ from scopecat_testkit.project_loading import isolated_project_imports
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
 
 _SOURCE = """\
-from pathlib import Path
-from filelock import FileLock
+import time
 from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.automation import procedure
-from scopecat_lab.helper import LABEL, DISCONNECT_GATE
+from scopecat_lab.helper import LABEL
 
 class Intent(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -45,10 +44,7 @@ class Answer:
 
 @procedure(id="ordinary", version="1", intent=Intent)
 def ordinary(context: LabProcedureContext, intent: Intent) -> None:
-    gate = Path(DISCONNECT_GATE)
-    gate.with_suffix(".entered").touch()
-    with FileLock(gate, timeout=60):
-        pass
+    time.sleep(2)
     context.interpret(
         "confirm",
         title=intent.label,
@@ -78,10 +74,21 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
         + '\n[lab.capabilities]\nprocedures = ["scopecat_lab.workflow:ordinary"]\n'
     )
     source = project.root / "src/scopecat_lab/workflow.py"
-    source.write_text(_SOURCE)
-    helper = source.with_name("helper.py")
     gate = tmp_path / "disconnect.lock"
-    helper.write_text(f'LABEL = "original source"\nDISCONNECT_GATE = {str(gate)!r}\n')
+    # The calibration-task test also consumes _SOURCE. Keep this handshake local
+    # to the case that owns the gate instead of changing that shared fixture.
+    procedure_source = _SOURCE.replace(
+        "    time.sleep(2)\n",
+        "    from pathlib import Path\n"
+        "    from filelock import FileLock\n"
+        f"    gate = Path({str(gate)!r})\n"
+        '    gate.with_suffix(".entered").touch()\n'
+        "    with FileLock(gate, timeout=60):\n"
+        "        pass\n",
+    )
+    source.write_text(procedure_source)
+    helper = source.with_name("helper.py")
+    helper.write_text('LABEL = "original source"\n')
     start_project(project, timeout=60)
     try:
         with isolated_project_imports(), project.authoring() as author:
@@ -110,7 +117,7 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                     helper.read_text().replace("original source", "changed source")
                 )
                 source.write_text(
-                    _SOURCE.replace(
+                    procedure_source.replace(
                         "title=intent.label,", 'title=intent.label + " new",'
                     )
                 )
