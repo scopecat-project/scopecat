@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import assert_type, cast
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 import scopecat as sc
 from scopecat.compiler.bind import bind_program
@@ -18,6 +19,7 @@ from scopecat.execution.local.program import ApplyStateOperation
 from scopecat.execution.program import RunCoverageEffect, RunDomainJob
 from scopecat.inspection import CompiledProgramInspectionQuery
 from scopecat.kernel.errors import CheckFailed
+from scopecat.measurements.results import MeasurementArray
 from scopecat.planning.compilation import compile_run_program
 from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
 from scopecat.records.config import ConfigProfileSnapshot
@@ -54,6 +56,15 @@ from reference_lab.targets.list_mode import (
     MappedListModeTarget,
     configured_list_mode_target,
     point_realization_fingerprint,
+)
+from reference_lab.targets.list_mode.circuit_runtime import (
+    correlate_list_mode_run,
+    realize_measurements,
+)
+from reference_lab.targets.list_mode.execution_model import (
+    DigitizerResultBatch,
+    DigitizerResultChunk,
+    ListModeRun,
 )
 from reference_lab.virtual_lab.execution import virtual_quantum_job_runtime
 from reference_lab.workflows.drag_beta_calibration import (
@@ -332,14 +343,6 @@ def test_topology_selection_retains_entities_through_compilation_and_results(
     assert iq_shots.shape == (1, len(expected_entities), 7)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "#773: grouped acquisitions use target order instead of the topology-selected "
-        "product entity order; see reference-gallery-retirement.md"
-    ),
-)
 def test_topology_result_rows_match_the_product_entity_order() -> None:
     config = bootstrap_config()
     provider = ReferenceLabProvider(seed=7)
@@ -367,6 +370,49 @@ def test_topology_result_rows_match_the_product_entity_order() -> None:
     assert tuple(
         address.slot_id.scope for address in result.result_address.acquisitions
     ) == tuple(("targets", entity.id) for entity in entities)
+
+    # Raw target rows may arrive in any address order. Distinct values and
+    # missing shots must follow their entity identities through correlation.
+    addresses = tuple(reversed(mapped.acquisition_addresses))
+    truth = {"q0": 10.0, "q1": 20.0, "q2": 30.0}
+    missing_shot = {"q0": 1, "q1": 2, "q2": 3}
+    raw_values = np.asarray(
+        [
+            [truth[address.slot_id.scope[-1]] + shot for shot in range(7)]
+            for address in addresses
+        ],
+        dtype=np.complex128,
+    )
+    raw_available = np.asarray(
+        [
+            [shot != missing_shot[address.slot_id.scope[-1]] for shot in range(7)]
+            for address in addresses
+        ],
+        dtype=np.bool_,
+    )
+    raw = DigitizerResultBatch(
+        addresses=addresses,
+        shot_count=7,
+        chunks=(DigitizerResultChunk(0, raw_values, raw_available),),
+    )
+    [realized] = realize_measurements(
+        correlate_list_mode_run(
+            mapped, ListModeRun(raw, mapped.artifact, "entity-order-regression")
+        )
+    )
+    value = realized.value
+    assert isinstance(value, MeasurementArray)
+    assert value.availability is not None
+    rows = cast("list[list[complex]]", value.values.tolist())
+    availability = cast("list[list[bool]]", value.availability.valid.tolist())
+    for row, entity in enumerate(entities):
+        assert rows[row] == [
+            0 if shot == missing_shot[entity.id] else truth[entity.id] + shot
+            for shot in range(7)
+        ]
+        assert availability[row] == [
+            shot != missing_shot[entity.id] for shot in range(7)
+        ]
 
 
 def _logical_measurement_values(
