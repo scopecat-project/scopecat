@@ -210,7 +210,8 @@ experiment defaults are not implicitly applied.
 Retain `prepared` (or its serialized `command`) before submission. After an
 uncertain response, retry that exact command with the same request key; a changed
 command must not reuse the key. `prepared.reconnect(session).submit()` preserves
-its original source and identity. The application validates the exact registered
+its original source and identity, and rejects a different data-store or deployment
+identity even if its workspace ID matches. The application validates the exact registered
 definition and canonical intent in the retained revision, then owns dispatch.
 Closing the client or kernel leaves the managed task with the application.
 

@@ -44,6 +44,7 @@ class AuthorProcedureOperations:
             raise ValueError("Use project.authoring() or sc.notebook()")
         revision = self.session.current_author_source()
         require_procedure_source(definition, project_root=root, revision=revision)
+        health = self.session.health()
         return PreparedAuthorProcedure(
             self.session,
             ProcedureSubmitCommand(
@@ -54,6 +55,8 @@ class AuthorProcedureOperations:
                     workspace_id=self.session.workspace_id, code_revision=revision
                 ),
             ),
+            health.project_id,
+            health.deployment_id,
         )
 
     def get(self, procedure_id: str) -> AuthorProcedure:
@@ -66,6 +69,8 @@ class AuthorProcedureOperations:
 class PreparedAuthorProcedure:
     session: DaemonClient
     command: ProcedureSubmitCommand
+    project_id: str
+    deployment_id: str
 
     def submit(self) -> AuthorProcedure:
         """Retry this exact command after an uncertain response; retain its key.
@@ -74,6 +79,7 @@ class PreparedAuthorProcedure:
         then owns dispatch. This object and its command remain pinned even when
         source files change. No procedure code executes in this client.
         """
+        self._require_application(self.session)
         result = self.session.submit_author_procedure(self.command)
         return AuthorProcedure(self.session, result.procedure_id, result.dispatch_error)
 
@@ -81,7 +87,20 @@ class PreparedAuthorProcedure:
         assert self.command.source is not None
         if session.workspace_id != self.command.source.workspace_id:
             raise ValueError("Prepared procedure belongs to another workspace")
-        return PreparedAuthorProcedure(session, self.command)
+        self._require_application(session)
+        return PreparedAuthorProcedure(
+            session, self.command, self.project_id, self.deployment_id
+        )
+
+    def _require_application(self, session: DaemonClient) -> None:
+        health = session.health()
+        if (health.project_id, health.deployment_id) != (
+            self.project_id,
+            self.deployment_id,
+        ):
+            raise ValueError(
+                "Prepared procedure belongs to another data store or deployment"
+            )
 
 
 @dataclass(frozen=True, slots=True)
