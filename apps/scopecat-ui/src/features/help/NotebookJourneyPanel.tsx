@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { type LessonTopic, useDesktopAvailable } from "../application/DesktopSession";
+import { navigate, navigateLink, useLocationUrl } from "../../lib/navigation";
 import { primaryButton, secondaryButton } from "../../ui/styles";
 
 const lessons: Record<LessonTopic, { title: string; description: string }> = {
@@ -44,7 +45,12 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
   const desktop = useDesktopAvailable();
   const native = desktop ? window.pywebview?.api : undefined;
   const client = useQueryClient();
-  const [topic, setTopic] = useState<LessonTopic>("parameters");
+  const location = useLocationUrl();
+  const selectedTopic = location.searchParams.get("lesson");
+  const topic: LessonTopic =
+    selectedTopic && Object.hasOwn(lessons, selectedTopic)
+      ? (selectedTopic as LessonTopic)
+      : "parameters";
   const [parent, setParent] = useState<string>();
   const status = useQuery({
     queryKey: ["notebook-journey", topic],
@@ -83,7 +89,9 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
           value={topic}
           disabled={busy}
           onChange={(event) => {
-            setTopic(event.target.value as LessonTopic);
+            const next = new URL(window.location.href);
+            next.searchParams.set("lesson", event.target.value);
+            navigate(next, { replace: true });
             setParent(undefined);
             prepare.reset();
             open.reset();
@@ -108,6 +116,11 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
         acquisition, procedure, or task cells starts new work. To read existing results after a
         restart, use the Notebook’s history section.
       </p>
+      <p>
+        Return to this course in Help to continue its existing folder. Closing the Notebook or
+        application keeps saved files and results; save editor changes before closing. After a
+        kernel restart, run the connection and history cells, not Run All.
+      </p>
       {!native ? (
         <p>Open Help in the Scopecat desktop application to prepare this Notebook.</p>
       ) : (
@@ -129,13 +142,13 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
                     ? "Retry preparation"
                     : `Start ${topic} Notebook`}
             </button>
-            {!journey && (
+            {!journey && status.isSuccess && (
               <button className={secondaryButton} disabled={busy} onClick={() => choose.mutate()}>
                 Choose another save location…
               </button>
             )}
           </div>
-          {!journey && (
+          {!journey && status.isSuccess && (
             <p>
               {parent
                 ? `Save in: ${parent}`
@@ -148,11 +161,21 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
         <p role="status">
           {prepare.isPending
             ? "Preparing code and Python; this may take a few minutes. No measurements are running."
-            : "Opening editor…"}
+            : choose.isPending
+              ? "Choosing save location…"
+              : "Opening editor…"}
         </p>
+      )}
+      {open.isSuccess && !busy && (
+        <p role="status">Editor open requested. Select the displayed Python kernel in VS Code.</p>
       )}
       {journey && (
         <div className="grid gap-1 break-all">
+          <p>
+            {journey.ready
+              ? "Preparation saved. Continue checks this folder and opens its Notebook."
+              : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
+          </p>
           <p>
             Code folder: <code>{journey.directory}</code>
           </p>
@@ -164,12 +187,33 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
           </p>
           <p>
             Continue preserves edited files and saved parameters. Use{" "}
-            <a className="underline" href="#runs">
+            <a className="underline" href="#runs" onClick={navigateLink}>
               Runs
             </a>{" "}
             to reopen a result without collecting again. Manage retained runs in Data; keep your
             edited files when removing records.
           </p>
+          {journey.ready && (
+            <>
+              <p>
+                Keep writing your own experiments in this ordinary author folder: edit source in
+                <code> src/my_experiment</code>, then construct a new request as shown in the
+                Notebook. Earlier runs keep their original source and parameters.
+              </p>
+              <p>
+                <a
+                  className="underline"
+                  href={`?lesson=${topic}&source=${encodeURIComponent(journey.directory)}#settings`}
+                  onClick={navigateLink}
+                >
+                  Manage this code folder in Settings
+                </a>{" "}
+                to check its registered Python or repair a missing local environment. For a separate
+                experiment folder, use Author code → New code folder there. No copying or publishing
+                step is needed to keep using this folder.
+              </p>
+            </>
+          )}
         </div>
       )}
       {error && <p role="alert">{error instanceof Error ? error.message : String(error)}</p>}

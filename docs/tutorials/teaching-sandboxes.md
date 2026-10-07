@@ -136,6 +136,29 @@ acceptance observations.
 
 ## Notebook workspace and saved edits
 
+You can keep writing in the course folder: it is already an ordinary registered
+author directory. Save your changes in `src/my_experiment` and construct a new
+request as shown in the Notebook. No graduation,
+copying, publication or second registration step is required. Earlier runs retain
+their original source and parameters.
+
+Help's **Manage this code folder in Settings** selects that exact directory. Check
+its execution Python there; if its local `.venv` is missing, use **Create local
+Python environment**, or the explicit repair control for a damaged environment.
+If the source folder or Notebook is missing, restore the original files to the
+shown location; Continue deliberately does not recreate them over your work.
+
+To start separately, use **Settings → Author code → New code folder**, choose a
+save location and a new name, then **Create folder and prepare Python**. Follow
+[starter authoring](starter-authoring.md) in that folder. Keep the course folder
+and retained results for reference; no transfer of teaching parameters is implied.
+
+Save editor changes before closing. Return to the same course in Help and choose
+**Continue**; reconnect and use its history cells to reopen the exact run,
+procedure or task. The selected course stays in the page URL when navigating
+away and returning or reloading that page. A fresh application window can select
+the course again; its saved folder is independent of this page selection.
+
 For your own experiments, open your registered source folder in VS Code and use
 the interpreter shown in Application settings. Python files and notebooks share
 the application service. See the [learning path](../getting-started/learning-path.md)

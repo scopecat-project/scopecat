@@ -17,6 +17,7 @@ function show() {
 afterEach(() => {
   cleanup();
   delete window.pywebview;
+  window.history.replaceState(null, "", "/");
 });
 it("prepares without forms and preserves the saved path when opening the editor fails", async () => {
   const journey = {
@@ -118,3 +119,60 @@ it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "ta
     expect(prepare).toHaveBeenCalledTimes(1);
   },
 );
+
+it("returns to the selected course and opens its exact Settings folder without preparing again", async () => {
+  const journey = {
+    directory: "/authors/notes & experiments",
+    notebook: "/authors/notes & experiments/notebooks/groups.ipynb",
+    python: "/authors/notes & experiments/.venv/bin/python",
+    ready: true,
+  };
+  const status = vi.fn().mockResolvedValue(journey);
+  const prepare = vi.fn();
+  Object.defineProperty(window, "pywebview", {
+    configurable: true,
+    value: { api: { notebook_journey: status, prepare_notebook_journey: prepare } },
+  });
+  const first = show();
+  fireEvent.change(screen.getByRole("combobox", { name: "Course" }), {
+    target: { value: "groups" },
+  });
+  expect(await screen.findByText(journey.notebook)).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "Manage this code folder in Settings" }));
+  expect(new URL(window.location.href).searchParams.get("source")).toBe(journey.directory);
+  expect(window.location.hash).toBe("#settings");
+  first.unmount();
+  // A newly mounted Help reads the page selection, not a component-local default.
+  show();
+  expect(screen.getByRole("combobox", { name: "Course" })).toHaveValue("groups");
+  expect(await screen.findByRole("button", { name: "Continue groups Notebook" })).toBeEnabled();
+  expect(status).toHaveBeenLastCalledWith("groups");
+  expect(prepare).not.toHaveBeenCalled();
+});
+
+it("shows unfinished preparation without claiming the folder is ready", async () => {
+  window.history.replaceState(null, "", "/?lesson=unknown#help");
+  Object.defineProperty(window, "pywebview", {
+    configurable: true,
+    value: {
+      api: {
+        notebook_journey: vi.fn().mockResolvedValue({
+          directory: "/authors/unfinished",
+          notebook: "/authors/unfinished/notebooks/parameters.ipynb",
+          python: "/authors/unfinished/.venv/bin/python",
+          ready: false,
+        }),
+      },
+    },
+  });
+  show();
+  expect(await screen.findByText(/Preparation unfinished/)).toBeVisible();
+  expect(
+    screen.queryByRole("link", { name: "Manage this code folder in Settings" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry preparation" })).toBeEnabled();
+  expect(
+    screen.queryByRole("button", { name: /Choose another save location/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Course" })).toHaveValue("parameters");
+});
