@@ -214,6 +214,39 @@ describe("config provenance navigation", () => {
     expect(await screen.findByText("Instrument workspace")).toBeVisible();
   });
 
+  it("returns to the same run after editing and still follows explicit run history", async () => {
+    window.history.replaceState(null, "", "/?run=run-2");
+    renderApp();
+    await screen.findByTitle("run-2");
+    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+    expect(window.location.search).not.toContain("run=");
+    fireEvent.click(screen.getByRole("button", { name: "Experiments" }));
+    await screen.findByText("Calibration launcher");
+    fireEvent.click(screen.getByRole("button", { name: "Runs" }));
+    await waitFor(() => expect(window.location.search).toBe("?run=run-2"));
+    expect(await screen.findByTitle("run-2")).toBeVisible();
+    fireEvent.click(screen.getByTitle("Inspect run run-1"));
+    await screen.findByTitle("run-1");
+    act(() => window.history.back());
+    expect(await screen.findByTitle("run-2")).toBeVisible();
+    act(() => window.history.forward());
+    expect(await screen.findByTitle("run-1")).toBeVisible();
+  });
+
+  it("retains sample revision and analysis selection while their pages are inactive", async () => {
+    window.history.replaceState(null, "", "/?sample=chip-a17&sample-revision=3#samples");
+    renderApp();
+    await screen.findByText("Selected sample chip-a17");
+    fireEvent.click(screen.getByRole("button", { name: "Analyses" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Select next analysis" }));
+    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+    fireEvent.click(screen.getByRole("button", { name: "Samples" }));
+    expect(await screen.findByText("Selected sample chip-a17")).toBeVisible();
+    expect(new URLSearchParams(window.location.search).get("sample-revision")).toBe("3");
+    fireEvent.click(screen.getByRole("button", { name: "Analyses" }));
+    expect(await screen.findByText("Selected analysis analysis-next")).toBeVisible();
+  });
+
   it("does not add an extra history entry for automatic first-run selection", async () => {
     window.history.replaceState(null, "", "/");
     const before = window.history.length;
