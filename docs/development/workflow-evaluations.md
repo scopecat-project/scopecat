@@ -96,6 +96,30 @@ the project console can explain the selected configuration and instruments.
 diagnosing a lab, not as ceremony in the common experiment path. Preview should
 describe conflicts in user vocabulary rather than compiler structure.
 
+### Desktop continuation through retained results
+
+**Target journey:** choose a sample/target, edit working parameters, explicitly
+adopt them, preview and start an experiment, inspect that exact result, then
+return to the next edit without changing either the adopted copy or recorded run.
+
+**Executable evidence:** UI `object-parameters.e2e.ts` covers the sample map and
+explicit target/setup handoff. `parameter-working-inputs.e2e.ts` reuses two windows
+to check conflicting drafts, restart recovery, stale previews, separate selected
+runs and continued editing. `application-loop.e2e.ts` uses one application data
+space and a separate editable ordinary author folder. It loses the response after
+admission, navigates away, edits the source table, checks the original submission
+and reopens its result without a second acquisition. Back/forward and reopening
+the procedure preserve this window's experiment inputs. The retained run still
+contains the adopted scale of 2 and result of 1.6 after the working table reaches 4.
+
+**Success evidence:** saved edits require explicit adoption; submission uncertainty
+can be resolved without rerunning; exact results remain selected independently in
+each window. Procedure and result links retain the current console's editable
+state, while modified clicks keep normal browser behavior.
+
+**Current boundary:** these are browser/software journeys. They do not qualify
+native host plumbing, installation, unfamiliar-user operation or physical devices.
+
 ## 4. Select and export measurement data
 
 **Target journey:** start from a run, discover its variables, select meaningful

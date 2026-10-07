@@ -355,3 +355,44 @@ it("links the immutable failed source and retained acquisition of a recovery", a
     "?run=retained-sample#runs",
   );
 });
+
+it("opens retained result links in place and preserves modified-click behavior", async () => {
+  window.history.replaceState(null, "", "/?procedure=p1&run=previous#launch");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        view({
+          steps: {
+            procedure_run_id: "p1",
+            next_cursor: null,
+            items: [
+              {
+                procedure_run_id: "p1",
+                step_key: "experiment",
+                revision: 1,
+                inputs: [],
+                intent_hash: "sha256:" + "3".repeat(64),
+                operation: "run",
+                attempt: 1,
+                state: "succeeded",
+                output: { kind: "run", run_id: "exact-run" },
+              },
+            ],
+          },
+        }),
+      ),
+    ),
+  );
+  mount();
+  const result = await screen.findByRole("link", { name: "Open run" });
+  // A modified click belongs to the browser; it must not change this window.
+  expect(fireEvent.click(result, { ctrlKey: true })).toBe(true);
+  expect(window.location.search).toBe("?procedure=p1&run=previous");
+  expect(fireEvent.click(result)).toBe(false);
+  expect(window.location.search).toBe("?procedure=p1&run=exact-run");
+  expect(window.location.hash).toBe("#runs");
+  expect(fireEvent.click(screen.getByRole("link", { name: "Reopen this procedure" }))).toBe(false);
+  expect(window.location.search).toBe("?procedure=p1");
+  expect(window.location.hash).toBe("#launch");
+});

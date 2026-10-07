@@ -1,3 +1,4 @@
+import { navigateLink } from "../../lib/navigation";
 import { PlanOrigin } from "./PlanOrigin";
 import { ClearData } from "../history/DataCleanup";
 import { ProcedureWorkerLog } from "./ProcedureWorkerLog";
@@ -80,7 +81,11 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
       <PlanOrigin reference={run?.plan_ref} />
       {run?.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
       <p>{run?.definition.id ?? procedureId}</p>
-      <a className="underline" href={`?procedure=${encodeURIComponent(procedureId)}#launch`}>
+      <a
+        onClick={navigateLink}
+        className="underline"
+        href={`?procedure=${encodeURIComponent(procedureId)}#launch`}
+      >
         Reopen this procedure
       </a>
       {progress.isPending && <p role="status">Loading retained procedure state…</p>}
@@ -120,6 +125,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
             <p>
               Recovery from{" "}
               <a
+                onClick={navigateLink}
                 className="underline"
                 href={`?procedure=${encodeURIComponent(run.recovery.procedure_run_id)}#launch`}
               >
@@ -127,6 +133,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
               </a>{" "}
               using{" "}
               <a
+                onClick={navigateLink}
                 className="underline"
                 href={`?run=${encodeURIComponent(run.recovery.retained_run.run_id)}#runs`}
               >
@@ -153,6 +160,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
           )}
           {run.resource_wait && (
             <a
+              onClick={navigateLink}
               className="underline"
               href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.resource_wait.run_id)}#runs`}
             >
@@ -168,6 +176,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
           <ComparisonLink />
           {run.state === "waiting_for_input" && (
             <a
+              onClick={navigateLink}
               className="underline"
               href={`?procedure=${encodeURIComponent(procedureId)}#decisions`}
             >
@@ -261,7 +270,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
                     </details>
                   )}
                   {href && (!child || step.output?.kind !== "run") && (
-                    <a className="underline" href={href}>
+                    <a onClick={navigateLink} className="underline" href={href}>
                       Open{" "}
                       {step.output?.kind === "analysis"
                         ? "analysis"
