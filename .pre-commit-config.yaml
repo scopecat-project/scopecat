@@ -7,7 +7,7 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/tombi-toml/tombi-pre-commit
-    rev: 819a761d4cad4adbe153e31e3851996b223c8aaa  # frozen: v1.7.1
+    rev: 3e7d0dfbb244888710ccd530be67a5983bf21c1e  # frozen: v1.7.2
     hooks:
       - id: tombi-format
         args: ["--offline"]
