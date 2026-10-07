@@ -1,0 +1,130 @@
+{
+  "tested_candidate_commit": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+  "tested_candidate_tree": "4f52574aaf792fd2abf0d4c09626db9d92c99fa8",
+  "base_main": "29536e3bbb0629906a5a929a57efbf5c805e4938",
+  "prior_evidence_commit": "b45fc65126a66c7912756fa2371d918fb7970259",
+  "evidence_commit_is_not_tested_candidate": true,
+  "browser_baseline": {
+    "scenario": "parameter-context.e2e.ts:104 launches two samples with independent parameter versions and declared batches",
+    "baseline_result": "failed at line 150 after 120000ms",
+    "candidate_same_environment_result": "failed at line 150 after 120000ms",
+    "both_observed": "values-1; Hide context choices expanded; cooldown-a selected",
+    "controlled_environment": "same cloud Linux, Python 3.14.7, locked Playwright 1.63.0, system Chromium 151.0.7922.173, same locks and build commands; one worker and zero retries",
+    "qualification_limit": "Actions used Chromium 153. Pinned browser download was forbidden, so both local controls use identical system Chromium instead. Video disabled; screenshots/traces retained. Orphan reaping supplied outside repository because container PID 1 does not reap.",
+    "conclusion": "The baseline itself reproduces the failure; this is not inferred only from an empty diff.",
+    "contract_sources": [
+      "apps/scopecat-ui/src/features/launch/MeasurementContext.tsx:24 initializes browsing when the draft already has a selected batch/collection",
+      "docs/development/architecture/draft-recovery.md: navigation must retain input",
+      "apps/scopecat-ui/src/features/launch/LaunchDraft.test.tsx: keeps context across experiments",
+      "main PR #916 preserves drafts through retained-result navigation"
+    ],
+    "diagnostic_excerpt": "Test timeout of 120000ms exceeded. locator.click waiting for getByRole('button', { name: 'Browse samples, batches and collections', exact: true }); parameter-context.e2e.ts:150:14. Screenshot/context instead shows Hide context choices expanded, cooldown-a selected."
+  },
+  "caller_proposal": {
+    "file": "apps/scopecat-ui/e2e/parameter-context.e2e.ts",
+    "patch": "acceptance-917-918-caller.patch",
+    "scope": "test-only isolated main worktree; not applied to candidate or PR branches",
+    "change": "Only expand when aria-expanded is false; assert expanded=true, batch visible, and selected batch value.",
+    "validation": "same single scenario passed in 51.1s, zero retries",
+    "original_assertions_preserved": "All bytes outside this one scoped interaction block are unchanged, including all four acquisitions, preview bindings, Python VERIFY snapshot parameter/setup/sample/revision/batch/frequency and no-global-registry assertions. Three UI expectations are added.",
+    "original_test_sha256": "f281c6e70ed646d9f81dc84503712901d916f6c93b2f41ef42597fcff8b5827a",
+    "proposed_test_sha256": "ea3f90cdcc72ecc3da88f9ae1c4da72dfed0ed2f7b40d9270886924501ccbabd",
+    "patch_sha256": "408c54d47a0f67feaa7038010214e5d31bc8b689309a9de433895fc62f530a11"
+  },
+  "native": {
+    "run_id": 37677040546,
+    "url": "https://github.com/scopecat-project/scopecat/actions/runs/37677040546",
+    "head_sha": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+    "dispatch_count": 1,
+    "profile": "native-distribution",
+    "workflow_modified": false,
+    "result": "failure",
+    "macos": {
+      "platform": "macOS",
+      "commit": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+      "bundle_sha256": "14b3eb99046f3c3a95a1a2c194bca1c8390c94b9684ac2833fdfc8deae278650",
+      "probe_hashes_match_checkout": true,
+      "window_checks": 8,
+      "host_stopped": true,
+      "cleanup_completed": true,
+      "reset_and_reopen": "passed",
+      "storage_stages": "A/B/C passed with identical application draft",
+      "not_evaluated": [
+        "OS focus",
+        "OS menu clicks",
+        "tray",
+        "production startup",
+        "human presentation"
+      ],
+      "download_limits": {
+        "signature": "passed",
+        "quarantine": "0083;6ac6a386;ScopecatAcceptance;",
+        "gatekeeper_returncode": 3,
+        "gatekeeper_output": "/Users/runner/work/_temp/macos-download/work-e2j8y8c_/download/Scopecat.app: rejected\n",
+        "notarization": "not-provided",
+        "finder_first_open": "not-evaluated",
+        "tamper_detection": "passed"
+      }
+    },
+    "windows": {
+      "commit": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+      "bundle_sha256": "57be9a4534ec71561884354b21b7931423a8dbf9b808786555f516c3a29474de",
+      "probe_hashes_match_checkout": true,
+      "platform": "Windows-2025Server-10.0.26100-SP0",
+      "result": "failed",
+      "completed_window_checks": 0,
+      "observed_exception": "webview.errors.WebViewException: Main window failed to start",
+      "python_log_observation": "WebView2 CreateCoreWebView2ControllerAsync: 0x80004004 E_ABORT; cause/order not established by this log",
+      "host_stopped": true,
+      "cleanup_completed": true,
+      "separate_reset_and_reopen": "passed",
+      "not_reached": [
+        "secondary window checks",
+        "Windows storage A/B/C",
+        "data-journey and configuration sharing",
+        "Setup.exe install and uninstall",
+        "qualified Windows installer artifact upload"
+      ],
+      "diagnostic_traceback": "Traceback (most recent call last):\n  File \"D:\\a\\scopecat\\scopecat\\scripts\\verify_native_windows.py\", line 363, in exercise\n    wait_for(\n    ~~~~~~~~^\n        lambda: (\n        ^^^^^^^^^\n    ...<2 lines>...\n        \"Main run did not render\",\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"D:\\a\\scopecat\\scopecat\\scripts\\verify_native_windows.py\", line 150, in wait_for\n    while not check():\n              ~~~~~^^\n  File \"D:\\a\\scopecat\\scopecat\\scripts\\verify_native_windows.py\", line 365, in <lambda>\n    run_id in text_content(first.window, \"run-detail-header\")\n              ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\a\\scopecat\\scopecat\\scripts\\verify_native_windows.py\", line 231, in text_content\n    evaluate(\n    ~~~~~~~~^\n        window,\n        ^^^^^^^\n        f\"document.querySelector('[data-testid={test_id}]')?.textContent || ''\",\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"D:\\a\\scopecat\\scopecat\\scripts\\verify_native_windows.py\", line 226, in evaluate\n    return cast(\"object\", window.evaluate_js(script))\n                          ~~~~~~~~~~~~~~~~~~^^^^^^^^\n  File \"D:\\a\\_temp\\native-acceptance\\work-kanqez67\\acceptance\\native-windows\\host-g59lo9x3\\Relocated 中文 Scopecat\\resources\\python\\Lib\\site-packages\\webview\\window.py\", line 44, in wrapper\n    raise WebViewException('Main window failed to start')\nwebview.errors.WebViewException: Main window failed to start\n",
+      "python_log_excerpt": "[pywebview] Failed to delete user data folder: 'NoneType' object has no attribute 'BrowserProcessId'\n[pywebview] WebView2 initialization failed with exception:\n  (0x80004004): Operation aborted (Exception from HRESULT: 0x80004004 (E_ABORT))\n\n   at System.Runtime.InteropServices.Marshal.ThrowExceptionForHRInternal(Int32 errorCode, IntPtr errorInfo)\n\n   at Microsoft.Web.WebView2.Core.CoreWebView2Environment.<CreateCoreWebView2ControllerAsync>d__21.MoveNext()\n\n--- End of stack trace from previous location where exception was thrown ---\n\n   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()\n\n   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)\n\n   at Microsoft.Web.WebView2.WinForms.WebView2.<InitCoreWebView2Async>d__25.MoveNext()",
+      "diagnostic_interpretation": "The E_ABORT log is an observation, not an established root cause; it may be a cleanup consequence. No retry was used to qualify this candidate."
+    },
+    "artifacts": [
+      {
+        "id": 11508150652,
+        "name": "native-macos-latest",
+        "sha256": "10098a231dadf4ebf01d01c644fb3f46f1de3f75ad5facb093af5874fba49587",
+        "downloaded_and_inspected": true
+      },
+      {
+        "id": 11509030293,
+        "name": "native-windows-latest",
+        "sha256": "98defb7848bade77f790d8d251eb5bcd302a1654035eae9a61ec01079429af36",
+        "downloaded_and_inspected": true
+      },
+      {
+        "id": 11508085677,
+        "name": "scopecat-preview-macOS-b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+        "downloaded_and_inspected": false
+      }
+    ],
+    "isolation": "Fresh disposable GitHub-hosted RUNNER_TEMP descendants only; copies of candidate package; all reset data synthetic; reset probe explicitly skips backup while testing cancellation, confirmation, and reopen. Baseline default-backup protections were tested separately earlier."
+  },
+  "unchanged_conclusions": {
+    "local_application_run": 37674562875,
+    "local_application_gate": "failure retained; no whole-profile rerun",
+    "candidate": "not accepted",
+    "PR_917": "draft, unmerged, original head preserved",
+    "PR_918": "draft, unmerged, original head preserved",
+    "real_VSCode_and_human_window_interaction": "not evaluated",
+    "native_windows_root_cause": "unresolved; no retry and no product changes"
+  },
+  "reproduction": {
+    "browser": "On each selected checkout/build: node node_modules/@playwright/test/cli.js test e2e/parameter-context.e2e.ts --project=journey-1 --grep \"and declared batches\" --workers=1 --retries=0 --reporter=line; local external config sets only absolute test/output paths, Chromium executable and video off.",
+    "native": "gh workflow run acceptance.yml --ref tmp/acceptance-917-918-20261007 -f profile=native-distribution (already run once; no automatic repeat)"
+  },
+  "original_pr_heads_verified": {
+    "917": "52e3884de2c90d99c160e688582ca3a3e73e34fb",
+    "918": "3fe39e4a5734e08d2f45579669e4de0ac5fc2a07"
+  }
+}
