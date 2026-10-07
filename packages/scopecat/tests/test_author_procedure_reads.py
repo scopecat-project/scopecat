@@ -75,7 +75,9 @@ def test_output_pages_and_does_not_fall_back_from_newest_incomplete_attempt() ->
         (60, -1),
     ],
 )
-def test_wait_rejects_invalid_budgets_before_reading(timeout, interval) -> None:
+def test_wait_rejects_invalid_budgets_before_reading(
+    timeout: float, interval: float
+) -> None:
     client = Mock(spec=DaemonClient)
     with pytest.raises(ValueError, match="finite"):
         AuthorProcedure(client, "retained").wait(timeout=timeout, interval=interval)
