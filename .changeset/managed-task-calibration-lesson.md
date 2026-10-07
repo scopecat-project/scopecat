@@ -1,11 +1,14 @@
 ---
-"scopecat": patch
-"scopecat-lab-teaching": patch
-"scopecat-lab-tools": patch
+default: minor
 ---
 
-Prepare source-bound background calibration tasks through the ordinary author
-session, reconnect to retained task evidence, and wait without advancing execution.
-Migrate the task-calibration lesson to the same application session, with editable
-source and external real-kernel checks of in-flight disconnect/reconnect, source
-retention, retries, scientific rejection and fenced final publication.
+Run background calibration tasks from one author session.
+
+Prepare and submit calibration tasks in a Notebook or author session, then
+reconnect to read stage results and final publication evidence. Prepared tasks
+retain their original source and inputs when files change; retry the same
+submission without creating duplicate tasks. Starting or continuing remains
+explicit, and waiting does not advance tasks or publish parameters.
+
+The task-calibration lesson now uses this same session throughout, without a
+separate client or service-management steps.
