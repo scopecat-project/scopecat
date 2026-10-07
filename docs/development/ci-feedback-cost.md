@@ -63,7 +63,7 @@ asserts shard coverage. The lockfile and test selection were unchanged.
 
 | Run | Revision/event | Core jobs | Test steps | Elapsed | Runner seconds |
 | --- | --- | ---: | ---: | ---: | ---: |
-| [37659972306](https://github.com/scopecat-project/scopecat/actions/runs/37659972306) | `322caf6f`, dispatch | 309 | 291 | 315 | 617 |
+| [37659972306](https://github.com/scopecat-project/scopecat/actions/runs/37659972306) | `322caf6f`, dispatch | 309 | 292 | 315 | 617 |
 | [37660513163](https://github.com/scopecat-project/scopecat/actions/runs/37660513163) | `71fdf7e5`, PR | 233 / 244 | 218 / 231 | 250 | 781 |
 | [37660539960](https://github.com/scopecat-project/scopecat/actions/runs/37660539960) | `71fdf7e5`, exact-head dispatch | 232 / 244 | 217 / 229 | 250 | 914 |
 
@@ -84,8 +84,10 @@ The observed feedback reduction is 65 seconds (20.6%), to 4m10s in both candidat
 runs. Total runner seconds increased by 26.6%/48.1%; core alone increased from
 309 to 477/476 seconds. This is a feedback-latency tradeoff, not a reduction in
 compute cost. A cache miss explains some preparation cost but cannot explain
-all of the larger per-test phase totals. Different hosted runners and duplicated
-session setup may contribute; these samples do not isolate their effects. The
+all of the larger per-test phase totals. Summed setup was only 6.47 seconds in
+the baseline and 10.48 across both shards; call time rose from 501.82 to 731.74.
+Most of the increase is inside test calls, not duplicated pytest fixture setup.
+Different hosted runners may contribute; these samples do not isolate the cause. The
 same-SHA baseline variability above also rules out treating the 65 seconds as a
 precise causal estimate. Two successful observations under five minutes do not
 establish a sustained guarantee. Keep the scope bounded to these two shards;
