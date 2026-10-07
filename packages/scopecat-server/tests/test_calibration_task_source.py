@@ -247,3 +247,47 @@ def test_task_retained_worker_and_reconnect(tmp_path: Path) -> None:
     finally:
         release_notebook_imports(project.root)
         stop_project(project)
+
+
+@pytest.mark.parametrize("reject_first", [False, True])
+def test_advance_does_not_revalidate_ready_stages_while_work_is_active(
+    tmp_path: Path,
+    reject_first: bool,
+) -> None:
+    with _check_case(tmp_path) as (runtime, check, _):
+        tasks = runtime.application.calibration_tasks
+        source = ProcedureSource(
+            workspace_id="workspace",
+            code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
+        )
+        spec = _task(check).model_copy(update={"source": source})
+        validated: list[ProcedureSubmitCommand] = []
+        tasks.validate_call = validated.append
+        tasks.create(spec)
+        tasks.control(
+            CalibrationTaskControl(
+                task_id=spec.task_id,
+                expected_revision=1,
+                action="start",
+                actor="test",
+                reason="advance independent stages",
+            )
+        )
+        validated.clear()
+
+        def validate(command: ProcedureSubmitCommand) -> None:
+            validated.append(command)
+            if reject_first and len(validated) == 1:
+                raise BackendConflict("first stage validation rejected")
+
+        tasks.validate_call = validate
+        admitted = tasks.advance(spec.task_id)
+        assert len(validated) == 2
+        assert set(admitted.task.executions) == ({"b"} if reject_first else {"a"})
+        if reject_first:
+            assert admitted.task.dispatch_errors == {
+                "a": "first stage validation rejected"
+            }
+        for _ in range(3):
+            assert tasks.advance(spec.task_id) == admitted
+        assert len(validated) == 2

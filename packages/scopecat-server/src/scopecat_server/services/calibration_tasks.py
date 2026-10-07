@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
@@ -184,11 +185,7 @@ class CalibrationTaskService:
                 task = task.model_copy(update={"mode": "finished"})
                 self._store.update(connection, task)
                 return self._view(connection, task)
-            if any(
-                stage.state
-                in {"queued", "running", "waiting_for_input", "attention_required"}
-                for stage in view.progress.stages
-            ):
+            if self._has_active_stage(view):
                 return view
             reason = self._budget_reason(task)
             if reason is not None:
@@ -433,6 +430,14 @@ class CalibrationTaskService:
         )
 
     @staticmethod
+    def _has_active_stage(view: CalibrationTaskView) -> bool:
+        return any(
+            stage.state
+            in {"queued", "running", "waiting_for_input", "attention_required"}
+            for stage in view.progress.stages
+        )
+
+    @staticmethod
     def _require_prepared_task(
         task: CalibrationTaskRecord,
         prepared: PreparedTaskAdmissions,
@@ -460,6 +465,13 @@ class CalibrationTaskService:
             if task.specification.source is None:
                 return PreparedTaskAdmissions(task, {})
             view = self._view(connection, task)
+            if stage_id is None and (
+                task.mode != "running"
+                or view.finalization is not None
+                or self._has_active_stage(view)
+                or self._budget_reason(task) is not None
+            ):
+                return PreparedTaskAdmissions(task, {})
             if stage_id is not None:
                 stages = (
                     [stage_id]
@@ -480,7 +492,10 @@ class CalibrationTaskService:
                     and task.finalization_run_id is None
                     and task.finalization_error is None
                 ):
-                    commands.append(self._finalization_command(connection, view))
+                    # Rebuild under the write-side savepoint so the ordinary
+                    # finalization error is retained until explicit start.
+                    with suppress(BackendConflict, BackendNotFound):
+                        commands.append(self._finalization_command(connection, view))
             else:
                 stages = []
             for key in stages:

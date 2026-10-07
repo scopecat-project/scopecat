@@ -28,7 +28,7 @@ from scopecat.daemon.calibration_tasks import (
 )
 from scopecat.daemon.wire import AnalysisFactOutputPayload, AnalysisSaveCommand
 from scopecat.project import load_project
-from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
+from scopecat.records.analysis import AnalysisFact, AnalysisRecord, RunAnalysisSubject
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.calibration_check import CalibrationCheckResult
 from scopecat.sdk.compute import PYTHON_JSON_CODEC
@@ -296,3 +296,122 @@ def test_finalization_handoff_recovery_and_rejection(
         assert (
             ended.progress.successful
         )  # Check progress is not final scientific success.
+
+
+def test_missing_historical_repair_output_retains_finalization_error(
+    tmp_path: Path,
+) -> None:
+    from scopecat.daemon.calibration_tasks import CalibrationStageAttempt
+    from scopecat.runs.refs import record_content_ref
+
+    from .test_calibration_repair import finish_check, specification, start
+
+    with _check_case(tmp_path) as (runtime, check, child):
+        app = runtime.application
+        tasks = app.calibration_tasks
+        validated: list[ProcedureSubmitCommand] = []
+        tasks.validate_call = validated.append
+        source = ProcedureSource(
+            workspace_id="workspace",
+            code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
+        )
+        original = _command(check)
+        spec = specification(check).model_copy(
+            update={
+                "source": source,
+                "finalization": CalibrationTaskCall(
+                    definition=original.definition.model_copy(
+                        update={"id": "finalize"}
+                    ),
+                    intent={"calibration_task": None},
+                ),
+            }
+        )
+        tasks.create(spec)
+        start(runtime)
+        tasks.advance("repair")
+        finish_check(runtime, child, passed=False)
+        repair = tasks.advance("repair")
+        finish_check(runtime, child, passed=True)
+        with tasks._sqlite.read_transaction() as connection:
+            evidence = tasks._checks.evidence_in_transaction(
+                connection, repair.task.executions["q0"]
+            )
+        assert evidence is not None and evidence.analysis_record_id is not None
+
+        # Seed a completed verification association; candidate binding has separate
+        # coverage. All procedure, measurement and analysis records here are real.
+        verification = app.automation.submit(
+            original.model_copy(
+                update={
+                    "request_key": "verification",
+                    "source": source,
+                }
+            )
+        ).run
+        with tasks._sqlite.write_transaction() as connection:
+            task = tasks._read(connection, "repair")
+            tasks._store.update(
+                connection,
+                task.model_copy(
+                    update={
+                        "attempts": {
+                            "q0": (
+                                *task.attempts["q0"],
+                                CalibrationStageAttempt(
+                                    phase="verify",
+                                    procedure_run_id=verification.procedure_run_id,
+                                    check=check,
+                                ),
+                            )
+                        },
+                    }
+                ),
+            )
+        finish_check(runtime, child, passed=True)
+        assert tasks.get("repair").progress.successful
+        ref = record_content_ref(record_id=evidence.analysis_record_id, kind="analysis")
+        run_id = evidence.measurement.run_id
+        repository = tasks._checks._runs
+        record = repository.read_model(run_id, ref, AnalysisRecord)
+        without_fact = repository.store_object(
+            run_id, record.model_copy(update={"outputs": []}).model_dump_json().encode()
+        )
+        with tasks._sqlite.write_transaction() as connection:
+            row = connection.execute(
+                "SELECT digest FROM run_repository_refs WHERE run_id=? AND ref=?",
+                (run_id, ref),
+            ).fetchone()
+            assert row is not None
+            digest = row[0]
+            connection.execute(
+                "UPDATE run_repository_refs SET digest=? WHERE run_id=? AND ref=?",
+                (without_fact.digest, run_id, ref),
+            )
+        count = len(validated)
+        failed = tasks.advance("repair")
+        assert failed.progress.successful
+        assert failed.task.finalization_run_id is None
+        assert failed.task.finalization_error is not None
+        assert (
+            failed.task.finalization_error
+            == "check result requires its declared fact output"
+        )
+        assert tasks.advance("repair") == failed
+        assert len(validated) == count
+        assert len(app.automation.list(ProcedureRunListQuery()).items) == 3
+        with tasks._sqlite.write_transaction() as connection:
+            connection.execute(
+                "UPDATE run_repository_refs SET digest=? WHERE run_id=? AND ref=?",
+                (digest, run_id, ref),
+            )
+        assert tasks.advance("repair") == failed  # Restoring bytes is not a retry.
+        start(runtime)
+        bound = tasks.advance("repair")
+        assert bound.finalization is not None
+        inputs = CalibrationTaskInputs.model_validate(
+            bound.finalization.intent["calibration_task"]
+        )
+        assert inputs.repairs["q0"] == evidence
+        assert bound.task.finalization_error is None
+        assert tasks.advance("repair") == bound
