@@ -87,10 +87,19 @@ def _parallel_set_readout(
 @sc.experiment(id="reference_lab.test.parallel_set_readout")
 def _parallel_set_readout_experiment(
     experiment: sc.ExperimentContext,
+    *,
+    from_topology: bool = False,
 ) -> None:
     prepare_quantum_hardware(experiment)
+    targets = (
+        quantum.select_qubits(
+            3, connected=True, anchor="q1", connection_kind="nearest_neighbor"
+        )
+        if from_topology
+        else ("q0", "q1")
+    )
     results = experiment.use(
-        _parallel_set_readout(("q0", "q1"))
+        _parallel_set_readout(targets)
         .with_shots(7)
         .with_compiler_inputs(qubits=sc.parameter_table_ref(QubitParameters))
     )
@@ -263,6 +272,101 @@ def test_parallel_qubit_set_compiles_to_one_entity_axis_result_group() -> None:
     assert job.execution.next_batch_max_points == (
         artifact.compilation_budget.next_batch_max_points
     )
+
+
+def test_topology_selection_retains_entities_through_compilation_and_results(
+    tmp_path: Path,
+) -> None:
+    config = bootstrap_config()
+    provider = ReferenceLabProvider(seed=7)
+    composition = compose_test_instruments(
+        config=config,
+        provider=provider,
+        domain_compiler=QuantumLabCompiler(target=_configured_target(config, provider)),
+        payload_codecs=reference_lab_payload_codecs(),
+    )
+    invocation = _parallel_set_readout_experiment.build(from_topology=True)
+    bound = bind_program(
+        compile_invocation(invocation).program,
+        build_config_environment(config),
+    )
+    expected_entities = ("q1", "q0", "q2")
+    [product] = bound.bindings.product_defs
+    assert [axis.kind for axis in product.axes] == ["entity", "shot"]
+    assert product.axes[0].entities is not None
+    assert tuple(entity.id for entity in product.axes[0].entities) == expected_entities
+
+    plan = compile_run_program(composition.system, bound=bound)
+    [job] = tuple(
+        operation for operation in plan.coverage if isinstance(operation, RunDomainJob)
+    )
+    mapped = cast("MappedListModeTarget", job.execution.invocation.payload)
+    [result] = mapped.mapping.results
+    assert {
+        address.slot_id.scope for address in result.result_address.acquisitions
+    } == {("targets", entity) for entity in expected_entities}
+    # Placement may canonicalize order, but must retain exactly the selected set.
+    assert set(mapped.artifact.placement.logical_qubit_ids) == set(expected_entities)
+
+    lab = in_process_lab(
+        tmp_path,
+        config=config,
+        system=composition.system,
+        instrument_backend=composition.backend,
+    )
+    run = lab.prepare(invocation).run()
+    assert run.status == "completed"
+    data = run.measurements()
+    assert len(data) == 1
+    iq_shots = data["parallel_set_readout/iq_shots"]
+    [entity_dimension] = [
+        dimension
+        for dimension in data.schema.dimensions
+        if dimension.kind == "entity" and dimension.id in iq_shots.dims
+    ]
+    assert entity_dimension.index is not None
+    assert (
+        tuple(entity.id for entity in entity_dimension.index.values)
+        == expected_entities
+    )
+    assert iq_shots.shape == (1, len(expected_entities), 7)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "#773: grouped acquisitions use target order instead of the topology-selected "
+        "product entity order; see reference-gallery-retirement.md"
+    ),
+)
+def test_topology_result_rows_match_the_product_entity_order() -> None:
+    config = bootstrap_config()
+    provider = ReferenceLabProvider(seed=7)
+    composition = compose_test_instruments(
+        config=config,
+        provider=provider,
+        domain_compiler=QuantumLabCompiler(target=_configured_target(config, provider)),
+        payload_codecs=reference_lab_payload_codecs(),
+    )
+    bound = bind_program(
+        compile_invocation(
+            _parallel_set_readout_experiment.build(from_topology=True)
+        ).program,
+        build_config_environment(config),
+    )
+    plan = compile_run_program(composition.system, bound=bound)
+    [job] = tuple(
+        operation for operation in plan.coverage if isinstance(operation, RunDomainJob)
+    )
+    mapped = cast("MappedListModeTarget", job.execution.invocation.payload)
+    [result] = mapped.mapping.results
+    entities = result.product.axes[0].entities
+    assert entities is not None
+    # circuit_runtime.realize_measurements emits rows in this acquisition order.
+    assert tuple(
+        address.slot_id.scope for address in result.result_address.acquisitions
+    ) == tuple(("targets", entity.id) for entity in entities)
 
 
 def _logical_measurement_values(

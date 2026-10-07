@@ -16,7 +16,8 @@ source; installed historical environments and scientific data are untouched.
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
-| `20_flux_spectroscopy.py`, `24`–`25`, `29`, `31` | Compiled buffers, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `20_flux_spectroscopy.py`, `24`–`25`, `29` | Compiled buffers, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `31_topology_scaled_ramsey.py` | Topology-selected entities retain their identity through compilation and results | Retired with its dedicated experiment/result wrapper. Core topology selection and the focused runner test retain selection and metadata coverage; the assertion mapping and open numerical row-order gap are below. |
 | `28_channel_conflict_diagnostic.py` | Logical pulse-overlap diagnostics | Retired with its daemon/gallery test and dedicated `conflicting_drive` / `conflicting_drive_program` wrappers. Existing quantum scheduling and authoring tests own the diagnostic, as detailed below. |
 | `34_xy_lo_sweep.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` and their workflow modules | Shared owners, signed IF, entityless claims and variable-length acquisition | Retired the scripts, experiments, result wrappers and XY facade. Current contract owners and deliberately withdrawn fixture assertions are mapped below. |
 | `30_drag_calibration.py` | DRAG acquisition, fit and uncertainty display, exact candidate lineage and independent verification | Retired. `test_typed_candidates.py` retains the real-device simulation and analysis with independent parameters/setup and no default mutation. Global publication/restore is no longer a required author journey. |
@@ -89,6 +90,53 @@ expresses an obsolete requirement before removing it.
   `core_integration/test_run_handle.py::test_run_projects_paged_measurements_into_one_arrow_reader`
   checks durable Arrow pagination and schema. These directly cover the deleted
   workbench's summary counts without acquiring a resonator scan first.
+
+## Topology gallery retirement: assertion mapping
+
+The `31_topology_scaled_ramsey.py` presentation, its gallery test and the
+`topology_scaled_ramsey` / `TopologyScaledRamseyDataset` experiment/result wrappers
+are retired. Repository consumer inspection found only the deleted notebook using
+those wrappers. The lower-level `topology_scaled_ramsey_program` remains in
+`workflows/ramsey.py`: `virtual_lab/quantum_responses.py` still dispatches its
+Ramsey response by program identity. Similar names do not imply identical lifetimes.
+
+| Former assertion | Current evidence or withdrawal |
+| --- | --- |
+| Connected selection yields `q1`, `q0`, `q2` | Core `compiler/test_topology_selection.py::test_topology_selection_resolves_a_stable_connected_region` owns deterministic anchored ordering, connection-kind filtering and stability after topology expansion. `test_topology_selection_reports_an_unsatisfied_connected_count` owns rejection when too few connected entities exist. |
+| Selected entities appear in the compiled and acquired result | Reference `unit/test_quantum_runner.py::test_topology_selection_retains_entities_through_compilation_and_results` uses the existing minimal set-readout input with a topology selection. It checks bound product axes, each compiled acquisition's entity scope, the placement's selected entity set and the executed dataset's entity index and shape. This preserves metadata and selected-set coverage; row-to-entity numerical correspondence has the known gap below. |
+| Three points/records and shape `3 × 3 × 64` | Three delay values and 64 shots were gallery fixture choices. The replacement checks one point and seven shots against the selected entity count. Existing runner batch-invariance coverage and core scan/dataset tests own scan and dimension behavior; the old delay vector is not a protocol requirement. |
+| `iq_shots` and exact `shared/topology-scaled-ramsey/...` dimension strings | The minimal runner input checks its result alias and typed entity dimension. The retired wrapper's generated path strings are fixture identities, not a required public namespace. |
+| Draw output contains `parallel_each $targets` | Withdrawn presentation-only text check. The replacement compiles and executes the existing `parallel_each` input; it does not promise the old draw wording. |
+| Run status is `completed` | Checked by the same focused in-process runner execution. Existing bare-instrument runner and device-runtime tests retain device integration evidence. This is not a new daemon/worker or hardware acceptance claim. |
+
+### Open row-order gap found during migration
+
+The stronger mapping check exposes a pre-existing gap at base `d20ed757`:
+`map_quantum_target_results` in quantum `program_results.py` retains target
+acquisition order (`q0`, `q1`, `q2`), while the bound product and dataset entity
+axis retain topology selection order (`q1`, `q0`, `q2`). Reference
+`circuit_runtime.realize_measurements` emits the rows in mapping order without
+reordering them to that entity axis. The old gallery checked only labels and
+shape, so it did not establish correct row-to-entity numerical correspondence.
+
+`test_quantum_runner.py::test_topology_result_rows_match_the_product_entity_order`
+retains the stronger assertion as **strict xfail**, pending a separately reviewed
+quantum mapping fix. Reproduce the actual failure (without xfail handling) with:
+
+```sh
+uv run --locked pytest --runxfail -q examples/reference_lab/tests/unit/test_quantum_runner.py::test_topology_result_rows_match_the_product_entity_order
+```
+
+Expected diagnostic: the first acquisition scope is `('targets', 'q0')`, but the
+first product entity requires `('targets', 'q1')`. This slice neither fixes that
+shared compiler path nor claims the correspondence contract is satisfied. A
+future fix must remove the xfail and validate distinguishable per-entity values.
+The retained passing check proves selected-set and metadata preservation only.
+
+This slice leaves the `29` unavailable-channel scenario, parallel raw-IQ shared
+acceptance, worker chain, provider/setup inventory and retained scientific data
+unchanged. No performance improvement is claimed. The broader retirement in #773
+remains open.
 
 ## Waveform gallery retirement: contract owners
 
