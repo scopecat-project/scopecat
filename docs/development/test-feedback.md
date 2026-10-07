@@ -181,6 +181,24 @@ by the real journey; this fixture does not claim to validate managed analysis
 execution or source validation. No production deadlines, retry rules or CI
 selection change with this split.
 
+## Author workspace and procedure assertion placement
+
+`test_two_workspace_publication_and_execution` keeps all seven real task runs,
+both retained analyses, independent source/parameter selections and current-format
+backup/restore after deleting the original author folder. Stale-generation
+publication rejection is covered by `test_refresh_worker_handoff.py`, including
+candidate process cleanup and preservation of the active revision, and by the
+SQLite author revision repository tests.
+
+`test_managed_source_retry_disconnect_and_continue` uses a test-owned file lock
+and worker arrival marker to hold the actual procedure worker until its submitting
+client closes. Resume and cancellation do not pay a fixed sleep. Source retention,
+reconnection, idempotency, cancellation and server admission rejections remain in
+that daemon journey. `scopecat/tests/test_author_procedures.py` covers the purely
+client-side workspace/store/deployment reconnection fences, no submission on
+rejection, and identity rechecking at submission, without starting a second daemon.
+These changes do not alter core selection, worker isolation or production timeouts.
+
 ## Thin Windows and macOS smoke
 
 See [platform smoke selection and measurements](platform-smoke.md) for the bounded
