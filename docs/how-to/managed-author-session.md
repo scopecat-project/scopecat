@@ -402,3 +402,50 @@ interpret progress; an adaptive plan's accepted size need not be its final size.
 Progress and records are successive observations, not an atomic snapshot, and
 execution may finish between the reads. Even then use `job.result(step=...)` for
 the retained successful acquisition and normal analysis/provenance APIs.
+
+### Prepare a background calibration task
+
+`author.calibration_tasks` (also available on `sc.notebook()`) uses the existing
+`CalibrationTaskPlan`, `task_call`, repair budget and finalization contracts:
+
+```python
+prepared = author.calibration_tasks.prepare(
+    "calibration-round-1",
+    plan,
+    calls=calls,
+    finalization=finalization,
+    repairs=repairs,
+    repair_budget=repair_budget,
+)
+view = prepared.submit()
+view = author.calibration_tasks.start(view, actor="author", reason="Run this round")
+```
+
+Build the calls after selecting the author revision and importing its declarations.
+Preparation captures one `ProcedureSource` and detached normalized call intents for
+all stages, repairs, candidate verification and finalization. Session experiment
+defaults do not change those inputs. The application validates the templates and
+resolved invocations against the retained source before admission. It owns worker
+execution and task advancement; no second client or Notebook polling loop is needed.
+
+`submit()` saves the specification but does not start it. Retry the same prepared
+object and task ID after an uncertain response. Changed source files and mutations
+to the caller's input dictionaries or the exposed command copy cannot change that
+retry. `prepared.reconnect(new_session)` checks workspace, data store and deployment
+before reattaching; submission rechecks the application's identity.
+
+Use `author.calibration_tasks.get(task_id)` or bounded `list()` after reopening.
+`wait(task_id, timeout=90)` only observes: it returns a stopped task, admission error,
+or procedure attention/input state. A timeout stops waiting without cancellation.
+Inspect the returned view before explicitly calling `start(view, actor=…, reason=…)`
+to continue admission. Existing procedure controls still handle human input and
+reconciliation. Pause/cancel prevent future stage admission; already admitted
+procedures retain their own controls.
+
+Stage evidence is in `view.progress.stages`; attempts and their phases are retained
+in `view.task.attempts`. Read each procedure with `author.procedures.get(id)` and
+its outputs through `author.run(...)` or `author.published_analysis(...)` on the same
+session. Finalization is a separate procedure in `view.finalization`. Task mode
+`finished` and successful stage checks do not imply scientific acceptance or branch
+publication: inspect the final decision and publication receipt. These reads never
+retry a stage, refresh source, advance a task or publish a branch.

@@ -251,7 +251,17 @@ without new acquisitions. No source fingerprint or import check is bypassed.
 Scientific rejection, missing-target coverage, history completeness and publication
 assertions live outside the learner cells. The internal source-lifecycle regression
 retains the exact fit checkpoint and replay checks through `should_yield`; it does
-not introduce an ordinary-author pause or confirmation API. Task-calibration
-retains its existing separate journey pending its source-bound admission migration.
+not introduce an ordinary-author pause or confirmation API.
+
+`test_managed_task_calibration_shipped_kernel` executes the shipped task-calibration
+cells with the same application/author-folder separation. It witnesses a leased
+worker at the learner's actual close call and reconnects while the task remains
+running. The harness changes editable fit source after preparation, then checks
+that all stages and finalization retain the original source and normalized intent.
+Repeating prepared submissions creates no extra executions. Accepted, scientifically
+rejected and stale-branch finalizations retain their distinct publication outcomes.
+A second real kernel after application restart reads the same evidence, raw data
+and branch heads without new acquisition. Pure assertions and evidence bookmarks
+remain in the external harness, not the learner cells.
 These are source/software journeys, not installed-delivery, native editor, device
 or unfamiliar-user acceptance.

@@ -681,10 +681,13 @@ class DaemonClient:
             f"{_API_PREFIX}/calibration-tasks", command, CalibrationTaskView
         )
 
-    def get_calibration_task(self, task_id: str) -> CalibrationTaskView:
+    def get_calibration_task(
+        self, task_id: str, *, timeout: float | None = None
+    ) -> CalibrationTaskView:
         return self._get_model(
             f"{_API_PREFIX}/calibration-tasks/{quote(task_id, safe='')}",
             CalibrationTaskView,
+            timeout=timeout,
         )
 
     def list_calibration_tasks(
