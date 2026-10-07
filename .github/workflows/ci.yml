@@ -30,7 +30,8 @@ jobs:
         os:
           - ubuntu-latest
         group:
-          - { label: core, suite: core, shard: 1/1 }
+          - { label: core-1, suite: core, shard: 1/2 }
+          - { label: core-2, suite: core, shard: 2/2 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -70,7 +71,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Test data ecosystem adapters
-        if: matrix.group.label == 'core'
+        if: matrix.group.label == 'core-1'
         run: >-
           uv run --locked --package scopecat --extra pandas pytest -q
           packages/scopecat/tests/measurements/test_dataset.py

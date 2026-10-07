@@ -16,10 +16,12 @@ def test_repository_tiers_preserve_qualification_coverage() -> None:
     assert "packages/lab-tools/tests/test_calibration_smoke.py" in core
     assert "packages/lab-tools/tests/test_array_maintenance.py" in journey
     assert "packages/lab-tools/tests/test_installed_adapter_journey.py" in journey
-    first = set(select_files(root, "journey", (1, 2)))
-    second = set(select_files(root, "journey", (2, 2)))
-    assert first.isdisjoint(second)
-    assert first | second == journey
+    for suite in ("core", "journey"):
+        first = set(select_files(root, suite, (1, 2)))
+        second = set(select_files(root, suite, (2, 2)))
+        assert first and second
+        assert first.isdisjoint(second)
+        assert first | second == set(select_files(root, suite))
 
 
 @pytest.mark.parametrize("suite", ["fast", "core", "journey", "full"])

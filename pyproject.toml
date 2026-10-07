@@ -524,9 +524,37 @@ journey_paths = [
 "examples/reference_lab/tests/unit/test_list_mode_waveforms.py" = 1.6
 "examples/reference_lab/tests/unit/test_payloads.py" = 0.0
 "examples/reference_lab/tests/unit/test_provider.py" = 0.0
-"examples/reference_lab/tests/unit/test_quantum_runner.py" = 14.1
+# Ubuntu core run 37631300685.
+"examples/reference_lab/tests/unit/test_quantum_runner.py" = 7.3
 "packages/scopecat-server/tests/test_author_validation_diagnostics.py" = 61.5
 "packages/scopecat-server/tests/test_snapshot_integration.py" = 44.7
+
+# Ubuntu core run 37631300685: files costing >=5s, summed setup/call/teardown.
+"packages/lab-tools/tests/test_calibration_smoke.py" = 24.8
+"packages/lab-tools/tests/test_first_run_journey.py" = 12.7
+"packages/lab-tools/tests/test_native_windows_probe.py" = 17.2
+"packages/lab-tools/tests/test_notebook_managed_procedure.py" = 9.0
+"packages/lab-tools/tests/test_settings_journey.py" = 6.1
+"packages/scopecat-instruments/tests/test_generated_clients.py" = 11.3
+"packages/scopecat-instruments/tests/test_sdk_process.py" = 10.4
+"packages/scopecat-server/tests/test_author_environments.py" = 22.5
+"packages/scopecat-server/tests/test_author_preparations.py" = 23.0
+"packages/scopecat-server/tests/test_author_procedures.py" = 31.0
+"packages/scopecat-server/tests/test_author_workspaces.py" = 62.8
+"packages/scopecat-server/tests/test_automation_runtime.py" = 7.2
+"packages/scopecat-server/tests/test_calibration_task_source.py" = 15.6
+"packages/scopecat-server/tests/test_configuration_exchange.py" = 10.9
+"packages/scopecat-server/tests/test_connection_residency_worker.py" = 14.2
+"packages/scopecat-server/tests/test_device_ownership.py" = 6.2
+"packages/scopecat-server/tests/test_instrument_worker.py" = 33.1
+"packages/scopecat-server/tests/test_instruments.py" = 24.0
+"packages/scopecat-server/tests/test_launch_preview.py" = 6.1
+"packages/scopecat-server/tests/test_lifecycle.py" = 33.4
+"packages/scopecat-server/tests/test_payload_transport.py" = 6.2
+"packages/scopecat-server/tests/test_practice_lifecycle.py" = 10.8
+"packages/scopecat-server/tests/test_project_analysis_runtime.py" = 7.7
+"packages/scopecat-server/tests/test_refresh_worker_handoff.py" = 7.1
+"packages/scopecat-server/tests/test_runtime.py" = 9.9
 
 [tool.uv]
 exclude-newer = "3d"
