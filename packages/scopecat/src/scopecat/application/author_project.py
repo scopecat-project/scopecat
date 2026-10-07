@@ -18,6 +18,7 @@ from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
+from scopecat.api.calibration_checks import LabCalibrationChecks
 from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
@@ -27,10 +28,12 @@ from scopecat.api.parameter_revisions import (
     ParameterBranchWorkspace,
 )
 from scopecat.api.parameters import ParameterEditor
+from scopecat.api.project_analysis import RemoteProjectAnalysisOperations
 from scopecat.api.published_analysis import (
     AnalysisGroupResult,
     AnalysisResult,
     GroupedAnalysisResult,
+    PublishedAnalysis,
 )
 from scopecat.api.run import RunHandle
 from scopecat.api.setup import LabSetupOperations
@@ -353,6 +356,15 @@ class AuthorProject(DaemonClient):
         from scopecat.application.author_procedures import AuthorProcedureOperations
 
         return AuthorProcedureOperations(self, self.project_root)
+
+    @property
+    def calibration_checks(self) -> LabCalibrationChecks:
+        """Read retained checks, applicability and capability reports."""
+        return LabCalibrationChecks(self)
+
+    def published_analysis(self, selector: str) -> PublishedAnalysis:
+        """Read a retained project analysis without importing or executing code."""
+        return RemoteProjectAnalysisOperations(self).published_analysis(selector)
 
     @property
     def apparatus(self) -> LabApparatusOperations:

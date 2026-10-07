@@ -221,8 +221,24 @@ request `task.cancel(actor="author", reason="Stop")`. Answer a waiting step usin
 ready work. Existing revision fences and unknown-outcome gates still apply.
 A dispatch error retains the admitted task ID for inspection and explicit resume.
 
+`task.wait(timeout=60)` observes until the request closes, waits for input or
+requires attention. It returns the retained state, including failed scientific
+outcomes; timeout stops the wait without cancelling or retrying work. Use
+`task.steps()` and `task.output("verify")` to read retained evidence, and
+`session.published_analysis(...)` for a project-level publication. These reads do
+not import author code. `session.procedures.list()` returns a bounded page of
+snapshots; pass `next_cursor` as `cursor` for another page and reopen by
+`procedure_run_id`. Calibration history and capability reports are available
+through `session.calibration_checks`.
+
+The calibration and joint-calibration lessons use this managed path, including
+closing the Notebook connection while application workers continue. Reconnecting
+can read an old request immediately. Before preparing new work in that session,
+explicitly reimport definitions and intent types; aliases from a closed session
+are not rebound automatically.
+
 `Project.connect()` and `LabClient.procedures.start/resume` retain their explicit
 local Python execution semantics, including internal worker use. They are not
-aliases for this managed API. Existing calibration, joint and task teaching
-consumers need a separate migration of their source binding and scientific intent;
-this first slice does not change their return values or merge the client classes.
+aliases for this managed API. The task-calibration lesson still requires a separate
+migration of source-bound stage and finalization admission. The two client classes
+retain their distinct execution responsibilities.
