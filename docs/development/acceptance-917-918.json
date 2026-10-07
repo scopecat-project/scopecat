@@ -1,0 +1,165 @@
+{
+  "candidate_commit": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+  "candidate_tree": "4f52574aaf792fd2abf0d4c09626db9d92c99fa8",
+  "branch": "tmp/acceptance-917-918-20261007",
+  "base_main": "29536e3bbb0629906a5a929a57efbf5c805e4938",
+  "sources": {
+    "917": "52e3884de2c90d99c160e688582ca3a3e73e34fb",
+    "918": "3fe39e4a5734e08d2f45579669e4de0ac5fc2a07"
+  },
+  "merge_order": [
+    917,
+    918
+  ],
+  "working_tree_clean": true,
+  "original_pr_branches_changed": false,
+  "local_checks": [
+    {
+      "check": "NotebookJourneyPanel + ApplicationSettings",
+      "result": "passed",
+      "tests": 20
+    },
+    {
+      "check": "App.navigation + DesktopSession",
+      "result": "passed",
+      "tests": 34
+    },
+    {
+      "check": "TypeScript + production UI build",
+      "result": "passed"
+    },
+    {
+      "check": "data-reset + desktop-session + desktop-install + acceptance-workspaces",
+      "initial_result": "2 failed, 86 passed, 1 skipped, 2 teardown errors",
+      "diagnostic": "Detached daemon zombies are not reaped by the cloud container init; psutil waits time out after stop. No production or test assertion change.",
+      "log": "safety-initial-failure.log"
+    },
+    {
+      "check": "data-reset rerun with existing verifier Linux subreaper setup",
+      "result": "passed",
+      "tests": 23,
+      "command": "UV_CACHE_DIR=/workspace/.cache/uv uv run --locked python -c 'import ctypes, pytest; assert ctypes.CDLL(None, use_errno=True).prctl(36,1,0,0,0) == 0; raise SystemExit(pytest.main([\"-n\", \"0\", \"-q\", \"packages/lab-tools/tests/test_data_reset.py\"]))'",
+      "log": "reset-subreaper.log"
+    },
+    {
+      "check": "remaining desktop/installation/acceptance fixture checks",
+      "result": "65 passed, 1 skipped",
+      "skip": "Windows Shell32 known folders requires Windows"
+    },
+    {
+      "check": "verify_notebook_journey real Chromium and independent kernels",
+      "result": "passed",
+      "parameters": "7x64 -> 7x32 -> 5x32; retained run, Settings exact-source without document reload, service/kernel restart",
+      "groups": "42 -> 63 points; 2 -> 3 groups; restart/history-only reopen and course navigation/reload",
+      "substitutions": [
+        "external editor activation",
+        "native window plumbing"
+      ],
+      "report": "notebook-journey/acceptance.json",
+      "group_report": "notebook-journey/groups-acceptance.json"
+    }
+  ],
+  "delivery": {
+    "manifest": "toolchain/bundle.json",
+    "manifest_sha256": "8bccb41f55599f474d726f165d2a77c9a72534fb461f2877d43ce8de614a251c",
+    "source_commit": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+    "kind": "Linux offline development delivery with independent author Python; not a native installed desktop"
+  },
+  "workflow": {
+    "id": 37674562875,
+    "profile": "local-application",
+    "url": "https://github.com/scopecat-project/scopecat/actions/runs/37674562875",
+    "result": "failure",
+    "expected_scope": [
+      "browser journey shards",
+      "Windows/Linux isolated wheels and offline teaching delivery"
+    ],
+    "excluded": [
+      "native-distribution",
+      "public-preview publishing",
+      "Mac",
+      "full Python matrix"
+    ],
+    "installed_windows": "passed",
+    "installed_linux": "passed",
+    "raw_logs": [
+      "windows-installed-job.log",
+      "linux-installed-job.log"
+    ],
+    "framework_artifact_verification": {
+      "artifact_id": 11505719524,
+      "commit": "b54376a8de67c6b9e0cdc533eb417cc9f5286d4c",
+      "verified_files": 8,
+      "archive_sha256": "2b1841a251ebc53625537347f4430eee2460ac1d10069a621f67e96306bc7e83",
+      "preview_sha256": "819ffe2703f36503067afd792af4325abedef7b4af92b92eea924570eadb3b1a"
+    },
+    "artifacts": [
+      {
+        "id": 11505719524,
+        "name": "scopecat-framework",
+        "downloaded_and_hashed": true
+      },
+      {
+        "id": 11507475321,
+        "name": "scopecat-tutorial-windows-latest",
+        "size_bytes": 115021088,
+        "downloaded_locally": false
+      },
+      {
+        "id": 11506242696,
+        "name": "scopecat-tutorial-ubuntu-latest",
+        "size_bytes": 147936413,
+        "downloaded_locally": false
+      }
+    ],
+    "artifact_access": "Direct gh/curl artifact download returns 403. GitHub connector downloaded framework successfully. Large tutorial ZIPs exceed executor 32 MiB transfer limit; job logs independently retrieved instead, per-Notebook artifact JSON was not independently inspected.",
+    "browser_shard_1": "7 passed, 1 failed (also failed on retry)",
+    "browser_shard_2": "20 passed",
+    "gate": "failure"
+  },
+  "not_run": [
+    "Windows EXE installer/uninstaller and actual native WebView multiwindow/storage/reset sequence",
+    "Mac native installation/host checks (parent deferred)",
+    "actual VS Code activation/kernel selection",
+    "unfamiliar-user usability",
+    "real devices"
+  ],
+  "reusable_entries": {
+    "source_browser_kernel": "scripts/verify_notebook_journey.py <fresh-work> <toolchain-delivery> [current-gui-dist]",
+    "installed_profile": "gh workflow run acceptance.yml --ref tmp/acceptance-917-918-20261007 -f profile=local-application",
+    "native_profile": "acceptance.yml profile=native-distribution currently has both macOS and Windows; do not dispatch as Windows-only",
+    "native_verifier": "scripts/verify_native_application.py <app> <fresh-reports> <installer> --native-windows; requires disposable GitHub-hosted Mac/Windows runner and RUNNER_TEMP descendant",
+    "reset_safety": "packages/lab-tools/tests/test_data_reset.py; actual native reset probe chooses skip-backup; real folder-picker interaction remains separate"
+  },
+  "side_effect_review": [
+    "Only fresh temporary test homes; backup/reset fixtures preserve source/install files and may delete only their seeded test store",
+    "Native wrapper copies input app before relocation; Windows setup/uninstall targets temporary Installed Scopecat directory",
+    "local-application writes Actions artifacts, no release/tag/deploy/PyPI",
+    "Native hosted guard intentionally not bypassed on Linux/user host"
+  ],
+  "failure": {
+    "job_id": 112975010008,
+    "test": "e2e/parameter-context.e2e.ts:104 launches two samples with independent parameter versions and declared batches",
+    "location": "e2e/parameter-context.e2e.ts:150",
+    "environment": "GitHub-hosted ubuntu-latest; workflow browser project journey-1; locked Playwright 1.63.0",
+    "reproduction": "pnpm exec playwright test e2e/parameter-context.e2e.ts --project=journey-1 --grep \"and declared batches\" --reporter=line",
+    "observed": "Both attempt and retry time out after 120000ms waiting for button Browse samples, batches and collections. Error-context contains Parameters: values-1, button Hide context choices [expanded], and Experimental batch combo with cooldown-a selected.",
+    "excerpt": [
+      "Error: locator.click: Test timeout of 120000ms exceeded.",
+      "waiting for getByRole('button', { name: 'Browse samples, batches and collections', exact: true })",
+      "button \"Hide context choices\" [expanded]",
+      "combobox \"Experimental batch\": option \"cooldown-a\" [selected]"
+    ],
+    "interpretation": "Likely stale test assumption that context choices are collapsed on each loop; no baseline rerun or repair performed. Test and MeasurementContext.tsx are unchanged from base main. Do not mark candidate accepted.",
+    "artifact_id": 11506802645,
+    "artifact_url": "https://github.com/scopecat-project/scopecat/actions/runs/37674562875/artifacts/11506802645",
+    "artifact_sha256": "1bf95ce84098c09143075f1c08e912a19f09cacef367f12986f0a428e37dc249",
+    "raw_artifact_downloaded": true,
+    "retention_days": 7
+  },
+  "scope_decision": "No workflow edits and no Mac run. local-application used unchanged. Windows-only native matrix narrowing remains undecided; native acceptance not performed.",
+  "remaining_blockers": [
+    "Browser declared-batches case fails; candidate acceptance gate is red",
+    "Actual native installer/WebView/editor and Mac checks remain unexecuted"
+  ]
+}
