@@ -11,27 +11,27 @@ from unittest.mock import patch
 
 import httpx2
 import pytest
+from filelock import FileLock
 from scopecat.application.author_imports import release_notebook_imports
 from scopecat.application.author_procedures import AuthorProcedure
 from scopecat.automation.wire import (
     ProcedureRunListQuery,
     ProcedureStepInputSubmitCommand,
 )
-from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import Project
 from scopecat_testkit.project_loading import isolated_project_imports
 
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
 
 _SOURCE = """\
-import time
+from pathlib import Path
+from filelock import FileLock
 from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.procedures import LabProcedureContext
 from scopecat.automation import procedure
-from scopecat_lab.helper import LABEL
+from scopecat_lab.helper import LABEL, DISCONNECT_GATE
 
 class Intent(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -45,7 +45,10 @@ class Answer:
 
 @procedure(id="ordinary", version="1", intent=Intent)
 def ordinary(context: LabProcedureContext, intent: Intent) -> None:
-    time.sleep(2)
+    gate = Path(DISCONNECT_GATE)
+    gate.with_suffix(".entered").touch()
+    with FileLock(gate, timeout=60):
+        pass
     context.interpret(
         "confirm",
         title=intent.label,
@@ -77,7 +80,8 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
     source = project.root / "src/scopecat_lab/workflow.py"
     source.write_text(_SOURCE)
     helper = source.with_name("helper.py")
-    helper.write_text('LABEL = "original source"\n')
+    gate = tmp_path / "disconnect.lock"
+    helper.write_text(f'LABEL = "original source"\nDISCONNECT_GATE = {str(gate)!r}\n')
     start_project(project, timeout=60)
     try:
         with isolated_project_imports(), project.authoring() as author:
@@ -99,24 +103,12 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                 # The command owns detached, recursively frozen JSON containers.
                 old_intent.tags.append("caller mutation")
                 assert prepared.command.intent["tags"] == ("source-bound",)
-                # Even a low-level client with the same workspace ID must not
-                # reconnect this command to another application's scientific store.
-                other = initialize_project(tmp_path / "other-store")
-                start_project(other, timeout=60)
-                try:
-                    with DaemonClient(
-                        resolve_daemon_endpoint(other.root),
-                        workspace_id=author.workspace_id,
-                    ) as wrong_store:
-                        with pytest.raises(ValueError, match="another data store"):
-                            prepared.reconnect(wrong_store)
-                        assert not wrong_store.list_procedures(
-                            ProcedureRunListQuery(request_key="ordinary-retry")
-                        ).items
-                finally:
-                    stop_project(other)
+                # Reconnection identity fences are covered directly in
+                # scopecat/tests/test_author_procedures.py.
                 original_source = prepared.command.source
-                helper.write_text('LABEL = "changed source"\n')
+                helper.write_text(
+                    helper.read_text().replace("original source", "changed source")
+                )
                 source.write_text(
                     _SOURCE.replace(
                         "title=intent.label,", 'title=intent.label + " new",'
@@ -126,10 +118,17 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                     author.procedures.prepare(
                         old_definition, old_intent, request_key="stale-source"
                     )
-                handle = prepared.submit()
-                assert handle.dispatch_error is None
-                assert handle.progress().dispatch.worker_running
-                author.close()
+                # Hold the real worker until this client has disconnected. The
+                # unlocked gate is immediate on resume and on the cancellation run.
+                with FileLock(gate, timeout=60):
+                    handle = prepared.submit()
+                    assert handle.dispatch_error is None
+                    deadline = time.monotonic() + 60
+                    while not gate.with_suffix(".entered").exists():
+                        assert time.monotonic() < deadline, handle.progress()
+                        time.sleep(0.01)
+                    assert handle.progress().dispatch.worker_running
+                    author.close()
             # The submitting client is gone before waiting for the worker.
             with project.authoring() as reconnected:
                 observed = reconnected.procedures.get(handle.id)
