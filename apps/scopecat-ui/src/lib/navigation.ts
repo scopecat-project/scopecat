@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 export interface NavigationOptions {
   replace?: boolean;
 }
@@ -14,6 +15,27 @@ export function navigate(target: URL | string, options: NavigationOptions = {}) 
     window.history.pushState({ scopecatPosition: position + 1 }, "", url);
   }
   window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
+/** Keep ordinary console links in this window without discarding its editable state. */
+export function navigateLink(event: MouseEvent<HTMLAnchorElement>) {
+  const link = event.currentTarget;
+  const url = new URL(link.href);
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.altKey ||
+    link.hasAttribute("download") ||
+    (link.target && link.target !== "_self") ||
+    url.origin !== window.location.origin ||
+    url.pathname !== window.location.pathname
+  )
+    return;
+  event.preventDefault();
+  navigate(url);
 }
 
 export function navigateBack() {

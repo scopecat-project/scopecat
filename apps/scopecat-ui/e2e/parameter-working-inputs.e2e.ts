@@ -125,6 +125,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
       work.getByRole("button", { name: "Start acquisition", exact: true }),
     ).toBeDisabled();
     await expect(work.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
+    await work.getByLabel("Gain", { exact: true }).fill("2");
     await work.getByRole("button", { name: "Use current working inputs", exact: true }).click();
     await expect(
       work.getByRole("button", { name: "Start acquisition", exact: true }),
@@ -192,6 +193,11 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       "href",
       `?procedure=${encodeURIComponent(procedureB)}&run=${encodeURIComponent(runB)}#runs`,
     );
+    // Reopening the same procedure must not reload away this window's launch draft.
+    await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
+    await work.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
+    await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
+    await expect(work.getByText(/Using working input revision/)).toBeVisible();
     await work.getByRole("button", { name: "Configuration", exact: true }).click();
     await expect(continuedField).toHaveValue("5.5");
     await testInfo.attach("working-inputs-evidence", {
