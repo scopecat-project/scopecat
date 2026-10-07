@@ -2,11 +2,9 @@
 default: minor
 ---
 
-Run calibration and joint-calibration lessons through managed author sessions.
+Keep calibration lessons running in the background after closing a Notebook.
 
-The shipped notebooks submit source-bound procedures to application workers,
-reconnect to the same request, and read retained checks and publication evidence.
-History, bounded waiting and step outputs are available from the author session;
-closing a Notebook does not stop its worker. Regression assertions stay in the
-external real-kernel harness, including in-flight disconnect and history reopening.
-Task-calibration admission remains a separate migration.
+Calibration and joint-calibration continue in the application while the Notebook
+is disconnected. Reconnect to view the same request, its progress and retained
+results. Browse previous requests, checks and publication evidence without
+repeating measurements. Waiting for a result can time out without stopping it.

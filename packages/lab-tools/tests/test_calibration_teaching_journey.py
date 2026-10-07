@@ -100,6 +100,7 @@ from pathlib import Path
 import pytest
 import scopecat as sc
 from scopecat_server.lifecycle import start_project, stop_project
+from lab_tools.verify_editing import _cell_index
 
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root / "src"))
@@ -121,7 +122,7 @@ try:
         session.refresh()
         namespace = {"sc": sc, "session": session}
         cells = json.loads((root / "notebooks/calibration.ipynb").read_text())["cells"]
-        exec("".join(cells[2]["source"]), namespace)
+        exec("".join(cells[_cell_index(cells, "calibration-2")]["source"]), namespace)
         lab = project.connect()
         module = importlib.import_module("my_experiment.calibration")
         intent = module.CalibrationIntent(
@@ -442,6 +443,7 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
 
     from lab_tools.application_runtime import ApplicationRuntime
     from lab_tools.notebook import kernel_command
+    from lab_tools.verify_editing import _cell_index
     from scopecat.project import open_project
     from scopecat_server.lifecycle import start_project, stop_project
 
@@ -466,11 +468,17 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
     _, environment = kernel_command(root, source_path=False)
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
+    anchor_id = {"calibration": "calibration-5", "joint-calibration": "joint-5"}[topic]
+    # Check raw IDs before nbformat can normalize duplicate IDs during loading.
+    _cell_index(json.loads(path.read_text(encoding="utf-8"))["cells"], anchor_id)
     notebook = read(path, as_version=4)
     # Observe the learner's actual close call, not a substituted binding/cell.
     # The independent observer waits while that session is closed, proving the
     # real worker keeps executing without a live Notebook client.
-    notebook.cells.insert(5, v4.new_code_cell(_OBSERVE_RUNNING_DISCONNECT))
+    notebook.cells.insert(
+        _cell_index(notebook.cells, anchor_id),
+        v4.new_code_cell(_OBSERVE_RUNNING_DISCONNECT),
+    )
     notebook.cells.append(v4.new_code_cell(_MANAGED_CHECKS))
     notebook.cells.append(v4.new_code_cell(_SAVE_EVIDENCE))
     reopen = v4.new_notebook(cells=[v4.new_code_cell(_REOPEN_CHECKS)])

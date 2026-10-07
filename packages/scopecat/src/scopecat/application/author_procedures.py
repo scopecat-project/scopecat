@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 import httpx2
@@ -141,8 +142,16 @@ class AuthorProcedure:
         A failed scientific decision is a retained closure, not a client exception.
         Timeout only stops waiting; it neither cancels nor retries the procedure.
         """
-        if timeout < 0 or interval <= 0:
-            raise ValueError("timeout must be nonnegative and interval positive")
+        if (
+            not isfinite(timeout)
+            or timeout < 0
+            or not isfinite(interval)
+            or interval <= 0
+        ):
+            raise ValueError(
+                "timeout must be finite and nonnegative; "
+                "interval must be finite and positive"
+            )
         deadline = time.monotonic() + timeout
         while True:
             try:

@@ -59,3 +59,24 @@ def test_output_pages_and_does_not_fall_back_from_newest_incomplete_attempt() ->
         procedure.output("fit")
     client.cancel_procedure.assert_not_called()
     client.dispatch_project_procedure.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("timeout", "interval"),
+    [
+        (float("nan"), 0.2),
+        (float("inf"), 0.2),
+        (float("-inf"), 0.2),
+        (-1, 0.2),
+        (60, float("nan")),
+        (60, float("inf")),
+        (60, float("-inf")),
+        (60, 0),
+        (60, -1),
+    ],
+)
+def test_wait_rejects_invalid_budgets_before_reading(timeout, interval) -> None:
+    client = Mock(spec=DaemonClient)
+    with pytest.raises(ValueError, match="finite"):
+        AuthorProcedure(client, "retained").wait(timeout=timeout, interval=interval)
+    assert not client.method_calls
