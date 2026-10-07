@@ -5,12 +5,15 @@ from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from scopecat.analysis.calibration import CHECK_RESULT
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
     ProcedureCloseCommand,
+    ProcedureSource,
     ProcedureStepBeginCommand,
     ProcedureStepCompleteCommand,
+    ProcedureSubmitCommand,
     ProcedureWorkerLeaseAcquireCommand,
     RunOutputRef,
 )
@@ -31,6 +34,7 @@ from scopecat.daemon.wire import (
     RunSubmission,
 )
 from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.calibration_check import (
     CalibrationCheckRequest,
     CalibrationCheckResult,
@@ -232,15 +236,33 @@ def test_deadline_waits_for_admitted_work_and_does_not_reset_on_resume(
             assert len(stopped.task.attempts["q0"]) == 1
 
 
-def test_verification_admission_failure_never_repeats_repair(tmp_path: Path) -> None:
+@pytest.mark.parametrize("retained", [False, True])
+def test_verification_admission_failure_never_repeats_repair(
+    tmp_path: Path, retained: bool
+) -> None:
     with _check_case(tmp_path) as (runtime, check, child):
         tasks = runtime.application.calibration_tasks
-        tasks.create(specification(check))
+        source = (
+            ProcedureSource(
+                workspace_id="workspace",
+                code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
+            )
+            if retained
+            else None
+        )
+        validated: list[ProcedureSubmitCommand] = []
+        tasks.validate_call = validated.append
+        tasks.create(specification(check).model_copy(update={"source": source}))
         start(runtime)
         tasks.advance("repair")
         finish_check(runtime, child, passed=False)
         repair = tasks.advance("repair")
         assert repair.task.attempts["q0"][-1].phase == "repair"
+        run = runtime.application.automation.get(repair.task.executions["q0"])
+        assert run.source == source
+        if retained:
+            assert validated[-1].intent == run.intent
+            assert len(validated) == 4  # Both templates, initial check and repair.
         finish_check(runtime, child, passed=True)  # Deliberately no candidate output.
         blocked = tasks.advance("repair")
         assert "q0" in blocked.task.dispatch_errors

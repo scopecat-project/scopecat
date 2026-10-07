@@ -762,6 +762,18 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             )
         return completed.stdout
 
+    def validate_task_call(command: ProcedureSubmitCommand) -> None:
+        try:
+            retained_call(
+                ProcedureValidationCall(request=command), started=time.perf_counter()
+            )
+        except HTTPException as error:
+            raise BackendConflict(str(error.detail)) from error
+        except (KeyError, ValueError) as error:
+            raise BackendConflict(str(error)) from error
+
+    application.calibration_tasks.validate_call = validate_task_call
+
     @app.post(f"{_API_PREFIX}/analysis-follows")
     def create_analysis_follow(command: AnalysisFollowRequest) -> AnalysisFollowView:
         try:

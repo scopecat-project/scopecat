@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from scopecat.automation import RegisteredProcedure
+from scopecat.automation import ProcedureSource, RegisteredProcedure
 from scopecat.automation.calibration_tasks import CalibrationTaskPlan
 from scopecat.daemon.calibration_tasks import (
     CalibrationRepairBudget,
@@ -43,13 +43,16 @@ class LabCalibrationTasks:
         plan: CalibrationTaskPlan,
         *,
         calls: dict[str, CalibrationTaskCall],
+        source: ProcedureSource | None = None,
         finalization: CalibrationTaskCall | None = None,
         repairs: dict[str, CalibrationStageRepair] | None = None,
         repair_budget: CalibrationRepairBudget | None = None,
     ) -> CalibrationTaskView:
+        """Retain one optional immutable source for all task invocations."""
         return self._client.create_calibration_task(
             CalibrationTaskCreate(
                 task_id=task_id,
+                source=source,
                 plan=plan,
                 calls=calls,
                 finalization=finalization,

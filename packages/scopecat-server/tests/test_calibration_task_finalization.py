@@ -9,8 +9,10 @@ from scopecat.automation import (
     AnalysisPublicationOutputRef,
     ProcedureCloseCommand,
     ProcedureRunListQuery,
+    ProcedureSource,
     ProcedureStepBeginCommand,
     ProcedureStepCompleteCommand,
+    ProcedureSubmitCommand,
     ProcedureWorkerLeaseAcquireCommand,
     RunOutputRef,
 )
@@ -27,6 +29,7 @@ from scopecat.daemon.calibration_tasks import (
 from scopecat.daemon.wire import AnalysisFactOutputPayload, AnalysisSaveCommand
 from scopecat.project import load_project
 from scopecat.records.analysis import AnalysisFact, RunAnalysisSubject
+from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.calibration_check import CalibrationCheckResult
 from scopecat.sdk.compute import PYTHON_JSON_CODEC
 
@@ -40,8 +43,9 @@ from .test_project_analysis_runtime import _complete_signal_run
 
 
 @pytest.mark.parametrize("passed", [True, False])
+@pytest.mark.parametrize("retained", [True, False])
 def test_finalization_handoff_recovery_and_rejection(
-    tmp_path: Path, passed: bool
+    tmp_path: Path, passed: bool, retained: bool
 ) -> None:
     root = tmp_path / "source"
     root.mkdir()
@@ -49,9 +53,20 @@ def test_finalization_handoff_recovery_and_rejection(
     with _check_case(root) as (runtime, check, child):
         app = runtime.application
         tasks = app.calibration_tasks
+        validated: list[ProcedureSubmitCommand] = []
+        tasks.validate_call = validated.append
+        source = (
+            ProcedureSource(
+                workspace_id="workspace",
+                code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
+            )
+            if retained
+            else None
+        )
         command = _command(check)
         spec = CalibrationTaskCreate(
             task_id="round",
+            source=source,
             plan=CalibrationTaskPlan(
                 stages=(CalibrationTaskStage(id="fit", check=check),)
             ),
@@ -208,6 +223,27 @@ def test_finalization_handoff_recovery_and_rejection(
                 reason="retry admission",
             )
         )
+        if retained:
+
+            def reject_bound(command: ProcedureSubmitCommand) -> None:
+                assert command.intent["calibration_task"] is not None
+                raise BackendConflict("authored final intent rejected")
+
+            tasks.validate_call = reject_bound
+            rejected = tasks.advance("round")
+            assert rejected.task.finalization_error == "authored final intent rejected"
+            assert rejected.task.finalization_run_id is None
+            assert len(app.automation.list(ProcedureRunListQuery()).items) == 1
+            tasks.control(
+                CalibrationTaskControl(
+                    task_id="round",
+                    expected_revision=rejected.task.control_revision,
+                    action="start",
+                    actor="test",
+                    reason="retry validation",
+                )
+            )
+            tasks.validate_call = validated.append
         bound = tasks.advance("round")
         assert bound.finalization is not None and bound.task.mode == "running"
         assert tasks.advance("round") == bound
@@ -218,6 +254,11 @@ def test_finalization_handoff_recovery_and_rejection(
         assert inputs.checks["fit"] == bound.progress.stages[0].evidence
         assert inputs.checks["fit"].analysis_record_id == saved.record.id
         assert bound.finalization.intent["captured_destination"] == "unchanged"
+        assert parent.source == bound.finalization.source == source
+        if retained:
+            assert validated[1].intent["calibration_task"] is None
+            assert validated[-1].intent == bound.finalization.intent
+            assert all(command.source == source for command in validated)
         assert bound.task.specification == spec
     with LocalDaemonRuntime(root) as restarted:
         assert restarted.application.calibration_tasks.advance("round") == bound

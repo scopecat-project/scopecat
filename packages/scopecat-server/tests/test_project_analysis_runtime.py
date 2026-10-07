@@ -1736,16 +1736,20 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 assert restored_source.setup == resolved.config_source.setup
 
 
+@pytest.mark.parametrize("retained", [False, True])
 def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
     tmp_path: Path,
+    retained: bool,
 ) -> None:
     from scopecat.analysis.calibration import CHECK_RESULT
     from scopecat.automation import (
         AnalysisPublicationOutputRef,
         ProcedureCloseCommand,
         ProcedureDefinitionRef,
+        ProcedureSource,
         ProcedureStepBeginCommand,
         ProcedureStepCompleteCommand,
+        ProcedureSubmitCommand,
         ProcedureWorkerLeaseAcquireCommand,
         RunOutputRef,
     )
@@ -1762,6 +1766,7 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
     )
     from scopecat.daemon.wire import AnalysisFactOutputPayload
     from scopecat.records.analysis import AnalysisFact
+    from scopecat.records.author_revision import AuthorRevisionRef
     from scopecat.records.calibration_check import (
         CalibrationCheckRequest,
         CalibrationCheckResult,
@@ -1815,6 +1820,12 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
         )
         specification = CalibrationTaskCreate(
             task_id="candidate-flow",
+            source=ProcedureSource(
+                workspace_id="workspace",
+                code_revision=AuthorRevisionRef(content_hash="sha256:" + "a" * 64),
+            )
+            if retained
+            else None,
             plan=CalibrationTaskPlan(
                 stages=(
                     CalibrationTaskStage(id="fit", check=check),
@@ -1844,6 +1855,8 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
                 for key in ("fit", "verify", "wrong-analysis")
             },
         )
+        validated: list[ProcedureSubmitCommand] = []
+        app.calibration_tasks.validate_call = validated.append
         app.calibration_tasks.create(specification)
         first = app.calibration_tasks.dispatch(
             CalibrationTaskDispatch(task_id=specification.task_id, stage_id="fit")
@@ -2007,6 +2020,10 @@ def test_task_binds_adopted_candidate_atomically_and_replays_after_restart(
         assert bound.task.specification == specification
         assert lab.parameters.checkout("daily").head == branch
         called = app.automation.get(bound.task.executions["verify"])
+        assert called.source == parent.source == specification.source
+        if retained:
+            assert validated[-1].intent == called.intent
+            assert validated[-1].intent != specification.calls["verify"].intent
         assert (
             CalibrationCheckRequest.model_validate(called.intent["calibration_check"])
             == adopted
