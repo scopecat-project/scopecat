@@ -13,6 +13,7 @@ from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
+from scopecat.kernel.content_identity import canonical_json
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.author_revision import AuthorRevisionRef
 
@@ -57,7 +58,9 @@ def main() -> None:
                 report_stage("procedure definition validation")
                 definition = application.procedures.resolve(call.request.definition)
                 intent = thaw_json_value(call.request.intent)
-                if definition.encode_intent(intent) != intent:
+                if canonical_json(definition.encode_intent(intent)) != canonical_json(
+                    intent
+                ):
                     raise ValueError(
                         "procedure intent is not canonical for retained source"
                     )

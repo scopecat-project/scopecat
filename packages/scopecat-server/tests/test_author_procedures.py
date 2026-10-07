@@ -35,6 +35,7 @@ class Intent(BaseModel):
     model_config = ConfigDict(frozen=True)
     label: str
     tags: list[str] = ["source-bound"]
+    repetitions: int = 1
 
 @dataclass
 class Answer:
@@ -172,6 +173,19 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                     reconnected.submit_author_procedure(stale_source)
                 assert not reconnected.list_procedures(
                     ProcedureRunListQuery(request_key="changed-source")
+                ).items
+                # JSON true must not pass canonical validation as integer 1.
+                noncanonical = current.command.model_copy(
+                    update={
+                        "request_key": "noncanonical",
+                        "intent": {**current.command.intent, "repetitions": True},
+                    }
+                )
+                with pytest.raises(httpx2.HTTPStatusError) as rejected:
+                    reconnected.submit_author_procedure(noncanonical)
+                assert "not canonical" in rejected.value.response.text
+                assert not reconnected.list_procedures(
+                    ProcedureRunListQuery(request_key="noncanonical")
                 ).items
                 # The daemon checks registration/fingerprint before admitting.
                 forged = current.command.model_copy(
