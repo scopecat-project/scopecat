@@ -49,7 +49,13 @@ def test_grouped_teaching_restart(tmp_path: Path, monkeypatch, notebook_imports,
         v4.new_code_cell(GROUP_CHECKS + "\nassert before_runs == {run.id}\n")
     )
     reopen = v4.new_notebook(
-        cells=[v4.new_code_cell(c) for c in (*GROUP_REOPEN_CELLS, ADD_ANALYSIS)]
+        cells=[
+            *[v4.new_code_cell(c) for c in GROUP_REOPEN_CELLS],
+            v4.new_code_cell(
+                "assert before_runs == {bookmark['run_id'], bookmark['changed_run_id']}"
+            ),
+            v4.new_code_cell(ADD_ANALYSIS),
+        ]
     )
     project = sc.open_project(root)
     for name, document in (("groups", notebook), ("groups-reopen", reopen)):
