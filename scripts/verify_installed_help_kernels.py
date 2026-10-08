@@ -240,7 +240,7 @@ def verify_installed(payload: Path, work: Path) -> None:
         retained = {}
         for journey in (parameters, groups):
             code = journey.directory / "src/my_experiment/teaching.py"
-            code.write_text(code.read_text() + "\n# retained author note\n")
+            code.write_bytes(code.read_bytes() + b"\n# retained author note\n")
             notebook = nbformat.read(journey.notebook, as_version=4)
             cast("list[NotebookNode]", notebook.cells).append(
                 nbformat.v4.new_code_cell("# My retained notes")
