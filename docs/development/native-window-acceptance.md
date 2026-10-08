@@ -9,9 +9,10 @@ Linux checks, browser acceptance and platform-smoke are not native passes.
 [PR #888](https://github.com/scopecat-project/scopecat/pull/888) records native
 [run 37456101480](https://github.com/scopecat-project/scopecat/actions/runs/37456101480)
 at `9537010eeeda8dae2b3a317c6389d03828483985`: Windows, Mac and the acceptance gate
-passed. Its inspected [Windows reports](https://github.com/scopecat-project/scopecat/actions/runs/37456101480/artifacts/11410985150)
-and [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37456101480/artifacts/11410530238)
-record cookie preservation through peer opening/closing, independent-host isolation,
+passed. PR #888 records the following results from the
+[Windows reports](https://github.com/scopecat-project/scopecat/actions/runs/37456101480/artifacts/11410985150)
+and [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37456101480/artifacts/11410530238):
+cookie preservation through peer opening/closing, independent-host isolation,
 service replacement and exact application draft/form recovery. Windows used
 Server 2025 amd64 / WebView2 153.0.4234.48; Mac used macOS 26.6.2 arm64.
 The Windows delivery contains `pywebview-6.2.1+scopecat.windows.1`; ordinary source
