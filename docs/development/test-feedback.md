@@ -314,5 +314,5 @@ plumbing, editor activation and VS Code's `__file__` injection are substituted;
 this is not native/editor/unfamiliar-user acceptance. Experiment-form draft and
 uncertain-submission persistence are separate from this Notebook receipt journey.
 
-The [entry and recovery observation](ordinary-author-entry.md) distinguishes
-this completed loop from the unresolved experiment-form recovery boundary.
+The [recoverable-editing contract](architecture/draft-recovery.md#experiment-form-boundary)
+distinguishes this receipt journey from experiment-form draft recovery.
