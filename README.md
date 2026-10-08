@@ -34,8 +34,9 @@ Python and application dependencies; opening saved data requires no source check
 or laboratory SDK. See [first steps](docs/getting-started/index.md) and
 [preview artifacts](docs/development/public-preview.md#artifact-identity-and-consumer-selection).
 
-For an actual desktop from a source checkout, use the
-[local Mac desktop guide](docs/development/local-desktop-trial.md) with isolated data.
+For native acceptance from a source checkout, use the
+[local Mac packaging guide](docs/development/local-desktop-trial.md) with isolated
+data. A unified one-command native desktop development loop is not implemented.
 
 For browser frontend development without installing the application:
 

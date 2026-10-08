@@ -211,11 +211,13 @@ and rejection of unsupported formats remain distinct from future compatibility.
 
 ## Run without installation
 
-Choose the entry for the behavior you are changing:
+A unified one-command native desktop with Vite hot reload and author-environment
+preparation is not implemented. The packaged path below is for acceptance; it is
+not the default daily development loop. Choose the existing entry for your work:
 
 | Goal | Entry | Runtime and limitation |
 | --- | --- | --- |
-| Ordinary desktop, Settings new folder, editor, clipboard and native dialogs | [Build and open a local Mac desktop](local-desktop-trial.md) | One packaged app with its own Python and author-environment payload; isolated test data; no manual daemon setup |
+| Ordinary desktop, Settings new folder, editor, clipboard and native dialogs | [Build a local Mac desktop for acceptance](local-desktop-trial.md) | One packaged app with its own Python and author-environment payload; isolated test data; no manual daemon setup |
 | Browser frontend hot reload | `lab_tools.dev --source .` below | Checkout Python, one owned backend and Vite; no native DesktopAPI |
 | Short source-native window debugging | [Source-window shortcut](local-desktop-trial.md#choose-the-developer-mode) | Built GUI and checkout Python; a fresh home lacks author-environment payload and packaged Cocoa repair |
 | Inspect/maintain one existing application backend | `scopecat app --home APPLICATION_STATE --action status` | Explicit existing application owner; use the desktop for ordinary startup and Quit |

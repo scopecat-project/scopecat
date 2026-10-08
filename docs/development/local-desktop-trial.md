@@ -1,4 +1,7 @@
-# Run a local Mac desktop
+# Build a local Mac desktop for acceptance
+
+This is a packaged acceptance path, not a one-command daily development loop.
+A unified native-window + Vite + backend desktop-dev entry is not implemented.
 
 Build a local `.app` to exercise Settings, native dialogs, clipboard and your
 editor with isolated development data. The application manages its own service;
