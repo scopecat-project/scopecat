@@ -23,12 +23,14 @@ from scopecat_server.lifecycle import initialize_project, start_project, stop_pr
 @pytest.mark.parametrize(
     "stderr", [None, "partial diagnostic", b"partial diagnostic\xff"]
 )
-def test_environment_timeout_retains_operation_and_stderr(monkeypatch, action, stderr):
+def test_environment_timeout_retains_operation_and_stderr(
+    monkeypatch: pytest.MonkeyPatch, action: str, stderr: str | bytes | None
+) -> None:
     failure = subprocess.TimeoutExpired(
         "environment worker", 60, output=b"private result", stderr=stderr
     )
     run = Mock(side_effect=failure)
-    monkeypatch.setattr(author_environment.subprocess, "run", run)
+    monkeypatch.setattr(subprocess, "run", run)
     with pytest.raises(ValueError, match="timed out") as caught:
         author_environment._call(Path("author-python"), action, "private request")
     message = str(caught.value)
@@ -42,13 +44,13 @@ def test_environment_timeout_retains_operation_and_stderr(monkeypatch, action, s
     assert run.call_args.kwargs["timeout"] == 60
 
 
-def test_environment_timeout_bounds_stderr(monkeypatch):
+def test_environment_timeout_bounds_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
     failure = subprocess.TimeoutExpired(
         "environment worker",
         60,
         stderr=b"old diagnostic" + b"x" * 8192 + b"last message",
     )
-    monkeypatch.setattr(author_environment.subprocess, "run", Mock(side_effect=failure))
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=failure))
     with pytest.raises(ValueError, match="timed out") as caught:
         author_environment._call(Path("author-python"), "capture", "{}")
     message = str(caught.value)
@@ -58,15 +60,18 @@ def test_environment_timeout_bounds_stderr(monkeypatch):
     assert len(message) < 8400
 
 
-def test_environment_timeout_keeps_real_child_stderr(monkeypatch):
+def test_environment_timeout_keeps_real_child_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     run = subprocess.run
-    children = []
+    children: list[subprocess.TimeoutExpired] = []
 
-    def synthetic_worker(command, **kwargs):
+    def synthetic_worker(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
         assert kwargs["timeout"] == 60
         assert command[-1] == "capture"
         # Only the synthetic test process uses a short deadline.
-        kwargs["timeout"] = 2
         try:
             return run(
                 [
@@ -79,13 +84,17 @@ def test_environment_timeout_keeps_real_child_stderr(monkeypatch):
                         "time.sleep(30)"
                     ),
                 ],
-                **kwargs,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=2,
+                check=False,
             )
         except subprocess.TimeoutExpired as error:
             children.append(error)
             raise
 
-    monkeypatch.setattr(author_environment.subprocess, "run", synthetic_worker)
+    monkeypatch.setattr(subprocess, "run", synthetic_worker)
     with pytest.raises(ValueError, match="timed out") as caught:
         author_environment._call(Path(sys.executable), "capture", "{}")
     assert "synthetic import reached" in str(caught.value)
