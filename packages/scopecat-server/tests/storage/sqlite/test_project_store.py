@@ -130,15 +130,26 @@ def test_bootstrap_refuses_a_noncurrent_project_schema(
     database = tmp_path / "control.sqlite3"
     store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
     store.bootstrap()
-    with sqlite3.connect(database) as connection:
+    with store.sqlite.write_transaction() as connection:
         connection.execute("UPDATE project_schema SET version = ?", (version,))
-        before = tuple(connection.iterdump())
+    store.close()
+    # Inspect a complete, closed store as a new owner. Rejection must preserve
+    # physical files too, not merely an equivalent SQL dump.
+    original_paths = set(tmp_path.iterdir())
+    original_files = {
+        path.name: path.read_bytes() for path in original_paths if path.is_file()
+    }
+    reopened = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
+    with pytest.raises(
+        SchemaVersionError,
+        match=f"version: {version}; expected {PROJECT_SCHEMA_VERSION}",
+    ):
+        reopened.bootstrap()
 
-    with pytest.raises(SchemaVersionError, match=f"version: {version}"):
-        store.bootstrap()
-
-    with sqlite3.connect(database) as connection:
-        assert tuple(connection.iterdump()) == before
+    assert set(tmp_path.iterdir()) == original_paths
+    assert {
+        path.name: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
+    } == original_files
 
 
 def test_bootstrap_rejects_noncurrent_version_before_initializing_missing_tables(
@@ -159,10 +170,15 @@ def test_bootstrap_rejects_noncurrent_version_before_initializing_missing_tables
             "INSERT INTO project_schema(singleton, version) VALUES (1, ?)",
             (version,),
         )
+        connection.execute("CREATE TABLE retained(value TEXT)")
+        connection.execute("INSERT INTO retained VALUES ('original')")
     original = database.read_bytes()
     objects = tmp_path / "objects"
     store = SQLiteProjectStore(SQLiteDatabase(database), objects)
-    with pytest.raises(SchemaVersionError, match=f"version: {version}"):
+    with pytest.raises(
+        SchemaVersionError,
+        match=f"version: {version}; expected {PROJECT_SCHEMA_VERSION}",
+    ):
         store.bootstrap()
     assert database.read_bytes() == original
     assert set(tmp_path.iterdir()) == {database}
