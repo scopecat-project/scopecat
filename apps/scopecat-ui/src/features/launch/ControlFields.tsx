@@ -139,7 +139,8 @@ export function ControlFields({
                   ? (units[control.unit ?? ""]?.scale ?? 1) / (units[draft.unit]?.scale ?? 1)
                   : 1;
               const numeric = {
-                type: "number",
+                type: "text",
+                inputMode: "decimal" as const,
                 step: "any",
                 required: true,
                 min: control.minimum == null ? undefined : control.minimum * scale,
@@ -253,7 +254,8 @@ export function ControlFields({
                             }
                           />
                           <input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             min={2}
                             step={1}
                             required

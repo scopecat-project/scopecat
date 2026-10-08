@@ -236,7 +236,7 @@ def test_previous_development_schema_is_rejected_without_migration_or_deletion(
     before = {
         path.name: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
     }
-    with pytest.raises(SchemaVersionError, match="expected 112"):
+    with pytest.raises(SchemaVersionError, match="expected 113"):
         make_store(tmp_path)
     assert before == {
         path.name: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()

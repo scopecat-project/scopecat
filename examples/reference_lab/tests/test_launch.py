@@ -6,6 +6,7 @@ import shutil
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
+from typing import cast
 
 import httpx2
 import pytest
@@ -211,11 +212,20 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         )
         assert preview.manual_state is not None
         assert preview.manual_state.binding.request_hash == preview.request_hash
+        assert preview.procedure_definition is not None
+        assert repeated.procedure_definition is not None
+        assert preview.procedure_definition.id == repeated.procedure_definition.id
+        assert (
+            preview.procedure_definition.version
+            == repeated.procedure_definition.version
+        )
         exclude = {
             "request_hash": True,
             "code_revision": True,
             "manual_state": True,
             "definition_hash": True,
+            # Installed author workers fingerprint their own retained declaration.
+            "procedure_definition": True,
             "preflight": {"stages": {"__all__": {"inspections"}}},
         }
         assert preview.model_dump(exclude=exclude) == repeated.model_dump(
@@ -372,9 +382,27 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
         preview = provider(lab, request)
         assert isinstance(preview, LaunchPreview)
         before = lab.setup.get("initial")
-        admitted = provider(
-            lab, submit_request(request, preview, "launch-reviewed-candidate")
-        )
+        command = submit_request(request, preview, "launch-reviewed-candidate")
+        assert preview.procedure_definition is not None
+        with httpx2.Client(base_url=reference_lab_daemon.url, trust_env=False) as http:
+            retained = http.post(
+                "/api/v1/launch-attempts",
+                json={
+                    "definition": preview.procedure_definition.model_dump(mode="json"),
+                    "request": command.model_dump(mode="json"),
+                },
+            )
+            retained.raise_for_status()
+            sequence = cast("int", retained.json()["sequence"])
+            missing = http.get(f"/api/v1/launch-attempts/{sequence}/resolve")
+            missing.raise_for_status()
+            assert missing.json()["procedure_id"] is None
+        admitted = provider(lab, command)
+        assert isinstance(admitted, LaunchSubmission)
+        with httpx2.Client(base_url=reference_lab_daemon.url, trust_env=False) as http:
+            recovered = http.get(f"/api/v1/launch-attempts/{sequence}/resolve")
+            recovered.raise_for_status()
+            assert recovered.json()["procedure_id"] == admitted.procedure_id
         assert isinstance(admitted, LaunchSubmission)
         handle = lab.procedures.get(admitted.procedure_id).resume()
         assert handle.state == "waiting_for_input"

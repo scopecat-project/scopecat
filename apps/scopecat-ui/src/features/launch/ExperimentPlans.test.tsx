@@ -1,3 +1,7 @@
+import {
+  installLaunchRecoveryRoutes,
+  procedureDefinition,
+} from "../../test/launch-recovery-fixture";
 import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
@@ -163,6 +167,7 @@ function Harness({
         Edit while opening
       </button>
       <button
+        disabled={!context.recovery.ready}
         onClick={() =>
           void context.submit(
             {
@@ -185,6 +190,7 @@ function Harness({
               }),
             },
             "original",
+            procedureDefinition,
           )
         }
       >
@@ -207,6 +213,7 @@ function setup(library = false, initialize = true) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  installLaunchRecoveryRoutes();
   return render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="project-a">
@@ -231,10 +238,13 @@ it("opening another plan resets the save name, keeps current actor and preserves
     "fetch",
     vi.fn(async (input: Request) => {
       if (input.url.includes("experiment-launcher/submit")) throw new TypeError("lost response");
+      if (input.url.includes("setup/revisions/"))
+        return reply({ resolution: { definition_id: "bench" } });
       return reply({ items: [] });
     }),
   );
   setup();
+  await waitFor(() => expect(screen.getByText("Unknown submit")).toBeEnabled());
   fireEvent.click(screen.getByText("Unknown submit"));
   await waitFor(() =>
     expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key"),
@@ -242,6 +252,7 @@ it("opening another plan resets the save name, keeps current actor and preserves
   fireEvent.click(screen.getByText("Open first"));
   expect(screen.getByLabelText("Plan name")).toHaveValue("First plan");
   fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Unsaved name" } });
+  await screen.findByText("Experiment input saved in application data.", { exact: true });
   fireEvent.click(screen.getByText("Open second"));
   expect(screen.getByLabelText("Plan name")).toHaveValue("Second plan");
   expect(screen.getByLabelText("Current operator")).toHaveTextContent("operator");
@@ -334,6 +345,7 @@ it("waits for initial catalog readiness before allowing a saved plan to open", a
       </LaunchDraftProvider>
     </QueryClientProvider>
   );
+  installLaunchRecoveryRoutes();
   const rendered = render(view(true));
   const open = await screen.findByRole("button", { name: "Open First plan r1" });
   expect(open).toBeDisabled();
@@ -385,6 +397,7 @@ it("preserves a registered target through reopening, preview, submission and pla
             experiment_id: "signal",
             workspace_id: "legacy",
             definition_hash: first.definition.definition_hash,
+            procedure_definition: procedureDefinition,
             request_hash: `sha256:${"a".repeat(64)}`,
             reviewed,
             point_count: 1,
@@ -395,6 +408,7 @@ it("preserves a registered target through reopening, preview, submission and pla
             manual_state: {
               event_id: 1,
               binding: {
+                procedure_definition: procedureDefinition,
                 request_hash: `sha256:${"a".repeat(64)}`,
                 config_source_hash: `sha256:${"b".repeat(64)}`,
               },
@@ -415,6 +429,7 @@ it("preserves a registered target through reopening, preview, submission and pla
   fireEvent.click(screen.getByText("Open target"));
   expect(screen.getByLabelText("Selected registered target")).toHaveTextContent("revision 3");
   expect(screen.getByLabelText("Sample ID")).toBeDisabled();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   const start = screen.getByRole("button", { name: "Start acquisition" });

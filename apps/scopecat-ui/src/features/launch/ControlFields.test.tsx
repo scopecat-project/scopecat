@@ -37,7 +37,7 @@ it("converts GHz to MHz and replaces a scalar rather than hiding it behind a sca
   render(<Form fields={[frequency]} />);
   fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "5.1" } });
   fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
-  expect(screen.getByLabelText("Frequency")).toHaveValue(5100);
+  expect(screen.getByLabelText("Frequency")).toHaveValue("5100");
   expect(JSON.parse(screen.getByTestId("edits").textContent)).toEqual({
     frequency: { mode: "fixed", value: { value: 5100, unit: "MHz" } },
   });
@@ -48,7 +48,7 @@ it("converts GHz to MHz and replaces a scalar rather than hiding it behind a sca
     frequency: { mode: "scan", axis: { kind: "values", values: [{ value: 4.8, unit: "GHz" }] } },
   });
   fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "fixed" } });
-  expect(screen.getByLabelText("Frequency")).toHaveValue(4.8);
+  expect(screen.getByLabelText("Frequency")).toHaveValue("4.8");
 });
 it.each(["dBm", "unknown-project-unit"])(
   "retains %s without offering a silent linear relabel",
@@ -69,7 +69,7 @@ it("keeps a required control empty and offers only explicit sources", () => {
   const drafts = initialControlDrafts([control]);
   render(<ControlFields controls={[control]} drafts={drafts} onChange={() => {}} />);
   expect(screen.getByText("Frequency (required)")).toBeVisible();
-  expect(screen.getByLabelText("Frequency")).toHaveValue(null);
+  expect(screen.getByLabelText("Frequency")).toHaveValue("");
   expect(screen.getByLabelText("Frequency")).toBeRequired();
   expect(screen.queryByRole("option", { name: "Declared default" })).toBeNull();
   expect(() => controlEdits(drafts)).toThrow("finite numbers");

@@ -18,7 +18,7 @@ establish an installed upgrade or human/device acceptance.
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
 | Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent-data baseline is designated |
-| Editing recovery | Application-owned Decision and parameter drafts, conflicts and explicit adoption | See [Decision drafts](architecture/decision-drafts.md), [parameter drafts](architecture/parameter-drafts.md) and [native acceptance](native-window-acceptance.md) for their distinct coverage. |
+| Editing recovery | Application-owned Decision, parameter and experiment drafts, conflicts and explicit adoption; exact original-submission recovery | See [experiment recovery](architecture/experiment-drafts.md), [Decision drafts](architecture/decision-drafts.md), [parameter drafts](architecture/parameter-drafts.md) and [native acceptance](native-window-acceptance.md) for their distinct coverage. |
 | Configuration sharing | Inert inspection, atomic editable derivations and installed continuation | [Data exchange](architecture/data-exchange.md); broader structured authoring remains #502. |
 | Teaching | Same-application manual-peak practice and persistent Help continuation for the supplied Notebook topics | Course design and actual editor/unfamiliar-user evidence remain #565/#616. |
 

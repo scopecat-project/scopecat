@@ -3,12 +3,12 @@ import { useLaunchDraft } from "./LaunchDraft";
 
 export function OriginalSubmission({
   onOpen,
-  catalogReady,
+  catalogReady: _catalogReady,
 }: {
   onOpen: (id: string) => void;
   catalogReady: boolean;
 }) {
-  const { attempt, checkSubmission, submit, retryOriginalAllowed } = useLaunchDraft();
+  const { attempt, checkSubmission, rerun } = useLaunchDraft();
   if (!attempt) return null;
   return (
     <section className="border rounded p-3 space-y-2" aria-label="Original launch submission">
@@ -44,22 +44,6 @@ export function OriginalSubmission({
           >
             Check original submission
           </button>
-          <button
-            type="button"
-            disabled={attempt.checking || !retryOriginalAllowed || !catalogReady}
-            onClick={() => {
-              void submit(attempt.request, attempt.definition);
-            }}
-            className="border rounded px-3 py-1"
-          >
-            Retry original submission
-          </button>
-          {(!retryOriginalAllowed || !catalogReady) && (
-            <p>
-              The original workspace, definition or configuration is changed or unverified. Its
-              original request will not be recompiled; checking for retained work is read-only.
-            </p>
-          )}
         </>
       )}
       {attempt.status === "pending" && (
@@ -70,6 +54,9 @@ export function OriginalSubmission({
           Open submitted procedure
         </button>
       )}
+      <button type="button" disabled={attempt.status === "pending"} onClick={rerun}>
+        Prepare a new run (separate acquisition)
+      </button>
       <details>
         <summary>Original launch inputs</summary>
         <pre className="overflow-auto">

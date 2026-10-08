@@ -2,7 +2,7 @@ import type { MethodResponse } from "openapi-fetch";
 import type { apiClient } from "../../api-client";
 import type { components } from "../../api-schema";
 
-export type LaunchCatalogEntry = components["schemas"]["LaunchCatalogEntry"];
+export type LaunchCatalogEntry = components["schemas"]["LaunchCatalogEntry-Output"];
 export type LaunchPreview = MethodResponse<
   typeof apiClient,
   "post",

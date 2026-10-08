@@ -1,7 +1,11 @@
+import {
+  installLaunchRecoveryRoutes,
+  procedureDefinition,
+} from "../../test/launch-recovery-fixture";
 import { defaultSelection } from "./scientific-selection";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { waitFor, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
@@ -42,6 +46,7 @@ function Probe() {
   return (
     <>
       <button
+        disabled={!state.recovery.ready}
         onClick={() =>
           void state.submit(
             {
@@ -56,6 +61,7 @@ function Probe() {
               selection: defaultSelection(),
             },
             "original-definition",
+            procedureDefinition,
           )
         }
       >
@@ -112,6 +118,7 @@ it("imports a new suggested draft while retaining an uncertain original submissi
     }),
   );
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  installLaunchRecoveryRoutes();
   const view = render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="one">
@@ -119,6 +126,8 @@ it("imports a new suggested draft while retaining an uncertain original submissi
       </LaunchDraftProvider>
     </QueryClientProvider>,
   );
+  fireEvent.click(screen.getByText("Import"));
+  await waitFor(() => expect(screen.getByText("Lose receipt")).toBeEnabled());
   fireEvent.click(screen.getByText("Lose receipt"));
   await screen.findByText("unknown:unknown-original");
   fireEvent.click(screen.getByText("Import"));
@@ -154,6 +163,7 @@ it("clears an unrelated sample and resolved context when importing inputs withou
       }),
     ),
   );
+  installLaunchRecoveryRoutes();
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}

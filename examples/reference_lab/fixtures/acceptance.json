@@ -794,6 +794,11 @@
         }
       ]
     },
+    "procedure_definition": {
+      "fingerprint": "sha256:8b664ac105a95b97830de968ad4edaff2ecd148ab30a238ff1ac8cbb61ae0a98",
+      "id": "scopecat.author:reference_lab.frequency_amplitude",
+      "version": "1"
+    },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "resolved_inputs": {},
     "resources": [],
@@ -1186,6 +1191,11 @@
           }
         }
       ]
+    },
+    "procedure_definition": {
+      "fingerprint": "sha256:8b664ac105a95b97830de968ad4edaff2ecd148ab30a238ff1ac8cbb61ae0a98",
+      "id": "scopecat.author:reference_lab.frequency_amplitude",
+      "version": "1"
     },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "resolved_inputs": {},
@@ -1883,6 +1893,11 @@
           }
         }
       ]
+    },
+    "procedure_definition": {
+      "fingerprint": "sha256:85e1bafb0ebe84ef55571125a8c81099cfa0d265e8477f0346093f3a64f89c37",
+      "id": "scopecat.author:reference_lab.temperature_diagnostic",
+      "version": "1"
     },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "resolved_inputs": {},

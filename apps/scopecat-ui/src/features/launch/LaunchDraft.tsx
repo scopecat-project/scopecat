@@ -1,3 +1,12 @@
+import {
+  useLaunchRecovery,
+  attemptHistory,
+  attemptRequest,
+  restoreDraft,
+  resolveAttempt,
+  type DraftRecord,
+  type AttemptRecord,
+} from "./launch-recovery";
 import type { WorkingInput } from "../config/parameter-draft-api";
 import type { components } from "../../api-schema";
 import {
@@ -21,7 +30,6 @@ import { apiClient, apiData, type LaunchRejection } from "../../api-client";
 import { initialControlDrafts, type ControlDrafts } from "./ControlFields";
 import { canRenderField, type FormField } from "./launch-fields";
 import {
-  findSubmittedProcedure,
   isKnownRejection,
   type SubmissionAttempt,
   type SubmissionRequest,
@@ -29,6 +37,9 @@ import {
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
 export interface LaunchDraft {
+  sourceBaseline?: PlanRevision["definition"]["code_revision"];
+  needsReview?: boolean;
+  unresolvedFields?: string[];
   workingInput?: WorkingInput;
   rejection?: LaunchRejection;
   handoff?: ComparisonHandoff;
@@ -54,6 +65,13 @@ export interface LaunchDraft {
 }
 type DraftUpdate = (current: LaunchDraft) => LaunchDraft;
 interface DraftContext {
+  recovery: ReturnType<typeof useLaunchRecovery>;
+  recover: (record: DraftRecord) => void;
+  recoverAttempt: (record: AttemptRecord) => void;
+  attemptsReady: boolean;
+  retryAttempts: () => void;
+  sourceObserved: (workspace: string, source: LaunchDraft["sourceBaseline"]) => void;
+  rerun: () => void;
   projectId: string | undefined;
   workspaceId: string;
   selectWorkspace: (workspaceId: string) => void;
@@ -70,9 +88,12 @@ interface DraftContext {
   select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => void;
   update: (change: DraftUpdate) => void;
   isCurrent: (revision: number | undefined) => boolean;
-  retryOriginalAllowed: boolean;
   attempt: SubmissionAttempt | undefined;
-  submit: (request: SubmissionRequest, definition: string) => Promise<string | undefined>;
+  submit: (
+    request: SubmissionRequest,
+    definition: string,
+    identity?: components["schemas"]["ProcedureDefinitionRef"],
+  ) => Promise<string | undefined>;
   checkSubmission: () => Promise<void>;
 }
 const Context = createContext<DraftContext | null>(null);
@@ -121,8 +142,7 @@ function initialDraft(
     revision,
     pending: false,
     error: "",
-    notice:
-      "Editable inputs are kept for this project while this console is open. Preview before starting.",
+    notice: "Experiment inputs are saved in application data. Preview before starting.",
   };
 }
 
@@ -160,6 +180,7 @@ function ProjectDraft({
   children: ReactNode;
 }) {
   const [draft, setDraft] = useState<LaunchDraft>();
+  const recovery = useLaunchRecovery(draft, setDraft);
   const [workspaceId, setWorkspaceId] = useState(
     () => new URLSearchParams(window.location.search).get("workspace") || "",
   );
@@ -169,6 +190,34 @@ function ProjectDraft({
   const [selectedSubject, setSelectedSubject] = useState<ScientificSelection["subject"]>();
   const [selectedWorkingInput, setSelectedWorkingInput] = useState<WorkingInput>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
+  const attemptGeneration = useRef(0);
+  const [attemptsReady, setAttemptsReady] = useState(false);
+  const [attemptReload, setAttemptReload] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const generation = attemptGeneration.current;
+    void attemptHistory()
+      .then((page) => {
+        if (!active) return;
+        const record = page.items[0];
+        if (record && generation === attemptGeneration.current)
+          setAttempt({
+            request: attemptRequest(record),
+            definition: "",
+            sequence: record.sequence,
+            status: "unknown",
+            error:
+              "Recovered original request. Check the original task or explicitly prepare a new run.",
+          });
+        setAttemptsReady(true);
+      })
+      .catch(() => {
+        if (active) setAttemptsReady(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [attemptReload]);
   const latest = useRef(draft);
   useEffect(() => {
     latest.current = draft;
@@ -180,7 +229,37 @@ function ProjectDraft({
       alive.current = false;
     };
   }, []);
-  const resetSource = useCallback((owner: string) => {
+  const canLeave = recovery.canLeave;
+  const mayLeave = useCallback(() => {
+    if (canLeave()) return true;
+    setDraft((current) => {
+      const error =
+        "Wait for input saving or retry the failed save before switching experiments or source. Your current edits remain here.";
+      return current && current.error !== error ? { ...current, error } : current;
+    });
+    return false;
+  }, [canLeave]);
+  const mayLeaveRef = useRef(mayLeave);
+  useEffect(() => {
+    mayLeaveRef.current = mayLeave;
+  }, [mayLeave]);
+  const resetSource = (owner: string) => {
+    if (!mayLeave()) return;
+    if (owner === currentWorkspace.current) {
+      setDraft((current) =>
+        current
+          ? {
+              ...invalidateDraft(
+                current,
+                "Current source selected. Review retained input before preview.",
+              ),
+              codeRevision: undefined,
+              needsReview: true,
+            }
+          : current,
+      );
+      return;
+    }
     currentWorkspace.current = owner;
     latest.current = undefined;
     setWorkspaceId(owner);
@@ -204,9 +283,15 @@ function ProjectDraft({
           }
         : current,
     );
-  }, []);
+  };
   const select = useCallback(
     (entry: LaunchCatalogEntry, reset = false, owner = workspaceId) => {
+      if (
+        latest.current?.experiment &&
+        latest.current.experiment !== entry.id &&
+        !mayLeaveRef.current()
+      )
+        return;
       setDraft((current) => {
         if (currentWorkspace.current !== owner) return current;
         if (!reset && current?.workspaceId === owner && current.definition === definitionKey(entry))
@@ -227,38 +312,65 @@ function ProjectDraft({
         next.collection = current?.collection;
         next.actor = current?.actor ?? "operator";
         if (!reset && current?.workspaceId === owner && current.experiment === entry.id) {
-          // Keep raw inputs for review; the new declaration and server validate them.
-          next.values = Object.fromEntries(
-            Object.entries(next.values).map(([name, value]) => [
-              name,
-              current.values[name] ?? value,
-            ]),
-          );
-          if (current.controlDefinition === next.controlDefinition) {
-            next.controls = current.controls;
-            next.notice =
-              "Experiment revision changed. Inputs and control edits are retained; preview again.";
-          } else {
-            next.notice =
-              "Control declarations changed. Check retained inputs and new control defaults, then preview again.";
-          }
+          next.values = { ...next.values, ...current.values };
+          next.controls = { ...next.controls, ...current.controls };
+          next.sourceBaseline = current.sourceBaseline;
+          next.needsReview = true;
+          next.unresolvedFields = [
+            ...Object.keys(current.values).filter(
+              (name) => !(name in (entry.request.properties ?? {})),
+            ),
+            ...Object.keys(current.controls).filter(
+              (id) =>
+                !entry.controls.some(
+                  (control) => control.id === id && control.ownership === "editable",
+                ),
+            ),
+          ];
+          next.notice =
+            "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.";
         }
         return next;
       });
     },
     [selectedConfiguration, selectedWorkingInput, selectedSubject, workspaceId],
   );
-  async function submit(request: SubmissionRequest, definition: string) {
-    const wasUnknown = attempt?.status === "unknown";
-    setAttempt({ request, definition, status: "pending", error: "" });
+  async function submit(
+    request: SubmissionRequest,
+    definition: string,
+    identity?: components["schemas"]["ProcedureDefinitionRef"],
+  ) {
+    if (attempt) throw new Error("Recover the original task or explicitly choose a new run first.");
+    if (!attemptsReady)
+      throw new Error(
+        "Original submission history is not loaded. Reconnect before starting acquisition.",
+      );
+    const generation = ++attemptGeneration.current;
+    await recovery.flush();
+    if (!identity)
+      throw new Error(
+        "Preview does not identify the original procedure definition. Preview again before submitting.",
+      );
+    const retained = await apiData(
+      apiClient.POST("/api/v1/launch-attempts", { body: { definition: identity, request } }),
+    );
+    if (alive.current && attemptGeneration.current === generation)
+      setAttempt({
+        request,
+        definition,
+        sequence: retained.sequence,
+        status: "pending",
+        error: "",
+      });
     try {
       const receipt = await apiData(
         apiClient.POST("/api/v1/experiment-launcher/submit", { body: request }),
       );
-      if (!alive.current) return;
+      if (!alive.current || attemptGeneration.current !== generation) return;
       setAttempt({
         request,
         definition,
+        sequence: retained.sequence,
         status: "confirmed",
         procedureId: receipt.procedure_id,
         error: receipt.dispatch_error
@@ -267,11 +379,12 @@ function ProjectDraft({
       });
       return receipt.procedure_id;
     } catch (error) {
-      if (alive.current)
+      if (alive.current && attemptGeneration.current === generation)
         setAttempt({
           request,
           definition,
-          status: isKnownRejection(error) && !wasUnknown ? "rejected" : "unknown",
+          sequence: retained.sequence,
+          status: isKnownRejection(error) ? "rejected" : "unknown",
           error: error instanceof Error ? error.message : String(error),
         });
     }
@@ -280,10 +393,17 @@ function ProjectDraft({
   async function checkSubmission() {
     if (!attempt) return;
     const selected = attempt;
+    const generation = ++attemptGeneration.current;
     setAttempt({ ...selected, checking: true, error: "" });
     try {
-      const id = await findSubmittedProcedure(selected.request);
-      if (alive.current)
+      if (!selected.sequence) throw new Error("Original submission has no retained receipt.");
+      const result = await resolveAttempt(selected.sequence);
+      if (!result.procedure_id)
+        throw new Error(
+          "No retained procedure found yet. Original submission remains unconfirmed; recovery never resubmits.",
+        );
+      const id = result.procedure_id;
+      if (alive.current && attemptGeneration.current === generation)
         setAttempt({
           ...selected,
           checking: false,
@@ -292,7 +412,7 @@ function ProjectDraft({
           error: "",
         });
     } catch (error) {
-      if (alive.current)
+      if (alive.current && attemptGeneration.current === generation)
         setAttempt({
           ...selected,
           checking: false,
@@ -304,6 +424,54 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        recovery,
+        recover: (record) => {
+          if (!mayLeave()) return;
+          if (!recovery.selectCopy(record)) return;
+          currentWorkspace.current = record.target.workspace_id;
+          setWorkspaceId(record.target.workspace_id);
+          setDraft(restoreDraft(record, (latest.current?.revision ?? 0) + 1));
+        },
+        recoverAttempt: (record) => {
+          attemptGeneration.current += 1;
+          setAttempt({
+            request: attemptRequest(record),
+            definition: "",
+            sequence: record.sequence,
+            status: "unknown",
+            error: "Recovered original request. Query it without resubmitting.",
+          });
+        },
+        sourceObserved: (owner, source) =>
+          setDraft((current) => {
+            if (
+              !current ||
+              current.workspaceId !== owner ||
+              current.codeRevision ||
+              current.sourceBaseline?.content_hash === source?.content_hash
+            )
+              return current;
+            return {
+              ...invalidateDraft(
+                current,
+                "Author source changed. Retained inputs need review and a fresh preview.",
+              ),
+              sourceBaseline: source,
+              needsReview: Boolean(current.sourceBaseline) || current.needsReview,
+            };
+          }),
+        rerun: () => {
+          attemptGeneration.current += 1;
+          setAttempt(undefined);
+          setDraft((current) =>
+            current
+              ? invalidateDraft(
+                  { ...current, admittedProcedureId: undefined },
+                  "New run selected. Preview and explicitly start another acquisition. The original receipt remains in recovery history.",
+                )
+              : current,
+          );
+        },
         workspaceId,
         selectWorkspace: (owner) => {
           if (owner !== currentWorkspace.current) resetSource(owner);
@@ -352,16 +520,16 @@ function ProjectDraft({
           );
         },
         draft,
+        attemptsReady,
+        retryAttempts: () => {
+          if (!attemptsReady) setAttemptReload((value) => value + 1);
+        },
         attempt,
         submit,
         checkSubmission,
-        retryOriginalAllowed:
-          attempt?.definition === draft?.definition &&
-          attempt?.request.workspace_id === workspaceId &&
-          draft?.workspaceId === workspaceId &&
-          (!draft?.codeRevision ||
-            attempt?.request.code_revision?.content_hash === draft.codeRevision.content_hash),
         openPlan: (plan, entry) => {
+          if (!mayLeave()) return;
+          if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id)) return;
           if (!alive.current) return;
           const current = latest.current;
           const next = initialDraft(
@@ -400,6 +568,8 @@ function ProjectDraft({
           });
         },
         importHandoff: (entry, handoff) => {
+          if (!mayLeave()) return;
+          if (!recovery.keepExplicitInput(handoff.request.workspace_id, entry.id)) return;
           if (!alive.current) return;
           const current = latest.current;
           const next = initialDraft(

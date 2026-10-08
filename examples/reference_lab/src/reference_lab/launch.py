@@ -22,7 +22,7 @@ from scopecat.application.launch_config import (
     launch_preflight_configuration,
     launch_preflight_meaning,
 )
-from scopecat.automation import InterpretationRequest, procedure
+from scopecat.automation import InterpretationRequest, ProcedureSource, procedure
 from scopecat.config.parameter_updates import materialize_parameter_updates
 from scopecat.planning.preflight import (
     ExactQuantity,
@@ -237,6 +237,7 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
             )
         )
         return LaunchPreview(
+            procedure_definition=launch_channel_timing.ref,
             workspace_id=request.workspace_id,
             experiment_id=entry.id,
             manual_state=request.manual_state,
@@ -273,6 +274,12 @@ def launch_provider(lab: LabClient, request: LaunchRequest) -> LaunchResult:
         launch_channel_timing,
         intent,
         request_key=request.request_key,
+        scientific_binding=resolved.reviewed.binding,
+        source=ProcedureSource(
+            workspace_id=request.workspace_id, code_revision=request.code_revision
+        )
+        if request.code_revision
+        else None,
         samples=resolved.reviewed.binding.sample_selectors(),
         expected_manual_preview=request.manual_state,
         expected_configuration=launch_configuration_fence(resolved.reviewed),

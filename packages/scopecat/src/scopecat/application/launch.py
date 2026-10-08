@@ -16,6 +16,7 @@ from pydantic import (
 
 from scopecat.application.controls import LaunchControl, LaunchControlValue
 from scopecat.application.inspection import LaunchInspection
+from scopecat.automation import ProcedureDefinitionRef
 from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.daemon.procedure_views import LaunchSubmission as LaunchSubmission
 from scopecat.kernel.problems import Problem
@@ -100,6 +101,7 @@ class LaunchPreview(BaseModel):
     code_revision: AuthorRevisionRef | None = None
     plan_ref: ExperimentPlanRef | None = None
     definition_hash: Sha256ContentHash | None = None
+    procedure_definition: ProcedureDefinitionRef | None = None
     experiment_id: str
     request_hash: Sha256ContentHash
     reviewed: ReviewedScientificSelection

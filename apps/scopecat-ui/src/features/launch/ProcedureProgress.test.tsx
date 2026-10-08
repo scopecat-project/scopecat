@@ -1,3 +1,4 @@
+import { installLaunchRecoveryRoutes } from "../../test/launch-recovery-fixture";
 import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
@@ -40,6 +41,7 @@ function view(overrides: Partial<ProcedureOperatorView> = {}): ProcedureOperator
   };
 }
 function mount(component = <ProcedureProgress procedureId="p1" />) {
+  if (component.type === LaunchDraftProvider) installLaunchRecoveryRoutes();
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}

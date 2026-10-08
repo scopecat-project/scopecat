@@ -47,6 +47,7 @@ from .devices import DeviceService
 from .driver_sources import DriverSourceService
 from .executor import ExecutorService
 from .experiment_plans import ExperimentPlanService
+from .launch_recovery import LaunchRecoveryService
 from .leases import OwnershipLeaseSupervisor
 from .manual_previews import ManualPreviewService
 from .parameter_drafts import ParameterDraftService
@@ -133,6 +134,7 @@ class DaemonApplication:
         self.payloads = payloads
         self.reviews = reviews
         self.automation = automation
+        self.launch_recovery = LaunchRecoveryService(project_store.sqlite)
         self.decision_drafts = DecisionDraftService(project_store.sqlite)
         self.parameter_drafts = ParameterDraftService(project_store.sqlite, config)
         self.data_cleanup = DataCleanupService(project_store)
