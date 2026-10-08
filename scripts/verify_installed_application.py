@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import sys
@@ -25,6 +26,11 @@ def files(root: Path) -> dict[str, str]:
 
 
 def verify(home: Path, destination: Path, gui: Path) -> None:
+    # Adopt detached daemons in containers whose PID 1 does not reap children.
+    # The lifecycle wait can then reap the exact process it stopped.
+    if sys.platform == "linux":
+        if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
+            raise OSError(ctypes.get_errno(), "PR_SET_CHILD_SUBREAPER")
     destination.mkdir(parents=True, exist_ok=False)
     source = destination / "实验代码"
     write_author_scaffold(source)
