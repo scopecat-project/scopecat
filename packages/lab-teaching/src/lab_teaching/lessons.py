@@ -26,6 +26,21 @@ TOPICS = {
     "task-calibration": "后台标定与最终发布",
 }
 
+TOPIC_PROCEDURES = {
+    "calibration": (
+        "my_experiment.calibration:calibrate",
+        "my_experiment.calibration:check_zero",
+    ),
+    "joint-calibration": (
+        "my_experiment.joint_calibration:calibrate_joint",
+        "my_experiment.calibration:check_zero",
+    ),
+    "task-calibration": (
+        "my_experiment.task_calibration:fit_stage",
+        "my_experiment.task_calibration:finalize",
+    ),
+}
+
 
 def install_lesson(root: Path, topic: str | None = None) -> Path:
     if topic is not None and topic not in TOPICS:
@@ -96,26 +111,20 @@ def install_lesson(root: Path, topic: str | None = None) -> Path:
             lesson.joinpath("calibration.py.txt").read_bytes()
         )
         (root / "src/my_experiment/teaching.py").unlink()
-        procedure = "my_experiment.calibration:calibrate"
         if topic in ("joint-calibration", "task-calibration"):
             _ = (root / "src/my_experiment/joint_calibration.py").write_bytes(
                 lesson.joinpath("joint_calibration.py.txt").read_bytes()
             )
-            procedure = "my_experiment.joint_calibration:calibrate_joint"
-        procedures = [procedure, "my_experiment.calibration:check_zero"]
         if topic == "task-calibration":
             _ = (root / "src/my_experiment/task_calibration.py").write_bytes(
                 lesson.joinpath("task_calibration.py.txt").read_bytes()
             )
-            procedures = [
-                "my_experiment.task_calibration:fit_stage",
-                "my_experiment.task_calibration:finalize",
-            ]
         manifest = root / "scopecat.toml"
         _ = manifest.write_text(
             manifest.read_text(encoding="utf-8").replace(
                 "[lab.capabilities]",
-                f"[lab.capabilities]\nprocedures = {json.dumps(procedures)}",
+                "[lab.capabilities]\n"
+                f"procedures = {json.dumps(TOPIC_PROCEDURES[topic])}",
             ),
             encoding="utf-8",
         )

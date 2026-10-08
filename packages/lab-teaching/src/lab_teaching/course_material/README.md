@@ -1,5 +1,7 @@
 # 合成 Rabi 实验项目
 
+此路径用于维护者独立验收和既有独立项目；普通学习推荐从 Scopecat Help 开始。
+
 用 VS Code 打开本文件夹，安装推荐的 Python/Jupyter 扩展。在 Notebook 右上角选择
 本项目 `.venv` 的 Python，打开 `notebooks/start.ipynb`；完成后在新内核运行
 `notebooks/reopen.ipynb`。不需要 sys.path、切换工作目录或启动浏览器 JupyterLab。
@@ -37,8 +39,8 @@ from my_experiment.teaching import teaching_rabi
 不需要另写 `importlib.reload`。共享软件包升级由维护者处理，并重启 Notebook kernel。
 如果刷新报语法错误，修正文件后再次刷新；不要把刷新成功当成实验已经运行。
 
-本轮项目仍使用本地存储。正式实验室数据空间与代码工作区解耦是后续开发，不把该
-教学模板视为已经完成多实验台或持续数据管理的部署。
+这是命令行生成的独立教学项目，运行与历史保存在本目录。Scopecat Help 的课程使用
+当前应用的数据空间；其“继续”不会打开本项目。再次使用本项目时打开原目录并启动服务。
 
 第二批小范围练习见 [修改、刷新、读取](EDITING.md)：先改一个默认值，
 再另选时间尝试平均 IQ 与类型化历史读取。两项不要求同时完成，也不包含原课程全部题目。
