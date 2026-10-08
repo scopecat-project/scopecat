@@ -96,6 +96,8 @@ Current automated evidence has distinct boundaries:
   Linux/Windows acceptance job, installed Help and grouped recovery must pass
   before the same invocation omits duplicate standalone grouped stages. Default
   course analysis, compute/refresh and default-course snapshot recovery remain.
+  Those legacy stages reuse the verified application-install cache; author and
+  recovery preparation still start with separate empty caches.
 - `verify_notebook_journey.py` uses real browser/kernel execution and verifies
   generated material identity, edits, restart and Continue without reacquisition.
   External editor/window activation is substituted; actual native editor use and
@@ -112,6 +114,11 @@ Current automated evidence has distinct boundaries:
   original source ID in fresh environments, with old source/environment paths
   unavailable. Exact grouped results and new analysis are checked; application
   snapshots do not thereby restore external editable sources or Help Continue.
+  Only after recovery passes and the daemon stops are the generated environments
+  at the retired locations and their old author cache discarded. Source files,
+  scientific data, snapshots and recovered environments remain. Failures before
+  recovery succeeds leave diagnostic environments in place. Reports distinguish
+  bytes before and after this cleanup, without claiming a measured peak footprint.
   This remains a maintainer check, not an additional per-PR platform gate.
   Browser/native interaction, legacy editor tasks and the default-course checks
   retain their separate consumers. Phase timings and environment/cache sizes

@@ -59,6 +59,10 @@ def verify(bundle: Path, destination: Path) -> None:
         env=env,
         check=True,
     )
+    # Installation has already proved this cache started empty. The legacy
+    # stages historically reused their bootstrap cache; do not unpack the same
+    # framework wheels into a second cache. Author/recovery caches stay separate.
+    env["UV_CACHE_DIR"] = str(help_evidence / "empty-cache")
     phases = {"installed_help_and_group_recovery": perf_counter() - phase}
     phase = perf_counter()
     python = bootstrap / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -153,6 +157,7 @@ def verify(bundle: Path, destination: Path) -> None:
                 )["build_id"],
                 "software": "passed",
                 "phase_seconds": phases,
+                "legacy_cache": "reused verified application installation cache",
                 "grouped_carrier": "same-application Help and explicit recovery",
                 "duplicate_standalone_group_stages": "omitted after replacement passed",
                 "human": "not-evaluated",

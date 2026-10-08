@@ -329,6 +329,12 @@ def verify_installed(payload: Path, work: Path) -> None:
         # environment path may satisfy the recovery check; keep bytes for diagnosis.
         unavailable = work / "unavailable-originals"
         unavailable.mkdir()
+        obsolete = [unavailable / runtime.home.name / "environments", author_cache]
+        for source in (parameters.directory, groups.directory):
+            obsolete.extend(
+                unavailable / source.name / name
+                for name in (".venv", ".scopecat-python")
+            )
         for path in (runtime.home, parameters.directory, groups.directory):
             path.rename(unavailable / path.name)
             assert not path.exists()
@@ -378,24 +384,51 @@ def verify_installed(payload: Path, work: Path) -> None:
     finally:
         runtime.stop()
     assert runtime.status().state == "stopped"
-    evidence["logical_bytes"] = {
-        name: sum(
-            path.stat().st_size
-            for path in (work / name).rglob("*")
-            if path.is_file() and not path.is_symlink()
-        )
-        for name in (
-            "snapshot",
-            "restored-author",
-            "recovered-application",
-            "unavailable-originals",
-            "application-python",
-            "application-base",
-            "empty-cache",
-            "author-empty-cache",
-            "recovery-empty-cache",
-        )
+
+    def logical_bytes() -> dict[str, int]:
+        return {
+            name: sum(
+                path.stat().st_size
+                for path in (work / name).rglob("*")
+                if path.is_file() and not path.is_symlink()
+            )
+            for name in (
+                "snapshot",
+                "restored-author",
+                "recovered-application",
+                "unavailable-originals",
+                "application-python",
+                "application-base",
+                "empty-cache",
+                "author-empty-cache",
+                "recovery-empty-cache",
+            )
+        }
+
+    evidence["logical_bytes_before_cleanup"] = logical_bytes()
+    phase = perf_counter()
+    # Only a successful recovery reaches here. These generated interpreters
+    # have already lost their original paths; keep source/scientific evidence,
+    # the recovered environments and their cache available for inspection.
+    retained_files = {
+        path: file_hash(path)
+        for path in unavailable.rglob("*")
+        if path.is_file() and not any(path.is_relative_to(root) for root in obsolete)
     }
+    for directory in obsolete:
+        assert directory.is_relative_to(work) and not directory.is_symlink()
+        shutil.rmtree(directory)
+    assert all(
+        path.is_file() and file_hash(path) == digest
+        for path, digest in retained_files.items()
+    )
+    verify_snapshot(snapshot)
+    timings["discard_obsolete_generated_environments"] = perf_counter() - phase
+    evidence["discarded_generated_directories"] = [
+        str(p.relative_to(work)) for p in obsolete
+    ]
+    evidence["retained_original_evidence_files"] = len(retained_files)
+    evidence["logical_bytes"] = logical_bytes()
     evidence.update(result="passed", cleanup="stopped")
     (work / "acceptance.json").write_text(
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
