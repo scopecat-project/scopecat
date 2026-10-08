@@ -1,10 +1,18 @@
 # Run an experiment from a notebook
 
-Use the laboratory's installed environment and start its daemon as described by
-its setup guide. The lab maintainer supplies a parameter branch and registered
-experiment. This example assumes a `bench-a` setup, a laboratory `qubits` table and `signal`
-experiment; substitute your laboratory's names. Sample/target selection is a
-separate choice, not a prerequisite for editing parameters.
+For a first device-free experiment, start with the installed application and
+[First experiment](../getting-started/quickstart.md). Create or select your code
+folder in **Settings → Author code**, then choose that folder's Python in your
+editor. Keep Scopecat open; registered folders connect to its application service
+and share application-owned data. No per-folder daemon startup is needed.
+
+This API guide is for an already prepared laboratory author folder. Its maintainer
+supplies the execution environment, parameter branch and registered experiments;
+use the existing-folder preparation in [application maintenance](maintain-application.md#author-folders).
+The examples assume a `bench-a` setup, a laboratory `qubits` table and a `signal`
+experiment; substitute your laboratory's names. These are not the analytic
+starter's declarations. Sample/target selection is a separate choice, not a
+prerequisite for editing parameters.
 
 ```python
 import scopecat as sc
@@ -270,9 +278,11 @@ It is the existing validation and execution contract, not another control regist
 ## Restart Python and read the same result
 
 The receipt path is printed/stored by your notebook, and receipts are also kept
-under the project's `.scopecat/author-jobs/` directory. Keep that file alongside
-your notebook's run references. It contains the exact reviewed request and an
-identity for finding its durable procedure, not a copy of the run data.
+under the bound data root's `author-jobs/` directory. For application-registered
+folders this is application data, not a new data owner inside the code folder.
+Keep the printed receipt path alongside your notebook's run references. The receipt
+contains the exact reviewed request and an identity for finding its durable
+procedure, not a copy of the run data.
 
 ```python
 with project.authoring() as author:

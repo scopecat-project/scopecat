@@ -29,6 +29,24 @@ require restoring the last viewed run, changing the default Runs entry, linking
 windows, or introducing a multiple-workspace manager. The existing window-close,
 background and work-aware Quit semantics remain unchanged.
 
+## Experiment-form boundary
+
+The experiment launch form currently keeps editable inputs and its original
+submission attempt in window memory. Navigation within that window can retain
+input; reload/restart does not restore it. Changing control declarations can
+replace control edits with new defaults. A server-admitted procedure remains
+retained independently of the window's original-request panel. These boundaries
+do not satisfy the editing contract above and are distinct from parameter and
+Decision draft persistence.
+
+Experiment recovery needs its own logical target, baseline/revalidation, conflict,
+retention and completion policy before implementation. Recovery of an uncertain
+submission must retain the original exact request identity before sending,
+independently of editable input, and cannot authorize acquisition. Browser storage
+or matching mutable inputs is not a substitute for that identity. See
+[the ordinary-entry PR evidence](https://github.com/scopecat-project/scopecat/pull/930)
+for the observed cases; broader lifecycle choices remain separate work.
+
 ## Application drafts and native storage
 
 Application drafts use typed read/save/discard operations with conditional writes
