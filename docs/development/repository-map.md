@@ -107,13 +107,13 @@ standalone lifecycle requires replacing its remaining installed-delivery and
 recovery consumers or explicitly withdrawing that supported entry; deleting
 verification alone would not establish convergence.
 
-Standalone procedure topics have an admission gap: creation accepts
-`calibration`, `joint-calibration` and `task-calibration`, but `check_project`
-requires an exact experiment-only capability dictionary and rejects their
-`procedures` declarations. Their generation and real-kernel tests do not establish
-that `scopecat-lab prepare/start` accepts them. Help registers those procedures
-through its existing application path. Resolve standalone admission or withdraw
-those CLI choices explicitly before claiming the standalone topic path works.
+Standalone admission accepts the experiment-only capability declaration and the
+three exact procedure combinations generated for `calibration`,
+`joint-calibration` and `task-calibration`. Generation and admission share those
+declarations; unknown, incomplete or mixed procedure combinations and extra
+capabilities remain rejected. The admission check does not start a service or
+establish installed-delivery acceptance for every topic. Help registers those
+procedures through its existing application path.
 
 For this boundary, `scripts/verify_default_teaching_journey.py` compares freshly
 generated source and original Notebook cells with the checkout before running the

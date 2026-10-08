@@ -5,6 +5,7 @@ import sys
 
 import pytest
 
+from lab_teaching.lessons import TOPICS
 from lab_tools import project as cli
 
 
@@ -26,7 +27,7 @@ def test_tools_check_preserves_store_and_detects_same_version_change(
     assert not (root / ".scopecat-notebook").exists()
 
 
-@pytest.mark.parametrize("topic", [None, "parameters"])
+@pytest.mark.parametrize("topic", [None, *TOPICS])
 def test_generated_project_declares_capabilities_without_application_factory(
     tmp_path, monkeypatch, topic
 ):
@@ -36,7 +37,7 @@ def test_generated_project_declares_capabilities_without_application_factory(
     root = tmp_path / "course"
     cli.create_project(root, topic=topic)
     manifest = tomllib.loads((root / "scopecat.toml").read_text())
-    assert manifest["lab"]["capabilities"] == {"author_modules": ["my_experiment"]}
+    assert manifest["lab"]["capabilities"]["author_modules"] == ["my_experiment"]
     assert "application" not in manifest["lab"]
     assert "create_application" not in (root / "src/workspace_app.py").read_text()
     assert cli.check_project(root) == root
@@ -50,6 +51,29 @@ def test_generated_project_declares_capabilities_without_application_factory(
     (root / "scopecat.toml").write_text(text)
     with pytest.raises(ValueError, match="无设备"):
         cli.check_project(root)
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [
+        ("calibration:calibrate", "calibration:unknown"),
+        (', "my_experiment.calibration:check_zero"', ""),
+        ("calibration:check_zero", "task_calibration:finalize"),
+        ("[lab.capabilities]", "[lab.capabilities]\nextra = []"),
+        ("[lab]", '[lab]\napplication = "other:create_application"'),
+    ],
+)
+def test_teaching_admission_rejects_unrecognized_capability_combinations(
+    tmp_path, monkeypatch, original, replacement
+):
+    monkeypatch.setattr(cli, "environment_identity", dict)
+    root = tmp_path / "course"
+    manifest = cli.create_project(root, topic="calibration")
+    text = manifest.read_text().replace(original, replacement)
+    manifest.write_text(text)
+    with pytest.raises(ValueError, match="无设备"):
+        cli.check_project(root)
+    assert manifest.read_text() == text
 
 
 def test_installed_notebook_uses_project_python_without_source_injection(
