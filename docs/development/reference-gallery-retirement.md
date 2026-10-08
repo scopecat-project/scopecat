@@ -16,7 +16,8 @@ source; installed historical environments and scientific data are untouched.
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
-| `20_flux_spectroscopy.py`, `24`–`25` | Compiled buffers, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `20_flux_spectroscopy.py` | Complex VNA traces, flux fit, exact candidate and review provenance | Retired presentation script. Dedicated spectroscopy worker and focused scientific tests retain acquisition, numerical fits and source identity; see the mapping below. |
+| `24`–`25` | Host/quantum composition and point-local routing | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
 | `29_channel_unavailable.py` | Independent multiplexed-channel availability, entity provenance and HTTP traces | Retired duplicate presentation/acquisition. The existing shared acceptance worker result now owns the assertions; mapping below. |
 | `31_topology_scaled_ramsey.py` | Topology-selected entities retain their identity through compilation and results | Retired with its dedicated experiment/result wrapper. Core topology selection and the focused runner test retain selection and metadata coverage; the assertion mapping and corrected numerical row correspondence are below. |
 | `28_channel_conflict_diagnostic.py` | Logical pulse-overlap diagnostics | Retired with its daemon/gallery test and dedicated `conflicting_drive` / `conflicting_drive_program` wrappers. Existing quantum scheduling and authoring tests own the diagnostic, as detailed below. |
@@ -278,6 +279,43 @@ identical. The fixture does not embed the full device inventory; its unchanged
 shape does not mean the setup structure was unchanged. These checks establish
 source-level software behavior, not installed-package, private-consumer or hardware
 qualification. They add no historical-format reader or migration.
+
+## Spectroscopy gallery retirement: retained device science
+
+`20_flux_spectroscopy.py` had one repository consumer: the script-execution test
+in `tests/test_flux_spectroscopy.py`. The presentation and summary dictionary are
+retired. Its experiment, result schema and analysis remain dependencies of the
+named scientific tests; `multichannel_bias.py` also imports its `Q0` fixture input.
+No provider package bytes or inventory are removed in this slice. This is not a
+claim that the shared acceptance capture executes spectroscopy.
+
+The existing daemon test now calls the workflow directly through the shared
+equipment-only `independent_lab_daemon`, with explicit independent parameters and
+setup. It neither copies gallery scripts nor adds a daemon fixture or tutorial API.
+The complete eleven-bias acquisition remains bounded, retaining the fit's scientific
+input vector rather than shortening it merely to reduce test time.
+
+| Former assertion or behavior | Retained evidence |
+| --- | --- |
+| Completed run, eleven preview points and measurement records | `test_flux_spectroscopy_worker_retains_science_and_exact_inputs` keeps the real HTTP/worker acquisition and count checks. Every record additionally checks VNA frequency/S21 and mixing-chamber acquisition identities, and complex trace shape, dtype and units. |
+| Analysis identity/revision and fit-report filename | The same worker test checks these and the report's fitted-point count. `test_flux_spectroscopy_runs_fits_saves_and_proposes` retains detailed schema, traces, fit outputs and model assertions. |
+| Candidate configuration identity | The worker test retains it and checks candidate resonance/linewidth equal the published fit exactly, with a 5.06 GHz resonance, 1 MHz linewidth and zero-bias sweet spot within the existing scientific tolerances. |
+| Fit review accepted | The worker test retains acceptance and the RMSE bound, and checks the exact source run, analysis and fit dataset output of the review. |
+| Equipment-only setup and no implicit default publication | The worker test asserts exact run parameter/setup references, unchanged saved parameters/setup and an empty combined registry. |
+| Bias cleanup and robust complex fitting | The existing focused tests retain output-disabled success/failure behavior and notch recovery with a known delay and an injected outlier. These are in-process tests, not new worker failure evidence. |
+
+The full isolated acceptance generator changes no identity, key, type, length or
+other stable value. Its only three raw differences are the real/imaginary components
+of `coherent_scalar.items[0].observables.iq_mean.value` and the imaginary component
+at item 2, all within the existing `1e-12` scalar-IQ tolerance. The committed
+scientific representatives remain unchanged; no hash update or comparison-rule
+change is needed.
+
+The host/quantum composition and point-local routing scripts `24`–`25` remain.
+Compiled buffers, signed IF/LO, shared physical claims, multiplexed readout and
+ragged worker/restart coverage keep their existing owners listed above. No real
+hardware, installed delivery, historical data or performance qualification is
+claimed; #773 remains open.
 
 ## Configuration-authority retirement evidence
 
