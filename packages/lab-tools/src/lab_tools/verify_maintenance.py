@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
+from time import perf_counter
 from typing import Protocol, cast
 
 
-def verify_restore(root: Path, *, static_dir: Path | None = None) -> None:
+def verify_restore(
+    root: Path, *, static_dir: Path | None = None, groups: bool = True
+) -> None:
     from scopecat.author_workspaces import local_author_workspaces
 
     from .environment import prepare_project
@@ -17,14 +21,19 @@ def verify_restore(root: Path, *, static_dir: Path | None = None) -> None:
     output = root.with_name(root.name + "-maintenance")
     output.mkdir()
     cli = [sys.executable, "-m", "scopecat_server.cli"]
+    timings: dict[str, float] = {}
     for arguments in (
         ["snapshot", "create", str(root), str(output / "original")],
         ["snapshot", "verify", str(output / "original")],
         ["snapshot", "restore", str(output / "original"), str(output / "restored")],
     ):
+        phase = perf_counter()
         _ = subprocess.run([*cli, *arguments], check=True)  # noqa: S603 - explicit local tool and argument list
+        timings[arguments[1]] = perf_counter() - phase
+    phase = perf_counter()
     project = output / "restored"
     python = prepare_project(project, bundle=static_dir.parent if static_dir else None)
+    timings["prepare_environment"] = perf_counter() - phase
     command = [
         str(python),
         "-m",
@@ -35,11 +44,21 @@ def verify_restore(root: Path, *, static_dir: Path | None = None) -> None:
     ]
     if static_dir is not None:
         command.extend(("--static-dir", str(static_dir)))
+    if not groups:
+        command.append("--without-groups")
+    phase = perf_counter()
     _ = subprocess.run(command, check=True)  # noqa: S603 - explicit local tool and argument list
+    timings["read_copy"] = perf_counter() - phase
+    (output / "verification-phases.json").write_text(
+        json.dumps({"groups": groups, "seconds": timings}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     print("备份副本、独立环境恢复、原结果读回及新增分析通过", flush=True)
 
 
-def read_copy(root: Path, *, source_id: str, static_dir: Path | None = None) -> None:
+def read_copy(
+    root: Path, *, source_id: str, static_dir: Path | None = None, groups: bool = True
+) -> None:
     import os
 
     from .notebook_io import notebook_io
@@ -62,11 +81,12 @@ def read_copy(root: Path, *, source_id: str, static_dir: Path | None = None) -> 
     # Snapshot locations are intentionally unbound; explicitly reconnect the
     # restored source identity before requesting new analysis of retained runs.
     register_author_workspace(root, root, identity=source_id)
+    cells = (
+        *reopen_cells(root),
+        *((*GROUP_REOPEN_CELLS, ADD_ANALYSIS) if groups else ()),
+    )
     notebook = nbformat.v4.new_notebook(
-        cells=[
-            nbformat.v4.new_code_cell(cell)
-            for cell in (*reopen_cells(root), *GROUP_REOPEN_CELLS, ADD_ANALYSIS)
-        ]
+        cells=[nbformat.v4.new_code_cell(cell) for cell in cells]
     )
     try:
         _ = start_project(project, static_dir=static_dir, timeout=300)
@@ -110,10 +130,17 @@ if __name__ == "__main__":
         project: Path
         static_dir: Path | None
         source_id: str
+        without_groups: bool
 
     parser = argparse.ArgumentParser()
     _ = parser.add_argument("project", type=Path)
     _ = parser.add_argument("--static-dir", type=Path)
     _ = parser.add_argument("--source-id", required=True)
+    _ = parser.add_argument("--without-groups", action="store_true")
     args = cast("VerifyArguments", cast("object", parser.parse_args()))
-    read_copy(args.project, source_id=args.source_id, static_dir=args.static_dir)
+    read_copy(
+        args.project,
+        source_id=args.source_id,
+        static_dir=args.static_dir,
+        groups=not args.without_groups,
+    )

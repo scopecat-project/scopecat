@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from time import perf_counter
 from typing import TypedDict, cast
 
 
@@ -42,13 +43,24 @@ def verify(bundle: Path, destination: Path) -> None:
         UV_CACHE_DIR=str(destination / "empty-cache"),
         PYTHONUTF8="1",
     )
-    bootstrap = destination / "bootstrap"
+    phase = perf_counter()
+    help_evidence = destination / "help"
+    # The replacement must pass in this invocation and on this platform before
+    # the standalone carrier omits its duplicate grouped acquisition/recovery.
+    bootstrap = help_evidence / "application-python"
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [sys.executable, str(bundle / "install.py"), str(bootstrap)],
+        [
+            sys.executable,
+            str(Path(__file__).with_name("verify_installed_help_kernels.py")),
+            str(bundle),
+            str(help_evidence),
+        ],
         cwd=destination,
         env=env,
         check=True,
     )
+    phases = {"installed_help_and_group_recovery": perf_counter() - phase}
+    phase = perf_counter()
     python = bootstrap / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     console = python.with_name("scopecat.exe" if os.name == "nt" else "scopecat")
     for command_args in (
@@ -65,11 +77,24 @@ def verify(bundle: Path, destination: Path) -> None:
         )
     command = [str(python), "-m", "lab_tools.cli"]
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
-        [*command, "verify", str(destination / "中文 教材")],
+        [
+            str(python),
+            "-c",
+            (
+                "import sys; from pathlib import Path; "
+                "from lab_tools.verify import verify_project; "
+                "verify_project(Path(sys.argv[1]), "
+                "static_dir=Path(sys.argv[2]), groups=False)"
+            ),
+            str(destination / "中文 教材"),
+            str(bundle / "gui"),
+        ],
         cwd=destination,
         env=env,
         check=True,
     )
+    phases["console_and_default_course_restore"] = perf_counter() - phase
+    phase = perf_counter()
     project = destination / "编辑器 准备"
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [*command, "create", str(project)], cwd=destination, env=env, check=True
@@ -104,6 +129,8 @@ def verify(bundle: Path, destination: Path) -> None:
     )
     if result.returncode == 0 or "Select Kernel" not in result.stderr:
         raise RuntimeError(f"错误内核未正确拒绝: {result.stdout}\n{result.stderr}")
+    phases["editor_prepare_and_wrong_kernel"] = perf_counter() - phase
+    phase = perf_counter()
     home = destination / "application-state"
     subprocess.run(  # noqa: S603 - isolated installed interpreter and fixed check
         [
@@ -117,6 +144,7 @@ def verify(bundle: Path, destination: Path) -> None:
         env=env,
         check=True,
     )
+    phases["installed_application"] = perf_counter() - phase
     (destination / "acceptance.json").write_text(
         json.dumps(
             {
@@ -124,6 +152,9 @@ def verify(bundle: Path, destination: Path) -> None:
                     (bundle / "bundle.json").read_text(encoding="utf-8")
                 )["build_id"],
                 "software": "passed",
+                "phase_seconds": phases,
+                "grouped_carrier": "same-application Help and explicit recovery",
+                "duplicate_standalone_group_stages": "omitted after replacement passed",
                 "human": "not-evaluated",
                 "physical": "not-evaluated",
                 "practice": "synthetic scan and manual decision",
