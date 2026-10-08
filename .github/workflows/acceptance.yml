@@ -470,7 +470,8 @@ jobs:
           dist/tutorial dist/tutorial-complete
 
       - name: Archive the complete offline delivery
-        run: python -m tarfile -c dist/tutorial.tar.gz dist/tutorial-complete
+        working-directory: dist
+        run: python -m tarfile -c tutorial.tar.gz tutorial-complete
 
       - name: Verify the archived delivery, notebooks and installed application
         run: |
