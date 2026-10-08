@@ -3,7 +3,11 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
+import {
+  chooseReferenceContext,
+  prepareReferenceContexts,
+  reviewRetainedExperiment,
+} from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -75,13 +79,12 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
     ).toBeDisabled();
-    await expect(
-      page.getByText(
-        "Experiment revision changed. Inputs and control edits are retained; preview again.",
-      ),
-    ).toBeVisible();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await expect(page.getByLabel("Frequency points")).toHaveValue("3");
+    await reviewRetainedExperiment(page);
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
     const nextPreviewResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/experiment-launcher/preview") &&
@@ -200,6 +203,14 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await page.goForward();
     await expect(page.getByRole("button", { name: "Experiments", exact: true })).toBeVisible();
     await page.goBack();
+    await reviewRetainedExperiment(page);
+    await page
+      .getByRole("button", { name: "Prepare a new run (separate acquisition)", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    expect(submissions).toHaveLength(1);
     const previewB = await preview();
     expect(previewB.code_revision).not.toEqual(previewA.code_revision);
     await expect(resultA.getByTestId("run-status")).toHaveText("Running");

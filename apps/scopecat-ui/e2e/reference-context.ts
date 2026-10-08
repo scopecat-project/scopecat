@@ -34,3 +34,11 @@ export async function chooseReferenceContext(page: Page, setup = "browser-bench-
   await page.getByRole("button", { name: "Use this parameter version", exact: true }).click();
   await page.getByLabel("Experiment setup", { exact: true }).selectOption(setup);
 }
+
+export async function reviewRetainedExperiment(page: Page) {
+  const review = page.getByRole("region", { name: "Review recovered experiment", exact: true });
+  await expect(review).toBeVisible();
+  await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+  await review.getByRole("button", { name: "Confirm reviewed input", exact: true }).click();
+  await expect(review).toBeHidden();
+}
