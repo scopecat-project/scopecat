@@ -92,7 +92,10 @@ Current automated evidence has distinct boundaries:
   retained intent classes; calibration/joint-calibration also passed real ipykernel
   execution. That resolved defect is documented in the PR, not a current blocker.
 - `verify_teaching_delivery.py` checks offline installation, console/editor-task
-  entry, wrong-kernel rejection and headless continuation.
+  entry, wrong-kernel rejection and headless continuation. In the existing slow
+  Linux/Windows acceptance job, installed Help and grouped recovery must pass
+  before the same invocation omits duplicate standalone grouped stages. Default
+  course analysis, compute/refresh and default-course snapshot recovery remain.
 - `verify_notebook_journey.py` uses real browser/kernel execution and verifies
   generated material identity, edits, restart and Continue without reacquisition.
   External editor/window activation is substituted; actual native editor use and
@@ -104,10 +107,15 @@ Current automated evidence has distinct boundaries:
   kernels are substituted. Fresh kernels reject the application interpreter,
   then read exact retained results after application restart without acquisition.
   Run `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
-  This is a targeted maintainer check, not an additional per-PR platform gate.
-  It preserves the old delivery/snapshot fixtures: browser/native interaction,
-  legacy editor tasks, default-course analysis, compute/refresh and snapshot
-  relocation assertions are outside this bounded proof.
+  The proof also snapshots the stopped service and restores it at a new location.
+  An independently backed-up author fixture is explicitly registered with its
+  original source ID in fresh environments, with old source/environment paths
+  unavailable. Exact grouped results and new analysis are checked; application
+  snapshots do not thereby restore external editable sources or Help Continue.
+  This remains a maintainer check, not an additional per-PR platform gate.
+  Browser/native interaction, legacy editor tasks and the default-course checks
+  retain their separate consumers. Phase timings and environment/cache sizes
+  describe verification cost; removing duplicate acquisition is not a speedup claim.
 
 Teaching checks complement fault/recovery/platform checks. They do not establish
 that a person can understand the material or operate real devices.
