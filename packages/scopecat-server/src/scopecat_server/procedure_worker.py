@@ -14,10 +14,13 @@ if TYPE_CHECKING:
 
 
 def main() -> None:
+    procedure_id = sys.argv[2]
+    record_timing("procedure_python_entry", procedure_id=procedure_id)
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         cast("TextIOWrapper", stream).reconfigure(encoding="utf-8")
     if sys.stdin.readline() != "registered\n":
         raise SystemExit("Worker was not registered by its application")
+    record_timing("procedure_registered", procedure_id=procedure_id)
     from scopecat_server.services.project_workers import capture_worker_process
 
     # Record the executing interpreter, not Windows' venv redirector. Recovery
