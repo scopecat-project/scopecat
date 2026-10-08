@@ -145,12 +145,15 @@ for (const scoped of [false, true]) {
         await launchVersion(page);
         await page.getByLabel("Sample ID", { exact: true }).fill(`context-${sample}`);
         if (scoped) {
-          await page
-            .getByRole("button", { name: "Browse samples, batches and collections", exact: true })
-            .click();
-          await page
-            .getByLabel("Experimental batch", { exact: true })
-            .selectOption(`cooldown-${sample}`);
+          const choices = page.getByRole("button", {
+            name: /^(Browse samples, batches and collections|Hide context choices)$/,
+          });
+          if ((await choices.getAttribute("aria-expanded")) === "false") await choices.click();
+          await expect(choices).toHaveAttribute("aria-expanded", "true");
+          const batch = page.getByLabel("Experimental batch", { exact: true });
+          await expect(batch).toBeVisible();
+          await batch.selectOption(`cooldown-${sample}`);
+          await expect(batch).toHaveValue(`cooldown-${sample}`);
         }
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
