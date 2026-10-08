@@ -256,6 +256,7 @@ function AnalysisDetail({
 
       <AnalysisPublicationView
         analysis={selected}
+        copyTarget={{ kind: "project" }}
         getArtifactDownload={(selector) =>
           getProjectAnalysisArtifactDownload(selected.id, selector)
         }

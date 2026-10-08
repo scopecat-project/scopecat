@@ -1,4 +1,5 @@
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
+import { CopyReadOnlyCode } from "../../ui/CopyReadOnlyCode";
 import { OpenRunWindow } from "./OpenRunWindow";
 import { WindowTitle } from "../application/WindowTitle";
 import { ExportRun } from "./ExportRun";
@@ -168,6 +169,7 @@ export function RunDetail({
               {run.runId}
             </code>
           </div>
+          <CopyReadOnlyCode target={{ kind: "run", runId: run.runId }} />
         </div>
         <dl className="mt-1 flex flex-none gap-7 max-[1100px]:gap-[18px] max-[680px]:mt-5 max-[680px]:grid max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
           <div className="grid gap-1.5">
