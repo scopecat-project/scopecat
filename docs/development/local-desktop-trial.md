@@ -1,7 +1,8 @@
 # Build a local Mac desktop for acceptance
 
 This is a packaged acceptance path, not a one-command daily development loop.
-A unified native-window + Vite + backend desktop-dev entry is not implemented.
+For daily native-window + Vite + backend editing, use the
+[unified source entry](public-preview.md#daily-source-desktop).
 
 Build a local `.app` to exercise Settings, native dialogs, clipboard and your
 editor with isolated development data. The application manages its own service;
@@ -44,10 +45,10 @@ issue or PR, not in this reusable startup guide.
 | Goal | Entry and boundary |
 | --- | --- |
 | Native desktop with ordinary Settings preparation | The packaged `.app` above; package-owned Python and author-environment resources |
-| Browser frontend hot reload | `uv run --locked python -m lab_tools.dev --source . --home PATH`; checkout Python, one owned backend and Vite; Ctrl-C stops both; no native DesktopAPI |
+| Daily native desktop with HMR | `uv run --locked python -m lab_tools.dev`; retained worktree home, real backend and Settings resources; [daily usage](public-preview.md#daily-source-desktop) |
 | Inspect or maintain an existing backend | `scopecat app --home APPLICATION_STATE --action status`; acts on that explicit application owner, without a separate daemon per author folder |
 
-The [Vite guide](public-preview.md#browser-frontend-debugging) describes frontend
+The [Vite guide](public-preview.md#daily-source-desktop) describes frontend
 prerequisites and source registration. Give Vite a separate development home,
 not a running native application's data directory.
 

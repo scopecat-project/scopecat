@@ -17,6 +17,8 @@ class DesktopSession:
         self.closing = closing
         self.prepare_reset: Callable[[], None] | None = None
         self.base_url: str | None = None
+        self.ui_url: str | None = None
+        self.endpoint_changed: Callable[[str], None] = lambda _url: None
         self.connection_changed: Callable[[str, str], None] = lambda _old, _new: None
         self._operation_lock = threading.Lock()
         self._exit_thread: threading.Thread | None = None
@@ -45,8 +47,22 @@ class DesktopSession:
     def connected(self, base_url: str) -> None:
         previous = self.base_url
         self.base_url = base_url
-        if previous is not None and previous != base_url:
+        self.endpoint_changed(base_url)
+        if previous is not None and (previous != base_url or self.ui_url is not None):
             self.connection_changed(previous, base_url)
+
+    @property
+    def page_url(self) -> str | None:
+        return (
+            self.ui_url if self.base_url is not None and self.ui_url else self.base_url
+        )
+
+    def restart(self, start: Callable[[], None]) -> None:
+        """Restart only after the daemon atomically admits idle shutdown."""
+        with self.operation():
+            if self.runtime.selection.exists() and not self.runtime.stop_if_idle():
+                raise ValueError("后台仍有工作；请等待空闲后重试，运行与数据保留")
+            start()
 
     @contextmanager
     def operation(self, *, allow_files: bool = False) -> Generator[None]:

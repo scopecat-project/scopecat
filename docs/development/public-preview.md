@@ -211,43 +211,50 @@ and rejection of unsupported formats remain distinct from future compatibility.
 
 ## Run without installation
 
-A unified one-command native desktop with Vite hot reload and author-environment
-preparation is not implemented. The packaged path below is for acceptance; it is
-not the default daily development loop. Choose the existing entry for your work:
+### Daily source desktop
 
-| Goal | Entry | Runtime and limitation |
-| --- | --- | --- |
-| Ordinary desktop, Settings new folder, editor, clipboard and native dialogs | [Build a local Mac desktop for acceptance](local-desktop-trial.md) | One packaged app with its own Python and author-environment payload; isolated test data; no manual daemon setup |
-| Browser frontend hot reload | `lab_tools.dev --source .` below | Checkout Python, one owned backend and Vite; no native DesktopAPI |
-| Short source-native window debugging | [Source-window shortcut](local-desktop-trial.md#choose-the-developer-mode) | Built GUI and checkout Python; a fresh home lacks author-environment payload and packaged Cocoa repair |
-| Inspect/maintain one existing application backend | `scopecat app --home APPLICATION_STATE --action status` | Explicit existing application owner; use the desktop for ordinary startup and Quit |
-
-### Browser frontend debugging
-
-From the public root:
-
-Install Python 3.14+, uv, Node.js and pnpm first. The launcher installs the locked
-frontend dependencies on explicit development startup.
+Install Python 3.14+, uv, Node.js and pnpm, then run from the public checkout:
 
 ```sh
-uv run --locked --group delivery python -m lab_tools.dev --source .
+uv run --locked python -m lab_tools.dev
 ```
 
-This starts a backend and Vite in the foreground, prints URLs and never opens a
-browser or native desktop. It is a current frontend debugging path, not the
-ordinary Settings/editor entry. Ctrl-C stops both. Disposable data and generated example source stay in
-`.scopecat-dev` between runs; checkout cleanup removes them. Use `--home` with an
-explicit directory outside the checkout for work you intend to retain, and put
-maintained author code in Git. It does not create a release, desktop entry or installation
-selection. Use `--workspace` to register laboratory author source. Registration
-does not select or activate its driver factory. Use **Update from source** in
-**Devices and drivers** when you want to use that implementation; an unavailable
-vendor environment does not prevent starting the development application.
-Device connection remains explicit. Source registration bindings created by the launcher are
-removed after successful shutdown; an existing binding is retained.
+This opens the existing native pywebview desktop with Vite HMR and the real
+Python backend. First startup prepares locked, verified wheels and an independent
+Python payload for ordinary Settings author-environment preparation. Later starts
+reuse content-addressed resources. UI edits use HMR and do not rebuild wheels or
+an app. Source Python/package edits print a restart reminder: enter `r` to restart
+an idle backend, or `w` to wait until it becomes idle. Restart refuses active or
+unknown work; it never force-stops it. Changes to native host Python need a full
+safe quit and relaunch. Existing author `.venv` directories and retained execution
+environments are never silently updated to follow the checkout.
 
-Consumers can run against the pinned preview GUI with `--preview`, or explicitly
-overlay a public checkout's editable packages for framework work. Overlay all
-public packages together and preserve the consumer lock. A checkout may live
-anywhere; a sibling directory has no special meaning. Framework changes require
-restart; author source refresh and idle driver source updates use the normal APIs.
+The default home is a stable hash of the canonical worktree path under the user's
+`Scopecat-Development` data directory, outside the checkout and separate from the
+installed application's data. Each worktree has its own owner and dynamic ports;
+a duplicate invocation reuses its owner and activates the native windows.
+The application starts blank: no example author folder is created or registered.
+Use Settings to create or register ordinary author source.
+
+```sh
+# A separate retained blank trial (the path must be new or owned by this checkout):
+uv run --locked python -m lab_tools.dev --home /absolute/path/to/dev-trial
+# Allocate a new blank home in the OS temporary directory; do not auto-delete it:
+uv run --locked python -m lab_tools.dev --temporary
+```
+
+Startup reports source, home, UI/backend URLs and log locations. `q` followed by
+Enter or Ctrl-C requests exit after work becomes idle; `c` cancels a pending
+terminal wait. Native Quit uses the ordinary application work-aware flow.
+No history is reset or automatically deleted. Retain useful temporary-home data
+outside the OS temp directory before the OS cleans it.
+
+`--browser` is an internal inspection option using the same Vite UI and real
+backend. Open its printed URL manually. Native bridge functions are unavailable;
+there is no alternative browser product or substitute UI. Vite receives an owned
+endpoint file and follows backend port changes after safe restart.
+
+For packaged acceptance, use [Build a local desktop](local-desktop-trial.md).
+That independent entry qualifies packaging and the installed lifecycle; it is not
+the everyday source editing loop. Native HMR, bridge, multi-window and Quit behavior
+must also be observed on the target OS; cloud backend tests do not establish it.

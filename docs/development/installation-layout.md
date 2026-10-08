@@ -19,7 +19,7 @@ Repository-local outputs have distinct lifetimes:
 | `/dist/native/` | One current native candidate at a stable path |
 | `/dist/qualified/` | Local copy of one accepted installer; publish before relying on it for distribution |
 | `/.test-results/` | Small reports and logs; keep the latest successful run and latest failure |
-| `/.scopecat-dev/` | Disposable development data and generated example source; reused between runs, removable with the checkout |
+| User `Scopecat-Development` directory | Retained worktree-specific development homes and verified resource cache; outside the checkout |
 
 Tool-owned directories such as frontend `dist`, `.venv` and `node_modules` retain
 their ordinary locations. Share uv/pnpm caches rather than creating another cache
@@ -27,9 +27,10 @@ per build. Cache pruning is separate maintenance, not a broad directory deletion
 Old `results/` directories are not a supported output location. New development
 must not depend on untracked inputs. Retained scientific data, site settings and
 vendor SDK installations belong outside the checkout, at explicit locations.
-Use `lab_tools.dev --home /absolute/path/outside/checkout` for retained development
-work, separate from the installed application's data. Move useful authored code
-into tracked source before cleaning the generated example. Classify existing files
+The daily `uv run --locked python -m lab_tools.dev` entry retains data outside
+the checkout in a worktree-specific development home, separate from installed
+application data. Use `--home /absolute/path/outside/checkout` for another trial.
+Keep authored source in its own tracked directory. Classify existing files
 by their contents and use: a disposable environment can be rebuilt, while retained
 scientific data, SDKs, settings and authored source are not build outputs.
 

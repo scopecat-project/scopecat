@@ -129,12 +129,13 @@ Use an isolated foreground development application and edit ordinary source in
 VS Code:
 
 ```sh
-python -m lab_tools.dev --home /path/to/development --workspace /path/to/author-source --source /path/to/scopecat
+uv run --locked python -m lab_tools.dev --home /path/to/development
 ```
 
-The development environment needs the source dependencies installed first. This
-command starts its own backend and Vite without opening a browser; Ctrl-C stops
-both. It does not install a desktop entry or share the daily application's home.
+Run this from a public checkout with Python 3.14+, uv, Node.js and pnpm. It opens
+the native desktop with Vite and an isolated backend; Ctrl-C requests exit after
+work becomes idle. Register the capability source folder through Settings.
+See [daily source development](../development/public-preview.md#daily-source-desktop).
 Registering the source folder does not enable its drivers. Experiment and
 analysis edits use ordinary author refresh. Initial driver selection and edits use
 **Update from source** in **Devices and drivers**, after finishing active work and
