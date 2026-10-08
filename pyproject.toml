@@ -442,6 +442,7 @@ fast_paths = [
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [
+  "packages/lab-tools/tests/test_native_console.py",
   "packages/lab-tools/tests/test_native_windows_probe.py",
   "packages/lab-tools/tests/test_cocoa_dependency.py",
   "packages/lab-tools/tests/test_windows_dependency.py",

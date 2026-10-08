@@ -102,7 +102,9 @@ def test_console_forwards_arguments_identity_and_exit_code(console_runtime):
     # A missing bundled interpreter must fail, even if a system Python exists.
     (python / "bin/python3").unlink()
     missing = run_console(python, dict(environment, PATH=os.defpath), "--help")
-    assert missing.returncode == 127
+    # macOS /bin/sh reports 126; Linux dash reports 127 for this exec failure.
+    assert missing.returncode in (126, 127)
+    assert str(python / "bin/python3") in missing.stderr
 
 
 def test_build_replaces_console_before_signing_and_rename(tmp_path, monkeypatch):
