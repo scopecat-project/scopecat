@@ -71,7 +71,6 @@ list of interfaces to preserve.
 | `20_flux_spectroscopy.py` | Bias scan, complex traces, fit artifacts, and a parameter proposal |
 | `24_flux_ramsey.py` | Host DC bias composed with a quantum delay scan |
 | `25_entity_routed_ramsey.py` | Point-local entity selection over reusable quantum work |
-| `29_channel_unavailable.py` | Entity-axis IQ traces, identity selection, provenance, and one unavailable demodulation channel |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
 
 The logical pulse-overlap diagnostic script and its dedicated experiment/program

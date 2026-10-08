@@ -16,7 +16,8 @@ source; installed historical environments and scientific data are untouched.
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
 | `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
-| `20_flux_spectroscopy.py`, `24`–`25`, `29` | Compiled buffers, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `20_flux_spectroscopy.py`, `24`–`25` | Compiled buffers, multiplexed readout and topology | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `29_channel_unavailable.py` | Independent multiplexed-channel availability, entity provenance and HTTP traces | Retired duplicate presentation/acquisition. The existing shared acceptance worker result now owns the assertions; mapping below. |
 | `31_topology_scaled_ramsey.py` | Topology-selected entities retain their identity through compilation and results | Retired with its dedicated experiment/result wrapper. Core topology selection and the focused runner test retain selection and metadata coverage; the assertion mapping and corrected numerical row correspondence are below. |
 | `28_channel_conflict_diagnostic.py` | Logical pulse-overlap diagnostics | Retired with its daemon/gallery test and dedicated `conflicting_drive` / `conflicting_drive_program` wrappers. Existing quantum scheduling and authoring tests own the diagnostic, as detailed below. |
 | `34_xy_lo_sweep.py`, `35_awg_output_monitor.py`, `50_ragged_scope_capture.py` and their workflow modules | Shared owners, signed IF, entityless claims and variable-length acquisition | Retired the scripts, experiments, result wrappers and XY facade. Current contract owners and deliberately withdrawn fixture assertions are mapped below. |
@@ -139,10 +140,63 @@ data was inspected or rewritten, and the tests do not establish which previously
 recorded runs, if any, were affected. Identical synthetic responses can hide a swap;
 the numerical regression deliberately uses distinct values and missing-shot patterns.
 
-This slice leaves the `29` unavailable-channel scenario, parallel raw-IQ shared
+The topology slice left the `29` unavailable-channel scenario (retired separately
+below), parallel raw-IQ shared
 acceptance, worker chain, provider/setup inventory and retained scientific data
 unchanged. No performance improvement is claimed. The broader retirement in #773
 remains open.
+
+## Unavailable-channel gallery retirement: assertion mapping
+
+`29_channel_unavailable.py` and its gallery test are retired. They acquired the
+same `parallel_raw_ramsey` input already executed by shared acceptance. The
+existing generator now calls `_check_independent_readout` on the exact source run
+referenced by its candidate execution. This reads the actual daemon/worker result
+and HTTP trace without another acquisition or another daemon. Checks live outside
+the device package so moving test assertions does not alter provider source identity.
+
+| Former assertion | Current evidence or withdrawal |
+| --- | --- |
+| Completed run, two records, two entities and 64 shots | The generator checks the completed source and full result shape from the existing worker acquisition. Two delays and 64 shots remain this shared input's choices, not a new compatibility promise. |
+| q0 available at both delays; q1 missing only at the second delay | The generator selects each entity by identity and checks every point's availability and exact `missing` reason. No whole-channel fallback or compute-only substitute. |
+| Source product belongs to each entity; acquisition policy is independent | The generator checks the entity/product correspondence and `independent` policy on the acquired variable. |
+| HTTP trace contains three usable series and one q1 failure | The generator requests the same bounded two-entity trace and checks all series/failure labels. |
+| Exact `shared/parallel-two-qubit-ramsey/shot` dimension string and summary dictionary | Withdrawn presentation identities. Typed entity-axis discovery, result shape and actual selection remain; this path string is not a protocol. |
+| Independent selection, reordered entities and partially missing shots | Existing core `measurements/test_dataset.py::test_entity_dimensions_support_labeled_selection_and_partial_availability` and `test_entity_alignment_reindexes_values_provenance_and_evidence`; reference `unit/test_list_mode_results.py` and `test_quantum_runner.py::test_topology_result_rows_match_the_product_entity_order` retain lower-level combinations with distinct numerical values. |
+| Shared physical multiplexing | Existing `test_quantum_runner.py::test_parallel_qubit_set_compiles_to_one_entity_axis_result_group` retains shared I/Q outputs, one digitizer input and acquisition ownership. The acceptance source still executes the real simulated device worker chain. |
+
+`parallel_raw_ramsey`, its result wrapper, program, response model and provider
+remain unchanged. In addition to acceptance, `launch.py` uses the input for
+candidate/launch scenarios. That is the bounded current dependency, not a promise
+to maintain the gallery API indefinitely. No new fixture or compatibility layer is
+needed for this slice. Examples 20/24–25, other compiler/device inventory, #773 and
+#615 remain unfinished. Signal/ordinary-analysis benchmarks and their inputs,
+Help/Notebook design and retained user data are untouched.
+
+### Verification boundary
+
+At base `9aaf0173e0802c3cb1bc1c845e9c4634365ebc38`, the local Linux
+Python 3.14.7 run of
+`uv run --locked pytest -n 0 examples/reference_lab/tests/test_acceptance.py examples/reference_lab/tests/test_gallery_notebooks.py --durations=10`
+reported 9 passed and 1 failed in 49.77 seconds. The deleted test's call took
+3.08 seconds. The failure predates this change: the isolated acceptance generator
+reports a stale committed fixture. Recursive comparison found nine identity leaves
+changed: `manual_state.binding.config_source_hash` and
+`reviewed.config_source.setup.{content_hash,revision_id}` under each of
+`controls_scalar`, `controls_scan` and `launch_preview`. Expected setup hash
+`ad37a47f…` was locally `ef8522ab…`; source hash `ec37f58d…` was `91044357…`.
+Three complex scalar components also differed within the existing 1e-12 tolerance.
+No other values, keys, types or lengths changed. The shared fixture is not rewritten
+by this retirement. This baseline failure remains a separate verification limit,
+not a passing acceptance claim.
+
+After retirement, the same file selection reports 8 passed and the same single
+fixture failure in 44.69 seconds; acceptance call time is 22.82 seconds versus
+23.00 seconds before. These single local samples (with focused contract checks
+running alongside the after sample) do not establish a stable wall-time speedup.
+They establish removal of one duplicate acquisition. The 79 tests in the dataset,
+list-mode result and quantum runner files pass. No native-window, installed-package,
+Windows or physical-hardware qualification is claimed.
 
 ## Waveform gallery retirement: contract owners
 
