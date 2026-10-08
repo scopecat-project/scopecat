@@ -393,6 +393,10 @@ def main() -> None:
         else development_home(source)
     )
     try:
+        if sys.platform == "darwin" and not args.browser:
+            from .dev_host import enter_host
+
+            enter_host(source, home)
         run(source, home, browser=args.browser)
     except KeyboardInterrupt:
         print("Development preparation cancelled; existing data retained.", flush=True)

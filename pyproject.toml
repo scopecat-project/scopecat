@@ -432,6 +432,7 @@ fast_paths = [
   "packages/scopecat-quantum/tests",
   "packages/lab-tools/tests/test_test_tiers.py",
   "packages/lab-tools/tests/test_dev.py",
+  "packages/lab-tools/tests/test_dev_host.py",
   "packages/lab-tools/tests/test_preview.py",
   "packages/lab-tools/tests/test_release_prepare.py",
   "packages/lab-tools/tests/test_release_identity.py",

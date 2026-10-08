@@ -220,7 +220,20 @@ uv run --locked python -m lab_tools.dev
 ```
 
 This opens the existing native pywebview desktop with Vite HMR and the real
-Python backend. First startup prepares locked, verified wheels and an independent
+Python backend. On macOS, the command first prepares a cached **Scopecat Dev**
+`.app` with the existing application icon and a stable worktree-specific bundle
+identity. It requires Xcode command line tools (`xcode-select --install`). The
+small host links the current Python in-process and preserves its environment,
+stdin, signals and exit status; it does not copy Python, dependencies, source or
+GUI into the `.app`. The printed host path can be used to identify it in native
+tools. It is a local development host, not a distributable installation.
+
+Host caches change only for checkout/interpreter/ABI/libpython, icon or host
+construction inputs. Ordinary GUI and application-source edits do not rebuild
+the host. After changing the host's own inputs, safely quit the existing owner
+before relaunching. `--browser` bypasses the native host for internal inspection.
+
+First startup prepares locked, verified wheels and an independent
 Python payload for ordinary Settings author-environment preparation. Later starts
 reuse content-addressed resources. UI edits use HMR and do not rebuild wheels or
 an app. Source Python/package edits print a restart reminder: enter `r` to restart
