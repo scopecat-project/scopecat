@@ -139,8 +139,13 @@ def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, 
         "src/workspace_app.py": "lessons/workspace_app.py.txt",
         **{
             f"src/my_experiment/{name}.py": f"lessons/{name}.py.txt"
-            for name in ("parameters", "setup", "response")
+            for name in ("parameters", "response")
         },
+        "src/my_experiment/setup.py": (
+            "lessons/setup.py.txt"
+            if topic is None
+            else "lessons/parameters_setup.py.txt"
+        ),
         "src/my_experiment/teaching.py": (
             "lessons/compute_experiment.py.txt"
             if topic == "compute"
