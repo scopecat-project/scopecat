@@ -276,9 +276,18 @@ def _installed_journey(bundle: Path, gui: Path) -> None:
             [sys.executable, str(project_root / "notebooks/02_edit_scan.py")],
             cwd=project_root,
         )
-        scan = cast(
-            "dict[str, object]", ast.literal_eval(scan_output.strip().splitlines()[0])
-        )
+        # The shipped notebook prints its preview and reopen receipt before the
+        # measurements. Require exactly one analysis summary, not the first line.
+        summaries = [
+            cast("dict[str, object]", ast.literal_eval(line))
+            for line in scan_output.splitlines()
+            if line.startswith("{")
+        ]
+        [scan] = [
+            item
+            for item in summaries
+            if set(item) == {"run_id", "points", "mean", "analysis_id"}
+        ]
         assert scan["points"] == 3 and scan["mean"] == 2 / 3
         shared_run_id = _shared_author_journey(project, str(scan["run_id"]))
         _run([*cli, "stop", str(project_root)], cwd=project_root)

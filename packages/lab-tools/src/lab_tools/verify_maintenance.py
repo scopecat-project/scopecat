@@ -53,7 +53,10 @@ def verify_restore(
         json.dumps({"groups": groups, "seconds": timings}, indent=2) + "\n",
         encoding="utf-8",
     )
-    print("备份副本、独立环境恢复、原结果读回及新增分析通过", flush=True)
+    print(
+        "备份副本、独立环境恢复及原结果读回通过" + ("；追加分析通过" if groups else ""),
+        flush=True,
+    )
 
 
 def read_copy(
