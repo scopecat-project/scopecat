@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from functools import cache
 from pathlib import Path, PurePosixPath
@@ -1087,6 +1087,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def health() -> DaemonHealth:
         return application.health()
 
+    shutdown_accepted = asyncio.Event()
+
     if request_shutdown is not None:
         # Serialize the idle decision with admission of HTTP mutations, including
         # source preparation and maintenance. Existing operations keep quit busy.
@@ -1131,7 +1133,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         ) -> None:
             nonlocal stopping
             async with lifecycle_lock:
-                if only_if_idle and (changing or application.activity().busy):
+                if (
+                    not stopping
+                    and only_if_idle
+                    and (changing or application.activity().busy)
+                ):
                     raise HTTPException(
                         status_code=409, detail="Application has active work"
                     )
@@ -1140,6 +1146,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         status_code=403, detail="invalid shutdown token"
                     )
                 stopping = True
+                shutdown_accepted.set()
 
     @app.put(
         f"{_API_PREFIX}/instrument-sessions/{{session_id}}/"
@@ -2778,6 +2785,8 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         run_id: str | None = None,
         follow: bool = True,
     ) -> StreamingResponse:
+        if shutdown_accepted.is_set():
+            raise HTTPException(status_code=503, detail="Scopecat is quitting")
         cursor = last_event_id if last_event_id is not None else after
         events = _event_stream(
             application,
@@ -2785,6 +2794,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             after=cursor,
             run_id=run_id,
             follow=follow,
+            shutdown_accepted=shutdown_accepted,
         )
         return StreamingResponse(
             events,
@@ -3086,9 +3096,10 @@ async def _event_stream(
     after: int | None,
     run_id: str | None,
     follow: bool,
+    shutdown_accepted: asyncio.Event,
 ) -> AsyncIterator[str]:
     cursor = after
-    while True:
+    while not shutdown_accepted.is_set():
         page = await run_in_threadpool(
             application.runs.list_events,
             limit=_SSE_PAGE_SIZE,
@@ -3097,6 +3108,8 @@ async def _event_stream(
             latest=False,
         )
         for event in page.items:
+            if shutdown_accepted.is_set():
+                return
             cursor = event.event_id
             yield _encode_sse(event.event_id, event.model_dump_json())
         if page.next_cursor is not None:
@@ -3104,7 +3117,8 @@ async def _event_stream(
             continue
         if not follow or await request.is_disconnected():
             return
-        await asyncio.sleep(_SSE_POLL_SECONDS)
+        with suppress(TimeoutError):
+            await asyncio.wait_for(shutdown_accepted.wait(), _SSE_POLL_SECONDS)
 
 
 def _encode_sse(event_id: int, data: str) -> str:

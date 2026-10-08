@@ -39,6 +39,8 @@ class DaemonEndpointRecord(BaseModel):
     # An already-running process may not have reported its interpreter yet.
     # It remains stoppable through its binding, PID and creation time.
     python: Path | None = None
+    # Set by the owning server after shutdown authorization, before HTTP drain.
+    shutdown_accepted: bool = False
 
 
 def daemon_record_path(project_root: str | Path) -> Path:

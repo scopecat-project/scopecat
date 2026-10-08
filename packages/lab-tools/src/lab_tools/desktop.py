@@ -447,6 +447,16 @@ def _recovery(error: Exception, *, can_reset: bool = False) -> str:
     )
 
 
+def _quit_recovery(error: Exception) -> str:
+    return _page(
+        "<h1>退出未完成</h1>"
+        "<p>应用尚未确认退出。已保存数据保留；请重试退出，勿重复启动或提交实验。</p>"
+        "<details><summary>查看退出错误详情</summary>"
+        f"<p>{escape(str(error))}</p></details>"
+        '<button onclick="quit()">重试退出 Scopecat</button>'
+    )
+
+
 def _window_close_handlers(
     window: webview.Window, closing: threading.Event, loaded: threading.Event
 ) -> tuple[Callable[[], bool], Callable[[], bool]]:
@@ -739,9 +749,7 @@ def run(
                 except Exception as error:
                     session.wait_for_idle(False)
                     windows.show()
-                    windows.latest.window.load_html(
-                        _recovery(error, can_reset=prepare_reset is not None)
-                    )
+                    windows.latest.window.load_html(_quit_recovery(error))
                 if activate.exists():
                     requested_package = activate.read_text(encoding="utf-8")
                     activate.unlink(missing_ok=True)

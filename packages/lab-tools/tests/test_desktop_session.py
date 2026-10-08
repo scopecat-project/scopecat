@@ -484,3 +484,15 @@ def test_new_window_keeps_root_and_run_window_requires_ready_service():
     windows = DesktopWindows(session, Mock())
     with pytest.raises(ValueError, match="准备"):
         windows.new_window("run-a")
+
+
+def test_quit_recovery_reports_exit_and_only_offers_quit_retry():
+    from lab_tools.desktop import _quit_recovery
+
+    page = _quit_recovery(ValueError("still quitting <details>"))
+    assert "退出未完成" in page
+    assert "still quitting &lt;details&gt;" in page
+    assert 'onclick="quit()"' in page
+    assert "启动未完成" not in page
+    assert 'onclick="restart()"' not in page
+    assert 'onclick="resetData()"' not in page
