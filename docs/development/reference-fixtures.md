@@ -226,6 +226,57 @@ explicit volatile identity fields are normalized. The scalar IQ comparison uses
 `1e-12` absolute/relative tolerance for platform reduction roundoff; other fields
 remain exact. Review generated differences when changing producers.
 
+### Setup identity audit (October 2026)
+
+The fixed acceptance setup became stale in
+[#898](https://github.com/scopecat-project/scopecat/pull/898)
+(`2138c5fd`), then changed again in
+[#902](https://github.com/scopecat-project/scopecat/pull/902)
+(`73f405ab`). Both retired source recipes inside `reference_lab`; neither refreshed
+the shared fixture. The original generator's `--check` passes at #898's parent
+`f34ad868` and fails at #898. #902's provider package bytes are unchanged through
+the audited main `21129395` (including #923/#924).
+
+This is expected source provenance propagation. On fresh bootstrap,
+`backend_artifact_hash` hashes the provider's regular package and helpers using
+sorted relative paths and exact file bytes, excluding Python bytecode. It includes
+the retired workflow files even though this acceptance slice does not call them.
+The artifact hash enters each `DeviceConnection`, its revision reference, and
+`SetupDeviceResolution`; `resolved_setup_hash` then determines both setup content
+hash and `resolved:<hash>` revision ID. The manual preview binding hashes the
+complete reviewed configuration source. No identity codec or product contract
+changed in this repair.
+
+| Source | Provider artifact hash | Resolved setup hash | Configuration source hash |
+| --- | --- | --- | --- |
+| Before #898 | `81425f26…` | `ad37a47f…` | `ec37f58d…` |
+| #898 | `811ea2c7…` | `be9679ae…` | `945a029d…` |
+| #902 through `21129395` | `e8a76549…` | `ef8522ab…` | `91044357…` |
+
+Two fresh captures at `21129395`, one under a separate temporary root with
+`PYTHONHASHSEED=917`, produced identical comparison differences. Historical checks
+ran from separate worktrees and locked environments on Python 3.14.7/Linux.
+The fresh-bootstrap artifact path hashes package bytes, not absolute paths,
+timestamps, package-install order or dependency versions. This does not assert
+that deliberately edited source bytes or retained driver-source environments
+have the same identity.
+
+The complete generated JSON audit found exactly nine identity leaves: each of
+`controls_scalar`, `controls_scan` and `launch_preview` changed
+`manual_state.binding.config_source_hash` and
+`reviewed.config_source.setup.{content_hash,revision_id}`. Three additional scalar
+IQ components differed only within the existing `1e-12` roundoff tolerance;
+all other values, keys, types and lengths matched. The correction takes the nine
+identities from the existing generator and retains the already accepted IQ
+representatives. It adds a negative comparison test for every affected identity
+leaf; scientific values, source/provenance and stable fields keep their existing
+exact comparisons outside that narrow IQ tolerance.
+
+The real Python/HTTP generator, including #923's independent readout assertions,
+and the remaining gallery suite provide the replacement evidence. This repair
+adds no fixture protocol, acquisition, native qualification or hardware claim,
+and does not close the remaining retirement or performance work in #773/#520.
+
 ## Exploratory author fixture
 
 | Owner | Responsibility |
