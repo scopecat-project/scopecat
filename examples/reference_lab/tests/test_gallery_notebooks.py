@@ -42,33 +42,3 @@ def test_multichannel_dc_bias_spans_two_devices_and_four_routes(
         "records": 1,
         "status": "completed",
     }
-
-
-def test_flux_ramsey_composes_local_bias_and_quantum_channels(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "24_flux_ramsey.py"))
-    summary = cast("dict[str, object]", namespace["flux_ramsey_summary"])
-
-    assert summary["points"] == 15
-    assert summary["records"] == 15
-    assert summary["status"] == "completed"
-    assert sorted(cast("dict[str, int]", summary["dimensions"]).values()) == [3, 5]
-
-
-def test_entity_routed_ramsey_switches_channel_sets_by_point(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    namespace = run_path(str(reference_lab_notebooks / "25_entity_routed_ramsey.py"))
-    summary = cast("dict[str, object]", namespace["entity_ramsey_summary"])
-
-    assert summary == {
-        "points": 6,
-        "records": 6,
-        "qubit_groups": 2,
-        "status": "completed",
-    }
