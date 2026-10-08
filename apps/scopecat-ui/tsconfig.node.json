@@ -13,5 +13,5 @@
     "noEmit": true,
     "strict": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "e2e"]
+  "include": ["vite.config.ts", "vite.config.test.ts", "playwright.config.ts", "e2e"]
 }

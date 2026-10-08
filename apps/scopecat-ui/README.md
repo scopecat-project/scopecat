@@ -8,17 +8,21 @@ designed to be served by the daemon so all API calls stay on relative
 pnpm install
 ```
 
-For frontend development, start a foreground application from the repository root:
+For source development, run from the public repository root:
 
 ```sh
-uv run --group delivery python -m lab_tools.dev --source .
+uv run --locked python -m lab_tools.dev
 ```
 
-The same command works in PowerShell. It owns a separate `.scopecat-dev` data
-directory, starts the backend and Vite, and prints their URLs without opening a
-browser. Ctrl-C stops both. No desktop installation is needed. Pass `--home` to
-choose another development directory. Vite receives `SCOPECAT_DEV_ENDPOINT` from
-the launcher; it does not discover or start a daily application.
+This opens the native desktop with Vite HMR and a real backend, in a retained
+home isolated by worktree. `--home PATH` selects another retained blank trial;
+`--temporary` allocates a new home without deleting it on exit. `--browser` is
+only for internal inspection without native bridge functions. Startup prints URLs
+and logs. Python changes need explicit safe restart (`r`, or `w` to wait for idle);
+Ctrl-C requests a work-aware exit. See [source development](../../docs/development/public-preview.md#daily-source-desktop).
+
+Vite reads `SCOPECAT_DEV_ENDPOINT_FILE` on each API request so backend restarts
+can change ports without replacing the UI origin or losing its HMR connection.
 
 `pnpm run build` writes only to this application's ignored `dist/` directory.
 Use the complete delivery workflow to install a changed bundle into the application.

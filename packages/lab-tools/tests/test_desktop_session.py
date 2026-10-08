@@ -438,7 +438,8 @@ def test_failed_restart_preparation_keeps_window_available():
     api = DesktopAPI(DesktopSession(runtime, closing), lambda: window, prepare)
     with pytest.raises(ValueError, match="missing dependency"):
         api.restart()
-    runtime.stop.assert_called_once()
+    runtime.stop_if_idle.assert_called_once()
+    runtime.stop.assert_not_called()
     prepare.assert_called_once()
     runtime.start.assert_not_called()
     window.run_js.assert_not_called()
@@ -496,3 +497,27 @@ def test_quit_recovery_reports_exit_and_only_offers_quit_retry():
     assert "启动未完成" not in page
     assert 'onclick="restart()"' not in page
     assert 'onclick="resetData()"' not in page
+
+
+def test_development_windows_reload_same_ui_origin_after_proxy_changes():
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+    session.ui_url = "http://127.0.0.1:5173"
+    session.connected("http://127.0.0.1:9000")
+    windows = DesktopWindows(session, Mock())
+    first, second = Mock(), Mock()
+    first.window.get_current_url.return_value = session.ui_url + "/?run=A#runs"
+    second.window.get_current_url.return_value = session.ui_url + "/?run=B#runs"
+    windows._views = [first, second]
+    proxy = Mock()
+    session.endpoint_changed = proxy
+    session.connected("http://127.0.0.1:9001")
+    proxy.assert_called_once_with("http://127.0.0.1:9001")
+    first.window.run_js.assert_called_once_with(
+        'window.location.replace("http://127.0.0.1:5173/?run=A#runs");'
+    )
+    second.window.run_js.assert_called_once_with(
+        'window.location.replace("http://127.0.0.1:5173/?run=B#runs");'
+    )
+    api = DesktopAPI(session, lambda: first.window)
+    assert api._data_url() == "http://127.0.0.1:9001"

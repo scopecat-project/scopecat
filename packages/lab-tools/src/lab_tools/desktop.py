@@ -266,10 +266,14 @@ class DesktopAPI:
         return "执行环境已选择；重新准备使用新环境，已有任务保持原环境。"
 
     def restart(self) -> None:
-        with self._session.operation():
-            if self._runtime.selection.exists():
-                self._runtime.stop()
-            self._start()
+        def start() -> None:
+            location = self._window().get_current_url()
+            current = urlsplit(location if isinstance(location, str) else "")
+            self._start(
+                urlunsplit(("", "", current.path, current.query, current.fragment))
+            )
+
+        self._session.restart(start)
 
     def prepare_author_environment(self, directory: str) -> str:
         from .author_environment import prepare_execution_environment
@@ -310,7 +314,9 @@ class DesktopAPI:
             )
             raise
         self._session.connected(record.base_url)
-        _replace_location(self._window(), record.base_url + location)
+        _replace_location(
+            self._window(), (self._session.page_url or record.base_url) + location
+        )
 
     def reset_data(self, skip_backup: bool = False) -> bool:
         """Confirmation belongs to the native host, not the unavailable backend."""
@@ -378,7 +384,7 @@ class DesktopAPI:
             record = reset_store(self._runtime, failure, prepare, destination)
             self._unsupported = None
             self._session.connected(record.base_url)
-            _replace_location(self._window(), record.base_url)
+            _replace_location(self._window(), self._session.page_url or record.base_url)
             return True
 
     def exit(self, background: bool) -> None:
@@ -504,7 +510,11 @@ class DesktopWindows:
         session.connection_changed = self._reconnect
 
     def _reconnect(self, previous: str, current: str) -> None:
-        old, new = urlsplit(previous), urlsplit(current)
+        old, new = (
+            (urlsplit(self._session.ui_url), urlsplit(self._session.ui_url))
+            if self._session.ui_url
+            else (urlsplit(previous), urlsplit(current))
+        )
         with self._lock:
             views = tuple(self._views)
         for view in views:
@@ -529,7 +539,7 @@ class DesktopWindows:
         import webview
 
         with self._lock:
-            location = self._session.base_url
+            location = self._session.page_url
             if run_id is not None:
                 if location is None:
                     raise ValueError("应用尚在准备，请稍后新建窗口")
@@ -654,6 +664,7 @@ def run(
     prepare: Callable[[], None] | None = None,
     package_identity: str = "source-development",
     prepare_reset: Callable[[], None] | None = None,
+    session: DesktopSession | None = None,
 ) -> None:
     # Optional dependency: command-line/service installations stay headless.
     import pystray
@@ -673,8 +684,8 @@ def run(
         activate.write_text(package_identity, encoding="utf-8")
         return
     try:
-        runtime = ApplicationRuntime(home)
-        closing = threading.Event()
+        runtime = session.runtime if session is not None else ApplicationRuntime(home)
+        closing = session.closing if session is not None else threading.Event()
 
         def configure() -> None:
             selected = runtime.configure(
@@ -688,7 +699,7 @@ def run(
             if checked != selected or runtime.pending.exists():
                 runtime.select(checked)
 
-        session = DesktopSession(runtime, closing)
+        session = session or DesktopSession(runtime, closing)
         session.prepare_reset = prepare_reset
         windows = DesktopWindows(session, prepare or configure)
         first = windows.create()

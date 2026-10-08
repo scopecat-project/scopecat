@@ -55,6 +55,7 @@ def runtime_command(python: Path, request: dict[str, object]) -> dict[str, objec
                 str(output),
             ],
             env=environment,
+            start_new_session=os.name != "nt",
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             check=False,
         )

@@ -420,3 +420,78 @@ it("allows only one failed-operation retry in flight before saving newer edits",
     ["newest", "saved"],
   ]);
 });
+
+it.each([false, true])(
+  "finishes an unmount-flushed save after the DOM is gone (failure=%s)",
+  async (fails) => {
+    const view = mount();
+    await saved(view);
+    let release!: () => void;
+    holdSave = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    failSave = fails;
+    act(() =>
+      view.result.current.setDraft((current) => ({
+        ...current!,
+        values: { center: "retained on close" },
+      })),
+    );
+    const recovery = view.result.current.recovery;
+    const count = commands.length;
+    view.unmount(); // Wake the debounce through the real hook cleanup.
+    const flushing = recovery.flush();
+    const browserWindow = window;
+    vi.stubGlobal("window", undefined); // Same boundary as Vitest's jsdom teardown.
+    try {
+      release();
+      const outcome = await flushing.then(
+        () => "saved",
+        (error: unknown) => String(error),
+      );
+      expect(outcome).toBe(
+        fails ? "Error: Resolve and save the current input before submitting." : "saved",
+      );
+      expect(commands).toHaveLength(count + 1);
+      expect(history.at(-1)?.input.values.center).toBe(fails ? "0" : "retained on close");
+    } finally {
+      vi.stubGlobal("window", browserWindow);
+    }
+  },
+);
+
+it.each([false, true])(
+  "settles a delayed retry after unmount without DOM updates (failure=%s)",
+  async (fails) => {
+    const view = mount();
+    await saved(view);
+    failSave = true;
+    act(() =>
+      view.result.current.setDraft((current) => ({
+        ...current!,
+        values: { center: "retry on close" },
+      })),
+    );
+    await waitFor(() =>
+      expect(view.result.current.recovery.status).toContain("not confirmed saved"),
+    );
+    const operation = commands.at(-1);
+    let release!: () => void;
+    holdSave = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    failSave = fails;
+    const retrying = view.result.current.recovery.retry();
+    view.unmount();
+    const browserWindow = window;
+    vi.stubGlobal("window", undefined);
+    try {
+      release();
+      await expect(retrying).resolves.toBeUndefined();
+      expect(commands.at(-1)).toBe(operation);
+      expect(history.at(-1)?.input.values.center).toBe(fails ? "0" : "retry on close");
+    } finally {
+      vi.stubGlobal("window", browserWindow);
+    }
+  },
+);

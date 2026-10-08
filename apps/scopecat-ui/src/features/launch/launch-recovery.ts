@@ -101,6 +101,14 @@ export function useLaunchRecovery(
   draft: LaunchDraft | undefined,
   setDraft: Dispatch<SetStateAction<LaunchDraft | undefined>>,
 ) {
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      // Persistence may finish after unmount; it must not notify the old UI.
+      mounted.current = false;
+    };
+  }, []);
   const session = useRef<Session | undefined>(undefined);
   const [unfinished] = useState(() => new Map<string, Session>());
   const [visibleSession, setVisibleSession] = useState<Session>();
@@ -135,6 +143,7 @@ export function useLaunchRecovery(
       cached.hydrating = JSON.stringify(rawInput(restored));
       setDraft((previous) => ({ ...restored, revision: (previous?.revision ?? 0) + 1 }));
       queueMicrotask(() => {
+        if (!mounted.current || session.current !== cached) return;
         setStatus(
           cached.failed
             ? "Input not confirmed saved. Your local copy is retained; retry saving before switching again."
@@ -156,7 +165,8 @@ export function useLaunchRecovery(
     session.current = current;
     unfinished.set(target, current);
     queueMicrotask(() => {
-      if (session.current === current) setStatus("Loading saved experiment input…");
+      if (mounted.current && session.current === current)
+        setStatus("Loading saved experiment input…");
     });
     let active = true;
     void readDraft(workspace, experiment)
@@ -248,7 +258,7 @@ export function useLaunchRecovery(
             current.conflict = result.saved?.state === "conflict";
             if (!current.conflict) current.revision = result.saved!.revision;
             if (sent !== current.queued) continue;
-            if (session.current === current)
+            if (mounted.current && session.current === current)
               setStatus(
                 current.conflict
                   ? "Another window changed this experiment. Your edits are retained as a separate conflict copy."
@@ -257,7 +267,7 @@ export function useLaunchRecovery(
             break;
           } catch (error) {
             current.failed = command;
-            if (session.current === current)
+            if (mounted.current && session.current === current)
               setStatus(
                 `Input not confirmed saved: ${String(error)}. Keep this window open and retry saving.`,
               );
@@ -266,7 +276,7 @@ export function useLaunchRecovery(
       } finally {
         current.pending = 0;
         current.flushing = false;
-        setEpoch((value) => value + 1);
+        if (mounted.current) setEpoch((value) => value + 1);
       }
     })();
   }, [encoded, target, epoch]);
@@ -363,10 +373,10 @@ export function useLaunchRecovery(
           if (!activeSession.conflict) activeSession.revision = result.saved!.revision;
           activeSession.queued = "";
         } catch (error) {
-          setStatus(`Input not confirmed saved: ${String(error)}`);
+          if (mounted.current) setStatus(`Input not confirmed saved: ${String(error)}`);
         } finally {
           activeSession.pending = 0;
-          setEpoch((value) => value + 1);
+          if (mounted.current) setEpoch((value) => value + 1);
         }
       })();
       await activeSession.queue;

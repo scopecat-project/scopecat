@@ -15,38 +15,6 @@ from scopecat.project_sources import capture_sources, materialize_sources
 from scopecat_server.lifecycle import write_daemon_endpoint_record
 
 
-def test_foreground_source_development_owns_and_stops_its_application(tmp_path):
-    from lab_tools.dev import development_session
-    from scopecat.project import open_project
-    from scopecat_server.lifecycle import inspect_daemon
-
-    home = tmp_path / "source development"
-    with development_session(home) as record:
-        assert record.base_url.startswith("http://127.0.0.1:")
-        assert not (home / "installation.json").exists()
-        assert not (home / "releases").exists()
-        with (
-            pytest.raises(RuntimeError, match="developer failure"),
-            development_session(tmp_path / "another"),
-        ):
-            raise RuntimeError("developer failure")
-    assert inspect_daemon(open_project(home / "runtime")).state == "stopped"
-    assert not (home / "authors/scopecat.runtime.toml").exists()
-    assert inspect_daemon(open_project(tmp_path / "another/runtime")).state == "stopped"
-    assert not (tmp_path / "another/authors/scopecat.runtime.toml").exists()
-    # Editable overlays can use an ephemeral interpreter. A later launch must
-    # explicitly register its current interpreter rather than reusing that path.
-    location = author_bindings_path(home / "runtime")
-    registry = LocalAuthorWorkspaces.model_validate_json(location.read_bytes())
-    previous = registry.items[0].model_copy(update={"python": tmp_path / "gone/python"})
-    location.write_text(
-        registry.model_copy(update={"items": (previous,)}).model_dump_json()
-    )
-    with development_session(home):
-        current = LocalAuthorWorkspaces.model_validate_json(location.read_bytes())
-        assert current.items[0].python == Path(sys.executable)
-
-
 @pytest.fixture
 def application(tmp_path: Path):
     gui = tmp_path / "gui"
@@ -56,36 +24,6 @@ def application(tmp_path: Path):
     runtime.configure(static_dir=gui)
     yield runtime
     runtime.stop()
-
-
-def test_development_source_registration_does_not_activate_drivers(tmp_path: Path):
-    import httpx2
-
-    from lab_tools.dev import development_session
-
-    source = tmp_path / "driver-source"
-    (source / "src").mkdir(parents=True)
-    (source / "scopecat.toml").write_text(
-        '[lab]\ninstrument_backend = "vendor_driver:create_backend"\n'
-        '[authors]\nsource_roots = ["src"]\ndependencies = []\n'
-    )
-    (source / "src/vendor_driver.py").write_text(
-        'raise RuntimeError("vendor environment is not prepared")\n'
-    )
-    with development_session(tmp_path / "development", workspace=source) as record:
-        with httpx2.Client(base_url=record.base_url, trust_env=False) as client:
-            assert client.get("/api/v1/health").status_code == 200
-            selected = client.get("/api/v1/devices/driver-source")
-            assert selected.status_code == 200
-            assert selected.json() == {"active": None}
-        assert (
-            LocalAuthorWorkspaces.model_validate_json(
-                author_bindings_path(record.project_root).read_bytes()
-            )
-            .items[0]
-            .root
-            == source
-        )
 
 
 def test_idle_exit_uses_live_service_and_releases_ownership(application):
@@ -319,3 +257,28 @@ def test_stopping_development_does_not_stop_another_application_home(
         assert other.status().state == "running"
     finally:
         other.stop()
+
+
+def test_blank_real_backend_restarts_without_registering_authors(tmp_path):
+    """Real startup invariant without rebuilding the offline payload in unit tests."""
+    import threading
+
+    from lab_tools.desktop_session import DesktopSession
+    from scopecat.author_workspaces import local_author_workspaces
+
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("development backend")
+    runtime = ApplicationRuntime(tmp_path / "home")
+    runtime.configure(static_dir=gui)
+    session = DesktopSession(runtime, threading.Event())
+    try:
+        session.connected(runtime.start().base_url)
+        assert not local_author_workspaces(runtime.root)
+        assert not (runtime.home / "authors").exists()
+        session.restart(lambda: session.connected(runtime.start().base_url))
+        assert runtime.status().state == "running"
+        assert session.request_exit() is None
+        assert runtime.status().state == "stopped"
+    finally:
+        runtime.stop()
