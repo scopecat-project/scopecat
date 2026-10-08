@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 from runpy import run_path
-from typing import Protocol, TypedDict, assert_type, cast
+from typing import Protocol, assert_type, cast
 
 import numpy as np
 import pytest
@@ -24,6 +24,8 @@ from scopecat.records.measurement import (
     MeasurementScalar,
 )
 from scopecat.records.parameter import TableParameterValue
+from scopecat.records.parameter_revision import ParameterRevision
+from scopecat.records.run import ParameterRunConfigSource
 from scopecat.sdk.instruments import (
     DriverAcquisition,
     DriverOutcome,
@@ -33,7 +35,8 @@ from scopecat_instruments.virtual import VirtualNetworkAnalyzer
 from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.server.in_process_lab import in_process_lab
 
-from reference_lab.configuration import bootstrap_config
+from reference_lab.application import create_application
+from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
 from reference_lab.parameters import ReadoutResonator
 from reference_lab.provider import FLUX_SOURCE_ID, ReferenceLabProvider
 from reference_lab.workflows.flux_spectroscopy import (
@@ -56,18 +59,6 @@ from reference_lab.workflows.flux_spectroscopy_analysis import (
 
 class _ReferenceLabDaemon(Protocol):
     url: str
-
-
-class _FluxNotebookSummary(TypedDict):
-    status: str
-    point_count: int
-    measurement_records: int
-    analysis_id: str
-    analysis_revision: int
-    fit_review_id: str
-    fit_review_accepted: bool
-    fit_report: str
-    candidate_config_id: str
 
 
 def test_complex_notch_fit_recovers_delay_and_ignores_one_outlier() -> None:
@@ -362,27 +353,80 @@ def test_direct_control_notebook_completes_through_the_project_daemon(
     assert trace_results["s_parameter"]["shape"] == [201]
 
 
-def test_flux_spectroscopy_notebook_completes_through_the_project_daemon(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
+def test_flux_spectroscopy_worker_retains_science_and_exact_inputs(
+    independent_lab_daemon: str,
+    independent_parameters: ParameterRevision,
 ) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    result = run_path(str(reference_lab_notebooks / "20_flux_spectroscopy.py"))
+    with create_application(EXAMPLE_ROOT).connect(independent_lab_daemon) as lab:
+        setup = lab.setup.get("initial")
+        inputs = lab.parameters.resolve(independent_parameters, setup=setup)
+        prepared = lab.prepare(flux_spectroscopy.build(), config=inputs)
+        assert prepared.preview().point_count == BIAS_POINTS
+        run = prepared.run()
+        assert run.status == "completed"
+        source = run.snapshot.config_source
+        assert isinstance(source, ParameterRunConfigSource)
+        assert source.parameters == independent_parameters.ref
+        assert source.setup == setup.ref
 
-    summary = cast("_FluxNotebookSummary", result["summary"])
-    assert summary["status"] == "completed"
-    assert summary["point_count"] == BIAS_POINTS
-    assert summary["measurement_records"] == BIAS_POINTS
-    assert summary["analysis_id"] == (
-        "analysis-reference_lab-flux_spectroscopy-analysis-r1"
-    )
-    assert summary["analysis_revision"] == 1
-    assert summary["fit_review_id"] == (
-        "analysis-reference_lab-flux_spectroscopy-fit-review-r1"
-    )
-    assert summary["fit_review_accepted"]
-    assert summary["fit_report"] == "flux-spectroscopy-fit.md"
-    assert summary["candidate_config_id"] == "candidate-readout-resonator-fit"
+        records = run.measurements().records
+        assert len(records) == BIAS_POINTS
+        for record in records:
+            for variable, instrument, result in (
+                ("trace/frequency", "readout-vna", "frequency"),
+                ("trace/s_parameter", "readout-vna", "s_parameter"),
+                ("temperature", "mixing-chamber", "temperature"),
+            ):
+                evidence = record.acquisition_evidence.for_variable(variable)
+                assert isinstance(evidence, InstrumentAcquisitionEvidence)
+                assert evidence.instrument_id == instrument
+                assert evidence.result_id == result
+            trace = record.observables["trace/s_parameter"]
+            assert isinstance(trace, MeasurementArray)
+            assert trace.shape == (TRACE_POINTS,)
+            assert trace.dtype == "complex128"
+            assert trace.unit == "ratio"
+
+        analysis = run.analyze(flux_spectroscopy_analysis())
+        assert analysis.id == "analysis-reference_lab-flux_spectroscopy-analysis-r1"
+        assert analysis.revision == 1
+        selected = analysis.fact_as("selected-sweet-spot", RESONATOR_TRACE_FIT_SCHEMA)
+        assert float(selected.dc_bias.to("V").value) == pytest.approx(0.0, abs=1e-12)
+        assert float(selected.resonance_frequency.to("GHz").value) == pytest.approx(
+            5.06, abs=0.001
+        )
+        assert float(selected.linewidth.to("MHz").value) == pytest.approx(1.0, rel=0.2)
+        report = run.published_analysis(analysis.id).artifact("fit-report")
+        assert report.entry.filename == "flux-spectroscopy-fit.md"
+        assert f"Fitted bias points: {BIAS_POINTS}" in report.text()
+        [proposal] = analysis.parameter_proposals
+        assert proposal.evidence_output_ids == ("selected-sweet-spot", "fit-by-bias")
+        candidate = lab.resolve_config(analysis.candidate_config())
+        assert candidate.id == "candidate-readout-resonator-fit"
+        assert (
+            _readout_quantity(candidate, ReadoutResonator.resonance_frequency.name)
+            == selected.resonance_frequency
+        )
+        assert (
+            _readout_quantity(candidate, ReadoutResonator.linewidth.name)
+            == selected.linewidth
+        )
+
+        review = run.analyze(flux_spectroscopy_fit_review())
+        assert review.id == "analysis-reference_lab-flux_spectroscopy-fit-review-r1"
+        quality = review.fact_as("quality-review", FLUX_SPECTROSCOPY_FIT_REVIEW_SCHEMA)
+        assert quality.accepted
+        assert quality.worst_complex_rmse < 0.02
+        [review_input] = review.inputs
+        assert isinstance(review_input, PublishedAnalysisRecordInput)
+        assert review_input.source == AnalysisPublishedOutputReference(
+            subject=RunAnalysisSubject(run_id=run.id),
+            analysis_record_id=analysis.id,
+            output_id="fit-by-bias",
+        )
+        assert lab.parameters.get(independent_parameters.id) == independent_parameters
+        assert lab.setup.get("initial") == setup
+        assert lab.config.registry().entries == ()
 
 
 def test_flux_spectroscopy_failure_aborts_with_bias_disabled(
