@@ -2,7 +2,7 @@ import { installLaunchRecoveryRoutes } from "../../test/launch-recovery-fixture"
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useEffect, useRef } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
@@ -56,7 +56,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-function mount(read: () => Promise<Response>) {
+function mount(read: () => Promise<Response>, recoveryRead?: Promise<void>) {
   const fetcher = vi.fn(async (request: Request) => {
     if (request.url.endsWith("/freeze"))
       return Response.json({ draft_id: "table-a", revision: 4, configuration });
@@ -65,6 +65,13 @@ function mount(read: () => Promise<Response>) {
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   installLaunchRecoveryRoutes();
+  if (recoveryRead) {
+    const fetchWithRecovery = globalThis.fetch;
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (new URL(request.url).pathname.endsWith("/launch-drafts/read")) await recoveryRead;
+      return fetchWithRecovery(request);
+    });
+  }
   render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="test">
@@ -79,7 +86,7 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
   const { client, fetcher } = mount(async () => Response.json(latest));
   await screen.findByText(/adopted copy matches the saved working table/);
   const preview = screen.getByRole("button", { name: "Preview" });
-  expect(preview).toBeEnabled();
+  await waitFor(() => expect(preview).toBeEnabled());
   expect(
     screen.getByText(/Parameter baseline: revision baseline-a with no overrides/),
   ).toBeVisible();
@@ -98,6 +105,18 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
   expect(preview).toBeEnabled();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   expect(screen.getByText(/Submitted experiments keep the inputs captured/)).toBeVisible();
+});
+it("waits for experiment input recovery even when the working table already matches", async () => {
+  let releaseRecovery!: () => void;
+  const recoveryRead = new Promise<void>((resolve) => {
+    releaseRecovery = resolve;
+  });
+  mount(async () => Response.json(source), recoveryRead);
+  await screen.findByText(/adopted copy matches the saved working table/);
+  const preview = screen.getByRole("button", { name: "Preview" });
+  expect(preview).toBeDisabled();
+  await act(async () => releaseRecovery());
+  await waitFor(() => expect(preview).toBeEnabled());
 });
 it("distinguishes a pending check from an unavailable source without replacing inputs", async () => {
   let resolve!: (response: Response) => void;
