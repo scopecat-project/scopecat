@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
+import pytest
 from pydantic import JsonValue, TypeAdapter
 from scopecat.application.launch import LaunchPreview
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
@@ -143,6 +144,31 @@ def test_fixture_comparison_limits_roundoff_to_complex_iq_components() -> None:
     )
     assert changed_coordinate != expected
     assert not acceptance_json_matches(expected, changed_coordinate)
+
+
+@pytest.mark.parametrize(
+    "preview", ["controls_scalar", "controls_scan", "launch_preview"]
+)
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("manual_state", "binding", "config_source_hash"),
+        ("reviewed", "config_source", "setup", "content_hash"),
+        ("reviewed", "config_source", "setup", "revision_id"),
+    ],
+)
+def test_fixture_comparison_requires_exact_setup_identity(
+    preview: str, path: tuple[str, ...]
+) -> None:
+    expected = FIXTURE.read_text()
+    fixture = cast("dict[str, JsonValue]", json.loads(expected))
+    owner = cast("dict[str, JsonValue]", fixture[preview])
+    for key in path[:-1]:
+        owner = cast("dict[str, JsonValue]", owner[key])
+    value = owner[path[-1]]
+    assert isinstance(value, str)
+    owner[path[-1]] = value[:-1] + ("0" if value[-1] != "0" else "1")
+    assert not acceptance_json_matches(expected, json.dumps(fixture))
 
 
 def test_shared_fixture_retains_control_sources_and_normalized_units() -> None:
