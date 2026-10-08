@@ -58,8 +58,11 @@ from the explicit acquisition cell.
 source-checkout UI building is a contributor concern, not an ordinary user's
 first-run requirement. Browser verification substitutes native editor activation
 and window plumbing. Actual editor interaction and unfamiliar-user observation
-remain separate acceptance work under #616. Parameters and groups are the two
-Help Notebook entries; five topics still need the same integration.
+remain separate acceptance work under #616. All seven topics now share Help
+preparation and continuation (#913). The shipped refresh/compute and grouping
+Notebooks have real-kernel evidence (#903/#904); #913 adds shared-application
+restart/history checks for the remaining topics. Course ordering, difficulty and
+possible grouping remain teaching-design work.
 
 ## 2. Inspect and directly control configured instruments
 
