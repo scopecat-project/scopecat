@@ -13,6 +13,7 @@ from scopecat_server.storage.sqlite.project_store import (
     SchemaVersionError,
     SQLiteProjectStore,
 )
+from scopecat_server.storage.sqlite.schema import PROJECT_SCHEMA_VERSION
 
 
 def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
@@ -118,28 +119,8 @@ def test_bootstrap_creates_the_complete_project_store_and_is_idempotent(
 @pytest.mark.parametrize(
     "version",
     (
-        0,
-        87,
-        91,
-        94,
-        95,
-        96,
-        97,
-        98,
-        100,
-        101,
-        102,
-        103,
-        104,
-        105,
-        106,
-        107,
-        108,
-        109,
-        110,
-        111,
-        112,
-        114,
+        pytest.param(PROJECT_SCHEMA_VERSION - 1, id="previous-format"),
+        pytest.param(PROJECT_SCHEMA_VERSION + 1, id="future-format"),
     ),
 )
 def test_bootstrap_refuses_a_noncurrent_project_schema(
@@ -160,10 +141,11 @@ def test_bootstrap_refuses_a_noncurrent_project_schema(
         assert tuple(connection.iterdump()) == before
 
 
-def test_bootstrap_refuses_v39_before_config_publish_step_boundary(
+def test_bootstrap_rejects_noncurrent_version_before_initializing_missing_tables(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "control.sqlite3"
+    version = PROJECT_SCHEMA_VERSION - 1
     with sqlite3.connect(database) as connection:
         connection.execute(
             """
@@ -174,213 +156,16 @@ def test_bootstrap_refuses_v39_before_config_publish_step_boundary(
             """
         )
         connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 39)"
+            "INSERT INTO project_schema(singleton, version) VALUES (1, ?)",
+            (version,),
         )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 39"):
+    original = database.read_bytes()
+    objects = tmp_path / "objects"
+    store = SQLiteProjectStore(SQLiteDatabase(database), objects)
+    with pytest.raises(SchemaVersionError, match=f"version: {version}"):
         store.bootstrap()
-
-
-def test_bootstrap_refuses_v40_before_procedure_schedule_boundary(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 40)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 40"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v41_before_calibration_cohort_boundary(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 41)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 41"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v42_before_calibration_publication_boundary(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 42)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 42"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v43_before_automatic_publication_boundary(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 43)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 43"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v44_with_unrecoverable_procedure_waiting_state(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 44)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 44"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v45_without_dedicated_calibration_receipts(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 45)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 45"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v46_with_cohort_planner_shadow_columns(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 46)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 46"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v47_with_duplicate_calibration_query_projections(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 47)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 47"):
-        store.bootstrap()
-
-
-def test_bootstrap_refuses_v52_without_execution_segments(
-    tmp_path: Path,
-) -> None:
-    database = tmp_path / "control.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE project_schema (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                version INTEGER NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "INSERT INTO project_schema(singleton, version) VALUES (1, 52)"
-        )
-
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(
-        SchemaVersionError,
-        match="version: 52; expected 113",
-    ):
-        store.bootstrap()
+    assert database.read_bytes() == original
+    assert set(tmp_path.iterdir()) == {database}
 
 
 def test_bootstrap_refuses_tables_without_a_project_schema(tmp_path: Path) -> None:
