@@ -75,20 +75,25 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                 ThreadPoolExecutor(max_workers=1) as observer,
             ):
                 select_reference_context(author)
+                original_revision = None
                 for operation in [
                     "first",
                     *(["repeat"] * repetitions),
                     "edit_input",
+                    "edit_scan",
+                    "after_source_edit",
                     "after_refresh",
                 ]:
-                    refresh_seconds: float | None = None
-                    if operation == "after_refresh":
+                    if operation == "after_source_edit":
                         path = root / "src/reference_lab_authors/authored/signal.py"
                         path.write_text(
                             path.read_text(encoding="utf-8")
                             + "\n# benchmark refresh\n",
                             encoding="utf-8",
                         )
+                    interaction_start = time.monotonic_ns()
+                    refresh_seconds: float | None = None
+                    if operation == "after_refresh":
                         refresh_start = time.monotonic_ns()
                         author.refresh()
                         refresh_seconds = (time.monotonic_ns() - refresh_start) / 1e9
@@ -96,8 +101,22 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     prepared = author.prepare(
                         "signal",
                         fixed={"gain": 2.0 if operation == "edit_input" else 1.0},
-                        scans={"frequency": [4.7, 4.8, 4.9]},
+                        scans={
+                            "frequency": [4.6, 4.8, 5.0]
+                            if operation == "edit_scan"
+                            else [4.7, 4.8, 4.9]
+                        },
                     )
+                    revision = prepared.preview.code_revision
+                    assert revision is not None
+                    if original_revision is None:
+                        original_revision = revision
+                    if (revision != original_revision) != (
+                        operation == "after_refresh"
+                    ):
+                        raise AssertionError(
+                            "Only explicit refresh may adopt edited source"
+                        )
                     submit_start = time.monotonic_ns()
                     job = prepared.run()
                     acknowledged = time.monotonic_ns()
@@ -116,14 +135,25 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     finally:
                         stop.set()
                     analysis_start = time.monotonic_ns()
-                    revision = prepared.preview.code_revision
-                    assert revision is not None
                     analysis = author.analyze(
                         str(result["run_id"]),
                         "reference_lab_authors.authored.ordinary_analysis:estimate_peak",
                         code_revision=revision,
                     )
                     analyzed = time.monotonic_ns()
+                    publication = author.run(str(result["run_id"])).published_analysis(
+                        analysis.analysis_id
+                    )
+                    if publication.id != analysis.analysis_id:
+                        raise AssertionError("Analysis read did not retain its receipt")
+                    if (
+                        publication.fact("author_code_revision").value
+                        != revision.content_hash
+                    ):
+                        raise AssertionError(
+                            "Published analysis changed source revision"
+                        )
+                    analysis_visible = time.monotonic_ns()
                     reopened = author.reopen(job.receipt).result()
                     values = reopened.measurements()["result"].require_values()
                     if reopened.id != result["run_id"] or len(values) != 3:
@@ -142,12 +172,27 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                             if prepared.preview.code_revision
                             else None,
                             "submit_start_ns": submit_start,
+                            "interaction_start_ns": interaction_start,
+                            "prepare_start_ns": prepare_start,
+                            "acknowledged_ns": acknowledged,
+                            "wait_return_ns": waited,
+                            "analysis_start_ns": analysis_start,
+                            "analysis_return_ns": analyzed,
+                            "analysis_visible_ns": analysis_visible,
+                            "reopen_read_ns": read,
+                            "analysis_id": analysis.analysis_id,
                             "prepare_seconds": (submit_start - prepare_start) / 1e9,
                             "acknowledgement_seconds": (acknowledged - submit_start)
                             / 1e9,
                             "wait_return_seconds": (waited - submit_start) / 1e9,
                             "analysis_seconds": (analyzed - analysis_start) / 1e9,
-                            "reopen_read_seconds": (read - analyzed) / 1e9,
+                            "analysis_read_seconds": (analysis_visible - analyzed)
+                            / 1e9,
+                            "interaction_to_analysis_visible_seconds": (
+                                analysis_visible - interaction_start
+                            )
+                            / 1e9,
+                            "reopen_read_seconds": (read - analysis_visible) / 1e9,
                             "refresh_seconds": refresh_seconds,
                         }
                     )
@@ -164,6 +209,31 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
             cast("dict[str, object]", json.loads(line))
             for line in path.read_text().splitlines()
         )
+    correlate_events(samples, events)
+    return {
+        **benchmark_record_header(
+            case_id="author-first-data", case_version=3, kind="e2e"
+        ),
+        "host": platform.platform(),
+        "python": platform.python_version(),
+        "daemon_start_seconds": startup,
+        "samples": samples,
+        "http_calls": transport.calls,
+        "scope": (
+            "Copied virtual signal, three computed points; "
+            "normal admission/publication. "
+            "Independent 0.2s retained-result observer; "
+            "analysis visibility is a subsequent ordinary receipt read; "
+            "interaction begins at the API call, including explicit refresh; "
+            "no physical devices, click dispatch or GUI rendering."
+        ),
+    }
+
+
+def correlate_events(
+    samples: list[dict[str, object]], events: list[dict[str, object]]
+) -> None:
+    """Keep raw clocks and both API/submission origins for matching identities."""
     for sample in samples:
         selected = [
             event
@@ -174,6 +244,8 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         selected.sort(key=lambda event: cast("int", event["monotonic_ns"]))
         required = {
             "procedure_dispatch",
+            "procedure_python_entry",
+            "procedure_registered",
             "procedure_worker_entry",
             "framework_ready",
             "source_restore_start",
@@ -196,25 +268,14 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     - cast("int", sample["submit_start_ns"])
                 )
                 / 1e9,
+                "since_interaction_seconds": (
+                    cast("int", event["monotonic_ns"])
+                    - cast("int", sample["interaction_start_ns"])
+                )
+                / 1e9,
             }
             for event in selected
         ]
-    return {
-        **benchmark_record_header(
-            case_id="author-first-data", case_version=2, kind="e2e"
-        ),
-        "host": platform.platform(),
-        "python": platform.python_version(),
-        "daemon_start_seconds": startup,
-        "samples": samples,
-        "http_calls": transport.calls,
-        "scope": (
-            "Copied virtual signal, three computed points; "
-            "normal admission/publication. "
-            "Independent 0.2s retained-result observer; "
-            "no physical devices or GUI rendering."
-        ),
-    }
 
 
 def main() -> None:

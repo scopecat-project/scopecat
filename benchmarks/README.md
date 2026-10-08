@@ -192,6 +192,26 @@ Measure ordinary author submission through first visible retained data:
 uv run --locked python -m benchmarks run author-first-data --repetitions 2
 ```
 
+Case version 3 retains the raw monotonic clocks and reports each worker/data
+event relative to both submission and the start of the ordinary API interaction.
+The latter includes prepare and, for `after_refresh`, the explicit refresh cost.
+It also reads the published analysis receipt through the ordinary run API and
+reports interaction-to-analysis visibility, separately from the analysis call
+and receipt/data reopening. This is API-visible retained content, not a rendered
+GUI or a measured click. The result observer still polls every 0.2 seconds.
+
+The serial workload separates initial and repeated calls, scalar and scan edits,
+the first call after editing source **without** refresh (still pinned to the old
+revision), and the first call after explicit refresh. All runs retain three
+virtual points. Refresh validates and adopts its prepare worker, so its cost
+must stay in comparisons of the whole interaction. `procedure_python_entry`
+marks entry after the lightweight timing helper imports; `procedure_registered`
+follows the parent registration gate. The existing `procedure_worker_entry`
+follows process-receipt imports and publication. The gap before that existing
+event therefore includes more than interpreter startup. The clocks are nested
+boundaries, not durations to add together. Keep all trials, including outliers,
+and run comparisons serially on the same host without competing test workloads.
+
 This virtual signal case records process startup, measurement transport and an
 independent ordinary result reader, followed by retained analysis and receipt
 reopening. It also records source-refresh duration. All author cases select
