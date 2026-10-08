@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from collections.abc import Callable, Generator
@@ -12,10 +11,9 @@ from uuid import uuid4
 import pytest
 from scopecat.api.lab import LabClient
 from scopecat.daemon.client import DaemonClient
-from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.project import load_project
 from scopecat.records.parameter_revision import ParameterRevision
-from scopecat_server.lifecycle import DaemonLifecycleError, start_project, stop_project
+from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.project_loading import isolated_project_imports
 
 from reference_lab.configuration import bootstrap_config
@@ -61,71 +59,6 @@ def isolate_project_loader(
             yield
     finally:
         restore()
-
-
-@pytest.fixture(scope="session")
-def reference_lab_daemon(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> Generator[ReferenceLabDaemon]:
-    """Run every notebook against one real HTTP daemon instance."""
-
-    project_root = tmp_path_factory.mktemp("reference-lab-project")
-    shutil.copytree(EXAMPLE_ROOT / "notebooks", project_root / "notebooks")
-    shutil.copytree(EXAMPLE_ROOT / "config", project_root / "config")
-    shutil.copytree(EXAMPLE_ROOT / "src", project_root / "src")
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", project_root / "scopecat.toml")
-    project = load_project(project_root / "scopecat.toml")
-    try:
-        record = start_project(project)
-    except DaemonLifecycleError as error:
-        log = project_root / ".scopecat" / "daemon.log"
-        if log.exists():
-            error.add_note(
-                "Reference fixture daemon log tail:\n"
-                + log.read_bytes()[-8192:].decode("utf-8", errors="replace")
-            )
-        raise
-    previous_url = os.environ.get(DAEMON_URL_ENV)
-    os.environ[DAEMON_URL_ENV] = record.base_url
-    try:
-        with LabClient(DaemonClient(record.base_url)) as lab:
-            setup = lab.setup.get("initial")
-            assert lab.config.registry().entries == ()
-        yield ReferenceLabDaemon(url=record.base_url, root=project_root)
-        with LabClient(DaemonClient(record.base_url)) as lab:
-            assert lab.config.registry().entries == ()
-            assert lab.setup.get("initial") == setup
-    finally:
-        if previous_url is None:
-            os.environ.pop(DAEMON_URL_ENV, None)
-        else:
-            os.environ[DAEMON_URL_ENV] = previous_url
-        stop_project(project)
-
-
-@pytest.fixture
-def reference_lab_notebooks(
-    reference_lab_daemon: ReferenceLabDaemon,
-    monkeypatch: pytest.MonkeyPatch,
-) -> Generator[Path]:
-    """Load gallery code from the same workspace that owns the test service."""
-    retained = {
-        name: module
-        for name, module in tuple(sys.modules.items())
-        if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}
-    }
-    for name in retained:
-        del sys.modules[name]
-    monkeypatch.setattr(
-        sys, "path", [str(reference_lab_daemon.root / "src"), *sys.path]
-    )
-    try:
-        yield reference_lab_daemon.root / "notebooks"
-    finally:
-        for name in tuple(sys.modules):
-            if name.partition(".")[0] in {"reference_lab", "reference_lab_authors"}:
-                del sys.modules[name]
-        sys.modules.update(retained)
 
 
 @pytest.fixture

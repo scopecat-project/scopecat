@@ -9,7 +9,7 @@ source temporarily supports integration tests. See the
 | Current content | Responsibility | Direction |
 | --- | --- | --- |
 | Server `scaffold.py`, installed framework verifier | Minimal public author workspace | Keep runnable without reference-lab installed; generated scripts use current APIs |
-| `reference_lab/notebooks` | Legacy integration inputs | Extract valid behavior, retire redundant scripts; write new lessons in topic sandboxes |
+| `reference_lab/tests/test_device_sessions.py` | Direct sessions and calibrated multichannel DC integration | Retains worker behavior after the final gallery scripts retired; new lessons belong in topic sandboxes |
 | `reference_lab/quantum_compilation`, `quantum_runner`, `virtual_lab` | Quantum-to-device integration | Maintainer-owned fixture; not a mandatory author dependency |
 | `reference_lab/workflows/drag_beta_*` | Calibration, publication and recovery contracts | Preserve integrated evidence; do not teach these as the first acquisition |
 | `reference_lab/tests/unit` | Local scientific/compiler behavior | Prefer small fixtures without a daemon |
@@ -204,11 +204,17 @@ Working-point structure-origin metadata is no longer an author workflow contract
 
 ## Explicit process fixtures
 
-The shared `reference_lab_daemon` is opt-in. Gallery tests request it directly
-or through `reference_lab_notebooks`; pure compiler/scientific unit tests do not
-start a service. Journeys that own a cloned workspace use their own lifecycle
-fixture rather than starting an unrelated reference daemon as well. Keep process
-ownership explicit when adding tests.
+Device and scientific tests opt into `independent_lab_daemon`; pure
+compiler/scientific unit tests do not start a service. The gallery-specific daemon
+and notebook-copy fixtures are retired. Journeys that own a cloned workspace use
+their own lifecycle fixtures, including the separate launch/author fixtures with
+the name `reference_lab_daemon`. The shared `ReferenceLabDaemon` data holder still
+serves the DRAG candidate fixture. Keep process ownership explicit when adding tests.
+
+`reference_lab/notebook.py::gallery_inputs` remains used by the UI E2E fixtures
+`run-comparison.e2e.ts` and `copy-read-only-code.e2e.ts`; their embedded Python is a
+live consumer even after the presentation scripts retire. The unused `show`
+helper is removed. These UI fixtures remain outside the device-retirement slice.
 
 ## Shared generated acceptance
 

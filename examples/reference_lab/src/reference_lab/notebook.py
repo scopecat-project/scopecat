@@ -1,8 +1,7 @@
-"""Small presentation helpers for executable notebook recipes."""
+"""Independent configuration inputs for UI acceptance fixtures."""
 
 from __future__ import annotations
 
-from pprint import pprint
 from uuid import uuid4
 
 from scopecat.api.lab import LabClient
@@ -15,7 +14,7 @@ def gallery_inputs(lab: LabClient) -> ParameterResolution:
     """Resolve fixed acceptance inputs without selecting a global default.
 
     This maintainer-owned gallery is a device test fixture, not an author template.
-    Each script run retains its own parameter revision and operator provenance.
+    Each capture retains its own parameter revision and operator provenance.
     """
     content = initial_parameters()
     saved = lab.parameters.save(
@@ -25,8 +24,3 @@ def gallery_inputs(lab: LabClient) -> ParameterResolution:
     )
     setup = lab.setup.get("initial")
     return lab.parameters.resolve(saved, setup=setup)
-
-
-def show(value: object) -> None:
-    """Render a value readably in both notebook cells and terminal runs."""
-    pprint(value, sort_dicts=False)

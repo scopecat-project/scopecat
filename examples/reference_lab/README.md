@@ -48,27 +48,20 @@ uv run scopecat start examples/reference_lab --static-dir apps/scopecat-ui/dist
 uv run scopecat open examples/reference_lab
 ```
 
-The daemon chooses a loopback port and records it inside the project. Every
-notebook discovers the same daemon automatically. Run a recipe in another
-terminal, for example:
-
-```sh
-uv run python examples/reference_lab/notebooks/10_direct_control.py
-```
-
+The daemon chooses a loopback port and records it inside the project.
 The virtual world is deterministic: enabled flux bias moves the VNA notch and
 changes mixing-chamber telemetry. Experiments use logical capabilities and can
 be routed to compatible real devices.
 
-## Retained script inventory
+## Retained device evidence
 
-These scripts are legacy test inputs. This list is not a learning sequence or a
-list of interfaces to preserve.
-
-| Script | Demonstrates |
-|---|---|
-| `10_direct_control.py` | Live typed clients and multi-device reservation without an experiment run |
-| `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
+The legacy presentation scripts are retired. `tests/test_device_sessions.py`
+checks typed multi-device direct sessions and four calibrated DC routes across
+two simulated devices through real workers, including readback, settling and final
+parked/off state. It shares the independent daemon fixture with scientific tests.
+The spectroscopy and DRAG fixtures retain their numerical analysis and source
+provenance; quantum composition retains point-local routes and host effects.
+See the [behavior map](../../docs/development/reference-gallery-retirement.md).
 
 The logical pulse-overlap diagnostic script and its dedicated experiment/program
 wrappers are retired. Quantum pulse tests own the error code, logical signal and

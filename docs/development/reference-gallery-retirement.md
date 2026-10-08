@@ -14,7 +14,7 @@ source; installed historical environments and scientific data are untouched.
 | `02_session_lifetime.py`, `21_scan_shapes.py`, `40_measurement_workbench.py` | Reattach without acquisition, scan semantics, retained data projections | Retired with duplicate gallery tests. Session closure/reattachment now uses the existing starter restart journey; scan and dataset behaviors have focused core coverage listed below. |
 | `05_sample_workflow.py` | Exact sample revision and analysis provenance | Retired. Dedicated sample binding/restart and sample-analysis isolation tests cover the behavior with equipment-only initialization and an empty parameter registry. |
 | `22_channel_map.py` | Routing and shared physical channels | Retired fixed-map presentation/test. Generic route completeness tests, compiled multiplexing constraints and real device journeys remain; exact four-qubit endpoint strings are fixture data, not a product contract. |
-| `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
+| `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Retired presentation and the dedicated multichannel experiment/result wrapper. `test_device_sessions.py` owns focused typed-session and four-route worker evidence; mapping below. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
 | `20_flux_spectroscopy.py` | Complex VNA traces, flux fit, exact candidate and review provenance | Retired presentation script. Dedicated spectroscopy worker and focused scientific tests retain acquisition, numerical fits and source identity; see the mapping below. |
 | `24`–`25` | Host/quantum composition and point-local routing | Retired scripts and their experiment/result wrappers. One bounded test-owned input retains compiled host ordering, point-local physical routes and real-worker values/source identity; mapping below. |
@@ -383,6 +383,51 @@ need their own consumer audit. Removing the unused topology program/dispatch
 pair does not justify removing the shared Ramsey response used here.
 No native-window, installed delivery, physical hardware or performance claim is
 made by this slice.
+
+## Final direct-control and multichannel gallery retirement
+
+The two remaining presentation scripts are retired. `10_direct_control.py` had
+only its script-execution test as a consumer. `33_multichannel_dc_bias.py` was the
+only consumer of `MULTICHANNEL_DC_BIAS`, its experiment/result wrapper and the
+profile helper in `workflows/multichannel_bias.py`; that module is removed.
+The replacement uses a small test-owned input returning existing typed readback
+products, without recreating the exported recipe/result API or its unrelated
+thermometer acquisition. Provider inventory, all parameter catalog/model rows and
+scientific spectroscopy/DRAG inputs remain unchanged.
+
+| Former assertion or retained behavior | Evidence after retirement |
+| --- | --- |
+| Three direct-control devices and 201-sample trace | `test_typed_direct_session_operates_and_releases_multiple_worker_devices` opens the typed DC, thermometer and VNA clients together on the existing independent daemon. It checks active session ownership, successful invoke/collect receipts, a seven-sample frequency vector with the exact endpoints, finite complex ratio values and the 5 µK temperature increase from enabling 50 mV bias. Sample count 201 and the full inventory summary were fixture choices. |
+| Direct source disabled and session released | The same test disables in `finally`, queries the output as false and checks all three devices become available with no owner after closing. Server instrument tests separately own connection reuse, retries and run/session contention. |
+| Four routes over two DC devices | `test_four_calibrated_routes_read_back_and_park_through_workers` checks the acquired entity index q0/q1/q2/q3 and each result's actual instrument/component acquisition evidence: two channels on each of flux-dac-a/b. It does not infer physical routing from a configuration display. |
+| Operate profile/calibration join and settled readback | Its one-point input resolves the existing logical bias × gain × polarity + offset parameter references. Worker readback retains -78.4, 22.4, 39.4 and -96.0 mV and all four settled flags. Exact saved parameters/setup are retained on the run; a duplicate computed summary is unnecessary. |
+| Final parked/off state | Success finalization applies the saved parked profile and disables each source. Durable state evidence checks actual/target voltages 0, 2, -1 and 3 mV, settled true and output false on every physical channel. This strengthens the old test, which checked only operate values. It does not add a worker-failure qualification claim. |
+| Per-entity alignment and shared component provenance | Existing instruments `test_symbolic_clients.py::test_dc_group_broadcasts_and_aligns_typed_operation_arguments` owns broadcast/reordered arguments; reference `unit/test_provider.py::test_multichannel_driver_dispatches_by_component_with_shared_provenance` owns shared endpoint provenance. Neither is substituted for the retained two-device worker journey. |
+
+Both worker tests share `independent_lab_daemon` with science/composition tests.
+The obsolete gallery daemon, environment-variable mutation and script-copy
+fixtures are removed. `ReferenceLabDaemon` itself remains used by the independent
+DRAG candidate fixture; the separate launch/author fixtures are untouched.
+Cross-language inspection found two UI E2E consumers of `gallery_inputs`, so
+`notebook.py` and that helper remain. Only its unconsumed `show` helper is removed.
+The retired directory's lint/type include paths and old gallery test weight are
+also removed; no new performance measurement or benchmark claim is implied.
+
+### Identity and scope boundary
+
+This slice is stacked on Ramsey candidate `b135ea0d`. Removing the workflow and
+presentation helper changes provider package artifact `eef7620a…` to `2e0787e0…`,
+which propagates through device revisions/resolution to setup `2803ed90…` →
+`a44cfb58…` and reviewed source `10601c6c…` → `800b0ee7…`. The full isolated
+generator comparison finds exactly the same nine identity paths listed above,
+plus the same three scalar-IQ roundoff components within the existing tolerance.
+Every other key/type/length/value matches. Only generated identity leaves are
+updated; accepted scientific values and comparison rules remain unchanged.
+
+The gallery's presentation scripts are now all retired. This does not complete
+#773/#615: shared UI fixture preparation, provider/compiler inventory and the
+necessary scientific workflows remain. No author-entry redesign, native-window,
+installed-delivery, physical-hardware or historical-data qualification is claimed.
 
 ## Configuration-authority retirement evidence
 
