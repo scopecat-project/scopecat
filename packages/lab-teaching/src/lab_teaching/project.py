@@ -99,6 +99,8 @@ def create_project(destination: str | Path, *, topic: str | None = None) -> Path
     if topic is not None:
         _ = (destination / "README.md").write_text(
             f"# {TOPICS[topic]}\n\n"
+            "此路径用于维护者独立验收和既有独立项目；"
+            "普通学习推荐从 Scopecat Help 开始。\n"
             "这是命令行生成的独立教学项目。用 VS Code 打开本目录，"
             "首次运行任务“首次准备项目环境”；已有 .venv 时直接使用原环境。\n"
             "运行任务“启动实验服务”，然后打开 "

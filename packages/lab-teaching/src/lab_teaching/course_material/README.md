@@ -1,5 +1,7 @@
 # 合成 Rabi 实验项目
 
+此路径用于维护者独立验收和既有独立项目；普通学习推荐从 Scopecat Help 开始。
+
 用 VS Code 打开本文件夹，安装推荐的 Python/Jupyter 扩展。在 Notebook 右上角选择
 本项目 `.venv` 的 Python，打开 `notebooks/start.ipynb`；完成后在新内核运行
 `notebooks/reopen.ipynb`。不需要 sys.path、切换工作目录或启动浏览器 JupyterLab。

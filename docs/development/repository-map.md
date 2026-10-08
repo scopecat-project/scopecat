@@ -100,12 +100,15 @@ regression coverage is not a permanent product commitment.
 | `lab-tools/pyproject.toml` | `scopecat-lab` console → `lab_tools.cli.main`; generated tasks use the same module directly | The console is documented in the standalone default README. Removing it is not justified by module-based CI alone. |
 | Desktop Help → `notebook_journey.prepare` | Shared lesson resources, client/execution environments and registration in the current application | Help owns its receipts and Continue behavior; it does not adopt the standalone service or its data. |
 
-Standalone topic READMEs describe their generated tasks and local `.scopecat`
-data. Help's topic READMEs describe the current application and Continue. Shared
-lesson resources do not make these lifecycles interchangeable. Retiring the
-standalone lifecycle requires replacing its remaining installed-delivery and
-recovery consumers or explicitly withdrawing that supported entry; deleting
-verification alone would not establish convergence.
+The standalone path remains a maintainer fixture and compatibility call path
+with existing generated-project consumers, not a commitment to a second teaching
+product. Ordinary learning starts in Help. Standalone topic READMEs describe their
+generated tasks and local `.scopecat` data; Help's topic READMEs describe the current
+application and Continue. Shared resources do not make these lifecycles
+interchangeable. Once the remaining consumers migrate with their installation,
+kernel and recovery checks preserved, unused standalone entries can be removed.
+Correcting their instructions and admission consistency does not reduce the
+number of entries or establish single-entry convergence.
 
 Standalone admission accepts the experiment-only capability declaration and the
 three exact procedure combinations generated for `calibration`,
