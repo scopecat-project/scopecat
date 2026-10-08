@@ -71,17 +71,22 @@ per-course backend services. Removing that manager did not complete or cancel th
 learning journey. Help's manual-peak practice is a delivered bounded capability;
 it does not replace the seven authored topics or their editable source. Follow
 [the existing teaching issue #565](https://github.com/scopecat-project/scopecat/issues/565)
-for the missing continuation, separately from human/device observations in #616.
+for remaining course design and fixture-consumer work, separately from
+human/device observations in #616.
 
 Help parameters now provides the representative desktop → Notebook → editable
 source → application results → restart/Continue journey (#875/#877). Default and
-topic generation share editable resources (#880). The other topics and remaining
-standalone lifecycle consumers are tracked in #565.
+topic generation share editable resources (#880). All seven topics now share
+Help preparation/continuation (#913); #918 preserves course selection and links
+Settings to the exact author folder. Remaining standalone lifecycle consumers
+and teaching design are tracked in #565.
 
 Current automated evidence has distinct boundaries:
 
 - `lab_tools.verify` executes shipped start/reopen Notebooks in separate kernels,
-  adding checks to evidence copies. Editing/grouping use parallel test Notebooks.
+  adding checks to evidence copies. Editing and grouping now execute shipped
+  Notebooks with separate evidence checks (#903/#904), including real kernels
+  and retained-result reopening after restart.
 - `test_calibration_teaching_journey.py` runs shipped binding/cells through IPython
   and restarts the service. #870 fixed the implicit import refresh that rejected
   retained intent classes; calibration/joint-calibration also passed real ipykernel

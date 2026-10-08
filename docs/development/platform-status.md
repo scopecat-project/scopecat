@@ -48,7 +48,16 @@ establish an installed upgrade or human/device acceptance.
   and [#859](https://github.com/scopecat-project/scopecat/pull/859).
 - Configuration sharing: [#861](https://github.com/scopecat-project/scopecat/pull/861)
   and [#871](https://github.com/scopecat-project/scopecat/pull/871).
-- Teaching source and material identity: #875/#877/#880; remaining coverage in #565.
+- Teaching source and material identity: #875/#877/#880. Shipped grouping and
+  refresh/compute real-kernel checks: [#903](https://github.com/scopecat-project/scopecat/pull/903)
+  and [#904](https://github.com/scopecat-project/scopecat/pull/904). All seven Help
+  topics share preparation/continuation in [#913](https://github.com/scopecat-project/scopecat/pull/913);
+  exact-folder Settings and course navigation are covered by
+  [#918](https://github.com/scopecat-project/scopecat/pull/918). Course design,
+  remaining fixture consumers and actual editor/user observations remain #565/#616.
+- Configuration derivation now limits actual request bytes before parsing:
+  [#901](https://github.com/scopecat-project/scopecat/pull/901). Broader structured
+  authoring and sharing decisions remain #502.
 - Native window/storage repair: [acceptance record](native-window-acceptance.md),
   including failed candidates and checks still pending. Source tests do not replace it.
 
