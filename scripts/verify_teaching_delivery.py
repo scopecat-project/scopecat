@@ -30,6 +30,47 @@ class Notebook(TypedDict):
     cells: list[Cell]
 
 
+def verify_default_material(root: Path) -> int:
+    """Compare the installed default scaffold before editor preparation or edits."""
+    material = (
+        Path(__file__).resolve().parents[1]
+        / "packages/lab-teaching/src/lab_teaching/course_material"
+    )
+    generated = {
+        "src/workspace_app.py": "lessons/workspace_app.py.txt",
+        **{
+            f"src/my_experiment/{name}.py": f"lessons/{template}.py.txt"
+            for name, template in (
+                ("parameters", "parameters"),
+                ("setup", "setup"),
+                ("response", "response"),
+                ("teaching", "experiment"),
+                ("analysis", "analysis"),
+                ("session", "session"),
+            )
+        },
+        **{
+            f"src/my_experiment/{name}.py": f"{name}.py"
+            for name in ("group_analysis", "result_types")
+        },
+        **{
+            f"notebooks/{name}": name
+            for name in (
+                "start.ipynb",
+                "reopen.ipynb",
+                "EDITING.md",
+                "GROUPS.md",
+            )
+        },
+    }
+    for target, resource in generated.items():
+        assert (root / target).read_bytes() == (material / resource).read_bytes(), (
+            f"Installed teaching material differs from this checkout: {target}; "
+            "rebuild the delivery from the matching source commit"
+        )
+    return len(generated)
+
+
 def verify(bundle: Path, destination: Path) -> None:
     from lab_tools.bundle import configure_console
 
@@ -103,6 +144,7 @@ def verify(bundle: Path, destination: Path) -> None:
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [*command, "create", str(project)], cwd=destination, env=env, check=True
     )
+    default_resources = verify_default_material(project)
     tasks = cast(
         "Editor",
         json.loads((project / ".vscode/tasks.json").read_text(encoding="utf-8")),
@@ -157,6 +199,7 @@ def verify(bundle: Path, destination: Path) -> None:
                 )["build_id"],
                 "software": "passed",
                 "phase_seconds": phases,
+                "default_resources_matching_checkout": default_resources,
                 "legacy_cache": "reused verified application installation cache",
                 "grouped_carrier": "same-application Help and explicit recovery",
                 "duplicate_standalone_group_stages": "omitted after replacement passed",
