@@ -32,6 +32,18 @@ def native_identity(source: Path) -> ReleaseIdentity:
     return ReleaseIdentity(version, number)
 
 
+def _write_macos_console(python_home: Path) -> None:
+    # Wheel installers embed the temporary build interpreter in console scripts.
+    # Replace only our public entry before signing; resolve Python beside this
+    # script on every invocation, without PATH lookup or writes to the app.
+    console = python_home / "bin/scopecat"
+    _ = console.write_text(
+        '#!/bin/sh\nexec "${0%/*}/python3" -I -B -m lab_tools.public_cli "$@"\n',
+        encoding="utf-8",
+    )
+    console.chmod(0o755)
+
+
 def build(source: Path, destination: Path) -> Path:
     if sys.platform not in ("darwin", "win32"):
         raise ValueError("原生应用需要在 macOS 或 Windows 上构建")
@@ -94,6 +106,8 @@ def build(source: Path, destination: Path) -> Path:
                 str(payload / "requirements.lock"),
             ]
         )
+        if sys.platform == "darwin":
+            _write_macos_console(python_home)
         _ = (resources / "bootstrap.py").write_text(
             "import sys\nfrom pathlib import Path\n"
             "root = Path(__file__).resolve().parent\n"
