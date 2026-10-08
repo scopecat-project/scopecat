@@ -204,8 +204,12 @@ def serve_project(
         server: uvicorn.Server
 
         def request_shutdown(token: str) -> bool:
+            nonlocal record
             if not secrets.compare_digest(token, shutdown_token):
                 return False
+            assert record is not None
+            record = record.model_copy(update={"shutdown_accepted": True})
+            write_daemon_endpoint_record(record)
             server.should_exit = True
             return True
 
@@ -413,12 +417,14 @@ def stop_project(
             record=status.record,
             detail="recorded process exited before it could be stopped",
         )
-    if not _request_graceful_shutdown(status.record, only_if_idle=only_if_idle):
+    if not status.record.shutdown_accepted and not _request_graceful_shutdown(
+        status.record, only_if_idle=only_if_idle
+    ):
         return status
     try:
         process.wait(timeout=timeout)
     except psutil.TimeoutExpired:
-        if only_if_idle:
+        if only_if_idle or status.record.shutdown_accepted:
             raise DaemonLifecycleError(
                 "Application is still quitting; retry shortly"
             ) from None

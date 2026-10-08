@@ -126,12 +126,17 @@ def test_endpoint_record_is_private_and_round_trips(tmp_path: Path) -> None:
     assert read_daemon_endpoint_record(tmp_path) == record
 
 
+@pytest.mark.parametrize("accepted", [False, True])
 def test_stale_pid_identity_is_removed_without_terminating_process(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    accepted: bool,
 ) -> None:
     project = initialize_project(tmp_path)
-    write_daemon_endpoint_record(_record(tmp_path, pid=4321, process_create_time=10))
+    record = _record(tmp_path, pid=4321, process_create_time=10).model_copy(
+        update={"shutdown_accepted": accepted}
+    )
+    write_daemon_endpoint_record(record)
     process = _FakeProcess(create_time=20)
 
     def process_factory(_pid: int | None = None) -> _FakeProcess:
@@ -668,3 +673,115 @@ def test_cancelling_start_reaps_its_launch(
         start_project(project, on_progress=cancel)
     assert len(spawned) == 1
     assert spawned[0].poll() is not None
+
+
+def test_idle_quit_drains_open_sse_and_exits_without_client_disconnect(
+    tmp_path: Path,
+) -> None:
+    import socket
+    import time
+    from urllib.parse import urlsplit
+
+    (tmp_path / "scopecat.toml").write_text("[lab]\n[authors]\ndependencies = []\n")
+    project = open_project(tmp_path, resolve_adapter=False)
+    with (tmp_path / "server.log").open("w") as log:
+        process = subprocess.Popen(  # noqa: S603 - owned test daemon
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from scopecat.project import open_project; "
+                    "from scopecat_server.lifecycle import serve_project; "
+                    "import sys; serve_project(open_project(sys.argv[1]))"
+                ),
+                str(tmp_path),
+            ],
+            stdout=log,
+            stderr=log,
+            env=_project_subprocess_environment(),
+        )
+        stream = None
+        try:
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                status = inspect_daemon(project)
+                if status.state == "running":
+                    break
+                assert process.poll() is None
+                time.sleep(0.05)
+            else:
+                pytest.fail("test daemon did not start")
+            assert status.record is not None
+            url = urlsplit(status.record.base_url)
+            assert url.hostname is not None and url.port is not None
+            stream = socket.create_connection((url.hostname, url.port), timeout=5)
+            stream.sendall(
+                b"GET /api/v1/events/stream HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            )
+            assert b"200 OK" in stream.recv(4096)
+            stop_project(project, only_if_idle=True, timeout=5)
+            assert process.wait(timeout=1) == 0
+            assert inspect_daemon(project).state == "stopped"
+            # The client has not closed its socket: the server ended the stream.
+            while stream.recv(4096):
+                pass
+            assert stop_project(project, only_if_idle=True).state == "stopped"
+        finally:
+            if stream is not None:
+                stream.close()
+            # Regressions release SSE before cleanup; never kill an owned daemon.
+            if process.poll() is None:
+                stop_project(project, only_if_idle=True)
+            process.wait(timeout=15)
+
+
+def test_accepted_shutdown_retry_only_waits_and_never_kills(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    project = initialize_project(tmp_path)
+    record = _record(tmp_path, pid=4321, process_create_time=10).model_copy(
+        update={"shutdown_accepted": True}
+    )
+    write_daemon_endpoint_record(record)
+    process = Mock()
+    process.wait.side_effect = psutil.TimeoutExpired(0)
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle.inspect_daemon",
+        Mock(return_value=DaemonStatus(state="degraded", record=record)),
+    )
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle._matching_process", Mock(return_value=process)
+    )
+    request = Mock(
+        side_effect=AssertionError("accepted shutdown must not request again")
+    )
+    monkeypatch.setattr("scopecat_server.lifecycle._request_graceful_shutdown", request)
+    with pytest.raises(DaemonLifecycleError, match="still quitting"):
+        stop_project(project, timeout=0, only_if_idle=True)
+    request.assert_not_called()
+    process.kill.assert_not_called()
+    process.terminate.assert_not_called()
+    assert read_daemon_endpoint_record(tmp_path) == record
+    process.wait.side_effect = None
+    stop_project(project, only_if_idle=True)
+    request.assert_not_called()
+    process.kill.assert_not_called()
+    process.terminate.assert_not_called()
+    assert read_daemon_endpoint_record(tmp_path) is None
+    foreign = record.model_copy(update={"project_root": tmp_path / "other"})
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle.inspect_daemon",
+        Mock(return_value=DaemonStatus(state="degraded", record=foreign)),
+    )
+    process.reset_mock()
+    with pytest.raises(DaemonLifecycleError, match="another workspace"):
+        stop_project(project, only_if_idle=True)
+    process.wait.assert_not_called()
+
+
+def test_old_endpoint_record_does_not_imply_shutdown_acceptance(tmp_path: Path) -> None:
+    record = _record(tmp_path, pid=123, process_create_time=45)
+    old = record.model_dump(exclude={"shutdown_accepted"})
+    assert not DaemonEndpointRecord.model_validate(old).shutdown_accepted

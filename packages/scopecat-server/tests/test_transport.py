@@ -614,3 +614,89 @@ def _accepted_manifest() -> RunSnapshot:
         created_at=_NOW,
         config_content_hash=_HASH,
     )
+
+
+@pytest.mark.parametrize("inflight", [False, True])
+def test_quit_ends_existing_sse_but_busy_or_invalid_quit_does_not(
+    inflight: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    import httpx2
+    from scopecat.daemon.health import ApplicationActivity
+
+    class IdleApplication(FakeApplication):
+        work = ApplicationActivity(calibration_tasks=1)
+
+        def activity(self) -> ApplicationActivity:
+            return self.work
+
+    async def scenario() -> None:
+        from threading import Event
+
+        backend = IdleApplication()
+        entered, release = Event(), Event()
+        original = backend.runs.list_events
+
+        def read_events(
+            *, limit: int, after: int | None, run_id: str | None, latest: bool
+        ) -> EventPage:
+            if inflight:
+                entered.set()
+                assert release.wait(5)
+            page = original(limit=limit, after=after, run_id=run_id, latest=latest)
+            if not inflight and not page.items:
+                entered.set()
+            return page
+
+        monkeypatch.setattr(backend.runs, "list_events", read_events)
+
+        def shutdown(token: str) -> bool:
+            return token == "valid"  # noqa: S105 - test credential
+
+        app = _create_test_app(backend, request_shutdown=shutdown)
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            pending = asyncio.create_task(client.get("/api/v1/events/stream"))
+            try:
+                assert await asyncio.to_thread(entered.wait, 3)
+                assert not pending.done()
+                headers = {"X-Scopecat-Shutdown-Token": "valid"}
+                refused = await client.post(
+                    "/api/v1/shutdown?only_if_idle=true", headers=headers
+                )
+                assert refused.status_code == 409
+                assert not pending.done()
+                backend.work = ApplicationActivity()
+                invalid = await client.post(
+                    "/api/v1/shutdown?only_if_idle=true",
+                    headers={"X-Scopecat-Shutdown-Token": "invalid"},
+                )
+                assert invalid.status_code == 403
+                assert not pending.done()
+                accepted = await client.post(
+                    "/api/v1/shutdown?only_if_idle=true", headers=headers
+                )
+                assert accepted.status_code == 202
+                release.set()
+                response = await asyncio.wait_for(pending, 2)
+                assert response.status_code == 200
+                assert ("event: project" in response.text) is not inflight
+                late = await client.get("/api/v1/events/stream")
+                assert late.status_code == 503
+                repeated = await client.post(
+                    "/api/v1/shutdown?only_if_idle=true", headers=headers
+                )
+                assert repeated.status_code == 202
+                invalid_retry = await client.post(
+                    "/api/v1/shutdown?only_if_idle=true",
+                    headers={"X-Scopecat-Shutdown-Token": "invalid"},
+                )
+                assert invalid_retry.status_code == 403
+            finally:
+                release.set()
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+
+    asyncio.run(scenario())
