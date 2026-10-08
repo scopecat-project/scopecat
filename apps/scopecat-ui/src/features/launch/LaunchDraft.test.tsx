@@ -1,3 +1,7 @@
+import {
+  installLaunchRecoveryRoutes,
+  procedureDefinition,
+} from "../../test/launch-recovery-fixture";
 import { navigate } from "../../lib/navigation";
 import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 import { targetRefKey } from "./target-api";
@@ -60,6 +64,7 @@ function preview() {
   return {
     workspace_id: "legacy",
     experiment_id: "prepared",
+    procedure_definition: procedureDefinition,
     request_hash: `sha256:${"a".repeat(64)}`,
     manual_state: {
       event_id: ++manualEventId,
@@ -134,6 +139,18 @@ beforeEach(() => {
     vi.fn(async (request: Request) => {
       const url = new URL(request.url);
       const path = url.pathname;
+      if (path.match(/launch-attempts\/\d+\/resolve$/))
+        return lookupMatch === "original"
+          ? Response.json({ procedure_id: "original-procedure" })
+          : lookupMatch === "none"
+            ? Response.json({ procedure_id: null })
+            : Response.json(
+                {
+                  detail:
+                    "The retained procedure does not confirm original identity; submission remains unconfirmed.",
+                },
+                { status: 409 },
+              );
       if (path.endsWith("/author-workspaces")) return Response.json(serviceWorkspaceCatalog);
       if (path.endsWith("/procedures") && url.searchParams.has("request_key")) {
         const original = submissions[0];
@@ -213,8 +230,13 @@ beforeEach(() => {
     }),
   );
 });
-afterEach(() => {
+beforeEach(() => installLaunchRecoveryRoutes());
+afterEach(async () => {
   cleanup();
+  // Let debounced application saves finish before replacing this test's transport.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
   client.clear();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
@@ -224,6 +246,7 @@ async function selectPrepared() {
   await screen.findByLabelText("Note");
 }
 async function previewReady() {
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready", { exact: true });
@@ -235,6 +258,7 @@ it("distinguishes preview waiting from submission confirmation without allowing 
   render(<Harness />);
   await selectPrepared();
   deferPreview = true;
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   expect(screen.getByRole("button", { name: "Preparing preview…" })).toBeDisabled();
@@ -281,9 +305,9 @@ it("retains the complete project draft across pages and resets explicitly withou
     expect(screen.getByLabelText("Operator")).toHaveValue("scientist");
     expect(screen.getByLabelText("Frequency source")).toHaveValue("range");
     expect(screen.getByLabelText("Frequency unit")).toHaveValue("MHz");
-    expect(screen.getByLabelText("Frequency start")).toHaveValue(4700);
-    expect(screen.getByLabelText("Frequency stop")).toHaveValue(4900);
-    expect(screen.getByLabelText("Frequency points")).toHaveValue(3);
+    expect(screen.getByLabelText("Frequency start")).toHaveValue("4700");
+    expect(screen.getByLabelText("Frequency stop")).toHaveValue("4900");
+    expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
     expect(screen.queryByText("Preview ready")).toBeNull();
   }
   expect(submissions).toHaveLength(0);
@@ -291,9 +315,9 @@ it("retains the complete project draft across pages and resets explicitly withou
   expect(screen.getByLabelText("Note")).toHaveValue("original");
   expect(screen.getByLabelText("Sample ID")).toHaveValue("sample-42");
   expect(screen.getByLabelText("Operator")).toHaveValue("scientist");
-  expect(screen.getByLabelText("Frequency")).toHaveValue(4.8);
+  expect(screen.getByLabelText("Frequency")).toHaveValue("4.8");
 });
-it("retries a retained candidate without consulting the global configuration", async () => {
+it("recovers a retained candidate without consulting global configuration or resubmitting", async () => {
   candidateSource = true;
   configFails = true;
   render(<Harness />);
@@ -301,14 +325,12 @@ it("retries a retained candidate without consulting the global configuration", a
   await previewReady();
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
-  const original = submissions[0];
   fireEvent.click(screen.getByRole("button", { name: "configuration" }));
   await returnToLaunch();
-  const retry = screen.getByRole("button", { name: "Retry original submission" });
-  expect(retry).toBeEnabled();
-  fireEvent.click(retry);
-  await waitFor(() => expect(submissions).toHaveLength(2));
-  expect(submissions[1]).toEqual(original);
+  lookupMatch = "original";
+  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+  await screen.findByRole("button", { name: "Open submitted procedure" });
+  expect(submissions).toHaveLength(1);
 });
 
 it("keeps an unknown submission key across navigation and temporary configuration read failure", async () => {
@@ -321,27 +343,28 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   fireEvent.click(screen.getByRole("button", { name: "configuration" }));
   configFails = true;
   await returnToLaunch();
-  expect(screen.getByRole("button", { name: "Retry original submission" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Check original submission" })).toBeEnabled();
   configFails = false;
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["config"] });
   });
   await screen.findByText("Preview ready", { exact: true });
   await previewReady(); // Previewing the same request does not allocate another submission.
-  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
-  await waitFor(() => expect(submissions).toHaveLength(2));
-  expect(submissions[1]?.request_key).toBe(originalKey);
-  expect(submissions[1]?.manual_state).toEqual(submissions[0]?.manual_state);
+  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+  await screen.findByText(/No retained procedure found yet/);
+  expect(submissions).toHaveLength(1);
+  expect(submissions[0]?.request_key).toBe(originalKey);
   await screen.findByRole("alert");
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "changed request" } });
   expect(screen.queryByText("Preview ready")).toBeNull();
   lookupMatch = "original";
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   await screen.findByRole("button", { name: "Open submitted procedure" });
+  fireEvent.click(screen.getByRole("button", { name: "Prepare a new run (separate acquisition)" }));
   await previewReady();
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
-  await waitFor(() => expect(submissions).toHaveLength(3));
-  expect(submissions[2]?.request_key).not.toBe(originalKey);
+  await waitFor(() => expect(submissions).toHaveLength(2));
+  expect(submissions[1]?.request_key).not.toBe(originalKey);
 });
 it("retains previews across global changes and invalidates changed experiment definitions", async () => {
   render(<Harness />);
@@ -360,7 +383,7 @@ it("retains previews across global changes and invalidates changed experiment de
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
   });
-  expect(await screen.findByText(/Experiment revision changed/)).toBeVisible();
+  expect(await screen.findByText(/Experiment declaration changed/)).toBeVisible();
   expect(screen.getByLabelText("Note")).toHaveValue("keep me");
   expect(screen.queryByText("Preview ready")).toBeNull();
 });
@@ -380,6 +403,7 @@ it("does not transfer a draft or late preview when the same console changes proj
   await selectPrepared();
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "project A only" } });
   deferPreview = true;
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   view.rerender(<Harness projectId="project-b" />);
@@ -407,8 +431,8 @@ it("reopens original admitted work after lost response, configuration and defini
     await client.invalidateQueries({ queryKey: ["config"] });
   });
   await returnToLaunch();
-  await screen.findByText(/Experiment revision changed/);
-  expect(screen.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
+  await screen.findByText(/Experiment declaration changed/);
+  expect(screen.queryByRole("button", { name: "Retry original submission" })).toBeNull();
   lookupMatch = "original";
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
@@ -433,28 +457,27 @@ it.each(["none", "ambiguous", "unverified", "different-config"] as const)(
   },
 );
 
-it("distinguishes a known rejection from an earlier unknown submission", async () => {
+it("keeps an unknown submission read-only after an earlier known rejection", async () => {
   render(<Harness />);
   await selectPrepared();
   await previewReady();
   rejectSubmission = true;
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByText("Submission rejected", { exact: true });
-  expect(screen.queryByRole("button", { name: "Check original submission" })).toBeNull();
   rejectSubmission = false;
+  fireEvent.click(screen.getByRole("button", { name: "Prepare a new run (separate acquisition)" }));
+  await previewReady();
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
-  await screen.findByRole("button", { name: "Retry original submission" });
-  rejectSubmission = true;
-  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
-  await waitFor(() => expect(submissions).toHaveLength(3));
   await screen.findByRole("button", { name: "Check original submission" });
-  expect(screen.queryByText("Submission rejected", { exact: true })).toBeNull();
-  expect(submissions[2]?.request_key).toBe(submissions[1]?.request_key);
+  expect(screen.queryByRole("button", { name: "Retry original submission" })).toBeNull();
+  expect(submissions).toHaveLength(2);
 });
+
 it("ignores a late preview after selecting another experiment in the same project", async () => {
   render(<Harness />);
   await selectPrepared();
   deferPreview = true;
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   fireEvent.change(screen.getByLabelText("Experiment"), { target: { value: "first" } });
@@ -489,7 +512,7 @@ it("retains an unavailable experiment draft until its declaration returns", asyn
   expect(submissions).toHaveLength(0);
 });
 
-it("retains a scan across helper revisions but resets changed control declarations", async () => {
+it("retains a scan across helper and default revisions for explicit review", async () => {
   render(<Harness />);
   await selectPrepared();
   fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
@@ -502,10 +525,10 @@ it("retains a scan across helper revisions but resets changed control declaratio
     await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
   });
   await screen.findByText(
-    "Experiment revision changed. Inputs and control edits are retained; preview again.",
+    "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
   );
-  expect(screen.getByLabelText("Frequency points")).toHaveValue(3);
-  expect(screen.getByLabelText("Frequency start")).toHaveValue(4.7);
+  expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
+  expect(screen.getByLabelText("Frequency start")).toHaveValue("4.7");
   expect(screen.queryByText("Preview ready")).toBeNull();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   catalog = [
@@ -520,10 +543,10 @@ it("retains a scan across helper revisions but resets changed control declaratio
     await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
   });
   await screen.findByText(
-    "Control declarations changed. Check retained inputs and new control defaults, then preview again.",
+    "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
   );
-  expect(screen.getByLabelText("Frequency", { exact: true })).toHaveValue(5);
-  expect(screen.queryByLabelText("Frequency points")).toBeNull();
+  expect(screen.getByLabelText("Frequency start")).toHaveValue("4.7");
+  expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
 });
 
 it("uses a new key after a fresh manual-state preview while preserving the original attempt", async () => {
@@ -536,6 +559,7 @@ it("uses a new key after a fresh manual-state preview while preserving the origi
   lookupMatch = "original";
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   await screen.findByRole("button", { name: "Open submitted procedure" });
+  fireEvent.click(screen.getByRole("button", { name: "Prepare a new run (separate acquisition)" }));
   await previewReady();
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await waitFor(() => expect(submissions).toHaveLength(2));
@@ -552,7 +576,7 @@ it("keeps preview clickable during a background catalog read and blocks a failed
   });
   await waitFor(() => expect(catalogResponse).toBeDefined());
   const button = screen.getByRole("button", { name: "Preview" });
-  expect(button).toBeEnabled();
+  await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
   await screen.findByText("Preview ready", { exact: true });
   await act(async () => {
@@ -592,9 +616,10 @@ it("keeps context across experiments and preserves the original submission after
   fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
-  await waitFor(() => expect(submissions).toHaveLength(2));
-  expect(submissions[1]).toEqual(submissions[0]);
+  lookupMatch = "original";
+  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+  await screen.findByRole("button", { name: "Open submitted procedure" });
+  expect(submissions).toHaveLength(1);
   expect(screen.getByLabelText("Experimental batch")).toHaveValue("batch-b");
 });
 
@@ -700,11 +725,12 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
   });
   fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  await screen.findByText("Experiment input saved in application data.", { exact: true });
   view.rerender(<Harness projectId="project-b" />);
   await selectPrepared();
   expect(screen.getByLabelText("Sample ID")).toHaveValue("");
-  expect(screen.getByLabelText("Operator")).toHaveValue("operator");
-  expect(screen.queryByText(/exact registered target retained/)).toBeNull();
+  expect(screen.getByLabelText("Operator")).toHaveValue("Alice");
+  expect(screen.getByText(/exact registered target retained/)).toBeVisible();
 });
 
 function mockWorkspaceCatalog() {
@@ -760,7 +786,7 @@ it("switches identical experiment definitions by workspace without replacing sci
   await previewReady();
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await waitFor(() => expect(submissions).toHaveLength(1));
-  await screen.findByRole("button", { name: "Retry original submission" });
+  await screen.findByRole("button", { name: "Check original submission" });
   const original = submissions[0];
   fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "workspace-b" } });
   await selectPrepared();
@@ -769,7 +795,7 @@ it("switches identical experiment definitions by workspace without replacing sci
   expect(screen.getByLabelText("Operator")).toHaveValue("Alice");
   expect(screen.getByLabelText("Record collection")).toHaveValue("collection-a");
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
-  expect(screen.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Retry original submission" })).toBeNull();
   expect(submissions).toEqual([original]);
   fireEvent.click(screen.getByRole("button", { name: "devices" }));
   await returnToLaunch();
@@ -780,11 +806,12 @@ it("switches identical experiment definitions by workspace without replacing sci
   fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "legacy" } });
   await selectPrepared();
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Retry original submission" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Check original submission" })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
-  await waitFor(() => expect(submissions).toHaveLength(2));
-  expect(submissions[1]).toEqual(original);
+  lookupMatch = "original";
+  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+  await screen.findByRole("button", { name: "Open submitted procedure" });
+  expect(submissions).toEqual([original]);
 });
 
 it("ignores a pending preview from the previous source even when the experiment definition is identical", async () => {
@@ -793,6 +820,7 @@ it("ignores a pending preview from the previous source even when the experiment 
   await selectPrepared();
   await screen.findByRole("option", { name: /Second code/ });
   deferPreview = true;
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   const previous = previewResponse!;
@@ -804,6 +832,7 @@ it("ignores a pending preview from the previous source even when the experiment 
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  await screen.findByText("Experiment input saved in application data.", { exact: true });
   view.rerender(<Harness projectId="project-b" />);
   await selectPrepared();
   expect(screen.getByLabelText("Code workspace")).toHaveValue("legacy");

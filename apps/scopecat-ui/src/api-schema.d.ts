@@ -1220,6 +1220,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/launch-attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Launch Attempt History */
+        get: operations["launch_attempt_history_api_v1_launch_attempts_get"];
+        put?: never;
+        /** Retain Launch Attempt */
+        post: operations["retain_launch_attempt_api_v1_launch_attempts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/launch-attempts/{sequence}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve Launch Attempt */
+        get: operations["resolve_launch_attempt_api_v1_launch_attempts__sequence__resolve_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/launch-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Launch Draft History */
+        get: operations["launch_draft_history_api_v1_launch_drafts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/launch-drafts/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Launch Draft */
+        post: operations["read_launch_draft_api_v1_launch_drafts_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/launch-drafts/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Launch Draft */
+        post: operations["save_launch_draft_api_v1_launch_drafts_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/measurement-context/resolve": {
         parameters: {
             query?: never;
@@ -7017,6 +7103,36 @@ export interface components {
         JsonMetadata: {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
         };
+        /** LaunchAttemptPage */
+        LaunchAttemptPage: {
+            /** Items */
+            items: components["schemas"]["LaunchAttemptRecord"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** LaunchAttemptRecord */
+        LaunchAttemptRecord: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            definition: components["schemas"]["ProcedureDefinitionRef"];
+            request: components["schemas"]["LaunchRequest-Output"];
+            /** Sequence */
+            sequence: number;
+        };
+        /** LaunchAttemptResolution */
+        LaunchAttemptResolution: {
+            attempt: components["schemas"]["LaunchAttemptRecord"];
+            /** Procedure Id */
+            procedure_id?: string | null;
+        };
+        /** LaunchAttemptSave */
+        LaunchAttemptSave: {
+            definition: components["schemas"]["ProcedureDefinitionRef"];
+            request: components["schemas"]["LaunchRequest-Input"];
+        };
         /** LaunchCatalog */
         LaunchCatalog: {
             code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
@@ -7024,12 +7140,12 @@ export interface components {
              * Entries
              * @default []
              */
-            entries: components["schemas"]["LaunchCatalogEntry"][];
+            entries: components["schemas"]["LaunchCatalogEntry-Output"][];
             /** Workspace Id */
             workspace_id: string;
         };
         /** LaunchCatalogEntry */
-        LaunchCatalogEntry: {
+        "LaunchCatalogEntry-Input": {
             /** Actions */
             actions: ("preview" | "submit")[];
             /**
@@ -7051,7 +7167,37 @@ export interface components {
              * @enum {string}
              */
             kind: "diagnostic" | "calibration";
-            request: components["schemas"]["LaunchInputSchema"];
+            request: components["schemas"]["LaunchInputSchema-Input"];
+            review?: components["schemas"]["InterpretationRequest"] | null;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
+        };
+        /** LaunchCatalogEntry */
+        "LaunchCatalogEntry-Output": {
+            /** Actions */
+            actions: ("preview" | "submit")[];
+            /**
+             * Configuration Effect
+             * @enum {string}
+             */
+            configuration_effect: "none" | "candidate" | "activation_after_review";
+            /**
+             * Controls
+             * @default []
+             */
+            controls: components["schemas"]["LaunchControl"][];
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "diagnostic" | "calibration";
+            request: components["schemas"]["LaunchInputSchema-Output"];
             review?: components["schemas"]["InterpretationRequest"] | null;
             /** Title */
             title: string;
@@ -7101,11 +7247,144 @@ export interface components {
             /** Value */
             value?: number | components["schemas"]["scopecat__kernel__quantity__Quantity"] | null;
         };
+        /** LaunchDraftInput */
+        "LaunchDraftInput-Input": {
+            /** Actor */
+            actor: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            /** Collection */
+            collection?: string | null;
+            /** Controls */
+            controls: {
+                [key: string]: components["schemas"]["RawControl"];
+            };
+            declaration: components["schemas"]["LaunchCatalogEntry-Input"];
+            /** Handoff */
+            handoff?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            } | null;
+            /**
+             * Pinned Source
+             * @default false
+             */
+            pinned_source: boolean;
+            /** Plan */
+            plan?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            } | null;
+            /**
+             * Plan Dirty
+             * @default false
+             */
+            plan_dirty: boolean;
+            selection: components["schemas"]["ScientificSelection-Input"];
+            /** Values */
+            values: {
+                [key: string]: string;
+            };
+            /** Working Input */
+            working_input?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            } | null;
+        };
+        /** LaunchDraftInput */
+        "LaunchDraftInput-Output": {
+            /** Actor */
+            actor: string;
+            code_revision?: components["schemas"]["AuthorRevisionRef"] | null;
+            /** Collection */
+            collection?: string | null;
+            /** Controls */
+            controls: {
+                [key: string]: components["schemas"]["RawControl"];
+            };
+            declaration: components["schemas"]["LaunchCatalogEntry-Output"];
+            /** Handoff */
+            handoff?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            } | null;
+            /**
+             * Pinned Source
+             * @default false
+             */
+            pinned_source: boolean;
+            /** Plan */
+            plan?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            } | null;
+            /**
+             * Plan Dirty
+             * @default false
+             */
+            plan_dirty: boolean;
+            selection: components["schemas"]["ScientificSelection-Output"];
+            /** Values */
+            values: {
+                [key: string]: string;
+            };
+            /** Working Input */
+            working_input?: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            } | null;
+        };
+        /** LaunchDraftPage */
+        LaunchDraftPage: {
+            /** Items */
+            items: components["schemas"]["LaunchDraftRecord"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /** LaunchDraftRecord */
+        LaunchDraftRecord: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            input: components["schemas"]["LaunchDraftInput-Output"];
+            /** Revision */
+            revision: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "saved" | "conflict" | "discarded";
+            target: components["schemas"]["LaunchDraftTarget"];
+        };
+        /** LaunchDraftSave */
+        LaunchDraftSave: {
+            /**
+             * Discard
+             * @default false
+             */
+            discard: boolean;
+            /** Expected Revision */
+            expected_revision: number;
+            input: components["schemas"]["LaunchDraftInput-Input"];
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            target: components["schemas"]["LaunchDraftTarget"];
+        };
+        /** LaunchDraftTarget */
+        LaunchDraftTarget: {
+            /** Experiment */
+            experiment: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** LaunchDraftView */
+        LaunchDraftView: {
+            head?: components["schemas"]["LaunchDraftRecord"] | null;
+            saved?: components["schemas"]["LaunchDraftRecord"] | null;
+        };
         /**
          * LaunchField
          * @description The small console form surface; additional project JSON Schema is retained.
          */
-        LaunchField: {
+        "LaunchField-Input": {
             default?: components["schemas"]["pydantic__types__JsonValue"];
             /** Description */
             description?: string | null;
@@ -7114,7 +7393,32 @@ export interface components {
             /** Exclusiveminimum */
             exclusiveMinimum?: number | null;
             /** Items */
-            items?: components["schemas"]["LaunchField"] | boolean | (components["schemas"]["LaunchField"] | boolean)[] | null;
+            items?: components["schemas"]["LaunchField-Input"] | boolean | (components["schemas"]["LaunchField-Input"] | boolean)[] | null;
+            /** Maximum */
+            maximum?: number | null;
+            /** Minimum */
+            minimum?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Type */
+            type?: string | string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LaunchField
+         * @description The small console form surface; additional project JSON Schema is retained.
+         */
+        "LaunchField-Output": {
+            default?: components["schemas"]["pydantic__types__JsonValue"];
+            /** Description */
+            description?: string | null;
+            /** Enum */
+            enum?: components["schemas"]["pydantic__types__JsonValue"][] | null;
+            /** Exclusiveminimum */
+            exclusiveMinimum?: number | null;
+            /** Items */
+            items?: components["schemas"]["LaunchField-Output"] | boolean | (components["schemas"]["LaunchField-Output"] | boolean)[] | null;
             /** Maximum */
             maximum?: number | null;
             /** Minimum */
@@ -7130,10 +7434,24 @@ export interface components {
          * LaunchInputSchema
          * @description Project-owned top-level request schema, rendered only for supported fields.
          */
-        LaunchInputSchema: {
+        "LaunchInputSchema-Input": {
             /** Properties */
             properties?: {
-                [key: string]: components["schemas"]["LaunchField"] | boolean;
+                [key: string]: components["schemas"]["LaunchField-Input"] | boolean;
+            };
+            /** Required */
+            required?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LaunchInputSchema
+         * @description Project-owned top-level request schema, rendered only for supported fields.
+         */
+        "LaunchInputSchema-Output": {
+            /** Properties */
+            properties?: {
+                [key: string]: components["schemas"]["LaunchField-Output"] | boolean;
             };
             /** Required */
             required?: string[];
@@ -7207,6 +7525,7 @@ export interface components {
              */
             point_count: number;
             preflight?: components["schemas"]["PreflightSummary"] | null;
+            procedure_definition?: components["schemas"]["ProcedureDefinitionRef"] | null;
             request_hash: components["schemas"]["Sha256ContentHash"];
             /** Resolved Inputs */
             resolved_inputs?: {
@@ -9688,6 +10007,41 @@ export interface components {
             title?: string | null;
         };
         pydantic__types__JsonValue: unknown;
+        /** RawControl */
+        RawControl: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "default" | "fixed" | "values" | "range";
+            /**
+             * Points
+             * @default
+             */
+            points: string;
+            /**
+             * Start
+             * @default
+             */
+            start: string;
+            /**
+             * Stop
+             * @default
+             */
+            stop: string;
+            /** Unit */
+            unit?: string | null;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+            /**
+             * Values
+             * @default
+             */
+            values: string;
+        };
         /** RecordCollection */
         RecordCollection: {
             /**
@@ -14716,6 +15070,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstrumentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    launch_attempt_history_api_v1_launch_attempts_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchAttemptPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retain_launch_attempt_api_v1_launch_attempts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchAttemptSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchAttemptRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_launch_attempt_api_v1_launch_attempts__sequence__resolve_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchAttemptResolution"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    launch_draft_history_api_v1_launch_drafts_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchDraftPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_launch_draft_api_v1_launch_drafts_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchDraftTarget"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_launch_draft_api_v1_launch_drafts_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchDraftSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchDraftView"];
                 };
             };
             /** @description Validation Error */

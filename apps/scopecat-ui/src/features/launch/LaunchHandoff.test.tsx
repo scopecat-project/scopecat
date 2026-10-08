@@ -1,7 +1,11 @@
+import {
+  installLaunchRecoveryRoutes,
+  procedureDefinition,
+} from "../../test/launch-recovery-fixture";
 import { defaultSelection } from "./scientific-selection";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { waitFor, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
@@ -42,6 +46,7 @@ function Probe() {
   return (
     <>
       <button
+        disabled={!state.recovery.ready}
         onClick={() =>
           void state.submit(
             {
@@ -56,6 +61,7 @@ function Probe() {
               selection: defaultSelection(),
             },
             "original-definition",
+            procedureDefinition,
           )
         }
       >
@@ -81,6 +87,7 @@ function Probe() {
       >
         Select old configuration
       </button>
+      <output aria-label="Recovery status">{state.recovery.status}</output>
       <button onClick={() => state.importHandoff(entry, suggestion)}>Import</button>
       <output aria-label="Context">
         {state.draft?.selection.configuration.kind === "parameters"
@@ -112,6 +119,7 @@ it("imports a new suggested draft while retaining an uncertain original submissi
     }),
   );
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  installLaunchRecoveryRoutes();
   const view = render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="one">
@@ -119,6 +127,8 @@ it("imports a new suggested draft while retaining an uncertain original submissi
       </LaunchDraftProvider>
     </QueryClientProvider>,
   );
+  fireEvent.click(screen.getByText("Import"));
+  await waitFor(() => expect(screen.getByText("Lose receipt")).toBeEnabled());
   fireEvent.click(screen.getByText("Lose receipt"));
   await screen.findByText("unknown:unknown-original");
   fireEvent.click(screen.getByText("Import"));
@@ -154,6 +164,7 @@ it("clears an unrelated sample and resolved context when importing inputs withou
       }),
     ),
   );
+  installLaunchRecoveryRoutes();
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -166,6 +177,11 @@ it("clears an unrelated sample and resolved context when importing inputs withou
   fireEvent.click(screen.getByText("Select old configuration"));
   await screen.findByText("old-context");
   expect(screen.getByLabelText("Sample")).toHaveTextContent("old-sample");
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
   fireEvent.click(screen.getByText("Import"));
   expect(screen.getByLabelText("Context")).toBeEmptyDOMElement();
   expect(screen.getByLabelText("Sample")).toBeEmptyDOMElement();

@@ -35,6 +35,7 @@ export function LaunchForm({
     isCurrent,
     submit,
     attempt,
+    recovery,
   } = useLaunchDraft();
   if (!retained) throw new Error("Select a launch draft before rendering its form");
   const draft: LaunchDraft = retained;
@@ -162,7 +163,16 @@ export function LaunchForm({
   }
   async function preview(event: React.FormEvent) {
     event.preventDefault();
-    if (!entry.actions.includes("preview") || !supported || !catalogReady || !workingCurrent)
+    if (
+      !entry.actions.includes("preview") ||
+      !supported ||
+      !catalogReady ||
+      !workingCurrent ||
+      draft.needsReview ||
+      Boolean(draft.unresolvedFields?.length) ||
+      !recovery.ready ||
+      recovery.conflict
+    )
       return;
     const revision = draft.revision;
     update((current) => ({ ...current, pending: "preview", error: "", rejection: undefined }));
@@ -257,6 +267,7 @@ export function LaunchForm({
           expected_request_hash: result?.request_hash,
         },
         draft.definition,
+        result?.procedure_definition ?? undefined,
       );
       if (procedureId && isCurrent(revision)) {
         update((current) => ({ ...current, admittedProcedureId: procedureId }));
@@ -280,7 +291,75 @@ export function LaunchForm({
       className="space-y-4 max-w-3xl"
     >
       <p>{entry.description}</p>
-      <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
+      <p role="status">{recovery.status}</p>
+      {recovery.unsavedTargets.length > 0 && (
+        <p role="alert">
+          Input is not confirmed saved for:{" "}
+          {recovery.unsavedTargets
+            .map(([workspace, experiment]) => `${workspace} / ${experiment}`)
+            .join(", ")}
+          . Keep this application open and return to retry these copies.
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          void recovery.retry();
+        }}
+      >
+        Retry saving input
+      </button>
+      {recovery.conflict && (
+        <section aria-label="Conflicting experiment input">
+          <p>Both copies are retained. Review the other window’s saved input before choosing.</p>
+          <pre>{JSON.stringify(recovery.head?.input, null, 2)}</pre>
+          <button type="button" disabled={recovery.writing} onClick={() => recovery.adoptLocal()}>
+            Keep my copy after review
+          </button>
+        </section>
+      )}
+      {draft.needsReview && (
+        <section aria-label="Review recovered experiment">
+          <p>
+            Review retained inputs against the current code, declarations and parameter baseline.
+            New defaults have not replaced your edits.
+          </p>
+          {Boolean(draft.unresolvedFields?.length) && (
+            <p role="alert">
+              Unavailable fields need explicit removal: {draft.unresolvedFields?.join(", ")}. Their
+              original values remain in recovery history.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              update((current) => ({
+                ...invalidateDraft(current, "Input reviewed. Preview before starting."),
+                needsReview: false,
+                values: Object.fromEntries(
+                  Object.entries(current.values).filter(
+                    ([name]) => name in (entry.request.properties ?? {}),
+                  ),
+                ),
+                controls: Object.fromEntries(
+                  Object.entries(current.controls).filter(([id]) =>
+                    entry.controls.some(
+                      (control) => control.id === id && control.ownership === "editable",
+                    ),
+                  ),
+                ),
+                unresolvedFields: [],
+              }))
+            }
+          >
+            Confirm reviewed input
+            {draft.unresolvedFields?.length ? " and remove unavailable fields" : ""}
+          </button>
+        </section>
+      )}
+      <fieldset disabled={!recovery.ready}>
+        <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
+      </fieldset>
       <PlanSave
         key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
         preview={result}
@@ -324,7 +403,7 @@ export function LaunchForm({
           {workingError && <p role="alert">{workingError}</p>}
           <button
             type="button"
-            disabled={Boolean(pending)}
+            disabled={Boolean(pending) || !recovery.ready}
             onClick={async () => {
               const revision = draft.revision;
               try {
@@ -376,7 +455,7 @@ export function LaunchForm({
       </p>
       <button
         type="button"
-        disabled={Boolean(pending)}
+        disabled={Boolean(pending) || !recovery.ready}
         onClick={() => select(entry, true)}
         className="border rounded px-3 py-1"
       >
@@ -387,7 +466,7 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </p>
       )}
-      <fieldset disabled={Boolean(pending)}>
+      <fieldset disabled={Boolean(pending) || !recovery.ready}>
         <ControlFields
           controls={entry.controls}
           drafts={drafts}
@@ -396,7 +475,7 @@ export function LaunchForm({
           }}
         />
       </fieldset>
-      <fieldset disabled={Boolean(pending)} className="grid grid-cols-2 gap-4">
+      <fieldset disabled={Boolean(pending) || !recovery.ready} className="grid grid-cols-2 gap-4">
         {fields.map(([name, field]) => (
           <label key={name} className="flex flex-col gap-1">
             {field.title ?? name}
@@ -439,7 +518,8 @@ export function LaunchForm({
               <input
                 aria-label={field.title ?? name}
                 required={entry.request.required?.includes(name)}
-                type={["number", "integer"].includes(field.type ?? "") ? "number" : "text"}
+                type="text"
+                inputMode={["number", "integer"].includes(field.type ?? "") ? "decimal" : undefined}
                 step={field.type === "integer" ? 1 : "any"}
                 min={field.minimum ?? field.exclusiveMinimum ?? undefined}
                 max={field.maximum ?? undefined}
@@ -457,6 +537,9 @@ export function LaunchForm({
           aria-describedby={draft.workingInput ? workingStatusId : undefined}
           disabled={
             Boolean(pending) ||
+            !recovery.ready ||
+            recovery.conflict ||
+            draft.needsReview ||
             !supported ||
             !actor.trim() ||
             !catalogReady ||
@@ -470,7 +553,7 @@ export function LaunchForm({
         </button>
       )}
       {entry.actions.includes("submit") && (
-        <fieldset disabled={Boolean(pending)} className="flex flex-wrap gap-3">
+        <fieldset disabled={Boolean(pending) || !recovery.ready} className="flex flex-wrap gap-3">
           <button
             type="button"
             disabled={
@@ -478,8 +561,9 @@ export function LaunchForm({
               !manualReady ||
               !actor.trim() ||
               Boolean(pending) ||
-              attempt?.status === "unknown" ||
-              attempt?.status === "pending"
+              Boolean(attempt) ||
+              draft.needsReview ||
+              recovery.conflict
             }
             aria-describedby={draft.workingInput ? workingStatusId : undefined}
             onClick={() => {

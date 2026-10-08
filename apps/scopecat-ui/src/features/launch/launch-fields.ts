@@ -1,6 +1,6 @@
 import type { components } from "../../api-schema";
 
-type LaunchField = components["schemas"]["LaunchField"];
+type LaunchField = components["schemas"]["LaunchField-Output"];
 interface FormArrayItem extends LaunchField {
   type: "string";
   enum: string[];

@@ -1,3 +1,4 @@
+import { installLaunchRecoveryRoutes } from "../../test/launch-recovery-fixture";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useEffect, useRef } from "react";
@@ -63,6 +64,7 @@ function mount(read: () => Promise<Response>) {
   });
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  installLaunchRecoveryRoutes();
   render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="test">

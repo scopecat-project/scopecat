@@ -105,7 +105,8 @@ it("retains the exact workspace and pinned code during declaration refresh until
   act(() => state.useCurrentSource());
   expect(state.workspaceId).toBe("workspace-B");
   expect(state.draft?.codeRevision).toBeUndefined();
-  expect(state.draft?.experiment).toBe("");
+  expect(state.draft?.experiment).toBe("rabi");
+  expect(state.draft?.values.note).toBe("reviewed");
   act(() => state.select(entry));
   expect(state.draft?.workspaceId).toBe("workspace-B");
 });

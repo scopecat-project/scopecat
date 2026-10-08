@@ -2,7 +2,8 @@
 
 The product principle approved on 2026-10-06 is: **valuable edits are recoverable
 by default**. Application-owned recovery is implemented for
-[Decision drafts](decision-drafts.md) and [parameter working tables](parameter-drafts.md).
+[Decision drafts](decision-drafts.md) and [parameter working tables](parameter-drafts.md), and
+[experiment input and original submissions](experiment-drafts.md).
 Other draft types still need their own lifecycle rather than a generic draft
 framework. The native store contract and its acceptance remain separate below.
 
@@ -31,21 +32,12 @@ background and work-aware Quit semantics remain unchanged.
 
 ## Experiment-form boundary
 
-The experiment launch form currently keeps editable inputs and its original
-submission attempt in window memory. Navigation within that window can retain
-input; reload/restart does not restore it. Changing control declarations can
-replace control edits with new defaults. A server-admitted procedure remains
-retained independently of the window's original-request panel. These boundaries
-do not satisfy the editing contract above and are distinct from parameter and
-Decision draft persistence.
-
-Experiment recovery needs its own logical target, baseline/revalidation, conflict,
-retention and completion policy before implementation. Recovery of an uncertain
-submission must retain the original exact request identity before sending,
-independently of editable input, and cannot authorize acquisition. Browser storage
-or matching mutable inputs is not a substitute for that identity. See
-[the ordinary-entry PR evidence](https://github.com/scopecat-project/scopecat/pull/930)
-for the observed cases; broader lifecycle choices remain separate work.
+The experiment launch form retains raw input and conflicting copies in application
+data, independently of scientific validation. Its original submission receipt is
+confirmed persisted before sending. Restart recovery only queries the exact
+original identity; preparing another run requires a new preview and explicit
+Start. See [experiment recovery](experiment-drafts.md) for baseline review,
+conditional writes, retention, pending-save limitations and identity checks.
 
 ## Application drafts and native storage
 

@@ -465,6 +465,7 @@ class AuthorExperiments:
                     invocation, config=config, config_source=source
                 )
                 return LaunchPreview(
+                    procedure_definition=_AuthorProcedure(selected).ref,
                     experiment_id=selected.entry.id,
                     manual_state=request.manual_state,
                     request_hash=request.request_hash,

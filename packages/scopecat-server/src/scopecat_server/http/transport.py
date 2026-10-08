@@ -399,6 +399,16 @@ from scopecat_server.decision_drafts import (
 from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
+from scopecat_server.launch_recovery import (
+    LaunchAttemptPage,
+    LaunchAttemptRecord,
+    LaunchAttemptResolution,
+    LaunchAttemptSave,
+    LaunchDraftPage,
+    LaunchDraftSave,
+    LaunchDraftTarget,
+    LaunchDraftView,
+)
 from scopecat_server.parameter_drafts import (
     ParameterDraftCommit,
     ParameterDraftFrozen,
@@ -2283,6 +2293,36 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.attempt,
         )
         return application.automation.wait_step_resources(command)
+
+    @app.post(f"{_API_PREFIX}/launch-drafts/read")
+    def read_launch_draft(target: LaunchDraftTarget) -> LaunchDraftView:
+        return application.launch_recovery.read(target)
+
+    @app.post(f"{_API_PREFIX}/launch-drafts/save")
+    def save_launch_draft(command: LaunchDraftSave) -> LaunchDraftView:
+        return application.launch_recovery.save(command)
+
+    @app.get(f"{_API_PREFIX}/launch-drafts")
+    def launch_draft_history(
+        before: Annotated[int | None, Query(ge=1)] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> LaunchDraftPage:
+        return application.launch_recovery.history(before, limit)
+
+    @app.post(f"{_API_PREFIX}/launch-attempts")
+    def retain_launch_attempt(command: LaunchAttemptSave) -> LaunchAttemptRecord:
+        return application.launch_recovery.retain(command)
+
+    @app.get(f"{_API_PREFIX}/launch-attempts")
+    def launch_attempt_history(
+        before: Annotated[int | None, Query(ge=1)] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> LaunchAttemptPage:
+        return application.launch_recovery.attempts(before, limit)
+
+    @app.get(f"{_API_PREFIX}/launch-attempts/{{sequence}}/resolve")
+    def resolve_launch_attempt(sequence: int) -> LaunchAttemptResolution:
+        return application.launch_recovery.resolve(sequence)
 
     @app.post(f"{_API_PREFIX}/parameter-drafts/start")
     def start_parameter_draft(command: ParameterDraftStart) -> ParameterDraftView:

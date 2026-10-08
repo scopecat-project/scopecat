@@ -1,3 +1,4 @@
+import { installLaunchRecoveryRoutes } from "./launch-recovery-fixture";
 import { serviceWorkspaceCatalog } from "./scientific-fixtures";
 // @vitest-environment jsdom
 
@@ -101,6 +102,7 @@ describe("shared reference-lab acceptance", () => {
         ),
       ),
     );
+    installLaunchRecoveryRoutes();
     render(
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -114,6 +116,7 @@ describe("shared reference-lab acceptance", () => {
     fireEvent.change(screen.getByLabelText("Experiment"), {
       target: { value: "reference_lab.temperature_diagnostic" },
     });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByText("Preview ready");
     expect(
@@ -165,6 +168,7 @@ describe("shared reference-lab acceptance", () => {
         return Response.json(fixtures.launch_catalog);
       }),
     );
+    installLaunchRecoveryRoutes();
     render(
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -180,6 +184,7 @@ describe("shared reference-lab acceptance", () => {
     expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("qubits[q0]");
     fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
     fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4900" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByText("Resolved controls");
     expect(screen.getAllByText("fixed")).toHaveLength(2);
@@ -198,6 +203,7 @@ describe("shared reference-lab acceptance", () => {
     fireEvent.change(screen.getByLabelText("Amplitude scan values"), {
       target: { value: "0.05, 0.1" },
     });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByText("Resolved controls");
     expect(screen.getAllByText("scanned")).toHaveLength(2);

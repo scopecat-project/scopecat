@@ -1,3 +1,7 @@
+import {
+  installLaunchRecoveryRoutes,
+  procedureDefinition,
+} from "../../test/launch-recovery-fixture";
 import { scenarioFixture } from "../../test/scenario-fixture";
 import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 import { defaultSelection } from "./scientific-selection";
@@ -36,6 +40,8 @@ it("shows a durable resource wait and its cancelled child without calling it run
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
       if (path.endsWith("/experiment-launcher")) return Response.json({ entries: [] });
+      if (path.match(/launch-attempts\/\d+\/resolve$/))
+        return Response.json({ procedure_id: "p1" });
       if (path.endsWith("/steps"))
         return Response.json({
           items: [{ step_key: "child", attempt: 1, state: "running" }],
@@ -93,12 +99,14 @@ const entry = {
 const manualFence = {
   event_id: 1,
   binding: {
+    procedure_definition: procedureDefinition,
     request_hash: "sha256:" + "a".repeat(64),
     config_source_hash: "sha256:" + "b".repeat(64),
     code_revision: null,
   },
 };
 const previewResult = {
+  procedure_definition: procedureDefinition,
   manual_state: manualFence,
   experiment_id: "rabi",
   workspace_id: "legacy",
@@ -134,6 +142,7 @@ function mount(
               ? Promise.resolve(manualValidity())
               : fetcher(request),
   );
+  installLaunchRecoveryRoutes();
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -153,6 +162,7 @@ it("previews a typed request and clears results after edits", async () => {
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect(screen.getAllByRole("region", { name: "Saved experiment plans" })).toHaveLength(1);
@@ -255,6 +265,7 @@ it("previews a chosen branch version and invalidates only when another version i
   fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-b" } });
   resolveSetup();
   await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect(requests[0]?.selection).toEqual({
@@ -273,6 +284,7 @@ it("previews a chosen branch version and invalidates only when another version i
   expect(screen.getByText("Preview ready")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
   await waitFor(() => expect(screen.queryByText("Preview ready")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect(requests[1]?.selection.configuration.ref.revision_id).toBe("values-2");
@@ -290,6 +302,7 @@ it("shows compilation failure without a successful preview", async () => {
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("binding unavailable");
   expect(screen.queryByText("Preview ready")).toBeNull();
@@ -310,6 +323,8 @@ it("retains the submission key after a lost response and opens durable progress"
         if (submitted.length === 1) throw new TypeError("connection lost");
         return Response.json({ procedure_id: "p1", dispatch_error: null });
       }
+      if (path.match(/launch-attempts\/\d+\/resolve$/))
+        return Response.json({ procedure_id: "p1" });
       if (path.endsWith("/steps")) return Response.json({ items: [], next_cursor: null });
       return Response.json(
         operatorResult({ procedure_run_id: "p1", state: "waiting_for_input", closure: null }),
@@ -322,6 +337,7 @@ it("retains the submission key after a lost response and opens durable progress"
   fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip" } });
   fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "reviewer" } });
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   await waitFor(() =>
@@ -329,11 +345,10 @@ it("retains the submission key after a lost response and opens durable progress"
   );
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
-  fireEvent.click(screen.getByRole("button", { name: "Retry original submission" }));
+  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
   await screen.findByText("Procedure progress");
-  expect(submitted).toHaveLength(2);
-  expect(submitted[0]?.request_key).toBe(submitted[1]?.request_key);
+  expect(submitted).toHaveLength(1);
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
 });
 
@@ -368,6 +383,7 @@ it("submits selected array members and invalidates the preview when membership c
   select.options[0]!.selected = true;
   select.options[2]!.selected = true;
   fireEvent.change(select);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect((await (fetcher.mock.calls[1]![0] as Request).json()).inputs).toEqual({
@@ -387,6 +403,8 @@ it("cancels a waiting procedure with the observed revision and recorded actor", 
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
       if (path.endsWith("/experiment-launcher")) return Response.json({ entries: [entry] });
+      if (path.match(/launch-attempts\/\d+\/resolve$/))
+        return Response.json({ procedure_id: "p1" });
       if (path.endsWith("/steps"))
         return Response.json({
           items: [{ step_key: "review", attempt: 1, state: "waiting_for_input" }],
@@ -439,6 +457,8 @@ it("keeps a running cancellation pending instead of reporting a stopped procedur
     vi.fn(async (request: Request) => {
       const path = new URL(request.url).pathname;
       if (path.endsWith("/experiment-launcher")) return Response.json({ entries: [entry] });
+      if (path.match(/launch-attempts\/\d+\/resolve$/))
+        return Response.json({ procedure_id: "p1" });
       if (path.endsWith("/steps")) return Response.json({ items: [], next_cursor: null });
       if (path.endsWith("/cancel")) {
         pending = true;
@@ -478,6 +498,7 @@ it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", asyn
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   await waitFor(() =>
@@ -548,6 +569,7 @@ it("invalidates a preview after relevant manual changes and retains science inpu
   );
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
@@ -559,7 +581,7 @@ it("invalidates a preview after relevant manual changes and retains science inpu
     { timeout: 3000 },
   );
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
-  expect(screen.getByLabelText("Amplitude")).toHaveValue(0.4);
+  expect(screen.getByLabelText("Amplitude")).toHaveValue("0.4");
   expect(screen.getByLabelText("Qubit")).toHaveValue("Q12");
   expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();
 });
@@ -587,6 +609,7 @@ it("parses numeric and boolean author choices before preview", async () => {
   mount();
   fireEvent.change(await screen.findByLabelText("Shots"), { target: { value: "8" } });
   fireEvent.change(screen.getByLabelText("Enabled"), { target: { value: "false" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   const request = fetcher.mock.calls[1]?.[0] as Request;
@@ -610,6 +633,7 @@ it("shows the preview's frozen scenario and clears it when inputs change", async
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
   expect(screen.getByRole("region", { name: "Reviewed execution scenario" })).toBeVisible();
@@ -644,8 +668,10 @@ it("shows typed rejection evidence and clears it after the request changes", asy
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("Preview ready");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await screen.findByText("sample_rate_limit");
   expect(screen.getByText("Declared capability limit")).toBeVisible();
@@ -670,6 +696,7 @@ it("keeps internal failures ordinary even when their text mentions unsupported c
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("internal unsupported capability bug");
   expect(screen.queryByText("Declared capability limit")).not.toBeInTheDocument();

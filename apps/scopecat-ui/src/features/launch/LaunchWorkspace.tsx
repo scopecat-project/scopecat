@@ -1,3 +1,4 @@
+import { LaunchRecoveryPanel } from "./LaunchRecoveryPanel";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { useEffect } from "react";
 import { navigate, useLocationUrl, type NavigationOptions } from "../../lib/navigation";
@@ -28,6 +29,7 @@ export function LaunchWorkspace({
     select,
     update,
     importHandoff,
+    sourceObserved,
   } = useLaunchDraft();
   const queryClient = useQueryClient();
   useEffect(() => {
@@ -55,14 +57,17 @@ export function LaunchWorkspace({
           signal,
         }),
       );
-      return result.entries;
+      return result;
     },
   });
+  useEffect(() => {
+    if (catalog.data) sourceObserved(workspaceId, catalog.data.code_revision ?? undefined);
+  }, [catalog.data, workspaceId, sourceObserved]);
   const location = useLocationUrl();
   const procedureId = location.searchParams.get("procedure") ?? draft?.admittedProcedureId ?? "";
   const entry = draft?.experiment
-    ? catalog.data?.find((item) => item.id === draft.experiment)
-    : catalog.data?.[0];
+    ? catalog.data?.entries.find((item) => item.id === draft.experiment)
+    : catalog.data?.entries[0];
   const unavailable =
     !handoff &&
     sourceAvailable &&
@@ -83,7 +88,7 @@ export function LaunchWorkspace({
     if (entry && !handoff && sourceAvailable) select(entry, false, workspaceId);
   }, [entry, select, handoff, sourceAvailable, workspaceId]);
   const handoffTarget = handoff
-    ? catalog.data?.find((item) => item.id === handoff.request.experiment)
+    ? catalog.data?.entries.find((item) => item.id === handoff.request.experiment)
     : undefined;
   const handoffUnavailable = handoff && catalog.isSuccess && !handoffTarget;
   useEffect(() => {
@@ -94,6 +99,7 @@ export function LaunchWorkspace({
   return (
     <section className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">Experiments</h2>
+      <LaunchRecoveryPanel />
       <SourceSelector
         catalog={sources}
         workspaceId={workspaceId}
@@ -151,7 +157,7 @@ export function LaunchWorkspace({
       <p>Select a maintained experiment and preview its configured parameters.</p>
       {sourceAvailable && catalog.isPending && <p role="status">Loading experiments…</p>}
       {catalog.error && <p role="alert">{catalog.error.message}</p>}
-      {catalog.data?.length === 0 && <p>This project has no registered experiments.</p>}
+      {catalog.data?.entries.length === 0 && <p>This project has no registered experiments.</p>}
       {unavailable && draft && (
         <p role="alert">
           The selected experiment ({draft.experiment}) is unavailable. Its inputs are retained until
@@ -167,7 +173,9 @@ export function LaunchWorkspace({
               disabled={!sourceAvailable || Boolean(handoff)}
               value={draft?.experiment ?? entry?.id}
               onChange={(event) => {
-                const selected = catalog.data?.find((item) => item.id === event.target.value);
+                const selected = catalog.data?.entries.find(
+                  (item) => item.id === event.target.value,
+                );
                 if (selected) select(selected, false, workspaceId);
               }}
               className="border rounded p-2 ml-2"
@@ -175,7 +183,7 @@ export function LaunchWorkspace({
               {!entry && draft && (
                 <option value={draft.experiment}>{draft.experiment} (unavailable)</option>
               )}
-              {catalog.data?.map((item) => (
+              {catalog.data?.entries.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.title}
                 </option>
