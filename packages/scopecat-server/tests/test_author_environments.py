@@ -7,13 +7,91 @@ import sys
 import sysconfig
 import zipfile
 from pathlib import Path
+from unittest.mock import Mock
 
+import pytest
 from scopecat.application import LabApplication
 from scopecat.author_workspaces import LocalAuthorWorkspaces, author_bindings_path
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
+from scopecat_server import author_environment
 from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
+
+
+@pytest.mark.parametrize("action", ["capture", "capture-driver", "check"])
+@pytest.mark.parametrize(
+    "stderr", [None, "partial diagnostic", b"partial diagnostic\xff"]
+)
+def test_environment_timeout_retains_operation_and_stderr(monkeypatch, action, stderr):
+    failure = subprocess.TimeoutExpired(
+        "environment worker", 60, output=b"private result", stderr=stderr
+    )
+    run = Mock(side_effect=failure)
+    monkeypatch.setattr(author_environment.subprocess, "run", run)
+    with pytest.raises(ValueError, match="timed out") as caught:
+        author_environment._call(Path("author-python"), action, "private request")
+    message = str(caught.value)
+    assert f"Author environment {action} timed out after 60 seconds" in message
+    assert "author-python" in message
+    assert ("partial diagnostic" in message) == (stderr is not None)
+    assert "private result" not in message
+    assert "private request" not in message
+    assert caught.value.__cause__ is failure
+    run.assert_called_once()
+    assert run.call_args.kwargs["timeout"] == 60
+
+
+def test_environment_timeout_bounds_stderr(monkeypatch):
+    failure = subprocess.TimeoutExpired(
+        "environment worker",
+        60,
+        stderr=b"old diagnostic" + b"x" * 8192 + b"last message",
+    )
+    monkeypatch.setattr(author_environment.subprocess, "run", Mock(side_effect=failure))
+    with pytest.raises(ValueError, match="timed out") as caught:
+        author_environment._call(Path("author-python"), "capture", "{}")
+    message = str(caught.value)
+    assert "old diagnostic" not in message
+    assert "[earlier stderr omitted; retaining last 8 KiB]" in message
+    assert message.endswith("last message")
+    assert len(message) < 8400
+
+
+def test_environment_timeout_keeps_real_child_stderr(monkeypatch):
+    run = subprocess.run
+    children = []
+
+    def synthetic_worker(command, **kwargs):
+        assert kwargs["timeout"] == 60
+        assert command[-1] == "capture"
+        # Only the synthetic test process uses a short deadline.
+        kwargs["timeout"] = 2
+        try:
+            return run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import sys,time; "
+                        "print('synthetic import reached', "
+                        "file=sys.stderr, flush=True); "
+                        "time.sleep(30)"
+                    ),
+                ],
+                **kwargs,
+            )
+        except subprocess.TimeoutExpired as error:
+            children.append(error)
+            raise
+
+    monkeypatch.setattr(author_environment.subprocess, "run", synthetic_worker)
+    with pytest.raises(ValueError, match="timed out") as caught:
+        author_environment._call(Path(sys.executable), "capture", "{}")
+    assert "synthetic import reached" in str(caught.value)
+    assert len(children) == 1
+    assert caught.value.__cause__ is children[0]
+    assert isinstance(children[0].stderr, bytes)
 
 
 def environment(root: Path, version: int) -> Path:

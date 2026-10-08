@@ -18,6 +18,8 @@ from scopecat.records.author_revision import (
     AuthorRevisionManifest,
 )
 
+from scopecat_server.worker_diagnostics import diagnostic_excerpt
+
 
 def _call(python: Path, action: str, value: str) -> str:
     environment = dict(os.environ)
@@ -36,7 +38,14 @@ def _call(python: Path, action: str, value: str) -> str:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except subprocess.TimeoutExpired as error:
-        raise ValueError(f"Author environment check timed out: {python}") from error
+        _, evidence = diagnostic_excerpt(error.stderr)
+        detail = (
+            f"Author environment {action} timed out after {error.timeout:g} seconds: "
+            f"{python}"
+        )
+        if evidence:
+            detail += "\n" + evidence
+        raise ValueError(detail) from error
     if result.returncode:
         raise ValueError(
             f"Author execution environment {python}:\n{result.stderr[-8192:]}"
