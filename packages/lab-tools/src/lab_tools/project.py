@@ -54,6 +54,8 @@ def create_project(destination: Path, *, topic: str | None = None) -> Path:
 
 
 def check_project(project: Path) -> Path:
+    from lab_teaching.lessons import TOPIC_PROCEDURES
+
     project = project.resolve()
     path = project / METADATA
     if not path.is_file():
@@ -70,8 +72,15 @@ def check_project(project: Path) -> Path:
             tomllib.loads((project / "scopecat.toml").read_text(encoding="utf-8")),
         ),
     )
+    teaching_capabilities = [
+        {"author_modules": ["my_experiment"]},
+        *(
+            {"author_modules": ["my_experiment"], "procedures": list(procedures)}
+            for procedures in TOPIC_PROCEDURES.values()
+        ),
+    ]
     if (
-        manifest["lab"].get("capabilities") != {"author_modules": ["my_experiment"]}
+        manifest["lab"].get("capabilities") not in teaching_capabilities
         or "application" in manifest["lab"]
         or "instrument_backend" in manifest["lab"]
     ):
