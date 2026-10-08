@@ -55,6 +55,14 @@ def test_generated_material_matches_reviewed_source_and_cannot_overlay_edits(
 
     root = tmp_path / "author"
     create_project(root, topic=topic)
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    tasks = json.loads((root / ".vscode/tasks.json").read_text(encoding="utf-8"))
+    for task in tasks["tasks"]:
+        assert task["label"] in readme
+    if topic is not None:
+        assert f"notebooks/{topic}.ipynb" in readme
+        assert "本项目 .scopecat" in readme
+        assert "从 Scopecat Help 开始或继续" not in readme
     material = (
         Path(__file__).resolve().parents[2]
         / "lab-teaching/src/lab_teaching/course_material"

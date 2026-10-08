@@ -96,4 +96,18 @@ def create_project(destination: str | Path, *, topic: str | None = None) -> Path
     _ = manifest.write_text(MANIFEST, encoding="utf-8")
     (destination / "notebooks").mkdir()
     _ = install_lesson(destination, topic)
+    if topic is not None:
+        _ = (destination / "README.md").write_text(
+            f"# {TOPICS[topic]}\n\n"
+            "这是命令行生成的独立教学项目。用 VS Code 打开本目录，"
+            "首次运行任务“首次准备项目环境”；已有 .venv 时直接使用原环境。\n"
+            "运行任务“启动实验服务”，然后打开 "
+            f"notebooks/{topic}.ipynb，选择本目录 .venv 内核。"
+            "“打开实验界面”任务会先启动或复用服务，再打开 GUI。\n"
+            "源码在 src/my_experiment，运行与历史保存在本项目 .scopecat 中。"
+            "完成后运行“停止实验服务”；关闭编辑器或内核不会停止服务。\n"
+            "Scopecat Help 的课程属于当前应用，不能用其“继续”打开本项目。"
+            "再次使用本项目时打开原目录，保留环境、源码和数据。\n",
+            encoding="utf-8",
+        )
     return manifest
