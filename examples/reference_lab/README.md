@@ -68,8 +68,6 @@ list of interfaces to preserve.
 | Script | Demonstrates |
 |---|---|
 | `10_direct_control.py` | Live typed clients and multi-device reservation without an experiment run |
-| `24_flux_ramsey.py` | Host DC bias composed with a quantum delay scan |
-| `25_entity_routed_ramsey.py` | Point-local entity selection over reusable quantum work |
 | `33_multichannel_dc_bias.py` | Profile/calibration join across two multichannel DC sources |
 
 The logical pulse-overlap diagnostic script and its dedicated experiment/program

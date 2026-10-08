@@ -17,7 +17,7 @@ source; installed historical environments and scientific data are untouched.
 | `10_direct_control.py`, `33_multichannel_dc_bias.py` | Shared device ownership, physical routes, multi-device bias control | Keep focused real-worker coverage. Add future device-topic sandboxes using current APIs rather than wrapping the old gallery. |
 | `23_q0_ramsey.py`, `26_parallel_multiplexed_ramsey.py`, `27_channel_timing_candidate.py`, `32_quantum_program_inspection.py`, `36_q0_fixed_if_lo_sweep.py` | Quantum execution, multiplexing, candidate lineage, layered preview and signed IF/LO semantics | Retired with duplicate gallery tests and unused probability-result experiment wrappers. Focused runner tests and shared acceptance retain execution evidence, as detailed below. |
 | `20_flux_spectroscopy.py` | Complex VNA traces, flux fit, exact candidate and review provenance | Retired presentation script. Dedicated spectroscopy worker and focused scientific tests retain acquisition, numerical fits and source identity; see the mapping below. |
-| `24`–`25` | Host/quantum composition and point-local routing | Extract minimal compiler/runner inputs and keep a bounded full-device journey. Review duplicated recipes and hard-coded configuration assumptions instead of preserving their signatures. |
+| `24`–`25` | Host/quantum composition and point-local routing | Retired scripts and their experiment/result wrappers. One bounded test-owned input retains compiled host ordering, point-local physical routes and real-worker values/source identity; mapping below. |
 | `29_channel_unavailable.py` | Independent multiplexed-channel availability, entity provenance and HTTP traces | Retired duplicate presentation/acquisition. The existing shared acceptance worker result now owns the assertions; mapping below. |
 | `31_topology_scaled_ramsey.py` | Topology-selected entities retain their identity through compilation and results | Retired with its dedicated experiment/result wrapper. Core topology selection and the focused runner test retain selection and metadata coverage; the assertion mapping and corrected numerical row correspondence are below. |
 | `28_channel_conflict_diagnostic.py` | Logical pulse-overlap diagnostics | Retired with its daemon/gallery test and dedicated `conflicting_drive` / `conflicting_drive_program` wrappers. Existing quantum scheduling and authoring tests own the diagnostic, as detailed below. |
@@ -311,11 +311,67 @@ at item 2, all within the existing `1e-12` scalar-IQ tolerance. The committed
 scientific representatives remain unchanged; no hash update or comparison-rule
 change is needed.
 
-The host/quantum composition and point-local routing scripts `24`–`25` remain.
+The host/quantum composition and point-local routing scripts `24`–`25` were
+subsequently retired with the evidence below.
 Compiled buffers, signed IF/LO, shared physical claims, multiplexed readout and
 ragged worker/restart coverage keep their existing owners listed above. No real
 hardware, installed delivery, historical data or performance qualification is
 claimed; #773 remains open.
+
+## Host-bias and entity-routing gallery retirement
+
+`24_flux_ramsey.py` and `25_entity_routed_ramsey.py` were the only repository
+consumers of `flux_ramsey` / `entity_routed_ramsey` and their result wrappers.
+Those four definitions, the scripts, duplicate gallery tests and now-unused
+`FLUX_BIASES`, `RAMSEY_DELAYS` and `Q1` constants are removed. The remaining
+`RamseyDataset` is used by editable signal author code; `ramsey_program` is used
+by coherent capture, fixed-IF execution and response selection. They remain.
+No author/performance input, device inventory or driver operation changes.
+
+`tests/test_quantum_composition.py` owns one eight-point input (two bias values,
+two entities in q1/q0 order and two delays), without an exported experiment/result
+API. It uses the existing capture module and Ramsey program. Its worker test
+shares `independent_lab_daemon` with the scientific fixture tests and selects
+explicit parameters/setup; it does not add another daemon fixture.
+
+| Retired assertion or actual behavior | Current owner and boundary |
+| --- | --- |
+| Fifteen points, fifteen records and 3 × 5 grid | Gallery vector sizes are withdrawn. Core `program/test_point_plan_policy.py`, `program/test_point_plan_invocations.py` and dataset grid tests own scan composition/order/projection. The small replacement checks every acquired coordinate and value. |
+| Host DC bias followed by quantum work | `test_bias_effects_and_point_local_quantum_routes_compile_together` checks disable → voltage operation → enable before each corresponding target job, concrete voltage arguments/entity, host and target resource ownership, and one-point batches bounded by these host effects. |
+| Six points and two qubit groups | Fixed point/group counts are withdrawn. The same compilation test checks every selected entity reaches physical placement, all events belong to that entity and q0/q1 use disjoint two-channel drive outputs. Core dataset grouping owns generic grouping. |
+| Real completed acquisition | `test_bias_and_entity_capture_worker_retains_values_and_inputs` executes the input through the existing HTTP daemon/device workers. It checks all eight bias/entity/delay tuples, 55/64 and 11/64 probabilities at 8/48 ns, ratio units, eight completed target receipts, actual/target final DC voltage and disabled output after success. |
+| Scientific source and isolated configuration | The worker test checks exact saved parameter/setup references on the run and unchanged inputs plus an empty combined registry afterward. The existing Ramsey response is bias-independent: these probabilities validate execution, not a flux-dependent physical model. Spectroscopy retains its separate flux model and fit evidence. |
+| Compiled buffers and shared claims | Existing `unit/test_list_mode_waveforms.py` checks calibrated physical samples, signed modulation, multiplexed accumulation limits and waveform identity. `unit/test_quantum_runner.py` retains compiled shared I/Q/acquisition constraints, entityless host/target physical AWG claims, host state requirements and batch invariance. These tests are reused, not copied into another gallery. |
+
+### Identity audit
+
+At base `5e8077d5`, the isolated acceptance generator's `--check` passes. Removing
+these definitions changes provider package bytes even though shared acceptance
+does not invoke them. `backend_artifact_hash` changes from `e8a76549…` to
+`c156fc57…`; it feeds device revisions and setup device resolution. The resolved
+setup hash changes from `ef8522ab…` to `d209fb15…`, and the reviewed configuration
+source hash from `91044357…` to `98085576…`. Setup inventory and recipe values
+are unchanged. This is the existing identity chain documented in
+[reference fixtures](reference-fixtures.md), not a change to scientific identity
+rules or a reason to skip hashes.
+
+The full recursive generator comparison finds nine changed identity leaves:
+`manual_state.binding.config_source_hash` and
+`reviewed.config_source.setup.{content_hash,revision_id}` under each of
+`controls_scalar`, `controls_scan` and `launch_preview`. Three additional scalar
+IQ components differ within the existing 1e-12 tolerance: real/imaginary at
+`coherent_scalar.items[0].observables.iq_mean.value` and imaginary at item 2.
+Every other value, key, type and array length matches. Only the nine generated
+identity leaves are updated; the accepted IQ representatives and all comparison
+rules remain unchanged. No historical data or installed environment is rewritten.
+
+The broader #773/#615 retirement remains open. Direct-control/multichannel-bias
+inputs, provider/target inventory and scientific DRAG/spectroscopy consumers still
+need their own consumer audit. `topology_scaled_ramsey_program` is now referenced
+only by response dispatch; removing that program/dispatch pair is a separate
+small candidate, not grounds to remove the shared Ramsey response used here.
+No native-window, installed delivery, physical hardware or performance claim is
+made by this slice.
 
 ## Configuration-authority retirement evidence
 
