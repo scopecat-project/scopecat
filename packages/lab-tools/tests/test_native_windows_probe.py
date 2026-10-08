@@ -360,3 +360,124 @@ def test_windows_storage_aggregate_retains_setup_error(
         windows_storage_probe.verify(tmp_path / "app", home)
     result = json.loads((home / "windows-storage/result.json").read_text())
     assert result["status"] == "failed" and "fixture setup failed" in result["error"]
+
+
+def test_window_diagnostics_retains_initialization_failure_before_cleanup(
+    tmp_path, monkeypatch
+):
+    """Exercise subscriptions/retention only; fake native objects do not qualify UI."""
+    import logging
+
+    from webview.event import Event
+
+    path = tmp_path / "window-diagnostics.jsonl"
+    diagnostics = probe.WindowDiagnostics(path)
+    window = SimpleNamespace()
+    names = (
+        "initialized",
+        "before_show",
+        "shown",
+        "before_load",
+        "loaded",
+        "_pywebviewready",
+    )
+    window.events = SimpleNamespace(**{name: Event(window, True) for name in names})
+    control = SimpleNamespace(
+        CoreWebView2=None,
+        CoreWebView2InitializationCompleted=Event(window, True),
+        NavigationCompleted=Event(window, True),
+    )
+    window.native = SimpleNamespace(browser=SimpleNamespace(webview=control))
+    monkeypatch.setattr(probe.sys, "platform", "win32")
+    monkeypatch.setattr(probe, "browser_processes", lambda: {"processes": []})
+    monkeypatch.setattr(
+        probe,
+        "import_module",
+        lambda _: SimpleNamespace(
+            CoreWebView2Environment=SimpleNamespace(
+                GetAvailableBrowserVersionString=lambda _: "123.4"
+            )
+        ),
+    )
+    diagnostics.attach(window)
+    window.events.initialized.set("edgechromium")
+    window.events.before_show.set()
+    window.events.shown.set()
+    control.CoreWebView2InitializationCompleted.set(
+        None,
+        SimpleNamespace(
+            IsSuccess=False,
+            InitializationException=SimpleNamespace(
+                HResult=-2147467260, Message="token=secret"
+            ),
+        ),
+    )
+    control.CoreWebView2 = SimpleNamespace(
+        BrowserProcessId=42, Environment=SimpleNamespace(BrowserVersionString="123.4")
+    )
+    control.NavigationCompleted.set(
+        None, SimpleNamespace(IsSuccess=False, WebErrorStatus="ConnectionAborted")
+    )
+    diagnostics.snapshot(window, "before_destroy")
+    before = path.read_text()
+    entries = [json.loads(line) for line in before.splitlines()]
+    assert (
+        next(e for e in entries if e["event"] == "core.at_hook")["core_initialized"]
+        is False
+    )
+    assert (
+        next(e for e in entries if e["event"] == "runtime")["available_runtime_version"]
+        == "123.4"
+    )
+    failure = next(
+        e for e in entries if e["event"] == "CoreWebView2InitializationCompleted"
+    )
+    assert failure["success"] is False and failure["hresult"] == -2147467260
+    navigation = next(e for e in entries if e["event"] == "NavigationCompleted")
+    assert navigation["success"] is False
+    assert navigation["web_error_status"] == "ConnectionAborted"
+    core = next(e for e in entries if e["event"] == "core.after_navigation")
+    assert core["browser_pid"] == 42 and core["runtime_version"] == "123.4"
+    snapshot = next(e for e in entries if e["event"] == "before_destroy")
+    assert snapshot["shown"] is True and snapshot["_pywebviewready"] is False
+    assert all(e["utc"].endswith("+00:00") and e["monotonic"] > 0 for e in entries)
+    # A late upstream error remains ordered after the saved pre-destroy snapshot.
+    diagnostics.emit(
+        logging.LogRecord(
+            "pywebview",
+            logging.ERROR,
+            "",
+            0,
+            "controller 0x80004004 token=secret https://host/?token=secret",
+            (),
+            None,
+        )
+    )
+    assert path.read_text().startswith(before)
+    assert json.loads(path.read_text().splitlines()[-1])["hresults"] == ["0x80004004"]
+    assert "secret" not in path.read_text()
+
+
+def test_window_diagnostics_unavailable_does_not_replace_acceptance_failure(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "diagnostics.jsonl"
+    diagnostics = probe.WindowDiagnostics(path)
+
+    def unavailable():
+        raise RuntimeError("token=secret")
+
+    monkeypatch.setattr(probe, "browser_processes", unavailable)
+    with pytest.raises(ValueError, match="original acceptance failure"):
+        try:
+            raise ValueError("original acceptance failure")
+        finally:
+            diagnostics.snapshot(SimpleNamespace(), "before_destroy")
+            diagnostics.record("before_destroy.result", status="failed", checks=[])
+    entries = [json.loads(line) for line in path.read_text().splitlines()]
+    assert entries[0]["unavailable"] == "AttributeError"
+    assert entries[1]["unavailable"] == "RuntimeError"
+    assert entries[2]["status"] == "failed"
+    assert "secret" not in path.read_text()
+    # An unwritable diagnostic target must also leave the caller running.
+    probe.WindowDiagnostics(tmp_path).record("cannot_write")

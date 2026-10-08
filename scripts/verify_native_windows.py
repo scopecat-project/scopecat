@@ -10,8 +10,10 @@ It is not production startup, focus, menu, tray or human-interaction qualificati
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -20,8 +22,10 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
+from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 
 import httpx2
 import psutil
@@ -44,6 +48,7 @@ from scopecat_server.validation_process import (  # noqa: TID251 - acceptance ow
 
 if TYPE_CHECKING:
     import webview
+    from webview.event import Event
 
 
 # The same first-ingest gate as the real browser journey. Calls delegate to the
@@ -248,6 +253,184 @@ def click_text(window: webview.Window, label: str) -> None:
     )
 
 
+class WindowDiagnostics(logging.Handler):
+    """Best-effort first-window evidence; never wait for JS or the GUI thread.
+
+    pywebview 6.2.1 emits before_show on the WinForms thread after setting native.
+    CoreWebView2 properties must be read there or in its native event callbacks.
+    Missing callbacks are not proof of failure: initialization may precede hookup.
+    Only allowlisted scalars are recorded (no URLs, command lines or error text).
+    """
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(level=logging.ERROR)
+        self.path = path
+        self.write_lock = threading.Lock()
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        # Upstream may report initialization failure before hooks or after destroy.
+        # Retain ordering and HRESULTs, never arbitrary message/exception content.
+        self.observe(
+            "pywebview.error",
+            lambda: {
+                "hresults": re.findall(r"0x[0-9a-fA-F]{8}\b", record.getMessage())
+            },
+        )
+
+    def record(self, event: str, **values: object) -> None:
+        try:
+            entry = {
+                "utc": datetime.now(UTC).isoformat(),
+                "monotonic": time.monotonic(),
+                "event": event,
+                **values,
+            }
+            with self.write_lock, self.path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(entry) + "\n")
+        except Exception:  # noqa: S110 - evidence must not block acceptance
+            # Diagnostics cannot override the acceptance result or prevent cleanup.
+            pass
+
+    def observe(self, event: str, read: Callable[[], dict[str, object]]) -> None:
+        try:
+            self.record(event, **read())
+        except Exception as error:
+            self.record(event, unavailable=type(error).__name__)
+
+    def attach(self, window: webview.Window) -> None:
+        def before_show() -> None:
+            self.record("before_show")
+            if sys.platform == "win32":
+                self.observe("native_hook", lambda: self.hook_native(window))
+
+        def initialized(renderer: str) -> None:
+            self.record("initialized", renderer=renderer)
+
+        window.events.initialized += initialized
+        window.events.before_show += before_show
+        for name in ("shown", "before_load", "loaded", "_pywebviewready"):
+            event = cast("Event", getattr(window.events, name))
+
+            def callback(name: str) -> Callable[[], None]:
+                def emit() -> None:
+                    self.record(name)
+
+                return emit
+
+            event += callback(name)
+        self.record("attached", ready_event="_pywebviewready")
+
+    def hook_native(self, window: webview.Window) -> dict[str, object]:
+        def available_runtime() -> dict[str, object]:
+            environment = native_member(
+                import_module("Microsoft.Web.WebView2.Core"),
+                "CoreWebView2Environment",
+            )
+            version = cast(
+                "Callable[[None], object]",
+                native_member(environment, "GetAvailableBrowserVersionString"),
+            )
+            return {"available_runtime_version": str(version(None))}
+
+        self.observe("runtime", available_runtime)
+        # Native properties are read only on the GUI thread.
+        native = cast("object", window.native)
+        control: object = native_member(native_member(native, "browser"), "webview")
+
+        def core_state() -> dict[str, object]:
+            core: object = native_member(control, "CoreWebView2")
+            if core is None:
+                return {"core_initialized": False}
+            environment: object = native_member(core, "Environment")
+            return {
+                "core_initialized": True,
+                "browser_pid": cast("int", native_member(core, "BrowserProcessId")),
+                "runtime_version": str(
+                    native_member(environment, "BrowserVersionString")
+                ),
+            }
+
+        def initialized(_sender: object, args: object) -> None:
+            def read() -> dict[str, object]:
+                error: object = native_member(args, "InitializationException")
+                return {
+                    "success": bool(native_member(args, "IsSuccess")),
+                    "hresult": None
+                    if error is None
+                    else cast("int", native_member(error, "HResult")),
+                }
+
+            self.observe("CoreWebView2InitializationCompleted", read)
+            self.observe("core.after_initialization", core_state)
+
+        def navigation(_sender: object, args: object) -> None:
+            self.observe(
+                "NavigationCompleted",
+                lambda: {
+                    "success": bool(native_member(args, "IsSuccess")),
+                    "web_error_status": str(native_member(args, "WebErrorStatus")),
+                },
+            )
+
+            self.observe("core.after_navigation", core_state)
+
+        for name, handler in (
+            ("CoreWebView2InitializationCompleted", initialized),
+            ("NavigationCompleted", navigation),
+        ):
+            event: object = native_member(control, name)
+            add = cast("Callable[[object], object]", native_member(event, "__iadd__"))
+            add(handler)
+        self.observe("core.at_hook", core_state)
+        return {"hooks_attached": True}
+
+    def snapshot(self, window: webview.Window, stage: str) -> None:
+        self.observe(
+            stage,
+            lambda: {
+                name: cast("Event", getattr(window.events, name)).is_set()
+                for name in ("shown", "before_load", "loaded", "_pywebviewready")
+            },
+        )
+        self.observe(stage + ".processes", browser_processes)
+
+
+def native_member(value: object, name: str) -> object:
+    """Optional pythonnet properties have no importable cross-platform stubs."""
+    return cast("object", getattr(value, name))
+
+
+def browser_processes() -> dict[str, object]:
+    """Owned WebView processes only; PID/session identity without command lines."""
+    processes = [psutil.Process(), *psutil.Process().children(recursive=True)]
+    result: list[dict[str, object]] = []
+    for process in processes:
+        try:
+            name = process.name()
+            if process.pid != os.getpid() and name.lower() != "msedgewebview2.exe":
+                continue
+            item: dict[str, object] = {
+                "pid": process.pid,
+                "name": name,
+                "created": process.create_time(),
+            }
+            if sys.platform == "win32":
+                import ctypes
+
+                session = ctypes.c_ulong()
+                if ctypes.windll.kernel32.ProcessIdToSessionId(
+                    process.pid, ctypes.byref(session)
+                ):
+                    item["session_id"] = session.value
+                else:
+                    item["session_unavailable"] = True
+            result.append(item)
+        except psutil.Error as error:
+            result.append({"pid": process.pid, "unavailable": type(error).__name__})
+    return {"processes": result}
+
+
 def probe(home: Path) -> None:
     require_hosted_runner(home)
     import webview
@@ -334,7 +517,10 @@ def probe(home: Path) -> None:
         assert child.poll() is None, "Acquisition exited early; see acquisition.log"
         run_id = (reports / "ready").read_text()
         evidence["run_id"] = run_id
+        diagnostics = WindowDiagnostics(reports / "window-diagnostics.jsonl")
+        logging.getLogger("pywebview").addHandler(diagnostics)
         first = windows.create(run_id)
+        diagnostics.observe("attach", lambda: diagnostics.attach(first.window) or {})
 
         def exercise() -> None:
             try:
@@ -608,6 +794,10 @@ def probe(home: Path) -> None:
             except Exception:
                 evidence["error"] = traceback.format_exc()
             finally:
+                diagnostics.snapshot(first.window, "before_destroy")
+                diagnostics.record(
+                    "before_destroy.result", status=evidence["status"], checks=checks
+                )
                 closing.set()
                 windows.destroy()
 
