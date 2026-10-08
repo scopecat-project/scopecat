@@ -63,7 +63,11 @@ interpret a timing sample as a benchmark or a successful run as hardware evidenc
 ## Coverage and CI
 
 The [historical timing sample](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/test-feedback.md#september-24-calibration-qualification-split)
-records the original tier split; current optimization work belongs to #520.
+records the original tier split. The closed
+[#520](https://github.com/scopecat-project/scopecat/issues/520) retains iteration-cost
+measurements and unresolved evidence gaps; closure is not a speedup or failure-fix
+claim. Current first-use profiling is tracked in
+[#523](https://github.com/scopecat-project/scopecat/issues/523).
 
 | Invariant | Ordinary PR coverage | Full qualification |
 | --- | --- | --- |
@@ -76,8 +80,7 @@ records the original tier split; current optimization work belongs to #520.
 ### Required gate
 
 [CI](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/ci.yml)
-is the required PR gate. Performance improvements are tracked in
-[#520](https://github.com/scopecat-project/scopecat/issues/520).
+is the required PR gate.
 Every PR, merge-group, main push and explicit CI dispatch runs:
 
 - Linux Python `core` (all fast and integration files), split into two required
