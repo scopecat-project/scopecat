@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunExecutionSegmentPage } from "../../api-contract";
 import { AnalysisCard, ExecutionSegmentsCard, ResourceCard } from "./RunDetailSections";
@@ -44,6 +44,7 @@ it("opens the exact linked run analysis outside the history page", async () => {
   );
   expect(await screen.findByRole("heading", { name: "Retained run evidence" })).toBeVisible();
   expect(screen.queryByText("No analyses saved")).toBeNull();
+  expect(screen.getByTestId("publication-id")).toHaveTextContent("older-publication");
   expect(get).toHaveBeenCalledWith("original-run", "older-publication", expect.any(AbortSignal));
   client.clear();
 });
@@ -147,3 +148,47 @@ function segment(
     ...overrides,
   };
 }
+
+it("shows the exact publication identity even when a run analysis has a reusable key", async () => {
+  vi.spyOn(runApi, "getRunAnalysis").mockResolvedValue({
+    id: "retained-publication-1",
+    title: "Grouped curves",
+    revision: 1,
+    publicationHash: "a".repeat(64),
+    publishedAt: "2026-09-08T00:00:00Z",
+    subject: "run",
+    inputs: [],
+    executions: [],
+    outputs: [],
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AnalysisCard
+        analyses={[
+          {
+            id: "retained-publication-1",
+            revision: 1,
+            publicationHash: "a".repeat(64),
+            key: "curves",
+            title: "Grouped curves",
+            publishedAt: "2026-09-08T00:00:00Z",
+            inputCount: 0,
+            outputCount: 0,
+          },
+        ]}
+        error={null}
+        pending={false}
+        runId="original-run"
+        hasNextPage={false}
+        loadingNextPage={false}
+        onLoadOlder={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  const details = screen.getByText("Grouped curves").closest("details")!;
+  details.open = true;
+  fireEvent(details, new Event("toggle"));
+  expect(await screen.findByTestId("publication-id")).toHaveTextContent("retained-publication-1");
+  client.clear();
+});

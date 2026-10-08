@@ -18,6 +18,14 @@ export function AnalysisPublicationView({
 }) {
   return (
     <div className="grid gap-2">
+      <dl className="text-[0.65rem] text-text-soft">
+        <dt className="text-text-dim">Publication ID</dt>
+        <dd className="m-0">
+          <code className="break-all" data-testid="publication-id">
+            {analysis.id}
+          </code>
+        </dd>
+      </dl>
       {analysis.inputs.length > 0 ? (
         <section className="rounded-[7px] border border-line bg-panel p-[9px]">
           <h4 className="mt-0 mb-2 text-[0.58rem] font-extrabold tracking-[0.06em] text-text-dim uppercase">
