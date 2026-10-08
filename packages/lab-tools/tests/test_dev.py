@@ -125,7 +125,7 @@ def test_terminal_wait_restarts_only_after_idle(tmp_path, monkeypatch):
     runtime = Mock()
     runtime.stop_if_idle.side_effect = [False, False, True]
     session = DesktopSession(runtime, threading.Event())
-    monkeypatch.setattr(dev, "source_identity", lambda _: "source")
+    monkeypatch.setattr(dev, "source_stamp", lambda _: "source")
     commands = queue.Queue()
     commands.put("w")
     start = Mock(side_effect=session.closing.set)
@@ -152,7 +152,7 @@ def test_failed_source_watcher_does_not_disable_safe_quit(tmp_path, monkeypatch)
         raise FileNotFoundError("editor replaced file")
 
     clock = itertools.count(0, 3)
-    monkeypatch.setattr(dev, "source_identity", changed)
+    monkeypatch.setattr(dev, "source_stamp", changed)
     monkeypatch.setattr(dev.time, "monotonic", lambda: next(clock))
     commands = queue.Queue()
     thread = threading.Thread(
@@ -180,3 +180,70 @@ def test_native_endpoint_change_updates_proxy_and_reuse_report(tmp_path):
         "ui": "http://127.0.0.1:5000",
         "backend": "http://127.0.0.1:9001",
     }
+
+
+def test_frontend_failure_reports_without_stopping_background_and_can_quit(
+    tmp_path, monkeypatch
+):
+    runtime = Mock()
+    runtime.stop_if_idle.return_value = True
+    session = DesktopSession(runtime, threading.Event())
+    hidden = Mock()
+    session.keep_running(hidden)
+    reported = threading.Event()
+    from types import SimpleNamespace
+
+    logger = Mock()
+    logger.error.side_effect = lambda _message: reported.set()
+    monkeypatch.setattr(dev, "logging", SimpleNamespace(getLogger=lambda _name: logger))
+    monkeypatch.setattr(dev, "source_stamp", lambda _source: "source")
+    frontend = Mock(returncode=1)
+    frontend.poll.return_value = 1
+    commands = queue.Queue()
+    thread = threading.Thread(
+        target=dev.control_session,
+        args=(session, tmp_path, commands, Mock(), frontend, tmp_path / "vite.log"),
+    )
+    thread.start()
+    try:
+        assert reported.wait(3)
+        assert not session.closing.is_set()
+        runtime.stop_if_idle.assert_not_called()
+        runtime.stop.assert_not_called()
+        message = logger.error.call_args.args[0]
+        assert "Vite exited (1)" in message
+        assert str(tmp_path / "vite.log") in message
+        assert "Ctrl-C" in message
+        commands.put("q")
+        thread.join(3)
+        assert not thread.is_alive()
+        assert session.closing.is_set()
+        logger.error.assert_called_once()
+        runtime.stop_if_idle.assert_called_once()
+        runtime.stop.assert_not_called()
+    finally:
+        session.closing.set()
+        thread.join(3)
+
+
+def test_source_reminder_reads_metadata_but_cache_still_hashes_bytes(
+    tmp_path, monkeypatch
+):
+    import os
+
+    source = tmp_path / "packages/example/src/example.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("one")
+    first = dev_resources.source_identity(tmp_path)
+    stat = source.stat()
+    source.write_text("two")
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert dev_resources.source_identity(tmp_path) != first
+
+    def reject_read(_path):
+        raise AssertionError("idle reminder must not read file contents")
+
+    monkeypatch.setattr(type(source), "read_bytes", reject_read)
+    stamp = dev_resources.source_stamp(tmp_path)
+    source.rename(source.with_name("renamed.py"))
+    assert dev_resources.source_stamp(tmp_path) != stamp

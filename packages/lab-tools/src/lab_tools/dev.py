@@ -32,7 +32,7 @@ from .dev_resources import (
     development_home,
     prepare_native_dependency,
     prepare_resources_logged,
-    source_identity,
+    source_stamp,
 )
 
 
@@ -125,12 +125,25 @@ def control_session(
     source: Path,
     commands: queue.Queue[str],
     prepare: Callable[[], None],
+    frontend: subprocess.Popen[str] | None = None,
+    frontend_log: Path | None = None,
 ) -> None:
     """Foreground commands share native lifecycle fencing; no forced fallback."""
     stamp: str | None = None
     restart_pending = False
+    frontend_failed = False
     next_check = time.monotonic() + 2
     while not session.closing.wait(0.2):
+        if frontend is not None and not frontend_failed and frontend.poll() is not None:
+            frontend_failed = True
+            message = (
+                f"Vite exited ({frontend.returncode}); "
+                "native/browser UI is unavailable. "
+                f"Backend work is retained. Log: {frontend_log}. "
+                "Enter q or press Ctrl-C to quit after idle, then relaunch."
+            )
+            print(message, flush=True)
+            logging.getLogger(__name__).error(message)
         try:
             command = commands.get_nowait()
         except queue.Empty:
@@ -140,7 +153,7 @@ def control_session(
                 restart_pending = command == "w"
                 session.restart(prepare)
                 restart_pending = False
-                stamp = source_identity(source)
+                stamp = source_stamp(source)
                 print(
                     "Backend restarted safely. Relaunch the command for native "
                     "host Python changes.",
@@ -162,7 +175,7 @@ def control_session(
             if restart_pending:
                 session.restart(prepare)
                 restart_pending = False
-                stamp = source_identity(source)
+                stamp = source_stamp(source)
                 print("Backend restarted after becoming idle.", flush=True)
             session.poll_exit()
         except Exception as error:
@@ -174,7 +187,7 @@ def control_session(
         if time.monotonic() >= next_check:
             next_check = time.monotonic() + 2
             try:
-                current = source_identity(source)
+                current = source_stamp(source)
                 if stamp is not None and current != stamp:
                     print(
                         "Python/package source changed: r + Enter restarts when idle; "
@@ -316,7 +329,9 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
             session.connected(session.runtime.start().base_url)
 
         controller = threading.Thread(
-            target=control_session, args=(session, source, commands, start), daemon=True
+            target=control_session,
+            args=(session, source, commands, start, child, logs / "vite.log"),
+            daemon=True,
         )
         controller.start()
 
@@ -331,14 +346,7 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
                 "the desktop.",
                 flush=True,
             )
-            while not closing.wait(0.5):
-                if child.poll() is not None:
-                    commands.put("q")
-                    print(
-                        f"Vite exited; safe shutdown pending. Log: {logs / 'vite.log'}",
-                        flush=True,
-                    )
-                    closing.wait(1)
+            closing.wait()
         else:
             from .desktop import run as desktop_run
 

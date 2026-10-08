@@ -245,7 +245,10 @@ uv run --locked python -m lab_tools.dev --temporary
 
 Startup reports source, home, UI/backend URLs and log locations. `q` followed by
 Enter or Ctrl-C requests exit after work becomes idle; `c` cancels a pending
-terminal wait. Native Quit uses the ordinary application work-aware flow.
+terminal wait. Native Quit uses the ordinary application work-aware flow. Choosing to keep work
+in the background hides the window and keeps the launcher alive. If Vite exits,
+the terminal reports the failure and log path; backend work continues. Use `q` or
+Ctrl-C for a safe exit before relaunching.
 No history is reset or automatically deleted. Retain useful temporary-home data
 outside the OS temp directory before the OS cleans it.
 

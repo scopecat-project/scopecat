@@ -28,12 +28,8 @@ def development_home(source: Path) -> Path:
     return user_data_path("Scopecat-Development", appauthor=False) / key
 
 
-def source_identity(source: Path) -> str:
-    """Hash actual package inputs, including dirty, untracked and ignored source.
-
-    UI is served by Vite. Its source does not enter the frozen author payload.
-    Only interpreter bytecode caches are excluded from package source trees.
-    """
+def source_files(source: Path) -> list[Path]:
+    """Actual package inputs; GUI and interpreter bytecode are not payload inputs."""
     paths = {source / name for name in ("uv.lock", "pyproject.toml", "release.toml")}
     for package in (source / "packages").iterdir():
         paths.update(package / name for name in ("pyproject.toml", "README.md"))
@@ -42,15 +38,42 @@ def source_identity(source: Path) -> str:
             for path in (package / "src").rglob("*")
             if "__pycache__" not in path.parts and path.suffix not in {".pyc", ".pyo"}
         )
+    return sorted(path for path in paths if path.is_file())
+
+
+def source_stamp(source: Path) -> str:
+    """Cheap change reminder only; never use metadata as a resource identity."""
     digest = hashlib.sha256()
-    for path in sorted(paths):
-        if path.is_file():
-            digest.update(
-                path.relative_to(source).as_posix().encode()
-                + b"\0"
-                + path.read_bytes()
-                + b"\0"
-            )
+    for path in source_files(source):
+        stat = path.stat()
+        digest.update(
+            repr(
+                (
+                    str(path),
+                    stat.st_size,
+                    stat.st_mtime_ns,
+                    stat.st_ctime_ns,
+                    stat.st_ino,
+                )
+            ).encode()
+        )
+    return digest.hexdigest()
+
+
+def source_identity(source: Path) -> str:
+    """Hash actual package inputs, including dirty, untracked and ignored source.
+
+    UI is served by Vite. Its source does not enter the frozen author payload.
+    Only interpreter bytecode caches are excluded from package source trees.
+    """
+    digest = hashlib.sha256()
+    for path in source_files(source):
+        digest.update(
+            path.relative_to(source).as_posix().encode()
+            + b"\0"
+            + path.read_bytes()
+            + b"\0"
+        )
     return digest.hexdigest()
 
 
