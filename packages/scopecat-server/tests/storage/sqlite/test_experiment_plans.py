@@ -122,27 +122,6 @@ def test_plan_content_rejects_execution_permission() -> None:
         )
 
 
-def test_schema_64_source_bytes_remain_unchanged(tmp_path: Path) -> None:
-    import sqlite3
-
-    from scopecat_server.storage.sqlite.project_store import SchemaVersionError
-
-    database = tmp_path / "old.sqlite3"
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            "CREATE TABLE project_schema("
-            "singleton INTEGER PRIMARY KEY, version INTEGER)"
-        )
-        connection.execute("INSERT INTO project_schema VALUES (1,64)")
-        connection.execute("CREATE TABLE retained(value TEXT)")
-        connection.execute("INSERT INTO retained VALUES ('original')")
-    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    store = SQLiteProjectStore(SQLiteDatabase(database), tmp_path / "objects")
-    with pytest.raises(SchemaVersionError, match="version: 64; expected 113"):
-        store.bootstrap()
-    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
-
-
 def test_snapshot_retains_hidden_plan_object_and_hash(tmp_path: Path) -> None:
     from scopecat.project import load_project
 

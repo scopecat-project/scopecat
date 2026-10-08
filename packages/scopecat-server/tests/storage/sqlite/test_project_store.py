@@ -170,10 +170,15 @@ def test_bootstrap_rejects_noncurrent_version_before_initializing_missing_tables
             "INSERT INTO project_schema(singleton, version) VALUES (1, ?)",
             (version,),
         )
+        connection.execute("CREATE TABLE retained(value TEXT)")
+        connection.execute("INSERT INTO retained VALUES ('original')")
     original = database.read_bytes()
     objects = tmp_path / "objects"
     store = SQLiteProjectStore(SQLiteDatabase(database), objects)
-    with pytest.raises(SchemaVersionError, match=f"version: {version}"):
+    with pytest.raises(
+        SchemaVersionError,
+        match=f"version: {version}; expected {PROJECT_SCHEMA_VERSION}",
+    ):
         store.bootstrap()
     assert database.read_bytes() == original
     assert set(tmp_path.iterdir()) == {database}
