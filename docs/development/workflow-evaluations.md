@@ -89,7 +89,10 @@ cleanup failures remain distinguishable without reading worker logs.
 preview points and resource requirements, run it, and receive the authored
 result with no manual recording schema or execution-phase management.
 
-**Executable evidence:** `20_flux_spectroscopy.py` and its reference-lab tests.
+**Executable evidence:** the retained `flux_spectroscopy` workflow and
+`test_flux_spectroscopy_worker_retains_science_and_exact_inputs` in the reference
+lab. The presentation script is retired; see the
+[assertion mapping](reference-gallery-retirement.md#spectroscopy-gallery-retirement-retained-device-science).
 
 **Success evidence:** previewed point count matches execution, the run reaches a
 terminal state, measurements retain declared coordinates and observables, and
