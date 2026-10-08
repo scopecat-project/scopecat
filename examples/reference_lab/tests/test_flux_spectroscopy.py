@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from runpy import run_path
-from typing import Protocol, assert_type, cast
+from typing import assert_type, cast
 
 import numpy as np
 import pytest
@@ -55,10 +54,6 @@ from reference_lab.workflows.flux_spectroscopy_analysis import (
     flux_spectroscopy_analysis,
     flux_spectroscopy_fit_review,
 )
-
-
-class _ReferenceLabDaemon(Protocol):
-    url: str
 
 
 def test_complex_notch_fit_recovers_delay_and_ignores_one_outlier() -> None:
@@ -333,24 +328,6 @@ def test_flux_spectroscopy_runs_fits_saves_and_proposes(tmp_path: Path) -> None:
     )
     assert review_input.target == fit_output.content.dataset_id
     assert review.executions == ()
-
-
-def test_direct_control_notebook_completes_through_the_project_daemon(
-    reference_lab_daemon: _ReferenceLabDaemon,
-    reference_lab_notebooks: Path,
-) -> None:
-    assert reference_lab_daemon.url.startswith("http://127.0.0.1:")
-    result = run_path(str(reference_lab_notebooks / "10_direct_control.py"))
-
-    inventory = cast("list[tuple[str, str]]", result["inventory"])
-    trace_results = cast("dict[str, dict[str, object]]", result["trace_results"])
-    assert {instrument_id for instrument_id, _availability in inventory} >= {
-        "bench-source",
-        "mixing-chamber",
-        "readout-vna",
-    }
-    assert trace_results["frequency"]["shape"] == [201]
-    assert trace_results["s_parameter"]["shape"] == [201]
 
 
 def test_flux_spectroscopy_worker_retains_science_and_exact_inputs(

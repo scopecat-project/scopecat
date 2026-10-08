@@ -70,8 +70,9 @@ possible grouping remain teaching-design work.
 needed devices, perform typed operations immediately, and attribute failure to
 one device or connection.
 
-**Executable evidence:** server instrument-view and direct-control tests, with
-`10_direct_control.py` temporarily retained for coupled virtual-device behavior.
+**Executable evidence:** server instrument-view and direct-control tests, plus
+`reference_lab/tests/test_device_sessions.py` for typed multi-device sessions and
+coupled virtual-device behavior through the real worker chain.
 The old fixed-inventory tour is retired; see the
 [retirement inventory](reference-gallery-retirement.md).
 

@@ -51,7 +51,6 @@ include = [
   "packages/scopecat-quantum/src",
   "packages/scopecat-quantum/tests",
   "examples/reference_lab/src",
-  "examples/reference_lab/notebooks",
   "examples/reference_lab/tests",
   "scripts",
   "benchmarks",
@@ -334,7 +333,6 @@ src = [
   "packages/scopecat-quantum/src",
   "packages/scopecat-quantum/tests",
   "examples/reference_lab/src",
-  "examples/reference_lab/notebooks",
   "examples/reference_lab/tests",
   "scripts",
   "benchmarks",
@@ -502,7 +500,6 @@ journey_paths = [
 "examples/reference_lab/tests/test_experiment_plans.py" = 145.2
 "examples/reference_lab/tests/test_exploration.py" = 3.3
 "examples/reference_lab/tests/test_flux_spectroscopy.py" = 9.9
-"examples/reference_lab/tests/test_gallery_notebooks.py" = 73.2
 "examples/reference_lab/tests/test_launch.py" = 111.5
 "examples/reference_lab/tests/test_managed_author_session.py" = 59.1
 "examples/reference_lab/tests/test_manual_launch.py" = 65.4
