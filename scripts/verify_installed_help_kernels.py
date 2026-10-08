@@ -285,6 +285,7 @@ def verify_installed(payload: Path, work: Path) -> None:
         )
         # External editable source and comparison evidence are an independent
         # verifier backup, NOT contents promised by the application snapshot.
+        phase = perf_counter()
         source_id = runtime.source(groups.directory)
         health = httpx2.get(
             runtime.start().base_url + "/api/v1/health", trust_env=False, timeout=30
@@ -311,6 +312,7 @@ def verify_installed(payload: Path, work: Path) -> None:
             for path in restored_source.rglob("*")
             if path.is_file()
         }
+        timings["independent_source_backup"] = perf_counter() - phase
         phase = perf_counter()
         runtime.stop()
         assert runtime.status().state == "stopped"
@@ -318,6 +320,7 @@ def verify_installed(payload: Path, work: Path) -> None:
         create_snapshot(open_project(runtime.root), snapshot)
         verify_snapshot(snapshot)
         recovered = ApplicationRuntime(work / "recovered-application")
+        recovered.home.mkdir()
         restore_snapshot(snapshot, recovered.root)
         assert not (recovered.root / "scopecat.runtime.toml").exists()
         assert not (recovered.root / ".scopecat/author-workspaces.json").exists()
@@ -388,6 +391,9 @@ def verify_installed(payload: Path, work: Path) -> None:
             "unavailable-originals",
             "application-python",
             "application-base",
+            "empty-cache",
+            "author-empty-cache",
+            "recovery-empty-cache",
         )
     }
     evidence.update(result="passed", cleanup="stopped")
