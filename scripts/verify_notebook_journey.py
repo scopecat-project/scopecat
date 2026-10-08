@@ -1,7 +1,7 @@
 """Exercise shipped cells through Help, an independent real kernel and one app.
 
 Usage: uv run --locked python scripts/verify_notebook_journey.py
-       <fresh-work-directory> <toolchain-delivery>
+       <fresh-work-directory> <toolchain-delivery> [current-gui-dist]
 Uses development dependencies and Playwright Chromium (or SCOPECAT_TEST_CHROMIUM).
 Browser-native bridge calls use
 DesktopAPI; only external editor activation/window plumbing is substituted.
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     import webview
 
 
-def verify(work: Path, payload: Path) -> None:
+def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
     # Daemons are detached grandchildren; cloud containers may have no reaping init.
     if sys.platform == "linux":
         if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
@@ -48,7 +48,7 @@ def verify(work: Path, payload: Path) -> None:
     nbformat = notebook_io()
     work.mkdir(parents=True, exist_ok=False)
     runtime = ApplicationRuntime(work / "application")
-    runtime.configure(static_dir=payload / "gui", delivery_root=payload)
+    runtime.configure(static_dir=gui or payload / "gui", delivery_root=payload)
     session = DesktopSession(runtime, threading.Event())
     api = DesktopAPI(session, lambda: cast("webview.Window", cast("object", None)))
     editor_files: list[str] = []
@@ -69,6 +69,7 @@ def verify(work: Path, payload: Path) -> None:
             )
             expose("journeyStatus", api.notebook_journey)
             expose("journeyPrepare", api.prepare_notebook_journey)
+            expose("applicationStatus", api.status)
 
             def editor(topic: str) -> None:
                 def record(journey: NotebookJourney) -> None:
@@ -85,6 +86,7 @@ def verify(work: Path, payload: Path) -> None:
                     window.journeyPrepare(parent ?? null, topic),
                 open_lesson_notebook: (topic) => window.journeyOpen(topic),
                 set_window_title: async () => {},
+                status: () => window.applicationStatus(),
             }};""")
             page.goto(endpoint + "/#help")
             page.get_by_role(
@@ -99,6 +101,22 @@ def verify(work: Path, payload: Path) -> None:
             assert journey is not None and journey.ready
             assert editor_files == [str(journey.notebook)]
             expect(page.get_by_text(str(journey.notebook), exact=True)).to_be_visible()
+            page.evaluate("window.continuationDocument = true")
+            page.get_by_role(
+                "link", name="Manage this code folder in Settings", exact=True
+            ).click()
+            expect(page.get_by_label("Your code folders")).to_have_value(
+                str(journey.directory)
+            )
+            expect(page.get_by_label("Author directory")).to_have_value(
+                str(journey.directory)
+            )
+            assert page.evaluate("window.continuationDocument") is True
+            page.get_by_role("button", name="Help", exact=True).click()
+            expect(page.get_by_role("combobox", name="Course")).to_have_value(
+                "parameters"
+            )
+            assert editor_files == [str(journey.notebook)]
             source = journey.directory
             notebook_bytes = journey.notebook.read_bytes()
             material = (
@@ -253,6 +271,7 @@ def verify(work: Path, payload: Path) -> None:
                         "restart_and_continue_without_acquisition": "passed",
                         "repeat_result_cell_without_acquisition": "passed",
                         "help_runs_link_reopens_retained_run": "passed",
+                        "settings_same_source_without_reload": "passed",
                     },
                     indent=2,
                 )
@@ -360,6 +379,14 @@ def verify_groups(
         page.get_by_role("button", name="Continue groups Notebook", exact=True)
     ).to_be_enabled()
     assert current(runtime, "groups") == journey
+    page.get_by_role("link", name="Runs", exact=True).click()
+    page.get_by_role("button", name="Help", exact=True).click()
+    expect(page.get_by_role("combobox", name="Course")).to_have_value("groups")
+    page.reload()
+    expect(page.get_by_role("combobox", name="Course")).to_have_value("groups")
+    expect(
+        page.get_by_role("button", name="Continue groups Notebook", exact=True)
+    ).to_be_enabled()
     page.screenshot(path=str(work / "groups-help.png"), full_page=True)
     assert journey.notebook.read_bytes() == retained
     assert "shots: int = 32" in code.read_text()
@@ -397,4 +424,8 @@ def verify_groups(
 
 
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve())
+    verify(
+        Path(sys.argv[1]).resolve(),
+        Path(sys.argv[2]).resolve(),
+        Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else None,
+    )
