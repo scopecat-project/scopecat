@@ -154,8 +154,8 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             )
             assert analysis.value.mean == 2.0
             assert analysis.publication.fact("author_workspace").value == registered.id
-            with pytest.raises(ValueError, match=r"generation|changed"):
-                b.refresh_authors(expected_generation=initial_b.generation)
+            # Stale-generation rejection and worker cleanup are covered by
+            # test_refresh_worker_handoff; keep this journey on source isolation.
             # Source owners and parameter branches are independent selections.
             configuration = imported.selection.configuration
             assert isinstance(configuration, ParameterConfiguration)
