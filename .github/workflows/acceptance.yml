@@ -470,11 +470,11 @@ jobs:
           dist/tutorial dist/tutorial-complete
 
       - name: Archive the complete offline delivery
-        run: python -m zipfile -c dist/tutorial.zip dist/tutorial-complete
+        run: python -m tarfile -c dist/tutorial.tar.gz dist/tutorial-complete
 
       - name: Verify the archived delivery, notebooks and installed application
         run: |
-          python -m zipfile -e dist/tutorial.zip dist/delivery-check
+          python -m tarfile -e dist/tutorial.tar.gz dist/delivery-check
           uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/tutorial-complete dist/tutorial-evidence
 
       - name: Retain tutorial delivery and executed notebooks
@@ -483,7 +483,7 @@ jobs:
         with:
           name: scopecat-tutorial-${{ matrix.os }}
           path: |
-            dist/tutorial.zip
+            dist/tutorial.tar.gz
             dist/tutorial-evidence/**/verified-*.ipynb
             dist/tutorial-evidence/help/*.ipynb
             dist/tutorial-evidence/**/acceptance.json
