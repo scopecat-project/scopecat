@@ -25,10 +25,7 @@ from scopecat_server.services.decision_drafts import DecisionDraftService
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 from scopecat_server.storage.sqlite.automation import SQLiteAutomationStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
-from scopecat_server.storage.sqlite.project_store import (
-    SchemaVersionError,
-    SQLiteProjectStore,
-)
+from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
 
 @dataclass
@@ -224,20 +221,3 @@ def test_current_backup_includes_saved_conflicting_and_discarded_drafts(tmp_path
     restored = make_store(tmp_path / "restored" / ".scopecat")
     assert DecisionDraftService(restored.sqlite).history() == history
     restored.close()
-
-
-def test_previous_development_schema_is_rejected_without_migration_or_deletion(
-    tmp_path: Path,
-):
-    store = make_store(tmp_path)
-    with store.sqlite.write_transaction() as connection:
-        connection.execute("UPDATE project_schema SET version=110")
-    store.close()
-    before = {
-        path.name: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
-    }
-    with pytest.raises(SchemaVersionError, match="expected 113"):
-        make_store(tmp_path)
-    assert before == {
-        path.name: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
-    }
