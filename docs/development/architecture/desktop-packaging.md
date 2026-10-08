@@ -97,6 +97,17 @@ Current automated evidence has distinct boundaries:
   generated material identity, edits, restart and Continue without reacquisition.
   External editor/window activation is substituted; actual native editor use and
   unfamiliar-user comprehension remain separate observations in #616.
+- `verify_installed_help_kernels.py` installs an existing full toolchain payload
+  into a fresh location and runs shipped parameters/groups cells through Help's
+  same-application preparation path. Installation and author preparation start
+  with separate empty caches and offline resolution; neither provisioning nor
+  kernels are substituted. Fresh kernels reject the application interpreter,
+  then read exact retained results after application restart without acquisition.
+  Run `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
+  This is a targeted maintainer check, not an additional per-PR platform gate.
+  It preserves the old delivery/snapshot fixtures: browser/native interaction,
+  legacy editor tasks, default-course analysis, compute/refresh and snapshot
+  relocation assertions are outside this bounded proof.
 
 Teaching checks complement fault/recovery/platform checks. They do not establish
 that a person can understand the material or operate real devices.
