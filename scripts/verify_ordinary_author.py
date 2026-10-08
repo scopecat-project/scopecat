@@ -96,7 +96,10 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                 args=["--no-sandbox"],
                 executable_path=os.environ.get("SCOPECAT_TEST_CHROMIUM"),
             )
-            page = browser.new_page()
+            context = browser.new_context(
+                permissions=["clipboard-read", "clipboard-write"]
+            )
+            page = context.new_page()
             page.set_default_timeout(30_000)
             expose = cast(
                 "Callable[[str, Callable[..., object]], object]", page.expose_function
@@ -242,6 +245,12 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
             assert table.locator("tbody tr").evaluate_all(
                 "rows => rows.map(row => row.lastElementChild.textContent)"
             ) == ["1", "2", "1"]
+            header = page.get_by_test_id("run-detail-header")
+            header.get_by_role("button", name="Copy read-only code", exact=True).click()
+            expect(header.get_by_role("status")).to_have_text("Read-only code copied.")
+            copied = cast("str", page.evaluate("navigator.clipboard.readText()"))
+            assert f'run = session.run("{run_id}")' in copied
+            (work / "copied-run.py").write_text(copied)
             evidence["gui_exact_values"] = [1, 2, 1]
             page.screenshot(path=str(work / "exact-run.png"), full_page=True)
             evidence["run_id"] = run_id
@@ -264,6 +273,14 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                 execute(parts[0])
                 execute(parts[1])
                 execute(parts[2])
+                execute("assert session is author")
+                execute(copied)
+                execute(
+                    f"assert run.id == {run_id!r}\n"
+                    "assert list(run.measurements()['result'].require_values()) "
+                    "== [1, 2, 1]"
+                )
+                evidence["gui_copied_code_in_fresh_kernel"] = "passed"
                 execute(f"receipt = Path({receipt!r})")
                 execute(parts[-2])
                 execute("assert list(values) == [1.0, 2.0, 1.0]")

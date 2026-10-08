@@ -100,9 +100,9 @@ errors and prompts; distinguish user reading time from software waiting.
    Make one real source edit (`return scale / ...` → `return 2 * scale / ...`),
    Preview, and explicitly Submit once more; check `[1, 2, 1]`.
 3. On that exact saved run, click **Copy read-only code** and paste into a fresh
-   VS Code kernel after the starter's Imports/Connect cells. Set `session = author`
-   in that kernel: the copied code expects `session`, while this starter calls
-   the same connection `author`. Execute the pasted read cell, not Run All, then
+   VS Code kernel after the starter's Imports/Connect cells. Connect provides
+   `session` and `author` as names for the same connection, so the copied snippet
+   works directly. Execute the pasted read cell, not Run All, then
    inspect `list(run.measurements()["result"].require_values())`. Match the run ID
    and values. Record whether native
    clipboard works or the manual-copy fallback is needed.

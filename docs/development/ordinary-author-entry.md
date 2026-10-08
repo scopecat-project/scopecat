@@ -16,7 +16,9 @@ quickstart's promised stop between preview and explicit acquisition.
 The starter now separates Imports, Connect, Preview, Submit, Result and analysis,
 Reopen, and Close using the same author session and receipt APIs. A fresh kernel
 can run Imports/Connect, select the existing receipt path, then Reopen/Close.
-It does not need to repeat Submit or analysis. Existing generated user folders
+Connect also provides `session = author`, so GUI-copied read-only code uses the
+same connection without a manual alias or another client. It does not need to
+repeat Submit or analysis. Existing generated user folders
 are not overwritten. The API guide now distinguishes prepared laboratory folders
 from first-use setup; the quickstart points saved-run inspection to **Runs**.
 

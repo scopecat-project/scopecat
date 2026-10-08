@@ -329,6 +329,8 @@ from scopecat.daemon.endpoint import resolve_daemon_endpoint
 project = sc.open_project(Path(__file__).resolve().parents[1])
 _ = project.load_application()
 author = project.authoring()
+# GUI "Copy read-only code" uses session; both names share this connection.
+session = author
 
 # %% Preview: refresh saved source and inspect without acquiring.
 author.refresh()

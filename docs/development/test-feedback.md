@@ -306,7 +306,9 @@ Use fresh output paths. Install Playwright Chromium first, or set
 cells run in its independently prepared ipykernel. Preview and a rejected syntax
 edit must leave zero runs; repaired source produces one explicit acquisition with
 values `[1, 2, 1]` in both Notebook and GUI. Application and kernel restart then
-read the same receipt and GUI values without another acquisition. Evidence retains
+execute the GUI-copied read-only code and read the same receipt and GUI values
+without another acquisition. Connect exposes `session = author` for the copied
+snippet without opening a second connection. Evidence retains
 executed cells, source/payload identity and screenshots. Native picker/window
 plumbing, editor activation and VS Code's `__file__` injection are substituted;
 this is not native/editor/unfamiliar-user acceptance. Experiment-form draft and
