@@ -98,9 +98,14 @@ expresses an obsolete requirement before removing it.
 The `31_topology_scaled_ramsey.py` presentation, its gallery test and the
 `topology_scaled_ramsey` / `TopologyScaledRamseyDataset` experiment/result wrappers
 are retired. Repository consumer inspection found only the deleted notebook using
-those wrappers. The lower-level `topology_scaled_ramsey_program` remains in
-`workflows/ramsey.py`: `virtual_lab/quantum_responses.py` still dispatches its
-Ramsey response by program identity. Similar names do not imply identical lifetimes.
+those wrappers. A subsequent full-repository audit found the lower-level
+`topology_scaled_ramsey_program` had no invocation consumer either: its sole
+external reference was the response dispatcher checking its program identity.
+The program, export and dispatch entry are now removed together. The topology
+runner tests below use their own minimal set-readout program, not this recipe;
+they retain `parallel_each` execution and numerical row correspondence. The shared
+Ramsey branch and response model remain used by single/parallel captures, with
+real-worker probabilities and independent-channel availability still checked.
 
 | Former assertion | Current evidence or withdrawal |
 | --- | --- |
@@ -348,9 +353,9 @@ explicit parameters/setup; it does not add another daemon fixture.
 At base `5e8077d5`, the isolated acceptance generator's `--check` passes. Removing
 these definitions changes provider package bytes even though shared acceptance
 does not invoke them. `backend_artifact_hash` changes from `e8a76549…` to
-`c156fc57…`; it feeds device revisions and setup device resolution. The resolved
-setup hash changes from `ef8522ab…` to `d209fb15…`, and the reviewed configuration
-source hash from `91044357…` to `98085576…`. Setup inventory and recipe values
+`eef7620a…`; it feeds device revisions and setup device resolution. The resolved
+setup hash changes from `ef8522ab…` to `2803ed90…`, and the reviewed configuration
+source hash from `91044357…` to `10601c6c…`. Setup inventory and recipe values
 are unchanged. This is the existing identity chain documented in
 [reference fixtures](reference-fixtures.md), not a change to scientific identity
 rules or a reason to skip hashes.
@@ -365,11 +370,17 @@ Every other value, key, type and array length matches. Only the nine generated
 identity leaves are updated; the accepted IQ representatives and all comparison
 rules remain unchanged. No historical data or installed environment is rewritten.
 
+The follow-up deletion of the unused topology program/dispatch pair was also
+compared against the first candidate `40b14195`: artifact `c156fc57…` becomes
+`eef7620a…`, setup `d209fb15…` becomes `2803ed90…`, and reviewed source
+`98085576…` becomes `10601c6c…`. Both this incremental comparison and the complete
+comparison against base find exactly the same nine identity paths and three
+roundoff-only IQ components, with no other value or structural changes.
+
 The broader #773/#615 retirement remains open. Direct-control/multichannel-bias
 inputs, provider/target inventory and scientific DRAG/spectroscopy consumers still
-need their own consumer audit. `topology_scaled_ramsey_program` is now referenced
-only by response dispatch; removing that program/dispatch pair is a separate
-small candidate, not grounds to remove the shared Ramsey response used here.
+need their own consumer audit. Removing the unused topology program/dispatch
+pair does not justify removing the shared Ramsey response used here.
 No native-window, installed delivery, physical hardware or performance claim is
 made by this slice.
 

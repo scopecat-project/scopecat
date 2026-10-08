@@ -85,27 +85,7 @@ def parallel_two_qubit_ramsey_program(
     )
 
 
-@q.program(id="reference-lab.topology-scaled-ramsey")
-def topology_scaled_ramsey_program(
-    targets: q.QubitSet,
-    delay: Annotated[Quantity, ScalarType(QuantityType(unit="ns"))],
-    phase: Annotated[Quantity, ScalarType(QuantityType(unit="rad"))],
-) -> q.QuantumFragment:
-    """Run the same Ramsey branch over a topology-selected qubit set."""
-
-    return q.parallel_each(
-        targets,
-        lambda qubit: _ramsey_branch(
-            qubit,
-            delay=delay,
-            phase=phase,
-            result="iq_shots",
-        ),
-    )
-
-
 __all__ = [
     "parallel_two_qubit_ramsey_program",
     "ramsey_program",
-    "topology_scaled_ramsey_program",
 ]

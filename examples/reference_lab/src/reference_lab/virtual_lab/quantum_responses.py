@@ -26,7 +26,6 @@ from reference_lab.workflows.drag_beta_calibration import (
 from reference_lab.workflows.ramsey import (
     parallel_two_qubit_ramsey_program,
     ramsey_program,
-    topology_scaled_ramsey_program,
 )
 
 
@@ -54,7 +53,6 @@ def quantum_lab_response(
     if program.id not in {
         ramsey_program.id,
         parallel_two_qubit_ramsey_program.id,
-        topology_scaled_ramsey_program.id,
     }:
         return None
     return RamseyAcquisitionResponse(
