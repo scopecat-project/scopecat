@@ -231,8 +231,12 @@ beforeEach(() => {
   );
 });
 beforeEach(() => installLaunchRecoveryRoutes());
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Let debounced application saves finish before replacing this test's transport.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
   client.clear();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
@@ -721,6 +725,7 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
   });
   fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  await screen.findByText("Experiment input saved in application data.", { exact: true });
   view.rerender(<Harness projectId="project-b" />);
   await selectPrepared();
   expect(screen.getByLabelText("Sample ID")).toHaveValue("");
@@ -827,6 +832,7 @@ it("ignores a pending preview from the previous source even when the experiment 
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  await screen.findByText("Experiment input saved in application data.", { exact: true });
   view.rerender(<Harness projectId="project-b" />);
   await selectPrepared();
   expect(screen.getByLabelText("Code workspace")).toHaveValue("legacy");

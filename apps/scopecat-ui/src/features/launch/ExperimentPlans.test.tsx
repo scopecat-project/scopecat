@@ -138,6 +138,7 @@ function Harness({
   }, [select, initialize]);
   return (
     <>
+      <output aria-label="Recovery status">{context.recovery.status}</output>
       <button onClick={() => context.select(entry)}>Select current catalog</button>
       <button onClick={() => context.openPlan(first, entry)}>Open first</button>
       <button onClick={() => context.openPlan(second, entry)}>Open second</button>
@@ -252,7 +253,11 @@ it("opening another plan resets the save name, keeps current actor and preserves
   fireEvent.click(screen.getByText("Open first"));
   expect(screen.getByLabelText("Plan name")).toHaveValue("First plan");
   fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Unsaved name" } });
-  await screen.findByText("Experiment input saved in application data.", { exact: true });
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
   fireEvent.click(screen.getByText("Open second"));
   expect(screen.getByLabelText("Plan name")).toHaveValue("Second plan");
   expect(screen.getByLabelText("Current operator")).toHaveTextContent("operator");
@@ -272,6 +277,11 @@ it("a slow older open cannot overwrite a later plan or a new edit", async () => 
     }),
   );
   setup(true);
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
   await screen.findByText("Open First plan r1");
   fireEvent.click(screen.getByText("Open First plan r1"));
   fireEvent.click(screen.getByText("Open Second plan r1"));

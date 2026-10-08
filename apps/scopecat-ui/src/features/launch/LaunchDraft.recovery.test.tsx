@@ -4,7 +4,7 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft, invalidateDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
-import type { AttemptRecord } from "./launch-recovery";
+import { attemptRequest, type AttemptRecord } from "./launch-recovery";
 import { defaultSelection } from "./scientific-selection";
 import {
   installLaunchRecoveryRoutes,
@@ -38,8 +38,12 @@ function mount() {
     </LaunchDraftProvider>,
   );
 }
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Let debounced application saves finish before replacing this test's transport.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
   vi.unstubAllGlobals();
 });
 it("keeps unsaved input reachable when switching is attempted after a failed save", async () => {
@@ -211,3 +215,103 @@ it("explicitly retries unavailable original receipt loading without submitting",
   expect(state.attempt?.sequence).toBe(7);
   expect(reads).toBe(2);
 });
+
+it.each(["flush", "retain"] as const)(
+  "fences duplicate calls and cancelled intent while awaiting %s",
+  async (phase) => {
+    let submits = 0;
+    vi.stubGlobal("fetch", async () => {
+      submits++;
+      return Response.json({ procedure_id: "original" });
+    });
+    installLaunchRecoveryRoutes();
+    const persisted = globalThis.fetch;
+    let release!: () => void;
+    let held = false;
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (
+        held &&
+        request.method === "POST" &&
+        request.url.endsWith(phase === "flush" ? "/launch-drafts/save" : "/launch-attempts")
+      ) {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
+      return persisted(request);
+    });
+    mount();
+    act(() => state.select(entry, false, "legacy"));
+    await waitFor(() =>
+      expect(state.recovery.status).toBe("Experiment input saved in application data."),
+    );
+    held = true;
+    if (phase === "flush")
+      act(() => state.update((current) => ({ ...current, values: { raw: "changed" } })));
+    const request = attemptRequest(attempt(1));
+    let sending!: Promise<string | undefined>;
+    act(() => {
+      sending = state.submit(request, "declaration", procedureDefinition);
+    });
+    await act(async () => {
+      await expect(state.submit(request, "declaration", procedureDefinition)).rejects.toThrow(
+        "already being prepared",
+      );
+    });
+    await waitFor(() => expect(release).toBeDefined());
+    act(() => state.rerun());
+    held = false;
+    await act(async () => {
+      release();
+      expect(await sending).toBeUndefined();
+    });
+    expect(submits).toBe(0);
+  },
+);
+
+it.each(["receipt", "edit", "unmount"] as const)(
+  "does not acquire after %s changes intent during retention",
+  async (change) => {
+    let submits = 0;
+    vi.stubGlobal("fetch", async () => {
+      submits++;
+      return Response.json({ procedure_id: "original" });
+    });
+    installLaunchRecoveryRoutes();
+    const persisted = globalThis.fetch;
+    let release!: () => void;
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (request.method === "POST" && request.url.endsWith("/launch-attempts"))
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return persisted(request);
+    });
+    const view = mount();
+    act(() => state.select(entry, false, "legacy"));
+    await waitFor(() =>
+      expect(state.recovery.status).toBe("Experiment input saved in application data."),
+    );
+    let sending!: Promise<string | undefined>;
+    act(() => {
+      sending = state.submit(attemptRequest(attempt(1)), "declaration", procedureDefinition);
+    });
+    await waitFor(() => expect(release).toBeDefined());
+    act(() => {
+      if (change === "receipt") state.recoverAttempt(attempt(7));
+      else if (change === "edit")
+        state.update((current) =>
+          invalidateDraft({ ...current, values: { raw: "new intent" } }, "changed"),
+        );
+      else view.unmount();
+    });
+    await act(async () => {
+      release();
+      expect(await sending).toBeUndefined();
+    });
+    expect(submits).toBe(0);
+    expect(change === "receipt" ? state.attempt?.sequence : submits).toBe(
+      change === "receipt" ? 7 : 0,
+    );
+  },
+);

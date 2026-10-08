@@ -87,6 +87,7 @@ function Probe() {
       >
         Select old configuration
       </button>
+      <output aria-label="Recovery status">{state.recovery.status}</output>
       <button onClick={() => state.importHandoff(entry, suggestion)}>Import</button>
       <output aria-label="Context">
         {state.draft?.selection.configuration.kind === "parameters"
@@ -176,6 +177,11 @@ it("clears an unrelated sample and resolved context when importing inputs withou
   fireEvent.click(screen.getByText("Select old configuration"));
   await screen.findByText("old-context");
   expect(screen.getByLabelText("Sample")).toHaveTextContent("old-sample");
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
   fireEvent.click(screen.getByText("Import"));
   expect(screen.getByLabelText("Context")).toBeEmptyDOMElement();
   expect(screen.getByLabelText("Sample")).toBeEmptyDOMElement();

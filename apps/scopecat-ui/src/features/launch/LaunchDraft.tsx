@@ -3,6 +3,7 @@ import {
   attemptHistory,
   attemptRequest,
   restoreDraft,
+  rawInput,
   resolveAttempt,
   type DraftRecord,
   type AttemptRecord,
@@ -191,6 +192,7 @@ function ProjectDraft({
   const [selectedWorkingInput, setSelectedWorkingInput] = useState<WorkingInput>();
   const [attempt, setAttempt] = useState<SubmissionAttempt>();
   const attemptGeneration = useRef(0);
+  const submitting = useRef(false);
   const [attemptsReady, setAttemptsReady] = useState(false);
   const [attemptReload, setAttemptReload] = useState(0);
   useEffect(() => {
@@ -345,16 +347,28 @@ function ProjectDraft({
       throw new Error(
         "Original submission history is not loaded. Reconnect before starting acquisition.",
       );
+    if (submitting.current) throw new Error("A submission is already being prepared.");
+    submitting.current = true;
     const generation = ++attemptGeneration.current;
-    await recovery.flush();
-    if (!identity)
-      throw new Error(
-        "Preview does not identify the original procedure definition. Preview again before submitting.",
+    const input = latest.current;
+    const inputIdentity = input ? JSON.stringify(rawInput(input)) : undefined;
+    const stillIntended = () =>
+      alive.current &&
+      attemptGeneration.current === generation &&
+      latest.current?.revision === input?.revision &&
+      latest.current?.workspaceId === input?.workspaceId &&
+      (latest.current ? JSON.stringify(rawInput(latest.current)) : undefined) === inputIdentity;
+    try {
+      await recovery.flush();
+      if (!stillIntended()) return undefined;
+      if (!identity)
+        throw new Error(
+          "Preview does not identify the original procedure definition. Preview again before submitting.",
+        );
+      const retained = await apiData(
+        apiClient.POST("/api/v1/launch-attempts", { body: { definition: identity, request } }),
       );
-    const retained = await apiData(
-      apiClient.POST("/api/v1/launch-attempts", { body: { definition: identity, request } }),
-    );
-    if (alive.current && attemptGeneration.current === generation)
+      if (!stillIntended()) return undefined;
       setAttempt({
         request,
         definition,
@@ -362,33 +376,36 @@ function ProjectDraft({
         status: "pending",
         error: "",
       });
-    try {
-      const receipt = await apiData(
-        apiClient.POST("/api/v1/experiment-launcher/submit", { body: request }),
-      );
-      if (!alive.current || attemptGeneration.current !== generation) return;
-      setAttempt({
-        request,
-        definition,
-        sequence: retained.sequence,
-        status: "confirmed",
-        procedureId: receipt.procedure_id,
-        error: receipt.dispatch_error
-          ? `Submitted; execution needs retry: ${receipt.dispatch_error}`
-          : "",
-      });
-      return receipt.procedure_id;
-    } catch (error) {
-      if (alive.current && attemptGeneration.current === generation)
+      try {
+        const receipt = await apiData(
+          apiClient.POST("/api/v1/experiment-launcher/submit", { body: request }),
+        );
+        if (!alive.current || attemptGeneration.current !== generation) return;
         setAttempt({
           request,
           definition,
           sequence: retained.sequence,
-          status: isKnownRejection(error) ? "rejected" : "unknown",
-          error: error instanceof Error ? error.message : String(error),
+          status: "confirmed",
+          procedureId: receipt.procedure_id,
+          error: receipt.dispatch_error
+            ? `Submitted; execution needs retry: ${receipt.dispatch_error}`
+            : "",
         });
+        return receipt.procedure_id;
+      } catch (error) {
+        if (alive.current && attemptGeneration.current === generation)
+          setAttempt({
+            request,
+            definition,
+            sequence: retained.sequence,
+            status: isKnownRejection(error) ? "rejected" : "unknown",
+            error: error instanceof Error ? error.message : String(error),
+          });
+      }
+      return undefined;
+    } finally {
+      submitting.current = false;
     }
-    return undefined;
   }
   async function checkSubmission() {
     if (!attempt) return;

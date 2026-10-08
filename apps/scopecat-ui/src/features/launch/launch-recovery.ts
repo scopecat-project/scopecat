@@ -94,6 +94,8 @@ interface Session {
   failed?: Save;
   conflict: boolean;
   hydrating?: string;
+  wake?: () => void;
+  flushing?: boolean;
 }
 export function useLaunchRecovery(
   draft: LaunchDraft | undefined,
@@ -210,55 +212,63 @@ export function useLaunchRecovery(
       current.hydrating = undefined;
       setEpoch((value) => value + 1);
     }
-    if (
-      !encoded ||
-      !current?.ready ||
-      current.target !== target ||
-      current.queued === encoded ||
-      current.failed
-    )
+    if (!encoded || !current?.ready || current.target !== target || current.queued === encoded)
       return;
     current.queued = encoded;
-    current.pending += 1;
+    if (current.failed || current.pending) return;
+    current.pending = 1;
     setStatus("Saving experiment input…");
-    current.queue = current.queue.then(async () => {
-      if (current.failed) {
-        current.pending -= 1;
-        return;
-      }
-      const input = JSON.parse(encoded) as Input;
-      const [workspace_id, experiment] = JSON.parse(target) as [string, string];
-      const command: Save = {
-        operation_id: crypto.randomUUID(),
-        expected_revision: current.revision,
-        target: { workspace_id, experiment },
-        input,
-        discard: false,
-      };
+    current.queue = (async () => {
       try {
-        const result = await saveDraft(command);
-        current.head = result.head ?? undefined;
-        current.conflict = result.saved?.state === "conflict";
-        if (!current.conflict) current.revision = result.saved!.revision;
-        if (session.current === current) {
-          setStatus(
-            current.conflict
-              ? "Another window changed this experiment. Your edits are retained as a separate conflict copy."
-              : "Experiment input saved in application data.",
-          );
-          setEpoch((value) => value + 1);
+        while (!current.failed) {
+          const candidate = current.queued;
+          if (!current.flushing) {
+            await new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, 250);
+              current.wake = () => {
+                clearTimeout(timer);
+                resolve();
+              };
+            });
+            current.wake = undefined;
+            if (candidate !== current.queued) continue;
+          }
+          const sent = current.queued;
+          const [workspace_id, experiment] = JSON.parse(current.target) as [string, string];
+          const command: Save = {
+            operation_id: crypto.randomUUID(),
+            expected_revision: current.revision,
+            target: { workspace_id, experiment },
+            input: JSON.parse(sent) as Input,
+            discard: false,
+          };
+          try {
+            const result = await saveDraft(command);
+            current.head = result.head ?? undefined;
+            current.conflict = result.saved?.state === "conflict";
+            if (!current.conflict) current.revision = result.saved!.revision;
+            if (sent !== current.queued) continue;
+            if (session.current === current)
+              setStatus(
+                current.conflict
+                  ? "Another window changed this experiment. Your edits are retained as a separate conflict copy."
+                  : "Experiment input saved in application data.",
+              );
+            break;
+          } catch (error) {
+            current.failed = command;
+            if (session.current === current)
+              setStatus(
+                `Input not confirmed saved: ${String(error)}. Keep this window open and retry saving.`,
+              );
+          }
         }
-      } catch (error) {
-        current.failed = command;
-        if (session.current === current)
-          setStatus(
-            `Input not confirmed saved: ${String(error)}. Keep this window open and retry saving.`,
-          );
       } finally {
-        current.pending -= 1;
+        current.pending = 0;
+        current.flushing = false;
         setEpoch((value) => value + 1);
       }
-    });
+    })();
   }, [encoded, target, epoch]);
   useEffect(() => {
     let active = true;
@@ -269,6 +279,17 @@ export function useLaunchRecovery(
       active = false;
     };
   }, [epoch, target, status]);
+  useEffect(
+    () => () => {
+      for (const pending of unfinished.values()) {
+        if (pending.pending) {
+          pending.flushing = true;
+          pending.wake?.();
+        }
+      }
+    },
+    [unfinished],
+  );
   const current = visibleSession;
   return {
     status,
@@ -316,6 +337,10 @@ export function useLaunchRecovery(
       const activeSession = session.current;
       if (!activeSession?.ready || activeSession.hydrating || activeSession.target !== target)
         throw new Error("Wait for input recovery before submitting.");
+      if (activeSession.pending) {
+        activeSession.flushing = true;
+        activeSession.wake?.();
+      }
       await activeSession.queue;
       if (activeSession.failed || activeSession.conflict || activeSession.queued !== encoded)
         throw new Error("Resolve and save the current input before submitting.");
@@ -326,18 +351,25 @@ export function useLaunchRecovery(
         setReload((value) => value + 1);
         return;
       }
-      if (!activeSession.failed) return;
-      try {
-        const result = await saveDraft(activeSession.failed);
-        activeSession.failed = undefined;
-        activeSession.head = result.head ?? undefined;
-        activeSession.conflict = result.saved?.state === "conflict";
-        if (!activeSession.conflict) activeSession.revision = result.saved!.revision;
-        activeSession.queued = "";
-        setEpoch((value) => value + 1);
-      } catch (error) {
-        setStatus(`Input not confirmed saved: ${String(error)}`);
-      }
+      if (!activeSession.failed || activeSession.pending) return;
+      const command = activeSession.failed;
+      activeSession.pending = 1;
+      activeSession.queue = (async () => {
+        try {
+          const result = await saveDraft(command);
+          activeSession.failed = undefined;
+          activeSession.head = result.head ?? undefined;
+          activeSession.conflict = result.saved?.state === "conflict";
+          if (!activeSession.conflict) activeSession.revision = result.saved!.revision;
+          activeSession.queued = "";
+        } catch (error) {
+          setStatus(`Input not confirmed saved: ${String(error)}`);
+        } finally {
+          activeSession.pending = 0;
+          setEpoch((value) => value + 1);
+        }
+      })();
+      await activeSession.queue;
     },
     adoptLocal() {
       const activeSession = session.current;

@@ -70,8 +70,12 @@ beforeEach(() => {
     return Response.json({ saved, head: saved.state === "saved" ? saved : head });
   });
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Let debounced application saves finish before replacing this test's transport.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
   vi.unstubAllGlobals();
 });
 function mount() {
@@ -80,10 +84,17 @@ function mount() {
     return { draft: draft!, setDraft, recovery: useLaunchRecovery(draft, setDraft) };
   });
 }
-const saved = async (view: ReturnType<typeof mount>) =>
-  waitFor(() =>
-    expect(view.result.current.recovery.status).toBe("Experiment input saved in application data."),
-  );
+const saved = async (view: ReturnType<typeof mount>) => {
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await waitFor(() => {
+    expect(view.result.current.recovery.status).toBe("Experiment input saved in application data.");
+    expect(view.result.current.recovery.writing).toBe(false);
+    expect(view.result.current.recovery.ready).toBe(true);
+  });
+};
+
 it("restores invalid raw strings and input modes after the provider is destroyed", async () => {
   const first = mount();
   await saved(first);
@@ -225,7 +236,7 @@ it("restores a pending target's local copy when its save fails after navigation"
   );
   act(() => view.result.current.setDraft(initial()));
   await waitFor(() => expect(view.result.current.draft.values.center).toBe("pending original"));
-  expect(view.result.current.recovery.status).toContain("not confirmed saved");
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
   failSave = false;
   await act(async () => {
     await view.result.current.recovery.retry();
@@ -307,4 +318,105 @@ it("rejects history, plan, and handoff replacement of a different target's faile
   expect(view.result.current.recovery.unsavedTargets).toContainEqual(["author", "signal"]);
   act(() => view.result.current.setDraft(initial()));
   await waitFor(() => expect(view.result.current.draft.values.center).toBe("unsaved original"));
+});
+
+it("coalesces unsent edits behind one slow save and flushes only the newest raw input", async () => {
+  const view = mount();
+  await saved(view);
+  let release!: () => void;
+  holdSave = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  act(() =>
+    view.result.current.setDraft((current) => ({ ...current!, values: { center: "in flight" } })),
+  );
+  await waitFor(() => expect(commands).toHaveLength(2));
+  for (let index = 0; index < 100; index++) {
+    act(() =>
+      view.result.current.setDraft((current) => ({
+        ...current!,
+        values: { center: `edit ${index}` },
+      })),
+    );
+  }
+  expect(commands).toHaveLength(2);
+  let flushed = false;
+  const flushing = view.result.current.recovery.flush().then(() => {
+    flushed = true;
+  });
+  expect(flushed).toBe(false);
+  await act(async () => {
+    release();
+    await flushing;
+  });
+  expect(history.map((item) => item.input.values.center)).toEqual(["0", "in flight", "edit 99"]);
+  expect(commands).toHaveLength(3);
+});
+
+it("retries the failed sent identity before saving the latest coalesced edits", async () => {
+  const view = mount();
+  await saved(view);
+  let release!: () => void;
+  holdSave = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  act(() =>
+    view.result.current.setDraft((current) => ({ ...current!, values: { center: "sent" } })),
+  );
+  await waitFor(() => expect(commands).toHaveLength(2));
+  const original = commands[1];
+  act(() =>
+    view.result.current.setDraft((current) => ({ ...current!, values: { center: "newest" } })),
+  );
+  failSave = true;
+  await act(async () => {
+    release();
+  });
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  failSave = false;
+  await act(async () => {
+    await view.result.current.recovery.retry();
+  });
+  await saved(view);
+  expect(commands[2]).toBe(original);
+  expect(history.map((item) => item.input.values.center)).toEqual(["0", "sent", "newest"]);
+});
+
+it("allows only one failed-operation retry in flight before saving newer edits", async () => {
+  const view = mount();
+  await saved(view);
+  failSave = true;
+  act(() =>
+    view.result.current.setDraft((current) => ({ ...current!, values: { center: "failed" } })),
+  );
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  const failedOperation = commands.at(-1);
+  let release!: () => void;
+  holdSave = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  failSave = false;
+  let retrying!: Promise<void>;
+  act(() => {
+    retrying = view.result.current.recovery.retry();
+  });
+  await waitFor(() => expect(commands).toHaveLength(3));
+  await act(async () => {
+    await view.result.current.recovery.retry();
+  });
+  expect(commands).toHaveLength(3);
+  expect(commands[2]).toBe(failedOperation);
+  act(() =>
+    view.result.current.setDraft((current) => ({ ...current!, values: { center: "newest" } })),
+  );
+  await act(async () => {
+    release();
+    await retrying;
+  });
+  await saved(view);
+  expect(history.map((item) => [item.input.values.center, item.state])).toEqual([
+    ["0", "saved"],
+    ["failed", "saved"],
+    ["newest", "saved"],
+  ]);
 });

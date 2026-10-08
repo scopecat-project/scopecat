@@ -438,9 +438,13 @@ def test_candidate_uses_existing_review_state_and_retains_result_references(
         assert lab.config.registry().entries == ()
 
 
+@pytest.mark.parametrize(
+    "experiment", ["reference_lab.temperature_diagnostic", "channel-timing"]
+)
 def test_http_submission_dispatches_the_same_durable_diagnostic(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
+    experiment: str,
 ) -> None:
     with (
         launch_application.connect(reference_lab_daemon.url) as lab,
@@ -458,11 +462,7 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
                 },
             ).json()
         )
-        entry = next(
-            item
-            for item in catalog.entries
-            if item.id == "reference_lab.temperature_diagnostic"
-        )
+        entry = next(item for item in catalog.entries if item.id == experiment)
         request = LaunchRequest(
             workspace_id=source_workspace_id(reference_lab_daemon.url),
             action="preview",
@@ -476,7 +476,18 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         )
         preview_response.raise_for_status()
         preview = LaunchPreview.model_validate(preview_response.json())
-        command = submit_request(request, preview, "http-dispatched-diagnostic")
+        command = submit_request(request, preview, f"http-dispatched-{experiment}")
+        assert preview.procedure_definition is not None
+        assert preview.code_revision is not None
+        retained = http.post(
+            "/api/v1/launch-attempts",
+            json={
+                "definition": preview.procedure_definition.model_dump(mode="json"),
+                "request": command.model_dump(mode="json"),
+            },
+        )
+        retained.raise_for_status()
+        sequence = cast("int", retained.json()["sequence"])
         response = http.post(
             "/api/v1/experiment-launcher/submit",
             json=command.model_dump(mode="json"),
@@ -487,12 +498,29 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         handle = lab.procedures.get(admitted.procedure_id)
         deadline = time.monotonic() + 30
         while (
-            handle.state not in {"closed", "attention_required"}
+            handle.state not in {"closed", "attention_required", "waiting_for_input"}
             and time.monotonic() < deadline
         ):
             time.sleep(0.05)
-        assert handle.state == "closed"
-        assert handle.output("experiment").kind == "run"
+        assert handle.state == (
+            "waiting_for_input" if experiment == "channel-timing" else "closed"
+        )
+        assert (
+            handle.output(
+                "source" if experiment == "channel-timing" else "experiment"
+            ).kind
+            == "run"
+        )
+        # Successful worker execution reloaded the retained source and matched the
+        # exact preview definition before running any procedure step.
+        assert handle.snapshot.definition == preview.procedure_definition
+        assert handle.snapshot.source is not None
+        assert handle.snapshot.source.code_revision == preview.code_revision
+        assert handle.snapshot.source.workspace_id == request.workspace_id
+        assert handle.snapshot.scientific_binding == preview.reviewed.binding
+        recovered = http.get(f"/api/v1/launch-attempts/{sequence}/resolve")
+        recovered.raise_for_status()
+        assert recovered.json()["procedure_id"] == admitted.procedure_id
         retry = http.post(
             "/api/v1/experiment-launcher/submit",
             json=command.model_dump(mode="json"),
