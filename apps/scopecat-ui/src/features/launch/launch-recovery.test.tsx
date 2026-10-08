@@ -445,10 +445,15 @@ it.each([false, true])(
     vi.stubGlobal("window", undefined); // Same boundary as Vitest's jsdom teardown.
     try {
       release();
-      if (fails) await expect(flushing).rejects.toThrow("Resolve and save");
-      else await expect(flushing).resolves.toBeUndefined();
+      const outcome = await flushing.then(
+        () => "saved",
+        (error: unknown) => String(error),
+      );
+      expect(outcome).toBe(
+        fails ? "Error: Resolve and save the current input before submitting." : "saved",
+      );
       expect(commands).toHaveLength(count + 1);
-      if (!fails) expect(history.at(-1)?.input.values.center).toBe("retained on close");
+      expect(history.at(-1)?.input.values.center).toBe(fails ? "0" : "retained on close");
     } finally {
       vi.stubGlobal("window", browserWindow);
     }
@@ -484,7 +489,7 @@ it.each([false, true])(
       release();
       await expect(retrying).resolves.toBeUndefined();
       expect(commands.at(-1)).toBe(operation);
-      if (!fails) expect(history.at(-1)?.input.values.center).toBe("retry on close");
+      expect(history.at(-1)?.input.values.center).toBe(fails ? "0" : "retry on close");
     } finally {
       vi.stubGlobal("window", browserWindow);
     }
