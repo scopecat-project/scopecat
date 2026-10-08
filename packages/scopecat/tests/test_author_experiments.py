@@ -13,7 +13,11 @@ import pytest
 
 from scopecat.api.lab import LabClient
 from scopecat.application import LabApplication
-from scopecat.application.authoring import AuthorExperiment, AuthorExperiments
+from scopecat.application.authoring import (
+    AuthorExperiment,
+    AuthorExperiments,
+    AuthorLaunchIntent,
+)
 from scopecat.application.launch import LaunchCatalog
 from scopecat.automation.definition import ProcedureRegistry
 from scopecat.planning.catalog import InstrumentContractCatalog
@@ -64,6 +68,42 @@ def test_copy_discovery_and_exact_initial_declaration_identity(
         ProcedureRegistry(second.procedures).resolve(retained_ref)
     monkeypatch.delitem(sys.modules, "author_copy.small")
     monkeypatch.delitem(sys.modules, "author_copy")
+
+
+def test_discovery_shares_only_the_current_call_intent_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "path", [str(tmp_path), *sys.path])
+    name = "author_schema_batch"
+    (tmp_path / f"{name}.py").write_text(
+        SOURCE
+        + SOURCE[SOURCE.index("@sc.experiment") :].replace("def small(", "def other("),
+        encoding="utf-8",
+    )
+    try:
+        with patch.object(
+            AuthorLaunchIntent,
+            "model_json_schema",
+            wraps=AuthorLaunchIntent.model_json_schema,
+        ) as schema:
+            first = AuthorExperiments.discover(name)
+            assert len(first.experiments) == 2
+            assert schema.call_count == 1
+            second = AuthorExperiments.discover(name)
+            assert schema.call_count == 2
+        for original, rediscovered in zip(
+            first.experiments, second.experiments, strict=True
+        ):
+            standalone = AuthorExperiment.from_declaration(original.declaration)
+            assert (
+                original.fingerprint
+                == rediscovered.fingerprint
+                == standalone.fingerprint
+            )
+            assert replace(original).fingerprint == original.fingerprint
+            assert original.entry == standalone.entry
+    finally:
+        monkeypatch.delitem(sys.modules, name, raising=False)
 
 
 def test_discovery_accepts_experiments_without_numeric_controls(

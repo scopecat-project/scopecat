@@ -10,7 +10,7 @@ from __future__ import annotations
 import inspect
 import pkgutil
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import InitVar, dataclass, field, replace
 from importlib import import_module
 from types import MappingProxyType
 from typing import Literal, cast
@@ -116,6 +116,7 @@ class AuthorExperiment:
     )
     workspace_id: str | None = field(default_factory=loading_workspace.get)
     fingerprint: Sha256ContentHash = field(init=False)
+    _intent_schema: InitVar[dict[str, object] | None] = None
 
     @classmethod
     def from_declaration(
@@ -124,10 +125,12 @@ class AuthorExperiment:
         *,
         code_revision: AuthorRevisionRef | None = None,
         workspace_id: str | None = None,
+        _intent_schema: dict[str, object] | None = None,
     ) -> AuthorExperiment:
         """Use the same contract for discovery and imported Python requests."""
         return cls(
             declaration=declaration,
+            _intent_schema=_intent_schema,
             input_model=author_input_model(declaration, declaration.controls),
             controls=declaration.controls,
             source=declaration.source,
@@ -143,7 +146,7 @@ class AuthorExperiment:
             else loading_workspace.get(),
         )
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _intent_schema: dict[str, object] | None) -> None:
         object.__setattr__(self, "source", MappingProxyType(dict(self.source)))
         object.__setattr__(
             self,
@@ -164,7 +167,9 @@ class AuthorExperiment:
                     "wrapper": python_source_identity(
                         _AuthorProcedure.run, label="author wrapper"
                     ),
-                    "intent": AuthorLaunchIntent.model_json_schema(),
+                    "intent": AuthorLaunchIntent.model_json_schema()
+                    if _intent_schema is None
+                    else _intent_schema,
                 }
             ),
         )
@@ -367,6 +372,9 @@ class AuthorExperiments:
                         root.__path__, f"{root.__name__}."
                     )
                 )
+        # Only share the framework schema within this discovery call. Each
+        # declaration still owns its input model and complete fingerprint.
+        intent_schema: dict[str, object] | None = None
         for name in sorted(names):
             module = import_module(name)
             for value in cast("dict[str, object]", vars(module)).values():
@@ -376,12 +384,15 @@ class AuthorExperiments:
                 ):
                     continue
                 experiment = value
+                if intent_schema is None:
+                    intent_schema = AuthorLaunchIntent.model_json_schema()
                 try:
                     discovered.append(
                         AuthorExperiment.from_declaration(
                             experiment,
                             code_revision=loading_revision.get(),
                             workspace_id=loading_workspace.get(),
+                            _intent_schema=intent_schema,
                         )
                     )
                 except (TypeError, ValueError) as error:
