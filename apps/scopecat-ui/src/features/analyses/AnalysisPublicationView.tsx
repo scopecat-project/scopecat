@@ -1,6 +1,8 @@
 import type { AnalysisExecutionOutputReference } from "../../api-contract";
 import { titleCase } from "../../lib/presentation";
 import type { AnalysisPublication } from "../../types";
+import type { PublicationCopyTarget } from "../../lib/read-only-code";
+import { CopyReadOnlyCode } from "../../ui/CopyReadOnlyCode";
 import {
   AnalysisMetadataView,
   AnalysisOutputView,
@@ -11,10 +13,12 @@ export function AnalysisPublicationView({
   analysis,
   getArtifactDownload,
   onOpenRun,
+  copyTarget,
 }: {
   analysis: AnalysisPublication;
   getArtifactDownload: AnalysisArtifactDownloader;
   onOpenRun?: (runId: string) => void;
+  copyTarget?: PublicationCopyTarget;
 }) {
   return (
     <div className="grid gap-2">
@@ -26,6 +30,7 @@ export function AnalysisPublicationView({
           </code>
         </dd>
       </dl>
+      {copyTarget && <CopyReadOnlyCode target={{ ...copyTarget, publicationId: analysis.id }} />}
       {analysis.inputs.length > 0 ? (
         <section className="rounded-[7px] border border-line bg-panel p-[9px]">
           <h4 className="mt-0 mb-2 text-[0.58rem] font-extrabold tracking-[0.06em] text-text-dim uppercase">

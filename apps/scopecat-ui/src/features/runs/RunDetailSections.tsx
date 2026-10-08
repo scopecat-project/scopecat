@@ -316,6 +316,7 @@ function LinkedRunAnalysis({ runId, analysisId }: { runId: string; analysisId: s
       <h4>{detail.data.title}</h4>
       <AnalysisPublicationView
         analysis={detail.data}
+        copyTarget={{ kind: "run", runId }}
         getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
       />
     </section>
@@ -359,6 +360,7 @@ function RunAnalysisItem({ analysis, runId }: { analysis: RunAnalysisSummary; ru
         ) : (
           <AnalysisPublicationView
             analysis={detail.data}
+            copyTarget={{ kind: "run", runId }}
             getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
           />
         )}
