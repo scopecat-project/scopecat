@@ -26,7 +26,7 @@ tray; choose **Quit** there when you want to exit.
 
 ## Share a record or save a copy
 
-For a run in your application, select it in **Experiments** and choose
+For a run in your application, select it in **Runs** and choose
 **Export Scopecat file…**. Choose a destination and wait for the saved-path
 confirmation. The file includes retained measurements and their scientific
 dependencies, which can include other runs used by the saved analyses.

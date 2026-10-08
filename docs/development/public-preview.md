@@ -211,17 +211,29 @@ and rejection of unsupported formats remain distinct from future compatibility.
 
 ## Run without installation
 
+Choose the entry for the behavior you are changing:
+
+| Goal | Entry | Runtime and limitation |
+| --- | --- | --- |
+| Ordinary desktop, Settings new folder, editor, clipboard and native dialogs | [Build and open a local Mac desktop](local-desktop-trial.md) | One packaged app with its own Python and author-environment payload; isolated test data; no manual daemon setup |
+| Browser frontend hot reload | `lab_tools.dev --source .` below | Checkout Python, one owned backend and Vite; no native DesktopAPI |
+| Short source-native window debugging | [Source-window shortcut](local-desktop-trial.md#troubleshooting-and-other-developer-modes) | Built GUI and checkout Python; a fresh home lacks author-environment payload and packaged Cocoa repair |
+| Inspect/maintain one existing application backend | `scopecat app --home APPLICATION_STATE --action status` | Explicit existing application owner; use the desktop for ordinary startup and Quit |
+
+### Browser frontend debugging
+
 From the public root:
 
 Install Python 3.14+, uv, Node.js and pnpm first. The launcher installs the locked
 frontend dependencies on explicit development startup.
 
 ```sh
-uv run --group delivery python -m lab_tools.dev --source .
+uv run --locked --group delivery python -m lab_tools.dev --source .
 ```
 
 This starts a backend and Vite in the foreground, prints URLs and never opens a
-browser. Ctrl-C stops both. Disposable data and generated example source stay in
+browser or native desktop. It is a current frontend debugging path, not the
+ordinary Settings/editor handoff. Ctrl-C stops both. Disposable data and generated example source stay in
 `.scopecat-dev` between runs; checkout cleanup removes them. Use `--home` with an
 explicit directory outside the checkout for work you intend to retain, and put
 maintained author code in Git. It does not create a release, desktop entry or installation

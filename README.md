@@ -34,14 +34,18 @@ Python and application dependencies; opening saved data requires no source check
 or laboratory SDK. See [first steps](docs/getting-started/index.md) and
 [preview artifacts](docs/development/public-preview.md#artifact-identity-and-consumer-selection).
 
-For framework development without installing the application:
+For an actual desktop from a candidate checkout, use the
+[local Mac desktop trial](docs/development/local-desktop-trial.md). It includes
+isolated data and a small editor/clipboard/dialog verification handoff.
+
+For browser frontend development without installing the application:
 
 ```sh
 uv run --locked --group delivery python -m lab_tools.dev --source .
 ```
 
 This uses an isolated development home, prints the preview URL and does not open
-a browser. Ctrl-C stops its owned processes. See [source development](docs/development/public-preview.md#run-without-installation)
+a browser or a native window. Native Settings operations need the desktop entry above. Ctrl-C stops its owned processes. See [source development](docs/development/public-preview.md#run-without-installation)
 for frontend prerequisites and author source registration. Daily experiment authors
 use their own Python and ordinary code folders with the installed application.
 
