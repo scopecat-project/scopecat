@@ -401,8 +401,53 @@ def verify_groups(
     bookmark = cast(
         "dict[str, str]", json.loads((source / "grouped-run.json").read_text())
     )
-    page.goto(endpoint + "/?run=" + bookmark["run_id"])
-    expect(page.get_by_text(bookmark["run_id"], exact=True)).to_be_visible()
+    page.get_by_role("link", name="Runs", exact=True).click()
+    page.get_by_title(f"Inspect run {bookmark['run_id']}", exact=True).click()
+    run_label = page.get_by_text(bookmark["run_id"], exact=True)
+    expect(run_label).to_be_visible()
+    selected_run = run_label.inner_text()
+    summaries = page.get_by_test_id("resource-card").locator("details > summary")
+    expect(summaries.first).to_be_visible()
+    for summary in summaries.all():
+        summary.click()
+    publication = page.get_by_test_id("publication-id").filter(
+        has_text=bookmark["publication_id"]
+    )
+    expect(publication).to_have_text(bookmark["publication_id"])
+    selected_publication = publication.inner_text()
+    # Use the shipped learner's read-only example, with identities taken from UI.
+    # The bookmark above selects the expected attempt, not the kernel readback.
+    notes = [
+        cell
+        for cell in cast("list[NotebookNode]", shipped["cells"])
+        if cell["id"] == "groups-5"
+    ]
+    assert len(notes) == 1
+    example = (
+        cast("str", notes[0]["source"]).split("```python\n", 1)[1].split("```", 1)[0]
+    )
+    example = example.replace("此前的运行 ID", selected_run).replace(
+        "此前的分组分析 ID", selected_publication
+    )
+    ui_reopen = nbformat.v4.new_notebook(
+        cells=[
+            nbformat.v4.new_code_cell("import scopecat as sc\nsession = sc.notebook()"),
+            nbformat.v4.new_code_cell(
+                f"before_runs = session.list_runs()\n"
+                f"before_analyses = session.run({selected_run!r}).analysis_summaries()"
+            ),
+            nbformat.v4.new_code_cell(example),
+            nbformat.v4.new_code_cell(
+                "assert len(restored.groups) == 2\n"
+                "assert len(run.measurements()) == 42\n"
+                "assert run.analysis_summaries() == before_analyses\n"
+                "assert session.list_runs() == before_runs\n"
+                "session.close()"
+            ),
+        ]
+    )
+    run_notebook(ui_reopen)
+    nbformat.write(ui_reopen, work / "groups-ui-reopened.ipynb")
     page.screenshot(path=str(work / "groups-same-run.png"), full_page=True)
     (work / "groups-acceptance.json").write_text(
         json.dumps(
@@ -415,6 +460,7 @@ def verify_groups(
                 "restart_continue_and_read_without_acquisition": "passed",
                 "source_and_notebook_edits_preserved": "passed",
                 "parameters_and_groups_independent": "passed",
+                "ui_ids_shipped_example_fresh_kernel_without_new_work": "passed",
                 "native_editor": "not evaluated",
             },
             indent=2,

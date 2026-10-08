@@ -106,8 +106,10 @@ the saved analysis; it does not collect again or publish another analysis.
 Add an amplitude to explore three groups and 63 points in a new run.
 
 **Continue groups Notebook** reopens the same files. After restarting the kernel,
-run the connection cell, find the retained run and grouped analysis IDs in Runs
-(or the saved acquisition output), and follow the Notebook’s read-only example.
+run the connection cell, open the intended run in **Runs**, and expand its grouped
+analysis. Use the full run ID in the run header and the **Publication ID** in the
+expanded analysis (not its reusable key) in the Notebook’s read-only example.
+The saved acquisition output also records this pair of IDs.
 Do not run all cells to reopen results. The application retains both courses’
 runs, while each course’s source and parameter edits remain independent.
 
