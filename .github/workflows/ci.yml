@@ -99,6 +99,11 @@ jobs:
           cache-suffix: platform-smoke-v1
       - name: Install smoke dependencies
         run: uv sync --locked --no-default-groups --group platform-smoke
+      - name: Check relocated Mac console
+        if: runner.os == 'macOS'
+        run: >-
+          uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
+          packages/lab-tools/tests/test_native_console.py
       - name: Run exact platform selection (no skips)
         env:
           SMOKE_EXPECTED_SHA: ${{ inputs.ref || github.sha }}
