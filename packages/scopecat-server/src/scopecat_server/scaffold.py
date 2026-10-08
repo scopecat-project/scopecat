@@ -310,44 +310,69 @@ def summarize(data: Dataset) -> Summary:
     return Summary(mean=sum(values) / len(values), points=len(values))
 ''',
     "notebooks/02_edit_scan.py": '''\
-"""Edit a request and retain an analysis without the reference lab or devices."""
+"""Edit a request and retain an analysis without the reference lab or devices.
 
+Run one cell at a time. Only the Submit cell acquires; do not Run All to reopen.
+After restarting Python, run Imports and Connect, set receipt to the printed path,
+then run Reopen. Keep your source edits and receipt path with your notebook notes.
+"""
+
+# %% Imports
 from pathlib import Path
 from urllib.parse import urlencode
 
 import scopecat as sc
+from scopecat.application.author_project import AuthorSubmissionUncertain
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
-# %% Setup: load this workspace's local application and import its declarations.
+# %% Connect: open Scopecat first. Close the previous author before reconnecting.
 project = sc.open_project(Path(__file__).resolve().parents[1])
 _ = project.load_application()
-with project.authoring() as author:
-    author.refresh()
-    from scopecat_lab.authored.parameters import open_parameters
-    from scopecat_lab.authored.signal import Summary, signal
+author = project.authoring()
 
-    params = open_parameters(author)
-    # Change params["response"]["signal"]["scale"], then save() to keep your edits.
-    request = signal(center=0.0).sweep(position=[-1.0, 0.0, 1.0])
-    alternative = request.copy()
-    alternative.values["center"] = 0.25
-    prepared = author.prepare(request, parameters=params)
+# %% Preview: refresh saved source and inspect without acquiring.
+author.refresh()
+from scopecat_lab.authored.parameters import open_parameters
+from scopecat_lab.authored.signal import Summary, signal
+
+params = open_parameters(author)
+# Change params["response"]["signal"]["scale"], then save() to keep your edits.
+request = signal(center=0.0).sweep(position=[-1.0, 0.0, 1.0])
+alternative = request.copy()
+alternative.values["center"] = 0.25
+prepared = author.prepare(request, parameters=params)
+print(prepared.preview)
+
+# %% Submit: explicitly acquire once. Repeating this cell creates another run.
+try:
     job = prepared.run()
-    run = job.wait(timeout=120).result()
-    report = author.analyze_as(
-        run.id, "scopecat_lab.authored.signal:summarize", Summary
-    )
-    # Reopen existing evidence. Calling prepared.run() again would acquire again.
-    reopened = author.reopen(job.receipt).wait(timeout=120).result()
-    print(
-        {
-            "run_id": reopened.id,
-            "points": report.value.points,
-            "mean": report.value.mean,
-            "analysis_id": report.publication.id,
-        }
-    )
-print(resolve_daemon_endpoint(project.root) + "/?" + urlencode({"run": run.id}))
+except AuthorSubmissionUncertain as error:
+    job = error.job
+    print("Submission uncertain; recover this receipt, do not submit again:",
+          job.receipt)
+    raise
+receipt = job.receipt
+print("Receipt for Reopen after restarting Python:", receipt)
+
+# %% Result and analysis: a wait timeout means wait on this job again.
+run = job.wait(timeout=120).result()
+values = run.measurements()["result"].require_values()
+print({"run_id": run.id, "values": values})
+report = author.analyze_as(run.id, "scopecat_lab.authored.signal:summarize", Summary)
+print({"run_id": run.id, "points": report.value.points, "mean": report.value.mean,
+       "analysis_id": report.publication.id})
+
+# %% Reopen: read the same acquisition, including after restarting Python.
+# After Imports and Connect, set receipt = Path("the printed receipt path") here.
+# For uncertain submission, author.reopen(receipt).recover() queries admission;
+# None is not permission to acquire again. Inspect Scopecat's retained procedures.
+reopened = author.reopen(receipt).wait(timeout=120).result()
+values = reopened.measurements()["result"].require_values()
+print({"run_id": reopened.id, "values": values})
+print(resolve_daemon_endpoint(project.root) + "/?" + urlencode({"run": reopened.id}))
+
+# %% Close after reading; reconnect before using lazy data again.
+author.close()
 ''',
 }
 

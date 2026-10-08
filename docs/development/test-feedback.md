@@ -286,3 +286,31 @@ and branch heads without new acquisition. Pure assertions and evidence bookmarks
 remain in the external harness, not the learner cells.
 These are source/software journeys, not installed-delivery, native editor, device
 or unfamiliar-user acceptance.
+
+### Ordinary Settings author entry
+
+`verify_ordinary_author.py` starts from empty application data and calls real
+`DesktopAPI` operations through Settings in Chromium. It creates a new folder,
+prepares independent client/execution Python from a toolchain delivery, and checks
+existing-folder and invalid-interpreter retry without replacing files or bindings.
+It does not scaffold, register, initialize parameters or save setup before entry.
+
+```sh
+uv run --locked python -m lab_tools.delivery /tmp/ordinary-delivery
+uv run --locked python -m lab_tools.toolchain /tmp/ordinary-delivery /tmp/ordinary-payload
+uv run --locked python scripts/verify_ordinary_author.py /tmp/ordinary-evidence /tmp/ordinary-payload
+```
+
+Use fresh output paths. Install Playwright Chromium first, or set
+`SCOPECAT_TEST_CHROMIUM` to a local Chromium executable. The supplied starter's
+cells run in its independently prepared ipykernel. Preview and a rejected syntax
+edit must leave zero runs; repaired source produces one explicit acquisition with
+values `[1, 2, 1]` in both Notebook and GUI. Application and kernel restart then
+read the same receipt and GUI values without another acquisition. Evidence retains
+executed cells, source/payload identity and screenshots. Native picker/window
+plumbing, editor activation and VS Code's `__file__` injection are substituted;
+this is not native/editor/unfamiliar-user acceptance. Experiment-form draft and
+uncertain-submission persistence are separate from this Notebook receipt journey.
+
+The [entry and recovery observation](ordinary-author-entry.md) distinguishes
+this completed loop from the unresolved experiment-form recovery boundary.

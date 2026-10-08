@@ -325,7 +325,13 @@ def test_cli_daemon_first_use_loop_uses_dynamic_port_and_cleans_record(
             env=_project_subprocess_environment(),
         )
         assert authored.returncode == 0, authored.stderr
-        scan_summary = ast.literal_eval(authored.stdout.strip().splitlines()[0])
+        scan_summary = ast.literal_eval(
+            next(
+                line
+                for line in authored.stdout.splitlines()
+                if "'analysis_id':" in line
+            )
+        )
         assert scan_summary["points"] == 3
         assert scan_summary["mean"] == pytest.approx(2 / 3)
         scan_run_id = scan_summary["run_id"]
