@@ -348,41 +348,15 @@ explicit parameters/setup; it does not add another daemon fixture.
 | Scientific source and isolated configuration | The worker test checks exact saved parameter/setup references on the run and unchanged inputs plus an empty combined registry afterward. The existing Ramsey response is bias-independent: these probabilities validate execution, not a flux-dependent physical model. Spectroscopy retains its separate flux model and fit evidence. |
 | Compiled buffers and shared claims | Existing `unit/test_list_mode_waveforms.py` checks calibrated physical samples, signed modulation, multiplexed accumulation limits and waveform identity. `unit/test_quantum_runner.py` retains compiled shared I/Q/acquisition constraints, entityless host/target physical AWG claims, host state requirements and batch invariance. These tests are reused, not copied into another gallery. |
 
-### Identity audit
+### Identity rules
 
-At base `5e8077d5`, the isolated acceptance generator's `--check` passes. Removing
-these definitions changes provider package bytes even though shared acceptance
-does not invoke them. `backend_artifact_hash` changes from `e8a76549…` to
-`eef7620a…`; it feeds device revisions and setup device resolution. The resolved
-setup hash changes from `ef8522ab…` to `2803ed90…`, and the reviewed configuration
-source hash from `91044357…` to `10601c6c…`. Setup inventory and recipe values
-are unchanged. This is the existing identity chain documented in
-[reference fixtures](reference-fixtures.md), not a change to scientific identity
-rules or a reason to skip hashes.
-
-The full recursive generator comparison finds nine changed identity leaves:
-`manual_state.binding.config_source_hash` and
-`reviewed.config_source.setup.{content_hash,revision_id}` under each of
-`controls_scalar`, `controls_scan` and `launch_preview`. Three additional scalar
-IQ components differ within the existing 1e-12 tolerance: real/imaginary at
-`coherent_scalar.items[0].observables.iq_mean.value` and imaginary at item 2.
-Every other value, key, type and array length matches. Only the nine generated
-identity leaves are updated; the accepted IQ representatives and all comparison
-rules remain unchanged. No historical data or installed environment is rewritten.
-
-The follow-up deletion of the unused topology program/dispatch pair was also
-compared against the first candidate `40b14195`: artifact `c156fc57…` becomes
-`eef7620a…`, setup `d209fb15…` becomes `2803ed90…`, and reviewed source
-`98085576…` becomes `10601c6c…`. Both this incremental comparison and the complete
-comparison against base find exactly the same nine identity paths and three
-roundoff-only IQ components, with no other value or structural changes.
-
-The broader #773/#615 retirement remains open. Direct-control/multichannel-bias
-inputs, provider/target inventory and scientific DRAG/spectroscopy consumers still
-need their own consumer audit. Removing the unused topology program/dispatch
-pair does not justify removing the shared Ramsey response used here.
-No native-window, installed delivery, physical hardware or performance claim is
-made by this slice.
+Retiring unused definitions still changes provider package bytes, which propagate
+through device revisions and resolved setup into the reviewed configuration source.
+Regenerate acceptance and compare every value, key, type and length; audit each
+identity change rather than skipping hashes. Preserve accepted scientific values
+and the existing narrow scalar-IQ tolerance. No historical data or installed
+environment is rewritten. Candidate-specific differences and validation evidence
+belong in the [retirement PR](https://github.com/scopecat-project/scopecat/pull/929).
 
 ## Final direct-control and multichannel gallery retirement
 
@@ -413,20 +387,20 @@ Cross-language inspection found two UI E2E consumers of `gallery_inputs`, so
 The retired directory's lint/type include paths and old gallery test weight are
 also removed; no new performance measurement or benchmark claim is implied.
 
-### Identity and scope boundary
+### Remaining boundary
 
-This slice is stacked on Ramsey candidate `b135ea0d`. Removing the workflow and
-presentation helper changes provider package artifact `eef7620a…` to `2e0787e0…`,
-which propagates through device revisions/resolution to setup `2803ed90…` →
-`a44cfb58…` and reviewed source `10601c6c…` → `800b0ee7…`. The full isolated
-generator comparison finds exactly the same nine identity paths listed above,
-plus the same three scalar-IQ roundoff components within the existing tolerance.
-Every other key/type/length/value matches. Only generated identity leaves are
-updated; accepted scientific values and comparison rules remain unchanged.
+The gallery's presentation scripts and dedicated recipe APIs are retired.
+Unused fixed component-ID exports and the prebuilt DRAG invocation alias are also
+removed; actual device components still derive from configured channel counts,
+and the scientific DRAG function remains a live consumer dependency.
+The same complete identity audit rules apply; candidate-specific differences and
+validation belong in the [retirement PR](https://github.com/scopecat-project/scopecat/pull/931).
 
-The gallery's presentation scripts are now all retired. This does not complete
-#773/#615: shared UI fixture preparation, provider/compiler inventory and the
-necessary scientific workflows remain. No author-entry redesign, native-window,
+This does not complete #773/#615 or require removing all reference code. Shared
+UI fixture preparation, provider/compiler integration and necessary scientific
+workflows remain. `pump-source` is still dynamically reachable through its catalog
+and route; its independent scientific need remains an explicit inventory audit
+item, not evidence that it is dead. No author-entry redesign, native-window,
 installed-delivery, physical-hardware or historical-data qualification is claimed.
 
 ## Configuration-authority retirement evidence

@@ -88,8 +88,6 @@ from reference_lab.targets.list_mode.iq_semantics import (
 from reference_lab.virtual_lab.capture_payload import VirtualCaptureQueueDocument
 from reference_lab.virtual_lab.capture_plant import VirtualCaptureSourceInterface
 
-AWG_OUTPUT_COMPONENT_IDS = tuple(f"ch{index}" for index in range(1, 9))
-DIGITIZER_INPUT_COMPONENT_IDS = ("ch1", "ch2")
 type BenchSamples = NDArray[np.float64]
 VIRTUAL_AWG_DRIVER_ID = "reference_lab.virtual.awg"
 VIRTUAL_DIGITIZER_DRIVER_ID = "reference_lab.virtual.digitizer"
@@ -843,8 +841,6 @@ def _quantity_value(value: DriverScalar, unit: str) -> float:
 
 
 __all__ = [
-    "AWG_OUTPUT_COMPONENT_IDS",
-    "DIGITIZER_INPUT_COMPONENT_IDS",
     "VIRTUAL_AWG_DRIVER_ID",
     "VIRTUAL_AWG_DRIVER_SPEC",
     "VIRTUAL_DIGITIZER_DRIVER_ID",

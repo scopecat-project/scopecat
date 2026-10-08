@@ -63,12 +63,8 @@ def drag_beta_experiment(
     )
 
 
-DRAG_BETA_EXPERIMENT = drag_beta_experiment.build()
-
-
 __all__ = [
     "DEFAULT_AMPLIFICATIONS",
-    "DRAG_BETA_EXPERIMENT",
     "DRAG_BETA_POINTS",
     "DRAG_BETA_SHOTS",
     "DRAG_BETA_SPAN",
