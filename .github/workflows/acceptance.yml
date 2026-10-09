@@ -464,13 +464,19 @@ jobs:
           uv run --locked --group delivery python -m lab_tools.delivery
           dist/tutorial --public-artifacts dist/framework
 
+      - name: Add the target-platform author toolchain
+        run: >-
+          uv run --locked --group delivery python -m lab_tools.toolchain
+          dist/tutorial dist/tutorial-complete
+
       - name: Archive the complete offline delivery
-        run: python -m zipfile -c dist/tutorial.zip dist/tutorial
+        working-directory: dist
+        run: python -m tarfile -c tutorial.tar.gz tutorial-complete
 
       - name: Verify the archived delivery, notebooks and installed application
         run: |
-          python -m zipfile -e dist/tutorial.zip dist/delivery-check
-          uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/tutorial dist/tutorial-evidence
+          python -m tarfile -e dist/tutorial.tar.gz dist/delivery-check
+          uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/tutorial-complete dist/tutorial-evidence
 
       - name: Retain tutorial delivery and executed notebooks
         if: always()
@@ -478,9 +484,11 @@ jobs:
         with:
           name: scopecat-tutorial-${{ matrix.os }}
           path: |
-            dist/tutorial.zip
+            dist/tutorial.tar.gz
             dist/tutorial-evidence/**/verified-*.ipynb
+            dist/tutorial-evidence/help/*.ipynb
             dist/tutorial-evidence/**/acceptance.json
+            dist/tutorial-evidence/**/verification-phases.json
             dist/tutorial-evidence/**/*.log
           retention-days: 7
           if-no-files-found: warn

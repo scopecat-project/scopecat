@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
+from time import perf_counter
 from typing import Protocol, cast
 
 
 class VerifyArguments(Protocol):
     project: Path
     static_dir: Path | None
+    without_groups: bool
 
 
-def execute_project(destination: Path, *, static_dir: Path | None = None) -> Path:
+def execute_project(
+    destination: Path, *, static_dir: Path | None = None, groups: bool = True
+) -> Path:
     """Create a fresh synthetic project and retain executed notebooks as evidence."""
     try:
         from .notebook_io import notebook_io
@@ -37,13 +42,16 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
     previous = os.environ.get("JUPYTER_PATH")
     os.environ["JUPYTER_PATH"] = env["JUPYTER_PATH"]
     project = sc.open_project(root)
+    timings: dict[str, float] = {}
     try:
+        phase = perf_counter()
         record = start_project(project, static_dir=static_dir, timeout=300)
         if static_dir is not None:
             response = httpx2.get(record.base_url)
             _ = response.raise_for_status()
             if "<html" not in response.text:
                 raise ValueError("GUI 入口未返回 HTML")
+        timings["start_service"] = perf_counter() - phase
         for name in (
             "start",
             "reopen",
@@ -54,6 +62,8 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
             "compute",
             "editing-reopen",
         ):
+            if not groups and name in ("groups", "groups-reopen"):
+                continue
             if name in ("start", "reopen"):
                 notebook = nbformat.read(root / f"notebooks/{name}.ipynb", as_version=4)
                 checks = (
@@ -100,6 +110,7 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
                 notebook = nbformat.v4.new_notebook(
                     cells=[nbformat.v4.new_code_cell(cell) for cell in cells]
                 )
+            phase = perf_counter()
             print(f"执行 {name}.ipynb", flush=True)
             try:
                 _ = NotebookClient(
@@ -115,19 +126,27 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
                 ).execute()
             finally:
                 nbformat.write(notebook, root / f"notebooks/verified-{name}.ipynb")
+                timings[name] = perf_counter() - phase
             if name in ("start", "groups", "refresh", "compute"):
+                phase = perf_counter()
                 _ = stop_project(project)
                 _ = start_project(project, static_dir=static_dir, timeout=300)
+                timings[f"restart_after_{name}"] = perf_counter() - phase
     finally:
         try:
             _ = stop_project(project)
         finally:
+            (root / "verification-phases.json").write_text(
+                json.dumps({"groups": groups, "seconds": timings}, indent=2) + "\n",
+                encoding="utf-8",
+            )
             if previous is None:
                 _ = os.environ.pop("JUPYTER_PATH", None)
             else:
                 os.environ["JUPYTER_PATH"] = previous
     print(
-        "合成课程、免命名保存、分组教材与修改后独立分析、统一刷新、新增实验、"
+        f"合成课程、免命名保存、{'分组教材、' if groups else ''}修改后独立分析、"
+        "统一刷新、新增实验、"
         "平均 IQ 与 Unit 读取及独立内核重开通过; "
         "不代表实机或真人体验验收",
         flush=True,
@@ -135,7 +154,9 @@ def execute_project(destination: Path, *, static_dir: Path | None = None) -> Pat
     return root
 
 
-def verify_project(destination: Path, *, static_dir: Path | None = None) -> Path:
+def verify_project(
+    destination: Path, *, static_dir: Path | None = None, groups: bool = True
+) -> Path:
     from .environment import prepare_project
     from .project import create_project
     from .verify_maintenance import verify_restore
@@ -145,10 +166,12 @@ def verify_project(destination: Path, *, static_dir: Path | None = None) -> Path
     command = [str(python), "-m", "lab_tools.verify", str(root)]
     if static_dir is not None:
         command.extend(("--static-dir", str(static_dir)))
+    if not groups:
+        command.append("--without-groups")
     env = dict(os.environ)
     _ = env.pop("PYTHONPATH", None)
     _ = subprocess.run(command, env=env, check=True)  # noqa: S603 - explicit local tool and argument list
-    verify_restore(root, static_dir=static_dir)
+    verify_restore(root, static_dir=static_dir, groups=groups)
     return root
 
 
@@ -158,5 +181,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     _ = parser.add_argument("project", type=Path)
     _ = parser.add_argument("--static-dir", type=Path)
+    _ = parser.add_argument("--without-groups", action="store_true")
     args = cast("VerifyArguments", cast("object", parser.parse_args()))
-    _ = execute_project(args.project, static_dir=args.static_dir)
+    _ = execute_project(
+        args.project, static_dir=args.static_dir, groups=not args.without_groups
+    )

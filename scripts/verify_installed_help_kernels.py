@@ -2,7 +2,8 @@
 
 Usage: python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>
 Uses existing delivery/toolchain artifacts without changing their manifests.
-No browser, native editor, snapshot restore or per-course service is exercised.
+Includes explicit snapshot recovery with a separately backed-up author fixture.
+Does not restore Help continuation or exercise a browser/native editor.
 """
 
 from __future__ import annotations
@@ -12,11 +13,13 @@ import hashlib
 import json
 import os
 import runpy
+import shutil
 import subprocess
 import sys
 import tarfile
 from collections.abc import Callable
 from pathlib import Path
+from time import perf_counter
 from typing import Protocol, cast
 
 
@@ -25,6 +28,7 @@ def python_in(root: Path) -> Path:
 
 
 def install_and_verify(payload: Path, work: Path) -> None:
+    started = perf_counter()
     # The shipped installer is stdlib-only; use its manifest checks before unpacking.
     installer = runpy.run_path(str(payload / "install.py"))
     cast("Callable[[Path], object]", installer["verify_bundle"])(payload)
@@ -57,18 +61,32 @@ def install_and_verify(payload: Path, work: Path) -> None:
         TEMP=str(temporary),
     )
     application = work / "application-python"
-    for command in (
-        [str(python), "-I", str(payload / "install.py"), str(application)],
-        [
-            str(python_in(application)),
-            "-I",
-            str(Path(__file__).resolve()),
-            str(payload),
-            str(work),
-            "--installed",
-        ],
+    for name, command in (
+        (
+            "installation",
+            [str(python), "-I", str(payload / "install.py"), str(application)],
+        ),
+        (
+            "journey",
+            [
+                str(python_in(application)),
+                "-I",
+                str(Path(__file__).resolve()),
+                str(payload),
+                str(work),
+                "--installed",
+            ],
+        ),
     ):
+        phase = perf_counter()
         subprocess.run(command, cwd=work, env=env, check=True)  # noqa: S603
+        print(f"{name}: {perf_counter() - phase:.3f}s", flush=True)
+    receipt = work / "acceptance.json"
+    evidence = cast(
+        "dict[str, object]", json.loads(receipt.read_text(encoding="utf-8"))
+    )
+    evidence["total_seconds"] = perf_counter() - started
+    receipt.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
 def verify_installed(payload: Path, work: Path) -> None:
@@ -83,12 +101,26 @@ def verify_installed(payload: Path, work: Path) -> None:
     from nbformat import NotebookNode
 
     from lab_tools.application_runtime import ApplicationRuntime
+    from lab_tools.author_environment import (
+        create_client_environment,
+        prepare_execution_environment,
+    )
     from lab_tools.bundle import file_hash, verify_bundle
     from lab_tools.notebook import kernel_command
     from lab_tools.notebook_io import notebook_io
     from lab_tools.notebook_journey import current, prepare
     from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
-    from scopecat.daemon.views import RunSummary, RunSummaryPage
+    from lab_tools.verify_maintenance import ADD_ANALYSIS
+    from scopecat.daemon.views import DaemonHealth, RunSummary, RunSummaryPage
+    from scopecat.project import open_project
+    from scopecat_server.author_registration import (  # noqa: TID251 - installed recovery integration
+        register_author_workspace,
+    )
+    from scopecat_server.snapshots import (  # noqa: TID251 - installed recovery integration
+        create_snapshot,
+        restore_snapshot,
+        verify_snapshot,
+    )
 
     # Detached daemons must remain waitable in containers without a reaping init.
     if sys.platform == "linux":
@@ -110,6 +142,7 @@ def verify_installed(payload: Path, work: Path) -> None:
     runtime = ApplicationRuntime(work / "application")
     runtime.configure(static_dir=payload / "gui", delivery_root=payload)
     material = files("lab_teaching.course_material").joinpath("lessons")
+    timings: dict[str, float] = {}
     evidence: dict[str, object] = {
         "bundle_sha256": file_hash(payload / "bundle.json"),
         "build_id": document["build_id"],
@@ -118,7 +151,8 @@ def verify_installed(payload: Path, work: Path) -> None:
         "cache_started_empty": True,
         "author_cache_started_empty": True,
         "native_editor": "not evaluated",
-        "snapshot_restore": "not evaluated",
+        "help_continue_restore": "not evaluated",
+        "phase_seconds": timings,
     }
 
     def runs() -> tuple[RunSummary, ...]:
@@ -135,6 +169,7 @@ def verify_installed(payload: Path, work: Path) -> None:
         *,
         python: Path | None = None,
     ) -> None:
+        started = perf_counter()
         _, env = kernel_command(
             root,
             python=str(python or python_in(root / ".venv")),
@@ -153,12 +188,15 @@ def verify_installed(payload: Path, work: Path) -> None:
             ).execute()
         finally:
             nbformat.write(notebook, work / f"{name}.ipynb")
+            timings[name] = perf_counter() - started
 
     try:
+        phase = perf_counter()
         first_endpoint = runtime.start()
         assert runs() == ()
         parameters = prepare(runtime, str(work), "parameters")
         groups = prepare(runtime, str(work), "groups")
+        timings["initial_start_and_prepare"] = perf_counter() - phase
         assert runtime.source(parameters.directory) != runtime.source(groups.directory)
         assert runs() == ()
         lessons: dict[str, list[NotebookNode]] = {}
@@ -202,13 +240,14 @@ def verify_installed(payload: Path, work: Path) -> None:
         retained = {}
         for journey in (parameters, groups):
             code = journey.directory / "src/my_experiment/teaching.py"
-            code.write_text(code.read_text() + "\n# retained author note\n")
+            code.write_bytes(code.read_bytes() + b"\n# retained author note\n")
             notebook = nbformat.read(journey.notebook, as_version=4)
             cast("list[NotebookNode]", notebook.cells).append(
                 nbformat.v4.new_code_cell("# My retained notes")
             )
             nbformat.write(notebook, journey.notebook)
             retained[journey.topic] = (code.read_bytes(), journey.notebook.read_bytes())
+        phase = perf_counter()
         runtime.stop()
         assert runtime.status().state == "stopped"
         runtime = ApplicationRuntime(work / "application")
@@ -221,6 +260,7 @@ def verify_installed(payload: Path, work: Path) -> None:
                 (journey.directory / "src/my_experiment/teaching.py").read_bytes(),
                 journey.notebook.read_bytes(),
             ) == retained[journey.topic]
+        timings["restart_and_continue"] = perf_counter() - phase
         execute(
             parameters.directory,
             [
@@ -243,9 +283,152 @@ def verify_installed(payload: Path, work: Path) -> None:
             first_pid=first_endpoint.pid,
             restarted_pid=restarted_endpoint.pid,
         )
+        # External editable source and comparison evidence are an independent
+        # verifier backup, NOT contents promised by the application snapshot.
+        phase = perf_counter()
+        source_id = runtime.source(groups.directory)
+        health = httpx2.get(
+            runtime.start().base_url + "/api/v1/health", trust_env=False, timeout=30
+        )
+        health.raise_for_status()
+        original_identity = DaemonHealth.model_validate_json(health.content).project_id
+        restored_source = work / "restored-author"
+        shutil.copytree(
+            groups.directory,
+            restored_source,
+            ignore=shutil.ignore_patterns(
+                ".venv",
+                ".scopecat-python",
+                ".scopecat",
+                "scopecat.runtime.toml",
+                "__pycache__",
+                "*.egg-info",
+            ),
+        )
+        assert not (restored_source / ".venv").exists()
+        assert not (restored_source / ".scopecat-python").exists()
+        backup_hashes = {
+            str(path.relative_to(restored_source)): file_hash(path)
+            for path in restored_source.rglob("*")
+            if path.is_file()
+        }
+        timings["independent_source_backup"] = perf_counter() - phase
+        phase = perf_counter()
+        runtime.stop()
+        assert runtime.status().state == "stopped"
+        snapshot = work / "snapshot"
+        create_snapshot(open_project(runtime.root), snapshot)
+        verify_snapshot(snapshot)
+        recovered = ApplicationRuntime(work / "recovered-application")
+        recovered.home.mkdir()
+        restore_snapshot(snapshot, recovered.root)
+        assert not (recovered.root / "scopecat.runtime.toml").exists()
+        assert not (recovered.root / ".scopecat/author-workspaces.json").exists()
+        timings["snapshot_verify_restore"] = perf_counter() - phase
+        # Move only this verifier's synthetic fixtures. No old absolute source or
+        # environment path may satisfy the recovery check; keep bytes for diagnosis.
+        unavailable = work / "unavailable-originals"
+        unavailable.mkdir()
+        obsolete = [unavailable / runtime.home.name / "environments", author_cache]
+        for source in (parameters.directory, groups.directory):
+            obsolete.extend(
+                unavailable / source.name / name
+                for name in (".venv", ".scopecat-python")
+            )
+        for path in (runtime.home, parameters.directory, groups.directory):
+            path.rename(unavailable / path.name)
+            assert not path.exists()
+        runtime = recovered
+        phase = perf_counter()
+        runtime.configure(static_dir=payload / "gui", delivery_root=payload)
+        recovery_cache = work / "recovery-empty-cache"
+        recovery_cache.mkdir()
+        os.environ["UV_CACHE_DIR"] = str(recovery_cache)
+        create_client_environment(runtime, restored_source)
+        execution_python = prepare_execution_environment(runtime, restored_source)
+        register_author_workspace(
+            runtime.root, restored_source, identity=source_id, python=execution_python
+        )
+        assert runtime.source(restored_source) == source_id
+        assert all(
+            file_hash(restored_source / name) == digest
+            for name, digest in backup_hashes.items()
+        )
+        timings["recovery_environments_and_registration"] = perf_counter() - phase
+        phase = perf_counter()
+        recovered_endpoint = runtime.start()
+        health = httpx2.get(
+            recovered_endpoint.base_url + "/api/v1/health", trust_env=False, timeout=30
+        )
+        health.raise_for_status()
+        assert (
+            DaemonHealth.model_validate_json(health.content).project_id
+            == original_identity
+        )
+        assert runs() == before
+        timings["recovery_start"] = perf_counter() - phase
+        execute(
+            restored_source,
+            [nbformat.v4.new_code_cell(c) for c in (*GROUP_REOPEN_CELLS, ADD_ANALYSIS)],
+            "groups-restored",
+        )
+        assert {run.run_id for run in runs()} == {run.run_id for run in before}
+        evidence.update(
+            snapshot_restore="passed",
+            recovery_source_id=source_id,
+            project_id=original_identity,
+            independent_source_backup=backup_hashes,
+            old_locations_unavailable=True,
+            recovery_cache_started_empty=True,
+        )
     finally:
         runtime.stop()
     assert runtime.status().state == "stopped"
+
+    def logical_bytes() -> dict[str, int]:
+        return {
+            name: sum(
+                path.stat().st_size
+                for path in (work / name).rglob("*")
+                if path.is_file() and not path.is_symlink()
+            )
+            for name in (
+                "snapshot",
+                "restored-author",
+                "recovered-application",
+                "unavailable-originals",
+                "application-python",
+                "application-base",
+                "empty-cache",
+                "author-empty-cache",
+                "recovery-empty-cache",
+            )
+        }
+
+    evidence["logical_bytes_before_cleanup"] = logical_bytes()
+    phase = perf_counter()
+    # Only a successful recovery reaches here. These generated interpreters
+    # have already lost their original paths; keep source/scientific evidence,
+    # the recovered environments and their cache available for inspection.
+    retained_files = {
+        path: file_hash(path)
+        for path in unavailable.rglob("*")
+        if path.is_file() and not any(path.is_relative_to(root) for root in obsolete)
+    }
+    for directory in obsolete:
+        assert directory.is_relative_to(work) and not directory.is_symlink()
+        shutil.rmtree(directory)
+    assert all(
+        path.is_file() and file_hash(path) == digest
+        for path, digest in retained_files.items()
+    )
+    verify_snapshot(snapshot)
+    timings["discard_obsolete_generated_environments"] = perf_counter() - phase
+    evidence["discarded_generated_directories"] = [
+        str(p.relative_to(work)) for p in obsolete
+    ]
+    evidence["retained_original_evidence_files"] = len(retained_files)
+    evidence["logical_bytes"] = logical_bytes()
     evidence.update(result="passed", cleanup="stopped")
     (work / "acceptance.json").write_text(
         json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
