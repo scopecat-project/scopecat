@@ -86,96 +86,6 @@ def test_reject_mixed_or_missing_artifacts(bundle, failure):
         verify.verify_bundle(bundle, COMMIT)
 
 
-@pytest.fixture
-def source(monkeypatch):
-    run = {
-        "repository": {"full_name": "owner/repo"},
-        "head_repository": {"full_name": "owner/repo"},
-        "head_sha": COMMIT,
-        "path": ".github/workflows/acceptance.yml",
-        "event": "workflow_dispatch",
-        "status": "completed",
-        "conclusion": "failure",
-    }
-    jobs = [{"name": "UI", "conclusion": "success"}]
-    artifacts = [
-        {
-            "id": 123,
-            "name": "scopecat-framework",
-            "expired": False,
-            "workflow_run": {"head_sha": COMMIT},
-        }
-    ]
-
-    def api(command, **kwargs):
-        path = command[-1]
-        if "/jobs?" in path or "/artifacts?" in path:
-            assert "--paginate" in command
-            result = jobs if "/jobs?" in path else artifacts
-            return "\n".join(json.dumps(item) for item in result)
-        return json.dumps(run)
-
-    monkeypatch.setattr(verify.subprocess, "check_output", api)
-    return run, jobs, artifacts
-
-
-def test_failed_journey_can_reuse_successful_build(source):
-    assert verify.verify_source("owner/repo", "12", COMMIT)["artifact_id"] == 123
-
-
-@pytest.mark.parametrize(
-    "failure",
-    [
-        "repository",
-        "fork",
-        "commit",
-        "workflow",
-        "event",
-        "running",
-        "producer_failed",
-        "producer_skipped",
-        "producer_missing",
-        "expired",
-        "missing",
-        "ambiguous",
-        "artifact_commit",
-        "invalid_id",
-    ],
-)
-def test_source_rejects_unqualified_inputs(source, failure):
-    run, jobs, artifacts = source
-    if failure == "repository":
-        run["repository"]["full_name"] = "other/repo"
-    elif failure == "fork":
-        run["head_repository"]["full_name"] = "other/repo"
-    elif failure == "commit":
-        run["head_sha"] = "b" * 40
-    elif failure == "workflow":
-        run["path"] = ".github/workflows/ci.yml"
-    elif failure == "event":
-        run["event"] = "pull_request"
-    elif failure == "running":
-        run["status"] = "in_progress"
-    elif failure == "producer_failed":
-        jobs[0]["conclusion"] = "failure"
-    elif failure == "producer_skipped":
-        jobs[0]["conclusion"] = "skipped"
-    elif failure == "producer_missing":
-        jobs.clear()
-    elif failure == "expired":
-        artifacts[0]["expired"] = True
-    elif failure == "missing":
-        artifacts.clear()
-    elif failure == "ambiguous":
-        artifacts.append(artifacts[0].copy())
-    elif failure == "artifact_commit":
-        artifacts[0]["workflow_run"]["head_sha"] = "b" * 40
-    with pytest.raises(ValueError, match="Framework"):
-        verify.verify_source(
-            "owner/repo", "../12" if failure == "invalid_id" else "12", COMMIT
-        )
-
-
 JOBS = [
     "PUBLIC_PREVIEW",
     "NATIVE_DISTRIBUTION",
@@ -198,7 +108,7 @@ SELECTED = {
 }
 
 
-def gate(profile, results, run_id=""):
+def gate(profile, results):
     workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
     script = workflow.split("      - name: Require successful jobs\n", 1)[1].split(
         "        run: |\n", 1
@@ -209,7 +119,6 @@ def gate(profile, results, run_id=""):
         env={
             **os.environ,
             "PROFILE": profile,
-            "FRAMEWORK_RUN_ID": run_id,
             **{f"{k}_RESULT": v for k, v in results.items()},
         },
         capture_output=True,
@@ -233,7 +142,6 @@ def test_gate_keeps_existing_profiles_and_requires_selected_jobs(profile):
                 job,
                 invalid,
             )
-    assert (gate(profile, results, "123") == 0) == (profile == "browser")
 
 
 def test_unknown_or_empty_selection_cannot_pass():
@@ -260,24 +168,11 @@ def test_workflow_selects_exact_profile_jobs(profile):
             continue
         condition = re.search(r"^    if: (.*)$", body, re.M)
         if condition:
-            terms = [term.split(" && ") for term in condition[1].split(" || ")]
+            terms = condition[1].split(" || ")
             assert all(
-                re.fullmatch(r"inputs.profile == '[\w-]+'", atom)
-                or atom == "inputs.framework_run_id == ''"
-                for term in terms
-                for atom in term
+                re.fullmatch(r"inputs.profile == '[\w-]+'", term) for term in terms
             )
-            enabled = any(
-                all(
-                    atom
-                    in {
-                        f"inputs.profile == '{profile}'",
-                        "inputs.framework_run_id == ''",
-                    }
-                    for atom in term
-                )
-                for term in terms
-            )
+            enabled = any(term == f"inputs.profile == '{profile}'" for term in terms)
         else:
             assert name == "browser-tests" and "    needs: ui\n" in body
             enabled = "UI" in selected
@@ -288,11 +183,15 @@ def test_workflow_selects_exact_profile_jobs(profile):
     assert "--project=journey-${{ matrix.shard }}" in jobs["browser-tests"]
 
 
-def test_browser_reuse_input_cannot_start_publication():
+def test_browser_rechecks_downloaded_identity_before_extraction():
     workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
-    job = workflow.split("  public-preview:\n", 1)[1].split(
-        "  native-distribution:\n", 1
+    browser = workflow.split("  browser-tests:\n", 1)[1].split(
+        "  installed-artifacts:\n", 1
     )[0]
-    assert job.startswith(
-        "    if: inputs.profile == 'public-preview' && inputs.framework_run_id == ''\n"
+    assert (
+        browser.index("name: scopecat-framework")
+        < browser.index("verify_acceptance_artifacts.py")
+        < browser.index("python -m zipfile")
     )
+    assert '--bundle ../../dist/framework --commit "$GITHUB_SHA"' in browser
+    assert "github-token:" not in browser and "run-id:" not in browser

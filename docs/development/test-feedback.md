@@ -128,21 +128,29 @@ operation or a release. Existing profiles retain their original scope.
 
 ```sh
 gh workflow run acceptance.yml --ref <branch> -f profile=browser
-# Repeat browser qualification using a completed run's exact-commit build:
-gh workflow run acceptance.yml --ref <same-commit-branch> -f profile=browser \
-  -f framework_run_id=<acceptance-run-id>
+# Retry only failed jobs in that exact run, retaining successful producer jobs:
+gh run rerun <run-id> --failed
+# Or rerun one browser job and its dependent gate:
+gh run rerun <run-id> --job <browser-job-id>
 ```
 
-Without `framework_run_id`, the workflow builds fresh immutable wheels and GUI.
-With it, the producer must be a completed acceptance run in this repository at
-exactly the checkout commit, with a successful `UI` job and one unexpired
-`scopecat-framework` artifact. A failed browser/installed job in that producer run
-does not invalidate its successful build. The consumer checks the manifest commit,
-every listed file hash and the GUI's embedded commit/version before publishing
-its shared input. A different commit, missing/expired artifact, failed producer,
-or mismatched bytes fails the run; there is no fallback rebuild. Reuse is rejected
-for other profiles. The source run/artifact ID and validated file hashes appear in
-the job log. This is exact-commit reuse, not compatibility inference across commits.
+Each new dispatch builds immutable wheels and GUI for that commit. Browser jobs
+consume the shared `scopecat-framework` artifact from the same run. Both the
+producer and each browser consumer check the manifest commit, every listed file
+hash and the GUI's embedded commit/version; mismatched or missing inputs fail
+before extraction/test execution. Validated identities and hashes appear in logs.
+[GitHub job retries](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+retain the original SHA/ref. Retrying a browser job reuses the successful UI job's
+artifact instead of rebuilding it or rerunning successful installed jobs. Avoid
+`--failed` when the UI producer failed if the intent is reuse: that producer must
+then rebuild. Artifact retention remains seven days; unavailable inputs fail,
+requiring a fresh dispatch rather than silently rebuilding inside a consumer.
+
+Cross-run artifact selection is deliberately not offered: the existing UI token
+has no Actions read permission, and this slice does not expand workflow permissions.
+A changed commit requires a fresh dispatch/build; no compatibility is inferred
+across commits. A rerun of only one shard is not fresh execution evidence for the
+other shard; record the attempts and their actual executed jobs.
 
 This slice avoids both installed platform jobs for browser-only work; it does not
 make the installed carrier cheaper. The #944 local measurements remain: old carrier
