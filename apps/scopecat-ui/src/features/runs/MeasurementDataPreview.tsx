@@ -290,19 +290,11 @@ export function MeasurementDataPreview({
                         </select>
                       ) : (
                         <>
-                          <input
-                            aria-label={`${axis.label} slice index`}
-                            className="w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
-                            max={axis.size}
-                            min={1}
-                            type="number"
-                            value={selectedIndex + 1}
-                            onChange={(event) => {
-                              const index = Number(event.target.value) - 1;
-                              if (Number.isInteger(index) && index >= 0 && index < axis.size) {
-                                onFixedAxisIndexChange(axis.id, index);
-                              }
-                            }}
+                          <MeasurementSliceIndex
+                            key={`${axis.id}:${selectedIndex}`}
+                            axis={axis}
+                            selectedIndex={selectedIndex}
+                            onCommit={(index) => onFixedAxisIndexChange(axis.id, index)}
                           />
                           <span className="max-w-52 truncate font-medium tracking-normal text-text-soft normal-case">
                             {sliceAxisOption(axis, selectedIndex)} · {axis.size.toLocaleString()}{" "}
@@ -742,6 +734,52 @@ function emptyChartMessage({
     return "No saved measurement records are available for this plot.";
   }
   return "No safe automatic plot is available for these variable shapes. The typed table remains available below.";
+}
+
+function MeasurementSliceIndex({
+  axis,
+  selectedIndex,
+  onCommit,
+}: {
+  axis: MeasurementSliceAxis;
+  selectedIndex: number;
+  onCommit: (index: number) => void;
+}) {
+  const [draft, setDraft] = useState<string>();
+  const commit = () => {
+    if (draft === undefined) return;
+    const position = Number(draft);
+    if (
+      draft.trim() !== "" &&
+      Number.isInteger(position) &&
+      position >= 1 &&
+      position <= axis.size
+    ) {
+      if (position - 1 !== selectedIndex) onCommit(position - 1);
+    }
+    setDraft(undefined);
+  };
+  return (
+    <input
+      aria-label={`${axis.label} slice index`}
+      className="w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+      max={axis.size}
+      min={1}
+      step={1}
+      type="number"
+      title={`Position 1–${axis.size}; press Enter or leave the field to apply`}
+      value={draft ?? String(selectedIndex + 1)}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        }
+        if (event.key === "Escape") setDraft(undefined);
+      }}
+    />
+  );
 }
 
 function sliceAxisOption(axis: MeasurementSliceAxis, index: number): string {

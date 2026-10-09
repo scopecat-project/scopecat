@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -1120,6 +1121,51 @@ describe("measurement visualization", () => {
     expect(screen.getByRole("spinbutton", { name: "Bias slice index" })).toHaveValue(1);
     expect(screen.queryByRole("combobox", { name: "Bias slice" })).not.toBeInTheDocument();
     expect(screen.getByText("0 V · 300 values")).toBeVisible();
+  });
+
+  it("lets a large-axis position be cleared and typed before committing a bounded index", () => {
+    const schema = largeFixedGridSchema();
+    const onCommit = vi.fn();
+    function Preview() {
+      const [index, setIndex] = useState(0);
+      return (
+        <MeasurementDataPreview
+          preview={{ schema, items: [] }}
+          sliceError={null}
+          slicePending={false}
+          fixedAxisIndices={{ bias: index }}
+          onFixedAxisIndexChange={(_axis, next) => {
+            onCommit(next);
+            setIndex(next);
+          }}
+        />
+      );
+    }
+    render(<Preview />);
+    let input = screen.getByRole("spinbutton", { name: "Bias slice index" });
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input).toHaveValue(null);
+    for (const value of ["1", "10", "100"]) {
+      fireEvent.change(input, { target: { value } });
+      expect(input).toHaveValue(Number(value));
+    }
+    expect(onCommit).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenLastCalledWith(99);
+    input = screen.getByRole("spinbutton", { name: "Bias slice index" });
+    expect(input).toHaveValue(100);
+    fireEvent.change(input, { target: { value: "999" } });
+    expect(input).toHaveValue(999);
+    fireEvent.blur(input);
+    expect(input).toHaveValue(100);
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    fireEvent.change(input, { target: { value: "20" } });
+    fireEvent.blur(input);
+    expect(onCommit).toHaveBeenLastCalledWith(19);
+    input = screen.getByRole("spinbutton", { name: "Bias slice index" });
+    fireEvent.change(input, { target: { value: "1" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(input).toHaveValue(20);
   });
 
   it("explains that a live selected slice is not complete yet", () => {
