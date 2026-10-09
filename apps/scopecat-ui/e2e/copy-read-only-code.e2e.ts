@@ -25,10 +25,10 @@ import json, sys
 import scopecat as sc
 project = sc.open_project(sys.argv[1])
 project.load_application()
-from reference_lab_authors.frequency_amplitude import frequency_amplitude, FREQUENCY, AMPLITUDE
-from reference_lab.notebook import gallery_inputs
+from ui_signal.signal import signal, FREQUENCY, AMPLITUDE
+from ui_signal.application import save_inputs
 with project.connect() as lab:
-    run = lab.run(frequency_amplitude.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(4.8, "GHz")])).with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(.1, "V")])), config=gallery_inputs(lab))
+    run = lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(4.8, "GHz")])).with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(.1, "V")])), config=save_inputs(lab))
     publications = {}
     for kind, owner in (("run", run), ("project", lab)):
         publications[kind] = []
@@ -60,7 +60,7 @@ for item in snippets:
         assertion += "\\nassert publication.fact('version').value == 1"
         assertion += "\\nassert len(publication.outputs) == 1"
     cells.append(v4.new_code_cell(assertion))
-cells.append(v4.new_code_cell("assert session.list_runs(limit=100).model_dump(mode='json') == before\\nassert not any(name.startswith('reference_lab_authors') for name in __import__('sys').modules)\\nsession.close()"))
+cells.append(v4.new_code_cell("assert session.list_runs(limit=100).model_dump(mode='json') == before\\nassert not any(name.startswith('ui_signal') for name in __import__('sys').modules)\\nsession.close()"))
 document = v4.new_notebook(cells=cells)
 try:
     NotebookClient(document, timeout=60, kernel_name="scopecat-lab", resources={"metadata": {"path": str(root)}}).execute()
@@ -76,8 +76,8 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
   const project = await mkdtemp(join(tmpdir(), "scopecat-copy-code-"));
   let passed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+    for (const name of ["src", "scopecat.toml"])
+      await cp(join("e2e/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);

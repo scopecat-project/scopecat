@@ -115,17 +115,11 @@ saved parameter revision rather than temporarily changing a global default.
 Selecting inputs is not scientific acceptance; preflight reports selected context
 and proposed candidate separately.
 
-The retained device gallery now also starts with equipment only. Acquisition and
-preview scripts explicitly call the maintainer-owned `gallery_inputs(lab)` helper,
-which saves an immutable fixture revision per script run and resolves it against
-the current setup without selecting defaults. Direct instrument control needs no parameter
-revision. Routing, waveform, resource-conflict, independent-channel failure and
-ragged-data assertions remain in place; the fixture checks that the combined
-registry stays empty and setup stays unchanged. This helper is acceptance code,
-not a replacement teaching template or a second user mode. The reference
-application no longer exposes transitional defaults. `initial_parameters()` and
-`bootstrap_config()` remain explicit fixture-data builders for callers that need
-saved inputs or complete low-level execution snapshots.
+Retained device/scientific fixtures start with equipment only and explicitly save
+parameter revisions when needed; direct instrument control needs none.
+`initial_parameters()` and `bootstrap_config()` remain fixture-data builders for
+saved inputs or complete low-level execution snapshots. Selecting inputs does not
+publish global defaults or establish scientific acceptance.
 
 No private package may become a prerequisite for public CI or the installed
 starter. Shared test helpers belong in testkit only when independently reused;
@@ -211,10 +205,14 @@ their own lifecycle fixtures, including the separate launch/author fixtures with
 the name `reference_lab_daemon`. The shared `ReferenceLabDaemon` data holder still
 serves the DRAG candidate fixture. Keep process ownership explicit when adding tests.
 
-`reference_lab/notebook.py::gallery_inputs` remains used by the UI E2E fixtures
-`run-comparison.e2e.ts` and `copy-read-only-code.e2e.ts`; their embedded Python is a
-live consumer even after the presentation scripts retire. The unused `show`
-helper is removed. These UI fixtures remain outside the device-retirement slice.
+The retained-data UI journeys `run-comparison.e2e.ts` and
+`copy-read-only-code.e2e.ts` use their own device-free author workspace under
+`apps/scopecat-ui/e2e/fixtures/retained-signal`. One signal parameter replaces the
+four-qubit configuration. Real workers retain comparison/source refresh, candidate
+rejection and input handoff; a fresh kernel reopens exact old publications without
+importing author code or acquiring again. The former `gallery_inputs` helper has
+no remaining consumers and is removed. Physical scientific journeys keep their
+separate reference fixtures.
 
 ## Shared generated acceptance
 

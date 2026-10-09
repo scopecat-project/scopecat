@@ -1,0 +1,7 @@
+[lab]
+bootstrap = "ui_signal.application:create_bootstrap"
+application = "ui_signal.application:create_application"
+
+[authors]
+source_roots = ["src"]
+refresh_roots = ["src/ui_signal"]
