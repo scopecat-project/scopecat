@@ -118,10 +118,13 @@ capabilities remain rejected. The admission check does not start a service or
 establish installed-delivery acceptance for every topic. Help registers those
 procedures through its existing application path.
 
-For this boundary, `scripts/verify_default_teaching_journey.py` compares freshly
-generated source and original Notebook cells with the checkout before running the
-six legacy course/reopen kernels from a wheel-installed delivery. Run it with
-that delivery's installed Python, a fresh author directory and the delivery path.
+For this boundary, `scripts/verify_teaching_delivery.py` compares all 13 default
+source, Notebook and guide resources with the checkout after the installed CLI
+creates its existing editor-check project, before preparation or edits. This
+rejects stale wheel resources without creating another environment or running
+extra kernels. The same verifier retains the six legacy course/reopen stages
+and default snapshot recovery. The retired resource-check wrapper had no CI
+consumer; its removal consolidates maintenance rather than reducing CI runtime.
 `scripts/verify_notebook_journey.py` separately checks Help's real browser/kernel,
 source edits and restart/Continue without reacquisition in the same application.
 These reject stale installed teaching resources. The added topics also have focused
