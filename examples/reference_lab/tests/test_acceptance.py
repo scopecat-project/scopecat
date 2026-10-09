@@ -66,7 +66,7 @@ def test_shared_fixture_retains_diagnostic_review_and_entity_contracts() -> None
     [reviewed] = ParameterProposalPage.model_validate(
         fixture["candidate_proposal"]
     ).items
-    assert reviewed.proposal.id == "q1-channel-delay"
+    assert reviewed.proposal.id == "q1-drag-beta"
     assert reviewed.approval is None
     schema = MeasurementDatasetSchema.model_validate(fixture["entity_analysis"])
     [entity_axis] = [

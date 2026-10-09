@@ -17,6 +17,7 @@ from scopecat.application.launch import LaunchCatalog, LaunchPreview
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementPreview
 from scopecat.kernel.quantity import Quantity
+from scopecat.planning.preflight import ExactQuantity, summarize_preflight
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
@@ -29,8 +30,7 @@ from scopecat.records.scientific_selection import (
 from scopecat_instruments import temperature_readout
 
 from reference_lab.configuration import initial_parameters
-from reference_lab.launch import launch_provider
-from reference_lab.parameters import ChannelCalibration
+from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
 from reference_lab_authors.frequency_amplitude import CONTROLS, frequency_amplitude
@@ -112,18 +112,15 @@ def capture_acceptance_fixtures(
     with AuthorProject(client.base_url, workspace_id=workspace_id) as authors:
         current_catalog = authors.catalog()
     assert current_catalog.workspace_id == workspace_id
-    # The shared UI fixture contains the three reference scenarios exercised here.
+    # The shared UI fixture contains the two ordinary author experiments exercised here.
     # Source-derived versions are checked by admission tests, not this shape fixture.
     catalog = LaunchCatalog(
         workspace_id=FIXTURE_WORKSPACE,
         entries=tuple(
             entry.model_copy(update={"version": "sha256:" + "0" * 64})
-            if entry.id != "channel-timing"
-            else entry
             for entry in current_catalog.entries
             if entry.id
             in {
-                "channel-timing",
                 "reference_lab.frequency_amplitude",
                 "reference_lab.temperature_diagnostic",
             }
@@ -141,18 +138,20 @@ def capture_acceptance_fixtures(
     selection = ScientificSelection(
         configuration=ParameterConfiguration(ref=parameters.ref, setup=setup.ref)
     )
-    setting_preview = launch_provider(
-        lab,
-        LaunchRequest(
-            workspace_id=workspace_id,
-            action="preview",
-            experiment="channel-timing",
-            version="1",
-            selection=selection,
+    # Inspect the actual compiled experiment, without the retired launcher shell.
+    setting_preview = summarize_preflight(
+        lab.preview_invocation(
+            parallel_raw_ramsey.build(),
+            config=resolved.config,
+            config_source=resolved.config_source,
         ),
+        stage_id="source",
+        label="Ramsey source",
+        configuration="selected_context",
+        config_content_hash=resolved.config_source.content_hash,
+        configuration_meaning="Explicit parameter and setup revisions",
+        executions=ExactQuantity(value=1, unit="runs", basis="One source acquisition"),
     )
-    assert isinstance(setting_preview, LaunchPreview)
-    assert setting_preview.preflight is not None
     config = resolved.config
     launch_preview = _checked_launch_preview(
         client,
@@ -305,16 +304,16 @@ def capture_acceptance_fixtures(
         invocation, config=resolved, name="Reference lab acceptance source"
     )
     analysis = (
-        source.analysis("Channel timing review")
+        source.analysis("Pulse-shape proposal")
         .result()
         .propose(
-            "q1-channel-delay",
+            "q1-drag-beta",
             sc.parameter_update(
-                ChannelCalibration.channel_delay,
+                QubitParameters.drag_beta,
                 sc.EntityRef(id="q1", kind="logical_qubit"),
                 1.0,
             ),
-            reason="align q1 acquisition with the shared readout window",
+            reason="Explicit trial pulse shape; not a fitted or accepted calibration",
         )
         .save()
     )
@@ -395,7 +394,7 @@ def capture_acceptance_fixtures(
     return {
         "launch_catalog": catalog.model_dump(mode="json"),
         "launch_preview": launch_preview.model_dump(mode="json"),
-        "planned_settings": setting_preview.preflight.stages[0].model_dump(
+        "planned_settings": setting_preview.model_dump(
             mode="json",
             include={
                 "planned_settings",

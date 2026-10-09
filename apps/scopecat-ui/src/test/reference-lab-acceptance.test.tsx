@@ -67,7 +67,7 @@ describe("shared reference-lab acceptance", () => {
     expect(screen.getByText(/drive-lo-a.*frequency/)).toBeVisible();
     expect(screen.getByText(/not observed or confirmed state/)).toBeVisible();
   });
-  it("uses the real diagnostic and reviewed-calibration catalog in the launcher", async () => {
+  it("uses the ordinary author catalog in the launcher", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) =>
@@ -112,7 +112,7 @@ describe("shared reference-lab acceptance", () => {
         </LaunchDraftProvider>
       </QueryClientProvider>,
     );
-    await screen.findByRole("option", { name: "Q1 channel timing candidate" });
+    await screen.findByRole("option", { name: "Temperature diagnostic" });
     fireEvent.change(screen.getByLabelText("Experiment"), {
       target: { value: "reference_lab.temperature_diagnostic" },
     });
@@ -292,9 +292,9 @@ describe("shared reference-lab acceptance", () => {
     serve(fixtures.candidate_proposal);
     const page = await getRunParameterProposals("acceptance-source");
     expect(page.items).toHaveLength(1);
-    expect(page.items[0]?.id).toBe("q1-channel-delay");
+    expect(page.items[0]?.id).toBe("q1-drag-beta");
     expect(page.items[0]?.approval).toBeUndefined();
-    expect(page.items[0]?.deltas[0]?.parameterId).toBe("channel_calibrations");
+    expect(page.items[0]?.deltas[0]?.parameterId).toBe("qubits");
     expect(page.items[0]?.deltas[0]?.before).not.toEqual(page.items[0]?.deltas[0]?.after);
   });
 
@@ -304,7 +304,7 @@ describe("shared reference-lab acceptance", () => {
       actor: "reviewer",
       approved_at: "2026-09-01T00:00:00Z",
       note: "Explicit operator review",
-      proposal_id: "q1-channel-delay",
+      proposal_id: "q1-drag-beta",
       run_id: "acceptance-source",
     };
     serve(approved);

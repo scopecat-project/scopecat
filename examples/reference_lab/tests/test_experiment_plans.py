@@ -9,7 +9,7 @@ import httpx2
 from pydantic import JsonValue, TypeAdapter
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorPreparedLaunch, AuthorProject
-from scopecat.application.comparison import ComparisonHandoff, comparison_selection
+from scopecat.application.comparison import ComparisonHandoff
 from scopecat.automation import RunOutputRef
 from scopecat.automation.wire import ProcedureSubmitCommand
 from scopecat.daemon.client import DaemonClient
@@ -357,58 +357,3 @@ def test_authored_plan_freezes_default_structural_input_and_explicit_copy(
             address = author.get_run(output.run_id).address
             assert address is not None and address.collection_id == collection.id
         assert lab.plans.get(saved.ref).definition.inputs == {"polarity": "positive"}
-
-
-def test_multi_stage_plan_retains_scope_while_candidate_changes_configuration(
-    independent_lab_daemon: str, independent_parameters: ParameterRevision
-) -> None:
-    from scopecat.records.sample import SampleRevisionDraft
-
-    from reference_lab.application import create_application
-    from reference_lab.configuration import EXAMPLE_ROOT
-
-    endpoint = independent_lab_daemon
-    with (
-        AuthorProject(endpoint, workspace_id=source_workspace_id(endpoint)) as author,
-        create_application(EXAMPLE_ROOT).connect(endpoint) as lab,
-    ):
-        sample = lab.samples.create(
-            f"timing-plan-{uuid4().hex}",
-            kind="synthetic",
-            content=SampleRevisionDraft(display_name="Timing chip"),
-        )
-        author.use(
-            sample=sample.id,
-            parameters=independent_parameters.ref,
-            setup=lab.setup.get("initial").ref,
-        )
-        prepared = author.prepare("channel-timing")
-        plan = prepared.save_plan("Timing review", saved_by="alice")
-        reopened = author.prepare_plan(plan.ref)
-        receipt = reopened.submit(request_key=f"timing-plan-{uuid4().hex}")
-        handle = lab.procedures.get(receipt.procedure_id).resume()
-        assert handle.state == "waiting_for_input", handle.snapshot.attention_reason
-        source_output = handle.output("source")
-        candidate_output = handle.output("candidate")
-        assert source_output.kind == "run"
-        assert candidate_output.kind == "run"
-        source = lab.get_run(source_output.run_id)
-        candidate = lab.get_run(candidate_output.run_id)
-        assert source.snapshot.scientific_binding == plan.definition.scientific_binding
-        assert (
-            candidate.snapshot.scientific_binding.subject
-            == source.snapshot.scientific_binding.subject
-        )
-        assert (
-            candidate.snapshot.config_content_hash
-            != source.snapshot.config_content_hash
-        )
-        assert source.request.plan_ref == candidate.request.plan_ref == plan.ref
-        followup = comparison_selection(candidate.snapshot)
-        assert followup.configuration.kind == "candidate"
-        assert followup.configuration.source == candidate.snapshot.config_source
-        assert followup.subject.kind == "sample"
-        assert (
-            followup.subject.sample_id == sample.id and followup.subject.revision == 1
-        )
-        handle.cancel(actor="alice", reason="Plan execution evidence checked")

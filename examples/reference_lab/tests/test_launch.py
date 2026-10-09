@@ -19,7 +19,7 @@ from scopecat.daemon.client import DaemonClient, DaemonConflictError
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.kernel.content_identity import sha256_json_hash
 from scopecat.kernel.quantity import Quantity
-from scopecat.planning.preflight import ExactQuantity, PreflightStage, UnknownQuantity
+from scopecat.planning.preflight import PreflightStage, UnknownQuantity
 from scopecat.project import Project, load_project
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementScalar
@@ -138,14 +138,11 @@ def assert_retained_shapes(stage: PreflightStage, run: RunHandle) -> None:
         assert product.unit == variable.unit
 
 
-@pytest.mark.parametrize(
-    "experiment", ["reference_lab.temperature_diagnostic", "channel-timing"]
-)
 def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
-    experiment: str,
 ) -> None:
+    experiment = "reference_lab.temperature_diagnostic"
     provider = launch_application.launch_provider
     assert provider is not None
     with (
@@ -232,9 +229,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             exclude=exclude
         )
         assert preview.preflight is not None
-        assert len(preview.preflight.stages) == (
-            1 if experiment == "reference_lab.temperature_diagnostic" else 2
-        )
+        assert len(preview.preflight.stages) == 1
         assert all(stage.selected_points <= 1 for stage in preview.preflight.stages)
         assert all(stage.sampled_points <= 64 for stage in preview.preflight.stages)
         for stage in preview.preflight.stages:
@@ -242,34 +237,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
             assert isinstance(wall_time.quantity, UnknownQuantity)
             assert wall_time.scope == "experiment"
             assert len(stage.planned_settings) <= stage.planned_setting_limit == 64
-            if experiment == "channel-timing":
-                [frequency] = [
-                    setting
-                    for setting in stage.planned_settings
-                    if setting.instrument_id == "drive-lo-a"
-                    and setting.setting.target.property_id == "frequency"
-                ]
-                assert frequency.setting.value.root == Quantity(4_850_000_000, "Hz")
-                assert frequency.point_index == 0
-                assert not stage.planned_settings_truncated
-                assert isinstance(stage.shots_per_point_per_entity, ExactQuantity)
-                assert stage.shots_per_point_per_entity.value == 64
-                playback = next(
-                    cost
-                    for cost in stage.costs
-                    if cost.metric == "waveform_playback_time"
-                )
-                assert isinstance(playback.quantity, ExactQuantity)
-                assert playback.quantity.value > 0
-                assert playback.quantity.unit == "s"
-                assert playback.scope == "inspected_artifact"
-                assert playback.target_id == stage.inspections[0].target_id
-                assert playback.artifact_fingerprint == (
-                    stage.inspections[0].artifact_fingerprint
-                )
-        assert preview.point_count == (
-            1 if experiment == "reference_lab.temperature_diagnostic" else 2
-        )
+        assert preview.point_count == 1
         assert isinstance(preview.reviewed.config_source, ParameterRunConfigSource)
         choice = reference_lab_daemon.selection.configuration
         assert isinstance(choice, ParameterConfiguration)
@@ -280,7 +248,7 @@ def test_real_http_preview_shares_catalog_and_never_admits_acquisition(
         assert lab.config.registry().entries == ()
 
 
-def test_exact_context_survives_default_changes_and_replays_exact_admission(
+def test_exact_context_survives_other_setup_saves_and_replays_exact_admission(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
 ) -> None:
@@ -363,89 +331,11 @@ def test_exact_context_survives_default_changes_and_replays_exact_admission(
             assert client.measurement_preview(run.id).items == records
 
 
-def test_candidate_uses_existing_review_state_and_retains_result_references(
-    reference_lab_daemon: _Daemon,
-    launch_application: LabApplication,
-) -> None:
-    from reference_lab.launch import TIMING_REVIEW, TimingReview
-
-    provider = launch_application.launch_provider
-    assert provider is not None
-    with launch_application.connect(reference_lab_daemon.url) as lab:
-        request = LaunchRequest(
-            workspace_id=source_workspace_id(reference_lab_daemon.url),
-            action="preview",
-            selection=reference_lab_daemon.selection,
-            experiment="channel-timing",
-            version="1",
-        )
-        preview = provider(lab, request)
-        assert isinstance(preview, LaunchPreview)
-        before = lab.setup.get("initial")
-        command = submit_request(request, preview, "launch-reviewed-candidate")
-        assert preview.procedure_definition is not None
-        with httpx2.Client(base_url=reference_lab_daemon.url, trust_env=False) as http:
-            retained = http.post(
-                "/api/v1/launch-attempts",
-                json={
-                    "definition": preview.procedure_definition.model_dump(mode="json"),
-                    "request": command.model_dump(mode="json"),
-                },
-            )
-            retained.raise_for_status()
-            sequence = cast("int", retained.json()["sequence"])
-            missing = http.get(f"/api/v1/launch-attempts/{sequence}/resolve")
-            missing.raise_for_status()
-            assert missing.json()["procedure_id"] is None
-        admitted = provider(lab, command)
-        assert isinstance(admitted, LaunchSubmission)
-        with httpx2.Client(base_url=reference_lab_daemon.url, trust_env=False) as http:
-            recovered = http.get(f"/api/v1/launch-attempts/{sequence}/resolve")
-            recovered.raise_for_status()
-            assert recovered.json()["procedure_id"] == admitted.procedure_id
-        assert isinstance(admitted, LaunchSubmission)
-        handle = lab.procedures.get(admitted.procedure_id).resume()
-        assert handle.state == "waiting_for_input"
-        assert handle.output("source").kind == "run"
-        assert handle.output("proposal").kind == "analysis"
-        candidate = handle.output("candidate")
-        assert candidate.kind == "run"
-        candidate_source = lab.get_run(candidate.run_id).snapshot.config_source
-        assert (
-            candidate_source is not None
-            and candidate_source.kind == "analysis_candidate"
-        )
-        assert preview.preflight is not None
-        assert [stage.configuration for stage in preview.preflight.stages] == [
-            "selected_context",
-            "proposed_candidate",
-        ]
-        for stage in preview.preflight.stages:
-            output = handle.output(stage.id)
-            assert output.kind == "run"
-            assert_retained_shapes(stage, lab.get_run(output.run_id))
-        review = handle.step("review").interpretation_request
-        assert review is not None and review.schema_id == TIMING_REVIEW.id
-        handle.respond(
-            "review",
-            TimingReview(True, "Candidate checked"),
-            schema=TIMING_REVIEW,
-            actor="reviewer",
-        )
-        handle.resume()
-        assert handle.state == "closed"
-        assert lab.setup.get("initial") == before
-        assert lab.config.registry().entries == ()
-
-
-@pytest.mark.parametrize(
-    "experiment", ["reference_lab.temperature_diagnostic", "channel-timing"]
-)
 def test_http_submission_dispatches_the_same_durable_diagnostic(
     reference_lab_daemon: _Daemon,
     launch_application: LabApplication,
-    experiment: str,
 ) -> None:
+    experiment = "reference_lab.temperature_diagnostic"
     with (
         launch_application.connect(reference_lab_daemon.url) as lab,
         httpx2.Client(
@@ -502,15 +392,8 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
             and time.monotonic() < deadline
         ):
             time.sleep(0.05)
-        assert handle.state == (
-            "waiting_for_input" if experiment == "channel-timing" else "closed"
-        )
-        assert (
-            handle.output(
-                "source" if experiment == "channel-timing" else "experiment"
-            ).kind
-            == "run"
-        )
+        assert handle.state == "closed"
+        assert handle.output("experiment").kind == "run"
         # Successful worker execution reloaded the retained source and matched the
         # exact preview definition before running any procedure step.
         assert handle.snapshot.definition == preview.procedure_definition
@@ -527,65 +410,6 @@ def test_http_submission_dispatches_the_same_durable_diagnostic(
         )
         retry.raise_for_status()
         assert LaunchSubmission.model_validate(retry.json()) == admitted
-
-
-def test_noop_candidate_preview_reports_reason_without_admitting_work(
-    reference_lab_daemon: _Daemon,
-    launch_application: LabApplication,
-) -> None:
-    import scopecat as sc
-    from scopecat.config.parameter_updates import materialize_parameter_updates
-
-    from reference_lab.parameters import ChannelCalibration
-
-    with (
-        launch_application.connect(reference_lab_daemon.url) as lab,
-        DaemonClient(reference_lab_daemon.url) as client,
-        httpx2.Client(
-            base_url=reference_lab_daemon.url, trust_env=False, timeout=30
-        ) as http,
-    ):
-        choice = reference_lab_daemon.selection.configuration
-        assert isinstance(choice, ParameterConfiguration)
-        original = lab.parameters.resolve(choice.ref, setup=choice.setup).config
-        parameters, _ = materialize_parameter_updates(
-            catalog=original.parameter_catalog,
-            base=original.parameter_snapshot,
-            updates=(
-                sc.parameter_update(
-                    ChannelCalibration.channel_delay,
-                    sc.EntityRef(id="q1", kind="logical_qubit"),
-                    1.0,
-                ),
-            ),
-            candidate_id="already-at-requested-delay",
-        )
-        saved = lab.parameters.save(
-            name="already-at-requested-delay",
-            catalog=original.parameter_catalog,
-            parameters=parameters,
-        )
-        selection = ScientificSelection(
-            configuration=ParameterConfiguration(ref=saved.ref, setup=choice.setup)
-        )
-        before = client.list_runs()
-        response = http.post(
-            "/api/v1/experiment-launcher/preview",
-            json={
-                "workspace_id": source_workspace_id(reference_lab_daemon.url),
-                "action": "preview",
-                "experiment": "channel-timing",
-                "version": "1",
-                "selection": selection.model_dump(mode="json"),
-            },
-        )
-        assert response.status_code == 422, response.text
-        assert (
-            "parameter change proposal does not change the base snapshot"
-            in response.text
-        )
-        assert client.list_runs() == before
-        assert lab.config.registry().entries == ()
 
 
 def test_http_controls_persist_one_source_and_match_notebook_edits(

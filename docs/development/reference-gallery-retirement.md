@@ -68,6 +68,16 @@ buffer transport, trigger ordering, ambiguous-load failure, shared claims and
 reset recovery. Removing the old receipt-only branch does not replace these
 physical/compiler boundaries with compute-only evidence.
 
+The legacy `channel-timing` launcher and its `channel_delay` parameter are
+retired. The operator supplied that proposal; neither compilation nor execution
+consumed the value, so a completed candidate run did not establish timing
+calibration. DRAG tests retain measured candidates, independent verification,
+branch publication and joint recovery. Core scientific-admission tests own
+multi-stage plan subject/configuration rules. Shared acceptance still inspects
+real Ramsey planned settings and displays a trial DRAG-parameter proposal;
+execution alone is not scientific approval. No timing-calibration capability is
+claimed by that display fixture.
+
 The current source map is in the [reference lab README](https://github.com/scopecat-project/scopecat/blob/main/examples/reference_lab/README.md).
 
 ## Scientific and data limits

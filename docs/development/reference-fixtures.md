@@ -105,15 +105,14 @@ recovery, unchanged failed-procedure history, exact recovery provenance and
 idempotency/conflict checks. Run counts compare against the existing store rather
 than assuming the service belongs to only one test.
 
-The launcher suite starts two equipment-only daemons to retain foreign-endpoint
-isolation coverage. Only the target daemon receives explicit parameter revisions;
-catalog, preflight, control edits, candidate review and HTTP dispatch do not rely
-on a global parameter default. Its stale-preview test now changes executable
-setup authority: new work from the old review is rejected, while replay of an
-existing admission remains idempotent. No-op candidate diagnostics use a separate
-saved parameter revision rather than temporarily changing a global default.
-Selecting inputs is not scientific acceptance; preflight reports selected context
-and proposed candidate separately.
+The ordinary-author launcher suite starts two equipment-only daemons to retain
+foreign-endpoint isolation. Catalog, preflight, control edits and HTTP dispatch
+use explicit parameter revisions. Saving another setup does not mutate an exact
+reviewed launch; original-admission replay remains idempotent. The old timing
+candidate launcher is removed because its delay was never consumed by compilation
+or execution. DRAG tests own scientific candidate review and recovery, while
+server scientific-admission tests own distinct-stage plan configurations and
+unchanged sample subjects.
 
 Retained device/scientific fixtures start with equipment only and explicitly save
 parameter revisions when needed; direct instrument control needs none.
@@ -221,7 +220,8 @@ device registry exercise exact parameter/setup/source identities without loading
 quantum compilation. Source edits, frozen in-flight work, conflicts and restart
 still cross real workers and storage. `manual-launch.e2e.ts` and the remaining
 `procedure-operator.e2e.ts` cases retain device ownership, device-revision
-invalidation and the physical timing candidate/review path.
+invalidation and diagnostic admission/restart. DRAG integration tests retain
+scientific candidate verification; the legacy timing launcher is retired.
 
 ## Shared generated acceptance
 

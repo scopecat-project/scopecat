@@ -5,26 +5,36 @@
         "approval": null,
         "proposal": {
           "analysis_record_id": "acceptance-analysis",
-          "base_config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "base_config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
           "base_config_id": "acceptance-parameters",
           "composition": null,
           "confidence": null,
           "deltas": [
             {
               "after": {
-                "id": "channel_calibrations",
+                "id": "qubits",
                 "rows": [
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.0
+                      "value": 0.5
                     },
-                    "flux_gain": 0.98,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.0
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4800000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.2
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 16.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.0
+                    },
                     "qubit": {
                       "id": "q0",
                       "kind": "logical_qubit",
@@ -32,16 +42,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
                       "value": 1.0
                     },
-                    "flux_gain": 1.02,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.002
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4900000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.18
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 18.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.5
+                    },
                     "qubit": {
                       "id": "q1",
                       "kind": "logical_qubit",
@@ -49,16 +69,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": -0.5
+                      "value": 0.4
                     },
-                    "flux_gain": 1.01,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": -0.001
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5000000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.17
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 20.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.0
+                    },
                     "qubit": {
                       "id": "q2",
                       "kind": "logical_qubit",
@@ -66,16 +96,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.75
+                      "value": 0.35
                     },
-                    "flux_gain": 0.99,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.003
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5100000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.16
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 22.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.5
+                    },
                     "qubit": {
                       "id": "q3",
                       "kind": "logical_qubit",
@@ -86,19 +126,29 @@
                 "shape": "table"
               },
               "before": {
-                "id": "channel_calibrations",
+                "id": "qubits",
                 "rows": [
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.0
+                      "value": 0.5
                     },
-                    "flux_gain": 0.98,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.0
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4800000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.2
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 16.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.0
+                    },
                     "qubit": {
                       "id": "q0",
                       "kind": "logical_qubit",
@@ -106,16 +156,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 1.5
+                      "value": 0.45
                     },
-                    "flux_gain": 1.02,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.002
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4900000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.18
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 18.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.5
+                    },
                     "qubit": {
                       "id": "q1",
                       "kind": "logical_qubit",
@@ -123,16 +183,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": -0.5
+                      "value": 0.4
                     },
-                    "flux_gain": 1.01,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": -0.001
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5000000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.17
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 20.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.0
+                    },
                     "qubit": {
                       "id": "q2",
                       "kind": "logical_qubit",
@@ -140,16 +210,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.75
+                      "value": 0.35
                     },
-                    "flux_gain": 0.99,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.003
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5100000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.16
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 22.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.5
+                    },
                     "qubit": {
                       "id": "q3",
                       "kind": "logical_qubit",
@@ -167,10 +247,10 @@
                   },
                   "before": {
                     "unit": "ns",
-                    "value": 1.5
+                    "value": 0.45
                   },
                   "change_kind": "physical",
-                  "field": "channel_delay",
+                  "field": "drag_beta",
                   "key": {
                     "qubit": {
                       "id": "q1",
@@ -180,13 +260,13 @@
                   }
                 }
               ],
-              "parameter_id": "channel_calibrations"
+              "parameter_id": "qubits"
             }
           ],
           "evidence_output_ids": [],
-          "id": "q1-channel-delay",
+          "id": "q1-drag-beta",
           "proposed_at": "2026-09-01T00:00:00Z",
-          "reason": "align q1 acquisition with the shared readout window",
+          "reason": "Explicit trial pulse shape; not a fitted or accepted calibration",
           "source_run_id": "acceptance-source"
         }
       }
@@ -696,7 +776,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:00005e340e0cdc4f974654f5246c8802c7451b259d0c997b23c0a02f01e0164b",
+        "config_source_hash": "sha256:f81f05d7012d0e23d55a468b5086d7458bb5d0e3ab8509fd5be760a7d70cc455",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -707,7 +787,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -795,7 +875,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:41133cca73c218363ebc52037c0d8a1373efe1165ada3b71804cdc387b11354c",
+      "fingerprint": "sha256:21a591fbec616bbce71df2ac3b7476ed2275dfb7350d0c060fc65217cecdc687",
       "id": "scopecat.author:reference_lab.frequency_amplitude",
       "version": "1"
     },
@@ -805,7 +885,7 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
         "scenario": null,
         "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
         "subject": {
@@ -814,16 +894,16 @@
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "content_hash": "sha256:a208747d2a60505d2f83e325b654823e776451764e0dbb2b3774fc49fd7fb909",
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d",
-          "revision_id": "resolved:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d"
+          "content_hash": "sha256:5d88e2708b83ec5fee7d320c5f0f95f615b32392cf45df89b1e995404ff2ed0b",
+          "revision_id": "resolved:5d88e2708b83ec5fee7d320c5f0f95f615b32392cf45df89b1e995404ff2ed0b"
         }
       }
     },
@@ -1094,7 +1174,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:00005e340e0cdc4f974654f5246c8802c7451b259d0c997b23c0a02f01e0164b",
+        "config_source_hash": "sha256:f81f05d7012d0e23d55a468b5086d7458bb5d0e3ab8509fd5be760a7d70cc455",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1105,7 +1185,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1193,7 +1273,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:41133cca73c218363ebc52037c0d8a1373efe1165ada3b71804cdc387b11354c",
+      "fingerprint": "sha256:21a591fbec616bbce71df2ac3b7476ed2275dfb7350d0c060fc65217cecdc687",
       "id": "scopecat.author:reference_lab.frequency_amplitude",
       "version": "1"
     },
@@ -1203,7 +1283,7 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
         "scenario": null,
         "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
         "subject": {
@@ -1212,16 +1292,16 @@
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "content_hash": "sha256:a208747d2a60505d2f83e325b654823e776451764e0dbb2b3774fc49fd7fb909",
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d",
-          "revision_id": "resolved:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d"
+          "content_hash": "sha256:5d88e2708b83ec5fee7d320c5f0f95f615b32392cf45df89b1e995404ff2ed0b",
+          "revision_id": "resolved:5d88e2708b83ec5fee7d320c5f0f95f615b32392cf45df89b1e995404ff2ed0b"
         }
       }
     },
@@ -1565,53 +1645,6 @@
           "preview",
           "submit"
         ],
-        "configuration_effect": "candidate",
-        "controls": [],
-        "description": "Measure, propose a timing change, run its candidate and request review. Accepting it as default remains a separate operator action.",
-        "id": "channel-timing",
-        "kind": "calibration",
-        "request": {
-          "additionalProperties": false,
-          "properties": {
-            "delay_ns": {
-              "default": 1.0,
-              "maximum": 10.0,
-              "minimum": 0.1,
-              "title": "Q1 channel delay (ns)",
-              "type": "number"
-            }
-          },
-          "title": "TimingRequest",
-          "type": "object"
-        },
-        "review": {
-          "instructions": "Review the source and candidate runs. Configuration acceptance is a separate action in the run's parameter proposals.",
-          "metadata": {},
-          "response_template": null,
-          "schema_codec": "scopecat.analysis-fact-schema.v1",
-          "schema_hash": "sha256:883d70a0d3ea73df08178493624f7f07abe2dd3e5ff08e286079c6f4adcdc98e",
-          "schema_id": "reference_lab.channel_timing_review.v1",
-          "structure": {
-            "fields": {
-              "accepted": {
-                "type": "bool"
-              },
-              "note": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "title": "Review q1 channel timing"
-        },
-        "title": "Q1 channel timing candidate",
-        "version": "1"
-      },
-      {
-        "actions": [
-          "preview",
-          "submit"
-        ],
         "configuration_effect": "none",
         "controls": [
           {
@@ -1782,7 +1815,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:00005e340e0cdc4f974654f5246c8802c7451b259d0c997b23c0a02f01e0164b",
+        "config_source_hash": "sha256:f81f05d7012d0e23d55a468b5086d7458bb5d0e3ab8509fd5be760a7d70cc455",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1793,7 +1826,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1895,7 +1928,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:20f26063c5bdc0295f712dca26e4588e25c64da80c9a460d9566d7df06aafcda",
+      "fingerprint": "sha256:1d15766df1adafd95befc5217968b2d68cef2d5005f71760c9ab1f84c7183508",
       "id": "scopecat.author:reference_lab.temperature_diagnostic",
       "version": "1"
     },
@@ -1907,7 +1940,7 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
         "scenario": null,
         "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
         "subject": {
@@ -1916,16 +1949,16 @@
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "content_hash": "sha256:a208747d2a60505d2f83e325b654823e776451764e0dbb2b3774fc49fd7fb909",
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d",
-          "revision_id": "resolved:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d"
+          "content_hash": "sha256:5d88e2708b83ec5fee7d320c5f0f95f615b32392cf45df89b1e995404ff2ed0b",
+          "revision_id": "resolved:5d88e2708b83ec5fee7d320c5f0f95f615b32392cf45df89b1e995404ff2ed0b"
         }
       }
     },

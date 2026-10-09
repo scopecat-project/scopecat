@@ -163,9 +163,9 @@ uv run basedpyright examples/reference_lab
 
 The [fixture ownership guide](../../docs/development/reference-fixtures.md#shared-generated-acceptance)
 documents shared response generation and coverage.
-`temperature_diagnostic()` in `workflows/temperature_diagnostic.py` retains one
+`temperature_diagnostic()` in `reference_lab_authors/temperature_diagnostic.py` retains one
 read-only thermometer sample through the normal run API. The shared fixture
-producer also exercises a reviewed timing candidate, resource wait/cancel and
+producer also exercises a trial DRAG-parameter candidate, resource wait/cancel and
 entity-indexed analysis using the existing public workflows.
 
 ```sh
@@ -175,12 +175,10 @@ uv run pytest examples/reference_lab/tests/test_acceptance.py
 
 ## Bounded launch preflight
 
-The typed launcher declares a diagnostic stage or separate source and candidate
-verification stages. Each stage reports planned executions, entity IDs, points,
-shots and configuration meaning. The first experiment's initial point count is
-not the entire procedure workload. The candidate stage uses the proposed channel
-delay to preview its configuration; this does not claim the candidate has run,
-passed verification or been accepted as the default.
+Ordinary author experiments use the framework launcher. The old channel-timing
+launcher is removed: its operator-supplied delay never entered the compiler or
+device execution. Scientific candidate verification belongs to the DRAG workflows.
+Shared acceptance obtains planned physical settings directly from a Ramsey preview.
 
 `planning.preflight.summarize_preflight` projects an existing experiment preview
 without compiling additional points. The preview displays at most 64 point
