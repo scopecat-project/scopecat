@@ -12,14 +12,14 @@ explicitly resolved `config` from your author session:
 ```python
 import scopecat as sc
 
-FREQUENCY = sc.Control(
-    "frequency", default=sc.Quantity(4.8, "GHz"), scannable=True
-)
+FREQUENCY = sc.Control("frequency", default=sc.Quantity(4.8, "GHz"), scannable=True)
 CONTROLS = sc.ControlSet((FREQUENCY,))
+
 
 @sc.experiment(controls=CONTROLS)
 def controlled(context: sc.ExperimentContext):
     return FREQUENCY.ref
+
 
 original = controlled.build()
 fixed = CONTROLS.apply(
