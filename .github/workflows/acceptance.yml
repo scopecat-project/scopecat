@@ -10,6 +10,7 @@ on:
         options:
           - full
           - local-application
+          - browser
           - service-lifecycle
           - native-distribution
           - public-preview
@@ -307,7 +308,7 @@ jobs:
         run: uv run --locked ruff format --check .
 
   ui:
-    if: inputs.profile == 'full' || inputs.profile == 'local-application'
+    if: inputs.profile == 'full' || inputs.profile == 'local-application' || inputs.profile == 'browser'
     name: UI
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -369,6 +370,11 @@ jobs:
       - name: Build standard framework artifacts and matching GUI
         run: uv run --locked --project ../.. python ../../scripts/build_preview.py ../../dist/framework
 
+      - name: Validate framework and GUI identity
+        run: >-
+          uv run --locked --project ../.. python ../../scripts/verify_acceptance_artifacts.py
+          --bundle ../../dist/framework --commit "$GITHUB_SHA"
+
       - name: Upload shared framework artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -411,6 +417,10 @@ jobs:
         with:
           name: scopecat-framework
           path: dist/framework
+      - name: Validate the downloaded browser input
+        run: >-
+          uv run --locked --project ../.. python ../../scripts/verify_acceptance_artifacts.py
+          --bundle ../../dist/framework --commit "$GITHUB_SHA"
       - name: Extract the shared browser GUI
         run: python -m zipfile -e ../../dist/framework/scopecat-ui.zip dist
       - run: pnpm exec playwright install --with-deps chromium
@@ -430,6 +440,7 @@ jobs:
           retention-days: 7
 
   installed-artifacts:
+    if: inputs.profile == 'full' || inputs.profile == 'local-application'
     name: Installed artifacts (${{ matrix.os }})
     needs: ui
     strategy:
@@ -578,6 +589,15 @@ jobs:
             exit 0
           fi
           test "$SERVICE_LIFECYCLE_RESULT" = skipped
+          if [ "$PROFILE" = browser ]; then
+            test "$UI_RESULT" = success
+            test "$BROWSER_TESTS_RESULT" = success
+            for result in "$INSTALLED_ARTIFACTS_RESULT" "$PYTHON_TESTS_RESULT" \
+              "$BENCHMARK_SMOKE_RESULT" "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
+              test "$result" = skipped
+            done
+            exit 0
+          fi
           test "$INSTALLED_ARTIFACTS_RESULT" = success
           test "$BROWSER_TESTS_RESULT" = success
           test "$UI_RESULT" = success
