@@ -222,7 +222,7 @@ describe("Run receipt summary", () => {
     expect(summary).toHaveTextContent("Received records 10");
     expect(summary).toHaveTextContent("Saved records 4");
     expect(summary).toHaveTextContent("6 received records awaiting save");
-    expect(summary).toHaveTextContent("waiting for execution and saving to finish");
+    expect(summary).not.toHaveTextContent("Planned data received");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("Succeeded")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Execution evidence", { exact: true }));

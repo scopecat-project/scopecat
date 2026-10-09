@@ -661,7 +661,7 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText(/^1 records/)).toBeVisible();
-    expect(screen.getByText(/Latest daemon receipt: point 1; not saved yet/)).toBeVisible();
+    expect(screen.getByText(/Latest daemon receipt: point index 0; not saved yet/)).toBeVisible();
     expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
       "Received records 1",
     );

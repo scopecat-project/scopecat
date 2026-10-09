@@ -100,14 +100,6 @@ export function ProgressCard({
           completion.
         </p>
       )}
-      {active &&
-        run.plan.pointCount !== undefined &&
-        received !== undefined &&
-        received >= run.plan.pointCount && (
-          <p className="mt-2 text-sm text-text-soft">
-            Planned data received; waiting for execution and saving to finish.
-          </p>
-        )}
       {received === undefined && active && (
         <p className="mt-2 text-sm text-text-soft">
           {run.status === "accepted"
