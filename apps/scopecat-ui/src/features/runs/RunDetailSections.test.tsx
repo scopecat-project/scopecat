@@ -221,7 +221,7 @@ describe("Run receipt summary", () => {
     const summary = screen.getByRole("region", { name: "Run progress" });
     expect(summary).toHaveTextContent("Received records 10");
     expect(summary).toHaveTextContent("Saved records 4");
-    expect(summary).toHaveTextContent("6 received records awaiting save");
+    expect(summary).toHaveTextContent("6 received records not saved yet");
     expect(summary).not.toHaveTextContent("Planned data received");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("Succeeded")).not.toBeInTheDocument();
@@ -231,7 +231,7 @@ describe("Run receipt summary", () => {
 
   it("does not invent receipts from coverage, and marks failed live refreshes", () => {
     render(<ProgressCard run={run} events={[]} receiptError={new Error("disconnected")} />);
-    expect(screen.getByText(/Device acquisition progress is not inferred/)).toBeVisible();
+    expect(screen.getByText("No measurement data received yet.")).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("Displayed counts and plots may be stale");
     expect(screen.getByRole("region", { name: "Run progress" })).not.toHaveTextContent(
       "Received records 9",

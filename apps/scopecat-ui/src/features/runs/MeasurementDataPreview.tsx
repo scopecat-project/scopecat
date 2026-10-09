@@ -173,7 +173,7 @@ export function MeasurementDataPreview({
 
       {preview.livePointIndex !== undefined && (
         <div className="border-b border-line bg-blue-soft px-3 py-2 text-xs text-blue">
-          Latest daemon receipt: point index {preview.livePointIndex}; not saved yet.
+          Latest received data: point index {preview.livePointIndex}; not saved yet.
         </div>
       )}
 

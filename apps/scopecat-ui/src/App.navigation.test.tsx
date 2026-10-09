@@ -628,6 +628,28 @@ describe("config provenance navigation", () => {
     );
   });
 
+  it("counts only saved preview records when live data is inactive", async () => {
+    window.history.replaceState(null, "", "/?run=run-1");
+    vi.mocked(getMeasurementPreview).mockResolvedValue({
+      items: [measurementRecord(0, 1)],
+      truncated: true,
+    });
+    vi.mocked(getMeasurementLivePreview).mockResolvedValue({
+      active: false,
+      latest: measurementRecord(1, 2),
+      receivedRecordCount: 2,
+      durableRecordCount: 1,
+    });
+
+    renderApp();
+    await waitFor(() => expect(getMeasurementLivePreview).toHaveBeenCalled());
+    expect(await screen.findByText(/^1\+ records/)).toBeVisible();
+    const progress = screen.getByRole("region", { name: "Run progress" });
+    expect(progress).toHaveTextContent("Saved preview records 1+");
+    expect(progress).not.toHaveTextContent(/Received records \d/);
+    expect(screen.queryByText(/Latest received data:/)).not.toBeInTheDocument();
+  });
+
   it("shows the latest daemon-received record before it is durable", async () => {
     window.history.replaceState(null, "", "/?run=run-1");
     const running = {
@@ -661,12 +683,15 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText(/^1 records/)).toBeVisible();
-    expect(screen.getByText(/Latest daemon receipt: point index 0; not saved yet/)).toBeVisible();
+    expect(screen.getByText(/Latest received data: point index 0; not saved yet/)).toBeVisible();
     expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
       "Received records 1",
     );
     expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
       "Saved records 0",
+    );
+    expect(screen.getByRole("region", { name: "Run progress" })).not.toHaveTextContent(
+      "Saved preview records",
     );
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });

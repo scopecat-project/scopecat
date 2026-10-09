@@ -1115,7 +1115,7 @@ describe("measurement visualization", () => {
     );
     expect(screen.getByText(/Partial received data; gaps are not interpolated/)).toBeVisible();
     expect(screen.getByText(/2 plotted points/)).toBeInTheDocument();
-    expect(screen.getByText(/Latest daemon receipt: point index 2; not saved yet/)).toBeVisible();
+    expect(screen.getByText(/Latest received data: point index 2; not saved yet/)).toBeVisible();
     expect(screen.queryByText(/3 plotted points/)).not.toBeInTheDocument();
   });
 

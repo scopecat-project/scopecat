@@ -90,21 +90,20 @@ export function ProgressCard({
       </div>
       {receiptError && (
         <p role="status" className="mt-2 text-sm text-yellow">
-          Live receipt unavailable. Displayed counts and plots may be stale:{" "}
+          Live updates unavailable. Displayed counts and plots may be stale:{" "}
           {errorMessage(receiptError)}
         </p>
       )}
       {received !== undefined && saved !== undefined && received > saved && (
         <p className="mt-2 text-sm text-yellow">
-          {received - saved} received records awaiting save. Received data is not recovery
-          completion.
+          {received - saved} received records not saved yet.
         </p>
       )}
       {received === undefined && active && (
         <p className="mt-2 text-sm text-text-soft">
           {run.status === "accepted"
-            ? "Accepted for execution; no measurement receipt reported."
-            : "No measurement receipt reported. Device acquisition progress is not inferred."}
+            ? "Waiting to start; no measurement data received yet."
+            : "No measurement data received yet."}
         </p>
       )}
       <details className="mt-1 text-xs text-text-dim">
@@ -119,8 +118,9 @@ export function ProgressCard({
           {run.updatedAt ? formatRelative(run.updatedAt) : "Not reported"}
         </p>
         <p className="mt-1">
-          Receipt counts describe data received by the daemon, not work inside a device batch. A
-          successful run includes saving and finalization.
+          Receipt counts describe data received by the daemon, not work inside a device batch.
+          Device acquisition progress is not inferred. A successful run includes saving and
+          finalization.
         </p>
       </details>
     </section>
