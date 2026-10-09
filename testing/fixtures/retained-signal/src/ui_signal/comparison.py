@@ -1,4 +1,4 @@
-"""Only the retained-data UI actions; scientific policy stays in reference tests."""
+"""Retained comparison, candidate review and input handoff for a synthetic signal."""
 
 from __future__ import annotations
 

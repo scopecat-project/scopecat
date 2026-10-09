@@ -696,7 +696,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:bb4a698804831f364179a708856edef433db0f8da45278d0b30b3f05f29c4794",
+        "config_source_hash": "sha256:8d83256d146b8a7b4d02ab0fe2980600b20e9559444bab9badbd37098fe91a53",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -795,7 +795,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:cb97ec99c88b5d2d4c0254a6531880a82c0b7c25136b364a1ab7cb876fa955f5",
+      "fingerprint": "sha256:b10a101519962073c53302c0990a85cd47e8c77d728d28c0845fe07d6cfe6ddc",
       "id": "scopecat.author:reference_lab.frequency_amplitude",
       "version": "1"
     },
@@ -822,8 +822,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:1a9540e00aa8875f51f758d4f24146effc7622275c5b63a6f20a4b88e7623639",
-          "revision_id": "resolved:1a9540e00aa8875f51f758d4f24146effc7622275c5b63a6f20a4b88e7623639"
+          "content_hash": "sha256:4c17bcbc9711bc105e773e02d693f0a070b121b67542fa1d3e89ba01ff92f744",
+          "revision_id": "resolved:4c17bcbc9711bc105e773e02d693f0a070b121b67542fa1d3e89ba01ff92f744"
         }
       }
     },
@@ -1094,7 +1094,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:bb4a698804831f364179a708856edef433db0f8da45278d0b30b3f05f29c4794",
+        "config_source_hash": "sha256:8d83256d146b8a7b4d02ab0fe2980600b20e9559444bab9badbd37098fe91a53",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1193,7 +1193,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:cb97ec99c88b5d2d4c0254a6531880a82c0b7c25136b364a1ab7cb876fa955f5",
+      "fingerprint": "sha256:b10a101519962073c53302c0990a85cd47e8c77d728d28c0845fe07d6cfe6ddc",
       "id": "scopecat.author:reference_lab.frequency_amplitude",
       "version": "1"
     },
@@ -1220,8 +1220,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:1a9540e00aa8875f51f758d4f24146effc7622275c5b63a6f20a4b88e7623639",
-          "revision_id": "resolved:1a9540e00aa8875f51f758d4f24146effc7622275c5b63a6f20a4b88e7623639"
+          "content_hash": "sha256:4c17bcbc9711bc105e773e02d693f0a070b121b67542fa1d3e89ba01ff92f744",
+          "revision_id": "resolved:4c17bcbc9711bc105e773e02d693f0a070b121b67542fa1d3e89ba01ff92f744"
         }
       }
     },
@@ -1782,7 +1782,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:bb4a698804831f364179a708856edef433db0f8da45278d0b30b3f05f29c4794",
+        "config_source_hash": "sha256:8d83256d146b8a7b4d02ab0fe2980600b20e9559444bab9badbd37098fe91a53",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1895,7 +1895,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:0a3f05a64cf052cf9ebd2c1510dd6cf04fe240418e66e934a8d4975c6e940348",
+      "fingerprint": "sha256:564e9d8f300e6f8004d0c80832ea7e2cf29554375ac289ab215d124600241bc3",
       "id": "scopecat.author:reference_lab.temperature_diagnostic",
       "version": "1"
     },
@@ -1924,8 +1924,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:1a9540e00aa8875f51f758d4f24146effc7622275c5b63a6f20a4b88e7623639",
-          "revision_id": "resolved:1a9540e00aa8875f51f758d4f24146effc7622275c5b63a6f20a4b88e7623639"
+          "content_hash": "sha256:4c17bcbc9711bc105e773e02d693f0a070b121b67542fa1d3e89ba01ff92f744",
+          "revision_id": "resolved:4c17bcbc9711bc105e773e02d693f0a070b121b67542fa1d3e89ba01ff92f744"
         }
       }
     },
