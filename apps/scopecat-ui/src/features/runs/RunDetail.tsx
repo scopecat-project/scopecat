@@ -27,6 +27,7 @@ import { RunAnalysisFollows } from "./RunAnalysisFollows";
 import { RunFailureEvidence } from "./RunFailureEvidence";
 import { RunDomainDecisionCard } from "./RunDomainDecisionCard";
 import type {
+  MeasurementSliceSelection,
   MeasurementEntitySelection,
   MeasurementTraceQueryPlan,
 } from "./measurement-visualization";
@@ -67,6 +68,8 @@ export function RunDetail({
   onTracePlanChange,
   onMeasurementEntitySelectionChange,
   measurementFixedAxisIndices,
+  measurementAxes,
+  onMeasurementAxesChange,
   onMeasurementSliceOffsetChange,
   onMeasurementFixedAxisIndexChange,
   analyses,
@@ -110,6 +113,8 @@ export function RunDetail({
   onTracePlanChange: (planId: string) => void;
   onMeasurementEntitySelectionChange: (selection: MeasurementEntitySelection) => void;
   measurementFixedAxisIndices: Record<string, number>;
+  measurementAxes?: MeasurementSliceSelection;
+  onMeasurementAxesChange?: (selection: MeasurementSliceSelection) => void;
   onMeasurementSliceOffsetChange: (offset: number) => void;
   onMeasurementFixedAxisIndexChange: (axisId: string, index: number) => void;
   analyses?: RunAnalysisSummary[];
@@ -305,6 +310,8 @@ export function RunDetail({
           onTracePlanChange={onTracePlanChange}
           onMeasurementEntitySelectionChange={onMeasurementEntitySelectionChange}
           measurementFixedAxisIndices={measurementFixedAxisIndices}
+          measurementAxes={measurementAxes}
+          onMeasurementAxesChange={onMeasurementAxesChange}
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />

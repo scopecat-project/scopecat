@@ -26,6 +26,190 @@ vi.mock("../../ui/EChartRuntime", () => ({ EChartRuntime: () => null }));
 afterEach(cleanup);
 
 describe("measurement visualization", () => {
+  it("selects axes independently without expanding the Cartesian product", () => {
+    const schema = threeDimensionalGridSchema();
+    const selection = { xAxisId: "bias", yAxisId: "row" };
+    expect(measurementSlicePlan(schema, selection)).toMatchObject({
+      varyingAxes: [{ id: "bias" }, { id: "row" }],
+      fixedAxes: [{ id: "column" }],
+      variableIds: ["row", "column", "bias", "temperature"],
+    });
+    const records = slicedGridRecords().filter(
+      (item) => item.coordinates.column?.kind === "scalar" && item.coordinates.column.value === 2,
+    );
+    const charts = planMeasurementCharts(records, schema, { column: 1 }, {}, selection);
+    expect(charts).toHaveLength(1);
+    expect(charts[0]).toMatchObject({
+      kind: "heatmap",
+      xLabel: "Bias [V]",
+      yLabel: "Row [mm]",
+      fixedCoordinates: [{ id: "column", value: 2 }],
+    });
+    const swapped = planMeasurementCharts(
+      records,
+      schema,
+      { column: 1 },
+      {},
+      { xAxisId: "row", yAxisId: "bias" },
+    );
+    expect(swapped[0]?.id).toBe(charts[0]?.id);
+    expect(swapped[0]).toMatchObject({ xLabel: "Row [mm]", yLabel: "Bias [V]" });
+    expect(
+      measurementSlicePlan(schema, { xAxisId: "bias", yAxisId: "bias" })?.fixedAxes.map(
+        (axis) => axis.id,
+      ),
+    ).toEqual(["row", "column"]);
+    expect(
+      measurementSlicePlan(schema, { xAxisId: "gone" })?.varyingAxes.map((axis) => axis.id),
+    ).toEqual(["row"]);
+  });
+
+  it("keeps missing, repeated and irregular values as observations without filling a grid", () => {
+    const schema = threeDimensionalGridSchema();
+    const selection = { xAxisId: "row", yAxisId: "column" };
+    const records = slicedGridRecords([0]);
+    const missing = {
+      ...records[1]!,
+      observables: {
+        temperature: {
+          kind: "unavailable" as const,
+          dtype: "float64" as const,
+          shape: [],
+          unit: "K",
+          metadata: {},
+          reason: "missing" as const,
+        },
+      },
+    };
+    const charts = planMeasurementCharts(
+      [records[0]!, missing, ...records.slice(3)],
+      schema,
+      { bias: 0 },
+      {},
+      selection,
+    );
+    expect(charts[0]).toMatchObject({ kind: "color-scatter" });
+    expect(charts[0]?.series[0]?.points).toHaveLength(4);
+    expect(charts[0]?.series[0]?.points.every((point) => point.color !== 0)).toBe(true);
+    const repeated = planMeasurementCharts(
+      [...records, records[0]!],
+      schema,
+      { bias: 0 },
+      {},
+      selection,
+    );
+    expect(repeated[0]?.kind).toBe("color-scatter");
+    expect(repeated[0]?.series[0]?.points).toHaveLength(7);
+    expect(planMeasurementCharts([], schema, { bias: 0 }, {}, selection)).toEqual([]);
+  });
+
+  it("plots only the selected horizontal coordinate and does not bridge absent samples", () => {
+    const schema = threeDimensionalGridSchema();
+    const records = slicedGridRecords([0]).filter((item) => item.point_index < 6);
+    const selection = { xAxisId: "column" };
+    expect(measurementSlicePlan(schema, selection)?.fixedAxes.map((axis) => axis.id)).toEqual([
+      "row",
+      "bias",
+    ]);
+    const full = planMeasurementCharts(records, schema, { row: 0, bias: 0 }, {}, selection);
+    expect(full[0]).toMatchObject({ kind: "line", xLabel: "Column [mm]" });
+    const partial = planMeasurementCharts(
+      [records[0]!, records[2]!],
+      schema,
+      { row: 0, bias: 0 },
+      {},
+      selection,
+    );
+    expect(partial[0]?.kind).toBe("scatter");
+    expect(partial[0]?.series[0]?.points.map((point) => point.x)).toEqual([1, 3]);
+  });
+
+  it("retains an unavailable signal and never substitutes point index for a missing selected coordinate", () => {
+    const schema = threeDimensionalGridSchema();
+    const items = slicedGridRecords([0])
+      .slice(0, 3)
+      .map((item) => ({
+        ...item,
+        coordinates: {},
+        observables: {
+          temperature: {
+            kind: "unavailable" as const,
+            dtype: "float64" as const,
+            shape: [],
+            unit: "K",
+            metadata: {},
+            reason: "missing" as const,
+          },
+        },
+      }));
+    for (const selection of [{ xAxisId: "column" }, { xAxisId: "row", yAxisId: "column" }]) {
+      const charts = planMeasurementCharts(items, schema, { row: 0, bias: 0 }, {}, selection);
+      expect(charts).toHaveLength(1);
+      expect(charts[0]?.series[0]?.points).toEqual([]);
+      expect(charts[0]?.xLabel).not.toBe("Point index");
+    }
+  });
+
+  it("keeps a chosen signal through an empty or pending slice", () => {
+    const schema = twoDimensionalGridSchema("complex128");
+    const items = slicedGridRecords([0]).map((item) => ({
+      ...item,
+      observables: { temperature: complexScalar(1, 2, "ratio") },
+    }));
+    const props = {
+      preview: { schema, items, truncated: false },
+      sliceError: null,
+      fixedAxisIndices: {},
+      measurementAxes: { xAxisId: "row", yAxisId: "column" },
+      onFixedAxisIndexChange: vi.fn(),
+    };
+    const { rerender } = render(
+      <MeasurementDataPreview
+        {...props}
+        slicePending={false}
+        slice={slicePreview(schema, items)}
+      />,
+    );
+    const phase = "slice:temperature:phase";
+    fireEvent.change(screen.getByLabelText("Measurement chart"), { target: { value: phase } });
+    rerender(<MeasurementDataPreview {...props} slicePending={true} />);
+    expect(screen.queryByLabelText("Measurement chart")).not.toBeInTheDocument();
+    rerender(
+      <MeasurementDataPreview
+        {...props}
+        slicePending={false}
+        slice={slicePreview(schema, items)}
+      />,
+    );
+    expect(screen.getByLabelText("Measurement chart")).toHaveValue(phase);
+  });
+
+  it("offers axis choices, independent stepping and a readable current slice", () => {
+    const schema = threeDimensionalGridSchema();
+    const onAxes = vi.fn();
+    const onFixed = vi.fn();
+    render(
+      <MeasurementDataPreview
+        preview={{ schema, items: slicedGridRecords([0]), truncated: false }}
+        slice={slicePreview(schema, slicedGridRecords([0]))}
+        sliceError={null}
+        slicePending={false}
+        fixedAxisIndices={{ bias: 0 }}
+        measurementAxes={{ xAxisId: "row", yAxisId: "column" }}
+        onMeasurementAxesChange={onAxes}
+        onFixedAxisIndexChange={onFixed}
+      />,
+    );
+    expect(screen.getByTestId("measurement-slice-summary")).toHaveTextContent("Bias = 0 V");
+    expect(screen.getByRole("button", { name: "Previous Bias value" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next Bias value" }));
+    expect(onFixed).toHaveBeenCalledWith("bias", 1);
+    fireEvent.change(screen.getByLabelText("Horizontal axis"), { target: { value: "column" } });
+    expect(onAxes).toHaveBeenLastCalledWith({ xAxisId: "column", yAxisId: undefined });
+    fireEvent.change(screen.getByLabelText("Vertical axis"), { target: { value: "" } });
+    expect(onAxes).toHaveBeenLastCalledWith({ xAxisId: "row", yAxisId: undefined });
+  });
+
   it("labels array summaries without interpreting them as absent or numeric data", () => {
     const item: components["schemas"]["MeasurementRecordPreview"] = {
       run_id: "run",

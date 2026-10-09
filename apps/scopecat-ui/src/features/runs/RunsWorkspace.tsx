@@ -41,6 +41,7 @@ import { classes, eyebrow, secondaryButton } from "../../ui/styles";
 import { RunDetail } from "./RunDetail";
 import {
   measurementSlicePlan,
+  type MeasurementSliceSelection,
   measurementTraceQueryPlans,
   type MeasurementEntitySelection,
 } from "./measurement-visualization";
@@ -84,10 +85,15 @@ export function RunsWorkspace({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [olderRunHistory, setOlderRunHistory] = useState<OlderRunHistory>();
+  const [requestedMeasurementAxes, setRequestedMeasurementAxes] = useState<{
+    runId: string;
+    selection: MeasurementSliceSelection;
+  }>();
   const [requestedMeasurementSlice, setRequestedMeasurementSlice] = useState<{
     runId: string;
     fixedAxisIndices: Record<string, number>;
     offset: number;
+    windowKey?: string;
   }>();
   const [requestedMeasurementTracePlan, setRequestedMeasurementTracePlan] = useState<{
     runId: string;
@@ -253,9 +259,23 @@ export function RunsWorkspace({
     }
     return [...items.values()];
   }, [runContentsQuery.data]);
-  const slicePlan = useMemo(
+  const defaultSlicePlan = useMemo(
     () => measurementSlicePlan(measurements?.schema),
     [measurements?.schema],
+  );
+  const measurementAxes = useMemo(() => {
+    if (requestedMeasurementAxes && requestedMeasurementAxes.runId === selectedRunId)
+      return requestedMeasurementAxes.selection;
+    if (!defaultSlicePlan?.numericAxes.length || !defaultSlicePlan.scalarObservableIds.length)
+      return undefined;
+    return {
+      xAxisId: defaultSlicePlan.numericAxes[0]!.id,
+      yAxisId: defaultSlicePlan.heatmap?.yAxis.id,
+    };
+  }, [defaultSlicePlan, requestedMeasurementAxes, selectedRunId]);
+  const slicePlan = useMemo(
+    () => measurementSlicePlan(measurements?.schema, measurementAxes),
+    [measurements?.schema, measurementAxes],
   );
   const tracePlans = useMemo(
     () => measurementTraceQueryPlans(measurements?.schema),
@@ -285,7 +305,8 @@ export function RunsWorkspace({
   const measurementSliceOffset =
     requestedMeasurementSlice !== undefined &&
     requestedMeasurementSlice.runId === selectedRunId &&
-    JSON.stringify(requestedMeasurementSlice.fixedAxisIndices) === measurementSliceKey
+    (requestedMeasurementSlice.windowKey ??
+      JSON.stringify(requestedMeasurementSlice.fixedAxisIndices)) === measurementSliceKey
       ? requestedMeasurementSlice.offset
       : 0;
   const currentMeasurementEntitySelection =
@@ -306,7 +327,13 @@ export function RunsWorkspace({
   );
   const measurementTraceEntityKey = JSON.stringify(selectedTraceEntities ?? null);
   const measurementSliceQuery = useQuery({
-    queryKey: ["measurement-slice", selectedRunId, measurementSliceKey, measurementSliceOffset],
+    queryKey: [
+      "measurement-slice",
+      selectedRunId,
+      measurementSliceKey,
+      measurementSliceOffset,
+      slicePlan?.variableIds,
+    ],
     queryFn: ({ signal }) =>
       getMeasurementSlice(
         selectedRunId!,
@@ -589,11 +616,29 @@ export function RunsWorkspace({
                 });
               }}
               onMeasurementEntitySelectionChange={handleMeasurementEntitySelectionChange}
+              measurementAxes={measurementAxes}
+              onMeasurementAxesChange={(selection) => {
+                setRequestedMeasurementAxes({ runId: selectedRunId!, selection });
+                setRequestedMeasurementSlice((current) => ({
+                  runId: selectedRunId!,
+                  fixedAxisIndices: {
+                    ...(current && current.runId === selectedRunId ? current.fixedAxisIndices : {}),
+                    ...measurementFixedAxisIndices,
+                  },
+                  offset: 0,
+                }));
+              }}
               measurementFixedAxisIndices={measurementFixedAxisIndices}
               onMeasurementSliceOffsetChange={(offset) => {
                 setRequestedMeasurementSlice({
                   runId: selectedRunId!,
-                  fixedAxisIndices: measurementFixedAxisIndices,
+                  fixedAxisIndices: {
+                    ...(requestedMeasurementSlice?.runId === selectedRunId
+                      ? requestedMeasurementSlice?.fixedAxisIndices
+                      : undefined),
+                    ...measurementFixedAxisIndices,
+                  },
+                  windowKey: measurementSliceKey,
                   offset,
                 });
               }}
@@ -601,6 +646,10 @@ export function RunsWorkspace({
                 setRequestedMeasurementSlice({
                   runId: selectedRunId!,
                   fixedAxisIndices: {
+                    ...(requestedMeasurementSlice &&
+                    requestedMeasurementSlice.runId === selectedRunId
+                      ? requestedMeasurementSlice.fixedAxisIndices
+                      : {}),
                     ...measurementFixedAxisIndices,
                     [axisId]: index,
                   },
