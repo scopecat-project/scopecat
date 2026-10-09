@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
@@ -111,10 +112,16 @@ def verify_installed(payload: Path, work: Path) -> None:
     from lab_tools.notebook_journey import current, prepare
     from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
     from lab_tools.verify_maintenance import ADD_ANALYSIS
+    from scopecat.automation import ProcedureRun
+    from scopecat.daemon.endpoint import DaemonEndpointRecord
     from scopecat.daemon.views import DaemonHealth, RunSummary, RunSummaryPage
     from scopecat.project import open_project
+    from scopecat.records.practice import PracticeScope
     from scopecat_server.author_registration import (  # noqa: TID251 - installed recovery integration
         register_author_workspace,
+    )
+    from scopecat_server.scaffold import (  # noqa: TID251 - installed source fixture
+        write_author_scaffold,
     )
     from scopecat_server.snapshots import (  # noqa: TID251 - installed recovery integration
         create_snapshot,
@@ -136,14 +143,18 @@ def verify_installed(payload: Path, work: Path) -> None:
     # Installation must not seed a cache that conceals missing author dependencies.
     author_cache = work / "author-empty-cache"
     author_cache.mkdir()
-    os.environ["UV_CACHE_DIR"] = str(author_cache)
     document = cast("dict[str, object]", cast("object", verify_bundle(payload)))
     nbformat = notebook_io()
     runtime = ApplicationRuntime(work / "application")
-    runtime.configure(static_dir=payload / "gui", delivery_root=payload)
     material = files("lab_teaching.course_material").joinpath("lessons")
     timings: dict[str, float] = {}
+    application_checks: dict[str, object] = {
+        "result": "incomplete",
+        "phase": "not-started",
+    }
     evidence: dict[str, object] = {
+        "result": "incomplete",
+        "application_checks": application_checks,
         "bundle_sha256": file_hash(payload / "bundle.json"),
         "build_id": document["build_id"],
         "installed_origins": origins,
@@ -161,6 +172,27 @@ def verify_installed(payload: Path, work: Path) -> None:
         )
         response.raise_for_status()
         return RunSummaryPage.model_validate_json(response.content).items
+
+    def empty_workbench() -> DaemonEndpointRecord:
+        record = runtime.start()
+        assert runtime.start() == record
+        with httpx2.Client(
+            base_url=record.base_url, trust_env=False, timeout=30
+        ) as client:
+            page = client.get("/")
+            assert page.status_code == 200
+            assert page.content == (payload / "gui/index.html").read_bytes()
+            response = client.get("/api/v1/runs")
+            assert response.status_code == 200
+            assert response.json()["items"] == []
+        return record
+
+    def source_files(root: Path) -> dict[str, str]:
+        return {
+            str(path.relative_to(root)): file_hash(path)
+            for path in root.rglob("*")
+            if path.is_file()
+        }
 
     def execute(
         root: Path,
@@ -192,7 +224,84 @@ def verify_installed(payload: Path, work: Path) -> None:
 
     try:
         phase = perf_counter()
-        first_endpoint = runtime.start()
+        # Practice uses the already-proved installation cache, never the cold
+        # author cache that must still qualify the first Help preparation.
+        application_checks["phase"] = "empty-application"
+        registered_source = work / "registered-source" / "实验代码"
+        write_author_scaffold(registered_source)
+        (registered_source / "owner-notes.txt").write_text(
+            "保留实验记录\n", encoding="utf-8"
+        )
+        selected = runtime.configure(static_dir=payload / "gui", delivery_root=payload)
+        identity = runtime.register_source(registered_source)
+        retained_source = source_files(registered_source)
+        application_checks.update(
+            source_id=identity,
+            source_files=retained_source,
+            environment=selected.environment,
+            practice_cache="installation",
+        )
+        empty_endpoint = empty_workbench()
+        application_checks["practice_pid"] = empty_endpoint.pid
+        application_checks["empty_workbench_before_practice"] = "passed"
+        application_checks["phase"] = "manual-practice"
+        with httpx2.Client(
+            base_url=empty_endpoint.base_url, trust_env=False, timeout=30
+        ) as client:
+            response = client.post(
+                "/api/v1/practice", json={"request_key": "installed-practice"}
+            )
+            response.raise_for_status()
+            scope = PracticeScope.model_validate(response.json())
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                task = ProcedureRun.model_validate(
+                    client.get(f"/api/v1/procedures/{scope.procedure_id}").json()
+                )
+                if task.state == "waiting_for_input":
+                    break
+                assert task.state not in {"closed", "attention_required"}, task
+                time.sleep(0.1)
+            else:
+                raise AssertionError("Practice did not reach manual input")
+            note = Path(scope.directory) / "my-notes.txt"
+            note.write_text("Keep this observation", encoding="utf-8")
+            cleared = client.post(
+                f"/api/v1/practice/{scope.id}/clear", json={"files": "preserve"}
+            )
+            cleared.raise_for_status()
+            assert cleared.json()["state"] == "cleared", cleared.text
+            assert note.read_text(encoding="utf-8") == "Keep this observation"
+            assert runtime.start() == empty_endpoint
+            assert client.get("/api/v1/runs").json()["items"] == []
+        application_checks["same_service_practice_and_owned_cleanup"] = "passed"
+        application_checks["phase"] = "runtime-requalification"
+        runtime.stop()
+        assert runtime.status().state == "stopped"
+        runtime.select(runtime.qualify(selected.python, selected.static_dir))
+        assert runtime.source(registered_source) == identity
+        assert source_files(registered_source) == retained_source
+        assert not (runtime.home / "host/services.sqlite").exists()
+        # Restart before Help, both to check the still-empty requalified app and
+        # to give its daemon the independent cold author cache, not practice's.
+        assert list(author_cache.iterdir()) == []
+        os.environ["UV_CACHE_DIR"] = str(author_cache)
+        runtime = ApplicationRuntime(work / "application")
+        first_endpoint = empty_workbench()
+        assert first_endpoint != empty_endpoint
+        assert runtime.source(registered_source) == identity
+        assert source_files(registered_source) == retained_source
+        application_checks.update(
+            empty_workbench_after_requalification="passed",
+            requalification_preserves_files_and_identity="passed",
+            requalified_pid=first_endpoint.pid,
+            author_cache_empty_after_practice=True,
+            phase="awaiting-Help-restart",
+        )
+        timings["application_start_practice_and_requalification"] = (
+            perf_counter() - phase
+        )
+        phase = perf_counter()
         assert runs() == ()
         parameters = prepare(runtime, str(work), "parameters")
         groups = prepare(runtime, str(work), "groups")
@@ -253,6 +362,16 @@ def verify_installed(payload: Path, work: Path) -> None:
         runtime = ApplicationRuntime(work / "application")
         restarted_endpoint = runtime.start()
         assert restarted_endpoint != first_endpoint
+        assert runtime.source(registered_source) == identity
+        assert source_files(registered_source) == retained_source
+        assert note.read_text(encoding="utf-8") == "Keep this observation"
+        assert not (runtime.home / "host/services.sqlite").exists()
+        application_checks.update(
+            application_reopen="passed",
+            one_runtime_without_manager="passed",
+            result="passed",
+            phase="complete",
+        )
         for journey in (parameters, groups):
             assert current(runtime, journey.topic) == journey
             assert prepare(runtime, topic=journey.topic) == journey
@@ -335,7 +454,12 @@ def verify_installed(payload: Path, work: Path) -> None:
                 unavailable / source.name / name
                 for name in (".venv", ".scopecat-python")
             )
-        for path in (runtime.home, parameters.directory, groups.directory):
+        for path in (
+            runtime.home,
+            parameters.directory,
+            groups.directory,
+            registered_source,
+        ):
             path.rename(unavailable / path.name)
             assert not path.exists()
         runtime = recovered
@@ -382,7 +506,15 @@ def verify_installed(payload: Path, work: Path) -> None:
             recovery_cache_started_empty=True,
         )
     finally:
-        runtime.stop()
+        try:
+            runtime.stop()
+            evidence["cleanup"] = "stopped"
+        finally:
+            # Preserve partial check/phase evidence on failure. Only the final
+            # successful cleanup below may replace "incomplete" with "passed".
+            (work / "acceptance.json").write_text(
+                json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+            )
     assert runtime.status().state == "stopped"
 
     def logical_bytes() -> dict[str, int]:

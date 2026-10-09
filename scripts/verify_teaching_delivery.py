@@ -100,6 +100,19 @@ def verify(bundle: Path, destination: Path) -> None:
         env=env,
         check=True,
     )
+    help_receipt = cast(
+        "dict[str, object]",
+        json.loads((help_evidence / "acceptance.json").read_text(encoding="utf-8")),
+    )
+    application_checks = help_receipt.get("application_checks")
+    if (
+        help_receipt.get("result") != "passed"
+        or not isinstance(application_checks, dict)
+        or cast("dict[str, object]", application_checks).get("result") != "passed"
+    ):
+        raise RuntimeError(
+            "Installed application checks must pass in this Help invocation"
+        )
     # Installation has already proved this cache started empty. The legacy
     # stages historically reused their bootstrap cache; do not unpack the same
     # framework wheels into a second cache. Author/recovery caches stay separate.
@@ -176,21 +189,6 @@ def verify(bundle: Path, destination: Path) -> None:
     if result.returncode == 0 or "Select Kernel" not in result.stderr:
         raise RuntimeError(f"错误内核未正确拒绝: {result.stdout}\n{result.stderr}")
     phases["editor_prepare_and_wrong_kernel"] = perf_counter() - phase
-    phase = perf_counter()
-    home = destination / "application-state"
-    subprocess.run(  # noqa: S603 - isolated installed interpreter and fixed check
-        [
-            str(python),
-            str(Path(__file__).with_name("verify_installed_application.py")),
-            str(home),
-            str(destination / "application"),
-            str(bundle / "gui"),
-        ],
-        cwd=destination,
-        env=env,
-        check=True,
-    )
-    phases["installed_application"] = perf_counter() - phase
     (destination / "acceptance.json").write_text(
         json.dumps(
             {
@@ -210,6 +208,7 @@ def verify(bundle: Path, destination: Path) -> None:
                 "no_management_service": "passed",
                 "managed_cleanup": "passed",
                 "installed_application": "passed",
+                "installed_application_carrier": "shared Help application",
             },
             ensure_ascii=False,
             indent=2,
