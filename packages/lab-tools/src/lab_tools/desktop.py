@@ -190,23 +190,21 @@ class DesktopAPI:
             raise ValueError("应用尚未准备就绪，请稍后重试")
         return self._session.base_url
 
-    def notebook_journey(
-        self, topic: LessonTopic = "parameters"
-    ) -> dict[str, object] | None:
-        from .notebook_journey import current
+    def notebook_journey(self, topic: LessonTopic = "parameters") -> dict[str, object]:
+        from .notebook_journey import status
 
-        journey = current(self._runtime, topic)
-        return journey.view() if journey else None
+        return status(self._runtime, topic)
 
     def prepare_notebook_journey(
         self,
         parent: str | None = None,
         topic: LessonTopic = "parameters",
+        repair: bool = False,
     ) -> dict[str, object]:
         from .notebook_journey import prepare
 
         with self._session.operation():
-            return prepare(self._runtime, parent, topic).view()
+            return prepare(self._runtime, parent, topic, repair=repair).view()
 
     def open_lesson_notebook(self, topic: LessonTopic = "parameters") -> None:
         from .notebook_journey import current, open_editor

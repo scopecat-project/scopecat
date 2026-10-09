@@ -380,6 +380,21 @@ def verify_installed(payload: Path, work: Path) -> None:
                 journey.notebook.read_bytes(),
             ) == retained[journey.topic]
         timings["restart_and_continue"] = perf_counter() - phase
+        # Exercise the explicit repair boundary with real independent environments.
+        # Kernels are closed here; source edits and retained results must survive.
+        repaired = prepare(runtime, topic="parameters", repair=True)
+        assert repaired.directory == parameters.directory and repaired.ready
+        assert list(repaired.directory.glob(".venv-retained-*"))
+        assert (
+            (repaired.directory / "src/my_experiment/teaching.py").read_bytes(),
+            repaired.notebook.read_bytes(),
+        ) == retained["parameters"]
+        execute(
+            repaired.directory,
+            lessons["parameters"][:2],
+            "parameters-repaired-connection",
+        )
+        assert runs() == before
         execute(
             parameters.directory,
             [

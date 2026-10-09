@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from filelock import FileLock
+from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
 
 from lab_teaching.lessons import TOPICS, LessonTopic, install_lesson
@@ -37,6 +37,7 @@ class NotebookJourney(BaseModel):
     topic: LessonTopic = "parameters"
     directory: Path
     ready: bool = False
+    rebuild_client: bool = False
 
     @property
     def notebook(self) -> Path:
@@ -72,6 +73,33 @@ def current(
     if journey.topic != topic:
         raise ValueError("课程记录与所选课程不符；请恢复原记录后继续")
     return journey
+
+
+def status(
+    runtime: ApplicationRuntime, topic: LessonTopic = "parameters"
+) -> dict[str, object]:
+    """Observe the cross-process preparation owner, including before allocation.
+
+    A receipt describes completed work, not whether its writer is still alive.
+    The OS releases the lock on failure or process exit, making retry available.
+    """
+    receipt = _receipt(runtime, topic)
+    if not receipt.parent.exists():
+        return {"state": "not_started", "journey": None}
+    try:
+        with FileLock(receipt.with_suffix(".lock"), timeout=0):
+            journey = current(runtime, topic)
+            state = (
+                "not_started"
+                if journey is None
+                else "ready"
+                if journey.ready
+                else "retryable"
+            )
+    except Timeout:
+        journey = current(runtime, topic)
+        state = "preparing"
+    return {"state": state, "journey": journey.view() if journey else None}
 
 
 def create_lesson_source(directory: Path, topic: LessonTopic = "parameters") -> None:
@@ -117,6 +145,8 @@ def prepare(
     runtime: ApplicationRuntime,
     parent: str | None = None,
     topic: LessonTopic = "parameters",
+    *,
+    repair: bool = False,
 ) -> NotebookJourney:
     """Retry preparation without rewriting source; continue without dependency work."""
     receipt = _receipt(runtime, topic)
@@ -136,6 +166,11 @@ def prepare(
             raise ValueError(
                 f"练习文件不可用，请恢复原目录后继续；不会重建或覆盖修改：{journey.directory}"
             )
+        if repair:
+            journey = journey.model_copy(
+                update={"ready": False, "rebuild_client": True}
+            )
+            _save(receipt, journey)
         if journey.ready:
             _ = runtime.source(journey.directory)
             if not environment_python(journey.directory / ".venv").is_file():
@@ -143,7 +178,12 @@ def prepare(
                     "本地 Python 缺失；在 Settings 重建此作者目录的本地环境后继续"
                 )
             return journey
-        _ = create_client_environment(runtime, journey.directory)
+        if journey.rebuild_client:
+            _ = create_client_environment(runtime, journey.directory, rebuild=True)
+            journey = journey.model_copy(update={"rebuild_client": False})
+            _save(receipt, journey)
+        else:
+            _ = create_client_environment(runtime, journey.directory)
         python = prepare_execution_environment(runtime, journey.directory)
         _ = runtime.register_source(journey.directory, python=python)
         journey = journey.model_copy(update={"ready": True})
