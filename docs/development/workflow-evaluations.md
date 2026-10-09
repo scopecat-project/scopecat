@@ -55,9 +55,12 @@ learning compiler internals or reading worker logs?
 
 ## Analyze, compare and choose the next experiment
 
-**Goal:** select bounded data by meaningful coordinates, inspect live or offline
-groups, publish analysis, compare retained runs and carry the chosen inputs into
-the next experiment without manually reconstructing identity.
+**Goal:** discover a run's variables, select bounded data by meaningful coordinates,
+and export to Xarray, Arrow, pandas or Polars without rebuilding the experiment or
+guessing its schema; see [measurement data](../how-to/use-measurement-data.md).
+Analyze with ordinary numerical Python without learning the internal output model.
+Inspect live or offline groups, publish conclusions, compare retained runs and
+carry chosen inputs into the next experiment without reconstructing identity.
 
 **Evidence:** core dataset and Arrow pagination tests own selection/export rules.
 Reference `test_grouped_analysis.py`, `test_live_group_traces.py` and

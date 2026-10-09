@@ -80,11 +80,14 @@ are unknown. [PR #902](https://github.com/scopecat-project/scopecat/pull/902) re
 the investigation and validation.
 
 Removing definitions or inventory can change provider bytes, device revisions,
-setup structure and reviewed source identity. Regenerate affected acceptance
-fixtures and compare all values, keys, types and lengths. Explain derived identity
-changes separately from scientific results; do not skip hashes or assume a
-hash-only diff. Preserve the existing narrow scalar-IQ tolerance and exact
-parameter/setup/source evidence. Representative deletion and validation records
+setup structure and reviewed source identity. When a change affects identities or
+scientific results retained in a current acceptance fixture, use that fixture's
+existing validation to check the affected evidence. Explain derived identity
+changes separately from scientific results; do not skip hashes or dismiss real
+scientific changes as identity churn. Preserve the existing narrow scalar-IQ
+tolerance and exact parameter/setup/source evidence. Deletion alone does not
+require rebuilding every fixture or creating a new evidence system.
+Representative deletion and validation records
 are [#929](https://github.com/scopecat-project/scopecat/pull/929) and
 [#931](https://github.com/scopecat-project/scopecat/pull/931).
 
