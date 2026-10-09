@@ -230,8 +230,10 @@ export function planMeasurementCharts(
         axis,
         selectedEntityIndices(axis, entitySelection),
         schema,
+        coordinate,
       ).map((chart): MeasurementChartPlan => ({
         ...chart,
+        id: `slice:${observable.id}:${axis.id}:${chart.id.split(":").at(-1)}`,
         grid: undefined,
         fixedCoordinates: undefined,
         kind:
@@ -604,12 +606,15 @@ function entityScalarCharts(
   axis: MeasurementEntityAxis,
   selected: number[],
   schema: MeasurementDatasetSchema,
+  coordinateId?: string,
 ): MeasurementChartPlan[] {
   const coordinate = orderCoordinates(
     variables.filter((variable) => variable.role === "coordinate" && variable.dims.length === 1),
     schema,
   ).find((candidate) =>
-    records.some((record) => numericScalar(valueFor(record, candidate)) !== undefined),
+    coordinateId !== undefined
+      ? candidate.id === coordinateId
+      : records.some((record) => numericScalar(valueFor(record, candidate)) !== undefined),
   );
   return valueModes(observable).flatMap((mode) => {
     const series = selected.map((entityIndex) => {
@@ -631,7 +636,7 @@ function entityScalarCharts(
       };
     });
     const available = series.reduce((count, candidate) => count + candidate.points.length, 0);
-    if (available === 0) return [];
+    if (available === 0 && coordinateId === undefined) return [];
     const expected = records.length * selected.length;
     const monotonic = series
       .filter((candidate) => candidate.points.length > 0)

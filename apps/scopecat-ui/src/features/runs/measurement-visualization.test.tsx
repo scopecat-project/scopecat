@@ -150,6 +150,20 @@ describe("measurement visualization", () => {
     }
   });
 
+  it("keeps entity scalar views on the selected coordinate when that coordinate is unavailable", () => {
+    const schema = entityScalarSchema();
+    const charts = planMeasurementCharts(
+      [record(0, {}, { readout: entityArray([1, 2], "ratio") })],
+      schema,
+      {},
+      {},
+      { xAxisId: "bias" },
+    );
+    expect(charts).toHaveLength(1);
+    expect(charts[0]?.xLabel).toBe("Bias [V]");
+    expect(charts[0]?.series.every((series) => series.points.length === 0)).toBe(true);
+  });
+
   it("keeps a chosen signal through an empty or pending slice", () => {
     const schema = twoDimensionalGridSchema("complex128");
     const items = slicedGridRecords([0]).map((item) => ({
