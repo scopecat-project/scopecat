@@ -2,4 +2,6 @@
 default: patch
 ---
 
-The reference integration lab no longer advertises the obsolete receipt-only Play waveform action; waveform execution uses the existing multi-channel program and shared-trigger path.
+Remove an obsolete reference-lab waveform action
+
+The removed Play waveform action only returned a receipt. Waveform execution continues through the existing multi-channel program and shared trigger.
