@@ -765,13 +765,12 @@ have their own maintainer; not every reusable scientific change is a compiler
 change. A new device capability, mapping or execution guarantee is a compiler /
 driver responsibility.
 
-The reference lab's `workflows/exploratory_signal.py` provides a small editable
-experiment and analysis on this direct Python path. Its companion fixture retains
-two samples in two explicitly configured working points using the normal run and
-sample records. Read the [exploratory journeys and ownership agreement](../development/reference-fixtures.md#exploratory-author-fixture)
-for executable checks and the features still to be built. In particular, a sample
-context label does not currently resolve parameter values, and a function's ID
-does not establish complete helper-code provenance.
+The device-free `testing/fixtures/retained-signal` project provides an editable
+experiment and ordinary analysis on this Python path. Server author journeys
+retain the selected source, parameters and analysis products across edits and
+restart. Read the [exploratory journeys and ownership agreement](../development/reference-fixtures.md#exploratory-author-fixture)
+for the executable owners. A sample context label does not resolve parameter
+values, and a function's ID alone does not establish helper-code provenance.
 
 Judge conveniences by whether an ordinary author can move from a surprising
 result to a revised experiment while preserving the old plan, parameters and

@@ -78,7 +78,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         )
         primary = child(
             author.prepare(
-                "reference_lab.frequency_amplitude",
+                "ui_signal.signal",
                 control_edits={"frequency": frequencies},
                 actor="source-author",
             )
@@ -87,7 +87,7 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         )
         secondary = child(
             author.prepare(
-                "reference_lab.frequency_amplitude",
+                "ui_signal.signal",
                 control_edits={
                     "frequency": frequencies,
                     "amplitude": ControlEdit(mode="fixed", value=Quantity(0.08, "V")),
@@ -282,7 +282,7 @@ def test_plan_freezes_sample_parameters_and_setup_without_activation(
             f"sample-{key}", revision=independent_parameters
         )
         author.use(sample=sample.id, parameter_branch=branch.name, setup=setup.ref)
-        saved = author.prepare("reference_lab.frequency_amplitude").save_plan(
+        saved = author.prepare("ui_signal.signal").save_plan(
             "Exact sample and parameters",
             saved_by="alice",
         )

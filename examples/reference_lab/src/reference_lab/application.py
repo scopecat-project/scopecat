@@ -27,7 +27,6 @@ def create_application(_project_root: Path) -> LabApplication:
 
     from scopecat.application import LabApplication
 
-    from reference_lab.comparison import comparison_provider
     from reference_lab.lab import reference_lab_system
     from reference_lab.workflows.analysis_recovery import (
         failed_temperature_analysis,
@@ -39,7 +38,6 @@ def create_application(_project_root: Path) -> LabApplication:
     )
 
     return LabApplication(
-        comparison_provider=comparison_provider,
         author_modules=(
             "reference_lab_authors.authored",
             "reference_lab_authors.frequency_amplitude",

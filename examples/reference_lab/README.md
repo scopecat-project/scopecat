@@ -208,7 +208,9 @@ for scalar → scan → default edits and the project constraint boundary.
 ## Ordinary experiment authors
 
 The application discovers local experiments in `src/reference_lab_authors/authored/`.
-Edit controls, helpers, Ramsey timing or retained-data analysis there; Launch lists
-them automatically without a per-experiment provider or procedure. Follow the
+The remaining declarations are Ramsey timing and live VNA/group analysis.
+Generic author, source-refresh and retained-analysis journeys use
+`testing/fixtures/retained-signal`; they do not require this laboratory. Launch
+discovers declarations without a per-experiment provider or procedure. Follow the
 [author guide](../../docs/how-to/write-an-experiment.md) for Python and GUI execution,
 source provenance limits, and the boundary with shared laboratory capabilities.

@@ -14,7 +14,7 @@ from pathlib import Path
 from threading import Event
 from typing import cast
 
-from benchmarks.e2e.author_context import select_reference_context
+from benchmarks.e2e.author_context import select_author_context
 from benchmarks.e2e.author_prepare import TimingTransport
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.application.author_project import AuthorProject
@@ -49,9 +49,8 @@ def observe_result(
 
 
 def measure(root: Path, *, repetitions: int) -> dict[str, object]:
-    source = Path(__file__).resolve().parents[2] / "examples/reference_lab"
-    for name in ("src", "config"):
-        shutil.copytree(source / name, root / name)
+    source = Path(__file__).resolve().parents[2] / "testing/fixtures/retained-signal"
+    shutil.copytree(source / "src", root / "src")
     shutil.copy2(source / "scopecat.toml", root / "scopecat.toml")
     project = load_project(root / "scopecat.toml")
     trace = root / "timing"
@@ -74,7 +73,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                 ) as author,
                 ThreadPoolExecutor(max_workers=1) as observer,
             ):
-                select_reference_context(author)
+                select_author_context(author)
                 original_revision = None
                 for operation in [
                     "first",
@@ -85,7 +84,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     "after_refresh",
                 ]:
                     if operation == "after_source_edit":
-                        path = root / "src/reference_lab_authors/authored/signal.py"
+                        path = root / "src/ui_signal/ordinary.py"
                         path.write_text(
                             path.read_text(encoding="utf-8")
                             + "\n# benchmark refresh\n",
@@ -137,7 +136,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     analysis_start = time.monotonic_ns()
                     analysis = author.analyze(
                         str(result["run_id"]),
-                        "reference_lab_authors.authored.ordinary_analysis:estimate_peak",
+                        "ui_signal.analysis:estimate_peak",
                         code_revision=revision,
                     )
                     analyzed = time.monotonic_ns()
@@ -212,7 +211,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
     correlate_events(samples, events)
     return {
         **benchmark_record_header(
-            case_id="author-first-data", case_version=3, kind="e2e"
+            case_id="author-first-data", case_version=4, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),

@@ -43,7 +43,7 @@ def test_session_selection_is_local_and_preparation_is_frozen(
             f"session-{key}", revision=independent_parameters
         )
         editor = lab.parameters.workspace(branch.name)
-        editor["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(4.85, "GHz")
+        editor["signal"]["signal"]["center"] = sc.Quantity(4.85, "GHz")
         changed = editor.save(f"session-changed-{key}")
         refs = [independent_parameters.ref, changed.ref]
         samples: list[str] = []

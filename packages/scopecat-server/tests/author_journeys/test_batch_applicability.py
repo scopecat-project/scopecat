@@ -14,9 +14,8 @@ from scopecat.records.research_project import RunHistoryFilter
 from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.sample import SampleRevisionDraft
 from scopecat_testkit.authoring import source_workspace_id
-
-from reference_lab.parameters import QubitParameters
-from reference_lab_authors.authored.signal import signal
+from ui_signal.ordinary import signal
+from ui_signal.signal import SignalParameters
 
 
 def test_batch_selection_preserves_frozen_evidence(
@@ -84,8 +83,8 @@ def test_batch_selection_preserves_frozen_evidence(
             .propose(
                 "carrier",
                 sc.parameter_update(
-                    QubitParameters.drive_carrier_frequency,
-                    sc.EntityRef(id="q0", kind="logical_qubit"),
+                    SignalParameters.center,
+                    "signal",
                     sc.Quantity(4.85, "GHz"),
                 ),
             )

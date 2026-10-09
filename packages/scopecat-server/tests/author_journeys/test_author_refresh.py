@@ -20,13 +20,13 @@ from scopecat.daemon.endpoint import read_daemon_endpoint_record
 from scopecat.daemon.preparation import AuthorPreparationFailed
 from scopecat.project import load_project
 from scopecat.records.launch_request import LaunchRequest
+from ui_signal.application import initial_parameters
+
 from scopecat_server.author_registration import register_author_workspace
 from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 
-from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
-
-pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+from .conftest import FIXTURE_ROOT
 
 
 def create_context(authors: AuthorProject) -> None:
@@ -125,16 +125,16 @@ def run_admitted(root: Path, procedure_id: str) -> None:
 def test_refresh_freezes_admission_and_analysis_across_restore(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    select_reference_source: Callable[[Path], None],
+    select_author_source: Callable[[Path], None],
 ) -> None:
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     root = tmp_path / "project"
     root.mkdir()
-    for name in ("src", "config"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    select_reference_source(root)
-    source_path = root / "src/reference_lab_authors/authored/signal.py"
+    for name in ("src",):
+        shutil.copytree(FIXTURE_ROOT / name, root / name)
+    shutil.copy2(FIXTURE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_author_source(root)
+    source_path = root / "src/ui_signal/ordinary.py"
     source = source_path.read_text()
     # Ordinary code is split into adjacent experiment/helper/analysis files.
     helper_start = source.index("def response(")
@@ -146,7 +146,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
         + source[helper_end:]
     )
     analysis_start = source.index("@sc.analysis_step")
-    analysis_end = source.index("@sc.experiment", analysis_start)
+    analysis_end = len(source)
     analysis = source[analysis_start:analysis_end]
     source = source[:analysis_start] + source[analysis_end:]
     source_path.write_text(source.replace("import numpy as np\n", ""))
@@ -259,7 +259,7 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
             for revision, expected in ((first, 1.0), (fourth.active, 10.0)):
                 result = authors.analyze(
                     retained.id,
-                    "reference_lab_authors.authored.analysis:selected_mean",
+                    "ui_signal.analysis:selected_mean",
                     code_revision=revision,
                     key=f"revision-{expected}",
                 )
@@ -276,19 +276,19 @@ def test_refresh_freezes_admission_and_analysis_across_restore(
 def test_refreshed_pulse_helper_keeps_admitted_recipe_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    select_reference_source: Callable[[Path], None],
+    select_author_source: Callable[[Path], None],
 ) -> None:
     """A device-free author run evaluates the retained recipe's expanded amplitude."""
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     root = tmp_path / "recipe-project"
     root.mkdir()
-    for name in ("src", "config"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    select_reference_source(root)
-    authored = root / "src/reference_lab_authors/authored"
+    for name in ("src",):
+        shutil.copytree(FIXTURE_ROOT / name, root / name)
+    shutil.copy2(FIXTURE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_author_source(root)
+    authored = root / "src/ui_signal"
     example = (
-        EXAMPLE_ROOT.parents[1]
+        Path(__file__).resolve().parents[4]
         / "packages/scopecat-quantum/examples/quantity_recipe.py"
     ).read_text()
     helper = example[: example.index('if __name__ == "__main__":')]
@@ -305,7 +305,7 @@ def recipe_amplitude() -> float:
 """
     helper_path = authored / "recipe.py"
     helper_path.write_text(helper)
-    signal_path = authored / "signal.py"
+    signal_path = authored / "ordinary.py"
     signal_path.write_text(
         signal_path.read_text()
         .replace(

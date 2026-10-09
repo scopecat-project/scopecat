@@ -25,9 +25,9 @@ otherwise. These are current owners, not a commitment to keep every fixture.
 | Ramsey, raw IQ, signed IF/LO and compilation | `test_quantum_composition.py`, `unit/test_quantum_runner.py` and `unit/test_list_mode_*` retain host ordering, point-local routes, physical buffers, multiplexed acquisition, shared claims, bounded chunks and numerical entity correspondence. Shared acceptance checks independent-channel availability and HTTP traces. |
 | DRAG candidate → independent verification → adoption | `test_typed_candidates.py` retains simulated device acquisition, numerical fit/report, exact candidate lineage, explicit branch publication and accepted-gate execution. Verification does not mutate defaults or setup. |
 | Joint calibration and recovery | The same candidate tests retain target-complete joint remeasurement, rejection, stale destinations, restart and lost-response replay. Server branch/analysis tests own atomic publication, conflicts and current-format recovery. |
-| Live/offline grouped analysis | `test_grouped_analysis.py` and `test_live_group_traces.py` retain grouped analysis, live traces and reopening. Core dataset tests own generic grouping, availability and selection. |
-| Compare results → next experiment | `test_comparison.py` and `test_experiment_plans.py` retain exact source inputs, candidate rejection, saved plans and handoff. Pure compute/UI presentation can use smaller fixtures. |
-| Author edits and reopening | `test_author_refresh.py`, `test_typed_author_refresh.py` and managed-author tests retain admitted source and independent contexts across edits/restart. Shipped Help lessons own the learning experience. |
+| Live/offline grouped analysis | Server `author_journeys/test_grouping.py` and reference `test_live_group_traces.py` retain grouped analysis, live traces and reopening. Core dataset tests own generic grouping, availability and selection. |
+| Compare results → next experiment | Server `author_journeys/test_comparison.py` and `author_journeys/test_experiment_plans.py` retain exact source inputs, candidate rejection, saved plans and handoff. Pure compute/UI presentation can use smaller fixtures. |
+| Author edits and reopening | Server `author_journeys/test_author_refresh.py`, `test_typed_author_refresh.py` and managed-author tests retain admitted source and independent contexts across edits/restart. Shipped Help lessons own the learning experience. |
 
 These eight groups describe the remaining review surface, not eight promises to
 preserve every old scenario. Keep stable user goals and scientific/data semantics
@@ -110,6 +110,31 @@ are [#929](https://github.com/scopecat-project/scopecat/pull/929) and
 [#931](https://github.com/scopecat-project/scopecat/pull/931).
 
 ## Remaining work
+
+Generic launch/source-restore, session/batch/target selection, saved-plan and
+retained-analysis journeys now belong to server `author_journeys`, using the
+shared device-free project. The scalar verifier already creates a current starter;
+its test wrapper is classified with those journeys. The reference author module
+now retains Ramsey and live VNA/group declarations. The old copied-Ramsey timing
+assertion is covered by the remaining manual-Ramsey and quantum-composition
+journeys; it is not reproduced in a compute-only project.
+
+The remaining `frequency_amplitude` fixture has a narrower current consumer:
+shared Python/HTTP/UI evidence for configuration-owned and derived controls,
+normalized fixed/scanned inputs and project constraints. Core
+`authoring/test_controls.py` owns the individual rules; the shared acceptance and
+launch checks retain their cross-layer presentation. Its 64-point limit and q0
+label are fixture choices, not product or scientific requirements.
+
+The device/compiler inventory still needs explicit choices. q2/q3 provide the
+unrelated activation/required chains in `unit/test_list_mode_placement.py`, while
+q0/q1 exercise shared LO and multiplexed readout. Removing them requires retaining
+both overlap and non-overlap cases. `pump-source` has no acquisition consumer;
+its current uses are the dynamically exposed RF catalog/route and the selected
+project configuration test. A later inventory reduction can retarget that test
+to an existing RF source and remove the spare entry without claiming a loss of
+pump calibration evidence. This consumer retirement does not change equipment
+implementations or make physical qualification claims.
 
 Retire duplicate consumers and unused dependencies after checking their actual
 callers and current requirements. Move generic cases to existing core, starter or

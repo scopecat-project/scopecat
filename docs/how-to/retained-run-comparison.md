@@ -5,12 +5,12 @@ Choose two completed retained runs, inspect their compatible coordinate and
 observable, select point positions independently and run a laboratory-owned
 Python model. This operation never dispatches a procedure or starts acquisition.
 
-The reference lab registers `signal-quadratic` through the maintained adapter in
-`reference_lab/comparison.py`; its editable model lives in
-`reference_lab_authors/authored/comparison.py`.
-Acquire two hardware-free `frequency_amplitude` runs over several frequencies,
+The device-free integration fixture registers `signal-quadratic` through
+`testing/fixtures/retained-signal/src/ui_signal/comparison.py`; its editable model lives in
+`testing/fixtures/retained-signal/src/ui_signal/model.py`.
+Acquire two `ui_signal.signal` runs in that project over several frequencies,
 then compare them. The quadratic model exposes an adjustable carrier offset. It
-is an analytic teaching example, not physical calibration evidence. Experiment
+is a synthetic integration example, not physical calibration evidence. Experiment
 authors can edit the authored fit/helper and its model version, then select
 **Refresh author code**. Registering or replacing the project-level
 `LabApplication(comparison_provider=...)` callback is a maintainer task, using the
@@ -21,7 +21,7 @@ When a provider suggests a follow-up experiment, use
 `comparison_selection(primary.snapshot)` from that module as the new
 `LaunchRequest.selection`. It retains exact parameter/setup or candidate inputs,
 subject revision and batch instead of resolving today's global defaults. The
-reference provider uses this path, including in equipment-only projects without
+fixture provider uses this path, including in equipment-only projects without
 a parameter default. The suggestion still needs a new checked preview and normal
 execution admission; retaining inputs does not approve a candidate or permit
 execution under obsolete equipment authority.
@@ -33,10 +33,9 @@ Different grids remain separate: no interpolation or cross-run join is performed
 This helper uses existing Dataset reads, not storage pushdown, and supports up to
 10,000 points per retained run. It is not a process-memory budget.
 
-The reference fit traces the original immutable datasets and exact ordered
+The fixture fit traces the original immutable datasets and exact ordered
 selection positions as explicit bindings. Its publications retain both run IDs
-and measurement hashes, model ID/version, parameters, coefficients, selected data
-and layered data/model figures. A fit is a normal primary-run analysis revision.
+and measurement hashes, model ID/version, parameters, coefficients and a fitted-curve figure. A fit is a normal primary-run analysis revision.
 The primary run must actually be an input; secondary measurements are checked
 against their true owner and content hash, and secondary runs must be complete.
 Project analyses still cannot publish parameter proposals. Nothing copies an

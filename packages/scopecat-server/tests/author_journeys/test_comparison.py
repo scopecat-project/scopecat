@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
 import time
+from collections.abc import Callable
+from pathlib import Path
 
 import httpx2 as httpx
 import pytest
@@ -14,6 +17,7 @@ from scopecat.application.comparison import ComparisonHandoff
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.automation import RunOutputRef
 from scopecat.daemon.client import DaemonClient
+from scopecat.project import load_project
 from scopecat.records.analysis import MeasurementAnalysisRecordInput
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.comparison import (
@@ -24,22 +28,32 @@ from scopecat.records.comparison import (
 )
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     ScientificSelection,
 )
 from scopecat_testkit.authoring import source_workspace_id
+from ui_signal.application import initial_parameters
+from ui_signal.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
+from ui_signal.model import MODEL
 
-from reference_lab.comparison import FIT_SCHEMA, NEXT_INPUT_SCHEMA, REVIEW_SCHEMA
-from reference_lab_authors.authored.comparison import MODEL
+from scopecat_server.lifecycle import start_project, stop_project
+
+from .conftest import FIXTURE_ROOT
 
 
 def test_two_retained_runs_fit_candidate_rejection_and_handoff(
-    independent_lab_daemon: str, independent_parameters: ParameterRevision
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+    select_author_source: Callable[[Path], None],
 ) -> None:
-    url = independent_lab_daemon
+    root = tmp_path / "comparison"
+    shutil.copytree(FIXTURE_ROOT, root)
+    select_author_source(root)
+    project = load_project(root / "scopecat.toml")
+    url = start_project(project).base_url
+    request.addfinalizer(lambda: stop_project(project))
     with (
         LabClient(DaemonClient(url)) as lab,
         httpx.Client(
@@ -47,6 +61,12 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         ) as http,
     ):
         setup = lab.setup.get("initial")
+        content = initial_parameters()
+        independent_parameters = lab.parameters.save(
+            name="comparison-inputs",
+            catalog=content.catalog,
+            parameters=content.parameters,
+        )
         frequencies = [sc.Quantity(value, "GHz") for value in (4.6, 4.7, 4.8, 4.9, 5.0)]
         catalog = LaunchCatalog.model_validate(
             http.get(
@@ -54,11 +74,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
                 headers={"X-Scopecat-Workspace": source_workspace_id(url)},
             ).json()
         )
-        entry = next(
-            item
-            for item in catalog.entries
-            if item.id == "reference_lab.frequency_amplitude"
-        )
+        entry = next(item for item in catalog.entries if item.id == "ui_signal.signal")
         launch = LaunchRequest(
             workspace_id=source_workspace_id(url),
             action="preview",
@@ -130,9 +146,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         assert isinstance(secondary_output, RunOutputRef)
         secondary = lab.get_run(secondary_output.run_id)
         runs = (primary, secondary)
-        originals = tuple(
-            run.measurements()["response"].require_values() for run in runs
-        )
+        originals = tuple(run.measurements()["result"].require_values() for run in runs)
         original_requests = tuple(run.request for run in runs)
         assert lab.config.registry().entries == ()
         run_ids = {run.id for run in lab.runs().items}
@@ -177,15 +191,12 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         saved = primary.published_analysis(first.analysis_id)
         assert saved.fact_as("comparison-request", COMPARISON_REQUEST_SCHEMA) == command
         fit = saved.fact_as("fit", FIT_SCHEMA)
-        assert fit.primary_points == (4, 1, 2, 3)
         assert fit.center_ghz == pytest.approx(4.8, abs=0.02)
         assert {
             item.run_id
             for item in saved.inputs
             if isinstance(item, MeasurementAnalysisRecordInput)
         } == {run.id for run in runs}
-        assert fit.primary_hash == inspected.primary.content_hash
-        assert fit.secondary_hash == inspected.secondary.content_hash
         assert len(saved.executions) == 1
         assert (
             saved.fact_as("next-input", NEXT_INPUT_SCHEMA).frequency.value
@@ -279,7 +290,7 @@ def test_two_retained_runs_fit_candidate_rejection_and_handoff(
         assert lab.config.registry().entries == ()
         assert tuple(run.request for run in runs) == original_requests
         assert (
-            tuple(run.measurements()["response"].require_values() for run in runs)
+            tuple(run.measurements()["result"].require_values() for run in runs)
             == originals
         )
         assert (

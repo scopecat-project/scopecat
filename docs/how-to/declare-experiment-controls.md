@@ -6,20 +6,22 @@ This page covers the explicit maintained control contract, ownership and project
 `sc.Control` describes a maintained numeric control: its default, unit, bounds,
 label, group, ownership, and provenance. Attach its `sc.ControlSet` explicitly
 with `@sc.experiment(controls=controls)`. It supplies the same defaults to
-immutable Python invocations and the typed launch catalog. The reference lab's
-`frequency_amplitude` workflow demonstrates this with an analytic signal model.
+immutable Python invocations and the typed launch catalog. For example, with an
+explicitly resolved `config` from your author session:
 
 ```python
 import scopecat as sc
-from reference_lab.configuration import bootstrap_config
-from reference_lab_authors.frequency_amplitude import (
-    CONTROLS,
-    FREQUENCY,
-    frequency_amplitude,
-)
 
-config = bootstrap_config()
-original = frequency_amplitude.build()
+FREQUENCY = sc.Control(
+    "frequency", default=sc.Quantity(4.8, "GHz"), scannable=True
+)
+CONTROLS = sc.ControlSet((FREQUENCY,))
+
+@sc.experiment(controls=CONTROLS)
+def controlled(context: sc.ExperimentContext):
+    return FREQUENCY.ref
+
+original = controlled.build()
 fixed = CONTROLS.apply(
     original, config=config, edits={"frequency": sc.Quantity(4900, "MHz")}
 )
