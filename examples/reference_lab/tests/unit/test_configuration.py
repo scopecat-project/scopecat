@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 import scopecat as sc
 from scopecat.config.parameter_resolution import validate_parameter_snapshot
-from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
 from scopecat.planning.catalog import InstrumentContractCatalog
 from scopecat.planning.provider_binding import resolve_instrument_contract_catalog
@@ -159,7 +158,7 @@ def _without_idempotent_program_start(
     return catalog.model_copy(update={"instruments": instruments})
 
 
-def test_bootstrap_config_provides_valid_drag_compiler_parameters() -> None:
+def test_bootstrap_config_provides_valid_parameters() -> None:
     config = bootstrap_config()
 
     assert (
@@ -169,16 +168,6 @@ def test_bootstrap_config_provides_valid_drag_compiler_parameters() -> None:
         )
         == ()
     )
-    qubits = config.parameter_snapshot.get("qubits")
-    assert isinstance(qubits, TableParameterValue)
-    q0 = next(
-        row
-        for row in qubits.rows
-        if row["qubit"] == EntityRef(id="q0", kind="logical_qubit")
-    )
-    assert q0["drag_beta"] == Quantity(value=0.5, unit="ns")
-    assert q0["quarter_turn_duration"] == Quantity(value=16, unit="ns")
-    assert q0["quarter_turn_amplitude"] == Quantity(value=0.2, unit="arb")
 
 
 def test_target_configuration_keeps_topology_separate_from_calibration() -> None:
@@ -274,60 +263,42 @@ def test_target_rejects_an_unknown_lab_iq_policy() -> None:
         _configured_target(changed)
 
 
-def test_list_mode_target_owns_only_real_time_members() -> None:
+def test_list_mode_target_uses_configured_capacity_limits() -> None:
     config = bootstrap_config()
     domain_target = config.domain_target
     assert domain_target is not None
-    assert domain_target.instrument_ids == [
-        "drive-awg",
-        "readout-awg",
-        "readout-digitizer",
-        "timing-controller",
-    ]
+    configuration = domain_target.configuration.copy()
+    capabilities = configuration["capabilities"]
+    assert isinstance(capabilities, dict)
+    limits = {
+        "max_list_entries": 7,
+        "max_program_waveform_bytes": 1024,
+        "max_program_event_count": 31,
+        "max_program_acquisition_count": 11,
+        "max_result_bytes": 4096,
+        "max_result_chunk_bytes": 128,
+    }
+    configuration["capabilities"] = {**capabilities, **limits}
+    changed = config.model_copy(
+        update={
+            "system": config.system.model_copy(
+                update={
+                    "domain_target": domain_target.model_copy(
+                        update={"configuration": configuration}
+                    )
+                }
+            )
+        }
+    )
 
-    target = _configured_target(config)
-    assert len(target.output_bindings) == 8
-    assert len(target.acquisition_bindings) == 4
-    assert target.preparation.timing.trigger_instrument_id == "timing-controller"
-    assert all(
-        binding.i_channel_id != binding.q_channel_id
-        for binding in target.output_bindings
-    )
-    drive_ifs = {
-        binding.signal.owner.value: binding.intermediate_frequency_hz
-        for binding in target.output_bindings
-        if isinstance(binding.signal, DriveSignal)
-    }
-    drive_lo_groups = {
-        binding.signal.owner.value: binding.lo_group_id
-        for binding in target.output_bindings
-        if isinstance(binding.signal, DriveSignal)
-    }
-    assert drive_ifs == {
-        "q0": -50.0e6,
-        "q1": 50.0e6,
-        "q2": -50.0e6,
-        "q3": 50.0e6,
-    }
-    assert drive_lo_groups == {
-        "q0": "drive-a",
-        "q1": "drive-a",
-        "q2": "drive-b",
-        "q3": "drive-b",
-    }
-    assert {binding.input_id for binding in target.acquisition_bindings} == {
-        target.acquisition_bindings[0].input_id
-    }
+    target = _configured_target(changed)
+
+    for name, expected in limits.items():
+        assert getattr(target, name) == expected
     assert (
-        len({binding.demodulator_slot_id for binding in target.acquisition_bindings})
-        == 4
+        target.capability_fingerprint
+        != _configured_target(config).capability_fingerprint
     )
-    assert target.max_list_entries == 256
-    assert target.max_program_waveform_bytes == 48 * 1024 * 1024
-    assert target.max_program_event_count == 256 * 1024
-    assert target.max_program_acquisition_count == 64 * 1024
-    assert target.max_result_bytes == 512 * 1024 * 1024
-    assert target.max_result_chunk_bytes == 8 * 1024 * 1024
 
 
 def test_acquisition_dsp_policy_selects_only_advertised_lowerings() -> None:
@@ -501,7 +472,14 @@ def test_lab_rf_routing_retains_component_scope_outside_domain_target() -> None:
     _configured_target(changed)
 
 
-def test_list_mode_target_resolves_lo_and_mixer_from_reviewed_parameters() -> None:
+@pytest.mark.parametrize(
+    ("lo_frequency_hz", "expected_if_hz"),
+    [(4.75e9, 50e6), (4.8e9, 0.0), (4.85e9, -50e6)],
+)
+def test_list_mode_target_resolves_lo_and_mixer_from_reviewed_parameters(
+    lo_frequency_hz: float,
+    expected_if_hz: float,
+) -> None:
     config = bootstrap_config()
     lo_table = config.parameter_snapshot.get(sc.parameter_table_name(LoGroupParameters))
     mixer_table = config.parameter_snapshot.get(
@@ -511,7 +489,7 @@ def test_list_mode_target_resolves_lo_and_mixer_from_reviewed_parameters() -> No
     assert isinstance(mixer_table, TableParameterValue)
 
     lo_rows = tuple(
-        {**dict(row), LoGroupParameters.frequency.name: Quantity(4800000000.0, "Hz")}
+        {**dict(row), LoGroupParameters.frequency.name: Quantity(lo_frequency_hz, "Hz")}
         if row[LoGroupParameters.group.name] == "drive-a"
         else row
         for row in lo_table.rows
@@ -554,7 +532,7 @@ def test_list_mode_target_resolves_lo_and_mixer_from_reviewed_parameters() -> No
     binding = next(
         binding for binding in target.output_bindings if binding.signal == signal
     )
-    assert binding.intermediate_frequency_hz == 0.0
+    assert binding.intermediate_frequency_hz == expected_if_hz
     assert binding.mixer.ii == 0.9
     assert binding.mixer.iq == 0.1
     assert binding.mixer.qi == -0.2

@@ -403,6 +403,27 @@ and route; its independent scientific need remains an explicit inventory audit
 item, not evidence that it is dead. No author-entry redesign, native-window,
 installed-delivery, physical-hardware or historical-data qualification is claimed.
 
+## Target configuration snapshot retirement
+
+`tests/unit/test_configuration.py` no longer freezes the reference fixture's
+four-qubit inventory or its default calibration and capacity values. The retained
+configuration checks exercise routing, instrument authority, DSP/trigger selection
+and reviewed parameter resolution. No provider, route, compiler, response model or
+worker input is removed by this slice.
+
+| Removed fixture assertion | Current evidence or withdrawal |
+| --- | --- |
+| q0 starts at 0.5 ns DRAG beta, 16 ns duration and 0.2 arb amplitude | Default scientific values are fixture choices. Bootstrap parameter validation remains. `test_compiler_parameters.py::test_drag_beta_overlay_changes_resolved_pulse_not_recipe_identity` checks that edited beta changes the resolved pulse and fingerprint without changing recipe identity; `test_typed_candidates.py` retains actual DRAG acquisition, analysis and accepted-gate execution. |
+| Exact four-device target list, eight outputs and four acquisitions | Inventory size/order is not a compiler contract. `test_target_configuration_cannot_exceed_its_instrument_authority` retains rejection of unauthorized timing hardware; `test_lab_rf_routing_retains_component_scope_outside_domain_target` retains host RF ownership and component scope. The runner's fixed-IF host-effect test retains actual target/resource requirements in a compiled plan. |
+| q0–q3 IF/LO dictionaries | The existing reviewed-parameter test now exercises positive, zero and negative IF by changing the selected LO, while retaining mixer, physical offsets, LO group and fingerprint assertions. `test_fixed_if_lo_sweep_bounds_real_time_batches_with_host_effects` retains execution at fixed negative IF and measured carrier values. The particular four-row mapping is withdrawn. |
+| Every I/Q pair differs; all four acquisitions share one input with four slots | `test_parallel_qubit_set_compiles_to_one_entity_axis_result_group` checks actual compiled shared outputs/input and acquisition ownership for the selected entities. Waveform and placement tests retain physical I/Q behavior. A fixed count of four demodulators is not required. |
+| Six exact default memory/event/acquisition/list/chunk capacities | `test_list_mode_target_uses_configured_capacity_limits` supplies distinct non-default limits and checks that configuration reaches the target and changes its capability identity. `test_list_mode_cache_and_budget.py` retains capacity calculation and waveform/event/acquisition/result/chunk rejection; `test_list_mode_device_runtime.py` retains bounded result chunks. Default capacities are not public compatibility promises. |
+
+These replacements need no daemon. Existing bounded worker journeys, shared
+claims, entityless diagnostics, ragged acquisition and current-format recovery
+remain unchanged. The source package and shared acceptance identities are unchanged;
+this retires test maintenance assumptions, not device/compiler coverage or #773.
+
 ## Configuration-authority retirement evidence
 
 Global activation, stale-global-default and restoration-of-default assertions are
