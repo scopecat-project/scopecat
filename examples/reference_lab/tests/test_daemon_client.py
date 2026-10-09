@@ -82,8 +82,8 @@ def test_reference_lab_application_loads_selected_project_system(
     infrastructure_path = config_dir / "system-infrastructure.json"
     infrastructure_path.write_text(
         infrastructure_path.read_text().replace(
-            '"exclusivity_key": "pump-source"',
-            '"exclusivity_key": "selected/pump-source"',
+            '"exclusivity_key": "drive-lo-a"',
+            '"exclusivity_key": "selected/drive-lo-a"',
             1,
         )
     )
@@ -95,9 +95,12 @@ def test_reference_lab_application_loads_selected_project_system(
     assert bootstrap.setup is not None
     assert bootstrap.parameter_defaults is None
     equipment = bootstrap.setup()
-    assert equipment.instrument_registry.instruments[0].exclusivity_key == (
-        "selected/pump-source"
+    instrument = next(
+        item
+        for item in equipment.instrument_registry.instruments
+        if item.id == "drive-lo-a"
     )
+    assert instrument.exclusivity_key == "selected/drive-lo-a"
     parameters = initial_parameters()
     selected_config = compose_configuration(
         equipment,

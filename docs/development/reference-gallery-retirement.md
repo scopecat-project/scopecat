@@ -1,8 +1,9 @@
 # Retire the reference gallery by behavior
 
-The gallery's presentation scripts are retired. Its remaining device, compiler
-and scientific inputs support integration tests while their ownership is reviewed
-in [#773](https://github.com/scopecat-project/scopecat/issues/773), under
+The gallery's presentation scripts and generic author shell are retired. Its
+retained device, compiler and scientific inputs belong to the integration evidence
+owners below, completing the tracked-fixture retirement scope of
+[#773](https://github.com/scopecat-project/scopecat/issues/773), under
 [#615](https://github.com/scopecat-project/scopecat/issues/615). This does not make
 the reference application a supported author template.
 
@@ -10,8 +11,9 @@ The lab originally probed user needs through runnable experiments. Retiring its
 implementation does not retire those needs. [Workflow evaluations](workflow-evaluations.md)
 retain representative user goals and gaps; this page maps their current evidence.
 Help tutorials own teaching, core tests own mechanism rules, and a few combined
-journeys retain scientific integration and product feedback. The whole old
-implementation can eventually retire without creating another gallery API.
+journeys retain scientific integration and product feedback. The retained source
+directory is an integration fixture, not unfinished gallery retirement or another
+gallery API. Future changes follow the needs of those consumers.
 
 ## Current evidence owners
 
@@ -58,8 +60,9 @@ Do not reduce every scientific/device case to a minimal compute fixture.
 
 The scope device, monitor binding and scope-only interfaces are removed. Retained
 AWG/digitizer/trigger participation, capture queues and non-scope receipts still
-have consumers. `pump-source` remains dynamically reachable through its catalog
-and route; its scientific need is an inventory question, not proof of dead code.
+have consumers. The spare `pump-source` catalog entry and route are removed;
+the selected-project configuration check uses the existing `drive-lo-a` RF source.
+No acquisition depended on the spare entry.
 The unused single-output `play(waveform)` protocol and its separate sampled-waveform
 codec are also retired. AWGs execute multi-channel programs through load/arm and
 the shared trigger; output reset remains a state-invalidation input. Existing
@@ -109,7 +112,7 @@ Representative deletion and validation records
 are [#929](https://github.com/scopecat-project/scopecat/pull/929) and
 [#931](https://github.com/scopecat-project/scopecat/pull/931).
 
-## Remaining work
+## Retirement outcome and retained ownership
 
 Generic launch/source-restore, session/batch/target selection, saved-plan and
 retained-analysis journeys now belong to server `author_journeys`, using the
@@ -124,15 +127,18 @@ single-signal project through the existing acceptance generator. Core
 `authoring/test_controls.py` owns project validation; the obsolete reference
 64-point policy is retired. The physical UI draft/authority check uses Ramsey.
 
-The device/compiler inventory still needs explicit choices. q2/q3 provide the
+The retained device/compiler inventory has bounded consumers. q2/q3 provide the
 unrelated activation/required chains in `unit/test_list_mode_placement.py`, while
-q0/q1 exercise shared LO and multiplexed readout. Removing them requires retaining
-both overlap and non-overlap cases. `pump-source` has no acquisition consumer;
-its current uses are the dynamically exposed RF catalog/route and the selected
-project configuration test. A later inventory reduction can retarget that test
-to an existing RF source and remove the spare entry without claiming a loss of
-pump calibration evidence. This consumer retirement does not change equipment
-implementations or make physical qualification claims.
+q0/q1 exercise shared LO and multiplexed readout. Both overlap and non-overlap
+cases remain; the exact labels and four-qubit count are not a product promise.
+Compiler/runner tests and compiler/scan benchmarks own buffers, routing, triggering,
+resource claims and bounded execution. The science journeys in the table own
+spectroscopy and calibration composition; manual/diagnostic UI journeys and server
+snapshot recovery retain the cross-layer boundaries. These are ongoing integration
+fixtures, not a requirement to recreate old examples or prove a synthetic plant's
+physical validity before retiring them. No known generic shell or unused spare
+device remains in this inventory review. Keeping these current inputs does not
+require keeping #773 open solely because `examples/reference_lab` still exists.
 
 Retire duplicate consumers and unused dependencies after checking their actual
 callers and current requirements. Move generic cases to existing core, starter or

@@ -5,7 +5,7 @@
         "approval": null,
         "proposal": {
           "analysis_record_id": "acceptance-analysis",
-          "base_config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+          "base_config_content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
           "base_config_id": "acceptance-parameters",
           "composition": null,
           "confidence": null,
@@ -1821,7 +1821,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:b5e665ce0541e3f0cc147160cc3ca9d978ac00a4264492268d4ea4d1cd11f75c",
+        "config_source_hash": "sha256:3e839c0382be26ff352895b1b000fcda11ddcc29ad71a3259ccea719b4af97a1",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1832,7 +1832,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+          "config_content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1934,7 +1934,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:6b55e89b2e027583e8f95164d676b1233817cd06d895e045be40b52ef02cc8bc",
+      "fingerprint": "sha256:caaa891d42f0395ba8657bd270c04da83c4640c2f67e34c011bf512acce4a5ab",
       "id": "scopecat.author:reference_lab.temperature_diagnostic",
       "version": "1"
     },
@@ -1946,16 +1946,16 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+        "config_content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
         "scenario": null,
-        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
+        "setup_content_hash": "sha256:bd749036fc7346504cc5ec57fc3a6cdc655be85ffd644a521b3b61ed4d97752b",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+        "content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
@@ -1963,8 +1963,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:1e60266f60489fcafe828c815d005beab7b0a79dcdb30d556d9cf755bd0f7e90",
-          "revision_id": "resolved:1e60266f60489fcafe828c815d005beab7b0a79dcdb30d556d9cf755bd0f7e90"
+          "content_hash": "sha256:2c1d2b447eb1b945cb981394ae5dfc044f3581fd656fdbf79c251d4e09eb60dc",
+          "revision_id": "resolved:2c1d2b447eb1b945cb981394ae5dfc044f3581fd656fdbf79c251d4e09eb60dc"
         }
       }
     },
