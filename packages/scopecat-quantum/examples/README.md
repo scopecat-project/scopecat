@@ -28,7 +28,7 @@ from the other.
 
 In a running author project, save helper edits, refresh the author revision,
 and preview again before submitting a new run. Already admitted runs keep
-their source revision. `examples/reference_lab/tests/test_author_refresh.py`
+their source revision. `packages/scopecat-server/tests/author_journeys/test_author_refresh.py`
 checks revision retention through worker execution and store restoration;
 `tests/test_quantity_expressions.py` checks the concrete waveform and timing
 of nested expressions at multiple points. The standalone example above does
