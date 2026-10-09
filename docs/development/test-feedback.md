@@ -120,6 +120,37 @@ establish the full architecture milestone, a supported data baseline or release
 readiness. Platform artifacts contain the offline bundle, executed notebooks,
 acceptance report and retained lifecycle logs, including on failure.
 
+The `browser` profile runs the same two real-daemon browser shards without the
+Linux/Windows installed jobs. Its gate requires the UI artifact producer and both
+browser shards to succeed, and requires unrelated jobs to be skipped. This is
+browser evidence only; it does not qualify installed delivery, recovery, native
+operation or a release. Existing profiles retain their original scope.
+
+```sh
+gh workflow run acceptance.yml --ref <branch> -f profile=browser
+# Repeat browser qualification using a completed run's exact-commit build:
+gh workflow run acceptance.yml --ref <same-commit-branch> -f profile=browser \
+  -f framework_run_id=<acceptance-run-id>
+```
+
+Without `framework_run_id`, the workflow builds fresh immutable wheels and GUI.
+With it, the producer must be a completed acceptance run in this repository at
+exactly the checkout commit, with a successful `UI` job and one unexpired
+`scopecat-framework` artifact. A failed browser/installed job in that producer run
+does not invalidate its successful build. The consumer checks the manifest commit,
+every listed file hash and the GUI's embedded commit/version before publishing
+its shared input. A different commit, missing/expired artifact, failed producer,
+or mismatched bytes fails the run; there is no fallback rebuild. Reuse is rejected
+for other profiles. The source run/artifact ID and validated file hashes appear in
+the job log. This is exact-commit reuse, not compatibility inference across commits.
+
+This slice avoids both installed platform jobs for browser-only work; it does not
+make the installed carrier cheaper. The #944 local measurements remain: old carrier
+226.540 s / 2.456 GB logical retained bytes; converged carrier after cleanup
+333.570 s / 4.057 GB. These are local observations, not CI timings or peak disk/RSS.
+Recovery remains part of installed qualification; separating it requires retaining
+its real application, cold-cache, source-restoration and numerical guarantees.
+
 See [core feedback cost](ci-feedback-cost.md) for the two-shard measurements and
 runner-cost tradeoff.
 
