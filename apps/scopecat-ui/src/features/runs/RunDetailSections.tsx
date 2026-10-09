@@ -38,6 +38,7 @@ import {
   getRunContent,
 } from "./run-api";
 import type {
+  MeasurementSliceSelection,
   MeasurementEntitySelection,
   MeasurementTraceQueryPlan,
 } from "./measurement-visualization";
@@ -516,6 +517,8 @@ export function DataCard({
   onTracePlanChange,
   onMeasurementEntitySelectionChange,
   measurementFixedAxisIndices,
+  measurementAxes,
+  onMeasurementAxesChange,
   onMeasurementSliceOffsetChange,
   onMeasurementFixedAxisIndexChange,
 }: {
@@ -539,6 +542,8 @@ export function DataCard({
   onTracePlanChange: (planId: string) => void;
   onMeasurementEntitySelectionChange: (selection: MeasurementEntitySelection) => void;
   measurementFixedAxisIndices: Record<string, number>;
+  measurementAxes?: MeasurementSliceSelection;
+  onMeasurementAxesChange?: (selection: MeasurementSliceSelection) => void;
   onMeasurementSliceOffsetChange: (offset: number) => void;
   onMeasurementFixedAxisIndexChange: (axisId: string, index: number) => void;
 }) {
@@ -581,6 +586,8 @@ export function DataCard({
         onTracePlanChange={onTracePlanChange}
         onMeasurementEntitySelectionChange={onMeasurementEntitySelectionChange}
         fixedAxisIndices={measurementFixedAxisIndices}
+        measurementAxes={measurementAxes}
+        onMeasurementAxesChange={onMeasurementAxesChange}
         onSliceOffsetChange={onMeasurementSliceOffsetChange}
         onFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
       />
@@ -785,6 +792,8 @@ function MeasurementRecords({
   onTracePlanChange,
   onMeasurementEntitySelectionChange,
   fixedAxisIndices,
+  measurementAxes,
+  onMeasurementAxesChange,
   onSliceOffsetChange,
   onFixedAxisIndexChange,
   error,
@@ -802,6 +811,8 @@ function MeasurementRecords({
   onTracePlanChange: (planId: string) => void;
   onMeasurementEntitySelectionChange: (selection: MeasurementEntitySelection) => void;
   fixedAxisIndices: Record<string, number>;
+  measurementAxes?: MeasurementSliceSelection;
+  onMeasurementAxesChange?: (selection: MeasurementSliceSelection) => void;
   onSliceOffsetChange: (offset: number) => void;
   onFixedAxisIndexChange: (axisId: string, index: number) => void;
   error: Error | null;
@@ -842,6 +853,8 @@ function MeasurementRecords({
       onTracePlanChange={onTracePlanChange}
       onEntitySelectionChange={onMeasurementEntitySelectionChange}
       fixedAxisIndices={fixedAxisIndices}
+      measurementAxes={measurementAxes}
+      onMeasurementAxesChange={onMeasurementAxesChange}
       onSliceOffsetChange={onSliceOffsetChange}
       onFixedAxisIndexChange={onFixedAxisIndexChange}
     />

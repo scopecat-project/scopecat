@@ -100,7 +100,14 @@ export interface MeasurementHeatmapCapability {
   observableIds: string[];
 }
 
+export interface MeasurementSliceSelection {
+  xAxisId: string;
+  yAxisId?: string;
+}
+
 export interface MeasurementSlicePlan {
+  numericAxes: MeasurementSliceAxis[];
+  scalarObservableIds: string[];
   varyingAxes: MeasurementSliceAxis[];
   fixedAxes: MeasurementSliceAxis[];
   variableIds: string[];
@@ -163,12 +170,80 @@ export function planMeasurementCharts(
   schema?: MeasurementDatasetSchema,
   fixedAxisIndices?: Readonly<Record<string, number>>,
   entitySelection: MeasurementEntitySelection = {},
+  selection?: MeasurementSliceSelection,
 ): MeasurementChartPlan[] {
   if (records.length === 0 || schema === undefined) return [];
   const variables = variableDescriptors(schema);
   const observables = orderObservables(variables, schema);
   const entityAxes = measurementEntityAxes(schema);
   const entityAxisById = new Map(entityAxes.map((axis) => [axis.id, axis]));
+  if (selection && schema.point_domain.kind === "product_grid") {
+    const plan = measurementSlicePlan(schema, selection);
+    if (!plan) return [];
+    if (plan.heatmap) {
+      return productGridHeatmaps(
+        records,
+        variables,
+        observables,
+        schema,
+        fixedAxisIndices,
+        selection,
+      );
+    }
+    const coordinate = plan.varyingAxes[0]?.id;
+    const selectedVariables = variables.filter(
+      (variable) => variable.role !== "coordinate" || variable.id === coordinate,
+    );
+    const expected = plan.varyingAxes[0]?.size;
+    const scalarPlans = observables
+      .filter((variable) => variable.dims.length === 1 && isNumericVariable(variable))
+      .flatMap((observable) =>
+        scalarChart(records, selectedVariables, observable, schema, coordinate).map(
+          (chart): MeasurementChartPlan => ({
+            ...chart,
+            id: `slice:${observable.id}:${chart.id.split(":").at(-1)}`,
+            grid: undefined,
+            fixedCoordinates: undefined,
+            kind:
+              chart.kind === "line" &&
+              chart.series.every((series) => series.points.length === expected)
+                ? "line"
+                : "scatter",
+            note: [
+              chart.note,
+              "Only available values are plotted; missing points are not interpolated.",
+            ]
+              .filter(Boolean)
+              .join(" "),
+          }),
+        ),
+      );
+    const entityPlans = observables.flatMap((observable) => {
+      const axis = observable.entityAxisId
+        ? entityAxisById.get(observable.entityAxisId)
+        : undefined;
+      if (!axis || observable.dims.length !== 2 || !isNumericVariable(observable)) return [];
+      return entityScalarCharts(
+        records,
+        selectedVariables,
+        observable,
+        axis,
+        selectedEntityIndices(axis, entitySelection),
+        schema,
+        coordinate,
+      ).map((chart): MeasurementChartPlan => ({
+        ...chart,
+        id: `slice:${observable.id}:${axis.id}:${chart.id.split(":").at(-1)}`,
+        grid: undefined,
+        fixedCoordinates: undefined,
+        kind:
+          chart.kind === "line" && chart.series.every((series) => series.points.length === expected)
+            ? "line"
+            : "scatter",
+      }));
+    });
+    return [...scalarPlans, ...entityPlans];
+  }
   const gridPlans = productGridHeatmaps(records, variables, observables, schema, fixedAxisIndices);
   const colorPlans = pointCloudColorCharts(records, variables, observables, schema);
   const entityPlans = observables.flatMap((observable) => {
@@ -189,6 +264,7 @@ export function planMeasurementCharts(
 /** Choose bounded server projection axes for one product-grid slice. */
 export function measurementSlicePlan(
   schema?: MeasurementDatasetSchema,
+  selection?: MeasurementSliceSelection,
 ): MeasurementSlicePlan | undefined {
   if (schema?.point_domain.kind !== "product_grid") return undefined;
   const variables = variableDescriptors(schema);
@@ -205,7 +281,16 @@ export function measurementSlicePlan(
   });
   if (axes.length === 0 || axes.some(({ axis }) => !validGridSize(axis.size))) return undefined;
   const numericAxes = axes.filter(hasRealNumericVariable);
-  const varyingAxes = numericAxes.length > 0 ? numericAxes.slice(0, 2) : axes.slice(0, 1);
+  const xAxis = numericAxes.find(({ axis }) => axis.id === selection?.xAxisId) ?? numericAxes[0];
+  const yAxis = numericAxes.find(
+    ({ axis }) => axis.id === selection?.yAxisId && axis.id !== xAxis?.axis.id,
+  );
+  const varyingAxes =
+    selection && xAxis
+      ? [xAxis, ...(yAxis ? [yAxis] : [])]
+      : numericAxes.length > 0
+        ? numericAxes.slice(0, 2)
+        : axes.slice(0, 1);
   const varyingAxisIds = new Set(varyingAxes.map(({ axis }) => axis.id));
   const observables = variables.filter(
     (variable) =>
@@ -218,7 +303,9 @@ export function measurementSlicePlan(
       variable.dims.length === 2 &&
       isNumericVariable(variable),
   );
-  const heatmapAxes = numericAxes.slice(0, 2);
+  const heatmapAxes = selection
+    ? varyingAxes.filter(hasRealNumericVariable)
+    : numericAxes.slice(0, 2);
   const heatmap =
     heatmapAxes.length === 2 && observables.length > 0
       ? {
@@ -228,12 +315,14 @@ export function measurementSlicePlan(
         }
       : undefined;
   return {
+    numericAxes: numericAxes.map(sliceAxisDescriptor),
+    scalarObservableIds: observables.map((variable) => variable.id),
     varyingAxes: varyingAxes.map(sliceAxisDescriptor),
     fixedAxes: axes.filter(({ axis }) => !varyingAxisIds.has(axis.id)).map(sliceAxisDescriptor),
     variableIds: [
       ...new Set([
-        ...varyingAxes.flatMap(({ variable }) =>
-          variable && isNumericVariable(variable) ? [variable.id] : [],
+        ...(selection ? axes : varyingAxes).flatMap(({ variable }) =>
+          variable && (selection || isNumericVariable(variable)) ? [variable.id] : [],
         ),
         ...observables.map((observable) => observable.id),
         ...entitySliceVariables.map((variable) => variable.id),
@@ -475,20 +564,24 @@ function scalarChart(
   variables: VariableDescriptor[],
   observable: VariableDescriptor,
   schema: MeasurementDatasetSchema,
+  coordinateId?: string,
 ): MeasurementChartPlan[] {
   const candidates = variables.filter(
     (variable) => variable.role === "coordinate" && variable.dims.length === 1,
   );
-  const coordinate = orderCoordinates(candidates, schema).find((candidate) =>
-    records.some((record) => numericScalar(valueFor(record, candidate)) !== undefined),
-  );
+  const coordinate =
+    coordinateId !== undefined
+      ? candidates.find((candidate) => candidate.id === coordinateId)
+      : orderCoordinates(candidates, schema).find((candidate) =>
+          records.some((record) => numericScalar(valueFor(record, candidate)) !== undefined),
+        );
   return valueModes(observable).flatMap((mode) => {
     const points = records.flatMap((record) => {
       const y = numericScalar(valueFor(record, observable), mode);
       const x = coordinate ? numericScalar(valueFor(record, coordinate)) : record.point_index;
       return x === undefined || y === undefined ? [] : [{ x, y }];
     });
-    if (points.length === 0) return [];
+    if (points.length === 0 && coordinateId === undefined) return [];
     return [
       {
         id: `scalar:${observable.id}:${coordinate?.id ?? "point"}:${mode}`,
@@ -513,12 +606,15 @@ function entityScalarCharts(
   axis: MeasurementEntityAxis,
   selected: number[],
   schema: MeasurementDatasetSchema,
+  coordinateId?: string,
 ): MeasurementChartPlan[] {
   const coordinate = orderCoordinates(
     variables.filter((variable) => variable.role === "coordinate" && variable.dims.length === 1),
     schema,
   ).find((candidate) =>
-    records.some((record) => numericScalar(valueFor(record, candidate)) !== undefined),
+    coordinateId !== undefined
+      ? candidate.id === coordinateId
+      : records.some((record) => numericScalar(valueFor(record, candidate)) !== undefined),
   );
   return valueModes(observable).flatMap((mode) => {
     const series = selected.map((entityIndex) => {
@@ -540,7 +636,7 @@ function entityScalarCharts(
       };
     });
     const available = series.reduce((count, candidate) => count + candidate.points.length, 0);
-    if (available === 0) return [];
+    if (available === 0 && coordinateId === undefined) return [];
     const expected = records.length * selected.length;
     const monotonic = series
       .filter((candidate) => candidate.points.length > 0)
@@ -672,9 +768,10 @@ function productGridHeatmaps(
   observables: VariableDescriptor[],
   schema: MeasurementDatasetSchema,
   fixedAxisIndices?: Readonly<Record<string, number>>,
+  selection?: MeasurementSliceSelection,
 ): MeasurementChartPlan[] {
   if (schema.point_domain.kind !== "product_grid") return [];
-  const heatmap = measurementSlicePlan(schema)?.heatmap;
+  const heatmap = measurementSlicePlan(schema, selection)?.heatmap;
   if (!heatmap) return [];
   const variablesById = new Map(variables.map((variable) => [variable.id, variable]));
   const axes: ProductGridAxis[] = schema.point_domain.axes.map((axis) => {
@@ -700,33 +797,59 @@ function productGridHeatmaps(
     .filter((observable) => heatmapObservableIds.has(observable.id))
     .flatMap((observable) =>
       valueModes(observable).flatMap((mode) =>
-        [{ records, fixedCoordinates: selectedCoordinates }].flatMap((slice) => {
-          const grid = completeGrid(
-            slice.records,
-            xAxis.variable,
-            yAxis.variable,
-            observable,
-            mode,
-            xAxis.axis.size,
-            yAxis.axis.size,
-          );
-          if (!grid) return [];
-          const fixedCoordinates = slice.fixedCoordinates;
-          return [
-            {
-              id: heatmapId(observable, xAxis.variable, yAxis.variable, mode, fixedCoordinates),
-              kind: "heatmap" as const,
-              title: `${chartTitle(observable, mode)} heatmap`,
-              xLabel: valueLabel(xAxis.variable),
-              yLabel: valueLabel(yAxis.variable),
-              colorLabel: chartValueLabel(observable, mode),
-              fixedCoordinates,
-              grid: { xValues: grid.xValues, yValues: grid.yValues },
-              note: productGridNote(mode),
-              series: [{ id: observable.id, label: observable.label, points: grid.points }],
-            },
-          ];
-        }),
+        [{ records, fixedCoordinates: selectedCoordinates }].flatMap(
+          (slice): MeasurementChartPlan[] => {
+            const grid = completeGrid(
+              slice.records,
+              xAxis.variable,
+              yAxis.variable,
+              observable,
+              mode,
+              xAxis.axis.size,
+              yAxis.axis.size,
+            );
+            if (!grid) {
+              if (!selection) return [];
+              const points = records.flatMap((record) => {
+                const x = numericScalar(valueFor(record, xAxis.variable));
+                const y = numericScalar(valueFor(record, yAxis.variable));
+                const color = numericScalar(valueFor(record, observable), mode);
+                return x === undefined || y === undefined || color === undefined
+                  ? []
+                  : [{ x, y, color }];
+              });
+              return [
+                {
+                  id: `slice:${observable.id}:${mode}`,
+                  kind: "color-scatter" as const,
+                  title: chartTitle(observable, mode),
+                  xLabel: valueLabel(xAxis.variable),
+                  yLabel: valueLabel(yAxis.variable),
+                  colorLabel: chartValueLabel(observable, mode),
+                  note: "Incomplete or repeated coordinates: available points only, without interpolation.",
+                  series: [{ id: observable.id, label: observable.label, points }],
+                },
+              ];
+            }
+            const fixedCoordinates = slice.fixedCoordinates;
+            return [
+              {
+                id: selection
+                  ? `slice:${observable.id}:${mode}`
+                  : heatmapId(observable, xAxis.variable, yAxis.variable, mode, fixedCoordinates),
+                kind: "heatmap" as const,
+                title: `${chartTitle(observable, mode)} heatmap`,
+                xLabel: valueLabel(xAxis.variable),
+                yLabel: valueLabel(yAxis.variable),
+                colorLabel: chartValueLabel(observable, mode),
+                fixedCoordinates,
+                grid: { xValues: grid.xValues, yValues: grid.yValues },
+                note: selection ? chartNote(mode) : productGridNote(mode),
+                series: [{ id: observable.id, label: observable.label, points: grid.points }],
+              },
+            ];
+          },
+        ),
       ),
     );
 }

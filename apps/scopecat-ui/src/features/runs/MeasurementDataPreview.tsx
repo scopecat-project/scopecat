@@ -20,6 +20,7 @@ import {
   type MeasurementEntityAxis,
   type MeasurementEntitySelection,
   type MeasurementSliceAxis,
+  type MeasurementSliceSelection,
   type MeasurementTraceQueryPlan,
 } from "./measurement-visualization";
 
@@ -33,6 +34,8 @@ export function MeasurementDataPreview({
   sliceError,
   slicePending,
   fixedAxisIndices,
+  measurementAxes,
+  onMeasurementAxesChange,
   onSliceOffsetChange,
   onFixedAxisIndexChange,
   tracePlans = [],
@@ -48,6 +51,8 @@ export function MeasurementDataPreview({
   sliceError: Error | null;
   slicePending: boolean;
   fixedAxisIndices: Record<string, number>;
+  measurementAxes?: MeasurementSliceSelection;
+  onMeasurementAxesChange?: (selection: MeasurementSliceSelection) => void;
   onSliceOffsetChange?: (offset: number) => void;
   onFixedAxisIndexChange: (axisId: string, index: number) => void;
   tracePlans?: MeasurementTraceQueryPlan[];
@@ -58,7 +63,12 @@ export function MeasurementDataPreview({
   onTracePlanChange?: (planId: string) => void;
   onEntitySelectionChange?: (selection: MeasurementEntitySelection) => void;
 }) {
-  const slicePlan = useMemo(() => measurementSlicePlan(preview.schema), [preview.schema]);
+  const slicePlan = useMemo(
+    () => measurementSlicePlan(preview.schema, measurementAxes),
+    [preview.schema, measurementAxes],
+  );
+  const [requestedChartId, setRequestedChartId] = useState<string>();
+  const supportsAxisSelection = (slicePlan?.scalarObservableIds.length ?? 0) > 0;
   const chartSchema = slice?.schema ?? preview.schema;
   const entityAxes = useMemo(() => measurementEntityAxes(preview.schema), [preview.schema]);
   const [selectedEntityIdentities, setSelectedEntityIdentities] = useState<
@@ -107,6 +117,7 @@ export function MeasurementDataPreview({
       chartSchema,
       fixedAxisIndices,
       entitySelection,
+      measurementAxes,
     ).map((chart) =>
       liveScalarScan && chart.kind === "line"
         ? {
@@ -118,6 +129,7 @@ export function MeasurementDataPreview({
     );
   }, [
     plotRecords,
+    measurementAxes,
     liveScalarScan,
     chartSchema,
     entitySelection,
@@ -179,7 +191,8 @@ export function MeasurementDataPreview({
 
       {slicePlan &&
         !liveScalarScan &&
-        (slicePlan.fixedAxes.length > 0 ||
+        (onMeasurementAxesChange ||
+          slicePlan.fixedAxes.length > 0 ||
           slice?.truncated ||
           sliceError ||
           slice?.items.length !== slice?.selectedPointCount) && (
@@ -188,57 +201,141 @@ export function MeasurementDataPreview({
             data-testid="measurement-slice-controls"
           >
             <div className="flex flex-wrap items-end gap-2">
-              {slicePlan.fixedAxes.map((axis) => {
-                const selectedIndex = fixedAxisIndices[axis.id] ?? 0;
-                return (
-                  <label
-                    className="grid gap-1 text-xs font-bold tracking-[0.04em] text-text-dim uppercase"
-                    key={axis.id}
-                  >
-                    {axis.label} slice
-                    {axis.size <= MAX_SLICE_SELECT_OPTIONS ? (
+              {onMeasurementAxesChange &&
+                supportsAxisSelection &&
+                slicePlan.numericAxes.length > 0 && (
+                  <>
+                    <label className="grid gap-1 text-xs text-text-soft">
+                      Horizontal axis
                       <select
-                        aria-label={`${axis.label} slice`}
-                        className="min-w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
-                        value={selectedIndex}
+                        aria-label="Horizontal axis"
+                        className="rounded border border-line bg-panel px-2 py-1"
+                        value={slicePlan.varyingAxes[0]?.id}
                         onChange={(event) =>
-                          onFixedAxisIndexChange(axis.id, Number(event.target.value))
+                          onMeasurementAxesChange({
+                            xAxisId: event.target.value,
+                            yAxisId:
+                              slicePlan.varyingAxes[1]?.id === event.target.value
+                                ? undefined
+                                : slicePlan.varyingAxes[1]?.id,
+                          })
                         }
                       >
-                        {Array.from({ length: axis.size }, (_value, index) => (
-                          <option key={index} value={index}>
-                            {sliceAxisOption(axis, index)}
+                        {slicePlan.numericAxes.map((axis) => (
+                          <option key={axis.id} value={axis.id}>
+                            {axis.label}
+                            {axis.unit ? ` [${axis.unit}]` : ""}
                           </option>
                         ))}
                       </select>
-                    ) : (
-                      <>
-                        <input
-                          aria-label={`${axis.label} slice index`}
-                          className="w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
-                          max={axis.size}
-                          min={1}
-                          type="number"
-                          value={selectedIndex + 1}
-                          onChange={(event) => {
-                            const index = Number(event.target.value) - 1;
-                            if (Number.isInteger(index) && index >= 0 && index < axis.size) {
-                              onFixedAxisIndexChange(axis.id, index);
-                            }
-                          }}
-                        />
-                        <span className="max-w-52 truncate font-medium tracking-normal text-text-soft normal-case">
-                          {sliceAxisOption(axis, selectedIndex)} · {axis.size.toLocaleString()}{" "}
-                          values
-                        </span>
-                      </>
-                    )}
-                  </label>
+                    </label>
+                    <label className="grid gap-1 text-xs text-text-soft">
+                      Vertical axis
+                      <select
+                        aria-label="Vertical axis"
+                        className="rounded border border-line bg-panel px-2 py-1"
+                        value={slicePlan.varyingAxes[1]?.id ?? ""}
+                        onChange={(event) =>
+                          onMeasurementAxesChange({
+                            xAxisId: slicePlan.varyingAxes[0]!.id,
+                            yAxisId: event.target.value || undefined,
+                          })
+                        }
+                      >
+                        <option value="">None · signal curve</option>
+                        {slicePlan.numericAxes
+                          .filter((axis) => axis.id !== slicePlan.varyingAxes[0]?.id)
+                          .map((axis) => (
+                            <option key={axis.id} value={axis.id}>
+                              {axis.label}
+                              {axis.unit ? ` [${axis.unit}]` : ""}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+              {slicePlan.fixedAxes.map((axis) => {
+                const selectedIndex = fixedAxisIndices[axis.id] ?? 0;
+                return (
+                  <div
+                    className="grid gap-1 text-xs font-bold tracking-[0.04em] text-text-dim uppercase"
+                    key={axis.id}
+                  >
+                    <span>{axis.label} slice</span>
+                    <span className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Previous ${axis.label} value`}
+                        disabled={selectedIndex === 0}
+                        className="rounded border border-line px-2 py-1 disabled:opacity-35"
+                        onClick={() => onFixedAxisIndexChange(axis.id, selectedIndex - 1)}
+                      >
+                        −
+                      </button>
+                      {axis.size <= MAX_SLICE_SELECT_OPTIONS ? (
+                        <select
+                          aria-label={`${axis.label} slice`}
+                          className="min-w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+                          value={selectedIndex}
+                          onChange={(event) =>
+                            onFixedAxisIndexChange(axis.id, Number(event.target.value))
+                          }
+                        >
+                          {Array.from({ length: axis.size }, (_value, index) => (
+                            <option key={index} value={index}>
+                              {sliceAxisOption(axis, index)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                          <MeasurementSliceIndex
+                            key={`${axis.id}:${selectedIndex}`}
+                            axis={axis}
+                            selectedIndex={selectedIndex}
+                            onCommit={(index) => onFixedAxisIndexChange(axis.id, index)}
+                          />
+                          <span className="max-w-52 truncate font-medium tracking-normal text-text-soft normal-case">
+                            {sliceAxisOption(axis, selectedIndex)} · {axis.size.toLocaleString()}{" "}
+                            values
+                          </span>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Next ${axis.label} value`}
+                        disabled={selectedIndex + 1 >= axis.size}
+                        className="rounded border border-line px-2 py-1 disabled:opacity-35"
+                        onClick={() => onFixedAxisIndexChange(axis.id, selectedIndex + 1)}
+                      >
+                        +
+                      </button>
+                    </span>
+                  </div>
                 );
               })}
             </div>
+            <p
+              className="basis-full text-xs text-text-soft"
+              data-testid="measurement-slice-summary"
+            >
+              Current slice:{" "}
+              {slicePlan.varyingAxes
+                .map((axis) => `${axis.label}${axis.unit ? ` [${axis.unit}]` : ""} varying`)
+                .join(" × ")}
+              {slicePlan.fixedAxes
+                .map(
+                  (axis) =>
+                    ` · ${axis.label} = ${sliceAxisOption(axis, fixedAxisIndices[axis.id] ?? 0)}`,
+                )
+                .join("")}
+            </p>
             <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-text-dim">
-              <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex items-center gap-1.5"
+                role={sliceError ? "alert" : "status"}
+              >
                 {slicePending && (
                   <LoaderCircle className="animate-spin" size={12} aria-hidden="true" />
                 )}
@@ -389,7 +486,11 @@ export function MeasurementDataPreview({
       )}
 
       {charts.length > 0 ? (
-        <MeasurementChartPicker charts={charts} />
+        <MeasurementChartPicker
+          charts={charts}
+          requestedChartId={requestedChartId}
+          onChartChange={setRequestedChartId}
+        />
       ) : tracePlans.length === 0 ? (
         <p className="m-0 border-b border-line px-3 py-2.5 text-sm leading-normal text-text-dim">
           {emptyChartMessage({
@@ -418,12 +519,15 @@ export function MeasurementDataPreview({
         <details className="border-b border-line bg-panel-soft px-3 py-2 text-xs text-text-dim">
           <summary className="cursor-pointer">About this data view</summary>
           <p className="mt-2">
-            One-axis scans may overlay the latest received record; gaps in that preview are not
-            interpolated. Heatmaps and the table use the selected saved slice when available. Trace
-            previews are bounded by the server for the selected authored domain and entities. Entity
-            selection also filters comparison plots and table summaries. Large slices expose bounded
-            logical-point windows without losing their authored-axis context. The JSON preview
-            retains the bounded run view, including the latest live daemon receipt.
+            Product-grid scalar signals offer numeric plot axes; other dimensions stay fixed at
+            authored positions. Text, boolean and opaque coordinates are not treated as continuous
+            axes. Point clouds and array-local traces keep their existing views. One-axis scans may
+            overlay the latest received record; gaps in that preview are not interpolated. Heatmaps
+            and the table use the selected saved slice when available. Trace previews are bounded by
+            the server for the selected authored domain and entities. Entity selection also filters
+            comparison plots and table summaries. Large slices expose bounded logical-point windows
+            without losing their authored-axis context. The JSON preview retains the bounded run
+            view, including the latest live daemon receipt.
           </p>
         </details>
       )}
@@ -619,6 +723,9 @@ function emptyChartMessage({
     if (slice.truncated) {
       return "The selected slice is too large for an automatic plot. Use a projected Arrow reader for analysis.";
     }
+    if (slice.items.length === 0) {
+      return "No saved records in the selected slice. Planned points may not have been acquired or saved yet.";
+    }
     if (slice.items.length < slice.selectedPointCount) {
       return `The selected slice is incomplete: ${slice.items.length.toLocaleString()} of ${slice.selectedPointCount.toLocaleString()} points are durable. A complete grid is not available in this saved slice.`;
     }
@@ -627,6 +734,52 @@ function emptyChartMessage({
     return "No saved measurement records are available for this plot.";
   }
   return "No safe automatic plot is available for these variable shapes. The typed table remains available below.";
+}
+
+function MeasurementSliceIndex({
+  axis,
+  selectedIndex,
+  onCommit,
+}: {
+  axis: MeasurementSliceAxis;
+  selectedIndex: number;
+  onCommit: (index: number) => void;
+}) {
+  const [draft, setDraft] = useState<string>();
+  const commit = () => {
+    if (draft === undefined) return;
+    const position = Number(draft);
+    if (
+      draft.trim() !== "" &&
+      Number.isInteger(position) &&
+      position >= 1 &&
+      position <= axis.size
+    ) {
+      if (position - 1 !== selectedIndex) onCommit(position - 1);
+    }
+    setDraft(undefined);
+  };
+  return (
+    <input
+      aria-label={`${axis.label} slice index`}
+      className="w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+      max={axis.size}
+      min={1}
+      step={1}
+      type="number"
+      title={`Position 1–${axis.size}; press Enter or leave the field to apply`}
+      value={draft ?? String(selectedIndex + 1)}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        }
+        if (event.key === "Escape") setDraft(undefined);
+      }}
+    />
+  );
 }
 
 function sliceAxisOption(axis: MeasurementSliceAxis, index: number): string {
@@ -641,9 +794,19 @@ function sliceAxisOption(axis: MeasurementSliceAxis, index: number): string {
   return `${value}${unit ? ` ${unit}` : ""}${duplicate ? ` · Index ${index + 1}` : ""}`;
 }
 
-export function MeasurementChartPicker({ charts }: { charts: MeasurementChartPlan[] }) {
-  const [requestedChartId, setRequestedChartId] = useState<string>();
-  const selectedChart = charts.find((chart) => chart.id === requestedChartId) ?? charts[0];
+export function MeasurementChartPicker({
+  charts,
+  requestedChartId,
+  onChartChange,
+}: {
+  charts: MeasurementChartPlan[];
+  requestedChartId?: string;
+  onChartChange?: (id: string) => void;
+}) {
+  const [localChartId, setLocalChartId] = useState<string>();
+  const signalViews = charts.every((chart) => chart.id.startsWith("slice:"));
+  const selectedChart =
+    charts.find((chart) => chart.id === (requestedChartId ?? localChartId)) ?? charts[0];
   return (
     <div className="border-b border-line p-2.5" data-testid="measurement-charts">
       <div
@@ -651,15 +814,20 @@ export function MeasurementChartPicker({ charts }: { charts: MeasurementChartPla
         hidden={charts.length === 1}
       >
         <span>
-          {charts.length} chart {charts.length === 1 ? "candidate" : "candidates"}
+          {charts.length}{" "}
+          {signalViews
+            ? "signal views"
+            : charts.length === 1
+              ? "chart candidate"
+              : "chart candidates"}
         </span>
         {charts.length > 1 && (
           <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
-            Chart
+            {signalViews ? "Signal" : "Chart"}
             <select
               aria-label="Measurement chart"
               className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
-              onChange={(event) => setRequestedChartId(event.target.value)}
+              onChange={(event) => (onChartChange ?? setLocalChartId)(event.target.value)}
               value={selectedChart?.id ?? ""}
             >
               {charts.map((chart) => (
@@ -721,7 +889,9 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           {chart.layout === "small-multiples" ? "small multiples" : chart.kind.replace("-", " ")}
         </span>
       </figcaption>
-      {chart.layout === "small-multiples" && chart.series.length > 1 ? (
+      {points.length === 0 ? (
+        <p role="status">No available values for this signal in the selected slice.</p>
+      ) : chart.layout === "small-multiples" && chart.series.length > 1 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-2">
           {chart.series.map((series) => (
             <MeasurementSeriesPanel chart={chart} key={series.id} series={series} />
@@ -794,6 +964,7 @@ function entityChipClasses(selected: boolean): string {
 }
 
 function chartOptionLabel(chart: MeasurementChartPlan): string {
+  if (chart.id.startsWith("slice:")) return chart.colorLabel ?? chart.yLabel;
   const color = chart.colorLabel ? ` · color: ${chart.colorLabel}` : "";
   const layout = chart.layout === "small-multiples" ? " · small multiples" : "";
   const fixed =
