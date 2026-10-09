@@ -5,7 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunExecutionSegmentPage } from "../../api-contract";
-import { AnalysisCard, ExecutionSegmentsCard, ResourceCard } from "./RunDetailSections";
+import {
+  AnalysisCard,
+  ExecutionSegmentsCard,
+  ResourceCard,
+  ProgressCard,
+} from "./RunDetailSections";
+
+import type { ProjectRun } from "../../types";
 
 import * as runApi from "./run-api";
 
@@ -191,4 +198,43 @@ it("shows the exact publication identity even when a run analysis has a reusable
   fireEvent(details, new Event("toggle"));
   expect(await screen.findByTestId("publication-id")).toHaveTextContent("retained-publication-1");
   client.clear();
+});
+
+describe("Run receipt summary", () => {
+  const run = {
+    runId: "run-progress",
+    status: "running",
+    stateLabel: "Running",
+    progressCompleted: 9,
+    plan: { pointCount: 10 },
+    pointPlan: { acceptedPointCount: 10, closed: true },
+  } as ProjectRun;
+
+  it("keeps receipt counts separate from recovery coverage and from success", () => {
+    render(
+      <ProgressCard
+        run={run}
+        events={[]}
+        measurements={{ items: [], recordCount: 10, durableRecordCount: 4 }}
+      />,
+    );
+    const summary = screen.getByRole("region", { name: "Run progress" });
+    expect(summary).toHaveTextContent("Received records 10");
+    expect(summary).toHaveTextContent("Saved records 4");
+    expect(summary).toHaveTextContent("6 received records not saved yet");
+    expect(summary).not.toHaveTextContent("Planned data received");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Succeeded")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
+    expect(screen.getByText(/9 points have durable execution evidence/)).toBeVisible();
+  });
+
+  it("does not invent receipts from coverage, and marks failed live refreshes", () => {
+    render(<ProgressCard run={run} events={[]} receiptError={new Error("disconnected")} />);
+    expect(screen.getByText("No measurement data received yet.")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Displayed counts and plots may be stale");
+    expect(screen.getByRole("region", { name: "Run progress" })).not.toHaveTextContent(
+      "Received records 9",
+    );
+  });
 });

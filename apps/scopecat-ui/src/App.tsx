@@ -168,7 +168,7 @@ export default function App() {
     if (!healthQuery.isSuccess) return;
     const events = new EventSource(`/api/v1/events/stream?after=${eventCursor.current}`);
     let refreshTimer: number | undefined;
-    const measurementRunsToReset = new Set<string>();
+    const measurementRunsToRefresh = new Set<string>();
     const invalidateCanonicalQueries = () => {
       void queryClient.invalidateQueries({ queryKey: ["runs"] });
       void queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -199,27 +199,27 @@ export default function App() {
     const refresh = (event: Event) => {
       const measurementRunId = measurementEventRunId(event);
       if (measurementRunId !== undefined) {
-        measurementRunsToReset.add(measurementRunId);
+        measurementRunsToRefresh.add(measurementRunId);
       }
       if (refreshTimer !== undefined) return;
       refreshTimer = window.setTimeout(() => {
         refreshTimer = undefined;
-        const resetMeasurementRuns = [...measurementRunsToReset];
-        measurementRunsToReset.clear();
+        const measurementRunsToRefreshNow = [...measurementRunsToRefresh];
+        measurementRunsToRefresh.clear();
         invalidateCanonicalQueries();
-        for (const runId of resetMeasurementRuns) {
-          void queryClient.resetQueries({
+        for (const runId of measurementRunsToRefreshNow) {
+          void queryClient.invalidateQueries({
             queryKey: ["measurements", runId],
             exact: true,
           });
-          void queryClient.resetQueries({
+          void queryClient.invalidateQueries({
             queryKey: ["measurements", "live", runId],
             exact: true,
           });
-          void queryClient.resetQueries({
+          void queryClient.invalidateQueries({
             queryKey: ["measurement-slice", runId],
           });
-          void queryClient.resetQueries({
+          void queryClient.invalidateQueries({
             queryKey: ["measurement-trace", runId],
           });
         }
@@ -299,7 +299,7 @@ export default function App() {
           </span>
         </a>
         <nav
-          className="absolute left-1/2 flex -translate-x-1/2 gap-4 max-[880px]:static max-[880px]:ml-auto max-[880px]:translate-x-0 max-[680px]:order-3 max-[680px]:w-full max-[680px]:overflow-x-auto"
+          className="mx-4 flex min-w-0 flex-1 gap-4 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap max-[680px]:order-3 max-[680px]:mx-0 max-[680px]:w-full max-[680px]:flex-auto"
           aria-label="Project sections"
         >
           <button

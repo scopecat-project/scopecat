@@ -948,7 +948,7 @@ describe("measurement visualization", () => {
 
     expect(
       screen.getByText(
-        "The selected slice is incomplete: 5 of 6 points are durable. The plot will appear when the grid is complete.",
+        "The selected slice is incomplete: 5 of 6 points are durable. A complete grid is not available in this saved slice.",
       ),
     ).toBeVisible();
   });
@@ -1088,6 +1088,35 @@ describe("measurement visualization", () => {
       columns: [{ id: "point", label: "Point", role: "point" }],
       rows: [{ id: "point-0:0", cells: ["0"] }],
     });
+  });
+
+  it("plots a sparse one-axis receipt without inventing buffered points or saved data", () => {
+    const schema = scalarSchema();
+    const latest = record(2, { bias: scalar(0.2, "V") }, { signal: scalar(4, "ratio") });
+    const saved = record(0, { bias: scalar(0, "V") }, { signal: scalar(1, "ratio") });
+    render(
+      <MeasurementDataPreview
+        preview={{
+          schema,
+          items: [saved, latest],
+          recordCount: 3,
+          durableRecordCount: 1,
+          livePointIndex: 2,
+        }}
+        slice={{ ...slicePreview(schema, [saved]), selectedPointCount: 3 }}
+        sliceError={null}
+        slicePending={false}
+        fixedAxisIndices={{}}
+        onFixedAxisIndexChange={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("plot-position")).toHaveTextContent(
+      "saved and received preview · 2 available records · highest point index 2",
+    );
+    expect(screen.getByText(/Partial received data; gaps are not interpolated/)).toBeVisible();
+    expect(screen.getByText(/2 plotted points/)).toBeInTheDocument();
+    expect(screen.getByText(/Latest received data: point index 2; not saved yet/)).toBeVisible();
+    expect(screen.queryByText(/3 plotted points/)).not.toBeInTheDocument();
   });
 
   it("renders plots and a typed table while keeping raw JSON secondary", () => {

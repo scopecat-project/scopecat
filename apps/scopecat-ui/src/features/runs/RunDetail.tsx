@@ -55,6 +55,7 @@ export function RunDetail({
   measurements,
   measurementsError,
   measurementsPending,
+  liveMeasurementsError,
   measurementSlice,
   measurementSliceError,
   measurementSlicePending,
@@ -97,6 +98,7 @@ export function RunDetail({
   measurements?: MeasurementPreview;
   measurementsError: Error | null;
   measurementsPending: boolean;
+  liveMeasurementsError?: Error | null;
   measurementSlice?: MeasurementSlicePreview;
   measurementSliceError: Error | null;
   measurementSlicePending: boolean;
@@ -129,18 +131,15 @@ export function RunDetail({
   return (
     <>
       <WindowTitle title={`${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`} />
-      <OpenRunWindow key={`open:${run.runId}`} runId={run.runId} />
-      <ComparisonLink runId={run.runId} />
-      <ExportRun key={`export:${run.runId}`} runId={run.runId} />
-      <RunPlanOrigin runId={run.runId} />
-      <ClearData key={`cleanup:${run.runId}`} runs={[run.runId]} />
-      <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
       <header
-        className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-[17px] max-[680px]:block"
+        className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-3 max-[680px]:block"
         data-testid="run-detail-header"
       >
         <div className="min-w-0">
-          <div className="mb-2.5 flex flex-wrap items-center gap-2.5 text-[0.68rem] font-bold text-text-dim">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <h2 className="m-0 text-[clamp(1.2rem,1.8vw,1.55rem)] font-[650] tracking-[-0.035em] [overflow-wrap:anywhere]">
+              {run.displayName ?? run.experimentId}
+            </h2>
             <span
               className={classes(
                 "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[0.62rem] font-extrabold tracking-[0.04em] uppercase",
@@ -151,10 +150,8 @@ export function RunDetail({
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
               {run.stateLabel}
             </span>
+            <CopyReadOnlyCode target={{ kind: "run", runId: run.runId }} compact />
           </div>
-          <h2 className="mb-[7px] text-[clamp(1.2rem,1.8vw,1.55rem)] font-[650] tracking-[-0.035em] [overflow-wrap:anywhere]">
-            {run.displayName ?? run.experimentId}
-          </h2>
           <div className="flex max-w-[min(60vw,620px)] items-center gap-2 overflow-hidden text-[0.68rem] text-text-dim max-[680px]:max-w-full">
             {run.displayName && (
               <code
@@ -169,7 +166,6 @@ export function RunDetail({
               {run.runId}
             </code>
           </div>
-          <CopyReadOnlyCode target={{ kind: "run", runId: run.runId }} />
         </div>
         <dl className="mt-1 flex flex-none gap-7 max-[1100px]:gap-[18px] max-[680px]:mt-5 max-[680px]:grid max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
           <div className="grid gap-1.5">
@@ -196,9 +192,19 @@ export function RunDetail({
           </div>
         </dl>
       </header>
+      <div className="my-3 flex flex-wrap items-center gap-3 text-sm">
+        <OpenRunWindow key={`open:${run.runId}`} runId={run.runId} />
+        <ComparisonLink runId={run.runId} />
+        <ExportRun key={`export:${run.runId}`} runId={run.runId} />
+        <details className="text-sm text-text-soft">
+          <summary className="cursor-pointer rounded-md border border-line px-3 py-2">
+            {run.scenario ? "Software scenario" : "Execution context · not declared"}
+          </summary>
+          <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
+        </details>
+      </div>
+      <RunPlanOrigin runId={run.runId} />
       <RunFailureEvidence runId={run.runId} />
-      <RunMeasuredCosts runId={run.runId} />
-      <RunAnalysisFollows runId={run.runId} />
 
       {run.samples.length > 0 && (
         <section
@@ -231,6 +237,9 @@ export function RunDetail({
         </section>
       )}
 
+      {run.resources.some(
+        (resource) => resource.blockedBy || resource.status === "quarantined",
+      ) && <ResourceCard run={run} />}
       <RunCancellationNotice run={run} />
       {run.status === "attention_required" && (
         <div
@@ -268,32 +277,13 @@ export function RunDetail({
         </div>
       )}
 
-      <div className="mt-[18px] grid grid-cols-[minmax(0,1.55fr)_minmax(250px,0.85fr)] gap-3 max-[1100px]:grid-cols-[minmax(0,1.25fr)_minmax(230px,0.9fr)] max-[680px]:grid-cols-[minmax(0,1fr)]">
-        <ProgressCard run={run} events={events} measurements={measurements} />
-        <ExecutionSegmentsCard
-          page={executionSegments}
-          error={executionSegmentsError}
-          pending={executionSegmentsPending}
-        />
-        <RunDomainDecisionCard
-          page={domainDecisions}
-          error={domainDecisionsError}
-          pending={domainDecisionsPending}
-          completedPointCount={Math.max(run.progressCompleted ?? 0, measurements?.recordCount ?? 0)}
+      <div className="mt-4 grid min-w-0 gap-4">
+        <ProgressCard
           run={run}
+          events={events}
+          measurements={measurements}
+          receiptError={liveMeasurementsError}
         />
-        <RunProposals key={run.runId} runId={run.runId} />
-        <AnalysisCard
-          analyses={analyses}
-          error={analysesError}
-          pending={analysesPending}
-          runId={run.runId}
-          hasNextPage={analysesHasNextPage}
-          loadingNextPage={analysesLoadingNextPage}
-          onLoadOlder={onLoadOlderAnalyses}
-        />
-        <ResourceCard run={run} />
-        <TimelineCard events={events} error={eventsError} pending={eventsPending} />
         <DataCard
           run={run}
           measurements={measurements}
@@ -318,6 +308,51 @@ export function RunDetail({
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
+        <AnalysisCard
+          analyses={analyses}
+          error={analysesError}
+          pending={analysesPending}
+          runId={run.runId}
+          hasNextPage={analysesHasNextPage}
+          loadingNextPage={analysesLoadingNextPage}
+          onLoadOlder={onLoadOlderAnalyses}
+        />
+        <RunAnalysisFollows runId={run.runId} />
+        <details
+          className="rounded-md border border-line p-4"
+          open={run.plan.pointCount === undefined || undefined}
+        >
+          <summary className="cursor-pointer text-sm font-semibold">
+            Proposals and adaptive controls
+          </summary>
+          <div className="mt-3 grid gap-3">
+            <RunDomainDecisionCard
+              page={domainDecisions}
+              error={domainDecisionsError}
+              pending={domainDecisionsPending}
+              completedPointCount={run.progressCompleted ?? 0}
+              run={run}
+            />
+            <RunProposals key={run.runId} runId={run.runId} />
+          </div>
+        </details>
+        <details className="rounded-md border border-line p-4">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Execution diagnostics and provenance
+          </summary>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <ExecutionSegmentsCard
+              page={executionSegments}
+              error={executionSegmentsError}
+              pending={executionSegmentsPending}
+            />
+            <ResourceCard run={run} />
+            <TimelineCard events={events} error={eventsError} pending={eventsPending} />
+
+            <RunMeasuredCosts runId={run.runId} />
+            <ClearData key={`cleanup:${run.runId}`} runs={[run.runId]} />
+          </div>
+        </details>
       </div>
     </>
   );
