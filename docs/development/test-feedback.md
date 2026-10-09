@@ -131,7 +131,7 @@ gh workflow run acceptance.yml --ref <branch> -f profile=browser
 # Retry only failed jobs in that exact run, retaining successful producer jobs:
 gh run rerun <run-id> --failed
 # Or rerun one browser job and its dependent gate:
-gh run rerun <run-id> --job <browser-job-id>
+gh run rerun --job <browser-job-id>
 ```
 
 Each new dispatch builds immutable wheels and GUI for that commit. Browser jobs
