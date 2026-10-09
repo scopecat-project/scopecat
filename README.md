@@ -66,18 +66,6 @@ with the installed application.
 
 ## Development
 
-Development requires Python 3.14 or newer. Run the repository checks from the
-root:
-
-```sh
-uv run pytest
-uv run basedpyright
-uv run lint-imports
-uv run ruff check .
-uv run ruff format --check .
-uv run python scripts/check_document_links.py
-uv run --group docs zensical build --strict
-```
-
-See the [contributor guide](docs/development/index.md) for focused package tests,
-repository structure, architecture, UI development, and documentation preview.
+Use the [contributor guide](docs/development/index.md) for setup, focused checks,
+repository structure and architecture. [Test feedback](docs/development/test-feedback.md)
+explains CI and acceptance; documentation changes need link and strict build checks.

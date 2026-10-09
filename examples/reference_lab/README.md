@@ -15,7 +15,9 @@ feeds responses into this normal device path.
 
 ## Audience and boundary
 
-The gallery is retired as teaching material. Do not translate its scripts to new
+The lab originally probed user requirements through runnable scenarios. Its
+[workflow goals](../../docs/development/workflow-evaluations.md) remain separate
+from this replaceable implementation. The gallery is retired as teaching material. Do not translate its scripts to new
 APIs merely to keep their old interfaces working. New lessons belong in public
 tutorial sandboxes. Extract necessary scientific/device behaviors into focused
 tests, reassess assertions tied to obsolete configuration models, then retire
@@ -63,23 +65,6 @@ The spectroscopy and DRAG fixtures retain their numerical analysis and source
 provenance; quantum composition retains point-local routes and host effects.
 See the [behavior map](../../docs/development/reference-gallery-retirement.md).
 
-The logical pulse-overlap diagnostic script and its dedicated experiment/program
-wrappers are retired. Quantum pulse tests own the error code, logical signal and
-instruction identities; the existing authoring test retains propagation through
-binding and pulse lowering without a daemon. These checks do not cover physical
-route conflicts or runtime exclusion; shared AWG/digitizer and device journeys
-remain. See the [retained evidence](../../docs/development/reference-gallery-retirement.md#retired-generic-cases-retained-evidence).
-
-The XY, AWG monitor and ragged scope scripts and their workflow modules are
-retired. Current quantum renderer, core resource/dataset and server worker tests
-own their valid framework contracts. The existing quantum runner fixture retains
-fixed-IF host/target execution and a minimal entityless-host/shared-AWG claim check.
-No gallery facade or full-application clone is required for those checks. See the
-[contract ownership map](../../docs/development/reference-gallery-retirement.md#waveform-gallery-retirement-contract-owners)
-for retained evidence and intentionally withdrawn simulator-specific assertions.
-The scope driver, interfaces, default binding and AWG-to-scope capture hooks are
-also retired; the quantum capture queue and shared trigger/device paths remain.
-
 The application registers `drag_branch_calibration`, a bounded integration
 procedure over an explicitly requested q0/q1 target list. It captures independent
 parameter/setup inputs and a destination branch, fits each target, composes its
@@ -110,7 +95,7 @@ independence between logical targets.
 | `src/reference_lab/provider.py` | Bare virtual device provider and shared AWG/digitizer trigger world |
 | `src/reference_lab/virtual_lab/` | Injected deterministic quantum plant adapter |
 | `src/reference_lab/workflows/` | Legacy integration inputs; extract valid behaviors before retirement |
-| `notebooks/` | User-facing recipes and their intent |
+| `src/reference_lab_authors/authored/` | Editable author inputs used by integration journeys |
 | `tests/` | Daemon, worker, target, storage, analysis, and configuration checks |
 
 Configuration revisions are immutable. Instrument connections and startup state

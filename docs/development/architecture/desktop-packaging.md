@@ -1,28 +1,21 @@
 # Ready-to-run desktop packaging
 
-PR #829 delivered ready-to-run installation; PR #837 completed the bounded
-multi-window, file and lifecycle product gate on Mac and Windows. The
-[desktop product decision](desktop-product.md#technology-decision) retains the
-Python/WebView host. PR #844 separated author execution and vendor environments.
-PR #845 qualified these capabilities together and closed obsolete delivery paths;
-it does not reopen host selection or expand into a full GUI redesign.
-
-The package contains a relocatable CPython runtime with dependencies prepared at
-build time. Editable author code and vendor environments remain independent.
+The desktop package contains a relocatable CPython runtime with dependencies
+prepared at build time. Ordinary launch uses that fixed runtime without installing
+packages or writing application files. Editable author code and vendor environments
+remain independent. The [host decision](desktop-product.md#technology-decision)
+retains CPython, pywebview and the existing web UI.
 
 ## Maintained installation entries
 
 | Installation / acceptance owner | Included entry and boundary |
 | --- | --- |
-| Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. No host/runtime process redesign accompanies CLI ownership. |
+| Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. Application launch uses the packaged runtime. |
 | Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
 | Teaching/offline verification | Existing `scopecat-lab`, generated VS Code tasks and standalone `install.py` remain; `bundle.py` retains manifest/hash checks and offline environment installation. |
 
-CLI ownership has moved from the server wheel to the application-tools wheel.
-A server-only consumer must replace `scopecat COMMAND` with the module entry;
-complete application consumers retain their console commands. Installing only
-server dependencies does not install windows, teaching tools or their commands.
-See the [CLI migration](../../reference/cli.md#entry-ownership-and-migration).
+The application-tools wheel owns the `scopecat` console. Server-only consumers use
+the module entry; see [CLI ownership](../../reference/cli.md#entry-ownership-and-migration).
 
 ## Coverage by consumer boundary
 
@@ -33,7 +26,7 @@ not additional desktop products.
 
 | Boundary | Current coverage and artifact | Unique failure surface |
 | --- | --- | --- |
-| Source and browser | Regular CI; Linux browser shards in `full` / `local-application` | API, UI interactions and source regressions; not installed-package evidence |
+| Source and browser | Regular CI; Linux browser shards in `full` / `local-application` / `browser` | API, UI interactions and source regressions; not installed-package evidence |
 | Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or lab-tools; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
 | Offline installer and teaching consumers | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained notebook and generated editor-task callers, application reopen |
 | Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
@@ -50,95 +43,66 @@ form; it does not retire the teaching requirement. Existing generated teaching c
 retiring them or narrowing their platform matrix requires an explicit consumer
 replacement and supported-platform decision.
 
-The old pilot builder, its four-package `manifest.json` and GUI-embedded server
-wheel/sdist are retired. Standard server wheels remain unchanged: GUI is a separate
-ZIP. Acceptance replaces the old embedded-resource assertions with commit/hash,
-served index and asset byte equality, and `build-info.json` version checks. The
-minimal environment still excludes the other three wheels in the seven-package
-standard artifact. Do not confuse this retired pilot format with the maintained
-`bundle.json` offline payload.
+The standard artifact carries framework wheels and a separate GUI ZIP. The old
+pilot builder and GUI-embedded server package are retired; the `bundle.json`
+offline payload remains maintained. Installed checks validate commit/hash, served
+GUI bytes and version without checkout imports. Repeating scientific assertions
+at this boundary catches wheel discovery and same-version source-byte changes.
 
-Matching scientific assertions at source and installed boundaries are intentional:
-the latter catches wheel discovery and same-version byte changes. Similarly,
-standalone offline installation and native offline startup fail at different
-boundaries. Neither native data export/import nor these checks qualifies the full
-installed configuration-exchange/source-registration/environment journey.
+Native data export/import does not qualify the complete installed configuration
+exchange and source-registration journey. Track that distinction in
+[#502](https://github.com/scopecat-project/scopecat/issues/502).
 
 ## Teaching intent and acceptance limits
 
-The teaching goal is Notebook and application collaboration, not management of
-per-course backend services. Removing that manager did not complete or cancel the
-learning journey. Help's manual-peak practice is a delivered bounded capability;
-it does not replace the seven authored topics or their editable source. Follow
-[the existing teaching issue #565](https://github.com/scopecat-project/scopecat/issues/565)
-for remaining course design and fixture-consumer work, separately from
-human/device observations in #616.
+Help supports Notebook/application collaboration through shared preparation and
+Continue for all seven supplied topics. It preserves editable source and retained
+results. Course ordering and remaining standalone lifecycle consumers belong to
+[#565](https://github.com/scopecat-project/scopecat/issues/565); actual editor use and
+unfamiliar-user observations belong to
+[#616](https://github.com/scopecat-project/scopecat/issues/616).
 
-Help parameters now provides the representative desktop → Notebook → editable
-source → application results → restart/Continue journey (#875/#877). Default and
-topic generation share editable resources (#880). All seven topics now share
-Help preparation/continuation (#913); #918 preserves course selection and links
-Settings to the exact author folder. Remaining standalone lifecycle consumers
-and teaching design are tracked in #565.
+Source/browser/kernel owners are listed in
+[test feedback](../test-feedback.md#teaching-and-author-entry). Installed coverage
+has two additional boundaries:
 
-Current automated evidence has distinct boundaries:
-
-- `lab_tools.verify` executes shipped start/reopen Notebooks in separate kernels,
-  adding checks to evidence copies. Editing and grouping now execute shipped
-  Notebooks with separate evidence checks (#903/#904), including real kernels
-  and retained-result reopening after restart.
-- `test_calibration_teaching_journey.py` runs shipped binding/cells through IPython
-  and restarts the service. #870 fixed the implicit import refresh that rejected
-  retained intent classes; calibration/joint-calibration also passed real ipykernel
-  execution. That resolved defect is documented in the PR, not a current blocker.
 - `verify_teaching_delivery.py` checks offline installation, console/editor-task
-  entry, wrong-kernel rejection and headless continuation. In the existing slow
-  Linux/Windows acceptance job, installed Help and grouped recovery must pass
-  before the same invocation omits duplicate standalone grouped stages. Default
-  course analysis, compute/refresh and default-course snapshot recovery remain.
-  Those legacy stages reuse the verified application-install cache; author and
-  recovery preparation still start with separate empty caches.
-- `verify_notebook_journey.py` uses real browser/kernel execution and verifies
-  generated material identity, edits, restart and Continue without reacquisition.
-  External editor/window activation is substituted; actual native editor use and
-  unfamiliar-user comprehension remain separate observations in #616.
-- `verify_installed_help_kernels.py` installs an existing full toolchain payload
-  into a fresh location and runs shipped parameters/groups cells through Help's
-  same-application preparation path. Installation and author preparation start
-  with separate empty caches and offline resolution; neither provisioning nor
-  kernels are substituted. Fresh kernels reject the application interpreter,
-  then read exact retained results after application restart without acquisition.
-  Run `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
-  The proof also snapshots the stopped service and restores it at a new location.
-  An independently backed-up author fixture is explicitly registered with its
-  original source ID in fresh environments, with old source/environment paths
-  unavailable. Exact grouped results and new analysis are checked; application
-  snapshots do not thereby restore external editable sources or Help Continue.
-  Only after recovery passes and the daemon stops are the generated environments
-  at the retired locations and their old author cache discarded. Source files,
-  scientific data, snapshots and recovered environments remain. Failures before
-  recovery succeeds leave diagnostic environments in place. Reports distinguish
-  bytes before and after this cleanup, without claiming a measured peak footprint.
-  This remains a maintainer check, not an additional per-PR platform gate.
-  Browser/native interaction, legacy editor tasks and the default-course checks
-  retain their separate consumers. Phase timings and environment/cache sizes
-  describe verification cost; removing duplicate acquisition is not a speedup claim.
+  entry, wrong-kernel rejection and headless continuation on Linux/Windows.
+  Installed Help and grouped recovery pass before duplicate standalone grouped
+  stages are omitted. Default-course, editing and snapshot checks retain their
+  own consumers. Application-install cache reuse does not replace empty-cache
+  author and recovery preparation.
+- `verify_installed_help_kernels.py` installs the full toolchain at a fresh location,
+  prepares author environments offline with separate empty caches, and executes
+  shipped parameters/groups through Help in real kernels. Fresh kernels reject the application interpreter; after application restart they
+  read exact retained results without acquisition. Run
+  `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
 
-Teaching checks complement fault/recovery/platform checks. They do not establish
-that a person can understand the material or operate real devices.
+The installed Help verifier also restores a stopped-service snapshot at a new
+location with old source/environment paths unavailable. It explicitly registers
+an independently backed-up author fixture with its original source ID, then
+checks grouped results and new analysis. Application snapshots do not restore
+external editable source or Help Continue. Only after recovery succeeds and the
+daemon stops are retired generated environments and their author cache discarded;
+source, scientific data, snapshots and recovered environments remain. Earlier
+failure preserves diagnostic environments. Before/after sizes are retained bytes,
+not peak footprint or a speedup claim. This maintainer check adds no per-PR gate.
+
+Automated teaching checks complement platform/fault/recovery checks. They do not
+establish learner comprehension or physical scientific correctness.
+
+<span id="required-comparison"></span>
 
 ## Composition evidence
 
-These are the criteria used for the recorded host decision, not a requirement to
-benchmark another host in every release.
-
-PR #845 used the following composition boundary. Reuse the earlier accepted native
-window observations; rerun them only for a changed interaction or a new failure.
+[PR #845](https://github.com/scopecat-project/scopecat/pull/845) records the
+composition decision. Reuse accepted observations unless a changed interaction or
+new failure requires them again. This is not a recurring host comparison.
 
 | Journey | Maintained evidence | Separate observation |
 | --- | --- | --- |
 | Install, export, external analysis, import in an empty app, remove application | `verify_native_application.py` on Mac/Windows; empty PATH, empty uv cache and offline dependency preparation for the bundled example | Real file dialogs and window lifecycle accepted in PR #837 |
-| Ordinary source, different SDK Python, manual decisions, source edit, kill/reopen and practice cleanup | PR #844 installed private consumer evidence; repeat affected consumers when the public pin changes | Actual VS Code selection and real vendor SDK/output |
+| Ordinary source, independent execution Python, source edit and reopen | Installed consumer evidence linked from PR #845; repeat affected consumers for dependency updates | Actual editor selection and physical-device output |
 | Optional extension wheel and execution-environment replacement | Installed-adapter journey: no adapter in application Python, explicit driver activation, retained source/analysis/snapshot, source package loss does not block application | Laboratory-specific extension maintenance |
 | Two distinct app builds, failed replacement/retry and retained measurement | `verify_native_replacement.py`, same current scientific-data format only | User interaction with a changed installer, if applicable |
 | Development preview and exit ownership | Application lifecycle tests; isolated home, no automatic browser launch | No need to reopen the daily app for routine tests |
@@ -148,17 +112,11 @@ acceptance items. Neither headless checks nor maintainer familiarity closes them
 There is no supported persistent-data baseline yet; these checks add no migration
 or arbitrary old-environment support promise.
 
-- Native window readiness, backend readiness and failure reporting are distinct.
-- Measure first empty-store use separately from reopening; disclose OS cache and
-  environment. A few local samples do not establish production latency budgets.
-- Report package size, installed size and duplicate payload separately. A smaller
-  host executable does not imply the scientific dependencies disappeared.
-- Separate host, WebView, controller and backend memory. Summed RSS is not unique
-  physical memory; do not compare a bare Rust executable to an entire Python app.
-- Include build time, dynamic source/extension loading, native dependency handling,
-  diagnostics, process ownership and clean shutdown on both Mac and Windows.
-- Verify no runtime package installation and no writes to installed application
-  files. Explicit author/extension dependency maintenance remains separate.
+Native window readiness, backend readiness and failure reporting are separate.
+Measure first-use and reopen costs separately, with OS/cache context. Distinguish
+package/installed size from duplicate payload, and host/WebView/controller/backend
+memory; summed RSS is not unique physical memory. Retain diagnostics, process
+ownership and clean shutdown evidence on both platforms.
 
 ## Reproducible Python baseline
 
@@ -230,20 +188,11 @@ application files and clean shutdown. Input packages are not changed. The retain
 `replacement.json` identifies both manifests. This is not a prebaseline migration
 test or a native window interaction test.
 
-The native entry now starts the package's interpreter without calling the retained
-delivery installer. Explicitly created author environments retain their own base
-Python outside application files. Candidate-update and capability-snapshot commands
-and storage have been removed, together with the retained-release installer and
-its generated launchers. The standalone offline-environment installer remains for
-teaching/build verification; it cannot install a desktop application. The pending runtime
-registration record remains a crash-recovery journal, not a user-selectable update.
-It may be completed by a newly verified package after replacement; recovery does
-not require reinstalling the package that first wrote the marker. The native entry
-recreates its derived runtime receipt from current package qualification, without
-reading historical receipt formats. Scientific-data readers are unaffected.
-The final host must preserve the work-aware quit/background contract. Data
-initialization and explicit current-format checks are normal runtime work, not
-dependency setup.
+The pending runtime-registration record is a crash-recovery journal. A newly
+verified package may complete it after replacement and recreate its derived receipt
+from current qualification; it need not reinstall the original package or read
+historical receipt formats. Scientific-data readers are unaffected. The retained
+standalone installer prepares offline environments, not desktop applications.
 
 ## Implementation boundary
 
@@ -255,8 +204,7 @@ The installed package owns one fixed application runtime. Its executable starts
 that runtime directly; a previous installation's selected interpreter must not
 override it. Application updates replace application files after the owned
 processes exit. They do not prepare or select another Python environment inside
-the data directory. This removes `native_bootstrap.prepare`'s `prepare_home` and
-candidate-selection responsibilities, rather than merely moving them into Rust.
+the data directory.
 
 The desktop host owns windows, reopening, background presence and application
 process lifetime. The Python backend owns scientific state, active-work reporting
@@ -281,9 +229,6 @@ notebook refresh checks the former; backend recovery still checks the latter.
 Explicit author dependencies remain required on both sides. Workspaces without
 an explicit dependency declaration retain their full captured environment contract.
 
-## Historical packaging observations
-
-The [original packaging record](https://github.com/scopecat-project/scopecat/blob/53a74eaae7d2195fa4430eda7d737506d13da9fd/docs/development/architecture/desktop-packaging.md#native-interaction-evidence-2026-10-01)
-retains the native host/tray/exit investigations, failures and dated observations.
-Current interaction evidence is linked from the [desktop product contract](desktop-product.md#evidence)
-and [native window acceptance](../native-window-acceptance.md).
+Current native interaction evidence is linked from the
+[desktop product contract](desktop-product.md#evidence) and
+[native window acceptance](../native-window-acceptance.md).

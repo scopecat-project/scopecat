@@ -21,7 +21,8 @@ uv run basedpyright
 uv run lint-imports
 uv run ruff check .
 uv run ruff format --check .
-uv run --group docs zensical build --strict
+uv run --locked python scripts/check_document_links.py
+uv run --locked --group docs zensical build --strict
 ```
 
 Run one member's suite with its declared dependency group when iterating:
@@ -40,7 +41,8 @@ uv run --locked --package reference-lab --group test pytest examples/reference_l
 - [Source development and previews](public-preview.md): run and distribute a checkout.
 - [Test feedback](test-feedback.md): focused checks, CI and acceptance profiles.
 - [Reference fixtures](reference-fixtures.md): shared evidence and fixture ownership.
-- [Workflow evaluations](workflow-evaluations.md): observable cross-surface outcomes.
+- [Workflow evaluations](workflow-evaluations.md): user goals, representative evidence and gaps.
+- [Reference retirement](reference-gallery-retirement.md): retained scientific semantics and current owners.
 - [Data compatibility](data-compatibility.md): persistent-format policy.
 - [Project charter](project-charter.md): product scope.
 
