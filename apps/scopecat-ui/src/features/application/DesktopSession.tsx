@@ -41,9 +41,18 @@ export interface NotebookJourney {
   ready: boolean;
 }
 
+export interface NotebookJourneyStatus {
+  state: "not_started" | "preparing" | "ready" | "retryable";
+  journey: NotebookJourney | null;
+}
+
 interface DesktopAPI {
-  notebook_journey(topic?: LessonTopic): Promise<NotebookJourney | null>;
-  prepare_notebook_journey(parent?: string, topic?: LessonTopic): Promise<NotebookJourney>;
+  notebook_journey(topic?: LessonTopic): Promise<NotebookJourneyStatus>;
+  prepare_notebook_journey(
+    parent?: string,
+    topic?: LessonTopic,
+    repair?: boolean,
+  ): Promise<NotebookJourney>;
   open_lesson_notebook(topic?: LessonTopic): Promise<void>;
   open_run_window(runId: string): Promise<void>;
   set_window_title(title: string): Promise<void>;

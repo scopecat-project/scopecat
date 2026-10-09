@@ -83,7 +83,10 @@ dependencies = ["humanize==4.13.0"]
 Choose **Prepare execution environment from pyproject.toml**,
 then refresh and preview your experiment.
 Preparation resolves the source requirements with compatible Scopecat packages in a separate managed
-environment. Conflicting requirements fail without changing the running application
+environment. Packages supplied by the delivery stay constrained to its complete
+dependency lock, the same baseline used to create the local Notebook environment.
+Online resolution can add declared packages but cannot silently upgrade that baseline.
+Conflicting requirements fail without changing the running application
 or the selected source environment. Existing prepared work and plans retain their
 recorded dependency versions; the application remains running. Local pip installs
 alone do not change background execution.
@@ -99,6 +102,15 @@ For a broken local environment, close its terminals and kernels, then choose
 `.venv-retained-…`; a failed rebuild restores it. The replacement starts from the
 selected delivery, so reinstall your local additions afterwards. This operation
 does not alter source files, measurements or managed execution environments.
+
+For a Help course with failing imports, use **Repair Notebook environments** in
+that course after closing its notebooks and Python terminals. Repair keeps the
+same folder, source edits, Notebook notes and saved results. It retains the old
+local environment and prepares the background environment against the delivery
+lock; previously prepared work keeps its recorded environment. Restart the
+Notebook with the displayed `.venv` kernel. Reinstall local additions if needed.
+Help windows observe the same preparation operation: wait while it is running;
+after a failure or interruption, retry continues in the same folder.
 
 Managed execution environments live under `HOME/environments`; retained environments
 are not disposable caches. To use an existing environment instead, enter its Python

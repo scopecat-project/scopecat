@@ -82,6 +82,7 @@ def preparation(tmp_path, monkeypatch):
     bundle = tmp_path / "bundle"
     bundle.mkdir()
     (bundle / environments.MANIFEST).write_text("delivery identity")
+    (bundle / "requirements.lock").write_text("locked==1\n")
     runtime = Mock(home=tmp_path / "data", lock=threading.Lock())
     runtime.installation.return_value = SimpleNamespace(
         python=Path("application-python"),
@@ -166,3 +167,115 @@ def test_concurrent_preparation_publishes_one_candidate_per_identity(preparation
         str(current),
     }
     assert previous.parent.parent.parent.is_dir()
+
+
+def test_online_newer_dependency_cannot_override_delivery_lock(tmp_path, monkeypatch):
+    """Exercise uv's real resolver/installer against a newer HTTP candidate."""
+    import functools
+    import subprocess
+    import sys
+    import zipfile
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    from uv import find_uv_bin
+
+    bundle = tmp_path / "bundle"
+    wheels = bundle / "wheels"
+    wheels.mkdir(parents=True)
+    index = tmp_path / "index"
+    (index / "schema-runtime").mkdir(parents=True)
+
+    def wheel(directory, name, version, dependencies=()):
+        normalized = name.replace("-", "_")
+        path = directory / f"{normalized}-{version}-py3-none-any.whl"
+        info = f"{normalized}-{version}.dist-info"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(f"{normalized}/__init__.py", f'VERSION = "{version}"\n')
+            archive.writestr(
+                f"{info}/METADATA",
+                f"Metadata-Version: 2.3\nName: {name}\nVersion: {version}\n"
+                + "".join(f"Requires-Dist: {item}\n" for item in dependencies),
+            )
+            archive.writestr(
+                f"{info}/WHEEL",
+                "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            )
+            archive.writestr(f"{info}/RECORD", "")
+        return path
+
+    wheel(wheels, "scopecat", "1", ("schema-runtime>=1",))
+    wheel(wheels, "scopecat-server", "1", ("scopecat==1",))
+    wheel(wheels, "schema-runtime", "1")
+    wheel(index / "schema-runtime", "schema-runtime", "2")
+    (bundle / environments.MANIFEST).write_text("verified delivery fixture")
+    constraints = bundle / "requirements.lock"
+    constraints.write_text("scopecat==1\nscopecat-server==1\nschema-runtime==1\n")
+    source = tmp_path / "source"
+    source.mkdir()
+    declaration = source / "pyproject.toml"
+    declaration.write_text(
+        '[project]\nname="experiment"\nversion="1"\ndependencies=["schema-runtime>=1"]\n'
+    )
+    runtime = Mock(home=tmp_path / "application", lock=threading.Lock())
+    runtime.installation.return_value = SimpleNamespace(
+        python=Path(sys.executable), environment={"scopecat": "1", "server": "1"}
+    )
+    monkeypatch.setattr(environments, "_bundle", lambda _: bundle)
+    monkeypatch.setattr(
+        environments, "_independent_python", lambda *_: Path(sys.executable)
+    )
+    monkeypatch.setattr("scopecat_server.author_environment.capture", Mock())
+    monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "uv-cache"))
+    monkeypatch.setenv("UV_NO_CONFIG", "true")
+    monkeypatch.delenv("UV_OFFLINE", raising=False)
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        functools.partial(SimpleHTTPRequestHandler, directory=str(index)),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    monkeypatch.setenv("UV_DEFAULT_INDEX", f"http://127.0.0.1:{server.server_port}")
+    try:
+        available = tmp_path / "available.lock"
+        subprocess.run(  # noqa: S603 - owned resolver and loopback fixture
+            [
+                find_uv_bin(),
+                "pip",
+                "compile",
+                str(declaration),
+                "--python",
+                sys.executable,
+                "--find-links",
+                str(wheels),
+                "--output-file",
+                str(available),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert "schema-runtime==2" in available.read_text()
+        python = environments.prepare_execution_environment(runtime, source)
+        result = subprocess.check_output(  # noqa: S603 - test-owned interpreter
+            [
+                str(python),
+                "-I",
+                "-c",
+                "import schema_runtime; print(schema_runtime.VERSION)",
+            ],
+            text=True,
+        )
+        assert result.strip() == "1"
+        retained = python.parent.parent.parent / "requirements.lock"
+        before = retained.read_bytes()
+        declaration.write_text(declaration.read_text().replace(">=1", ">=2"))
+        with pytest.raises(ValueError, match="依赖准备未完成"):
+            environments.prepare_execution_environment(runtime, source)
+        assert python.is_file() and retained.read_bytes() == before
+        assert (
+            len(list((runtime.home / "environments").glob("*/environment.json"))) == 1
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=10)

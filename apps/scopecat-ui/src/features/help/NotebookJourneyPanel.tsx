@@ -69,15 +69,18 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
     queryKey: ["notebook-journey", topic],
     queryFn: () => native!.notebook_journey(topic),
     enabled: !!native,
+    refetchInterval: 1_000,
   });
   const open = useMutation({
     mutationFn: (requested: LessonTopic) => native!.open_lesson_notebook(requested),
   });
   const prepare = useMutation({
-    mutationFn: (request: { topic: LessonTopic; parent?: string }) =>
-      native!.prepare_notebook_journey(request.parent, request.topic),
+    mutationFn: (request: { topic: LessonTopic; parent?: string; repair?: boolean }) =>
+      request.repair
+        ? native!.prepare_notebook_journey(request.parent, request.topic, true)
+        : native!.prepare_notebook_journey(request.parent, request.topic),
     onSuccess: (journey, request) => {
-      client.setQueryData(["notebook-journey", request.topic], journey);
+      client.setQueryData(["notebook-journey", request.topic], { state: "ready", journey });
       if (stillSelected()) open.mutate(request.topic);
     },
     onSettled: (_journey, _error, request) =>
@@ -89,8 +92,22 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
       if (directory && stillSelected()) setParent(directory);
     },
   });
-  const journey = status.data;
-  const busy = prepare.isPending || open.isPending || choose.isPending;
+  const journey = status.data?.journey;
+  const phase = status.data?.state;
+  const previousPhase = useRef(phase);
+  const { isError: preparationFailed, reset: resetPreparation } = prepare;
+  useEffect(() => {
+    if (
+      preparationFailed &&
+      previousPhase.current === "retryable" &&
+      (phase === "preparing" || phase === "ready")
+    ) {
+      resetPreparation();
+    }
+    previousPhase.current = phase;
+  }, [phase, preparationFailed, resetPreparation]);
+  const preparing = prepare.isPending || status.data?.state === "preparing";
+  const busy = preparing || open.isPending || choose.isPending;
   const error = prepare.error ?? open.error ?? choose.error ?? status.error;
   return (
     <section
@@ -147,7 +164,7 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
                 prepare.mutate({ topic, parent });
               }}
             >
-              {prepare.isPending
+              {preparing
                 ? "Preparing Notebook…"
                 : journey?.ready
                   ? `Continue ${topic} Notebook`
@@ -155,13 +172,13 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
                     ? "Retry preparation"
                     : `Start ${topic} Notebook`}
             </button>
-            {!journey && status.isSuccess && (
+            {!journey && status.isSuccess && !preparing && (
               <button className={secondaryButton} disabled={busy} onClick={() => choose.mutate()}>
                 Choose another save location…
               </button>
             )}
           </div>
-          {!journey && status.isSuccess && (
+          {!journey && status.isSuccess && !preparing && (
             <p>
               {parent
                 ? `Save in: ${parent}`
@@ -172,8 +189,8 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
       )}
       {busy && (
         <p role="status">
-          {prepare.isPending
-            ? "Preparing code and Python; this may take a few minutes. No measurements are running."
+          {preparing
+            ? "Preparing code and Python; this may take a few minutes. Preparation does not start measurements."
             : choose.isPending
               ? "Choosing save location…"
               : "Opening editor…"}
@@ -185,9 +202,11 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
       {journey && (
         <div className="grid gap-1 break-all">
           <p>
-            {journey.ready
-              ? "Preparation saved. Continue checks this folder and opens its Notebook."
-              : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
+            {preparing
+              ? "Preparation is running. This folder will be available when it finishes."
+              : journey.ready
+                ? "Preparation saved. Continue checks this folder and opens its Notebook."
+                : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
           </p>
           <p>
             Code folder: <code>{journey.directory}</code>
@@ -206,6 +225,26 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
             to reopen a result without collecting again. Manage retained runs in Data; keep your
             edited files when removing records.
           </p>
+          <details>
+            <summary>Repair Notebook environments</summary>
+            <p>
+              If imports fail or the Python environment is incomplete, close this folder’s notebooks
+              and Python terminals, then repair. Repair keeps your edited files and saved results,
+              retains the previous local environment, and prepares matching dependencies for the
+              notebook and future background work. Existing tasks keep their original execution
+              environment. Reinstall any packages you added locally afterwards.
+            </p>
+            <button
+              className={secondaryButton}
+              disabled={!reachable || busy || status.isError}
+              onClick={() => {
+                open.reset();
+                prepare.mutate({ topic, repair: true });
+              }}
+            >
+              Repair environments and open Notebook
+            </button>
+          </details>
           {journey.ready && (
             <>
               <p>

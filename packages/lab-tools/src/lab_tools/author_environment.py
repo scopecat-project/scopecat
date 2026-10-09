@@ -129,16 +129,19 @@ def create_client_environment(
 def prepare_execution_environment(
     runtime: ApplicationRuntime, workspace: Path, *, offline: bool = False
 ) -> Path:
-    """Resolve source dependencies with the application's framework API version.
+    """Resolve source dependencies against the same delivery lock as the client.
 
     The returned environment is application-owned. Existing published source and
     pending tasks retain their previous interpreters when this candidate is selected.
+    Additional declared packages may be fetched online; they cannot upgrade the
+    delivery's shared dependencies and change declaration identity in the worker.
     """
     workspace = workspace.resolve()
     declaration = workspace / "pyproject.toml"
     if not declaration.is_file():
         raise ValueError("请在作者目录的 pyproject.toml 声明后台实验所需依赖")
     bundle = _bundle(runtime)
+    constraints = bundle / "requirements.lock"
     uv = find_uv_bin()
     framework = runtime.installation().environment
     with tempfile.TemporaryDirectory(prefix="scopecat-author-lock-") as temporary:
@@ -162,6 +165,8 @@ def prepare_execution_environment(
                 str(runtime.installation().python),
                 "--find-links",
                 (bundle / "wheels").as_uri(),
+                "--constraint",
+                constraints.as_uri(),
                 "--generate-hashes",
                 "--no-header",
                 "--no-annotate",
@@ -172,7 +177,11 @@ def prepare_execution_environment(
         )
         requirements = lock.read_text(encoding="utf-8")
     key = sha256_json_hash(
-        {"delivery": file_hash(bundle / MANIFEST), "requirements": requirements}
+        {
+            "delivery": file_hash(bundle / MANIFEST),
+            "constraints": file_hash(constraints),
+            "requirements": requirements,
+        }
     ).split(":")[-1]
     directory = runtime.home / "environments" / key
     ready = directory / "environment.json"

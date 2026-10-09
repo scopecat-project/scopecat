@@ -95,8 +95,10 @@ def verify(work: Path, static: Path) -> None:
             def status(topic: LessonTopic) -> dict[str, object] | None:
                 return api.notebook_journey(topic)
 
-            def prepare(parent: str | None, topic: LessonTopic) -> dict[str, object]:
-                return api.prepare_notebook_journey(parent, topic)
+            def prepare(
+                parent: str | None, topic: LessonTopic, repair: bool = False
+            ) -> dict[str, object]:
+                return api.prepare_notebook_journey(parent, topic, repair)
 
             def editor(topic: LessonTopic) -> None:
                 api.open_lesson_notebook(topic)
@@ -106,8 +108,8 @@ def verify(work: Path, static: Path) -> None:
             expose("journeyOpen", editor)
             page.add_init_script("""window.pywebview = {api: {
                 notebook_journey: (topic) => window.journeyStatus(topic),
-                prepare_notebook_journey: (parent, topic) =>
-                    window.journeyPrepare(parent ?? null, topic),
+                prepare_notebook_journey: (parent, topic, repair = false) =>
+                    window.journeyPrepare(parent ?? null, topic, repair),
                 open_lesson_notebook: (topic) => window.journeyOpen(topic),
                 set_window_title: async () => {},
             }};""")

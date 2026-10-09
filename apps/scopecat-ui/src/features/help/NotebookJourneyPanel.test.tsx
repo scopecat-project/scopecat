@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { navigate } from "../../lib/navigation";
+import type { NotebookJourney } from "../application/DesktopSession";
 import { NotebookJourneyPanel } from "./NotebookJourneyPanel";
+
+function savedStatus(journey: NotebookJourney | null) {
+  return { state: journey ? (journey.ready ? "ready" : "retryable") : "not_started", journey };
+}
 
 function show(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
@@ -25,9 +30,9 @@ it("prepares without forms and preserves the saved path when opening the editor 
     python: "/authors/lesson/.venv/bin/python",
     ready: true,
   };
-  const status = vi.fn().mockResolvedValue(null);
+  const status = vi.fn().mockResolvedValue(savedStatus(null));
   const prepare = vi.fn().mockImplementation(async () => {
-    status.mockResolvedValue(journey);
+    status.mockResolvedValue(savedStatus(journey));
     return journey;
   });
   const open = vi.fn().mockRejectedValue(new Error("Open the Notebook manually"));
@@ -76,7 +81,9 @@ it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "ta
     let finish!: (value: typeof groups) => void;
     const status = vi
       .fn()
-      .mockImplementation(async (selected) => (selected === "parameters" ? parameters : null));
+      .mockImplementation(async (selected) =>
+        savedStatus(selected === "parameters" ? parameters : null),
+      );
     const prepare = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -106,7 +113,7 @@ it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "ta
     await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
     await vi.waitFor(() => expect(prepare).toHaveBeenCalledWith(undefined, topic));
     status.mockImplementation(async (selected) =>
-      selected === "parameters" ? parameters : groups,
+      savedStatus(selected === "parameters" ? parameters : groups),
     );
     finish(groups);
     expect(await screen.findByText(groups.notebook)).toBeVisible();
@@ -126,7 +133,7 @@ it("returns to the selected course and opens its exact Settings folder without p
     python: "/authors/notes & experiments/.venv/bin/python",
     ready: true,
   };
-  const status = vi.fn().mockResolvedValue(journey);
+  const status = vi.fn().mockResolvedValue(savedStatus(journey));
   const prepare = vi.fn();
   Object.defineProperty(window, "pywebview", {
     configurable: true,
@@ -155,12 +162,14 @@ it("shows unfinished preparation without claiming the folder is ready", async ()
     configurable: true,
     value: {
       api: {
-        notebook_journey: vi.fn().mockResolvedValue({
-          directory: "/authors/unfinished",
-          notebook: "/authors/unfinished/notebooks/parameters.ipynb",
-          python: "/authors/unfinished/.venv/bin/python",
-          ready: false,
-        }),
+        notebook_journey: vi.fn().mockResolvedValue(
+          savedStatus({
+            directory: "/authors/unfinished",
+            notebook: "/authors/unfinished/notebooks/parameters.ipynb",
+            python: "/authors/unfinished/.venv/bin/python",
+            ready: false,
+          }),
+        ),
       },
     },
   });
@@ -210,7 +219,7 @@ it.each(["navigate", "popstate"] as const)(
     const pending = deferred<typeof parametersJourney>();
     const open = vi.fn();
     const prepare = vi.fn().mockReturnValue(pending.promise);
-    const status = vi.fn().mockResolvedValue(null);
+    const status = vi.fn().mockResolvedValue(savedStatus(null));
     Object.defineProperty(window, "pywebview", {
       configurable: true,
       value: {
@@ -235,9 +244,11 @@ it.each(["navigate", "popstate"] as const)(
     expect(screen.queryByText(/Preparing code and Python/)).not.toBeInTheDocument();
     await act(async () => pending.resolve(parametersJourney));
     await vi.waitFor(() =>
-      expect(client.getQueryData(["notebook-journey", "parameters"])).toEqual(parametersJourney),
+      expect(client.getQueryData(["notebook-journey", "parameters"])).toEqual(
+        savedStatus(parametersJourney),
+      ),
     );
-    expect(client.getQueryData(["notebook-journey", "groups"])).toBeNull();
+    expect(client.getQueryData(["notebook-journey", "groups"])).toEqual(savedStatus(null));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["notebook-journey", "parameters"] });
     expect(open).not.toHaveBeenCalled();
     expect(screen.queryByText(parametersJourney.notebook)).not.toBeInTheDocument();
@@ -250,8 +261,8 @@ it.each(["prepare", "choose", "open"] as const)(
   async (operation) => {
     const pending = deferred<never>();
     const bridge = {
-      notebook_journey: vi.fn().mockResolvedValue(null),
-      prepare_notebook_journey: vi.fn().mockResolvedValue(parametersJourney),
+      notebook_journey: vi.fn().mockResolvedValue(savedStatus(null)),
+      prepare_notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
       choose_directory: vi.fn().mockReturnValue(pending.promise),
       open_lesson_notebook: vi.fn().mockReturnValue(pending.promise),
     };
@@ -289,7 +300,7 @@ it("discards a delayed folder choice after URL navigation", async () => {
     configurable: true,
     value: {
       api: {
-        notebook_journey: vi.fn().mockResolvedValue(null),
+        notebook_journey: vi.fn().mockResolvedValue(savedStatus(null)),
         choose_directory: vi.fn().mockReturnValue(pending.promise),
         prepare_notebook_journey: prepare,
         open_lesson_notebook: vi.fn(),
@@ -316,8 +327,8 @@ it.each([false, true])(
       configurable: true,
       value: {
         api: {
-          notebook_journey: vi.fn().mockResolvedValue(parametersJourney),
-          prepare_notebook_journey: vi.fn().mockResolvedValue(parametersJourney),
+          notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
+          prepare_notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
           open_lesson_notebook: open,
         },
       },
@@ -335,3 +346,94 @@ it.each([false, true])(
     expect(open).toHaveBeenCalledTimes(1);
   },
 );
+
+it("observes another window preparing, failing, retrying and completing without opening its editor", async () => {
+  const pending = deferred<typeof parametersJourney>();
+  const retry = deferred<typeof parametersJourney>();
+  let remote = { state: "not_started", journey: null as NotebookJourney | null };
+  const status = vi.fn().mockImplementation(async () => remote);
+  const prepare = vi
+    .fn()
+    .mockImplementationOnce(() => {
+      remote = { state: "preparing", journey: { ...parametersJourney, ready: false } };
+      return pending.promise;
+    })
+    .mockImplementationOnce(() => {
+      remote = { state: "preparing", journey: { ...parametersJourney, ready: false } };
+      return retry.promise;
+    });
+  const open = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(window, "pywebview", {
+    configurable: true,
+    value: {
+      api: {
+        notebook_journey: status,
+        prepare_notebook_journey: prepare,
+        open_lesson_notebook: open,
+      },
+    },
+  });
+  const first = within(show().container);
+  const second = within(show().container);
+  const start = await first.findByRole("button", { name: "Start parameters Notebook" });
+  await vi.waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  expect(
+    await second.findByRole("button", { name: "Preparing Notebook…" }, { timeout: 3_000 }),
+  ).toBeDisabled();
+  expect(second.queryByText(/Preparation unfinished/)).not.toBeInTheDocument();
+  remote = { state: "retryable", journey: { ...parametersJourney, ready: false } };
+  await act(async () => pending.reject(new Error("dependency unavailable")));
+  const retryButton = await second.findByRole(
+    "button",
+    { name: "Retry preparation" },
+    { timeout: 3_000 },
+  );
+  expect(retryButton).toBeEnabled();
+  fireEvent.click(retryButton);
+  expect(
+    await first.findByRole("button", { name: "Preparing Notebook…" }, { timeout: 3_000 }),
+  ).toBeDisabled();
+  remote = { state: "ready", journey: parametersJourney };
+  await act(async () => retry.resolve(parametersJourney));
+  expect(
+    await first.findByRole("button", { name: "Continue parameters Notebook" }, { timeout: 3_000 }),
+  ).toBeEnabled();
+  expect(await second.findByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
+  expect(first.queryByRole("alert")).not.toBeInTheDocument();
+  expect(open).toHaveBeenCalledTimes(1);
+});
+
+it("explicitly repairs the retained course and explains kernel closure and preserved edits", async () => {
+  const prepare = vi.fn().mockResolvedValue(parametersJourney);
+  Object.defineProperty(window, "pywebview", {
+    configurable: true,
+    value: {
+      api: {
+        notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
+        prepare_notebook_journey: prepare,
+        open_lesson_notebook: vi.fn().mockResolvedValue(undefined),
+      },
+    },
+  });
+  show();
+  fireEvent.click(await screen.findByText("Repair Notebook environments"));
+  expect(screen.getByText(/close this folder’s notebooks and Python terminals/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Repair environments and open Notebook" }));
+  await vi.waitFor(() => expect(prepare).toHaveBeenCalledWith(undefined, "parameters", true));
+});
+
+it("still shows a Continue failure when the saved receipt was ready", async () => {
+  Object.defineProperty(window, "pywebview", {
+    configurable: true,
+    value: {
+      api: {
+        notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
+        prepare_notebook_journey: vi.fn().mockRejectedValue(new Error("Local Python is missing")),
+      },
+    },
+  });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "Continue parameters Notebook" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Local Python is missing");
+});

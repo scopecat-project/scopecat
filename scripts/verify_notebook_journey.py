@@ -82,8 +82,8 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             expose("journeyOpen", editor)
             page.add_init_script("""window.pywebview = {api: {
                 notebook_journey: (topic) => window.journeyStatus(topic),
-                prepare_notebook_journey: (parent, topic) =>
-                    window.journeyPrepare(parent ?? null, topic),
+                prepare_notebook_journey: (parent, topic, repair = false) =>
+                    window.journeyPrepare(parent ?? null, topic, repair),
                 open_lesson_notebook: (topic) => window.journeyOpen(topic),
                 set_window_title: async () => {},
                 status: () => window.applicationStatus(),
