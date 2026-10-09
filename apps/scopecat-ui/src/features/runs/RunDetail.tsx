@@ -308,18 +308,22 @@ export function RunDetail({
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
+        <AnalysisCard
+          analyses={analyses}
+          error={analysesError}
+          pending={analysesPending}
+          runId={run.runId}
+          hasNextPage={analysesHasNextPage}
+          loadingNextPage={analysesLoadingNextPage}
+          onLoadOlder={onLoadOlderAnalyses}
+        />
         <RunAnalysisFollows runId={run.runId} />
         <details
           className="rounded-md border border-line p-4"
-          open={
-            run.plan.pointCount === undefined ||
-            Boolean(analyses?.length) ||
-            Boolean(analysesError) ||
-            undefined
-          }
+          open={run.plan.pointCount === undefined || undefined}
         >
           <summary className="cursor-pointer text-sm font-semibold">
-            Analyses, proposals and adaptive controls
+            Proposals and adaptive controls
           </summary>
           <div className="mt-3 grid gap-3">
             <RunDomainDecisionCard
@@ -330,15 +334,6 @@ export function RunDetail({
               run={run}
             />
             <RunProposals key={run.runId} runId={run.runId} />
-            <AnalysisCard
-              analyses={analyses}
-              error={analysesError}
-              pending={analysesPending}
-              runId={run.runId}
-              hasNextPage={analysesHasNextPage}
-              loadingNextPage={analysesLoadingNextPage}
-              onLoadOlder={onLoadOlderAnalyses}
-            />
           </div>
         </details>
         <details className="rounded-md border border-line p-4">
