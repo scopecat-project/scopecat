@@ -71,6 +71,15 @@ def test_list_mode_artifact_inspection_is_bounded_and_preserves_peaks() -> None:
     assert preview.sample_indices == tuple(sorted(preview.sample_indices))
     assert preview.peak_abs == float(cast("np.float64", np.max(np.abs(source))))
     assert preview.peak_abs == max(abs(sample) for sample in preview.samples)
+    # The display is bounded to one entry, but work describes both compiled
+    # entries and all three repetitions, not a full experiment wall-clock estimate.
+    [playback] = [
+        estimate
+        for estimate in inspection.work_estimates
+        if estimate.metric == "waveform_playback_time"
+    ]
+    assert playback.lower == playback.upper == 6e-7
+    assert playback.unit == "s"
     assert inspection.bounds.max_points == 1
     assert inspection.bounds.max_waveforms_per_point == 1
     assert inspection.bounds.max_samples_per_waveform == 10
