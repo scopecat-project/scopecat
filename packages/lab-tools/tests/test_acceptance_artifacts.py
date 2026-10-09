@@ -109,14 +109,11 @@ def source(monkeypatch):
 
     def api(command, **kwargs):
         path = command[-1]
-        result = (
-            [{"jobs": jobs}]
-            if "/jobs?" in path
-            else [{"artifacts": artifacts}]
-            if "/artifacts?" in path
-            else [run]
-        )
-        return json.dumps(result)
+        if "/jobs?" in path or "/artifacts?" in path:
+            assert "--paginate" in command
+            result = jobs if "/jobs?" in path else artifacts
+            return "\n".join(json.dumps(item) for item in result)
+        return json.dumps(run)
 
     monkeypatch.setattr(verify.subprocess, "check_output", api)
     return run, jobs, artifacts

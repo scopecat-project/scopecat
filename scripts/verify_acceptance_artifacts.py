@@ -34,10 +34,6 @@ class Job(TypedDict):
     conclusion: str
 
 
-class JobsPage(TypedDict):
-    jobs: list[Job]
-
-
 class ArtifactRun(TypedDict):
     head_sha: str
 
@@ -47,10 +43,6 @@ class Artifact(TypedDict):
     name: str
     expired: bool
     workflow_run: ArtifactRun
-
-
-class ArtifactsPage(TypedDict):
-    artifacts: list[Artifact]
 
 
 class Arguments(argparse.Namespace):
@@ -65,17 +57,16 @@ def verify_source(repository: str, run_id: str, commit: str) -> dict[str, object
         raise ValueError("Framework run ID must be a positive integer")
     base = f"repos/{repository}/actions/runs/{run_id}"
 
-    def api(path: str) -> object:
-        return cast(
-            "object",
-            json.loads(
-                subprocess.check_output(
-                    ["gh", "api", "--paginate", "--slurp", path], text=True
-                )
-            ),
+    def api(path: str, collection: str = "") -> object:
+        options = (
+            ["--paginate", "--jq", f".{collection}[] | @json"] if collection else []
         )
+        output = subprocess.check_output(["gh", "api", *options, path], text=True)
+        if collection:
+            return [cast("object", json.loads(line)) for line in output.splitlines()]
+        return cast("object", json.loads(output))
 
-    [run] = cast("list[Run]", api(base))
+    run = cast("Run", api(base))
     if (
         run["repository"]["full_name"] != repository
         or run["head_repository"]["full_name"] != repository
@@ -88,17 +79,14 @@ def verify_source(repository: str, run_id: str, commit: str) -> dict[str, object
             "Framework source must be a completed same-repository acceptance run "
             "at this exact commit"
         )
-    jobs = [
-        job
-        for page in cast("list[JobsPage]", api(f"{base}/jobs?filter=all&per_page=100"))
-        for job in page["jobs"]
-    ]
+    jobs = cast("list[Job]", api(f"{base}/jobs?filter=all&per_page=100", "jobs"))
     if not any(job["name"] == "UI" and job["conclusion"] == "success" for job in jobs):
         raise ValueError("Framework source has no successful UI artifact producer")
     artifacts = [
         artifact
-        for page in cast("list[ArtifactsPage]", api(f"{base}/artifacts?per_page=100"))
-        for artifact in page["artifacts"]
+        for artifact in cast(
+            "list[Artifact]", api(f"{base}/artifacts?per_page=100", "artifacts")
+        )
         if artifact["name"] == "scopecat-framework" and not artifact["expired"]
     ]
     if len(artifacts) != 1 or artifacts[0]["workflow_run"]["head_sha"] != commit:
