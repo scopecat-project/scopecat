@@ -214,6 +214,15 @@ importing author code or acquiring again. The former `gallery_inputs` helper has
 no remaining consumers and is removed. Physical scientific journeys keep their
 separate reference fixtures.
 
+Generic browser authoring, parameter editing, sample-map handoff, saved plans,
+independent workbench contexts and lost-submission recovery use
+`apps/scopecat-ui/e2e/fixtures/author-workspace`. Its two signal objects and empty
+device registry exercise exact parameter/setup/source identities without loading
+quantum compilation. Source edits, frozen in-flight work, conflicts and restart
+still cross real workers and storage. `manual-launch.e2e.ts` and the remaining
+`procedure-operator.e2e.ts` cases retain device ownership, device-revision
+invalidation and the physical timing candidate/review path.
+
 ## Shared generated acceptance
 
 `reference_lab/acceptance.py` produces the shared

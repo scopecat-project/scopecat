@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { prepareReferenceContexts } from "./reference-context";
+import { copyAuthorWorkspace, prepareAuthorContexts } from "./author-context";
 import type { components } from "../src/api-schema";
 
 const ROOT = resolve(process.cwd(), "../..");
@@ -26,10 +26,9 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
   test.setTimeout(120000);
   const home = await mkdtemp(join(tmpdir(), "scopecat-object-parameters-"));
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(home, name), { recursive: true });
+    await copyAuthorWorkspace(home);
     uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, home);
+    prepareAuthorContexts(uv, home);
     const { base_url: url } = JSON.parse(
       await readFile(join(home, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
@@ -98,16 +97,14 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await page
       .getByRole("button", { name: "Edit working parameters beside map", exact: true })
       .click();
-    await page.getByRole("button", { name: "Select object q0", exact: true }).click();
+    await page.getByRole("button", { name: "Select object a", exact: true }).click();
     const form = page.getByRole("region", { name: "Object parameter values", exact: true });
-    const field = form.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    const field = form.getByLabel("signals[1].center", { exact: true });
     await expect(field).toBeVisible();
     await field.fill("1e");
-    await page.getByRole("button", { name: "Select object q1", exact: true }).click();
-    await expect(
-      form.getByLabel("qubits[2].drive_carrier_frequency", { exact: true }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Select object q0", exact: true }).click();
+    await page.getByRole("button", { name: "Select object b", exact: true }).click();
+    await expect(form.getByLabel("signals[2].center", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Select object a", exact: true }).click();
     await expect(field).toHaveValue("1e");
     await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await page.evaluate(`window.scrollTo(0, 0);
@@ -127,17 +124,13 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
       contentType: "image/png",
     });
     await page.getByRole("button", { name: "Configuration", exact: true }).click();
-    await expect(page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true })).toHaveValue(
-      "1e",
-    );
+    await expect(page.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
     await page.getByRole("button", { name: "Samples", exact: true }).click();
     await page
       .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
       .click();
-    await page.getByRole("button", { name: "Select object q0", exact: true }).click();
-    await expect(form.getByLabel("qubits[1].drive_carrier_frequency", { exact: true })).toHaveValue(
-      "1e",
-    );
+    await page.getByRole("button", { name: "Select object a", exact: true }).click();
+    await expect(form.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
     expect(forbidden).toEqual([]);
     const branch = await (
       await page.request.get(`${url}/api/v1/parameters/branches/browser`)
@@ -146,7 +139,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
 
     // Only this explicit action carries the resolved target/setup to Experiments.
     await field.fill("5.2");
-    await form.getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true }).fill("GHz");
+    await form.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
     await page
       .getByRole("button", {
         name: "Use working inputs, target and setup for next experiment",
@@ -185,7 +178,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await page
       .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
       .click();
-    await page.getByRole("button", { name: "Select object q0", exact: true }).click();
+    await page.getByRole("button", { name: "Select object a", exact: true }).click();
     await expect(field).toHaveValue("5.2");
     await field.fill("5.3");
     await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
@@ -198,7 +191,7 @@ import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     run = lab.get_run(sys.argv[2])
-    value = run.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
+    value = run.config.parameter_snapshot.get('signals').rows[0]['center']
     assert value.to('GHz') == sc.Quantity(5.2, 'GHz'), value
     assert lab.parameters.checkout('browser').head.generation == 1
     print(run.id, value)

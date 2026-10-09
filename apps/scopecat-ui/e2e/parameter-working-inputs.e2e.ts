@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { expect, test, type Page } from "@playwright/test";
-import { prepareReferenceContexts, reviewRetainedExperiment } from "./reference-context";
+import { prepareAuthorContexts, reviewRetainedExperiment } from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]) {
@@ -23,7 +23,7 @@ async function openTable(page: Page, url: string) {
   await page.goto(`${url}/#configuration`);
   await page.getByLabel("Working parameter branch", { exact: true }).fill("browser");
   await page.getByRole("button", { name: "Open working table", exact: true }).click();
-  await expect(page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("signals[1].center", { exact: true })).toBeVisible();
 }
 async function preview(page: Page) {
   const response = page.waitForResponse(
@@ -62,17 +62,16 @@ test("working B survives restart, invalidates stale previews and submits frozen 
   const endpoint = async () =>
     JSON.parse(await readFile(join(home, ".scopecat/daemon.json"), "utf8")).base_url as string;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(home, name), { recursive: true });
+    await copyAuthorWorkspace(home);
     uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, home);
+    prepareAuthorContexts(uv, home);
     const firstUrl = await endpoint();
     const context = await browser.newContext();
     const b = await context.newPage();
     const c = await context.newPage();
     await openTable(b, firstUrl);
     await openTable(c, firstUrl);
-    const field = b.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    const field = b.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
     await b.getByLabel("Source or reason for changes").fill("B unfinished raw input");
     await expect(b.getByText("Draft saved in application data", { exact: true })).toBeVisible();
@@ -99,14 +98,12 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const fresh = await browser.newContext();
     const work = await fresh.newPage();
     await openTable(work, url);
-    await expect(work.getByLabel("qubits[1].drive_carrier_frequency", { exact: true })).toHaveValue(
-      "1e",
-    );
+    await expect(work.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
     await expect(work.getByLabel("Source or reason for changes")).toHaveValue(
       "B unfinished raw input",
     );
-    await work.getByLabel("qubits[1].drive_carrier_frequency", { exact: true }).fill("5.2");
-    await work.getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true }).fill("GHz");
+    await work.getByLabel("signals[1].center", { exact: true }).fill("5.2");
+    await work.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
     await work
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
@@ -117,7 +114,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     expect(oldB.reviewed.config_source.overrides).toHaveLength(1);
     const editor = await fresh.newPage();
     await openTable(editor, url);
-    await editor.getByLabel("qubits[1].drive_carrier_frequency", { exact: true }).fill("5.3");
+    await editor.getByLabel("signals[1].center", { exact: true }).fill("5.3");
     await expect(
       editor.getByText("Draft saved in application data", { exact: true }),
     ).toBeVisible();
@@ -138,7 +135,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const procedureB = await submit(work);
     const runB = await retainedRun(work);
     // Later working edits must not replace the submitted capture.
-    await editor.getByLabel("qubits[1].drive_carrier_frequency", { exact: true }).fill("5.4");
+    await editor.getByLabel("signals[1].center", { exact: true }).fill("5.4");
     await expect(
       editor.getByText("Draft saved in application data", { exact: true }),
     ).toBeVisible();
@@ -151,7 +148,7 @@ import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     b=lab.get_run(sys.argv[2])
     assert len(b.snapshot.config_source.overrides) == 1
-    bv=b.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
+    bv=b.config.parameter_snapshot.get('signals').rows[0]['center']
     assert bv.to('GHz') == sc.Quantity(5.3,'GHz'), bv
     assert lab.parameters.checkout('browser').head.generation == 1
     assert len(lab.parameters.list()) == 1
@@ -189,7 +186,7 @@ import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     for run_id, frequency in ((sys.argv[2], 5.3), (sys.argv[3], 5.4)):
         run = lab.get_run(run_id)
-        value = run.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
+        value = run.config.parameter_snapshot.get('signals').rows[0]['center']
         assert value.to('GHz') == sc.Quantity(frequency, 'GHz'), (run_id, value)
 `,
       home,
@@ -199,7 +196,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await editor.getByRole("link", { name: /^Open retained run:/ }).click();
     await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
     await work.getByRole("button", { name: "Configuration", exact: true }).click();
-    const continuedField = work.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    const continuedField = work.getByLabel("signals[1].center", { exact: true });
     // Explicitly reopen the latest shared draft before making a new edit.
     await work.getByRole("button", { name: "Close editor", exact: true }).click();
     await work.getByRole("button", { name: "Open working table", exact: true }).click();
@@ -248,17 +245,16 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
   test.setTimeout(120000);
   const home = await mkdtemp(join(tmpdir(), "scopecat-working-close-"));
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(home, name), { recursive: true });
+    await copyAuthorWorkspace(home);
     uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, home);
+    prepareAuthorContexts(uv, home);
     const url = JSON.parse(await readFile(join(home, ".scopecat/daemon.json"), "utf8"))
       .base_url as string;
     const context = await browser.newContext();
     const page = await context.newPage();
     await openTable(page, url);
     await page.route("**/parameter-drafts/*/save", (route) => route.abort("connectionfailed"));
-    const field = page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    const field = page.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
     await expect(page.getByRole("button", { name: "Retry draft save", exact: true })).toBeVisible();
     const prompt = page.waitForEvent("dialog").then(async (dialog) => {

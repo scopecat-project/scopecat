@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
+import { chooseAuthorContext, copyAuthorWorkspace, prepareAuthorContexts } from "./author-context";
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
   const env = { ...process.env };
@@ -23,20 +23,15 @@ test("saves, reopens, copies and submits an immutable plan without activating co
   const project = await mkdtemp(join(tmpdir(), "scopecat-plans-e2e-"));
   let passed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
+    await copyAuthorWorkspace(project);
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, project);
+    prepareAuthorContexts(uv, project);
     const { base_url: endpoint } = JSON.parse(
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
     await page.goto(`${endpoint}/#launch`);
-    await page
-      .getByLabel("Experiment", { exact: true })
-      .selectOption("reference_lab.frequency_amplitude");
-    await chooseReferenceContext(page);
+    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await chooseAuthorContext(page);
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("alice");
     async function preview() {
       const response = page.waitForResponse((r) =>
