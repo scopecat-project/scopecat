@@ -1,11 +1,12 @@
 ---
-default: patch
+default: major
 ---
 
-Converge teaching CLI and acceptance on ordinary application author folders.
+Use application-managed folders for Notebook lessons
 
-`init --topic` shares Help’s editable source generator. Remove the standalone
-teaching console, generated service tasks and unused preparation/verification
-wrappers, including their GUI discovery helper. Keep offline author preparation,
-source edits, Notebook result reopening and shared-application recovery checks;
-existing folders retain their old environment.
+`scopecat init DIRECTORY --topic TOPIC` creates editable lesson source. Register
+and prepare the folder in Settings to use the same application's data as Help.
+
+The `scopecat-lab` command is removed; use Help or the init/Settings path above.
+Existing files, notes and results are not migrated automatically. Keep the original
+environment and data when continuing an existing standalone project.
