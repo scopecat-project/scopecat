@@ -48,13 +48,11 @@ def delivery(tmp_path: Path) -> Path:
     return root
 
 
-def test_gui_requires_current_runtime_and_unchanged_assets(delivery: Path):
-    assert bundle.gui_directory(delivery, {"scopecat": "current"}) == delivery / "gui"
-    with pytest.raises(ValueError, match="运行时代码不匹配"):
-        bundle.gui_directory(delivery, {"scopecat": "other-build-same-version"})
+def test_gui_assets_must_match_delivery(delivery: Path):
+    bundle.verify_bundle(delivery)
     (delivery / "gui/index.html").write_text("<html>stale GUI</html>")
     with pytest.raises(ValueError, match="被修改"):
-        bundle.gui_directory(delivery, {"scopecat": "current"})
+        bundle.verify_bundle(delivery)
 
 
 def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_path):
@@ -63,8 +61,6 @@ def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_
     with pytest.raises(ValueError, match="被修改"):
         bundle.install_bundle(delivery, destination)
     assert not destination.exists()
-    # Starting an installed GUI does not reread all third-party wheels.
-    assert bundle.gui_directory(delivery, {"scopecat": "current"}) == delivery / "gui"
 
 
 def add_toolchain(delivery, *, unsafe=False):

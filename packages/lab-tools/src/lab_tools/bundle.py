@@ -131,32 +131,31 @@ def read_bundle(root: Path) -> Bundle:
     return bundle
 
 
-def verify_bundle(root: Path, *, gui_only: bool = False) -> Bundle:
+def verify_bundle(root: Path) -> Bundle:
     root = root.resolve()
     if (root / MANIFEST).is_symlink():
         raise ValueError("交付清单不能是符号链接")
     bundle = read_bundle(root)
     if bundle["target"] != target_identity():
         raise ValueError("交付包的操作系统、CPU 或 Python ABI 与当前环境不同")
-    folders = ("gui",) if gui_only else ("gui", "wheels", "toolchain")
+    folders = ("gui", "wheels", "toolchain")
     actual = inventory(root, folders)
     expected = {
         name: value
         for name, value in bundle["files"].items()
         if name.startswith(tuple(folder + "/" for folder in folders))
     }
-    if not gui_only:
-        for name in (
-            "requirements.lock",
-            "dependencies.lock",
-            "build.lock",
-            "install.py",
-        ):
-            path = root / name
-            if path.is_symlink():
-                raise ValueError(f"交付文件不能是符号链接: {name}")
-            actual[name] = file_hash(path)
-            expected[name] = bundle["files"].get(name, "")
+    for name in (
+        "requirements.lock",
+        "dependencies.lock",
+        "build.lock",
+        "install.py",
+    ):
+        path = root / name
+        if path.is_symlink():
+            raise ValueError(f"交付文件不能是符号链接: {name}")
+        actual[name] = file_hash(path)
+        expected[name] = bundle["files"].get(name, "")
     if "gui/index.html" not in actual or actual != expected:
         raise ValueError("交付文件缺失、被修改或包含旧产物; 请恢复匹配的交付目录")
     return bundle
@@ -288,18 +287,6 @@ def installed_bundle(prefix: Path) -> Path | None:
     return root.resolve()
 
 
-def gui_directory(bundle_root: Path | None, runtime: dict[str, object]) -> Path:
-    """Validate just the small GUI payload at startup, not all dependency wheels."""
-    if bundle_root is None:
-        bundle_root = installed_bundle(Path(sys.prefix))
-        if bundle_root is None:
-            raise ValueError("未安装 GUI 交付记录; 请用 install.py 或指定 --bundle")
-    bundle = verify_bundle(bundle_root, gui_only=True)
-    if bundle["runtime"] != runtime:
-        raise ValueError("GUI 交付包与当前运行时代码不匹配; 拒绝启动旧 GUI")
-    return bundle_root.resolve() / "gui"
-
-
 def managed_path(home: Path, path: Path) -> Path:
     """Managed destinations must not redirect writes outside this installation."""
     current = home
@@ -317,7 +304,7 @@ class InstallArguments(Protocol):
 
 def main() -> None:
     configure_console()
-    parser = argparse.ArgumentParser(description="从本地交付目录离线安装最小教学环境")
+    parser = argparse.ArgumentParser(description="从本地交付目录离线安装应用环境")
     _ = parser.add_argument("destination", type=Path)
     _ = parser.add_argument("--bundle", type=Path, default=Path(__file__).parent)
     args = cast("InstallArguments", cast("object", parser.parse_args()))
