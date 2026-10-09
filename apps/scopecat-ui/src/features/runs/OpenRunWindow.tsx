@@ -8,7 +8,7 @@ export function OpenRunWindow({ runId }: { runId: string }) {
   // Only the exact retained run crosses the window boundary, never drafts or selection state.
   const href = `/?${new URLSearchParams({ run: runId })}`;
   return (
-    <div>
+    <div title="View this exact run independently. Each window keeps its own selection.">
       {desktop ? (
         <button className={secondaryButton} disabled={open.isPending} onClick={() => open.mutate()}>
           Open result in new window
@@ -18,11 +18,6 @@ export function OpenRunWindow({ runId }: { runId: string }) {
           Open result in new tab or window
         </a>
       )}
-      <p className="text-xs text-text-dim">
-        {desktop
-          ? "View this run independently while continuing here."
-          : "Your browser chooses a tab or window. Each view keeps its own selection."}
-      </p>
       {open.error && <p role="alert">{open.error.message}</p>}
     </div>
   );

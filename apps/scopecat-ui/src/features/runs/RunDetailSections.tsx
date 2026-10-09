@@ -10,7 +10,6 @@ import {
   CircleDot,
   Cpu,
   Database,
-  Gauge,
   LoaderCircle,
   SquareStack,
   XCircle,
@@ -47,89 +46,92 @@ export function ProgressCard({
   run,
   events,
   measurements,
+  receiptError,
 }: {
   run: ProjectRun;
   events: ProjectEvent[];
   measurements?: MeasurementPreview;
+  receiptError?: Error | null;
 }) {
-  const expected = run.plan.pointCount;
-  const completed = Math.max(completedPoints(run, events), measurements?.recordCount ?? 0);
-  const terminal = ["succeeded", "failed", "cancelled"].includes(run.status);
-  const adaptive = expected === undefined;
-  const accepted = run.pointPlan.acceptedPointCount;
-  const target = expected ?? (run.pointPlan.closed ? accepted : run.pointPlan.pointLimit);
-  const hasProgress = target > 0;
-  const progressValue = hasProgress
-    ? terminal && run.status === "succeeded" && expected !== undefined
-      ? target
-      : Math.min(completed, target)
+  const received = measurements?.recordCount;
+  const saved = measurements?.durableRecordCount;
+  const savedPreview = measurements
+    ? `${measurements.items.length}${measurements.truncated ? "+" : ""}`
     : undefined;
-  const percentage =
-    progressValue !== undefined && target ? Math.round((progressValue / target) * 100) : undefined;
-
+  const completed = completedPoints(run, events);
+  const active = ["accepted", "running"].includes(run.status);
   return (
-    <article className={classes(detailCard, "col-span-full max-[680px]:col-auto")}>
-      <CardHeading
-        icon={<Gauge size={17} />}
-        title="Execution progress"
-        accessory={
-          percentage !== undefined ? (
-            <strong className="font-mono text-[0.78rem] text-accent">{percentage}%</strong>
-          ) : (
-            <span className={countBadge}>{run.stateLabel}</span>
-          )
-        }
-      />
-      {hasProgress ? (
-        <>
-          <progress
-            className="h-2 w-full appearance-none overflow-hidden rounded-full border-0 bg-panel-strong [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-accent [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-panel-strong [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-accent"
-            max={target}
-            value={progressValue}
-            aria-label={`${progressValue ?? 0} of ${target} points complete`}
-          />
-          <div className="mt-[7px] flex justify-between text-[0.65rem] text-text-dim max-[460px]:flex-wrap max-[460px]:gap-2 [&_strong]:text-text-soft">
-            <span>
-              <strong>{progressValue ?? 0}</strong> / {adaptive ? accepted : target} points
-              {adaptive && ` accepted · ${run.pointPlan.pointLimit} max`}
-            </span>
-            <span>
-              {adaptive
-                ? run.pointPlan.closed
-                  ? run.pointPlan.stopReason
-                  : `Optimizer attempts ${run.pointPlan.optimizerAttemptCount} · operator requests ${run.pointPlan.operatorRequestCount} · plan open`
-                : `${events.length} durable events`}
-            </span>
-          </div>
-          <p className="mt-2 text-[0.65rem] text-text-dim">
-            Progress reflects published evidence. Durable checkpoints may lag received output;
-            retained measurements do not confirm a completed recovery group.
-          </p>
-        </>
-      ) : (
-        <div className="flex min-h-[54px] items-center gap-3 rounded-[9px] border border-dashed border-line bg-[rgb(255_255_255_/_1%)] p-3 text-text-dim">
-          <Activity className="flex-none text-blue" size={23} aria-hidden="true" />
-          <div>
-            <strong className="text-[0.75rem] text-text-soft">
-              {run.status === "running" ? "Execution is active" : "No point total reported"}
-            </strong>
-            <p className="mt-1 mb-0 text-[0.67rem] leading-[1.45]">
-              {events.length > 0
-                ? `${events.length} durable events received from this run.`
-                : "Progress will appear when the daemon publishes plan or execution events."}
-            </p>
-          </div>
-        </div>
-      )}
-      <div className="mt-[13px] grid grid-cols-3 gap-2 max-[460px]:grid-cols-1">
-        <Fact
-          label="Last update"
-          value={run.updatedAt ? formatRelative(run.updatedAt) : "Not reported"}
-        />
-        <Fact label="Result" value={titleCase(run.result ?? "Pending")} />
-        <Fact label="Certainty" value={titleCase(run.certainty ?? "Pending")} />
+    <section
+      aria-label="Run progress"
+      className="rounded-md border border-line bg-panel-soft px-4 py-2 text-sm"
+    >
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <strong>{run.stateLabel}</strong>
+        {received !== undefined && (
+          <span>
+            Received records <strong className="font-mono text-text">{received}</strong>
+          </span>
+        )}
+        {saved !== undefined && (
+          <span>
+            Saved records <strong className="font-mono text-text">{saved}</strong>
+          </span>
+        )}
+        {saved === undefined && savedPreview !== undefined && (
+          <span>
+            Saved preview records <strong className="font-mono text-text">{savedPreview}</strong>
+          </span>
+        )}
+        <span className="text-text-soft">
+          {run.plan.pointCount !== undefined
+            ? `${run.plan.pointCount} planned points`
+            : `${run.pointPlan.acceptedPointCount} accepted points · plan ${run.pointPlan.closed ? "closed" : "open"}`}
+        </span>
       </div>
-    </article>
+      {receiptError && (
+        <p role="status" className="mt-2 text-sm text-yellow">
+          Live receipt unavailable. Displayed counts and plots may be stale:{" "}
+          {errorMessage(receiptError)}
+        </p>
+      )}
+      {received !== undefined && saved !== undefined && received > saved && (
+        <p className="mt-2 text-sm text-yellow">
+          {received - saved} received records awaiting save. Received data is not recovery
+          completion.
+        </p>
+      )}
+      {active &&
+        run.plan.pointCount !== undefined &&
+        received !== undefined &&
+        received >= run.plan.pointCount && (
+          <p className="mt-2 text-sm text-text-soft">
+            Planned data received; waiting for execution and saving to finish.
+          </p>
+        )}
+      {received === undefined && active && (
+        <p className="mt-2 text-sm text-text-soft">
+          {run.status === "accepted"
+            ? "Accepted for execution; no measurement receipt reported."
+            : "No measurement receipt reported. Device acquisition progress is not inferred."}
+        </p>
+      )}
+      <details className="mt-1 text-xs text-text-dim">
+        <summary className="cursor-pointer">Execution evidence</summary>
+        <p className="mt-2">
+          {completed} points have durable execution evidence. Received records, saved records and
+          completed recovery groups are distinct.
+        </p>
+        <p className="mt-1">
+          Result: {titleCase(run.result ?? "Pending")} · Certainty:{" "}
+          {titleCase(run.certainty ?? "Pending")} · Run updated:{" "}
+          {run.updatedAt ? formatRelative(run.updatedAt) : "Not reported"}
+        </p>
+        <p className="mt-1">
+          Receipt counts describe data received by the daemon, not work inside a device batch. A
+          successful run includes saving and finalization.
+        </p>
+      </details>
+    </section>
   );
 }
 
@@ -570,133 +572,7 @@ export function DataCard({
     run.plan.coordinateIds.length > 0 ||
     run.plan.recordIds.length > 0;
   return (
-    <article
-      className={classes(detailCard, "[&>.run-inline-empty]:mt-2.5")}
-      data-testid="data-card"
-    >
-      <CardHeading
-        icon={<Database size={17} />}
-        title="Data contents"
-        accessory={
-          <span className={countBadge}>
-            {run.contents.length}
-            {contentsHasNextPage ? "+" : ""}
-          </span>
-        }
-      />
-      {hasPlanMetadata && (
-        <div className="mb-[13px] grid grid-cols-3 gap-2 rounded-[8px] border border-line bg-[rgb(255_255_255_/_1%)] p-2.5 max-[460px]:grid-cols-1">
-          <Fact
-            label={
-              run.plan.pointCount === undefined
-                ? "Initial / accepted / max points"
-                : "Planned points"
-            }
-            value={
-              run.plan.pointCount !== undefined
-                ? run.plan.pointCount.toLocaleString()
-                : `${run.pointPlan.initialPointCount.toLocaleString()} / ${run.pointPlan.acceptedPointCount.toLocaleString()} / ${run.pointPlan.pointLimit.toLocaleString()}`
-            }
-          />
-          <Fact label="Coordinates" value={String(run.plan.coordinateIds.length)} />
-          <Fact label="Records" value={String(run.plan.recordIds.length)} />
-        </div>
-      )}
-      {run.plan.coordinateIds.length > 0 && (
-        <TagGroup label="Coordinates" values={run.plan.coordinateIds} />
-      )}
-      {run.plan.recordIds.length > 0 && (
-        <TagGroup label="Record types" values={run.plan.recordIds} />
-      )}
-      {contentsError && run.contents.length === 0 ? (
-        <InlineEmpty
-          title="Data contents unavailable"
-          detail={errorMessage(contentsError)}
-          warning
-        />
-      ) : contentsPending ? (
-        <InlineEmpty
-          title="Reading data contents"
-          detail="Waiting for the daemon's relational content catalog."
-        />
-      ) : run.contents.length > 0 ? (
-        <div className="grid gap-[7px]">
-          <ul className="mt-2.5 grid list-none gap-[7px] p-0">
-            {run.contents.map((content) => (
-              <li
-                key={contentKey(content)}
-                className={classes(
-                  "flex min-w-0 items-center gap-[9px] rounded-[8px] border border-line bg-[rgb(255_255_255_/_1.2%)]",
-                  contentKey(content) === selectedContentKey &&
-                    "border-[rgb(128_163_207_/_25%)] bg-accent-soft",
-                )}
-              >
-                <button
-                  className="flex w-full cursor-pointer items-center gap-[9px] border-0 bg-transparent p-[9px] text-left text-inherit [&>svg]:flex-none [&>svg]:text-text-dim"
-                  type="button"
-                  onClick={() => setRequestedContentKey(contentKey(content))}
-                  aria-current={contentKey(content) === selectedContentKey ? "true" : undefined}
-                >
-                  <span
-                    className="grid size-7 flex-none place-items-center rounded-[7px] bg-blue-soft text-blue"
-                    aria-hidden="true"
-                  >
-                    {content.role === "dataset" ? (
-                      <Database size={15} />
-                    ) : (
-                      <SquareStack size={15} />
-                    )}
-                  </span>
-                  <span className="grid min-w-0 flex-1 gap-0.5">
-                    <strong className="overflow-hidden text-[0.7rem] font-[650] text-ellipsis whitespace-nowrap">
-                      {content.label}
-                    </strong>
-                    <small className="overflow-hidden text-[0.6rem] text-ellipsis whitespace-nowrap text-text-dim">
-                      {titleCase(content.role)}
-                      {content.detail ? ` · ${content.detail}` : ""}
-                    </small>
-                  </span>
-                  {canPreviewRunContent(content) && <ChevronRight size={15} aria-hidden="true" />}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {contentsError ? (
-            <p className="m-0 text-[0.61rem] text-red" role="status">
-              {errorMessage(contentsError)}
-            </p>
-          ) : null}
-          {contentsHasNextPage ? (
-            <button
-              className={classes(secondaryButton, "w-full")}
-              disabled={contentsLoadingNextPage}
-              onClick={onLoadOlderContents}
-              type="button"
-            >
-              {contentsLoadingNextPage ? (
-                <LoaderCircle className="animate-spin" size={14} aria-hidden="true" />
-              ) : (
-                <ChevronDown size={14} aria-hidden="true" />
-              )}
-              {contentsLoadingNextPage ? "Loading older contents…" : "Load older contents"}
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <InlineEmpty
-          title="No materialized contents"
-          detail="Dataset, record, and artifact metadata will appear after the daemon publishes it."
-        />
-      )}
-      {selectedContent && (
-        <RunContentPanel
-          entry={selectedContent}
-          content={contentQuery.data?.content}
-          format={contentQuery.data?.format}
-          error={contentQuery.error}
-          pending={contentQuery.isPending}
-        />
-      )}
+    <article className="min-w-0 [&>.run-inline-empty]:mt-2.5" data-testid="data-card">
       <MeasurementRecords
         key={run.runId}
         preview={measurements}
@@ -716,6 +592,134 @@ export function DataCard({
         onSliceOffsetChange={onMeasurementSliceOffsetChange}
         onFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
       />
+      <details className="mt-4 rounded-md border border-line p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-text-soft">
+          Saved files and record metadata
+        </summary>
+        <CardHeading
+          icon={<Database size={17} />}
+          title="Data contents"
+          accessory={
+            <span className={countBadge}>
+              {run.contents.length}
+              {contentsHasNextPage ? "+" : ""}
+            </span>
+          }
+        />
+        {hasPlanMetadata && (
+          <div className="mb-[13px] grid grid-cols-3 gap-2 rounded-[8px] border border-line bg-[rgb(255_255_255_/_1%)] p-2.5 max-[460px]:grid-cols-1">
+            <Fact
+              label={
+                run.plan.pointCount === undefined
+                  ? "Initial / accepted / max points"
+                  : "Planned points"
+              }
+              value={
+                run.plan.pointCount !== undefined
+                  ? run.plan.pointCount.toLocaleString()
+                  : `${run.pointPlan.initialPointCount.toLocaleString()} / ${run.pointPlan.acceptedPointCount.toLocaleString()} / ${run.pointPlan.pointLimit.toLocaleString()}`
+              }
+            />
+            <Fact label="Coordinates" value={String(run.plan.coordinateIds.length)} />
+            <Fact label="Record types" value={String(run.plan.recordIds.length)} />
+          </div>
+        )}
+        {run.plan.coordinateIds.length > 0 && (
+          <TagGroup label="Coordinates" values={run.plan.coordinateIds} />
+        )}
+        {run.plan.recordIds.length > 0 && (
+          <TagGroup label="Record types" values={run.plan.recordIds} />
+        )}
+        {contentsError && run.contents.length === 0 ? (
+          <InlineEmpty
+            title="Data contents unavailable"
+            detail={errorMessage(contentsError)}
+            warning
+          />
+        ) : contentsPending ? (
+          <InlineEmpty
+            title="Reading data contents"
+            detail="Waiting for the daemon's relational content catalog."
+          />
+        ) : run.contents.length > 0 ? (
+          <div className="grid gap-[7px]">
+            <ul className="mt-2.5 grid list-none gap-[7px] p-0">
+              {run.contents.map((content) => (
+                <li
+                  key={contentKey(content)}
+                  className={classes(
+                    "flex min-w-0 items-center gap-[9px] rounded-[8px] border border-line bg-[rgb(255_255_255_/_1.2%)]",
+                    contentKey(content) === selectedContentKey &&
+                      "border-[rgb(128_163_207_/_25%)] bg-accent-soft",
+                  )}
+                >
+                  <button
+                    className="flex w-full cursor-pointer items-center gap-[9px] border-0 bg-transparent p-[9px] text-left text-inherit [&>svg]:flex-none [&>svg]:text-text-dim"
+                    type="button"
+                    onClick={() => setRequestedContentKey(contentKey(content))}
+                    aria-current={contentKey(content) === selectedContentKey ? "true" : undefined}
+                  >
+                    <span
+                      className="grid size-7 flex-none place-items-center rounded-[7px] bg-blue-soft text-blue"
+                      aria-hidden="true"
+                    >
+                      {content.role === "dataset" ? (
+                        <Database size={15} />
+                      ) : (
+                        <SquareStack size={15} />
+                      )}
+                    </span>
+                    <span className="grid min-w-0 flex-1 gap-0.5">
+                      <strong className="overflow-hidden text-[0.7rem] font-[650] text-ellipsis whitespace-nowrap">
+                        {content.label}
+                      </strong>
+                      <small className="overflow-hidden text-[0.6rem] text-ellipsis whitespace-nowrap text-text-dim">
+                        {titleCase(content.role)}
+                        {content.detail ? ` · ${content.detail}` : ""}
+                      </small>
+                    </span>
+                    {canPreviewRunContent(content) && <ChevronRight size={15} aria-hidden="true" />}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {contentsError ? (
+              <p className="m-0 text-[0.61rem] text-red" role="status">
+                {errorMessage(contentsError)}
+              </p>
+            ) : null}
+            {contentsHasNextPage ? (
+              <button
+                className={classes(secondaryButton, "w-full")}
+                disabled={contentsLoadingNextPage}
+                onClick={onLoadOlderContents}
+                type="button"
+              >
+                {contentsLoadingNextPage ? (
+                  <LoaderCircle className="animate-spin" size={14} aria-hidden="true" />
+                ) : (
+                  <ChevronDown size={14} aria-hidden="true" />
+                )}
+                {contentsLoadingNextPage ? "Loading older contents…" : "Load older contents"}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <InlineEmpty
+            title="No materialized contents"
+            detail="Dataset, record, and artifact metadata will appear after the daemon publishes it."
+          />
+        )}
+        {selectedContent && (
+          <RunContentPanel
+            entry={selectedContent}
+            content={contentQuery.data?.content}
+            format={contentQuery.data?.format}
+            error={contentQuery.error}
+            pending={contentQuery.isPending}
+          />
+        )}
+      </details>
     </article>
   );
 }
@@ -972,20 +976,6 @@ function completedPoints(run: ProjectRun, events: ProjectEvent[]): number {
       }
       const pointIndex = event.payload.point_index;
       if (typeof pointIndex === "number") completedPointIndices.add(pointIndex);
-    }
-    if (
-      event.payload.stage === "append_measurement" &&
-      typeof evidence === "object" &&
-      evidence !== null
-    ) {
-      const record = evidence as Record<string, unknown>;
-      const startIndex = record.start_index;
-      const recordCount = record.record_count;
-      if (typeof startIndex === "number" && typeof recordCount === "number") {
-        for (let offset = 0; offset < recordCount; offset += 1) {
-          completedPointIndices.add(startIndex + offset);
-        }
-      }
     }
   }
   // Only durable transition facts survive daemon reconnects.

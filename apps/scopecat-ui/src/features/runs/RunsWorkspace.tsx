@@ -341,6 +341,7 @@ export function RunsWorkspace({
       ),
     enabled: selectedRunId !== undefined && selectedTracePlan !== undefined,
   });
+  const [showRunBrowser, setShowRunBrowser] = useState(true);
   const filteredRuns = useMemo(() => filterRuns(runs, filter, search), [runs, filter, search]);
 
   useEffect(() => {
@@ -358,174 +359,197 @@ export function RunsWorkspace({
 
   return (
     <>
-      <section
-        className="mb-2.5 grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-panel max-[460px]:grid-cols-[minmax(0,1fr)]"
-        aria-label="Project status"
-      >
-        <StatusItem
-          label="Daemon"
-          value={
-            healthReachable
-              ? titleCase(health?.status ?? "connected")
-              : healthPending
-                ? "Checking"
-                : "Unavailable"
-          }
-          detail={healthDetail(health)}
-          tone={healthReachable ? "good" : "muted"}
-        />
-        <StatusItem
-          label="Runs"
-          value={
-            runsQuery.isSuccess ? `${runs.length}${nextRunCursor !== undefined ? "+" : ""}` : "—"
-          }
-          detail={
-            runsQuery.isSuccess
-              ? nextRunCursor !== undefined
-                ? `${activeCount} active in loaded runs`
-                : `${activeCount} active`
-              : "No run data received"
-          }
-          tone={activeCount > 0 ? "active" : "muted"}
-        />
-        <StatusItem
-          label="Attention"
-          value={runsQuery.isSuccess ? String(attentionCount) : "—"}
-          detail={
-            attentionCount > 0
-              ? "Operator review needed"
-              : nextRunCursor !== undefined
-                ? "No flags in loaded runs"
-                : "No flagged runs"
-          }
-          tone={attentionCount > 0 ? "warning" : nextRunCursor !== undefined ? "muted" : "good"}
-        />
-      </section>
-
-      <div className="grid min-h-[620px] grid-cols-[minmax(300px,340px)_minmax(0,1fr)] items-start overflow-hidden rounded-lg border border-line bg-panel max-[1100px]:grid-cols-[minmax(270px,310px)_minmax(0,1fr)] max-[880px]:block max-[880px]:min-h-0 max-[880px]:overflow-visible max-[880px]:bg-transparent">
-        <aside
-          className="sticky top-[60px] flex max-h-[calc(100vh-72px)] min-h-[620px] flex-col border-r border-line bg-panel-soft px-[11px] pt-[13px] pb-[11px] max-[880px]:static max-[880px]:mb-3 max-[880px]:max-h-none max-[880px]:min-h-0 max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-[11px] max-[680px]:pt-4 max-[680px]:pb-[11px]"
-          aria-labelledby="runs-heading"
+      <div className="mb-3 flex items-center gap-3">
+        <button
+          type="button"
+          className={secondaryButton}
+          aria-expanded={showRunBrowser}
+          aria-controls="run-browser"
+          onClick={() => setShowRunBrowser(!showRunBrowser)}
         >
-          <div className="flex items-start justify-between px-1 pb-[11px]">
-            <div>
-              <p className={eyebrow}>Run browser</p>
-              <h2 className="m-0 text-[1.08rem] font-[650] tracking-[-0.02em]" id="runs-heading">
-                Experiments
-              </h2>
-            </div>
-            {runsQuery.isFetching && (
-              <LoaderCircle
-                className="mt-[7px] animate-spin text-text-dim"
-                size={17}
-                aria-label="Refreshing runs"
-              />
-            )}
-          </div>
+          {showRunBrowser ? "Hide run browser" : "Browse runs"}
+        </button>
+        <section
+          className="grid flex-1 grid-cols-3 overflow-hidden rounded-lg border border-line bg-panel max-[460px]:grid-cols-[minmax(0,1fr)]"
+          aria-label="Project status"
+        >
+          <StatusItem
+            label="Daemon"
+            value={
+              healthReachable
+                ? titleCase(health?.status ?? "connected")
+                : healthPending
+                  ? "Checking"
+                  : "Unavailable"
+            }
+            detail={healthDetail(health)}
+            tone={healthReachable ? "good" : "muted"}
+          />
+          <StatusItem
+            label="Runs"
+            value={
+              runsQuery.isSuccess ? `${runs.length}${nextRunCursor !== undefined ? "+" : ""}` : "—"
+            }
+            detail={
+              runsQuery.isSuccess
+                ? nextRunCursor !== undefined
+                  ? `${activeCount} active in loaded runs`
+                  : `${activeCount} active`
+                : "No run data received"
+            }
+            tone={activeCount > 0 ? "active" : "muted"}
+          />
+          <StatusItem
+            label="Attention"
+            value={runsQuery.isSuccess ? String(attentionCount) : "—"}
+            detail={
+              attentionCount > 0
+                ? "Operator review needed"
+                : nextRunCursor !== undefined
+                  ? "No flags in loaded runs"
+                  : "No flagged runs"
+            }
+            tone={attentionCount > 0 ? "warning" : nextRunCursor !== undefined ? "muted" : "good"}
+          />
+        </section>
+      </div>
 
-          <label className="flex min-h-10 items-center gap-[9px] rounded-[9px] border border-line bg-bg px-[11px] text-text-dim transition-[border-color,box-shadow] duration-150 focus-within:border-[rgb(128_163_207_/_55%)] focus-within:shadow-[0_0_0_3px_rgb(128_163_207_/_7%)]">
-            <Search size={16} aria-hidden="true" />
-            <span className="sr-only">Search by run, experiment, or resource</span>
-            <input
-              className="w-full min-w-0 border-0 bg-transparent p-0 text-[0.8rem] text-text outline-none placeholder:text-[#5e6a77]"
-              type="search"
-              placeholder="Search runs"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-
-          <div
-            className="my-2.5 mb-[11px] flex items-center gap-1 text-text-dim max-[460px]:overflow-x-auto"
-            aria-label="Filter runs"
+      <div
+        className={classes(
+          "grid min-h-[620px] items-start overflow-hidden rounded-lg border border-line bg-panel",
+          showRunBrowser
+            ? "grid-cols-[260px_minmax(0,1fr)] max-[880px]:grid-cols-1"
+            : "grid-cols-1",
+        )}
+      >
+        {showRunBrowser && (
+          <aside
+            id="run-browser"
+            className="sticky top-[60px] flex max-h-[calc(100vh-72px)] min-h-[620px] flex-col border-r border-line bg-panel-soft px-[11px] pt-[13px] pb-[11px] max-[880px]:static max-[880px]:mb-3 max-[880px]:max-h-none max-[880px]:min-h-0 max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-[11px] max-[680px]:pt-4 max-[680px]:pb-[11px]"
+            aria-labelledby="runs-heading"
           >
-            <ListFilter className="mx-[5px] ml-0.5 flex-none" size={15} aria-hidden="true" />
-            {FILTERS.map((item) => (
-              <button
-                key={item.key}
-                className={classes(
-                  "min-h-7 cursor-pointer rounded-[7px] border border-transparent bg-transparent px-2 text-[0.69rem] font-bold text-text-dim hover:bg-[rgb(255_255_255_/_3%)] hover:text-text-soft",
-                  filter === item.key &&
-                    "border-[rgb(128_163_207_/_17%)] bg-accent-soft text-accent",
-                )}
-                type="button"
-                aria-pressed={filter === item.key}
-                onClick={() => setFilter(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col gap-[7px] overflow-auto p-0.5 [scrollbar-color:#344252_transparent] [scrollbar-width:thin] max-[880px]:grid max-[880px]:grid-flow-col max-[880px]:auto-cols-[minmax(270px,64vw)] max-[880px]:overflow-x-auto max-[880px]:pb-[5px] max-[460px]:auto-cols-[minmax(260px,86vw)]">
-            {runsQuery.isPending && (
-              <PanelMessage
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Reading project"
-                detail="Waiting for the daemon to return its run index."
-              />
-            )}
-            {runsQuery.isError && (
-              <PanelMessage
-                icon={<Unplug />}
-                title="Run list unavailable"
-                detail={errorMessage(runsQuery.error)}
-              />
-            )}
-            {runsQuery.isSuccess && runs.length === 0 && (
-              <PanelMessage
-                icon={<FlaskConical />}
-                title="No runs yet"
-                detail="Submitted experiments will appear here."
-              />
-            )}
-            {runsQuery.isSuccess && runs.length > 0 && filteredRuns.length === 0 && (
-              <PanelMessage
-                icon={<Search />}
-                title="No matching runs"
-                detail="Try another status or search term."
-              />
-            )}
-            {filteredRuns.map((run) => (
-              <RunListItem
-                key={run.runId}
-                run={run}
-                selected={run.runId === selectedRunId}
-                onSelect={() => onSelectRun(run.runId)}
-              />
-            ))}
-            {olderRunsMutation.isError && (
-              <p className="mx-2 mt-1 mb-0 text-[0.67rem] leading-[1.45] text-red" role="status">
-                {errorMessage(olderRunsMutation.error)}
-              </p>
-            )}
-            {runsQuery.isSuccess && runHeadCursor !== undefined && nextRunCursor !== undefined && (
-              <div className="flex justify-center pt-[7px] pb-[3px]">
-                <button
-                  className={classes(secondaryButton, "w-full")}
-                  type="button"
-                  disabled={olderRunsMutation.isPending}
-                  onClick={() =>
-                    olderRunsMutation.mutate({
-                      headCursor: runHeadCursor,
-                      before: nextRunCursor,
-                    })
-                  }
-                >
-                  {olderRunsMutation.isPending ? (
-                    <LoaderCircle className="animate-spin" size={14} aria-hidden="true" />
-                  ) : (
-                    <ChevronRight size={14} aria-hidden="true" />
-                  )}
-                  {olderRunsMutation.isPending ? "Loading older runs…" : "Load older runs"}
-                </button>
+            <div className="flex items-start justify-between px-1 pb-[11px]">
+              <div>
+                <p className={eyebrow}>Run browser</p>
+                <h2 className="m-0 text-[1.08rem] font-[650] tracking-[-0.02em]" id="runs-heading">
+                  Experiments
+                </h2>
               </div>
-            )}
-          </div>
-        </aside>
+              {runsQuery.isFetching && (
+                <LoaderCircle
+                  className="mt-[7px] animate-spin text-text-dim"
+                  size={17}
+                  aria-label="Refreshing runs"
+                />
+              )}
+            </div>
+
+            <label className="flex min-h-10 items-center gap-[9px] rounded-[9px] border border-line bg-bg px-[11px] text-text-dim transition-[border-color,box-shadow] duration-150 focus-within:border-[rgb(128_163_207_/_55%)] focus-within:shadow-[0_0_0_3px_rgb(128_163_207_/_7%)]">
+              <Search size={16} aria-hidden="true" />
+              <span className="sr-only">Search by run, experiment, or resource</span>
+              <input
+                className="w-full min-w-0 border-0 bg-transparent p-0 text-[0.8rem] text-text outline-none placeholder:text-[#5e6a77]"
+                type="search"
+                placeholder="Search runs"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+
+            <div
+              className="my-2.5 mb-[11px] flex items-center gap-1 text-text-dim max-[460px]:overflow-x-auto"
+              aria-label="Filter runs"
+            >
+              <ListFilter className="mx-[5px] ml-0.5 flex-none" size={15} aria-hidden="true" />
+              {FILTERS.map((item) => (
+                <button
+                  key={item.key}
+                  className={classes(
+                    "min-h-7 cursor-pointer rounded-[7px] border border-transparent bg-transparent px-2 text-[0.69rem] font-bold text-text-dim hover:bg-[rgb(255_255_255_/_3%)] hover:text-text-soft",
+                    filter === item.key &&
+                      "border-[rgb(128_163_207_/_17%)] bg-accent-soft text-accent",
+                  )}
+                  type="button"
+                  aria-pressed={filter === item.key}
+                  onClick={() => setFilter(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col gap-[7px] overflow-auto p-0.5 [scrollbar-color:#344252_transparent] [scrollbar-width:thin] max-[880px]:grid max-[880px]:grid-flow-col max-[880px]:auto-cols-[minmax(270px,64vw)] max-[880px]:overflow-x-auto max-[880px]:pb-[5px] max-[460px]:auto-cols-[minmax(260px,86vw)]">
+              {runsQuery.isPending && (
+                <PanelMessage
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Reading project"
+                  detail="Waiting for the daemon to return its run index."
+                />
+              )}
+              {runsQuery.isError && (
+                <PanelMessage
+                  icon={<Unplug />}
+                  title="Run list unavailable"
+                  detail={errorMessage(runsQuery.error)}
+                />
+              )}
+              {runsQuery.isSuccess && runs.length === 0 && (
+                <PanelMessage
+                  icon={<FlaskConical />}
+                  title="No runs yet"
+                  detail="Submitted experiments will appear here."
+                />
+              )}
+              {runsQuery.isSuccess && runs.length > 0 && filteredRuns.length === 0 && (
+                <PanelMessage
+                  icon={<Search />}
+                  title="No matching runs"
+                  detail="Try another status or search term."
+                />
+              )}
+              {filteredRuns.map((run) => (
+                <RunListItem
+                  key={run.runId}
+                  run={run}
+                  selected={run.runId === selectedRunId}
+                  onSelect={() => onSelectRun(run.runId)}
+                />
+              ))}
+              {olderRunsMutation.isError && (
+                <p className="mx-2 mt-1 mb-0 text-[0.67rem] leading-[1.45] text-red" role="status">
+                  {errorMessage(olderRunsMutation.error)}
+                </p>
+              )}
+              {runsQuery.isSuccess &&
+                runHeadCursor !== undefined &&
+                nextRunCursor !== undefined && (
+                  <div className="flex justify-center pt-[7px] pb-[3px]">
+                    <button
+                      className={classes(secondaryButton, "w-full")}
+                      type="button"
+                      disabled={olderRunsMutation.isPending}
+                      onClick={() =>
+                        olderRunsMutation.mutate({
+                          headCursor: runHeadCursor,
+                          before: nextRunCursor,
+                        })
+                      }
+                    >
+                      {olderRunsMutation.isPending ? (
+                        <LoaderCircle className="animate-spin" size={14} aria-hidden="true" />
+                      ) : (
+                        <ChevronRight size={14} aria-hidden="true" />
+                      )}
+                      {olderRunsMutation.isPending ? "Loading older runs…" : "Load older runs"}
+                    </button>
+                  </div>
+                )}
+            </div>
+          </aside>
+        )}
 
         <section
-          className="min-h-[620px] min-w-0 bg-panel p-[clamp(18px,2vw,26px)] max-[880px]:min-h-[580px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-3.5 max-[680px]:py-5"
+          className="min-h-[620px] min-w-0 bg-panel p-5 max-[880px]:min-h-[580px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-3.5 max-[680px]:py-5"
           aria-label="Selected run details"
         >
           {daemonUnavailable ? (
@@ -549,6 +573,7 @@ export function RunsWorkspace({
               measurements={measurements}
               measurementsError={measurementsQuery.error}
               measurementsPending={measurementsQuery.isPending}
+              liveMeasurementsError={liveMeasurementsQuery.error}
               measurementSlice={measurementSliceQuery.data}
               measurementSliceError={measurementSliceQuery.error}
               measurementSlicePending={measurementSliceQuery.isFetching}

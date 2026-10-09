@@ -478,6 +478,7 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
 
     const detail = page.getByRole("region", { name: "Selected run details" });
     const state = detail.getByTestId("run-status");
+    await detail.getByText("Execution diagnostics and provenance", { exact: true }).click();
     const timeline = detail.getByTestId("timeline-card");
     await expect(detail.getByRole("heading", { name: LIVE_DISPLAY_NAME })).toBeVisible();
     await expect(detail.getByText(LIVE_EXPERIMENT_ID, { exact: true })).toBeVisible();
@@ -500,11 +501,12 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
     await expect(dataCard.getByTestId("measurement-preview")).toBeVisible();
     await expect(dataCard.getByTestId("measurement-preview")).toContainText('"point_index": 0');
     // Daemon receipt makes the completed point visible before durable batching flushes it.
-    await expect(
-      detail.getByRole("progressbar", {
-        name: "1 of 15 points complete",
-      }),
-    ).toBeVisible();
+    await expect(detail.getByRole("region", { name: "Run progress" })).toContainText(
+      "Received records 1",
+    );
+    await expect(detail.getByRole("region", { name: "Run progress" })).toContainText(
+      "Saved records 0",
+    );
 
     await writeFile(experiment.releaseMeasurement, "", "utf8");
     const completion = await experiment.completion;

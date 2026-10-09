@@ -564,12 +564,10 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    expect(
-      await screen.findByRole("progressbar", {
-        name: "1 of 3 points complete",
-      }),
-    ).toBeVisible();
-    expect(screen.getByText("33%")).toBeVisible();
+    await screen.findByRole("region", { name: "Run progress" });
+    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
+    expect(await screen.findByText(/0 points have durable execution evidence/)).toBeVisible();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("shows adaptive coverage against its point limit", async () => {
@@ -608,16 +606,11 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    const progress = await screen.findByRole("progressbar", {
-      name: "2 of 4 points complete",
-    });
-    expect(progress).toBeVisible();
-    expect(progress.closest("article")).toHaveTextContent("2 / 3 points accepted · 4 max");
-    expect(progress.closest("article")).toHaveTextContent(
-      "Optimizer attempts 1 · operator requests 1 · plan open",
-    );
-    expect(screen.getByText("Initial / accepted / max points")).toBeVisible();
-    expect(screen.getByText("1 / 3 / 4")).toBeVisible();
+    const progress = await screen.findByRole("region", { name: "Run progress" });
+    expect(progress).toHaveTextContent("3 accepted points · plan open");
+    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
+    expect(await screen.findByText(/2 points have durable execution evidence/)).toBeVisible();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("keeps distinct records in one bounded measurement preview", async () => {
@@ -668,11 +661,17 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText(/^1 records/)).toBeVisible();
-    expect(screen.getByText(/visible from daemon memory and is not durable yet/)).toBeVisible();
-    expect(screen.getByRole("progressbar", { name: "1 of 3 points complete" })).toBeVisible();
+    expect(screen.getByText(/Latest daemon receipt: point 1; not saved yet/)).toBeVisible();
+    expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
+      "Received records 1",
+    );
+    expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
+      "Saved records 0",
+    );
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("resets the bounded measurement preview for the event's run", async () => {
+  it("refreshes the bounded measurement preview without closing its disclosure", async () => {
     window.history.replaceState(null, "", "/?run=run-1");
     vi.mocked(getMeasurementPreview).mockResolvedValue({
       items: [measurementRecord(0, 0)],
@@ -682,6 +681,8 @@ describe("config provenance navigation", () => {
     const queryClient = createQueryClient();
     renderApp(queryClient);
     await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByText("Raw records", { exact: true }));
+    expect(screen.getByTestId("measurement-preview")).toBeVisible();
     expect(projectEventListener).toBeDefined();
     queryClient.setQueryData(["measurements", "run-2"], {
       items: [measurementRecord(9, 9)],
@@ -695,15 +696,18 @@ describe("config provenance navigation", () => {
       emitProjectEvent("run-2", "measurement_dataset_initialized");
     });
     await waitFor(() =>
-      expect(queryClient.getQueryData(["measurements", "run-2"])).toBeUndefined(),
+      expect(queryClient.getQueryState(["measurements", "run-2"])?.isInvalidated).toBe(true),
     );
-    expect(queryClient.getQueryData(["measurement-trace", "run-2", "trace", "{}"])).toBeUndefined();
+    expect(
+      queryClient.getQueryState(["measurement-trace", "run-2", "trace", "{}"])?.isInvalidated,
+    ).toBe(true);
     expect(getMeasurementPreview).toHaveBeenCalledTimes(1);
 
     act(() => {
       emitProjectEvent("run-1", "measurements_sealed");
     });
     await waitFor(() => expect(getMeasurementPreview).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("measurement-preview")).toBeVisible();
     expect(vi.mocked(getMeasurementPreview).mock.calls.map(([runId]) => runId)).toEqual([
       "run-1",
       "run-1",
@@ -810,6 +814,7 @@ describe("config provenance navigation", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     renderApp(queryClient);
 
+    fireEvent.click(await screen.findByText("Execution diagnostics and provenance"));
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     await waitFor(() => expect(openEventListener).toBeDefined());
     const initialCounts = canonicalQueryCallCounts();
@@ -846,6 +851,7 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
+    fireEvent.click(await screen.findByText("Execution diagnostics and provenance"));
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     expect(
       screen.getByText("Showing the latest 500 events; older events are not loaded."),
