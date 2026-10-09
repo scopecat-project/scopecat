@@ -3,7 +3,11 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
+import {
+  chooseReferenceContext,
+  prepareReferenceContexts,
+  reviewRetainedExperiment,
+} from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -78,19 +82,41 @@ test("two workbench pages retain independent context and share collection number
     await page.goto(`${url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseReferenceContext(page);
+    await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("");
+    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+      "operator",
+    );
     await page.getByRole("button", { name: "Browse samples, batches and collections" }).click();
     await page.getByLabel("Registered sample", { exact: true }).selectOption("chip-a");
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("Alice");
     const batchA = await createScope(page, "batch", "Cooldown A");
     const collection = await createScope(page, "collection", "Shared measurements");
+    // Finish A's explicit experiment round trip before another page edits the shared draft.
+    await page
+      .getByLabel("Experiment", { exact: true })
+      .selectOption("reference_lab.frequency_amplitude");
+    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
+    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
+    await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
+    await expect(page.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
+    await reviewRetainedExperiment(page);
+    await expect(
+      page.getByText("Experiment input saved in application data.", { exact: true }),
+    ).toBeVisible();
     const other = await context.newPage();
     await other.goto(`${url}/#launch`);
     await other.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await chooseReferenceContext(other, "browser-bench-b");
-    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("");
+    // New windows recover the saved experiment; no acquisition is authorized by recovery.
+    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(other.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
-      "operator",
+      "Alice",
     );
+    await expect(
+      other.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    await reviewRetainedExperiment(other);
+    await chooseReferenceContext(other, "browser-bench-b");
     await other.getByRole("button", { name: "Browse samples, batches and collections" }).click();
     await other.getByLabel("Registered sample", { exact: true }).selectOption("chip-b");
     await other.getByRole("textbox", { name: "Operator", exact: true }).fill("Bob");
@@ -115,14 +141,6 @@ test("two workbench pages retain independent context and share collection number
     await expect(other.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Bob");
     await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-b");
     await practice.close();
-    await page
-      .getByLabel("Experiment", { exact: true })
-      .selectOption("reference_lab.frequency_amplitude");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
-    await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
-    await expect(page.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
     const preparedA = await preview(page);
     const resolvedA = await (
       await page.request.get(
@@ -137,6 +155,11 @@ test("two workbench pages retain independent context and share collection number
     await page.getByLabel("Plan name", { exact: true }).fill("First batch recipe");
     await page.getByRole("button", { name: "Save plan", exact: true }).click();
     await expect(page.getByText(/Saved First batch recipe, revision 1/)).toBeVisible();
+    const conflictA = page.getByRole("region", { name: "Conflicting experiment input" });
+    await expect(conflictA).toContainText("Bob");
+    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await conflictA.getByRole("button", { name: "Keep my copy after review" }).click();
+    await expect(conflictA).toBeHidden();
     await page.getByLabel("Record collection", { exact: true }).selectOption("");
     const reopened = page.waitForRequest(
       (r) => r.url().endsWith("/experiment-launcher/preview") && r.method() === "POST",
@@ -170,6 +193,11 @@ test("two workbench pages retain independent context and share collection number
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
+    const conflictB = other.getByRole("region", { name: "Conflicting experiment input" });
+    await expect(conflictB).toContainText("Alice");
+    await expect(other.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await conflictB.getByRole("button", { name: "Keep my copy after review" }).click();
+    await expect(conflictB).toBeHidden();
     const preparedB = await preview(other);
     const resolvedB = await (
       await other.request.get(

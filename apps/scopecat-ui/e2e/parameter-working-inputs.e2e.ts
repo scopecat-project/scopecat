@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { expect, test, type Page } from "@playwright/test";
-import { prepareReferenceContexts } from "./reference-context";
+import { prepareReferenceContexts, reviewRetainedExperiment } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]) {
@@ -169,10 +169,33 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       .click();
     await editor.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await editor.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+    await reviewRetainedExperiment(editor);
+    await expect(editor.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
+    await expect(editor.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "Use current working inputs", exact: true }).click();
+    await expect(
+      editor.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
     await preview(editor);
     const procedureC = await submit(editor);
     const runC = await retainedRun(editor);
     expect(runC).not.toBe(runB);
+    uv([
+      "python",
+      "-c",
+      `
+import sys
+import scopecat as sc
+with sc.open_project(sys.argv[1]).connect() as lab:
+    for run_id, frequency in ((sys.argv[2], 5.3), (sys.argv[3], 5.4)):
+        run = lab.get_run(run_id)
+        value = run.config.parameter_snapshot.get('qubits').rows[0]['drive_carrier_frequency']
+        assert value.to('GHz') == sc.Quantity(frequency, 'GHz'), (run_id, value)
+`,
+      home,
+      runB,
+      runC,
+    ]);
     await editor.getByRole("link", { name: /^Open retained run:/ }).click();
     await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
     await work.getByRole("button", { name: "Configuration", exact: true }).click();

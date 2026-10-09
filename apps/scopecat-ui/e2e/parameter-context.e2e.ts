@@ -155,6 +155,20 @@ for (const scoped of [false, true]) {
           await batch.selectOption(`cooldown-${sample}`);
           await expect(batch).toHaveValue(`cooldown-${sample}`);
         }
+        if (index > 0) {
+          await expect(
+            page.getByRole("heading", { name: "Submission confirmed", exact: true }),
+          ).toBeVisible();
+          await expect(
+            page.getByRole("button", { name: "Start acquisition", exact: true }),
+          ).toBeDisabled();
+          await page
+            .getByRole("button", { name: "Prepare a new run (separate acquisition)", exact: true })
+            .click();
+          await expect(
+            page.getByRole("button", { name: "Start acquisition", exact: true }),
+          ).toBeDisabled();
+        }
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
         );

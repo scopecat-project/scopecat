@@ -4,7 +4,11 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
+import {
+  chooseReferenceContext,
+  prepareReferenceContexts,
+  reviewRetainedExperiment,
+} from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
@@ -157,6 +161,10 @@ retainedProcedureTest(
       await page.goto(`${endpoint.base_url}/#launch`);
       await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
       await chooseReferenceContext(page);
+      await reviewRetainedExperiment(page);
+      await expect(
+        page.getByRole("button", { name: "Start acquisition", exact: true }),
+      ).toBeDisabled();
       await page.getByRole("button", { name: "Preview", exact: true }).click();
       await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
       const sourceScope = page.getByRole("region", { name: "Selected-configuration source run" });
@@ -429,8 +437,15 @@ test("reopens a lost launch receipt after context changes without a second submi
       .getByRole("navigation", { name: "Project sections" })
       .getByRole("button", { name: "Experiments", exact: true })
       .click();
-    await expect(page.getByText(/Experiment revision changed/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Retry original submission" })).toBeDisabled();
+    await expect(
+      page.getByRole("region", { name: "Review recovered experiment", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    // Recovery reads the original receipt without reviewing or resubmitting the changed draft.
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Retry original submission" })).toHaveCount(0);
     await page.getByRole("button", { name: "Check original submission" }).click();
     await page.getByRole("button", { name: "Open submitted procedure" }).click();
     await expect(page).toHaveURL(new RegExp(`procedure=${originalId}`));
