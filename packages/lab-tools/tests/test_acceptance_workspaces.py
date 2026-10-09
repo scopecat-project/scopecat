@@ -372,3 +372,46 @@ def test_native_sequence_refuses_unverified_cleanup(tmp_path, monkeypatch, recei
     assert sequence["windows"]["exit_code"] == 7
     assert sequence["reset"]["status"] == "not-run"
     assert "cleanup" in sequence["reset"]["reason"]
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        {},
+        {"result": "passed"},
+        {"result": "passed", "application_checks": None},
+        {"result": "passed", "application_checks": {"result": "incomplete"}},
+        {"result": "incomplete", "application_checks": {"result": "passed"}},
+    ],
+)
+def test_teaching_delivery_requires_same_invocation_application_checks(
+    tmp_path, monkeypatch, receipt
+):
+    import json
+
+    delivery = load_script("verify_teaching_delivery")
+    calls = []
+
+    def incomplete_help(command, **kwargs):
+        calls.append(command)
+        work = Path(command[-1])
+        work.mkdir()
+        (work / "acceptance.json").write_text(json.dumps(receipt))
+
+    monkeypatch.setattr(delivery.subprocess, "run", incomplete_help)
+    destination = tmp_path / "evidence"
+    with pytest.raises(RuntimeError, match="must pass in this Help invocation"):
+        delivery.verify(tmp_path / "payload", destination)
+    assert len(calls) == 1
+    assert json.loads((destination / "help/acceptance.json").read_text()) == receipt
+
+
+def test_incomplete_help_receipt_is_retained_by_installed_upload():
+    workflow = (
+        Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
+    ).read_text()
+    upload = workflow.split(
+        "      - name: Retain tutorial delivery and executed notebooks\n", 1
+    )[1].split("  docs:\n", 1)[0]
+    assert "        if: always()\n" in upload
+    assert "dist/tutorial-evidence/**/acceptance.json" in upload

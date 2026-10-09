@@ -95,10 +95,19 @@ regression coverage is not a permanent product commitment.
 | `public_cli.init --topic`, `cli create`, teaching journey tests | `lab_tools.project.create_project` / `lab_teaching.project.create_project`: fresh standalone scaffold, with installation identity added by the tools wrapper | Help creates a registered source through `notebook_journey.create_lesson_source`, not this standalone scaffold. |
 | Generated `.vscode/tasks.json` | `lab_tools.cli prepare/start/open/stop`: install the project environment, explicitly operate its service and open its GUI | Retained for standalone folders. Help generates no service tasks and cannot Continue an unregistered standalone project. |
 | `environment.prepare_project` | `cli check`: validate installed source identity and teaching-project admission after preparation | Retained; same-application source registration is a different admission path. |
-| `acceptance.yml` → `scripts/verify_teaching_delivery.py` | Installed Help/grouped recovery first, then `verify_project(groups=False)` for the default course; the script also executes the generated prepare task and rejects the wrong kernel | Only same-invocation grouped acquisition/recovery is replaced. Default-course recovery, editor-task and installed-application checks remain; direct `cli verify` still runs its complete standalone check. |
+| `acceptance.yml` → `scripts/verify_teaching_delivery.py` | Installed Help first checks the empty workbench, real practice cleanup and runtime requalification, then lessons/grouped recovery; `verify_project(groups=False)` retains the default course, generated prepare task and wrong-kernel guard | The carrier requires the same invocation’s successful application-check receipt. The separate installed-application wrapper is retired; default-course recovery and editor-task checks remain, and direct `cli verify` still runs its complete standalone check. |
 | `verify.py`, `verify_maintenance.py`, editing/grouping/calibration journey tests | `verify_editing`, `verify_groups`, maintenance helpers: execute shipped cells and check exact retained results after reopening | Live verifier dependencies, not extra user teaching entries. |
 | `lab-tools/pyproject.toml` | `scopecat-lab` console → `lab_tools.cli.main`; generated tasks use the same module directly | The console is documented in the standalone default README. Removing it is not justified by module-based CI alone. |
 | Desktop Help → `notebook_journey.prepare` | Shared lesson resources, client/execution environments and registration in the current application | Help owns its receipts and Continue behavior; it does not adopt the standalone service or its data. |
+
+The installed Help application validates an empty workbench both before practice
+and after runtime requalification, before any lesson acquires data. Practice uses
+the verified installation cache; the subsequent restart switches to a still-empty
+author cache, and snapshot recovery keeps its separate cold cache. A dedicated
+registered scaffold and notes retain exact file hashes and source identity through
+requalification and the Help restart. Partial `help/acceptance.json` receipts are
+written on failure and retained by the existing always-upload step; incomplete
+checks cannot authorize omission of the former standalone application carrier.
 
 The standalone path remains a maintainer fixture and compatibility call path
 with existing generated-project consumers, not a commitment to a second teaching
