@@ -23,11 +23,11 @@ import json, sys
 import scopecat as sc
 project=sc.open_project(sys.argv[1])
 project.load_application()
-from reference_lab_authors.frequency_amplitude import frequency_amplitude, FREQUENCY, AMPLITUDE
-from reference_lab.notebook import gallery_inputs
+from ui_signal.signal import signal, FREQUENCY, AMPLITUDE
+from ui_signal.application import save_inputs
 with project.connect() as lab:
-    inputs = gallery_inputs(lab)
-    runs=[lab.run(frequency_amplitude.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(v,"GHz") for v in (4.6,4.7,4.8,4.9,5.0)])).with_axis(sc.axis(AMPLITUDE.ref,[sc.Quantity(a,"V")])), config=inputs) for a in (.1,.08)]
+    inputs = save_inputs(lab)
+    runs=[lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(v,"GHz") for v in (4.6,4.7,4.8,4.9,5.0)])).with_axis(sc.axis(AMPLITUDE.ref,[sc.Quantity(a,"V")])), config=inputs) for a in (.1,.08)]
     print(json.dumps([r.id for r in runs]))
 `;
 test("compares retained signals, saves independent results and imports a reviewed suggestion without acquisition", async ({
@@ -39,8 +39,8 @@ test("compares retained signals, saves independent results and imports a reviewe
   const project = await mkdtemp(join(tmpdir(), "scopecat-comparison-e2e-"));
   let passed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+    for (const name of ["src", "scopecat.toml"])
+      await cp(join("e2e/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
@@ -67,7 +67,7 @@ test("compares retained signals, saves independent results and imports a reviewe
     await expect(
       page.getByRole("button", { name: "Create explicit candidate", exact: true }),
     ).toBeVisible();
-    const modelPath = join(project, "src/reference_lab_authors/authored/comparison.py");
+    const modelPath = join(project, "src/ui_signal/model.py");
     const source = await readFile(modelPath, "utf8");
     await writeFile(
       modelPath,
@@ -116,9 +116,7 @@ test("compares retained signals, saves independent results and imports a reviewe
     ).toBeVisible();
     await page.locator("aside button").filter({ hasText: candidate.analysis_id }).click();
     await action("Import suggested inputs into Launch");
-    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(
-      "reference_lab.frequency_amplitude",
-    );
+    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ui_signal.signal");
     expect(
       Math.abs(Number(await page.getByLabel("Frequency", { exact: true }).inputValue()) - 4.8),
     ).toBeLessThan(0.02);
