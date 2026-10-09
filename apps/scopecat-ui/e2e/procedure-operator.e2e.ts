@@ -154,6 +154,44 @@ retainedProcedureTest(
       const runScreenshot = testInfo.outputPath("operator-retained-run.png");
       await page.screenshot({ path: runScreenshot, fullPage: true });
       await testInfo.attach("Retained run", { path: runScreenshot, contentType: "image/png" });
+      // Reuse the retained acquisition for the generic procedure → analysis link.
+      const runId = new URL(page.url()).searchParams.get("run")!;
+      const analyzed = JSON.parse(
+        uv([
+          "python",
+          "-c",
+          `
+import json, sys
+import scopecat as sc
+from scopecat.automation import RunOutputRef
+with sc.open_project(sys.argv[1]).connect() as lab:
+    from reference_lab.workflows.analysis_recovery import (
+        RetainedTemperatureIntent, recovered_temperature_analysis,
+    )
+    handle = lab.procedures.submit(
+        recovered_temperature_analysis,
+        RetainedTemperatureIntent(run=RunOutputRef(run_id=sys.argv[2])),
+        request_key="browser-analysis-link",
+    ).resume()
+    output = handle.output("summary")
+    assert output.kind == "analysis"
+    print(json.dumps({"procedure": handle.id, "analysis": output.analysis_record_id}))
+`,
+          project,
+          runId,
+        ]),
+      ) as { procedure: string; analysis: string };
+      await page.goto(`${endpoint.base_url}/?procedure=${analyzed.procedure}#launch`);
+      const analysisLink = page.getByRole("link", { name: "Open analysis", exact: true });
+      await expect(analysisLink).toHaveAttribute(
+        "href",
+        `?procedure=${analyzed.procedure}&run-analysis=${analyzed.analysis}&run=${runId}#runs`,
+      );
+      await analysisLink.click();
+      await expect(
+        page.getByRole("heading", { name: "Retained temperature summary", exact: true }),
+      ).toBeVisible();
+      expect(new URL(page.url()).searchParams.get("procedure")).toBe(analyzed.procedure);
     } catch (error) {
       // Capture the live failure before fixture teardown stops the daemon.
       const url = new URL(page.url());
