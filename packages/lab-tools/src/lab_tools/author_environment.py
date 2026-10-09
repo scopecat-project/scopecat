@@ -106,7 +106,9 @@ def create_client_environment(
         )
         python = environment_python(environment)
         _run([str(python), "-m", "ensurepip"])
-    except Exception:
+    except BaseException:
+        # Cancellation must not leave a partial interpreter available for reuse.
+        # Restore the user's previous environment before propagating the interrupt.
         if environment.exists():
             environment.rename(workspace / f".venv-failed-{uuid4().hex}")
         if previous is not None:

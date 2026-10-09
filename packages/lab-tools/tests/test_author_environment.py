@@ -1,4 +1,4 @@
-"""Execution receipts preserve full identity while native paths stay compact."""
+"""Author preparation preserves retry, retained environments and full identity."""
 
 import json
 import threading
@@ -10,6 +10,68 @@ from unittest.mock import Mock
 import pytest
 
 from lab_tools import author_environment as environments
+
+
+@pytest.mark.parametrize("rebuild", [False, True])
+@pytest.mark.parametrize("stage", ["install", "ensurepip"])
+@pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
+def test_interrupted_client_preparation_preserves_retry(
+    tmp_path, monkeypatch, rebuild, stage, failure
+):
+    workspace = tmp_path / "authors"
+    workspace.mkdir()
+    source = workspace / "experiment.py"
+    source.write_text("# authored source\n")
+    python = environments.environment_python(workspace / ".venv")
+    if rebuild:
+        python.parent.mkdir(parents=True)
+        python.write_bytes(b"original interpreter")
+    runtime = Mock()
+    monkeypatch.setattr(environments, "_bundle", lambda _: tmp_path)
+    monkeypatch.setattr(environments, "_independent_python", lambda *_: Path("base"))
+    interrupted = failure("preparation interrupted")
+
+    def install(*args, **kwargs):
+        python.parent.mkdir(parents=True)
+        python.write_bytes(b"candidate interpreter")
+        if stage == "install":
+            raise interrupted
+
+    installer = Mock(side_effect=install)
+    monkeypatch.setattr(environments, "install_bundle", installer)
+    ensurepip = Mock(side_effect=interrupted if stage == "ensurepip" else None)
+    monkeypatch.setattr(environments, "_run", ensurepip)
+
+    with pytest.raises(failure, match="preparation interrupted") as raised:
+        environments.create_client_environment(runtime, workspace, rebuild=rebuild)
+    assert raised.value is interrupted
+    assert source.read_text() == "# authored source\n"
+    assert not (workspace / "pyproject.toml").exists()
+    failed = list(workspace.glob(".venv-failed-*"))
+    assert len(failed) == 1
+    assert (
+        environments.environment_python(failed[0]).read_bytes()
+        == b"candidate interpreter"
+    )
+    assert not list(workspace.glob(".venv-retained-*"))
+
+    if rebuild:
+        assert python.read_bytes() == b"original interpreter"
+        assert environments.create_client_environment(runtime, workspace) == python
+        assert installer.call_count == 1
+    else:
+        assert not python.exists()
+
+    stage = "complete"
+    ensurepip.side_effect = None
+    assert (
+        environments.create_client_environment(runtime, workspace, rebuild=rebuild)
+        == python
+    )
+    assert installer.call_count == 2
+    assert python.read_bytes() == b"candidate interpreter"
+    assert source.read_text() == "# authored source\n"
+    assert (workspace / "pyproject.toml").is_file()
 
 
 @pytest.fixture
@@ -62,13 +124,14 @@ def test_short_candidates_reuse_full_identity_receipts(preparation):
     assert sum("install" in command for command in calls) == 1
 
 
-def test_failed_candidate_preserves_other_environments(preparation):
+@pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
+def test_failed_candidate_preserves_other_environments(preparation, failure):
     runtime, source, _, capture = preparation
     retained = runtime.home / "environments/e-retained/runtime"
     retained.mkdir(parents=True)
     (retained / "keep").write_text("existing environment")
-    capture.side_effect = ValueError("capture failed")
-    with pytest.raises(ValueError, match="capture failed"):
+    capture.side_effect = failure("capture failed")
+    with pytest.raises(failure, match="capture failed"):
         environments.prepare_execution_environment(runtime, source)
     assert (retained / "keep").read_text() == "existing environment"
     assert list((runtime.home / "environments").glob("e-*")) == [retained.parent]
