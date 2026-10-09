@@ -25,7 +25,6 @@ from scopecat.sdk.instruments.declarations import (
 from reference_lab.payloads import (
     AWG_PROGRAM_SCHEMA_ID,
     DIGITIZER_PROGRAM_SCHEMA_ID,
-    SAMPLED_WAVEFORM_SCHEMA_ID,
     TRIGGER_PROGRAM_SCHEMA_ID,
 )
 
@@ -86,19 +85,6 @@ class AnalogWaveformOutputInterface(Protocol):
         access="read_write",
         label="Output enabled",
     )
-
-    @operation(label="Play waveform")
-    def play(
-        self,
-        *,
-        waveform: Annotated[
-            object,
-            argument(
-                payload_schema_id=SAMPLED_WAVEFORM_SCHEMA_ID,
-                label="Sampled waveform",
-            ),
-        ],
-    ) -> None: ...
 
     @operation(
         label="Reset output settings",
@@ -246,12 +232,6 @@ ANALOG_WAVEFORM_OUTPUT_OFFSET = declared_property_ref(
 )
 ANALOG_WAVEFORM_OUTPUT_ENABLED = declared_property_ref(
     AnalogWaveformOutputInterface, "output_enabled"
-)
-ANALOG_WAVEFORM_OUTPUT_PLAY = declared_operation_ref(
-    AnalogWaveformOutputInterface, "play"
-)
-ANALOG_WAVEFORM_OUTPUT_WAVEFORM = declared_argument_ref(
-    AnalogWaveformOutputInterface, "play", "waveform"
 )
 ANALOG_WAVEFORM_OUTPUT_RESET = declared_operation_ref(
     AnalogWaveformOutputInterface, "reset"

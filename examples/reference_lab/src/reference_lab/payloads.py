@@ -18,7 +18,6 @@ from scopecat.sdk.structured_payloads import (
 
 from reference_lab.virtual_lab.capture_payload import VIRTUAL_CAPTURE_QUEUE_PAYLOAD
 
-SAMPLED_WAVEFORM_SCHEMA_ID = "sampled_waveform"
 AWG_PROGRAM_SCHEMA_ID = "reference_lab.awg_program.v4"
 DIGITIZER_PROGRAM_SCHEMA_ID = "reference_lab.digitizer_program.v1"
 TRIGGER_PROGRAM_SCHEMA_ID = "reference_lab.trigger_program.v1"
@@ -31,10 +30,6 @@ class _PayloadDocument(BaseModel):
         frozen=True,
         strict=True,
     )
-
-
-class SampledWaveformDocument(_PayloadDocument):
-    samples: Annotated[FrozenFloat64Vector, Field(min_length=1)]
 
 
 class AwgChannelWaveformDocument(_PayloadDocument):
@@ -173,10 +168,6 @@ class TriggerProgramDocument(_PayloadDocument):
     entries: tuple[TriggerProgramEntryDocument, ...] = Field(min_length=1)
 
 
-SAMPLED_WAVEFORM_PAYLOAD = PayloadContract(
-    schema_id=SAMPLED_WAVEFORM_SCHEMA_ID,
-    codec=pydantic_buffer_bundle_codec(SampledWaveformDocument),
-)
 AWG_PROGRAM_PAYLOAD = PayloadContract(
     schema_id=AWG_PROGRAM_SCHEMA_ID,
     codec=pydantic_buffer_bundle_codec(
@@ -195,7 +186,6 @@ TRIGGER_PROGRAM_PAYLOAD = PayloadContract(
 
 def reference_lab_payload_codecs() -> PayloadCodecRegistry:
     return PayloadCodecRegistry.from_contracts(
-        SAMPLED_WAVEFORM_PAYLOAD,
         AWG_PROGRAM_PAYLOAD,
         DIGITIZER_PROGRAM_PAYLOAD,
         TRIGGER_PROGRAM_PAYLOAD,
@@ -292,8 +282,6 @@ __all__ = [
     "AWG_PROGRAM_SCHEMA_ID",
     "DIGITIZER_PROGRAM_PAYLOAD",
     "DIGITIZER_PROGRAM_SCHEMA_ID",
-    "SAMPLED_WAVEFORM_PAYLOAD",
-    "SAMPLED_WAVEFORM_SCHEMA_ID",
     "TRIGGER_PROGRAM_PAYLOAD",
     "TRIGGER_PROGRAM_SCHEMA_ID",
     "AwgChannelWaveformDocument",
@@ -308,7 +296,6 @@ __all__ = [
     "MaterializedAwgProgramDocument",
     "PhaseSynthesizedAwgEntryDocument",
     "PhaseSynthesizedAwgProgramDocument",
-    "SampledWaveformDocument",
     "TriggerProgramDocument",
     "TriggerProgramEntryDocument",
     "materialize_awg_program",
