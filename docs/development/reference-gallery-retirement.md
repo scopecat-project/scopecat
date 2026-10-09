@@ -25,9 +25,9 @@ otherwise. These are current owners, not a commitment to keep every fixture.
 | Ramsey, raw IQ, signed IF/LO and compilation | `test_quantum_composition.py`, `unit/test_quantum_runner.py` and `unit/test_list_mode_*` retain host ordering, point-local routes, physical buffers, multiplexed acquisition, shared claims, bounded chunks and numerical entity correspondence. Shared acceptance checks independent-channel availability and HTTP traces. |
 | DRAG candidate → independent verification → adoption | `test_typed_candidates.py` retains simulated device acquisition, numerical fit/report, exact candidate lineage, explicit branch publication and accepted-gate execution. Verification does not mutate defaults or setup. |
 | Joint calibration and recovery | The same candidate tests retain target-complete joint remeasurement, rejection, stale destinations, restart and lost-response replay. Server branch/analysis tests own atomic publication, conflicts and current-format recovery. |
-| Live/offline grouped analysis | `test_grouped_analysis.py` and `test_live_group_traces.py` retain grouped analysis, live traces and reopening. Core dataset tests own generic grouping, availability and selection. |
+| Live/offline grouped analysis | Server `author_journeys/test_grouping.py` and reference `test_live_group_traces.py` retain grouped analysis, live traces and reopening. Core dataset tests own generic grouping, availability and selection. |
 | Compare results → next experiment | `test_comparison.py` and `test_experiment_plans.py` retain exact source inputs, candidate rejection, saved plans and handoff. Pure compute/UI presentation can use smaller fixtures. |
-| Author edits and reopening | `test_author_refresh.py`, `test_typed_author_refresh.py` and managed-author tests retain admitted source and independent contexts across edits/restart. Shipped Help lessons own the learning experience. |
+| Author edits and reopening | `test_author_refresh.py`, server `author_journeys/test_typed_author_refresh.py` and managed-author tests retain admitted source and independent contexts across edits/restart. Shipped Help lessons own the learning experience. |
 
 These eight groups describe the remaining review surface, not eight promises to
 preserve every old scenario. Keep stable user goals and scientific/data semantics

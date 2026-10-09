@@ -40,7 +40,7 @@ test("compares retained signals, saves independent results and imports a reviewe
   let passed = false;
   try {
     for (const name of ["src", "scopecat.toml"])
-      await cp(join("e2e/fixtures/retained-signal", name), join(project, name), {
+      await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);

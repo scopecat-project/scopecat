@@ -207,7 +207,7 @@ serves the DRAG candidate fixture. Keep process ownership explicit when adding t
 
 The retained-data UI journeys `run-comparison.e2e.ts` and
 `copy-read-only-code.e2e.ts` use their own device-free author workspace under
-`apps/scopecat-ui/e2e/fixtures/retained-signal`. One signal parameter replaces the
+`testing/fixtures/retained-signal`. One signal parameter replaces the
 four-qubit configuration. Real workers retain comparison/source refresh, candidate
 rejection and input handoff; a fresh kernel reopens exact old publications without
 importing author code or acquiring again. The former `gallery_inputs` helper has
@@ -293,19 +293,24 @@ Scientific choices (frequency, amplitude, timing, point/shot shape and retained
 products) remain visible to the author. Worker leases, compiler IR and SDK buffers
 are supporting diagnostics for the same frozen plan and data.
 
-`reference_lab/workflows/exploratory_signal.py` and `reference_lab/exploration.py`
-provide four analytic runs: two synthetic samples with local `q0`, each in parked
-and shifted contexts. Known carrier values are fixture inputs, not discovered
-calibration. `tests/test_exploration.py` checks retained identities, independent
-analysis over the same data, missing-input rejection and reconnection. Context
-labels describe provenance; they do not resolve parameters or prove validity.
-Source refresh and transitive source retention are separately covered by the
-[author revision journey](../how-to/refresh-author-code.md).
+`testing/fixtures/retained-signal` is a device-free author project shared by
+retained-data UI checks, generic author benchmarks and server author journeys.
+Its synthetic response and explicit parameter revision support ordinary analysis,
+source edits, candidate verification, grouped publication and reopening. Known
+centers are fixture inputs, not discovered calibration.
 
-This fixture provides no instrument or physical evidence. Unknown-sample tests
-must expose a missing response instead of silently recentering on the fixture's
-known answer. Current user-facing outcomes are described in
-[workflow evaluations](workflow-evaluations.md).
+`packages/scopecat-server/tests/author_journeys` owns those analysis and recovery
+interactions, including typed scalar readback. Independent sample/parameter
+selection and frozen inputs are covered by server `test_independent_parameters.py`
+and the UI parameter-context journeys. `test_unknown_parameter_authoring.py`
+owns missing/unknown-cell consumption and schema history. These replace the
+retired four-case exploratory and everyday-author wrappers without making their
+historical scenario list a permanent contract. Scientific device integration,
+including live VNA groups and DRAG verification, stays in the reference fixture.
+
+This fixture provides no instrument or physical evidence. Context labels do not
+resolve parameters or prove validity; current user-facing outcomes are described
+in [workflow evaluations](workflow-evaluations.md).
 
 ## Historical planning records
 

@@ -113,43 +113,33 @@ connection after the submitting session closes.
 
 ## Shared executable scenario
 
-`reference_lab.everyday_author` supplies reusable known/missing parameter inputs
-and `acquire_everyday_author_inputs(lab)`. It uses the existing reference table,
-`exploration_config`, `exploratory_signal`, real admission and retained recording.
-It needs no hardware. The two acquired runs have the same five frequency points:
+`testing/fixtures/retained-signal` provides a device-free current author project
+with an explicit center parameter and an editable synthetic response. Its server
+journeys acquire a peaked and a flat response, retain ordinary analysis source
+and arguments across edits/restart, and verify candidate cells using independent
+measurements. Analysis reuses retained data without publishing shared defaults.
 
-- The peaked response has a known center at 4.8 GHz and gain 1. Selecting values
-  at least 0.5 produces one point with mean 1.
-- The flat response has gain 0. Acquisition completes, but the same analysis
-  rejects it because no values meet the selection. It is a deliberately useless
-  scientific input, not a simulated device failure.
-- The missing carrier prevents the consumer's preview. This baseline fixture
-  encodes it by an absent cell. `test_unknown_parameter_authoring.py` additionally covers
-  user-declared complete tables, visible `None`, unrelated/required consumers,
-  frozen edits and old-run readback after explicit schema changes.
-
-Run the current executable check from the repository root:
+Run the current executable checks from the repository root:
 
 ```sh
 uv sync --locked
-uv run pytest -n 0 examples/reference_lab/tests/test_everyday_author.py
+uv run pytest -n 0 packages/scopecat-server/tests/author_journeys
 ```
 
-The existing test fixture creates a fresh project and real daemon. The check
-previews known/missing inputs, retains both runs, analyzes success and failure,
-reopens the original data, and confirms no extra acquisition or shared-default
-publication occurs during analysis. Reuse these run identities and normal
-Dataset/publication APIs when extending coverage; do not replace them with a fake result
-registry. Synthetic resonance/selection is a contract fixture, not a validated
-physical calibration or a full fitting lesson.
+Missing inputs and unknown cells are owned by
+`packages/lab-tools/tests/test_unknown_parameter_authoring.py`; it covers complete
+tables, visible `None`, unrelated/required consumers, frozen edits and old-run
+readback after schema changes. These checks replace the old everyday/exploratory
+wrappers. Synthetic resonance is a contract fixture, not physical calibration or
+a full fitting lesson.
 
 The facade coverage now also includes:
 
 - `test_managed_author_session.py`: frozen workspace submission, fresh-process
   reopening and recovery from a lost response without duplicate acquisition.
-- `test_ordinary_analysis.py`: ordinary function results with retained source,
+- `author_journeys/test_analysis.py`: ordinary function results with retained source,
   arguments and restart behavior.
-- `test_typed_candidates.py`: cell proposals tied to analysis receipts and
+- `author_journeys/test_candidates.py`: cell proposals tied to analysis receipts and
   independent verification policies.
 - `test_branch_parameter_editor.py` and `test_dataclass_parameters.py`: durable edits,
   unknown cells, live typed views and bounded, escaped notebook representations.
@@ -157,7 +147,7 @@ The facade coverage now also includes:
   structure changes, keyboard edits retained across navigation, and a real
   Python→GUI→Python round-trip preserving units and untouched cell origins.
 
-These tests complement the baseline synthetic scenario; passing them does not
+These tests exercise the current author boundary; passing them does not
 establish novice usability or physical calibration performance.
 
 ## Implemented preview and novice evaluation

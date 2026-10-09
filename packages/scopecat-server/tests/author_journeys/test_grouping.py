@@ -12,36 +12,35 @@ from scopecat.api.capture import open_capture
 from scopecat.api.published_analysis import AnalysisGroupResult
 from scopecat.application.author_project import AuthorPreparedLaunch
 from scopecat.project import load_project
+from ui_signal.analysis import PeakResult
+from ui_signal.application import initial_parameters
+from ui_signal.ordinary import signal as signal_declaration
+from ui_signal.signal import SignalParameters
+
 from scopecat_server.lifecycle import start_project, stop_project
 
-from reference_lab.configuration import EXAMPLE_ROOT, initial_parameters
-from reference_lab.parameters import QubitParameters
-from reference_lab_authors.authored.ordinary_analysis import PeakResult
-from reference_lab_authors.authored.signal import signal as signal_declaration
-
-pytestmark = pytest.mark.usefixtures("reference_lab_author_imports")
+from .conftest import FIXTURE_ROOT
 
 
 def test_grouped_analysis_recovery_and_restart(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    select_reference_source: Callable[[Path], None],
+    select_author_source: Callable[[Path], None],
 ) -> None:
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     root = tmp_path / "groups"
     root.mkdir()
-    for name in ("src", "config"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    select_reference_source(root)
-    signal = root / "src/reference_lab_authors/authored/signal.py"
+    shutil.copytree(FIXTURE_ROOT / "src", root / "src")
+    shutil.copy2(FIXTURE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    select_author_source(root)
+    signal = root / "src/ui_signal/ordinary.py"
     signal.write_text(
         signal.read_text().replace(
             'sc.ControlSpec(title="Gain")',
             'sc.ControlSpec(title="Gain", scannable=True)',
         )
     )
-    source = root / "src/reference_lab_authors/authored/ordinary_analysis.py"
+    source = root / "src/ui_signal/analysis.py"
     source.write_text(
         source.read_text()
         + """
@@ -62,7 +61,7 @@ def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
     )
     project = load_project(root / "scopecat.toml")
     endpoint = start_project(project)
-    analysis = "reference_lab_authors.authored.ordinary_analysis:group_peak"
+    analysis = "ui_signal.analysis:group_peak"
     try:
         with project.authoring() as author:
             content = initial_parameters()
@@ -87,8 +86,8 @@ def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
                 .result()
             )
             draft = declaration().sweep_parameter(
-                QubitParameters.drive_carrier_frequency,
-                "q0",
+                SignalParameters.center,
+                "signal",
                 [4.8, 4.9, 5.0],
                 name="center",
             )

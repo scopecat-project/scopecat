@@ -91,7 +91,7 @@ def test_residency_record(
     monkeypatch.setattr(
         author_residency, "AuthorProject", MagicMock(return_value=author)
     )
-    monkeypatch.setattr(author_residency, "select_reference_context", MagicMock())
+    monkeypatch.setattr(author_residency, "select_author_context", MagicMock())
     monkeypatch.setattr(author_residency, "load_project", MagicMock())
     monkeypatch.setattr(author_residency, "start_project", MagicMock())
     monkeypatch.setattr(author_residency, "stop_project", stop)
@@ -110,7 +110,7 @@ def test_residency_record(
         "refresh": 2 * rounds,
         "virtual": 1,
     }
-    assert result["case_version"] == 3
+    assert result["case_version"] == 4
     assert len(cast("list[str]", result["revision_hashes"])) == 1 + 2 * rounds
     assert result["run_id"] == "retained-run"
     assert result["survivors"] == []
