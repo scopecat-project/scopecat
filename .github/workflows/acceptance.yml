@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   public-preview:
-    if: inputs.profile == 'public-preview'
+    if: inputs.profile == 'public-preview' && inputs.framework_run_id == ''
     permissions:
       contents: write
       actions: read

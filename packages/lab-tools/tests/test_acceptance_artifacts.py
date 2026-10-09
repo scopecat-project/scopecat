@@ -260,11 +260,24 @@ def test_workflow_selects_exact_profile_jobs(profile):
             continue
         condition = re.search(r"^    if: (.*)$", body, re.M)
         if condition:
-            terms = condition[1].split(" || ")
+            terms = [term.split(" && ") for term in condition[1].split(" || ")]
             assert all(
-                re.fullmatch(r"inputs.profile == '[\w-]+'", term) for term in terms
+                re.fullmatch(r"inputs.profile == '[\w-]+'", atom)
+                or atom == "inputs.framework_run_id == ''"
+                for term in terms
+                for atom in term
             )
-            enabled = any(term == f"inputs.profile == '{profile}'" for term in terms)
+            enabled = any(
+                all(
+                    atom
+                    in {
+                        f"inputs.profile == '{profile}'",
+                        "inputs.framework_run_id == ''",
+                    }
+                    for atom in term
+                )
+                for term in terms
+            )
         else:
             assert name == "browser-tests" and "    needs: ui\n" in body
             enabled = "UI" in selected
@@ -273,3 +286,13 @@ def test_workflow_selects_exact_profile_jobs(profile):
     assert selected == SELECTED[profile]
     assert "shard: [1, 2]" in jobs["browser-tests"]
     assert "--project=journey-${{ matrix.shard }}" in jobs["browser-tests"]
+
+
+def test_browser_reuse_input_cannot_start_publication():
+    workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
+    job = workflow.split("  public-preview:\n", 1)[1].split(
+        "  native-distribution:\n", 1
+    )[0]
+    assert job.startswith(
+        "    if: inputs.profile == 'public-preview' && inputs.framework_run_id == ''\n"
+    )
