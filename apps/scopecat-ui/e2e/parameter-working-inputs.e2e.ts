@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { expect, test, type Page } from "@playwright/test";
-import { prepareAuthorContexts, reviewRetainedExperiment } from "./author-context";
+import {
+  copyAuthorWorkspace,
+  prepareAuthorContexts,
+  reviewRetainedExperiment,
+} from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]) {

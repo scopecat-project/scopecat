@@ -57,6 +57,10 @@ test("saves, reopens, copies and submits an immutable plan without activating co
       (await (await page.request.get(`${endpoint}/api/v1/runs?limit=100`)).json()).items,
     ).toHaveLength(0);
     await page.reload();
+    // Opening a plan follows recovery of the page's author catalog and draft.
+    await expect(
+      page.getByRole("region", { name: "Review recovered experiment", exact: true }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Open Signal baseline r1", exact: true }).click();
     await expect(page.getByLabel("Plan name")).toHaveValue("Signal baseline");
     await expect(
