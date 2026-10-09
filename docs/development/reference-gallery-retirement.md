@@ -60,6 +60,14 @@ The scope device, monitor binding and scope-only interfaces are removed. Retaine
 AWG/digitizer/trigger participation, capture queues and non-scope receipts still
 have consumers. `pump-source` remains dynamically reachable through its catalog
 and route; its scientific need is an inventory question, not proof of dead code.
+The unused single-output `play(waveform)` protocol and its separate sampled-waveform
+codec are also retired. AWGs execute multi-channel programs through load/arm and
+the shared trigger; output reset remains a state-invalidation input. Existing
+payload, list-mode device-runtime, quantum-runner and worker-composition tests own
+buffer transport, trigger ordering, ambiguous-load failure, shared claims and
+reset recovery. Removing the old receipt-only branch does not replace these
+physical/compiler boundaries with compute-only evidence.
+
 The current source map is in the [reference lab README](https://github.com/scopecat-project/scopecat/blob/main/examples/reference_lab/README.md).
 
 ## Scientific and data limits

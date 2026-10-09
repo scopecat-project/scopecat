@@ -44,10 +44,8 @@ from reference_lab.bench_interfaces import (
     ANALOG_WAVEFORM_OUTPUT_AMPLITUDE,
     ANALOG_WAVEFORM_OUTPUT_ENABLED,
     ANALOG_WAVEFORM_OUTPUT_OFFSET,
-    ANALOG_WAVEFORM_OUTPUT_PLAY,
     ANALOG_WAVEFORM_OUTPUT_RESET,
     ANALOG_WAVEFORM_OUTPUT_SPEC,
-    ANALOG_WAVEFORM_OUTPUT_WAVEFORM,
     AWG_ARM_PROGRAM,
     AWG_LOAD_PROGRAM,
     AWG_PROGRAM,
@@ -78,7 +76,6 @@ from reference_lab.payloads import (
     AwgProgramDocument,
     DigitizerProgramDocument,
     MaterializedAwgProgramDocument,
-    SampledWaveformDocument,
     TriggerProgramDocument,
     materialize_awg_program,
 )
@@ -497,33 +494,7 @@ class VirtualAwg:
                 None,
                 metadata={"operation_id": ANALOG_WAVEFORM_OUTPUT_RESET.operation_id},
             )
-        waveform = cast(
-            "SampledWaveformDocument",
-            cast(
-                "DriverPayload",
-                request.arguments[ANALOG_WAVEFORM_OUTPUT_WAVEFORM.argument_id],
-            ).value,
-        )
-        emitted = cast(
-            "bool",
-            self._state[
-                _mount_property(ANALOG_WAVEFORM_OUTPUT_ENABLED, component_path)
-            ],
-        )
-        sample_rate = _quantity_value(self._state[AWG_SAMPLE_RATE], "Hz")
-        run_mode = cast("str", self._state[AWG_RUN_MODE])
-        return DriverSuccess(
-            None,
-            metadata={
-                "component_path": list(component_path),
-                "operation_id": ANALOG_WAVEFORM_OUTPUT_PLAY.operation_id,
-                "sample_count": len(waveform.samples),
-                "sample_rate_hz": sample_rate,
-                "output_enabled": emitted,
-                "run_mode": run_mode,
-                "signal_emitted": emitted,
-            },
-        )
+        raise ValueError(f"unsupported AWG operation {request.target.operation_id!r}")
 
     def collect(self, request: DriverAcquisition) -> DriverOutcome[DriverReadback]:
         del request
