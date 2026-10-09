@@ -58,20 +58,18 @@ and again in the normal planning/admission entry, including direct `.with_axis`
 and `.bind` edits. Validate per-axis bounds or extrema and cross-field rules;
 do not enumerate a Cartesian scan merely to validate it.
 
-The reference model limits its own plans to 64 points and limits amplitude to
-0.2 V when maximum detuning from the configured q0 carrier exceeds 0.25 GHz.
-These are reference-project constraints, not global framework scan limits. The
-carrier is read from the same accepted `qubits[q0]` field used by the compute
-node; maximum detuning is derived from that carrier and the edited frequency
-axis. Both values display their provenance. Their resolvers' values are
-normalized and checked against declared units/bounds before displaying them.
-They cannot be edited through the control interface.
+A configuration-owned control can read a value from the explicitly selected
+parameter revision; a derived control can compute an offset from that value and
+the edited axis. The shared `testing/fixtures/retained-signal` example uses one
+signal center for this purpose. Both values display their provenance. Resolver
+outputs are normalized and checked against declared units/bounds before display;
+they cannot be edited through the control interface. Project-specific limits are
+not global framework scan limits.
 
 For an ordinary one-experiment author path, the [discovery adapter](write-an-experiment.md)
-automatically supplies these launch projections and single-run execution. The
-reference frequency/amplitude experiment uses this path, including its custom
-control validator. Maintained multi-stage workflows can use the same helpers
-inside their explicit provider.
+automatically supplies these launch projections and single-run execution,
+including a declared control validator. Maintained multi-stage workflows can use
+the same helpers inside their explicit provider.
 
 ## How discovery uses the declaration
 
@@ -88,7 +86,7 @@ A `ControlEdit` chooses exactly one source: `fixed` plus `value`, `scan` plus an
 existing axis record, or `default` with neither. Unknown or owned fields are
 rejected. The common launch worker validates nonempty edits against the project
 catalog before calling its action; direct Python provider implementations must
-call `validate_launch_control_edits` as the reference provider does. Empty edits
+call `validate_launch_control_edits`. Empty edits
 retain the existing request hash for providers without controls.
 
 The GUI renders labels/groups, declared bounds, readonly ownership and resolved
@@ -96,7 +94,7 @@ provenance from these models. A source edit invalidates the old preview and
 submission hash. Switching linear units converts the active values; nonlinear
 or unknown units retain only their declared unit. The server remains the
 unit/constraint authority. No device or accepted configuration is modified by
-previewing the reference model.
+previewing an experiment.
 
 ## Keep a launch draft while inspecting the project
 
@@ -107,8 +105,8 @@ only while that console session is open; reloading the page clears it. **Reset
 launch draft** restores the selected declaration's defaults. Neither navigation
 nor restoration previews or submits work automatically.
 
-Input edits, changed declarations, and a confirmed configuration activation
-change invalidate the preview. A temporary failure to read configuration blocks
+Input edits, changed declarations, and changed parameter/setup revisions
+invalidate the preview. A temporary failure to read configuration blocks
 submission until the context can be verified without discarding retained inputs.
 
 If a submission response is lost, its original payload and request key remain

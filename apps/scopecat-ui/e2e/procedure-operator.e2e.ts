@@ -267,17 +267,15 @@ test("retains launch inputs across workspaces and invalidates previews without s
     expect(sample.status(), await sample.text()).toBe(201);
     prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page
-      .getByLabel("Experiment", { exact: true })
-      .selectOption("reference_lab.frequency_amplitude");
+    await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
     await chooseReferenceContext(page);
     await page.getByLabel("Sample ID").fill("sample-navigation");
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("draft-author");
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency unit").selectOption("MHz");
-    await page.getByLabel("Frequency start").fill("4700");
-    await page.getByLabel("Frequency stop").fill("4900");
-    await page.getByLabel("Frequency points").fill("3");
+    await page.getByLabel("Delay source").selectOption("range");
+    await page.getByLabel("Delay unit").selectOption("ns");
+    await page.getByLabel("Delay start").fill("16");
+    await page.getByLabel("Delay stop").fill("48");
+    await page.getByLabel("Delay points").fill("3");
     for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
@@ -287,23 +285,21 @@ test("retains launch inputs across workspaces and invalidates previews without s
         .getByRole("navigation", { name: "Project sections" })
         .getByRole("button", { name: "Experiments", exact: true })
         .click();
-      await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(
-        "reference_lab.frequency_amplitude",
-      );
+      await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
       await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
       await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
         "draft-author",
       );
-      await expect(page.getByLabel("Frequency source")).toHaveValue("range");
-      await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
-      await expect(page.getByLabel("Frequency start")).toHaveValue("4700");
-      await expect(page.getByLabel("Frequency stop")).toHaveValue("4900");
-      await expect(page.getByLabel("Frequency points")).toHaveValue("3");
+      await expect(page.getByLabel("Delay source")).toHaveValue("range");
+      await expect(page.getByLabel("Delay unit")).toHaveValue("ns");
+      await expect(page.getByLabel("Delay start")).toHaveValue("16");
+      await expect(page.getByLabel("Delay stop")).toHaveValue("48");
+      await expect(page.getByLabel("Delay points")).toHaveValue("3");
     }
     expect(submissions).toBe(0);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    await page.getByLabel("Frequency points").fill("2");
+    await page.getByLabel("Delay points").fill("2");
     await expect(page.getByText("Preview ready", { exact: true })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
     await page.getByRole("button", { name: "Preview", exact: true }).click();
@@ -319,7 +315,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
       contentType: "image/png",
     });
     await page.getByRole("button", { name: "Reset launch draft" }).click();
-    await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
+    await expect(page.getByLabel("Delay", { exact: true })).toHaveValue("48");
     await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
       "draft-author",

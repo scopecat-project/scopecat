@@ -586,6 +586,87 @@
     ],
     "truncated": false
   },
+  "controls_catalog": {
+    "code_revision": null,
+    "entries": [
+      {
+        "actions": [
+          "preview",
+          "submit"
+        ],
+        "configuration_effect": "none",
+        "controls": [
+          {
+            "default": {
+              "unit": "GHz",
+              "value": 4.8
+            },
+            "group": "",
+            "id": "frequency",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "editable",
+            "provenance": "Project default",
+            "scannable": true,
+            "title": "Frequency",
+            "unit": "GHz"
+          },
+          {
+            "default": {
+              "unit": "V",
+              "value": 0.1
+            },
+            "group": "",
+            "id": "amplitude",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "editable",
+            "provenance": "Project default",
+            "scannable": true,
+            "title": "Amplitude",
+            "unit": "V"
+          },
+          {
+            "default": null,
+            "group": "",
+            "id": "reference_frequency",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "configuration",
+            "provenance": "Explicit signal[signal].center",
+            "scannable": false,
+            "title": "Reviewed center",
+            "unit": "GHz"
+          },
+          {
+            "default": null,
+            "group": "",
+            "id": "maximum_detuning",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "derived",
+            "provenance": "Requested frequency offset from the reviewed center",
+            "scannable": false,
+            "title": "Maximum detuning",
+            "unit": "GHz"
+          }
+        ],
+        "description": "ui_signal.signal",
+        "id": "ui_signal.signal",
+        "kind": "diagnostic",
+        "request": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "signalInputs",
+          "type": "object"
+        },
+        "review": null,
+        "title": "signal",
+        "version": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "workspace_id": "acceptance-source"
+  },
   "controls_scalar": {
     "code_revision": {
       "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
@@ -630,7 +711,7 @@
           }
         },
         "id": "amplitude",
-        "provenance": "Matches declared default: Reference model low-amplitude default",
+        "provenance": "Matches declared default: Project default",
         "state": "fixed",
         "value": {
           "unit": "V",
@@ -640,7 +721,7 @@
       {
         "axis": null,
         "id": "reference_frequency",
-        "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+        "provenance": "Explicit signal[signal].center",
         "state": "configuration",
         "value": {
           "unit": "GHz",
@@ -650,7 +731,7 @@
       {
         "axis": null,
         "id": "maximum_detuning",
-        "provenance": "Maximum requested frequency offset from the reviewed carrier",
+        "provenance": "Requested frequency offset from the reviewed center",
         "state": "derived",
         "value": {
           "unit": "GHz",
@@ -659,7 +740,7 @@
       }
     ],
     "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "experiment_id": "reference_lab.frequency_amplitude",
+    "experiment_id": "ui_signal.signal",
     "inspection": {
       "binding_edges": [],
       "bindings": [
@@ -680,7 +761,7 @@
         {
           "captures": [],
           "demanded_by": [
-            "record:response"
+            "record:result"
           ],
           "deterministic": false,
           "id": "response",
@@ -688,7 +769,7 @@
           "inputs": [
             "frequency",
             "amplitude",
-            "reference"
+            "center"
           ],
           "outputs": [
             "response"
@@ -709,12 +790,12 @@
       "item_limit": 256,
       "parameters": [
         {
-          "column_id": "drive_carrier_frequency",
+          "column_id": "center",
           "key_columns": [
-            "qubit"
+            "id"
           ],
           "kind": "lookup",
-          "table_id": "qubits"
+          "table_id": "signal"
         }
       ],
       "point_limit": 1,
@@ -742,7 +823,7 @@
             "point"
           ],
           "dtype": "float64",
-          "id": "response",
+          "id": "result",
           "recording_group_id": null,
           "role": "observable",
           "shape": [
@@ -776,7 +857,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:0f1c8715973821d7a35b01dae4a8f02bcadf42f87be965316a1df9387c1b8302",
+        "config_source_hash": "sha256:de5a386f0dedcb726654c1c91d8ef760e5dacd0a406537f7c5dcb0a260e9c28a",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -787,7 +868,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+          "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -832,12 +913,12 @@
             "unit": "runs",
             "value": 1.0
           },
-          "experiment_id": "reference_lab.frequency_amplitude",
+          "experiment_id": "ui_signal.signal",
           "id": "experiment",
           "initial_proposed_points": 1,
           "inspections": [],
           "instrument_ids": [],
-          "label": "Frequency / amplitude model",
+          "label": "signal",
           "planned_setting_limit": 64,
           "planned_settings": [],
           "planned_settings_truncated": false,
@@ -854,7 +935,7 @@
                 "point"
               ],
               "dtype": "float64",
-              "id": "response",
+              "id": "result",
               "retention": "retained",
               "shape": [
                 1
@@ -875,8 +956,8 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:4ef1e624f317938cdb3b9f175c731de312ab9342999150173aa63b44feb89add",
-      "id": "scopecat.author:reference_lab.frequency_amplitude",
+      "fingerprint": "sha256:0ce89cedf1071d9b9494c6c9eaae2312cee55bf6f5b5def3b95c34a06024a2fc",
+      "id": "scopecat.author:ui_signal.signal",
       "version": "1"
     },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -885,29 +966,29 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+        "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "scenario": null,
-        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
+        "setup_content_hash": "sha256:211d91edff28682eeead29fa86bc9e1bda37a2b30f66fabeff80c74a274f8975",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+        "content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:a208747d2a60505d2f83e325b654823e776451764e0dbb2b3774fc49fd7fb909",
-          "revision_id": "acceptance-parameters"
+          "content_hash": "sha256:47e9927c4dd24ae4f7ceefad80184e10cd4cc03cc68fcabfefff25185bfa11c0",
+          "revision_id": "acceptance-controls"
         },
         "setup": {
-          "content_hash": "sha256:59bd3cb2a710307586085405c5aa6e73f2cd4987238910e12c5cba599e7a4ba0",
-          "revision_id": "resolved:59bd3cb2a710307586085405c5aa6e73f2cd4987238910e12c5cba599e7a4ba0"
+          "content_hash": "sha256:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4",
+          "revision_id": "resolved:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4"
         }
       }
     },
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
+    "summary": "ui_signal.signal",
     "workspace_id": "acceptance-source"
   },
   "controls_scan": {
@@ -963,7 +1044,7 @@
       {
         "axis": null,
         "id": "reference_frequency",
-        "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+        "provenance": "Explicit signal[signal].center",
         "state": "configuration",
         "value": {
           "unit": "GHz",
@@ -973,7 +1054,7 @@
       {
         "axis": null,
         "id": "maximum_detuning",
-        "provenance": "Maximum requested frequency offset from the reviewed carrier",
+        "provenance": "Requested frequency offset from the reviewed center",
         "state": "derived",
         "value": {
           "unit": "GHz",
@@ -982,7 +1063,7 @@
       }
     ],
     "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "experiment_id": "reference_lab.frequency_amplitude",
+    "experiment_id": "ui_signal.signal",
     "inspection": {
       "binding_edges": [],
       "bindings": [
@@ -1003,7 +1084,7 @@
         {
           "captures": [],
           "demanded_by": [
-            "record:response"
+            "record:result"
           ],
           "deterministic": false,
           "id": "response",
@@ -1011,7 +1092,7 @@
           "inputs": [
             "frequency",
             "amplitude",
-            "reference"
+            "center"
           ],
           "outputs": [
             "response"
@@ -1032,12 +1113,12 @@
       "item_limit": 256,
       "parameters": [
         {
-          "column_id": "drive_carrier_frequency",
+          "column_id": "center",
           "key_columns": [
-            "qubit"
+            "id"
           ],
           "kind": "lookup",
-          "table_id": "qubits"
+          "table_id": "signal"
         }
       ],
       "point_limit": 6,
@@ -1140,7 +1221,7 @@
             "point"
           ],
           "dtype": "float64",
-          "id": "response",
+          "id": "result",
           "recording_group_id": null,
           "role": "observable",
           "shape": [
@@ -1174,7 +1255,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:0f1c8715973821d7a35b01dae4a8f02bcadf42f87be965316a1df9387c1b8302",
+        "config_source_hash": "sha256:de5a386f0dedcb726654c1c91d8ef760e5dacd0a406537f7c5dcb0a260e9c28a",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1185,7 +1266,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+          "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1230,12 +1311,12 @@
             "unit": "runs",
             "value": 1.0
           },
-          "experiment_id": "reference_lab.frequency_amplitude",
+          "experiment_id": "ui_signal.signal",
           "id": "experiment",
           "initial_proposed_points": 6,
           "inspections": [],
           "instrument_ids": [],
-          "label": "Frequency / amplitude model",
+          "label": "signal",
           "planned_setting_limit": 64,
           "planned_settings": [],
           "planned_settings_truncated": false,
@@ -1252,7 +1333,7 @@
                 "point"
               ],
               "dtype": "float64",
-              "id": "response",
+              "id": "result",
               "retention": "retained",
               "shape": [
                 6
@@ -1273,8 +1354,8 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:4ef1e624f317938cdb3b9f175c731de312ab9342999150173aa63b44feb89add",
-      "id": "scopecat.author:reference_lab.frequency_amplitude",
+      "fingerprint": "sha256:0ce89cedf1071d9b9494c6c9eaae2312cee55bf6f5b5def3b95c34a06024a2fc",
+      "id": "scopecat.author:ui_signal.signal",
       "version": "1"
     },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -1283,29 +1364,29 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+        "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "scenario": null,
-        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
+        "setup_content_hash": "sha256:211d91edff28682eeead29fa86bc9e1bda37a2b30f66fabeff80c74a274f8975",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:10a2287639aa095d6bfd59a204099a9c8c46361dda4bcb17738eaa08ad96a658",
+        "content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:a208747d2a60505d2f83e325b654823e776451764e0dbb2b3774fc49fd7fb909",
-          "revision_id": "acceptance-parameters"
+          "content_hash": "sha256:47e9927c4dd24ae4f7ceefad80184e10cd4cc03cc68fcabfefff25185bfa11c0",
+          "revision_id": "acceptance-controls"
         },
         "setup": {
-          "content_hash": "sha256:59bd3cb2a710307586085405c5aa6e73f2cd4987238910e12c5cba599e7a4ba0",
-          "revision_id": "resolved:59bd3cb2a710307586085405c5aa6e73f2cd4987238910e12c5cba599e7a4ba0"
+          "content_hash": "sha256:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4",
+          "revision_id": "resolved:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4"
         }
       }
     },
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
+    "summary": "ui_signal.signal",
     "workspace_id": "acceptance-source"
   },
   "diagnostic": {
@@ -1646,81 +1727,6 @@
           "submit"
         ],
         "configuration_effect": "none",
-        "controls": [
-          {
-            "default": {
-              "unit": "GHz",
-              "value": 4.8
-            },
-            "group": "Signal",
-            "id": "frequency",
-            "maximum": 5.5,
-            "minimum": 4.5,
-            "ownership": "editable",
-            "provenance": "Reference model operating frequency",
-            "scannable": true,
-            "title": "Frequency",
-            "unit": "GHz"
-          },
-          {
-            "default": {
-              "unit": "V",
-              "value": 0.1
-            },
-            "group": "Signal",
-            "id": "amplitude",
-            "maximum": 0.5,
-            "minimum": 0.0,
-            "ownership": "editable",
-            "provenance": "Reference model low-amplitude default",
-            "scannable": true,
-            "title": "Amplitude",
-            "unit": "V"
-          },
-          {
-            "default": null,
-            "group": "Configuration",
-            "id": "reference_frequency",
-            "maximum": null,
-            "minimum": null,
-            "ownership": "configuration",
-            "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
-            "scannable": false,
-            "title": "Reviewed carrier",
-            "unit": "GHz"
-          },
-          {
-            "default": null,
-            "group": "Derived",
-            "id": "maximum_detuning",
-            "maximum": null,
-            "minimum": null,
-            "ownership": "derived",
-            "provenance": "Maximum requested frequency offset from the reviewed carrier",
-            "scannable": false,
-            "title": "Maximum detuning",
-            "unit": "GHz"
-          }
-        ],
-        "description": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
-        "id": "reference_lab.frequency_amplitude",
-        "kind": "diagnostic",
-        "request": {
-          "additionalProperties": false,
-          "properties": {},
-          "title": "frequency_amplitudeInputs",
-          "type": "object"
-        },
-        "review": null,
-        "title": "Frequency / amplitude model",
-        "version": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      },
-      {
-        "actions": [
-          "preview",
-          "submit"
-        ],
-        "configuration_effect": "none",
         "controls": [],
         "description": "Retain one thermometer sample without changing device state or defaults.",
         "id": "reference_lab.temperature_diagnostic",
@@ -1815,7 +1821,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:0f1c8715973821d7a35b01dae4a8f02bcadf42f87be965316a1df9387c1b8302",
+        "config_source_hash": "sha256:b5e665ce0541e3f0cc147160cc3ca9d978ac00a4264492268d4ea4d1cd11f75c",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1928,7 +1934,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:d795ed68f523a2e12d33472e77cfdb1272d966dec3153b0e27b8b09f4d579de8",
+      "fingerprint": "sha256:6b55e89b2e027583e8f95164d676b1233817cd06d895e045be40b52ef02cc8bc",
       "id": "scopecat.author:reference_lab.temperature_diagnostic",
       "version": "1"
     },
@@ -1957,8 +1963,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:59bd3cb2a710307586085405c5aa6e73f2cd4987238910e12c5cba599e7a4ba0",
-          "revision_id": "resolved:59bd3cb2a710307586085405c5aa6e73f2cd4987238910e12c5cba599e7a4ba0"
+          "content_hash": "sha256:1e60266f60489fcafe828c815d005beab7b0a79dcdb30d556d9cf755bd0f7e90",
+          "revision_id": "resolved:1e60266f60489fcafe828c815d005beab7b0a79dcdb30d556d9cf755bd0f7e90"
         }
       }
     },

@@ -40,7 +40,6 @@ def create_application(_project_root: Path) -> LabApplication:
     return LabApplication(
         author_modules=(
             "reference_lab_authors.authored",
-            "reference_lab_authors.frequency_amplitude",
             "reference_lab_authors.temperature_diagnostic",
         ),
         build_experiment_system=lambda config, instrument_catalog: reference_lab_system(

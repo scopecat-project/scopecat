@@ -4,6 +4,7 @@ import math
 from typing import Annotated
 
 import scopecat as sc
+from scopecat.records.parameter import TableParameterValue
 
 
 class SignalParameters(sc.ParameterModel, table="signal"):
@@ -19,6 +20,52 @@ AMPLITUDE = sc.Control(
 )
 
 
+def configured_center(context: sc.ControlValidationContext) -> sc.Quantity:
+    table = context.config.parameter_snapshot.get("signal")
+    assert isinstance(table, TableParameterValue)
+    [row] = [row for row in table.rows if row["id"] == "signal"]
+    value = row["center"]
+    assert isinstance(value, sc.Quantity)
+    return value.to("GHz")
+
+
+def maximum_detuning(context: sc.ControlValidationContext) -> sc.Quantity:
+    center = configured_center(context).value
+    values = FREQUENCY.axis_values(context.axis(FREQUENCY.id))
+    return sc.Quantity(
+        max(
+            abs(value.to("GHz").value - center)
+            for value in values
+            if isinstance(value, sc.Quantity)
+        ),
+        "GHz",
+    )
+
+
+CONTROLS = sc.ControlSet(
+    (
+        FREQUENCY,
+        AMPLITUDE,
+        sc.Control(
+            "reference_frequency",
+            unit="GHz",
+            title="Reviewed center",
+            ownership="configuration",
+            resolve=configured_center,
+            provenance="Explicit signal[signal].center",
+        ),
+        sc.Control(
+            "maximum_detuning",
+            unit="GHz",
+            title="Maximum detuning",
+            ownership="derived",
+            resolve=maximum_detuning,
+            provenance="Requested frequency offset from the reviewed center",
+        ),
+    )
+)
+
+
 def response(
     frequency: sc.Quantity, amplitude: sc.Quantity, center: sc.Quantity
 ) -> Annotated[sc.Quantity, sc.ScalarType(sc.QuantityType(unit="V"))]:
@@ -26,7 +73,7 @@ def response(
     return sc.Quantity(amplitude.to("V").value * math.cos(2 * math.pi * offset), "V")
 
 
-@sc.experiment(id="ui_signal.signal", controls=sc.ControlSet((FREQUENCY, AMPLITUDE)))
+@sc.experiment(id="ui_signal.signal", controls=CONTROLS)
 def signal(context: sc.ExperimentContext):
     return context.compute(
         "response",

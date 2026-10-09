@@ -12,14 +12,11 @@ import scopecat as sc
 from pydantic import JsonValue
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorProject
-from scopecat.application.controls import edit_controls
 from scopecat.application.launch import LaunchCatalog, LaunchPreview
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import MeasurementPreview
-from scopecat.kernel.quantity import Quantity
 from scopecat.planning.preflight import ExactQuantity, summarize_preflight
 from scopecat.records.author_revision import AuthorRevisionRef
-from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.measurement import MeasurementScalar
 from scopecat.records.measurement_recording import measurement_record_content_hash
@@ -33,7 +30,6 @@ from reference_lab.configuration import initial_parameters
 from reference_lab.parameters import QubitParameters
 from reference_lab.workflows.coherent_ramsey import coherent_ramsey
 from reference_lab.workflows.ramsey_experiments import parallel_raw_ramsey
-from reference_lab_authors.frequency_amplitude import CONTROLS, frequency_amplitude
 from reference_lab_authors.temperature_diagnostic import (
     TemperatureDiagnosticIntent,
     temperature_diagnostic,
@@ -53,7 +49,7 @@ FIXTURE_TIME = datetime(2026, 9, 1, tzinfo=UTC)
 FIXTURE_WORKSPACE = "acceptance-source"
 
 
-def _checked_launch_preview(
+def checked_launch_preview(
     client: DaemonClient, request: LaunchRequest
 ) -> LaunchPreview:
     health = client.health()
@@ -112,7 +108,7 @@ def capture_acceptance_fixtures(
     with AuthorProject(client.base_url, workspace_id=workspace_id) as authors:
         current_catalog = authors.catalog()
     assert current_catalog.workspace_id == workspace_id
-    # The shared UI fixture contains the two ordinary author experiments exercised here.
+    # The shared UI fixture retains the entityless physical diagnostic.
     # Source-derived versions are checked by admission tests, not this shape fixture.
     catalog = LaunchCatalog(
         workspace_id=FIXTURE_WORKSPACE,
@@ -121,7 +117,6 @@ def capture_acceptance_fixtures(
             for entry in current_catalog.entries
             if entry.id
             in {
-                "reference_lab.frequency_amplitude",
                 "reference_lab.temperature_diagnostic",
             }
         ),
@@ -153,7 +148,7 @@ def capture_acceptance_fixtures(
         executions=ExactQuantity(value=1, unit="runs", basis="One source acquisition"),
     )
     config = resolved.config
-    launch_preview = _checked_launch_preview(
+    launch_preview = checked_launch_preview(
         client,
         LaunchRequest(
             workspace_id=workspace_id,
@@ -163,85 +158,6 @@ def capture_acceptance_fixtures(
             selection=selection,
         ),
     )
-    scalar_request = LaunchRequest(
-        workspace_id=workspace_id,
-        action="preview",
-        experiment="reference_lab.frequency_amplitude",
-        version="1",
-        selection=selection,
-        control_edits={
-            "frequency": ControlEdit.model_validate(
-                {"mode": "fixed", "value": {"value": 4900.0, "unit": "MHz"}}
-            ),
-            "amplitude": ControlEdit.model_validate(
-                {"mode": "fixed", "value": {"value": 100.0, "unit": "mV"}}
-            ),
-        },
-    )
-    controls_scalar = _checked_launch_preview(client, scalar_request)
-    assert (
-        isinstance(controls_scalar, LaunchPreview) and controls_scalar.point_count == 1
-    )
-    scan_request = scalar_request.model_copy(
-        update={
-            "control_edits": {
-                "frequency": ControlEdit.model_validate(
-                    {
-                        "mode": "scan",
-                        "axis": {
-                            "kind": "range",
-                            "start": {"value": 4700.0, "unit": "MHz"},
-                            "stop": {"value": 4900.0, "unit": "MHz"},
-                            "points": 3,
-                        },
-                    }
-                ),
-                "amplitude": ControlEdit.model_validate(
-                    {
-                        "mode": "scan",
-                        "axis": {
-                            "kind": "values",
-                            "values": [
-                                {"value": 50.0, "unit": "mV"},
-                                {"value": 100.0, "unit": "mV"},
-                            ],
-                        },
-                    }
-                ),
-            }
-        }
-    )
-    controls_scan = _checked_launch_preview(client, scan_request)
-    assert isinstance(controls_scan, LaunchPreview) and controls_scan.point_count == 6
-    controlled = edit_controls(
-        CONTROLS,
-        frequency_amplitude.build(),
-        config=config,
-        edits=scan_request.control_edits,
-    )
-    controlled_run = lab.run(controlled, config=resolved)
-    assert controlled_run.status == "completed"
-    controlled_records = controlled_run.measurements().records
-    assert len(controlled_records) == 6
-    reference_value = next(
-        value.value
-        for value in controls_scan.controls
-        if value.id == "reference_frequency"
-    )
-    assert isinstance(reference_value, Quantity)
-    for record in controlled_records:
-        frequency = record.coordinates["frequency"]
-        amplitude = record.coordinates["amplitude"]
-        response = record.observables["response"]
-        assert isinstance(frequency, MeasurementScalar) and frequency.unit == "GHz"
-        assert isinstance(amplitude, MeasurementScalar) and amplitude.unit == "V"
-        assert isinstance(response, MeasurementScalar) and response.unit == "V"
-        assert isinstance(frequency.value, float) and isinstance(amplitude.value, float)
-        assert isinstance(response.value, float)
-        expected = amplitude.value * math.cos(
-            2 * math.pi * (frequency.value - reference_value.value)
-        )
-        assert math.isclose(response.value, expected, rel_tol=1e-12, abs_tol=1e-12)
     diagnostic_run = lab.run(temperature_diagnostic.build(), config=resolved)
     assert diagnostic_run.status == "completed"
     assert diagnostic_run.snapshot.config_source == resolved.config_source
@@ -405,8 +321,6 @@ def capture_acceptance_fixtures(
         ),
         "diagnostic": diagnostic.model_dump(mode="json"),
         "coherent_scalar": coherent_preview.model_dump(mode="json"),
-        "controls_scalar": controls_scalar.model_dump(mode="json"),
-        "controls_scan": controls_scan.model_dump(mode="json"),
         "inspection": inspection.model_dump(mode="json"),
         "candidate_proposal": proposals.model_dump(mode="json"),
         "entity_analysis": schema.model_dump(mode="json"),

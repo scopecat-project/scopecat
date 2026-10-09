@@ -35,6 +35,7 @@ const fixtures = JSON.parse(
   launch_catalog: components["schemas"]["LaunchCatalog"];
   launch_preview: components["schemas"]["LaunchPreview"];
   diagnostic: components["schemas"]["MeasurementPreview"];
+  controls_catalog: components["schemas"]["LaunchCatalog"];
   controls_scalar: components["schemas"]["LaunchPreview"];
   controls_scan: components["schemas"]["LaunchPreview"];
   coherent_scalar: components["schemas"]["MeasurementPreview"];
@@ -165,7 +166,7 @@ describe("shared reference-lab acceptance", () => {
           );
         }
         if (path.endsWith("/procedures")) return Response.json({ items: [], next_cursor: null });
-        return Response.json(fixtures.launch_catalog);
+        return Response.json(fixtures.controls_catalog);
       }),
     );
     installLaunchRecoveryRoutes();
@@ -179,9 +180,9 @@ describe("shared reference-lab acceptance", () => {
       </QueryClientProvider>,
     );
     fireEvent.change(await screen.findByLabelText("Experiment"), {
-      target: { value: "reference_lab.frequency_amplitude" },
+      target: { value: "ui_signal.signal" },
     });
-    expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("qubits[q0]");
+    expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("signal[signal]");
     fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
     fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4900" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());

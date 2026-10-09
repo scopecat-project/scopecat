@@ -119,12 +119,10 @@ now retains Ramsey and live VNA/group declarations. The old copied-Ramsey timing
 assertion is covered by the remaining manual-Ramsey and quantum-composition
 journeys; it is not reproduced in a compute-only project.
 
-The remaining `frequency_amplitude` fixture has a narrower current consumer:
-shared Python/HTTP/UI evidence for configuration-owned and derived controls,
-normalized fixed/scanned inputs and project constraints. Core
-`authoring/test_controls.py` owns the individual rules; the shared acceptance and
-launch checks retain their cross-layer presentation. Its 64-point limit and q0
-label are fixture choices, not product or scientific requirements.
+Configuration-owned and derived-control presentation now comes from the same
+single-signal project through the existing acceptance generator. Core
+`authoring/test_controls.py` owns project validation; the obsolete reference
+64-point policy is retired. The physical UI draft/authority check uses Ramsey.
 
 The device/compiler inventory still needs explicit choices. q2/q3 provide the
 unrelated activation/required chains in `unit/test_list_mode_placement.py`, while
