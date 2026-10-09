@@ -1,10 +1,33 @@
 # Exact-run native window acceptance
 
-The combined #885/#886 candidate passed its specified **Mac and Windows native
-checks** on 2026-10-06. Qualification is bound to the exact candidate below.
+The #888 Windows cookie repair passed its bounded **Mac and Windows native
+checks** on 2026-10-06. Each result below is bound to its tested candidate;
 Linux checks, browser acceptance and platform-smoke are not native passes.
 
-## Accepted combined candidate
+## Accepted Windows repair
+
+[PR #888](https://github.com/scopecat-project/scopecat/pull/888) records native
+[run 37456101480](https://github.com/scopecat-project/scopecat/actions/runs/37456101480)
+at `9537010eeeda8dae2b3a317c6389d03828483985`: Windows, Mac and the acceptance gate
+passed. PR #888 records the following results from the
+[Windows reports](https://github.com/scopecat-project/scopecat/actions/runs/37456101480/artifacts/11410985150)
+and [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37456101480/artifacts/11410530238):
+cookie preservation through peer opening/closing, independent-host isolation,
+service replacement and exact application draft/form recovery. Windows used
+Server 2025 amd64 / WebView2 153.0.4234.48; Mac used macOS 26.6.2 arm64.
+The Windows delivery contains `pywebview-6.2.1+scopecat.windows.1`; ordinary source
+environments still use upstream pywebview.
+
+This qualifies the tested runner images and normal asynchronous initialization
+path. Injected races/faults remain unit-test evidence. It is not native execution
+of the later combined schema-112 main or a schema-111→112 upgrade. Forced exit
+with unacknowledged input, full human desktop interaction, all Windows versions
+and exhaustive browser-process/profile cleanup remain unqualified. Mac
+signature/tamper checks passed, but notarization was not provided, Gatekeeper
+rejected with code 3, and Finder first-open was not evaluated. The earlier failed
+and incomplete-report candidates below retain their own evidence boundaries.
+
+## Earlier accepted combined candidate
 
 [Manual run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157)
 used `native-distribution` at `4aee5825dbe374f469bc0f1be1e9a981908086c1`, combining
@@ -28,19 +51,21 @@ closeout combination. Documentation-only updates do not alter the tested code.
   `69e66d40be74245e21569a8f83e98dd1b4013cd703233da19f78942bd0f976a9`.
   All three hosts verified loaded Cocoa SHA-256
   `2fe47f99c36beb0bc5d156b3006321ff94c0f101d4fffc1ff49a5d2bad5abd39`.
-  Ordinary source environments and Windows retain upstream pywebview.
+  At this earlier candidate, ordinary source environments and Windows retained
+  upstream pywebview.
 - [Mac reports](https://github.com/scopecat-project/scopecat/actions/runs/37436328157/artifacts/11399659221),
   ZIP SHA-256 `8d1df6b36b37f14388394a40200951e9e97caa347440b55ade75edd298249921`;
   [Windows reports](https://github.com/scopecat-project/scopecat/actions/runs/37436328157/artifacts/11399981013),
   ZIP SHA-256 `cba90569644107eda3644bd35366ee75f0bab99055d1818893b43bd1c22b293c`.
 
-Windows did not run a corresponding complete host-restart/cookie-isolation check.
+At this earlier candidate, Windows did not run a corresponding complete
+host-restart/cookie-isolation check.
 OS focus, menu clicks, tray, native dialogs, visual presentation and complete user
 launch remain unevaluated. Mac signature/tamper checks passed, but notarization was
 not provided, Gatekeeper rejected the package (return code 3), and Finder first-open
 was not evaluated. Installer artifacts were retained without a release/tag/deploy.
 
-## Windows lifecycle follow-up (repair acceptance pending)
+## Windows lifecycle probe
 
 `verify_windows_storage.py` extends the existing opted-in `--native-windows`
 path on Windows, after the exact-run probe has saved a real Decision draft and
@@ -119,10 +144,10 @@ Early URL/HTML requests retain only the last navigation until successful cleanup
 The native probe requires the exact version and loaded Edge/WinForms hashes.
 See the [repair contract](architecture/draft-recovery.md#windows-cookie-initialization-repair).
 
-This repair still needs a new exact-SHA native run; the failed run above is not
-qualification for the repaired package. Linux sequencing tests do not execute
-Python.NET, STA dispatch or WebView2. Darwin's original patched wheel bytes and
-hash remain unchanged.
+The later [accepted Windows repair](#accepted-windows-repair) qualifies the repaired
+package at its exact SHA; this failed run does not. Linux sequencing tests do not
+execute Python.NET, STA dispatch or WebView2. Darwin's original patched wheel bytes
+and hash remain unchanged.
 
 The actual [Mac artifact 11407396038](https://github.com/scopecat-project/scopecat/actions/runs/37451728337/artifacts/11407396038)
 was independently checked, ZIP SHA-256
@@ -132,18 +157,17 @@ fixture and A/B/C complete draft receipts match, with fixed origin port `49613`
 and service PID/port `17831:49614` to `18801:49628`. Host exit/cleanup passed;
 notarization, Gatekeeper and Finder-first-open limitations remain unchanged.
 
-For this follow-up, dispatch **Full acceptance**, ref
-`codex/windows-native-recovery`, profile **native-distribution**, and match the
-run's head SHA to the reviewed PR head. Do not use `public-preview` or modify
-triggers to obtain dispatch access.
+For a future change requiring native requalification, use **Full acceptance**,
+profile **native-distribution**, at the reviewed candidate ref and match its exact
+head SHA. Do not use `public-preview` or modify triggers to obtain dispatch access.
 
 [Run 37446444844](https://github.com/scopecat-project/scopecat/actions/runs/37446444844)
 completed successfully at `0f80eb43941a06f13dc10f4ce9fef604ee42fc43`, but its
 Windows artifact omitted **all eight `windows-storage/` files**. The verifier
 retained those files; the workflow upload allowlist omitted their directory.
-The upload path is now corrected without changing triggers. A new manual run on
-the final reviewed head is needed for raw A/B/C evidence and the added same-host
-cookie check.
+The upload path was corrected without changing triggers; subsequent runs retained
+the reports, including the failure above and the accepted repair. This earlier
+successful run alone does not supply raw A/B/C or same-host cookie evidence.
 
 Execution and evidence retention are separate. At the tested SHA, Windows
 unconditionally invokes the lifecycle probe with `check=True` when native checks
@@ -237,8 +261,9 @@ evidence, not a claim about OS title rendering.
 created by the manual job. Never run it on a user's Mac, a retained desktop or a
 self-hosted runner.** Upstream pywebview 6.2.1 Cocoa uses and clears its default
 website store when each private window is created. The candidate's bounded
-production dependency patch is qualified only for the combined candidate above. Neither the application's isolated
-`--home` nor pywebview `storage_path` isolates that native store. This may affect
+production dependency patches are qualified only for the exact candidates recorded
+above. Neither the application's isolated `--home` nor pywebview `storage_path`
+isolates that native store. This may affect
 unrelated retained WebKit data under the same host identity. No local override is
 supported, and the probe never replaces the candidate backend or store.
 
@@ -285,16 +310,16 @@ This runs before the original acceptance workspace is removed, and the wrapper
 retains `draft-fixture.json` plus every stage report/log. A combined candidate uses
 fresh schema-111 data; it never upgrades an old development fixture.
 
-## Running the final candidate
+## Running a candidate requiring native qualification
 
 After ordinary CI and review, use GitHub **Actions → Full acceptance → Run
-workflow**. Select the reviewed acceptance-only integration branch
-`codex/native-draft-acceptance` under **Use workflow from**, choose
-**profile: native-distribution**, and run once for the final combined candidate.
-Confirm the run's head SHA equals the exact integration SHA in the handoff/#885
-body. #885's uncombined branch lacks #886's required API and is not this candidate. Do not choose
-`public-preview`, which publishes release assets. The native profile builds and
-retains installer artifacts but does not create a release, tag or deployment.
+workflow** for a change requiring native requalification. Select the reviewed
+candidate ref under **Use workflow from**, choose **profile: native-distribution**,
+and confirm the run's head SHA equals the exact reviewed SHA. The earlier
+#885/#886 result above required their combined API and probe; neither an older
+branch nor a later main inherits that result. Do not choose `public-preview`,
+which publishes release assets. The native profile builds and retains installer
+artifacts but does not create a release, tag or deployment.
 
 For each platform, inspect the `native-<platform>` artifact's
 `native-windows/result.json`, `identity.json`, `host.log`, `acquisition.log` and
@@ -307,9 +332,9 @@ with an alternate store and call it qualification.
 This is native component/bridge acceptance using programmatic DOM actions. It
 does not establish OS focus, actual menu clicks, visual presentation, tray,
 complete production startup, or durable browser persistence. The draft check covers
-window creation within the live process; the separate Mac Cocoa check covers
-browser ephemerality and application-draft recovery across complete host/service
-restart. That restart result is not extended to Windows.
+window creation within the live process. The separate Cocoa and Windows lifecycle
+checks cover browser ephemerality and application-draft recovery across complete
+host/service restart at their respective accepted SHAs above.
 No real devices, private consumer repositories or retained user data are fixtures.
 
 ## In-place reset recovery probe

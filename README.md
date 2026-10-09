@@ -34,20 +34,23 @@ Python and application dependencies; opening saved data requires no source check
 or laboratory SDK. See [first steps](docs/getting-started/index.md) and
 [preview artifacts](docs/development/public-preview.md#artifact-identity-and-consumer-selection).
 
-For native acceptance from a source checkout, use the
-[local Mac packaging guide](docs/development/local-desktop-trial.md) with isolated
-data. A unified one-command native desktop development loop is not implemented.
-
-For browser frontend development without installing the application:
+For daily source development, run from the public checkout with Python 3.14+, uv,
+Node.js and pnpm:
 
 ```sh
-uv run --locked --group delivery python -m lab_tools.dev --source .
+uv run --locked python -m lab_tools.dev
 ```
 
-This uses an isolated development home, prints the preview URL and does not open
-a browser or a native window. Native Settings operations need the desktop entry above. Ctrl-C stops its owned processes. See [source development](docs/development/public-preview.md#run-without-installation)
-for frontend prerequisites and author source registration. Daily experiment authors
-use their own Python and ordinary code folders with the installed application.
+This opens the native desktop with Vite HMR and the real backend, using a retained
+worktree-specific home separate from installed application data. It starts blank;
+create or register author source through Settings. Ctrl-C requests a safe exit
+when work is idle. See [daily source development](docs/development/public-preview.md#daily-source-desktop)
+for prerequisites, resource preparation and restart behavior.
+
+For native packaging acceptance, use the
+[local Mac packaging guide](docs/development/local-desktop-trial.md) with isolated
+data. Daily experiment authors use their own Python and ordinary code folders
+with the installed application.
 
 ## Repository
 

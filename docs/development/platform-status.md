@@ -28,7 +28,7 @@ establish an installed upgrade or human/device acceptance.
 | --- | --- |
 | Remaining reference/device/compiler retirement | [#773](https://github.com/scopecat-project/scopecat/issues/773), audit umbrella [#615](https://github.com/scopecat-project/scopecat/issues/615) |
 | Broader Notebook/application learning journey | [#565](https://github.com/scopecat-project/scopecat/issues/565); supplied Help topics share ordinary-author preparation; remaining fixture consumers, teaching design and native editor/human acceptance separate |
-| First-use profiling and iteration cost | [#523](https://github.com/scopecat-project/scopecat/issues/523), [#520](https://github.com/scopecat-project/scopecat/issues/520) |
+| First-use profiling | [#523](https://github.com/scopecat-project/scopecat/issues/523); closed iteration-cost issue #520 retains separate evidence gaps below |
 | Historical Windows startup/endpoint failures | [#465](https://github.com/scopecat-project/scopecat/issues/465), [#553](https://github.com/scopecat-project/scopecat/issues/553); do not infer a fix from later success |
 | Finer observed dependency coverage | [#783](https://github.com/scopecat-project/scopecat/issues/783); unknown reads cannot prove physical independence |
 | Other live domains and stateful analysis | [#561](https://github.com/scopecat-project/scopecat/issues/561) |
@@ -38,6 +38,11 @@ establish an installed upgrade or human/device acceptance.
 
 ## Evidence and distribution
 
+- Iteration-cost issue [#520](https://github.com/scopecat-project/scopecat/issues/520)
+  is closed. Its remaining checklist still records browser-seed measurement,
+  displaced-assertion mapping, comparable consumer/runner costs, the historical
+  manual-launch completion wait and the unpinned-provider limitation. Closure
+  does not establish that these were resolved or a sustained five-minute CI result.
 - Desktop composition: [#829](https://github.com/scopecat-project/scopecat/pull/829),
   [#837](https://github.com/scopecat-project/scopecat/pull/837),
   [#844](https://github.com/scopecat-project/scopecat/pull/844) and
