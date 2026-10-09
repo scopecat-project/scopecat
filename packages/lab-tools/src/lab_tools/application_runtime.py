@@ -28,6 +28,22 @@ from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 from .bundle import MANIFEST, file_hash, installed_bundle, managed_path, read_bundle
 
 
+def _check_served_gui(record: DaemonEndpointRecord, static_dir: Path) -> None:
+    """Reject a reused daemon's mismatched GUI without restarting active work."""
+    try:
+        response = httpx2.get(record.base_url + "/", timeout=30, trust_env=False)
+        matches = (
+            response.status_code == 200
+            and response.content == (static_dir / "index.html").read_bytes()
+        )
+    except httpx2.HTTPError as error:
+        raise ValueError(f"无法检查 GUI; 服务保持运行: {error}") from error
+    if not matches:
+        raise ValueError(
+            "现有服务的 GUI 不匹配; 服务保持运行。完成操作后请停止再打开应用"
+        )
+
+
 class Installation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     python: Path
@@ -226,9 +242,7 @@ class ApplicationRuntime:
             status = self.status()
             if status.state != "running" or status.record is None:
                 raise ValueError(f"应用尚未就绪：{status.detail or status.state}")
-            from .cli import check_served_gui
-
-            check_served_gui(self.root, selected.static_dir)
+            _check_served_gui(status.record, selected.static_dir)
             return status.record
 
     def stop(self) -> None:

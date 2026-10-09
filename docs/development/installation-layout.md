@@ -144,8 +144,7 @@ Keep four identities separate when describing installation:
 
 The current native installers provide the desktop application entry, **not a
 global PATH `scopecat` console**. Installing the `scopecat-lab-tools` wheel in a
-Python environment creates that environment's `scopecat` and `scopecat-lab`
-console scripts. This packaging fact is not an implemented application-owned CLI
+Python environment creates that environment's `scopecat` console script. This packaging fact is not an implemented application-owned CLI
 contract and does not require installing the whole application in every author
 venv. The generated author client environment starts with `scopecat` and
 `ipykernel`. Execution environments separately include framework/server requirements

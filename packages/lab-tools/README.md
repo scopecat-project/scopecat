@@ -5,7 +5,8 @@ This wheel owns its Python environment's `scopecat` console through
 console. An optional application-supplied CLI/launcher targeting the same data
 owner is the confirmed direction, not yet implemented; see [installation identities](../../docs/development/installation-layout.md#application-command-and-data-identities).
 It composes server commands with application, Notebook and practice operations.
-The separate `scopecat-lab` teaching entry remains supported by existing consumers.
+`scopecat init --topic` creates editable author source for the current application;
+prepare and register it in Settings. The old `scopecat-lab` lifecycle entry is removed.
 Native bootstrap, desktop and `ApplicationRuntime` are long-lived runtime code;
 this package also contains delivery and acceptance tools. See the
 [repository map](../../docs/development/repository-map.md) for those boundaries.

@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def lesson_path(root: Path) -> Path:
-    """Supply the topic notebook to the standalone default-course verifier."""
+    """Supply shipped grouping material to the default scientific test fixture."""
     path = root / "notebooks/groups.ipynb"
     if not path.exists():
         path.write_bytes(
@@ -102,3 +102,18 @@ assert {item.run_id for item in session.list_runs().items} == before_runs
 session.close()
 """,
 )
+
+
+ADD_ANALYSIS = """\
+session = project.authoring()
+# 原 run 使用保留源码;新分析不覆盖之前的分组结果。
+new = session.analyze_groups_as(
+    bookmark["run_id"], "my_experiment.group_analysis:summarize_curve", CurveSummary,
+    by=("amplitude",), fitting="frequency", arguments={"minimum_contrast": 2.0})
+assert new.publication.id != bookmark["publication_id"]
+assert all(group.value.status == "no_response" for group in new.groups)
+old = session.read_groups_as(
+    bookmark["run_id"], bookmark["publication_id"], CurveSummary)
+assert all(group.value.status == "estimated" for group in old.groups)
+session.close()
+"""

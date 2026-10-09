@@ -217,21 +217,16 @@ def test_start_checks_reused_service_gui(delivery, monkeypatch):
 
     import httpx2 as httpx
 
-    from lab_tools.cli import check_served_gui
-    from scopecat.daemon import endpoint
+    from lab_tools.application_runtime import _check_served_gui
 
-    monkeypatch.setattr(
-        endpoint,
-        "read_daemon_endpoint_record",
-        lambda _project: SimpleNamespace(base_url="http://127.0.0.1:12345"),
-    )
+    record = SimpleNamespace(base_url="http://127.0.0.1:12345")
     monkeypatch.setattr(
         httpx,
         "get",
         lambda *_args, **_kwargs: httpx.Response(404),
     )
     with pytest.raises(ValueError, match="服务保持运行"):
-        check_served_gui(delivery, delivery / "gui")
+        _check_served_gui(record, delivery / "gui")
     monkeypatch.setattr(
         httpx,
         "get",
@@ -239,7 +234,7 @@ def test_start_checks_reused_service_gui(delivery, monkeypatch):
             200, content=(delivery / "gui/index.html").read_bytes()
         ),
     )
-    check_served_gui(delivery, delivery / "gui")
+    _check_served_gui(record, delivery / "gui")
 
 
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):

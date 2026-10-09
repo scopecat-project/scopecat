@@ -12,7 +12,7 @@ retains CPython, pywebview and the existing web UI.
 | --- | --- |
 | Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. Application launch uses the packaged runtime. |
 | Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
-| Teaching/offline verification | Existing `scopecat-lab`, generated VS Code tasks and standalone `install.py` remain; `bundle.py` retains manifest/hash checks and offline environment installation. |
+| Teaching/offline verification | Help and CLI-created ordinary author source share application preparation; standalone `install.py` and `bundle.py` retain manifest/hash checks and offline environment installation. |
 
 The application-tools wheel owns the `scopecat` console. Server-only consumers use
 the module entry; see [CLI ownership](../../reference/cli.md#entry-ownership-and-migration).

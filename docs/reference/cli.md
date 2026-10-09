@@ -23,7 +23,6 @@ See the [entry map](../development/architecture/public-application.md#user-journ
 | --- | --- | --- |
 | Python environment with `scopecat-lab-tools` | `scopecat` or `python -m lab_tools.public_cli` | Project commands below plus `app`, `notebook`, `teach`, `init --topic` |
 | Server-only / retained server pilot | `python -m scopecat_server.cli` | Project commands below, without application/teaching commands |
-| Existing teaching tools | `scopecat-lab` | Existing generated-project / VS Code lifecycle; unchanged |
 
 The server wheel no longer owns the `scopecat` console script. Server-only scripts
 and users replace `scopecat COMMAND` with `python -m scopecat_server.cli COMMAND`
@@ -33,6 +32,19 @@ module. There is one console-script owner, with no optional provider discovery.
 Generated server projects print the module commands, which also work in a complete
 application environment. This does not change project files, data or runtime
 ownership; no migration of retained stores is implied.
+
+`scopecat init DIRECTORY --topic TOPIC` creates the same editable source used by
+Help, without starting a service or installing dependencies. Add that directory
+in the current application's Settings and prepare its author environment. For
+scripted preparation in an already configured application, use the existing
+`scopecat app --home HOME --workspace DIRECTORY` actions in order:
+`create-author-environment`, `register-source`, `prepare-author-environment`.
+Use the directory's `.venv` kernel; reopen it against the same application to read
+retained results. Help's Continue applies to folders created by Help.
+
+The former `scopecat-lab` console and generated tutorial service tasks are removed.
+Existing standalone projects retain their original environment and data; creating
+a new author folder does not migrate old results or overwrite edited material.
 
 Project lifecycle and configuration commands accept a project directory or a
 path to `scopecat.toml`; the current directory is the default. In the following

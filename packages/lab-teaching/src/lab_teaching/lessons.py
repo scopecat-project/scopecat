@@ -138,7 +138,8 @@ def install_lesson(root: Path, topic: str | None = None) -> Path:
             encoding="utf-8",
         )
     _ = (root / "README.md").write_text(
-        f"# {TOPICS[topic]}\n\n从 Scopecat Help 开始或继续。"
+        f"# {TOPICS[topic]}\n\nHelp 创建的目录可从原课程继续；"
+        "命令行生成的目录请先在 Scopecat Settings 添加并准备作者环境。"
         f"打开 notebooks/{topic}.ipynb，"
         "在外部编辑器选择此目录 .venv 内核。源码在 src/my_experiment。\n"
         "运行与历史保存在同一应用中；继续不会自动采集，也不会覆盖文件或保存的参数。\n"
