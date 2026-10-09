@@ -7,6 +7,8 @@ import { navigate } from "../../lib/navigation";
 import type { NotebookJourney } from "../application/DesktopSession";
 import { NotebookJourneyPanel } from "./NotebookJourneyPanel";
 
+type PrepareNotebook = NonNullable<Window["pywebview"]>["api"]["prepare_notebook_journey"];
+
 function savedStatus(journey: NotebookJourney | null) {
   return { state: journey ? (journey.ready ? "ready" : "retryable") : "not_started", journey };
 }
@@ -262,7 +264,7 @@ it.each(["prepare", "choose", "open"] as const)(
     const pending = deferred<never>();
     const bridge = {
       notebook_journey: vi.fn().mockResolvedValue(savedStatus(null)),
-      prepare_notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
+      prepare_notebook_journey: vi.fn<PrepareNotebook>().mockResolvedValue(parametersJourney),
       choose_directory: vi.fn().mockReturnValue(pending.promise),
       open_lesson_notebook: vi.fn().mockReturnValue(pending.promise),
     };
@@ -328,7 +330,7 @@ it.each([false, true])(
       value: {
         api: {
           notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
-          prepare_notebook_journey: vi.fn().mockResolvedValue(savedStatus(parametersJourney)),
+          prepare_notebook_journey: vi.fn<PrepareNotebook>().mockResolvedValue(parametersJourney),
           open_lesson_notebook: open,
         },
       },
