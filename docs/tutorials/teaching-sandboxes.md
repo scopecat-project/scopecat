@@ -45,6 +45,36 @@ file reclamation after an interruption. Record removal and file removal are
 reported separately. [Back up scientific records](../how-to/backup-and-restore.md)
 before deleting anything you intend to retain.
 
+## Choose a Notebook route
+
+Start with **Parameters and scans**, then **Edit and refresh experiments** if you
+want to keep authoring. The first lesson already lets you run an experiment, open
+its result in Scopecat, edit Python and run again. You can stop there and use the
+same editable folder for your own work; seven topics are not seven required steps.
+
+Choose **Mean IQ and typed results** when you need calculated outputs, or
+**Grouped analysis and history** when you need to summarize several curves. They
+are independent options after the basics, not prerequisites for one another.
+Move to **Parameter calibration and recovery** when you need to decide whether a
+proposed parameter correction should be adopted. Follow it with **Joint
+calibration and coupled checks**, then **Background calibration and publication**
+only if your work needs combined corrections and multi-stage tasks.
+
+The preparation steps below are shared: a running Scopecat desktop and VS Code
+with Python/Jupyter support. The lessons supply synthetic inputs and editable
+source; no device or previous course's data is required. The prerequisites in this
+table are suggested knowledge, not a requirement to import another lesson's runs.
+
+| Topic | Be comfortable with | Learn and finish able to |
+| --- | --- | --- |
+| **Parameters and scans** (`parameters`) — start here | Running a Python Notebook cell and saving a file | Preview and acquire a seven-point scan; read the same run in Notebook and Runs; change shots from 64 to 32 and compare the retained results. Defining a new parameter table is optional. |
+| **Edit and refresh experiments** (`refresh`) — continue authoring | The first lesson's request, preview and run cycle | Save an edit, distinguish old and new requests, add an experiment from the supplied source, and reopen an exact run. |
+| **Mean IQ and typed results** (`compute`) — optional calculation | Scan points, shots and basic NumPy arrays | Compare per-shot IQ with its mean, read typed rows, and reopen the chosen mean run. Recognize that averaging removes the shot distribution. |
+| **Grouped analysis and history** (`groups`) — optional analysis | Scans and retained run IDs | Analyze two amplitude groups across 42 frequency-scan points; add a third group for 63 points; reopen the saved analysis by its publication ID. |
+| **Parameter calibration and recovery** (`calibration`) — advanced adoption | Saved parameter branches, measurements and analysis; reading Python functions | Trace a fitted candidate through fresh verification to publication; compare acceptance with rejection that leaves its branch unchanged. Health checks and capability reports are a later extension. |
+| **Joint calibration and coupled checks** (`joint-calibration`) — advanced composition | Candidate, verification and publication concepts from calibration | Explain why individually accepted corrections can fail together, inspect the coupled decision and required target coverage, and find the original procedure again. |
+| **Background calibration and publication** (`task-calibration`) — advanced tasks | Joint verification and parameter branch versions | Inspect accepted, scientifically rejected and branch-conflict tasks; distinguish passed stages, final verification and an actual publication receipt. |
+
 ## Learn with Notebooks
 
 In desktop **Help → Learn with Notebooks**, select a topic, then choose **Start**. Scopecat creates an ordinary
@@ -113,7 +143,7 @@ The saved acquisition output also records this pair of IDs.
 Do not run all cells to reopen results. The application retains both courses’
 runs, while each course’s source and parameter edits remain independent.
 
-## Editing, computation and calibration
+## Continue editing, computation or calibration
 
 The same Help selector also offers these existing capabilities:
 
@@ -131,10 +161,9 @@ explicit scientific work; use the marked connection/history cells to inspect exi
 evidence. Preserve the exact run, procedure or task identity when comparing attempts.
 No topic needs another course's results.
 
-These entries expose existing teaching capabilities. Their ordering, difficulty and
-possible grouping remain teaching-design work; the selector is not a fixed syllabus.
-Actual external-editor interaction and unfamiliar-user learning remain separate
-acceptance observations.
+Choose the next topic by the task you want to accomplish. The route above is a
+reading guide for the supplied material, not a claim of completed unfamiliar-user
+evaluation.
 
 ## Notebook workspace and saved edits
 

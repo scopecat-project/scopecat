@@ -8,36 +8,37 @@ const lessons: Record<LessonTopic, { title: string; description: string }> = {
   parameters: {
     title: "Parameters and scans",
     description:
-      "Explore a seven-point synthetic scan, edit its Python source and parameters, and compare retained results in this application.",
-  },
-  groups: {
-    title: "Grouped analysis and history",
-    description:
-      "Scan two synthetic curves, analyze each group, and reopen their saved analysis without collecting again.",
+      "Start here: run a seven-point synthetic scan, view it in this application, then edit Python and compare a new run with the original.",
   },
   refresh: {
     title: "Edit and refresh experiments",
     description:
-      "Save Python source edits, preview a new request using the updated source, and add an experiment while keeping earlier runs available.",
+      "After parameters and scans: save source edits, compare old and new requests, and add an experiment while keeping earlier runs available.",
   },
   compute: {
     title: "Mean IQ and typed results",
-    description: "Compare synthetic IQ results and reopen retained data with typed result readers.",
+    description:
+      "Optional after basic scans; basic NumPy helps. Compare per-shot IQ with its mean and reopen the exact saved run with typed readers.",
+  },
+  groups: {
+    title: "Grouped analysis and history",
+    description:
+      "Optional after basic scans: analyze two synthetic curves by group, add a third, and reopen the saved analysis without collecting again.",
   },
   calibration: {
     title: "Parameter calibration and recovery",
     description:
-      "Submit a synthetic calibration procedure and inspect its correction, verification, and publication result.",
+      "Advanced; first understand saved parameters and analysis. Compare a verified correction that is published with a rejected correction that leaves its branch unchanged.",
   },
   "joint-calibration": {
     title: "Joint calibration and coupled checks",
     description:
-      "Compare individual corrections with a joint proposal and inspect coupled verification.",
+      "After parameter calibration: explain why individual corrections can pass while their combination fails, and inspect the coupled decision.",
   },
   "task-calibration": {
     title: "Background calibration and publication",
     description:
-      "Start a bounded calibration task and inspect its retained evidence and verified publication outcome.",
+      "After joint calibration: compare accepted, rejected and branch-conflict tasks; distinguish finished stages from verified publication.",
   },
 };
 
@@ -117,6 +118,11 @@ function NotebookJourneyCourse({ topic, reachable }: { topic: LessonTopic; reach
       <h3 id="notebook-journey-heading" className="font-semibold">
         Learn with Notebooks
       </h3>
+      <p>
+        Begin with Parameters and scans, then continue editing. Choose calculation or grouped
+        analysis as needed; calibration is an advanced route. You do not need all seven courses or
+        another course’s data.
+      </p>
       <label className="grid gap-1">
         Course
         <select
