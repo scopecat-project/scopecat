@@ -91,7 +91,7 @@ jobs:
           node-version-file: .node-version
       - name: Build versioned public assets
         run: uv run --locked python scripts/build_preview.py "$RUNNER_TEMP/preview" --release
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-public
           path: ${{ runner.temp }}/preview/*
@@ -159,7 +159,7 @@ jobs:
           fi
           cp "$RUNNER_TEMP/native-acceptance/native-release.json" "$RUNNER_TEMP/release-native/$PLATFORM-native-release.json"
           cp "$RUNNER_TEMP/native-acceptance/bundle.json" "$RUNNER_TEMP/release-native/$PLATFORM-bundle.json"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-native-${{ matrix.platform }}
           path: ${{ runner.temp }}/release-native/*
@@ -167,7 +167,7 @@ jobs:
           retention-days: 14
       - name: Retain qualification evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-evidence-${{ matrix.platform }}
           path: |
@@ -206,7 +206,7 @@ jobs:
         run: |
           uv run --locked python scripts/release_assets.py assemble release --commit "$RELEASE_COMMIT"
           uv run --locked python scripts/release_assets.py verify release --commit "$RELEASE_COMMIT"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-verified
           path: release/*
