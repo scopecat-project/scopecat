@@ -5,26 +5,36 @@
         "approval": null,
         "proposal": {
           "analysis_record_id": "acceptance-analysis",
-          "base_config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "base_config_content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
           "base_config_id": "acceptance-parameters",
           "composition": null,
           "confidence": null,
           "deltas": [
             {
               "after": {
-                "id": "channel_calibrations",
+                "id": "qubits",
                 "rows": [
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.0
+                      "value": 0.5
                     },
-                    "flux_gain": 0.98,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.0
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4800000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.2
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 16.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.0
+                    },
                     "qubit": {
                       "id": "q0",
                       "kind": "logical_qubit",
@@ -32,16 +42,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
                       "value": 1.0
                     },
-                    "flux_gain": 1.02,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.002
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4900000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.18
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 18.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.5
+                    },
                     "qubit": {
                       "id": "q1",
                       "kind": "logical_qubit",
@@ -49,16 +69,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": -0.5
+                      "value": 0.4
                     },
-                    "flux_gain": 1.01,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": -0.001
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5000000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.17
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 20.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.0
+                    },
                     "qubit": {
                       "id": "q2",
                       "kind": "logical_qubit",
@@ -66,16 +96,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.75
+                      "value": 0.35
                     },
-                    "flux_gain": 0.99,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.003
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5100000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.16
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 22.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.5
+                    },
                     "qubit": {
                       "id": "q3",
                       "kind": "logical_qubit",
@@ -86,19 +126,29 @@
                 "shape": "table"
               },
               "before": {
-                "id": "channel_calibrations",
+                "id": "qubits",
                 "rows": [
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.0
+                      "value": 0.5
                     },
-                    "flux_gain": 0.98,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.0
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4800000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.2
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 16.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.0
+                    },
                     "qubit": {
                       "id": "q0",
                       "kind": "logical_qubit",
@@ -106,16 +156,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 1.5
+                      "value": 0.45
                     },
-                    "flux_gain": 1.02,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.002
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 4900000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.18
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 18.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 4.5
+                    },
                     "qubit": {
                       "id": "q1",
                       "kind": "logical_qubit",
@@ -123,16 +183,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": -0.5
+                      "value": 0.4
                     },
-                    "flux_gain": 1.01,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": -0.001
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5000000000.0
                     },
-                    "flux_polarity": 1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.17
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 20.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.0
+                    },
                     "qubit": {
                       "id": "q2",
                       "kind": "logical_qubit",
@@ -140,16 +210,26 @@
                     }
                   },
                   {
-                    "channel_delay": {
+                    "drag_beta": {
                       "unit": "ns",
-                      "value": 0.75
+                      "value": 0.35
                     },
-                    "flux_gain": 0.99,
-                    "flux_offset": {
-                      "unit": "V",
-                      "value": 0.003
+                    "drive_carrier_frequency": {
+                      "unit": "Hz",
+                      "value": 5100000000.0
                     },
-                    "flux_polarity": -1,
+                    "quarter_turn_amplitude": {
+                      "unit": "arb",
+                      "value": 0.16
+                    },
+                    "quarter_turn_duration": {
+                      "unit": "ns",
+                      "value": 22.0
+                    },
+                    "quarter_turn_sigma": {
+                      "unit": "ns",
+                      "value": 5.5
+                    },
                     "qubit": {
                       "id": "q3",
                       "kind": "logical_qubit",
@@ -167,10 +247,10 @@
                   },
                   "before": {
                     "unit": "ns",
-                    "value": 1.5
+                    "value": 0.45
                   },
                   "change_kind": "physical",
-                  "field": "channel_delay",
+                  "field": "drag_beta",
                   "key": {
                     "qubit": {
                       "id": "q1",
@@ -180,13 +260,13 @@
                   }
                 }
               ],
-              "parameter_id": "channel_calibrations"
+              "parameter_id": "qubits"
             }
           ],
           "evidence_output_ids": [],
-          "id": "q1-channel-delay",
+          "id": "q1-drag-beta",
           "proposed_at": "2026-09-01T00:00:00Z",
-          "reason": "align q1 acquisition with the shared readout window",
+          "reason": "Explicit trial pulse shape; not a fitted or accepted calibration",
           "source_run_id": "acceptance-source"
         }
       }
@@ -506,6 +586,87 @@
     ],
     "truncated": false
   },
+  "controls_catalog": {
+    "code_revision": null,
+    "entries": [
+      {
+        "actions": [
+          "preview",
+          "submit"
+        ],
+        "configuration_effect": "none",
+        "controls": [
+          {
+            "default": {
+              "unit": "GHz",
+              "value": 4.8
+            },
+            "group": "",
+            "id": "frequency",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "editable",
+            "provenance": "Project default",
+            "scannable": true,
+            "title": "Frequency",
+            "unit": "GHz"
+          },
+          {
+            "default": {
+              "unit": "V",
+              "value": 0.1
+            },
+            "group": "",
+            "id": "amplitude",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "editable",
+            "provenance": "Project default",
+            "scannable": true,
+            "title": "Amplitude",
+            "unit": "V"
+          },
+          {
+            "default": null,
+            "group": "",
+            "id": "reference_frequency",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "configuration",
+            "provenance": "Explicit signal[signal].center",
+            "scannable": false,
+            "title": "Reviewed center",
+            "unit": "GHz"
+          },
+          {
+            "default": null,
+            "group": "",
+            "id": "maximum_detuning",
+            "maximum": null,
+            "minimum": null,
+            "ownership": "derived",
+            "provenance": "Requested frequency offset from the reviewed center",
+            "scannable": false,
+            "title": "Maximum detuning",
+            "unit": "GHz"
+          }
+        ],
+        "description": "ui_signal.signal",
+        "id": "ui_signal.signal",
+        "kind": "diagnostic",
+        "request": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "signalInputs",
+          "type": "object"
+        },
+        "review": null,
+        "title": "signal",
+        "version": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "workspace_id": "acceptance-source"
+  },
   "controls_scalar": {
     "code_revision": {
       "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
@@ -550,7 +711,7 @@
           }
         },
         "id": "amplitude",
-        "provenance": "Matches declared default: Reference model low-amplitude default",
+        "provenance": "Matches declared default: Project default",
         "state": "fixed",
         "value": {
           "unit": "V",
@@ -560,7 +721,7 @@
       {
         "axis": null,
         "id": "reference_frequency",
-        "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+        "provenance": "Explicit signal[signal].center",
         "state": "configuration",
         "value": {
           "unit": "GHz",
@@ -570,7 +731,7 @@
       {
         "axis": null,
         "id": "maximum_detuning",
-        "provenance": "Maximum requested frequency offset from the reviewed carrier",
+        "provenance": "Requested frequency offset from the reviewed center",
         "state": "derived",
         "value": {
           "unit": "GHz",
@@ -579,7 +740,7 @@
       }
     ],
     "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "experiment_id": "reference_lab.frequency_amplitude",
+    "experiment_id": "ui_signal.signal",
     "inspection": {
       "binding_edges": [],
       "bindings": [
@@ -600,7 +761,7 @@
         {
           "captures": [],
           "demanded_by": [
-            "record:response"
+            "record:result"
           ],
           "deterministic": false,
           "id": "response",
@@ -608,7 +769,7 @@
           "inputs": [
             "frequency",
             "amplitude",
-            "reference"
+            "center"
           ],
           "outputs": [
             "response"
@@ -629,12 +790,12 @@
       "item_limit": 256,
       "parameters": [
         {
-          "column_id": "drive_carrier_frequency",
+          "column_id": "center",
           "key_columns": [
-            "qubit"
+            "id"
           ],
           "kind": "lookup",
-          "table_id": "qubits"
+          "table_id": "signal"
         }
       ],
       "point_limit": 1,
@@ -662,7 +823,7 @@
             "point"
           ],
           "dtype": "float64",
-          "id": "response",
+          "id": "result",
           "recording_group_id": null,
           "role": "observable",
           "shape": [
@@ -696,7 +857,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:00005e340e0cdc4f974654f5246c8802c7451b259d0c997b23c0a02f01e0164b",
+        "config_source_hash": "sha256:de5a386f0dedcb726654c1c91d8ef760e5dacd0a406537f7c5dcb0a260e9c28a",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -707,7 +868,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -752,12 +913,12 @@
             "unit": "runs",
             "value": 1.0
           },
-          "experiment_id": "reference_lab.frequency_amplitude",
+          "experiment_id": "ui_signal.signal",
           "id": "experiment",
           "initial_proposed_points": 1,
           "inspections": [],
           "instrument_ids": [],
-          "label": "Frequency / amplitude model",
+          "label": "signal",
           "planned_setting_limit": 64,
           "planned_settings": [],
           "planned_settings_truncated": false,
@@ -774,7 +935,7 @@
                 "point"
               ],
               "dtype": "float64",
-              "id": "response",
+              "id": "result",
               "retention": "retained",
               "shape": [
                 1
@@ -795,8 +956,8 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:41133cca73c218363ebc52037c0d8a1373efe1165ada3b71804cdc387b11354c",
-      "id": "scopecat.author:reference_lab.frequency_amplitude",
+      "fingerprint": "sha256:0ce89cedf1071d9b9494c6c9eaae2312cee55bf6f5b5def3b95c34a06024a2fc",
+      "id": "scopecat.author:ui_signal.signal",
       "version": "1"
     },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -805,29 +966,29 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "scenario": null,
-        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
+        "setup_content_hash": "sha256:211d91edff28682eeead29fa86bc9e1bda37a2b30f66fabeff80c74a274f8975",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
-          "revision_id": "acceptance-parameters"
+          "content_hash": "sha256:47e9927c4dd24ae4f7ceefad80184e10cd4cc03cc68fcabfefff25185bfa11c0",
+          "revision_id": "acceptance-controls"
         },
         "setup": {
-          "content_hash": "sha256:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d",
-          "revision_id": "resolved:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d"
+          "content_hash": "sha256:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4",
+          "revision_id": "resolved:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4"
         }
       }
     },
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
+    "summary": "ui_signal.signal",
     "workspace_id": "acceptance-source"
   },
   "controls_scan": {
@@ -883,7 +1044,7 @@
       {
         "axis": null,
         "id": "reference_frequency",
-        "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
+        "provenance": "Explicit signal[signal].center",
         "state": "configuration",
         "value": {
           "unit": "GHz",
@@ -893,7 +1054,7 @@
       {
         "axis": null,
         "id": "maximum_detuning",
-        "provenance": "Maximum requested frequency offset from the reviewed carrier",
+        "provenance": "Requested frequency offset from the reviewed center",
         "state": "derived",
         "value": {
           "unit": "GHz",
@@ -902,7 +1063,7 @@
       }
     ],
     "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "experiment_id": "reference_lab.frequency_amplitude",
+    "experiment_id": "ui_signal.signal",
     "inspection": {
       "binding_edges": [],
       "bindings": [
@@ -923,7 +1084,7 @@
         {
           "captures": [],
           "demanded_by": [
-            "record:response"
+            "record:result"
           ],
           "deterministic": false,
           "id": "response",
@@ -931,7 +1092,7 @@
           "inputs": [
             "frequency",
             "amplitude",
-            "reference"
+            "center"
           ],
           "outputs": [
             "response"
@@ -952,12 +1113,12 @@
       "item_limit": 256,
       "parameters": [
         {
-          "column_id": "drive_carrier_frequency",
+          "column_id": "center",
           "key_columns": [
-            "qubit"
+            "id"
           ],
           "kind": "lookup",
-          "table_id": "qubits"
+          "table_id": "signal"
         }
       ],
       "point_limit": 6,
@@ -1060,7 +1221,7 @@
             "point"
           ],
           "dtype": "float64",
-          "id": "response",
+          "id": "result",
           "recording_group_id": null,
           "role": "observable",
           "shape": [
@@ -1094,7 +1255,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:00005e340e0cdc4f974654f5246c8802c7451b259d0c997b23c0a02f01e0164b",
+        "config_source_hash": "sha256:de5a386f0dedcb726654c1c91d8ef760e5dacd0a406537f7c5dcb0a260e9c28a",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1105,7 +1266,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1150,12 +1311,12 @@
             "unit": "runs",
             "value": 1.0
           },
-          "experiment_id": "reference_lab.frequency_amplitude",
+          "experiment_id": "ui_signal.signal",
           "id": "experiment",
           "initial_proposed_points": 6,
           "inspections": [],
           "instrument_ids": [],
-          "label": "Frequency / amplitude model",
+          "label": "signal",
           "planned_setting_limit": 64,
           "planned_settings": [],
           "planned_settings_truncated": false,
@@ -1172,7 +1333,7 @@
                 "point"
               ],
               "dtype": "float64",
-              "id": "response",
+              "id": "result",
               "retention": "retained",
               "shape": [
                 6
@@ -1193,8 +1354,8 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:41133cca73c218363ebc52037c0d8a1373efe1165ada3b71804cdc387b11354c",
-      "id": "scopecat.author:reference_lab.frequency_amplitude",
+      "fingerprint": "sha256:0ce89cedf1071d9b9494c6c9eaae2312cee55bf6f5b5def3b95c34a06024a2fc",
+      "id": "scopecat.author:ui_signal.signal",
       "version": "1"
     },
     "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -1203,29 +1364,29 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "config_content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "scenario": null,
-        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
+        "setup_content_hash": "sha256:211d91edff28682eeead29fa86bc9e1bda37a2b30f66fabeff80c74a274f8975",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "content_hash": "sha256:4de198ea95b473ff3e160d0e4cefa5dde7bff332659cbe35d5ac1d4ef0b587b6",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
-          "revision_id": "acceptance-parameters"
+          "content_hash": "sha256:47e9927c4dd24ae4f7ceefad80184e10cd4cc03cc68fcabfefff25185bfa11c0",
+          "revision_id": "acceptance-controls"
         },
         "setup": {
-          "content_hash": "sha256:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d",
-          "revision_id": "resolved:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d"
+          "content_hash": "sha256:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4",
+          "revision_id": "resolved:2621e335b6c6bc24f28b39633f24f9591e0588b7693a80f9424f6e444d9414f4"
         }
       }
     },
-    "summary": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
+    "summary": "ui_signal.signal",
     "workspace_id": "acceptance-source"
   },
   "diagnostic": {
@@ -1565,128 +1726,6 @@
           "preview",
           "submit"
         ],
-        "configuration_effect": "candidate",
-        "controls": [],
-        "description": "Measure, propose a timing change, run its candidate and request review. Accepting it as default remains a separate operator action.",
-        "id": "channel-timing",
-        "kind": "calibration",
-        "request": {
-          "additionalProperties": false,
-          "properties": {
-            "delay_ns": {
-              "default": 1.0,
-              "maximum": 10.0,
-              "minimum": 0.1,
-              "title": "Q1 channel delay (ns)",
-              "type": "number"
-            }
-          },
-          "title": "TimingRequest",
-          "type": "object"
-        },
-        "review": {
-          "instructions": "Review the source and candidate runs. Configuration acceptance is a separate action in the run's parameter proposals.",
-          "metadata": {},
-          "response_template": null,
-          "schema_codec": "scopecat.analysis-fact-schema.v1",
-          "schema_hash": "sha256:883d70a0d3ea73df08178493624f7f07abe2dd3e5ff08e286079c6f4adcdc98e",
-          "schema_id": "reference_lab.channel_timing_review.v1",
-          "structure": {
-            "fields": {
-              "accepted": {
-                "type": "bool"
-              },
-              "note": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "title": "Review q1 channel timing"
-        },
-        "title": "Q1 channel timing candidate",
-        "version": "1"
-      },
-      {
-        "actions": [
-          "preview",
-          "submit"
-        ],
-        "configuration_effect": "none",
-        "controls": [
-          {
-            "default": {
-              "unit": "GHz",
-              "value": 4.8
-            },
-            "group": "Signal",
-            "id": "frequency",
-            "maximum": 5.5,
-            "minimum": 4.5,
-            "ownership": "editable",
-            "provenance": "Reference model operating frequency",
-            "scannable": true,
-            "title": "Frequency",
-            "unit": "GHz"
-          },
-          {
-            "default": {
-              "unit": "V",
-              "value": 0.1
-            },
-            "group": "Signal",
-            "id": "amplitude",
-            "maximum": 0.5,
-            "minimum": 0.0,
-            "ownership": "editable",
-            "provenance": "Reference model low-amplitude default",
-            "scannable": true,
-            "title": "Amplitude",
-            "unit": "V"
-          },
-          {
-            "default": null,
-            "group": "Configuration",
-            "id": "reference_frequency",
-            "maximum": null,
-            "minimum": null,
-            "ownership": "configuration",
-            "provenance": "Accepted qubits[q0].drive_carrier_frequency; also used by the signal compute",
-            "scannable": false,
-            "title": "Reviewed carrier",
-            "unit": "GHz"
-          },
-          {
-            "default": null,
-            "group": "Derived",
-            "id": "maximum_detuning",
-            "maximum": null,
-            "minimum": null,
-            "ownership": "derived",
-            "provenance": "Maximum requested frequency offset from the reviewed carrier",
-            "scannable": false,
-            "title": "Maximum detuning",
-            "unit": "GHz"
-          }
-        ],
-        "description": "Preview fixed or scanned signal controls against the reviewed q0 carrier.\n\nProject limits: at most 64 points; amplitude at most 0.2 V when detuning\nexceeds 0.25 GHz. This analytic model makes no device calls.",
-        "id": "reference_lab.frequency_amplitude",
-        "kind": "diagnostic",
-        "request": {
-          "additionalProperties": false,
-          "properties": {},
-          "title": "frequency_amplitudeInputs",
-          "type": "object"
-        },
-        "review": null,
-        "title": "Frequency / amplitude model",
-        "version": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      },
-      {
-        "actions": [
-          "preview",
-          "submit"
-        ],
         "configuration_effect": "none",
         "controls": [],
         "description": "Retain one thermometer sample without changing device state or defaults.",
@@ -1782,7 +1821,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:00005e340e0cdc4f974654f5246c8802c7451b259d0c997b23c0a02f01e0164b",
+        "config_source_hash": "sha256:3e839c0382be26ff352895b1b000fcda11ddcc29ad71a3259ccea719b4af97a1",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1793,7 +1832,7 @@
       "scope_basis": "One authored run; all selected points.",
       "stages": [
         {
-          "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+          "config_content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
           "configuration": "selected_context",
           "configuration_meaning": "Uses exact parameter and setup revisions for this run; no calibration acceptance or default changes.",
           "costs": [
@@ -1895,7 +1934,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:20f26063c5bdc0295f712dca26e4588e25c64da80c9a460d9566d7df06aafcda",
+      "fingerprint": "sha256:caaa891d42f0395ba8657bd270c04da83c4640c2f67e34c011bf512acce4a5ab",
       "id": "scopecat.author:reference_lab.temperature_diagnostic",
       "version": "1"
     },
@@ -1907,25 +1946,25 @@
     "reviewed": {
       "binding": {
         "codec": "scopecat.scientific-binding.v3",
-        "config_content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "config_content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
         "scenario": null,
-        "setup_content_hash": "sha256:ffda9ee9776eac49f3aa8d75a81645b5c97fa0d3d3af909cafc13babd0e01140",
+        "setup_content_hash": "sha256:bd749036fc7346504cc5ec57fc3a6cdc655be85ffd644a521b3b61ed4d97752b",
         "subject": {
           "kind": "unbound"
         },
         "target_binding": null
       },
       "config_source": {
-        "content_hash": "sha256:92ae89a4deb567ed9f1d036c2c30d8aaafed33bbc4bf901f5ac1b826c8362f7f",
+        "content_hash": "sha256:881dc8f37b9953f2511d665dcf4083a63ac80c2b4b785695337850c876ecde9f",
         "kind": "parameter_revision",
         "overrides": [],
         "parameters": {
-          "content_hash": "sha256:fa9ee3d310686f0601ba7f7fc8f622b6972cf2901899ec5eda21a23017d9fae6",
+          "content_hash": "sha256:a208747d2a60505d2f83e325b654823e776451764e0dbb2b3774fc49fd7fb909",
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d",
-          "revision_id": "resolved:f63e09bc2c5191b151f569d6e5fc8c0398016026e02c7097a2d79e9f9b037b6d"
+          "content_hash": "sha256:2c1d2b447eb1b945cb981394ae5dfc044f3581fd656fdbf79c251d4e09eb60dc",
+          "revision_id": "resolved:2c1d2b447eb1b945cb981394ae5dfc044f3581fd656fdbf79c251d4e09eb60dc"
         }
       }
     },

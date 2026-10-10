@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
+
 import scopecat as sc
 from scopecat.measurements.dataset import Dataset
 

@@ -27,12 +27,7 @@ def create_application(_project_root: Path) -> LabApplication:
 
     from scopecat.application import LabApplication
 
-    from reference_lab.comparison import comparison_provider
     from reference_lab.lab import reference_lab_system
-    from reference_lab.launch import (
-        launch_channel_timing,
-        launch_provider,
-    )
     from reference_lab.workflows.analysis_recovery import (
         failed_temperature_analysis,
         recovered_temperature_analysis,
@@ -43,11 +38,8 @@ def create_application(_project_root: Path) -> LabApplication:
     )
 
     return LabApplication(
-        launch_provider=launch_provider,
-        comparison_provider=comparison_provider,
         author_modules=(
             "reference_lab_authors.authored",
-            "reference_lab_authors.frequency_amplitude",
             "reference_lab_authors.temperature_diagnostic",
         ),
         build_experiment_system=lambda config, instrument_catalog: reference_lab_system(
@@ -55,7 +47,6 @@ def create_application(_project_root: Path) -> LabApplication:
             instrument_catalog=instrument_catalog,
         ),
         procedures=(
-            launch_channel_timing,
             temperature_diagnostic_procedure,
             failed_temperature_analysis,
             recovered_temperature_analysis,

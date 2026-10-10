@@ -1,7 +1,7 @@
 # Refresh experiments, helpers and analysis
 
-The reference project keeps experiments in `reference_lab_authors` and drivers in
-`reference_lab`. Both can be ordinary source code. Author refresh selects code for
+Projects can keep experiment declarations and drivers in separate ordinary
+Python modules. Author refresh selects code for
 new tasks; changing the resident device driver uses a separate idle-device update.
 
 For Notebook/IPython work, use `session = sc.notebook()` once. Saved edits are
@@ -10,8 +10,8 @@ modules become available at the next cell. See the
 [Notebook workspace guide](../tutorials/teaching-sandboxes.md#notebook-workspace-and-saved-edits).
 The explicit operations below remain useful for scripts and controlled source selection.
 
-The reference lab enables author revisions by default. Edit the small files in
-`src/reference_lab_authors/authored`, then choose **Refresh author code** in
+The device-free project in `testing/fixtures/retained-signal` enables author
+revisions. In a copy of that project, edit `src/ui_signal`, then choose **Refresh author code** in
 **Experiments**. Scopecat validates a complete source snapshot in a new process
 before publishing it. Preview the updated controls and submit normally. The
 instrument service stays running; admitted procedures retain their original code.
@@ -49,7 +49,7 @@ Use the same connection/import cell on the first visit and after saving edits:
 ```python
 session = project.authoring()
 session.refresh()
-from reference_lab_authors.authored.signal import signal
+from ui_signal.ordinary import signal
 
 request = signal()
 launch = session.prepare(request)
@@ -125,7 +125,7 @@ with project.connect() as lab, project.authoring() as authors:
     )
     result = authors.analyze(
         retained.id,
-        "reference_lab_authors.authored.signal:selected_mean",
+        "ui_signal.ordinary:selected_mean",
         code_revision=original,
         key="original-model",
     )
@@ -149,7 +149,7 @@ not a claim of complete helper provenance.
 ## Declare simple form inputs
 
 Ordinary Python parameters with defaults become form fields alongside controls.
-For example, the reference `signal` experiment declares
+For example, the fixture’s `signal` experiment declares
 `polarity: Literal["positive", "negative"] = "positive"`. Select its polarity in
 Experiments, or pass `inputs={"polarity": "negative"}` to `authors.prepare()`.
 The same declaration creates the catalog schema and validates input values before
@@ -171,8 +171,8 @@ The maintainer configures these paths once in `scopecat.toml`:
 
 ```toml
 [authors]
-modules = ["reference_lab_authors.authored"]
-source_roots = ["src", "config"]
+modules = ["ui_signal.signal", "ui_signal.ordinary", "ui_signal.analysis"]
+source_roots = ["src"]
 ```
 
 `source_roots` archives the complete local dependency tree, including helper,

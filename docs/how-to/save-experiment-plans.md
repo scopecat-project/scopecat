@@ -50,7 +50,7 @@ import scopecat as sc
 
 with sc.open_project().authoring() as author:
     author.use(parameter_branch="daily", setup=author.setup.get("bench-a"))
-    prepared = author.prepare("reference_lab.frequency_amplitude", actor="alice")
+    prepared = author.prepare("signal", actor="alice")
     saved = prepared.save_plan("Frequency check", saved_by="alice")
 
     # A new preview selects the saved configuration and code, not today's default.

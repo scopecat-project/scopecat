@@ -1,4 +1,4 @@
-"""Explicit scientific inputs shared by the virtual reference benchmarks."""
+"""Explicit scientific inputs shared by the device-free author benchmarks."""
 
 from collections.abc import Callable
 from typing import cast
@@ -8,13 +8,13 @@ from scopecat.project import load_project_symbol
 from scopecat.records.parameter_revision import ParameterRevisionContent
 
 
-def select_reference_context(author: AuthorProject) -> None:
+def select_author_context(author: AuthorProject) -> None:
     """Select independent parameters/setup without publishing a global default."""
     assert author.project_root is not None
     factory = cast(
         "Callable[[], ParameterRevisionContent]",
         load_project_symbol(
-            "reference_lab.configuration:initial_parameters",
+            "ui_signal.application:initial_parameters",
             author.project_root,
             subject="benchmark parameters",
             require_callable=True,

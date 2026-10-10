@@ -105,15 +105,14 @@ recovery, unchanged failed-procedure history, exact recovery provenance and
 idempotency/conflict checks. Run counts compare against the existing store rather
 than assuming the service belongs to only one test.
 
-The launcher suite starts two equipment-only daemons to retain foreign-endpoint
-isolation coverage. Only the target daemon receives explicit parameter revisions;
-catalog, preflight, control edits, candidate review and HTTP dispatch do not rely
-on a global parameter default. Its stale-preview test now changes executable
-setup authority: new work from the old review is rejected, while replay of an
-existing admission remains idempotent. No-op candidate diagnostics use a separate
-saved parameter revision rather than temporarily changing a global default.
-Selecting inputs is not scientific acceptance; preflight reports selected context
-and proposed candidate separately.
+The ordinary-author launcher suite starts two equipment-only daemons to retain
+foreign-endpoint isolation. Catalog, preflight, control edits and HTTP dispatch
+use explicit parameter revisions. Saving another setup does not mutate an exact
+reviewed launch; original-admission replay remains idempotent. The old timing
+candidate launcher is removed because its delay was never consumed by compilation
+or execution. DRAG tests own scientific candidate review and recovery, while
+server scientific-admission tests own distinct-stage plan configurations and
+unchanged sample subjects.
 
 Retained device/scientific fixtures start with equipment only and explicitly save
 parameter revisions when needed; direct instrument control needs none.
@@ -207,7 +206,7 @@ serves the DRAG candidate fixture. Keep process ownership explicit when adding t
 
 The retained-data UI journeys `run-comparison.e2e.ts` and
 `copy-read-only-code.e2e.ts` use their own device-free author workspace under
-`apps/scopecat-ui/e2e/fixtures/retained-signal`. One signal parameter replaces the
+`testing/fixtures/retained-signal`. One signal parameter replaces the
 four-qubit configuration. Real workers retain comparison/source refresh, candidate
 rejection and input handoff; a fresh kernel reopens exact old publications without
 importing author code or acquiring again. The former `gallery_inputs` helper has
@@ -221,7 +220,8 @@ device registry exercise exact parameter/setup/source identities without loading
 quantum compilation. Source edits, frozen in-flight work, conflicts and restart
 still cross real workers and storage. `manual-launch.e2e.ts` and the remaining
 `procedure-operator.e2e.ts` cases retain device ownership, device-revision
-invalidation and the physical timing candidate/review path.
+invalidation and diagnostic admission/restart. DRAG integration tests retain
+scientific candidate verification; the legacy timing launcher is retired.
 
 ## Shared generated acceptance
 
@@ -302,19 +302,25 @@ Scientific choices (frequency, amplitude, timing, point/shot shape and retained
 products) remain visible to the author. Worker leases, compiler IR and SDK buffers
 are supporting diagnostics for the same frozen plan and data.
 
-`reference_lab/workflows/exploratory_signal.py` and `reference_lab/exploration.py`
-provide four analytic runs: two synthetic samples with local `q0`, each in parked
-and shifted contexts. Known carrier values are fixture inputs, not discovered
-calibration. `tests/test_exploration.py` checks retained identities, independent
-analysis over the same data, missing-input rejection and reconnection. Context
-labels describe provenance; they do not resolve parameters or prove validity.
-Source refresh and transitive source retention are separately covered by the
-[author revision journey](../how-to/refresh-author-code.md).
+`testing/fixtures/retained-signal` is a device-free author project shared by
+retained-data UI checks, generic author benchmarks and server author journeys.
+Its synthetic response and explicit parameter revision support ordinary analysis,
+source edits, candidate verification, grouped publication and reopening. Known
+centers are fixture inputs, not discovered calibration.
 
-This fixture provides no instrument or physical evidence. Unknown-sample tests
-must expose a missing response instead of silently recentering on the fixture's
-known answer. Current user-facing outcomes are described in
-[workflow evaluations](workflow-evaluations.md).
+`packages/scopecat-server/tests/author_journeys` owns those analysis and recovery
+interactions, including typed scalar readback, source restore, launch inspection,
+independent sessions, target/batch identity and saved-plan handoff. Independent sample/parameter
+selection and frozen inputs are covered by server `test_independent_parameters.py`
+and the UI parameter-context journeys. `test_unknown_parameter_authoring.py`
+owns missing/unknown-cell consumption and schema history. These replace the
+retired four-case exploratory and everyday-author wrappers without making their
+historical scenario list a permanent contract. Scientific device integration,
+including live VNA groups and DRAG verification, stays in the reference fixture.
+
+This fixture provides no instrument or physical evidence. Context labels do not
+resolve parameters or prove validity; current user-facing outcomes are described
+in [workflow evaluations](workflow-evaluations.md).
 
 ## Historical planning records
 

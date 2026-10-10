@@ -58,7 +58,6 @@ class ChannelCalibration(sc.ParameterModel, table="channel_calibrations"):
     "Reviewed per-qubit line calibration; physical routes live in config."
 
     qubit: sc.Param[sc.EntityRef] = sc.param(key=True, entity_kind="logical_qubit")
-    channel_delay: sc.Magnitude[float] = sc.quantity(unit="ns")
     flux_gain: sc.Param[float] = sc.param()
     flux_polarity: sc.Param[int] = sc.param()
     flux_offset: sc.Magnitude[float] = sc.quantity(unit="V")
@@ -224,28 +223,24 @@ def reference_lab_parameter_snapshot() -> ParameterSnapshot:
             ChannelCalibration: [
                 ChannelCalibration(
                     qubit=sc.EntityRef(id="q0", kind="logical_qubit"),
-                    channel_delay=0.0,
                     flux_gain=0.98,
                     flux_polarity=1,
                     flux_offset=0.0,
                 ),
                 ChannelCalibration(
                     qubit=sc.EntityRef(id="q1", kind="logical_qubit"),
-                    channel_delay=1.5,
                     flux_gain=1.02,
                     flux_polarity=-1,
                     flux_offset=0.002,
                 ),
                 ChannelCalibration(
                     qubit=sc.EntityRef(id="q2", kind="logical_qubit"),
-                    channel_delay=-0.5,
                     flux_gain=1.01,
                     flux_polarity=1,
                     flux_offset=-0.001,
                 ),
                 ChannelCalibration(
                     qubit=sc.EntityRef(id="q3", kind="logical_qubit"),
-                    channel_delay=0.75,
                     flux_gain=0.99,
                     flux_polarity=-1,
                     flux_offset=0.003,

@@ -45,7 +45,7 @@ def test_workspace_run_reopens_in_fresh_python(
         author.use(sample=sample.id, parameter_branch=branch.name, setup=equipment.ref)
         parameters = author.parameters.workspace(branch.name)
         stale = parameters.copy()
-        parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
+        parameters["signal"]["signal"]["center"] = sc.Quantity(5.1, "GHz")
         prepared = author.prepare(
             "signal",
             parameters=parameters,
@@ -59,10 +59,10 @@ def test_workspace_run_reopens_in_fresh_python(
             ).preview.point_count
             == 3
         )
-        parameters["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(4.8, "GHz")
+        parameters["signal"]["signal"]["center"] = sc.Quantity(4.85, "GHz")
         saved = parameters.save(note="Notebook edit")
         assert parameters.save() == saved
-        stale["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(4.9, "GHz")
+        stale["signal"]["signal"]["center"] = sc.Quantity(4.9, "GHz")
         with pytest.raises(DaemonConflictError, match="branch changed"):
             stale.save()
         assert author.parameters.workspace(branch.name).version == saved

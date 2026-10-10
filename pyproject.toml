@@ -52,6 +52,7 @@ include = [
   "packages/scopecat-quantum/tests",
   "examples/reference_lab/src",
   "examples/reference_lab/tests",
+  "testing/fixtures/retained-signal/src",
   "scripts",
   "benchmarks",
   "testing/scopecat-testkit/src",
@@ -67,6 +68,7 @@ pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "recommended"
 extraPaths = [
+  "testing/fixtures/retained-signal/src",
   "packages/scopecat",
   "packages/scopecat/src",
   "packages/lab-teaching/src",
@@ -469,6 +471,7 @@ integration_paths = [
   "packages/lab-tools/tests/test_teaching_delivery.py",
 ]
 journey_paths = [
+  "packages/scopecat-server/tests/author_journeys",
   "packages/lab-tools/tests/test_editing_teaching_journey.py",
   "packages/lab-tools/tests/test_data_reset.py",
   "packages/lab-tools/tests/test_platform_environment.py",
@@ -495,20 +498,16 @@ journey_paths = [
 "packages/lab-tools/tests/test_installed_adapter_journey.py" = 45.2
 "examples/reference_lab/tests/test_acceptance.py" = 37.3
 "examples/reference_lab/tests/test_analysis_recovery.py" = 6.1
-"examples/reference_lab/tests/test_author_launch.py" = 232.3
-"examples/reference_lab/tests/test_author_refresh.py" = 161.5
-"examples/reference_lab/tests/test_comparison.py" = 78.8
-"examples/reference_lab/tests/test_controls.py" = 0.0
+"packages/scopecat-server/tests/author_journeys/test_author_launch.py" = 232.3
+"packages/scopecat-server/tests/author_journeys/test_author_refresh.py" = 161.5
+"packages/scopecat-server/tests/author_journeys/test_comparison.py" = 78.8
 "examples/reference_lab/tests/test_daemon_client.py" = 4.6
-"examples/reference_lab/tests/test_everyday_author.py" = 1.5
-"examples/reference_lab/tests/test_experiment_plans.py" = 145.2
-"examples/reference_lab/tests/test_exploration.py" = 3.3
+"packages/scopecat-server/tests/author_journeys/test_experiment_plans.py" = 145.2
 "examples/reference_lab/tests/test_flux_spectroscopy.py" = 9.9
 "examples/reference_lab/tests/test_launch.py" = 111.5
-"examples/reference_lab/tests/test_managed_author_session.py" = 59.1
+"packages/scopecat-server/tests/author_journeys/test_managed_author_session.py" = 59.1
 "examples/reference_lab/tests/test_manual_launch.py" = 65.4
-"examples/reference_lab/tests/test_ordinary_analysis.py" = 80.2
-"examples/reference_lab/tests/test_parameter_contexts.py" = 10.0
+"packages/scopecat-server/tests/author_journeys/test_analysis.py" = 80.2
 "examples/reference_lab/tests/test_parameter_structure.py" = 3.4
 "examples/reference_lab/tests/test_typed_candidates.py" = 115.3
 "examples/reference_lab/tests/unit/test_bench_devices.py" = 0.0
@@ -573,6 +572,7 @@ scopecat-server = { workspace = true }
 scopecat-testkit = { workspace = true }
 
 [tool.uv.workspace]
+exclude = ["testing/fixtures"]
 members = [
   "packages/*",
   "examples/reference_lab",

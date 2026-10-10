@@ -1,8 +1,9 @@
 # Retire the reference gallery by behavior
 
-The gallery's presentation scripts are retired. Its remaining device, compiler
-and scientific inputs support integration tests while their ownership is reviewed
-in [#773](https://github.com/scopecat-project/scopecat/issues/773), under
+The gallery's presentation scripts and generic author shell are retired. Its
+retained device, compiler and scientific inputs belong to the integration evidence
+owners below, completing the tracked-fixture retirement scope of
+[#773](https://github.com/scopecat-project/scopecat/issues/773), under
 [#615](https://github.com/scopecat-project/scopecat/issues/615). This does not make
 the reference application a supported author template.
 
@@ -10,8 +11,9 @@ The lab originally probed user needs through runnable experiments. Retiring its
 implementation does not retire those needs. [Workflow evaluations](workflow-evaluations.md)
 retain representative user goals and gaps; this page maps their current evidence.
 Help tutorials own teaching, core tests own mechanism rules, and a few combined
-journeys retain scientific integration and product feedback. The whole old
-implementation can eventually retire without creating another gallery API.
+journeys retain scientific integration and product feedback. The retained source
+directory is an integration fixture, not unfinished gallery retirement or another
+gallery API. Future changes follow the needs of those consumers.
 
 ## Current evidence owners
 
@@ -25,9 +27,9 @@ otherwise. These are current owners, not a commitment to keep every fixture.
 | Ramsey, raw IQ, signed IF/LO and compilation | `test_quantum_composition.py`, `unit/test_quantum_runner.py` and `unit/test_list_mode_*` retain host ordering, point-local routes, physical buffers, multiplexed acquisition, shared claims, bounded chunks and numerical entity correspondence. Shared acceptance checks independent-channel availability and HTTP traces. |
 | DRAG candidate → independent verification → adoption | `test_typed_candidates.py` retains simulated device acquisition, numerical fit/report, exact candidate lineage, explicit branch publication and accepted-gate execution. Verification does not mutate defaults or setup. |
 | Joint calibration and recovery | The same candidate tests retain target-complete joint remeasurement, rejection, stale destinations, restart and lost-response replay. Server branch/analysis tests own atomic publication, conflicts and current-format recovery. |
-| Live/offline grouped analysis | `test_grouped_analysis.py` and `test_live_group_traces.py` retain grouped analysis, live traces and reopening. Core dataset tests own generic grouping, availability and selection. |
-| Compare results → next experiment | `test_comparison.py` and `test_experiment_plans.py` retain exact source inputs, candidate rejection, saved plans and handoff. Pure compute/UI presentation can use smaller fixtures. |
-| Author edits and reopening | `test_author_refresh.py`, `test_typed_author_refresh.py` and managed-author tests retain admitted source and independent contexts across edits/restart. Shipped Help lessons own the learning experience. |
+| Live/offline grouped analysis | Server `author_journeys/test_grouping.py` and reference `test_live_group_traces.py` retain grouped analysis, live traces and reopening. Core dataset tests own generic grouping, availability and selection. |
+| Compare results → next experiment | Server `author_journeys/test_comparison.py` and `author_journeys/test_experiment_plans.py` retain exact source inputs, candidate rejection, saved plans and handoff. Pure compute/UI presentation can use smaller fixtures. |
+| Author edits and reopening | Server `author_journeys/test_author_refresh.py`, `test_typed_author_refresh.py` and managed-author tests retain admitted source and independent contexts across edits/restart. Shipped Help lessons own the learning experience. |
 
 These eight groups describe the remaining review surface, not eight promises to
 preserve every old scenario. Keep stable user goals and scientific/data semantics
@@ -58,8 +60,9 @@ Do not reduce every scientific/device case to a minimal compute fixture.
 
 The scope device, monitor binding and scope-only interfaces are removed. Retained
 AWG/digitizer/trigger participation, capture queues and non-scope receipts still
-have consumers. `pump-source` remains dynamically reachable through its catalog
-and route; its scientific need is an inventory question, not proof of dead code.
+have consumers. The spare `pump-source` catalog entry and route are removed;
+the selected-project configuration check uses the existing `drive-lo-a` RF source.
+No acquisition depended on the spare entry.
 The unused single-output `play(waveform)` protocol and its separate sampled-waveform
 codec are also retired. AWGs execute multi-channel programs through load/arm and
 the shared trigger; output reset remains a state-invalidation input. Existing
@@ -67,6 +70,16 @@ payload, list-mode device-runtime, quantum-runner and worker-composition tests o
 buffer transport, trigger ordering, ambiguous-load failure, shared claims and
 reset recovery. Removing the old receipt-only branch does not replace these
 physical/compiler boundaries with compute-only evidence.
+
+The legacy `channel-timing` launcher and its `channel_delay` parameter are
+retired. The operator supplied that proposal; neither compilation nor execution
+consumed the value, so a completed candidate run did not establish timing
+calibration. DRAG tests retain measured candidates, independent verification,
+branch publication and joint recovery. Core scientific-admission tests own
+multi-stage plan subject/configuration rules. Shared acceptance still inspects
+real Ramsey planned settings and displays a trial DRAG-parameter proposal;
+execution alone is not scientific approval. No timing-calibration capability is
+claimed by that display fixture.
 
 The current source map is in the [reference lab README](https://github.com/scopecat-project/scopecat/blob/main/examples/reference_lab/README.md).
 
@@ -99,7 +112,33 @@ Representative deletion and validation records
 are [#929](https://github.com/scopecat-project/scopecat/pull/929) and
 [#931](https://github.com/scopecat-project/scopecat/pull/931).
 
-## Remaining work
+## Retirement outcome and retained ownership
+
+Generic launch/source-restore, session/batch/target selection, saved-plan and
+retained-analysis journeys now belong to server `author_journeys`, using the
+shared device-free project. The scalar verifier already creates a current starter;
+its test wrapper is classified with those journeys. The reference author module
+now retains Ramsey and live VNA/group declarations. The old copied-Ramsey timing
+assertion is covered by the remaining manual-Ramsey and quantum-composition
+journeys; it is not reproduced in a compute-only project.
+
+Configuration-owned and derived-control presentation now comes from the same
+single-signal project through the existing acceptance generator. Core
+`authoring/test_controls.py` owns project validation; the obsolete reference
+64-point policy is retired. The physical UI draft/authority check uses Ramsey.
+
+The retained device/compiler inventory has bounded consumers. q2/q3 provide the
+unrelated activation/required chains in `unit/test_list_mode_placement.py`, while
+q0/q1 exercise shared LO and multiplexed readout. Both overlap and non-overlap
+cases remain; the exact labels and four-qubit count are not a product promise.
+Compiler/runner tests and compiler/scan benchmarks own buffers, routing, triggering,
+resource claims and bounded execution. The science journeys in the table own
+spectroscopy and calibration composition; manual/diagnostic UI journeys and server
+snapshot recovery retain the cross-layer boundaries. These are ongoing integration
+fixtures, not a requirement to recreate old examples or prove a synthetic plant's
+physical validity before retiring them. No known generic shell or unused spare
+device remains in this inventory review. Keeping these current inputs does not
+require keeping #773 open solely because `examples/reference_lab` still exists.
 
 Retire duplicate consumers and unused dependencies after checking their actual
 callers and current requirements. Move generic cases to existing core, starter or

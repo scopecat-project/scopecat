@@ -14,7 +14,7 @@ from typing import cast
 
 import psutil
 
-from benchmarks.e2e.author_context import select_reference_context
+from benchmarks.e2e.author_context import select_author_context
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.application.author_project import AuthorProject
 from scopecat.project import load_project
@@ -26,7 +26,7 @@ _MODULE_ROLES = {
     "scopecat_server.validation_worker": "prepare",
     "scopecat_server.retained_worker": "analysis",
 }
-_ANALYSIS = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"
+_ANALYSIS = "ui_signal.analysis:estimate_peak"
 
 
 def validate_workload(
@@ -46,9 +46,8 @@ def measure(
         rounds=rounds,
         operations_per_revision=operations_per_revision,
     )
-    source = Path(__file__).resolve().parents[2] / "examples/reference_lab"
-    for name in ("src", "config"):
-        shutil.copytree(source / name, root / name)
+    source = Path(__file__).resolve().parents[2] / "testing/fixtures/retained-signal"
+    shutil.copytree(source / "src", root / "src")
     shutil.copy2(source / "scopecat.toml", root / "scopecat.toml")
     project = load_project(root / "scopecat.toml")
     daemon = start_project(project)
@@ -132,7 +131,7 @@ def measure(
         with AuthorProject(
             daemon.base_url, project_root=root, receipts=root / "receipts"
         ) as author:
-            select_reference_context(author)
+            select_author_context(author)
             prepared = timed(
                 "prepare_first",
                 lambda: author.prepare("signal", scans={"frequency": [4.7, 4.8, 4.9]}),
@@ -205,7 +204,7 @@ def measure(
 
             # Keep the historical first/repeat pair even in the default short case.
             visit(original, "initial", start=2)
-            source_file = root / "src/reference_lab_authors/authored/signal.py"
+            source_file = root / "src/ui_signal/ordinary.py"
             revision_hashes = [original.content_hash]
             for round_index in range(rounds):
                 original_pools = snapshot("round_started")
@@ -258,7 +257,7 @@ def measure(
             )
     return {
         **benchmark_record_header(
-            case_id="author-residency", case_version=3, kind="e2e"
+            case_id="author-residency", case_version=4, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),

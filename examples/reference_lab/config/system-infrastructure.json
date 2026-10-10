@@ -3,15 +3,6 @@
   "instrument_registry": {
     "instruments": [
       {
-        "id": "pump-source",
-        "exclusivity_key": "pump-source",
-        "driver_id": "scopecat.virtual.rf_source",
-        "connection": {"kind": "virtual"},
-        "run_start": "preserve",
-        "success_action": "release",
-        "failure_action": "abort_and_release"
-      },
-      {
         "id": "bench-source",
         "exclusivity_key": "bench-source",
         "driver_id": "scopecat.virtual.dc_source",
@@ -296,13 +287,6 @@
         "entity_ids": ["cryostat"],
         "endpoints": [
           {"interface_id": "scopecat.temperature_readout/v1", "entity_id": "cryostat"}
-        ]
-      },
-      {
-        "id": "pump-source",
-        "instrument_id": "pump-source",
-        "endpoints": [
-          {"interface_id": "scopecat.rf_output/v2"}
         ]
       },
       {

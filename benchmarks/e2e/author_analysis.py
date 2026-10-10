@@ -1,4 +1,4 @@
-"""Retained analysis and comparison on copied virtual reference data."""
+"""Retained analysis and comparison on copied device-free author data."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from typing import cast
 
 import httpx2
 
-from benchmarks.e2e.author_context import select_reference_context
+from benchmarks.e2e.author_context import select_author_context
 from benchmarks.e2e.author_prepare import TimingTransport
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
 from scopecat.api.run import RunHandle
@@ -33,9 +33,8 @@ from scopecat_server.lifecycle import (  # noqa: TID251 - deployed benchmark
 
 
 def measure(root: Path, *, repetitions: int) -> dict[str, object]:
-    source = Path(__file__).resolve().parents[2] / "examples/reference_lab"
-    for name in ("src", "config"):
-        shutil.copytree(source / name, root / name)
+    source = Path(__file__).resolve().parents[2] / "testing/fixtures/retained-signal"
+    shutil.copytree(source / "src", root / "src")
     shutil.copy2(source / "scopecat.toml", root / "scopecat.toml")
     project = load_project(root / "scopecat.toml")
     daemon = start_project(project)
@@ -61,8 +60,8 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                 base_url=daemon.base_url, timeout=60, transport=comparison_transport
             ) as http,
         ):
-            select_reference_context(author)
-            from reference_lab_authors.authored.ordinary_analysis import PeakResult
+            select_author_context(author)
+            from ui_signal.analysis import PeakResult
 
             start = time.perf_counter()
             signal = (
@@ -75,7 +74,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
             for amplitude in (0.05, 0.08):
                 runs.append(
                     author.prepare(
-                        "reference_lab.frequency_amplitude",
+                        "ui_signal.signal",
                         scans={
                             "frequency": [
                                 Quantity(value, "GHz")
@@ -89,7 +88,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
                     .result()
                 )
             setup_seconds = time.perf_counter() - start
-            name = "reference_lab_authors.authored.ordinary_analysis:estimate_peak"
+            name = "ui_signal.analysis:estimate_peak"
             for i in range(repetitions + 1):
                 timed(
                     "analysis_first" if i == 0 else "analysis_repeat",
@@ -153,7 +152,7 @@ def measure(root: Path, *, repetitions: int) -> dict[str, object]:
         stop_project(project)
     return {
         **benchmark_record_header(
-            case_id="author-analysis", case_version=2, kind="e2e"
+            case_id="author-analysis", case_version=3, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),

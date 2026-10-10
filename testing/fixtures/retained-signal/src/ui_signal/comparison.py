@@ -1,14 +1,11 @@
-"""Lab-owned, adjustable quadratic fit of two retained signal-model runs.
-
-This is a small analysis example, not a physical calibration or acquisition.
-"""
+"""Retained comparison, candidate review and input handoff for a synthetic signal."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypedDict
 
 import numpy as np
+
 import scopecat as sc
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.comparison import comparison_inputs, save_comparison
@@ -21,12 +18,7 @@ from scopecat.application.comparison import (
     comparison_selection,
 )
 from scopecat.kernel.quantity import Quantity
-from scopecat.records.analysis import (
-    AnalysisDatasetViewSource,
-    AnalysisField,
-    AnalysisFigureLayerSpec,
-    AnalysisFigureProjection,
-)
+from scopecat.records.analysis import AnalysisField
 from scopecat.records.comparison import (
     ComparisonCatalog,
     ComparisonPublication,
@@ -35,9 +27,8 @@ from scopecat.records.comparison import (
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchRequest
 
-from reference_lab.parameters import QubitParameters
-from reference_lab_authors.authored.comparison import MODEL, SignalFit, fit_signal
-from reference_lab_authors.frequency_amplitude import frequency_amplitude
+from .model import MODEL, SignalFit, fit_signal
+from .signal import SignalParameters, signal
 
 
 @dataclass(frozen=True)
@@ -59,12 +50,10 @@ class CandidateReview:
 
 
 NEXT_INPUT_SCHEMA = AnalysisFactSchema(
-    "reference_lab.signal-next-input.v1", SignalNextInput
+    "ui_signal.signal-next-input.v1", SignalNextInput
 )
-FIT_SCHEMA = AnalysisFactSchema("reference_lab.signal-comparison.v1", SignalFit)
-REVIEW_SCHEMA = AnalysisFactSchema(
-    "reference_lab.comparison-review.v1", CandidateReview
-)
+FIT_SCHEMA = AnalysisFactSchema("ui_signal.signal-comparison.v1", SignalFit)
+REVIEW_SCHEMA = AnalysisFactSchema("ui_signal.comparison-review.v1", CandidateReview)
 
 
 def _publication(run: str, published: PublishedAnalysis) -> ComparisonPublication:
@@ -73,13 +62,6 @@ def _publication(run: str, published: PublishedAnalysis) -> ComparisonPublicatio
         analysis_id=published.id,
         publication_hash=published.publication_hash,
     )
-
-
-class _Observation(TypedDict):
-    frequency: float
-    response: float
-    run: str
-    point: int
 
 
 def comparison_provider(lab: LabClient, request: ComparisonRequest) -> ComparisonResult:
@@ -105,35 +87,12 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
                 "secondary": selected.secondary,
                 "primary_points": request.primary.points,
                 "secondary_points": request.secondary.points,
-                "primary_run": request.primary_run,
-                "secondary_run": request.secondary_run,
                 "offset_ghz": offset,
             },
         )
         import pandas as pd
 
-        rows: list[_Observation] = [
-            {
-                "frequency": Quantity(x, curve.coordinate_unit).to("GHz").value,
-                "response": Quantity(y, curve.observable_unit).to("V").value,
-                "run": curve.run_id,
-                "point": point,
-            }
-            for curve, points in (
-                (selected.curves.primary, request.primary.points),
-                (selected.curves.secondary, request.secondary.points),
-            )
-            for x, y, point in zip(curve.x, curve.y, points, strict=True)
-        ]
-        grid = np.linspace(
-            min(row["frequency"] for row in rows),
-            max(row["frequency"] for row in rows),
-            80,
-        )
-        fields = {
-            "frequency": AnalysisField(role="coordinate", unit="GHz"),
-            "response": AnalysisField(role="observable", unit="V"),
-        }
+        grid = np.linspace(4.6, 5.0, 21)
         analysis = (
             selected.context.result(
                 f"Signal fit · {MODEL.version} · offset {offset:g} GHz"
@@ -142,9 +101,9 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
             .fact(
                 "next-input",
                 SignalNextInput(
-                    frequency_amplitude.id,
+                    signal.id,
                     AuthorExperiment.from_declaration(
-                        frequency_amplitude,
+                        signal,
                         code_revision=request.code_revision,
                         workspace_id=request.workspace_id,
                     ).entry.version,
@@ -152,7 +111,6 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
                 ),
                 schema=NEXT_INPUT_SCHEMA,
             )
-            .dataset("selected", pd.DataFrame(rows), fields=fields)
             .dataset(
                 "curve",
                 pd.DataFrame(
@@ -163,26 +121,17 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
                         ),
                     }
                 ),
-                fields=fields,
+                fields={
+                    "frequency": AnalysisField(role="coordinate", unit="GHz"),
+                    "response": AnalysisField(role="observable", unit="V"),
+                },
             )
-            .figure_layers(
-                title="Selected retained signals and quadratic model",
-                layers=(
-                    AnalysisFigureLayerSpec(
-                        id="selected",
-                        source=AnalysisDatasetViewSource(output_id="selected"),
-                        projection=AnalysisFigureProjection(
-                            kind="scatter", x="frequency", y="response", series="run"
-                        ),
-                    ),
-                    AnalysisFigureLayerSpec(
-                        id="model",
-                        source=AnalysisDatasetViewSource(output_id="curve"),
-                        projection=AnalysisFigureProjection(
-                            kind="line", x="frequency", y="response"
-                        ),
-                    ),
-                ),
+            .figure(
+                dataset="curve",
+                kind="line",
+                x="frequency",
+                y="response",
+                title="Retained signal fit",
             )
         )
         return _publication(request.primary_run, save_comparison(analysis, request))
@@ -244,8 +193,8 @@ def comparison_provider(lab: LabClient, request: ComparisonRequest) -> Compariso
         .propose(
             "carrier",
             sc.parameter_update(
-                QubitParameters.drive_carrier_frequency,
-                sc.EntityRef(id="q0", kind="logical_qubit"),
+                SignalParameters.center,
+                "signal",
                 Quantity(fit.center_ghz, "GHz"),
             ),
             reason=(

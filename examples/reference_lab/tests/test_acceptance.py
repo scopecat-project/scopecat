@@ -66,7 +66,7 @@ def test_shared_fixture_retains_diagnostic_review_and_entity_contracts() -> None
     [reviewed] = ParameterProposalPage.model_validate(
         fixture["candidate_proposal"]
     ).items
-    assert reviewed.proposal.id == "q1-channel-delay"
+    assert reviewed.proposal.id == "q1-drag-beta"
     assert reviewed.approval is None
     schema = MeasurementDatasetSchema.model_validate(fixture["entity_analysis"])
     [entity_axis] = [
@@ -185,7 +185,7 @@ def test_shared_fixture_retains_control_sources_and_normalized_units() -> None:
     assert scalar.controls[0].value == Quantity(4.9, "GHz")
     assert scalar.controls[1].value == Quantity(0.1, "V")
     assert scalar.controls[2].value == Quantity(4.8, "GHz")
-    assert "qubits[q0]" in scalar.controls[2].provenance
+    assert "signal[signal]" in scalar.controls[2].provenance
     assert [value.state for value in scanned.controls[:2]] == ["scanned", "scanned"]
     for value in scanned.controls[:2]:
         assert value.value is None and value.axis is not None

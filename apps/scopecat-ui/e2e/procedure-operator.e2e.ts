@@ -4,11 +4,7 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import {
-  chooseReferenceContext,
-  prepareReferenceContexts,
-  reviewRetainedExperiment,
-} from "./reference-context";
+import { chooseReferenceContext, prepareReferenceContexts } from "./reference-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
@@ -104,7 +100,7 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
 });
 
 retainedProcedureTest(
-  "reopens an admitted procedure after restart and follows exact retained run and analysis",
+  "reopens an admitted procedure after restart and follows its exact retained run",
   async ({ page, retainedProcedure }, testInfo) => {
     const { project, baseUrl, procedureId } = retainedProcedure;
     const endpoint = { base_url: baseUrl };
@@ -158,78 +154,44 @@ retainedProcedureTest(
       const runScreenshot = testInfo.outputPath("operator-retained-run.png");
       await page.screenshot({ path: runScreenshot, fullPage: true });
       await testInfo.attach("Retained run", { path: runScreenshot, contentType: "image/png" });
-      await page.goto(`${endpoint.base_url}/#launch`);
-      await page.getByLabel("Experiment", { exact: true }).selectOption("channel-timing");
-      await chooseReferenceContext(page);
-      await reviewRetainedExperiment(page);
-      await expect(
-        page.getByRole("button", { name: "Start acquisition", exact: true }),
-      ).toBeDisabled();
-      await page.getByRole("button", { name: "Preview", exact: true }).click();
-      await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-      const sourceScope = page.getByRole("region", { name: "Selected-configuration source run" });
-      const candidateScope = page.getByRole("region", {
-        name: "Proposed-configuration verification run",
-      });
-      await expect(sourceScope.getByText(/^Exact: 64 shots/)).toBeVisible();
-      await expect(candidateScope.getByText(/^Exact: 64 shots/)).toBeVisible();
-      await expect(candidateScope.getByText(/^Unknown \(s\)/)).toBeVisible();
-      await expect(candidateScope.getByText("Retained (planned dataset)")).toBeVisible();
-      await expect(candidateScope.getByText(/has not run or been verified/)).toBeVisible();
-      const preflightScreenshot = testInfo.outputPath("bounded-preflight.png");
-      await page.screenshot({ path: preflightScreenshot, fullPage: true });
-      await testInfo.attach("Bounded source and candidate preflight", {
-        path: preflightScreenshot,
-        contentType: "image/png",
-      });
-      const submissionResponse = page.waitForResponse(
-        (response) =>
-          new URL(response.url()).pathname === "/api/v1/experiment-launcher/submit" &&
-          response.request().method() === "POST",
-      );
-      await page.getByRole("button", { name: "Start acquisition" }).click();
-      // Admission launches a separate project worker. Observe that boundary before
-      // budgeting the existing execution milestones, rather than timing both together.
-      const response = await submissionResponse;
-      expect(response.ok()).toBe(true);
-      const submitted = (await response.json()) as {
-        procedure_id: string;
-        dispatch_error: string | null;
-      };
-      expect(submitted.dispatch_error).toBeNull();
-      await expect(page).toHaveURL(new RegExp(`procedure=${submitted.procedure_id}`));
-      // This procedure runs a source acquisition, analysis, and a second acquisition.
-      // Observe each durable milestone instead of spending one UI wait on all three.
-      const sourceStep = page.getByRole("listitem").filter({
-        has: page.getByText(/^source: (Running|Completed)$/),
-      });
-      // Source and candidate share an experiment name; select the source step
-      // even when it completes before the next browser observation.
-      const sourceRun = page
-        .getByText(/^Current step: source ·/)
-        .locator("..")
-        .getByRole("link", { name: /^Open current child run:/ })
-        .or(sourceStep.getByRole("link", { name: /^Open retained run:/ }));
-      await expect(sourceRun).toBeVisible();
-      const sourceHref = await sourceRun.getAttribute("href");
-      expect(sourceHref).toContain(`procedure=${submitted.procedure_id}`);
-      await expect(page.getByText("source: Completed", { exact: true })).toBeVisible();
-      await expect(sourceStep.getByRole("link", { name: /^Open retained run:/ })).toHaveAttribute(
-        "href",
-        sourceHref!,
-      );
-      await expect(page.getByText("candidate: Completed", { exact: true })).toBeVisible();
-      await expect(
-        page.getByRole("status").filter({ hasText: /^Waiting for review$/ }),
-      ).toBeVisible();
+      // Reuse the retained acquisition for the generic procedure → analysis link.
+      const runId = new URL(page.url()).searchParams.get("run")!;
+      const analyzed = JSON.parse(
+        uv([
+          "python",
+          "-c",
+          `
+import json, sys
+import scopecat as sc
+from scopecat.automation import RunOutputRef
+with sc.open_project(sys.argv[1]).connect() as lab:
+    from reference_lab.workflows.analysis_recovery import (
+        RetainedTemperatureIntent, recovered_temperature_analysis,
+    )
+    handle = lab.procedures.submit(
+        recovered_temperature_analysis,
+        RetainedTemperatureIntent(run=RunOutputRef(run_id=sys.argv[2])),
+        request_key="browser-analysis-link",
+    ).resume()
+    output = handle.output("summary")
+    assert output.kind == "analysis"
+    print(json.dumps({"procedure": handle.id, "analysis": output.analysis_record_id}))
+`,
+          project,
+          runId,
+        ]),
+      ) as { procedure: string; analysis: string };
+      await page.goto(`${endpoint.base_url}/?procedure=${analyzed.procedure}#launch`);
       const analysisLink = page.getByRole("link", { name: "Open analysis", exact: true });
-      const href = await analysisLink.getAttribute("href");
-      expect(href).toContain("run-analysis=");
+      await expect(analysisLink).toHaveAttribute(
+        "href",
+        `?procedure=${analyzed.procedure}&run-analysis=${analyzed.analysis}&run=${runId}#runs`,
+      );
       await analysisLink.click();
       await expect(
-        page.getByRole("heading", { name: "Channel timing candidate", exact: true }),
+        page.getByRole("heading", { name: "Retained temperature summary", exact: true }),
       ).toBeVisible();
-      expect(new URL(page.url()).searchParams.get("procedure")).toBeTruthy();
+      expect(new URL(page.url()).searchParams.get("procedure")).toBe(analyzed.procedure);
     } catch (error) {
       // Capture the live failure before fixture teardown stops the daemon.
       const url = new URL(page.url());
@@ -305,17 +267,15 @@ test("retains launch inputs across workspaces and invalidates previews without s
     expect(sample.status(), await sample.text()).toBe(201);
     prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page
-      .getByLabel("Experiment", { exact: true })
-      .selectOption("reference_lab.frequency_amplitude");
+    await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
     await chooseReferenceContext(page);
     await page.getByLabel("Sample ID").fill("sample-navigation");
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("draft-author");
-    await page.getByLabel("Frequency source").selectOption("range");
-    await page.getByLabel("Frequency unit").selectOption("MHz");
-    await page.getByLabel("Frequency start").fill("4700");
-    await page.getByLabel("Frequency stop").fill("4900");
-    await page.getByLabel("Frequency points").fill("3");
+    await page.getByLabel("Delay source").selectOption("range");
+    await page.getByLabel("Delay unit").selectOption("ns");
+    await page.getByLabel("Delay start").fill("16");
+    await page.getByLabel("Delay stop").fill("48");
+    await page.getByLabel("Delay points").fill("3");
     for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
@@ -325,23 +285,21 @@ test("retains launch inputs across workspaces and invalidates previews without s
         .getByRole("navigation", { name: "Project sections" })
         .getByRole("button", { name: "Experiments", exact: true })
         .click();
-      await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(
-        "reference_lab.frequency_amplitude",
-      );
+      await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
       await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
       await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
         "draft-author",
       );
-      await expect(page.getByLabel("Frequency source")).toHaveValue("range");
-      await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
-      await expect(page.getByLabel("Frequency start")).toHaveValue("4700");
-      await expect(page.getByLabel("Frequency stop")).toHaveValue("4900");
-      await expect(page.getByLabel("Frequency points")).toHaveValue("3");
+      await expect(page.getByLabel("Delay source")).toHaveValue("range");
+      await expect(page.getByLabel("Delay unit")).toHaveValue("ns");
+      await expect(page.getByLabel("Delay start")).toHaveValue("16");
+      await expect(page.getByLabel("Delay stop")).toHaveValue("48");
+      await expect(page.getByLabel("Delay points")).toHaveValue("3");
     }
     expect(submissions).toBe(0);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    await page.getByLabel("Frequency points").fill("2");
+    await page.getByLabel("Delay points").fill("2");
     await expect(page.getByText("Preview ready", { exact: true })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
     await page.getByRole("button", { name: "Preview", exact: true }).click();
@@ -357,7 +315,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
       contentType: "image/png",
     });
     await page.getByRole("button", { name: "Reset launch draft" }).click();
-    await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
+    await expect(page.getByLabel("Delay", { exact: true })).toHaveValue("48");
     await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
       "draft-author",

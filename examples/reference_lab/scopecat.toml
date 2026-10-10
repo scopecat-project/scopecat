@@ -7,6 +7,5 @@ instrument_backend = "reference_lab.backend:create_backend"
 source_roots = ["src", "config"]
 refresh_roots = [
   "src/reference_lab_authors/authored",
-  "src/reference_lab_authors/frequency_amplitude.py",
   "src/reference_lab_authors/temperature_diagnostic.py",
 ]

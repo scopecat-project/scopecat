@@ -31,12 +31,14 @@ from scopecat.records.scientific_selection import (
     SampleSubjectChoice,
     ScientificSelection,
 )
-from scopecat_server.author_worker import revision_project
-from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_testkit.authoring import source_workspace_id
 from scopecat_testkit.project_loading import isolated_project_imports
+from ui_signal.application import initial_parameters
 
-from reference_lab.configuration import EXAMPLE_ROOT, bootstrap_config
+from scopecat_server.author_worker import revision_project
+from scopecat_server.lifecycle import start_project, stop_project
+
+from .conftest import FIXTURE_ROOT
 
 
 @dataclass(frozen=True)
@@ -50,22 +52,20 @@ class AuthorDaemon:
 
 
 @pytest.fixture(scope="module")
-def reference_lab_daemon(
+def author_daemon(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Generator[AuthorDaemon]:
     root = tmp_path_factory.mktemp("ordinary-author")
-    for name in ("src", "config"):
-        shutil.copytree(EXAMPLE_ROOT / name, root / name)
-    shutil.copy2(EXAMPLE_ROOT / "scopecat.toml", root / "scopecat.toml")
-    source_path = root / "src/reference_lab_authors/authored/signal.py"
+    for name in ("src",):
+        shutil.copytree(FIXTURE_ROOT / name, root / name)
+    shutil.copy2(FIXTURE_ROOT / "scopecat.toml", root / "scopecat.toml")
+    source_path = root / "src/ui_signal/ordinary.py"
     source = source_path.read_text(encoding="utf-8")
     # Only ordinary author code changes, with no Git repository or project edits.
     source = (
         source.replace("def signal(", "def copied_signal(")
         .replace('"Exploratory signal"', '"Copied signal"')
         .replace("return gain /", "return 2 * gain /")
-        .replace('sc.Quantity(48, "ns")', 'sc.Quantity(88, "ns")')
-        .replace(".with_shots(8)", ".with_shots(4)")
         .replace(
             '.fact("mean", float(selected.mean()))',
             '.fact("mean", float(selected.max()))',
@@ -107,7 +107,7 @@ def preview_signal(
     source_path.write_text(source, encoding="utf-8")
     project = load_project(root / "scopecat.toml")
     with isolated_project_imports():
-        load_project(EXAMPLE_ROOT / "scopecat.toml").load_bootstrap()
+        load_project(FIXTURE_ROOT / "scopecat.toml").load_bootstrap()
     with pytest.MonkeyPatch.context() as patch:
         patch.delenv("SCOPECAT_DAEMON_URL", raising=False)
         endpoint = start_project(project)
@@ -123,18 +123,16 @@ def preview_signal(
                 application = revision_project(root, active).load_application()
                 analysis = cast(
                     "AnalysisDefinition[...]",
-                    import_module(
-                        "reference_lab_authors.authored.signal"
-                    ).selected_mean,
+                    import_module("ui_signal.ordinary").selected_mean,
                 )()
             # Keep the loaded objects, not snapshot import paths, across the
             # function-scoped loader isolation used by the rest of this suite.
             with application.connect(endpoint.base_url) as lab:
-                config = bootstrap_config()
+                config = initial_parameters()
                 parameters = lab.parameters.save(
                     name="author-inputs",
-                    catalog=config.parameter_catalog,
-                    parameters=config.parameter_snapshot,
+                    catalog=config.catalog,
+                    parameters=config.parameters,
                 )
                 configuration = ParameterConfiguration(
                     ref=parameters.ref, setup=lab.setup.get("initial").ref
@@ -151,9 +149,9 @@ def preview_signal(
 
 
 def test_copied_author_uses_shared_control_plan_and_real_retained_run(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
-    fixture = reference_lab_daemon
+    fixture = author_daemon
     authors = fixture.application.authors
     provider = fixture.application.launch_provider
     assert authors is not None and provider is not None
@@ -310,7 +308,7 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
             "author-daily", revision=fixture.configuration.ref
         )
         editor = lab.parameters.workspace(branch.name)
-        editor["qubits"]["q0"]["drive_carrier_frequency"] = sc.Quantity(5.1, "GHz")
+        editor["signal"]["signal"]["center"] = sc.Quantity(5.1, "GHz")
         editor.save()
         assert provider(lab, command) == admitted
         replay = provider(
@@ -324,39 +322,14 @@ def test_copied_author_uses_shared_control_plan_and_real_retained_run(
         assert lab.config.registry().entries == ()
 
 
-def test_author_changes_supported_timing_without_application_edits(
-    reference_lab_daemon: AuthorDaemon,
-) -> None:
-    fixture = reference_lab_daemon
-    authors = fixture.application.authors
-    assert authors is not None
-    with fixture.application.connect(fixture.url) as lab:
-        config = lab.parameters.resolve(
-            fixture.configuration.ref, setup=fixture.configuration.setup
-        ).config
-        entry = authors.get("ramsey")
-        invocation = entry.edit(config=config)
-        preview = lab.preview(
-            invocation, config=config, setup=fixture.configuration.setup
-        )
-        assert preview.initial_point_count == 1
-        run = lab.run(invocation, config=config, setup=fixture.configuration.setup)
-        assert run.status == "completed"
-        domain = run.request.point_plan.domain
-        assert domain.kind == "grid"
-        assert domain.axes[0].source.kind == "values"
-        assert domain.axes[0].source.values == [Quantity(88, "ns")]
-
-
 def test_revision_aware_notebook_prepare_preserves_parameter_context(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
     from scopecat.application.author_project import AuthorProject
     from scopecat.records.run import ParameterRunConfigSource
+    from ui_signal.signal import SignalParameters
 
-    from reference_lab.parameters import QubitParameters
-
-    fixture = reference_lab_daemon
+    fixture = author_daemon
     with fixture.application.connect(fixture.url) as lab:
         setup = lab.setup.get("initial")
         sample = lab.samples.create(
@@ -366,8 +339,8 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
         )
         overrides = (
             sc.parameter_update(
-                QubitParameters.drive_carrier_frequency,
-                sc.EntityRef(id="q0", kind="logical_qubit"),
+                SignalParameters.center,
+                "signal",
                 sc.Quantity(5.1, "GHz"),
             ),
         )
@@ -421,15 +394,15 @@ def test_revision_aware_notebook_prepare_preserves_parameter_context(
 
 
 def test_required_author_input_diagnostics_survive_the_worker_boundary(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
     with AuthorProject(
-        reference_lab_daemon.url,
-        workspace_id=source_workspace_id(reference_lab_daemon.url),
+        author_daemon.url,
+        workspace_id=source_workspace_id(author_daemon.url),
     ) as author:
         author.use(
-            parameters=reference_lab_daemon.configuration.ref,
-            setup=reference_lab_daemon.configuration.setup,
+            parameters=author_daemon.configuration.ref,
+            setup=author_daemon.configuration.setup,
         )
         entry = next(
             item for item in author.catalog().entries if item.id == "required_target"
@@ -453,10 +426,10 @@ class SignalInputs:
 @pytest.mark.parametrize("typed", [False, True])
 def test_editable_request_rebuilds_and_reuses_saved_plan(
     typed: bool,
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
     tmp_path: Path,
 ) -> None:
-    fixture = reference_lab_daemon
+    fixture = author_daemon
     assert fixture.application.authors is not None
     declaration = fixture.application.authors.get("copied_signal").declaration
     request = declaration(gain=1.0)
@@ -472,8 +445,8 @@ def test_editable_request_rebuilds_and_reuses_saved_plan(
         receipts=tmp_path / "receipts",
     ) as author:
         author.use(
-            parameters=reference_lab_daemon.configuration.ref,
-            setup=reference_lab_daemon.configuration.setup,
+            parameters=author_daemon.configuration.ref,
+            setup=author_daemon.configuration.setup,
         )
         selected = request.typed(SignalInputs) if typed else request
         scanned = author.prepare(selected)
@@ -522,19 +495,19 @@ def test_editable_request_rebuilds_and_reuses_saved_plan(
 
 
 def test_imported_request_rejects_changed_declaration_but_can_select_old_revision(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
-    fixture = reference_lab_daemon
+    fixture = author_daemon
     assert fixture.application.authors is not None
     declaration = fixture.application.authors.get("copied_signal").declaration
     request = declaration(gain=1.0)
-    path = fixture.root / "src/reference_lab_authors/authored/signal.py"
+    path = fixture.root / "src/ui_signal/ordinary.py"
     with AuthorProject(
         fixture.url, workspace_id=source_workspace_id(fixture.url)
     ) as author:
         author.use(
-            parameters=reference_lab_daemon.configuration.ref,
-            setup=reference_lab_daemon.configuration.setup,
+            parameters=author_daemon.configuration.ref,
+            setup=author_daemon.configuration.setup,
         )
         original = author.prepare(request)
         try:
@@ -557,15 +530,15 @@ def test_imported_request_rejects_changed_declaration_but_can_select_old_revisio
 
 
 def test_required_control_uses_existing_catalog_preview_and_plan_paths(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
     with AuthorProject(
-        reference_lab_daemon.url,
-        workspace_id=source_workspace_id(reference_lab_daemon.url),
+        author_daemon.url,
+        workspace_id=source_workspace_id(author_daemon.url),
     ) as author:
         author.use(
-            parameters=reference_lab_daemon.configuration.ref,
-            setup=reference_lab_daemon.configuration.setup,
+            parameters=author_daemon.configuration.ref,
+            setup=author_daemon.configuration.setup,
         )
         entry = next(
             item for item in author.catalog().entries if item.id == "required_level"
@@ -582,9 +555,9 @@ def test_required_control_uses_existing_catalog_preview_and_plan_paths(
 
 
 def test_author_inspection_is_bounded_and_retained_without_a_live_client(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
-    fixture = reference_lab_daemon
+    fixture = author_daemon
     assert fixture.application.authors is not None
     declaration = fixture.application.authors.get("copied_signal").declaration
     request = declaration(gain=1.0)
@@ -595,8 +568,8 @@ def test_author_inspection_is_bounded_and_retained_without_a_live_client(
         fixture.url, workspace_id=source_workspace_id(fixture.url)
     ) as author:
         author.use(
-            parameters=reference_lab_daemon.configuration.ref,
-            setup=reference_lab_daemon.configuration.setup,
+            parameters=author_daemon.configuration.ref,
+            setup=author_daemon.configuration.setup,
         )
         prepared = author.prepare(request)
         facts = prepared.inspection
@@ -609,10 +582,10 @@ def test_author_inspection_is_bounded_and_retained_without_a_live_client(
         assert any("response" in compute.implementation for compute in facts.computes)
         assert any(
             parameter.kind == "lookup"
-            and parameter.table_id == "qubits"
-            and parameter.column_id == "drive_carrier_frequency"
+            and parameter.table_id == "signal"
+            and parameter.column_id == "center"
             for parameter in facts.parameters
-        )
+        ), facts.parameters
         retained = prepared.preview.model_dump_json()
         request.values["frequency"] = sc.Quantity(4.8, "GHz")
         fixed = author.prepare(request)
@@ -628,9 +601,9 @@ def test_author_inspection_is_bounded_and_retained_without_a_live_client(
 
 
 def test_author_reads_ongoing_preview_after_reconnect(
-    reference_lab_daemon: AuthorDaemon,
+    author_daemon: AuthorDaemon,
 ) -> None:
-    fixture = reference_lab_daemon
+    fixture = author_daemon
     release = fixture.root / "release-preview"
     try:
         with AuthorProject(
@@ -639,8 +612,8 @@ def test_author_reads_ongoing_preview_after_reconnect(
             receipts=fixture.root / "receipts",
         ) as author:
             author.use(
-                parameters=reference_lab_daemon.configuration.ref,
-                setup=reference_lab_daemon.configuration.setup,
+                parameters=author_daemon.configuration.ref,
+                setup=author_daemon.configuration.setup,
             )
             job = author.prepare(
                 "preview_signal",

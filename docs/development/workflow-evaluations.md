@@ -63,9 +63,10 @@ Inspect live or offline groups, publish conclusions, compare retained runs and
 carry chosen inputs into the next experiment without reconstructing identity.
 
 **Evidence:** core dataset and Arrow pagination tests own selection/export rules.
-Reference `test_grouped_analysis.py`, `test_live_group_traces.py` and
-`test_comparison.py` retain grouped publication/restart and comparison-to-next-run
-journeys. See [grouped analysis](../how-to/grouped-analysis.md) and
+Server `author_journeys/test_grouping.py` retains offline grouped publication and
+restart. Reference `test_live_group_traces.py` retains live VNA grouping, while
+server `author_journeys/test_comparison.py` and the UI comparison journey retain
+comparison-to-next-run handoffs. See [grouped analysis](../how-to/grouped-analysis.md) and
 [retained-run comparison](../how-to/retained-run-comparison.md).
 
 **Boundary and questions:** pure compute/UI cases can move to smaller fixtures.

@@ -1,9 +1,9 @@
 # Scopecat Reference Integration Lab
 
-The reference lab is a retained integration fixture with legacy author code: one four-qubit project
+The reference lab is a retained device/compiler and scientific integration fixture: one four-qubit project
 with virtual RF and DC sources, temperature monitor, VNA, three shared LOs, two
-bare AWGs, a bare digitizer and timing controller. Its thirteen
-devices and six reviewed parameter tables exercise direct control, experiments,
+bare AWGs, a bare digitizer and timing controller. The virtual devices and
+explicit parameter revisions exercise direct control, experiments,
 quantum compilation, measurement analysis, and configuration history through
 the same daemon.
 
@@ -163,9 +163,9 @@ uv run basedpyright examples/reference_lab
 
 The [fixture ownership guide](../../docs/development/reference-fixtures.md#shared-generated-acceptance)
 documents shared response generation and coverage.
-`temperature_diagnostic()` in `workflows/temperature_diagnostic.py` retains one
+`temperature_diagnostic()` in `reference_lab_authors/temperature_diagnostic.py` retains one
 read-only thermometer sample through the normal run API. The shared fixture
-producer also exercises a reviewed timing candidate, resource wait/cancel and
+producer also exercises a trial DRAG-parameter candidate, resource wait/cancel and
 entity-indexed analysis using the existing public workflows.
 
 ```sh
@@ -175,12 +175,10 @@ uv run pytest examples/reference_lab/tests/test_acceptance.py
 
 ## Bounded launch preflight
 
-The typed launcher declares a diagnostic stage or separate source and candidate
-verification stages. Each stage reports planned executions, entity IDs, points,
-shots and configuration meaning. The first experiment's initial point count is
-not the entire procedure workload. The candidate stage uses the proposed channel
-delay to preview its configuration; this does not claim the candidate has run,
-passed verification or been accepted as the default.
+Ordinary author experiments use the framework launcher. The old channel-timing
+launcher is removed: its operator-supplied delay never entered the compiler or
+device execution. Scientific candidate verification belongs to the DRAG workflows.
+Shared acceptance obtains planned physical settings directly from a Ramsey preview.
 
 `planning.preflight.summarize_preflight` projects an existing experiment preview
 without compiling additional points. The preview displays at most 64 point
@@ -201,16 +199,12 @@ preflight; the launcher then shows that scope and estimates were not provided,
 never zero. A changed input requires a new preview, and submission still checks
 the frozen request, exact parameter/setup inputs and current device heads.
 
-The **Frequency / amplitude model** launcher uses one control declaration for
-notebook edits and forms. It previews fixed or scanned axes, configuration-owned
-q0 carrier and derived detuning, then runs a hardware-free analytic signal model.
-See [Declare experiment controls once](../../docs/how-to/declare-experiment-controls.md)
-for scalar → scan → default edits and the project constraint boundary.
-
 ## Ordinary experiment authors
 
 The application discovers local experiments in `src/reference_lab_authors/authored/`.
-Edit controls, helpers, Ramsey timing or retained-data analysis there; Launch lists
-them automatically without a per-experiment provider or procedure. Follow the
+The remaining declarations are Ramsey timing and live VNA/group analysis.
+Generic author, source-refresh and retained-analysis journeys use
+`testing/fixtures/retained-signal`; they do not require this laboratory. Launch
+discovers declarations without a per-experiment provider or procedure. Follow the
 [author guide](../../docs/how-to/write-an-experiment.md) for Python and GUI execution,
 source provenance limits, and the boundary with shared laboratory capabilities.
