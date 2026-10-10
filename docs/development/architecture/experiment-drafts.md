@@ -11,7 +11,7 @@ Saving input neither validates scientific values nor acquires data.
 
 Entering an experiment loads its saved input before editing. Intermediate invalid
 text survives reload and application restart. A recovered input always requires
-review and a new preview; a retained preview or request key is never restored as
+review and fresh preparation; a retained preview or request key is never restored as
 permission to execute. Current-source changes and declaration/default changes
 preserve existing edits. Removed or no-longer-editable fields remain visible as
 unresolved input until the user explicitly confirms their removal. New fields
@@ -67,9 +67,28 @@ An old query response cannot overwrite a subsequently selected receipt or new-ru
 choice.
 
 “Prepare a new run” is separate from recovering/opening the original task. It
-invalidates the preview and request key, requiring a fresh preview and explicit
-Start. Original receipts remain in history regardless of task completion; one
-new run does not erase evidence of an earlier uncertain submission.
+invalidates the preview and request key, requiring fresh preparation on explicit
+Start. Preview can inspect that preparation without submitting. Original receipts
+remain in history regardless of task completion; one new run does not erase evidence
+of an earlier uncertain submission.
+
+## Start and optional preview
+
+Start runs the existing preview and validity checks internally when there is no
+matching retained preview. The returned evidence is passed directly to submission;
+React rendering is not the handoff. Both paths preserve source, scientific context,
+request hash and manual-operation fences. The displayed catalog source is pinned
+for preparation. Known task effects and declared review instructions appear before
+Start; generating a candidate is not branch publication, and declared review may
+be automated. Starting does not answer a waiting interpretation request.
+
+One synchronous preparation guard covers checking through submission. Input edits,
+source/experiment changes, navigation and Cancel preparation revoke pending intent.
+Each asynchronous boundary checks that intent before proceeding. The original-request
+persistence path repeats the check after saving input and after retaining the receipt.
+A cancelled retained-but-unsent attempt is historical evidence, not acquisition.
+After submit is sent, the UI reports possible acquisition and uses task controls or
+original-receipt recovery; it does not call this preparation cancellation.
 
 ## Storage boundary
 

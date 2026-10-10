@@ -26,6 +26,8 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import { apiClient, apiData, type LaunchRejection } from "../../api-client";
 import { initialControlDrafts, type ControlDrafts } from "./ControlFields";
@@ -59,13 +61,18 @@ export interface LaunchDraft {
   revision: number;
   preview?: LaunchPreview;
   requestKey?: string;
-  pending: false | "preview" | "submit";
+  pending: false | "preview" | "prepare" | "submit";
   error: string;
   notice: string;
   admittedProcedureId?: string;
 }
 type DraftUpdate = (current: LaunchDraft) => LaunchDraft;
+export interface LaunchPreparation {
+  isIntended: () => boolean;
+  finish: () => void;
+}
 interface DraftContext {
+  beginPreparation: () => LaunchPreparation | undefined;
   recovery: ReturnType<typeof useLaunchRecovery>;
   recover: (record: DraftRecord) => void;
   recoverAttempt: (record: AttemptRecord) => void;
@@ -94,6 +101,7 @@ interface DraftContext {
     request: SubmissionRequest,
     definition: string,
     identity?: components["schemas"]["ProcedureDefinitionRef"],
+    preparation?: { isIntended: () => boolean; onSending: () => void },
   ) => Promise<string | undefined>;
   checkSubmission: () => Promise<void>;
 }
@@ -143,7 +151,8 @@ function initialDraft(
     revision,
     pending: false,
     error: "",
-    notice: "Experiment inputs are saved in application data. Preview before starting.",
+    notice:
+      "Experiment inputs are saved in application data. Start checks them before acquisition.",
   };
 }
 
@@ -180,7 +189,21 @@ function ProjectDraft({
   projectId: string | undefined;
   children: ReactNode;
 }) {
-  const [draft, setDraft] = useState<LaunchDraft>();
+  const [draft, setDraftState] = useState<LaunchDraft>();
+  const latest = useRef(draft);
+  const preparationToken = useRef<symbol | undefined>(undefined);
+  // Admission continuations must observe edits synchronously, before a React effect
+  // can run or a late preview/receipt response can continue the old intent.
+  const setDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>((change) => {
+    const next = typeof change === "function" ? change(latest.current) : change;
+    if (
+      next?.revision !== latest.current?.revision ||
+      next?.workspaceId !== latest.current?.workspaceId
+    )
+      preparationToken.current = undefined;
+    latest.current = next;
+    setDraftState(next);
+  }, []);
   const recovery = useLaunchRecovery(draft, setDraft);
   const [workspaceId, setWorkspaceId] = useState(
     () => new URLSearchParams(window.location.search).get("workspace") || "",
@@ -220,10 +243,6 @@ function ProjectDraft({
       active = false;
     };
   }, [attemptReload]);
-  const latest = useRef(draft);
-  useEffect(() => {
-    latest.current = draft;
-  }, [draft]);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -240,7 +259,7 @@ function ProjectDraft({
       return current && current.error !== error ? { ...current, error } : current;
     });
     return false;
-  }, [canLeave]);
+  }, [canLeave, setDraft]);
   const mayLeaveRef = useRef(mayLeave);
   useEffect(() => {
     mayLeaveRef.current = mayLeave;
@@ -253,7 +272,7 @@ function ProjectDraft({
           ? {
               ...invalidateDraft(
                 current,
-                "Current source selected. Review retained input before preview.",
+                "Current source selected. Review retained input before starting or previewing.",
               ),
               codeRevision: undefined,
               needsReview: true,
@@ -263,7 +282,6 @@ function ProjectDraft({
       return;
     }
     currentWorkspace.current = owner;
-    latest.current = undefined;
     setWorkspaceId(owner);
     setDraft((current) =>
       current
@@ -281,7 +299,7 @@ function ProjectDraft({
             revision: current.revision + 1,
             pending: false,
             error: "",
-            notice: "Code workspace changed. Select an experiment and preview before starting.",
+            notice: "Code workspace changed. Select an experiment; Start will check its inputs.",
           }
         : current,
     );
@@ -335,12 +353,13 @@ function ProjectDraft({
         return next;
       });
     },
-    [selectedConfiguration, selectedWorkingInput, selectedSubject, workspaceId],
+    [selectedConfiguration, selectedWorkingInput, selectedSubject, workspaceId, setDraft],
   );
   async function submit(
     request: SubmissionRequest,
     definition: string,
     identity?: components["schemas"]["ProcedureDefinitionRef"],
+    preparation?: { isIntended: () => boolean; onSending: () => void },
   ) {
     if (attempt) throw new Error("Recover the original task or explicitly choose a new run first.");
     if (!attemptsReady)
@@ -354,6 +373,7 @@ function ProjectDraft({
     const inputIdentity = input ? JSON.stringify(rawInput(input)) : undefined;
     const stillIntended = () =>
       alive.current &&
+      (!preparation || preparation.isIntended()) &&
       attemptGeneration.current === generation &&
       latest.current?.revision === input?.revision &&
       latest.current?.workspaceId === input?.workspaceId &&
@@ -377,6 +397,7 @@ function ProjectDraft({
         error: "",
       });
       try {
+        preparation?.onSending();
         const receipt = await apiData(
           apiClient.POST("/api/v1/experiment-launcher/submit", { body: request }),
         );
@@ -441,6 +462,26 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        beginPreparation: () => {
+          if (preparationToken.current || submitting.current) return;
+          const token = Symbol("launch preparation");
+          preparationToken.current = token;
+          const input = latest.current;
+          const isIntended = () =>
+            alive.current &&
+            preparationToken.current === token &&
+            latest.current?.revision === input?.revision &&
+            latest.current?.workspaceId === input?.workspaceId;
+          return {
+            isIntended,
+            finish: () => {
+              if (preparationToken.current !== token) return;
+              if (isIntended())
+                setDraft((current) => (current ? { ...current, pending: false } : current));
+              preparationToken.current = undefined;
+            },
+          };
+        },
         recovery,
         recover: (record) => {
           if (!mayLeave()) return;
@@ -450,6 +491,12 @@ function ProjectDraft({
           setDraft(restoreDraft(record, (latest.current?.revision ?? 0) + 1));
         },
         recoverAttempt: (record) => {
+          preparationToken.current = undefined;
+          setDraft((current) =>
+            current
+              ? invalidateDraft(current, "Original receipt selected. Preparation stopped.")
+              : current,
+          );
           attemptGeneration.current += 1;
           setAttempt({
             request: attemptRequest(record),
@@ -484,7 +531,7 @@ function ProjectDraft({
             current
               ? invalidateDraft(
                   { ...current, admittedProcedureId: undefined },
-                  "New run selected. Preview and explicitly start another acquisition. The original receipt remains in recovery history.",
+                  "New run selected. Start checks the inputs for another acquisition. The original receipt remains in recovery history.",
                 )
               : current,
           );
@@ -501,7 +548,7 @@ function ProjectDraft({
             !current.codeRevision
               ? invalidateDraft(
                   current,
-                  "Author code refreshed. Inputs are retained; preview the current source before starting.",
+                  "Author code refreshed. Inputs are retained; review them before starting.",
                 )
               : current,
           ),
@@ -531,7 +578,7 @@ function ProjectDraft({
                           : choice,
                     },
                   },
-                  "Configuration selected. Preview again before starting.",
+                  "Configuration selected. Start will check these inputs before acquisition.",
                 )
               : current,
           );
@@ -581,7 +628,7 @@ function ProjectDraft({
             codeRevision: d.code_revision,
             workspaceId: d.workspace_id,
             handoff: undefined,
-            notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${current?.actor ?? "operator"}. Fresh preview required.`,
+            notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${current?.actor ?? "operator"}. Start will prepare these saved inputs again.`,
           });
         },
         importHandoff: (entry, handoff) => {

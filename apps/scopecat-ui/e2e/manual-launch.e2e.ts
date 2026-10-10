@@ -136,9 +136,8 @@ with LabApplication().connect(sys.argv[1]) as lab:
     await expect(page.getByText(/Manual instrument changes invalidate this preview/)).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     await expect(page.getByLabel("Delay", { exact: true })).toHaveValue("64");
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
     const submitted = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/submit"),
     );

@@ -98,7 +98,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await reviewRetainedExperiment(page);
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     const nextPreviewResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/experiment-launcher/preview") &&
@@ -241,7 +241,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
       .click();
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(submissions).toHaveLength(1);
     const previewB = await preview();
     expect(previewB.code_revision).not.toEqual(previewA.code_revision);

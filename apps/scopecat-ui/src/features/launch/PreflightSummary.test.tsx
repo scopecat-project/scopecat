@@ -5,20 +5,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import type { components } from "../../api-schema";
 import { PreflightSummary } from "./PreflightSummary";
-import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
+import type { LaunchPreview } from "./launch-api";
 
 afterEach(cleanup);
-const entry: LaunchCatalogEntry = {
-  id: "candidate",
-  version: "1",
-  title: "Candidate",
-  description: "Compile candidate",
-  kind: "calibration",
-  configuration_effect: "candidate",
-  controls: [],
-  actions: ["preview", "submit"],
-  request: {},
-};
 const preview: LaunchPreview = {
   workspace_id: "legacy",
   experiment_id: "candidate",
@@ -105,7 +94,6 @@ const stage: components["schemas"]["PreflightStage"] = {
 it("separates exact stage scope, target bounds, unknown time and retention", () => {
   render(
     <PreflightSummary
-      entry={entry}
       preview={{
         ...preview,
         preflight: {
@@ -131,7 +119,7 @@ it("separates exact stage scope, target bounds, unknown time and retention", () 
 });
 
 it("reports an absent project summary without inventing zero work", () => {
-  render(<PreflightSummary entry={entry} preview={preview} />);
+  render(<PreflightSummary preview={preview} />);
   expect(screen.getByText(/Detailed preflight not provided/)).toBeVisible();
   expect(screen.queryByText(/Exact:/)).not.toBeInTheDocument();
 });
@@ -139,7 +127,6 @@ it("reports an absent project summary without inventing zero work", () => {
 it("shows planned settings with unit, order and truncation without claiming readback", () => {
   render(
     <PreflightSummary
-      entry={entry}
       preview={{
         ...preview,
         preflight: {
@@ -186,7 +173,6 @@ it("shows planned settings with unit, order and truncation without claiming read
 it("distinguishes an uninspected point from an inspected point with no settings", () => {
   const view = render(
     <PreflightSummary
-      entry={entry}
       preview={{
         ...preview,
         preflight: {
@@ -201,7 +187,6 @@ it("distinguishes an uninspected point from an inspected point with no settings"
   expect(screen.queryByText("No instrument settings in the selected point.")).toBeNull();
   view.rerender(
     <PreflightSummary
-      entry={entry}
       preview={{
         ...preview,
         preflight: {

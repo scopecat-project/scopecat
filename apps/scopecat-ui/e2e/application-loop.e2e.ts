@@ -72,7 +72,6 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       .click();
     await page.getByLabel("Experiment setup", { exact: true }).selectOption("loop-bench");
     await page.getByLabel("Position", { exact: true }).fill("0.5");
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
     const start = page.getByRole("button", { name: "Start acquisition", exact: true });
     await expect(start).toBeEnabled();
     let submissions = 0;

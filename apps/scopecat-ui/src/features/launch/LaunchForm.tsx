@@ -3,12 +3,17 @@ import { readParameterDraft, freezeParameterDraft } from "../config/parameter-dr
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { reviewedForRequest } from "./scientific-selection";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData, ApiError } from "../../api-client";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 import { ControlFields, ControlSummary, controlEdits } from "./ControlFields";
-import { invalidateDraft, useLaunchDraft, type LaunchDraft } from "./LaunchDraft";
+import {
+  invalidateDraft,
+  useLaunchDraft,
+  type LaunchDraft,
+  type LaunchPreparation,
+} from "./LaunchDraft";
 import { MeasurementContext, type MeasurementContextChange } from "./MeasurementContext";
 import { PlanSave } from "./PlanSave";
 import { PreflightSummary } from "./PreflightSummary";
@@ -35,17 +40,21 @@ export function LaunchForm({
     select,
     isCurrent,
     submit,
+    beginPreparation,
+    attemptsReady,
     attempt,
     recovery,
   } = useLaunchDraft();
   if (!retained) throw new Error("Select a launch draft before rendering its form");
   const draft: LaunchDraft = retained;
   const { controls: drafts, actor, values, error, pending } = draft;
+  const activePreparation = useRef<LaunchPreparation | undefined>(undefined);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      activePreparation.current?.finish();
     };
   }, []);
   const workingStatusId = useId();
@@ -74,7 +83,7 @@ export function LaunchForm({
           ? "The source working table is closed or conflicted. Open Configuration to review it and explicitly choose inputs again."
           : working.data.branch_changed
             ? "The working table’s branch changed. Review the latest branch head in Configuration, keep your table after review, then use current working inputs and preview again."
-            : "The working table has newer saved edits. Use current working inputs, then preview again before starting. Saved edits do not replace the adopted copy automatically.";
+            : "The working table has newer saved edits. Use current working inputs, then review the changes before starting. Saved edits do not replace the adopted copy automatically.";
   useEffect(() => {
     if (!draft.workingInput || !working.data || workingCurrent || draft.pending || !draft.preview)
       return;
@@ -82,11 +91,15 @@ export function LaunchForm({
       current.workingInput?.draft_id === draft.workingInput?.draft_id
         ? invalidateDraft(
             current,
-            "Working inputs changed. Use current inputs and preview again before starting.",
+            "Working inputs changed. Use current inputs and review the changes before starting.",
           )
         : current,
     );
   }, [working.data, workingCurrent, draft.workingInput, draft.pending, draft.preview, update]);
+  const readyToContinue = useRef(true);
+  useLayoutEffect(() => {
+    readyToContinue.current = catalogReady && workingCurrent;
+  }, [catalogReady, workingCurrent]);
   const result = catalogReady && !pending && workingCurrent ? draft.preview : undefined;
   const fence = result?.manual_state;
   const manual = useQuery({
@@ -110,7 +123,7 @@ export function LaunchForm({
       current.preview?.manual_state?.event_id === fence.event_id
         ? invalidateDraft(
             current,
-            `Manual instrument changes invalidate this preview. ${changes.join(" ")} Preview again before starting.`,
+            `Manual instrument changes invalidate this preview. ${changes.join(" ")} Review the changes, then start again.`,
           )
         : current,
     );
@@ -139,7 +152,7 @@ export function LaunchForm({
             (Boolean(current.plan) &&
               Object.keys(changes).some((key) => key !== "actor" && key !== "collection")),
         },
-        "Inputs changed. Preview again before starting.",
+        "Inputs changed. Start will check the new inputs before acquisition.",
       ),
     );
   }
@@ -162,56 +175,125 @@ export function LaunchForm({
         ]),
     );
   }
-  async function preview(event: React.FormEvent) {
-    event.preventDefault();
-    if (
-      !entry.actions.includes("preview") ||
-      !supported ||
-      !catalogReady ||
-      !workingCurrent ||
-      draft.needsReview ||
-      Boolean(draft.unresolvedFields?.length) ||
-      !recovery.ready ||
-      recovery.conflict
-    )
+  const canPrepare =
+    entry.actions.includes("preview") &&
+    supported &&
+    catalogReady &&
+    workingCurrent &&
+    !draft.needsReview &&
+    !draft.unresolvedFields?.length &&
+    recovery.ready &&
+    !recovery.conflict &&
+    Boolean(actor.trim()) &&
+    !(draft.selection.configuration.kind === "parameters" && !draft.selection.configuration.setup);
+  async function prepare(startAfter: boolean) {
+    if (!canPrepare || pending || (startAfter && (attempt || !attemptsReady))) return;
+    const operation = beginPreparation();
+    if (!operation) {
+      update((current) => ({
+        ...current,
+        error: "The previous preparation is still finishing. Wait before starting again.",
+      }));
       return;
-    const revision = draft.revision;
-    update((current) => ({ ...current, pending: "preview", error: "", rejection: undefined }));
+    }
+    activePreparation.current = operation;
+    const intended = () => mounted.current && readyToContinue.current && operation.isIntended();
+    update((current) => ({
+      ...current,
+      pending: startAfter ? "prepare" : "preview",
+      error: "",
+      rejection: undefined,
+    }));
+    async function checkWorkingInput() {
+      if (!draft.workingInput) return;
+      const latest = await readParameterDraft(draft.workingInput.draft_id);
+      if (!intended()) return;
+      if (
+        latest.head_revision !== draft.workingInput.revision ||
+        latest.draft.state !== "saved" ||
+        latest.branch_changed
+      )
+        throw new Error("Working inputs changed. Review and use current inputs before starting.");
+    }
     try {
-      const next = await apiData<LaunchPreview>(
-        apiClient.POST("/api/v1/experiment-launcher/preview", {
-          body: {
-            scan_mode: "cartesian",
-            parameter_sweeps: [],
-            action: "preview",
-            experiment: entry.id,
-            version: entry.version,
-            selection: draft.selection,
-            record_collection: draft.collection || undefined,
-            plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
-            inputs: inputValues(),
-            control_edits: controlEdits(drafts),
-            actor,
-            request_key: "",
-            code_revision: draft.codeRevision,
-            workspace_id: draft.workspaceId,
-          },
-        }),
+      const request = {
+        scan_mode: "cartesian" as const,
+        parameter_sweeps: [],
+        action: "preview" as const,
+        experiment: entry.id,
+        version: entry.version,
+        selection: draft.selection,
+        record_collection: draft.collection || undefined,
+        plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
+        inputs: inputValues(),
+        control_edits: controlEdits(drafts),
+        actor,
+        request_key: "",
+        code_revision: draft.codeRevision ?? draft.sourceBaseline,
+        workspace_id: draft.workspaceId,
+      };
+      await checkWorkingInput();
+      if (!intended()) return;
+      const checked =
+        startAfter && draft.preview
+          ? draft.preview
+          : await apiData<LaunchPreview>(
+              apiClient.POST("/api/v1/experiment-launcher/preview", { body: request }),
+            );
+      if (!intended()) return;
+      update((current) => ({
+        ...current,
+        preview: checked,
+        requestKey:
+          current.preview?.request_hash === checked.request_hash &&
+          JSON.stringify(current.preview.reviewed) === JSON.stringify(checked.reviewed) &&
+          JSON.stringify(current.preview.manual_state) === JSON.stringify(checked.manual_state)
+            ? current.requestKey
+            : undefined,
+        notice: "Preview matches these inputs and the checked project configuration.",
+      }));
+      if (!startAfter) return;
+      if (!checked.manual_state || !checked.procedure_definition)
+        throw new Error(
+          "Preparation did not return the required submission binding. Nothing was submitted.",
+        );
+      const validity = await apiData(
+        apiClient.POST("/api/v1/experiment-launcher/validity", { body: checked.manual_state }),
       );
-      if (isCurrent(revision))
-        update((current) => ({
-          ...current,
-          preview: next,
-          requestKey:
-            current.preview?.request_hash === next.request_hash &&
-            JSON.stringify(current.preview.reviewed) === JSON.stringify(next.reviewed) &&
-            JSON.stringify(current.preview.manual_state) === JSON.stringify(next.manual_state)
-              ? current.requestKey
-              : undefined,
-          notice: "Preview matches these inputs and the checked project configuration.",
-        }));
+      if (!intended()) return;
+      if (!validity.valid)
+        throw new Error(
+          `Instrument changes stopped this start. ${validity.changes.map((mutation) => `${mutation.instrument_ids.join(", ")}: ${mutation.reason}`).join(" ")} Review the changes, then start again.`,
+        );
+      await checkWorkingInput();
+      if (!intended()) return;
+      const requestKey =
+        draft.preview === checked && draft.requestKey ? draft.requestKey : crypto.randomUUID();
+      update((current) => ({ ...current, requestKey }));
+      const procedureId = await submit(
+        {
+          ...request,
+          action: "submit",
+          request_key: requestKey,
+          reviewed: reviewedForRequest(checked.reviewed),
+          code_revision: checked.code_revision,
+          workspace_id: checked.workspace_id,
+          manual_state: checked.manual_state,
+          expected_request_hash: checked.request_hash,
+        },
+        draft.definition,
+        checked.procedure_definition,
+        {
+          isIntended: intended,
+          onSending: () => update((current) => ({ ...current, pending: "submit" })),
+        },
+      );
+      if (procedureId && intended()) {
+        update((current) => ({ ...current, admittedProcedureId: procedureId }));
+        onAdmitted(procedureId);
+      }
     } catch (caught) {
-      if (isCurrent(revision))
+      if (intended())
         update((current) => ({
           ...current,
           error: caught instanceof Error ? caught.message : String(caught),
@@ -220,74 +302,16 @@ export function LaunchForm({
           requestKey: undefined,
         }));
     } finally {
-      if (isCurrent(revision)) update((current) => ({ ...current, pending: false }));
-    }
-  }
-  const source = result?.reviewed.config_source;
-  async function start() {
-    if (!source) return;
-    const revision = draft.revision;
-    const requestKey = draft.requestKey ?? crypto.randomUUID();
-    update((current) => ({
-      ...current,
-      requestKey,
-      pending: "submit",
-      error: "",
-      rejection: undefined,
-    }));
-    try {
-      if (draft.workingInput) {
-        const latest = await readParameterDraft(draft.workingInput.draft_id);
-        if (
-          latest.head_revision !== draft.workingInput.revision ||
-          latest.draft.state !== "saved" ||
-          latest.branch_changed
-        )
-          throw new Error(
-            "Working inputs changed. Use current inputs and preview again before starting.",
-          );
-      }
-      const procedureId = await submit(
-        {
-          scan_mode: "cartesian",
-          parameter_sweeps: [],
-          action: "submit",
-          experiment: entry.id,
-          version: entry.version,
-          inputs: inputValues(),
-          control_edits: controlEdits(drafts),
-          request_key: requestKey,
-          selection: draft.selection,
-          reviewed: result ? reviewedForRequest(result.reviewed) : undefined,
-          record_collection: draft.collection || undefined,
-          plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
-          actor,
-          code_revision: result?.code_revision,
-          workspace_id: result?.workspace_id,
-          manual_state: result?.manual_state,
-          expected_request_hash: result?.request_hash,
-        },
-        draft.definition,
-        result?.procedure_definition ?? undefined,
-      );
-      if (procedureId && isCurrent(revision)) {
-        update((current) => ({ ...current, admittedProcedureId: procedureId }));
-        if (mounted.current) onAdmitted(procedureId);
-      }
-    } catch (caught) {
-      if (isCurrent(revision))
-        update((current) => ({
-          ...current,
-          error: caught instanceof Error ? caught.message : String(caught),
-        }));
-    } finally {
-      if (isCurrent(revision)) update((current) => ({ ...current, pending: false }));
+      operation.finish();
+      if (activePreparation.current === operation) activePreparation.current = undefined;
     }
   }
   return (
     <form
       onSubmit={(event) => {
-        void preview(event);
+        event.preventDefault();
+        const previewOnly = event.nativeEvent.submitter?.getAttribute("value") === "preview";
+        void prepare(!previewOnly && entry.actions.includes("submit"));
       }}
       className="space-y-4 max-w-3xl"
     >
@@ -342,7 +366,7 @@ export function LaunchForm({
             className={secondaryButton}
             onClick={() =>
               update((current) => ({
-                ...invalidateDraft(current, "Input reviewed. Preview before starting."),
+                ...invalidateDraft(current, "Input reviewed. Ready to start or inspect a preview."),
                 needsReview: false,
                 values: Object.fromEntries(
                   Object.entries(current.values).filter(
@@ -365,7 +389,7 @@ export function LaunchForm({
           </button>
         </section>
       )}
-      <fieldset disabled={!recovery.ready}>
+      <fieldset disabled={pending === "submit" || !recovery.ready}>
         <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
       </fieldset>
       {draft.workingInput && (
@@ -383,7 +407,7 @@ export function LaunchForm({
             {workingBlockReason ??
               (result
                 ? "The preview uses this adopted copy."
-                : "The adopted copy matches the saved working table. Preview is required before acquisition.")}
+                : "The adopted copy matches the saved working table. Start checks it before acquisition.")}
           </p>
           {!workingCurrent && working.data && !working.isError && (
             <p>
@@ -436,7 +460,7 @@ export function LaunchForm({
       {draft.selection.configuration.kind === "unselected" ? (
         <p>
           Select a parameter branch or use a saved version from Configuration, then choose an
-          experiment setup before preview.
+          experiment setup before starting or previewing.
         </p>
       ) : null}
       <p className="text-sm">
@@ -457,7 +481,7 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </p>
       )}
-      <fieldset disabled={Boolean(pending) || !recovery.ready}>
+      <fieldset disabled={pending === "submit" || !recovery.ready}>
         <ControlFields
           controls={entry.controls}
           drafts={drafts}
@@ -466,7 +490,10 @@ export function LaunchForm({
           }}
         />
       </fieldset>
-      <fieldset disabled={Boolean(pending) || !recovery.ready} className="grid grid-cols-2 gap-4">
+      <fieldset
+        disabled={pending === "submit" || !recovery.ready}
+        className="grid grid-cols-2 gap-4"
+      >
         {fields.map(([name, field]) => (
           <label key={name} className="flex flex-col gap-1">
             {field.title ?? name}
@@ -524,71 +551,70 @@ export function LaunchForm({
       </fieldset>
       <section aria-label="Preview and start" className="space-y-3 border-t border-line pt-4">
         <p className="text-sm text-text-dim">
-          Preview checks these inputs without acquiring data. Start acquisition runs the checked
-          experiment.
+          Start checks the current inputs before submitting acquisition. Preview is optional and
+          never acquires data.
         </p>
+        <p>
+          {entry.configuration_effect === "none"
+            ? "This task does not publish parameter changes."
+            : entry.configuration_effect === "candidate"
+              ? "This task produces a parameter candidate. Creating it does not publish it to a branch."
+              : "This task can publish parameter changes after its declared review. Review may be automated; starting does not add a separate human approval step."}
+        </p>
+        {entry.review && <p>{entry.review.instructions}</p>}
         <div className="flex flex-wrap items-center gap-3">
+          {entry.actions.includes("submit") && (
+            <button
+              type="submit"
+              value="start"
+              className={primaryButton}
+              disabled={!canPrepare || Boolean(pending) || Boolean(attempt) || !attemptsReady}
+              aria-describedby={draft.workingInput ? workingStatusId : undefined}
+            >
+              {pending === "prepare"
+                ? "Preparing acquisition…"
+                : pending === "submit"
+                  ? "Submitting acquisition…"
+                  : "Start acquisition"}
+            </button>
+          )}
           {entry.actions.includes("preview") && (
             <button
               type="submit"
+              value="preview"
+              className={secondaryButton}
+              disabled={!canPrepare || Boolean(pending)}
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
-              disabled={
-                Boolean(pending) ||
-                !recovery.ready ||
-                recovery.conflict ||
-                draft.needsReview ||
-                !supported ||
-                !actor.trim() ||
-                !catalogReady ||
-                !workingCurrent ||
-                (draft.selection.configuration.kind === "parameters" &&
-                  !draft.selection.configuration.setup)
-              }
-              className={result ? secondaryButton : primaryButton}
             >
               {pending === "preview" ? "Preparing preview…" : "Preview"}
             </button>
           )}
-          {entry.actions.includes("submit") && (
-            <fieldset
-              disabled={Boolean(pending) || !recovery.ready}
-              className="flex flex-wrap gap-3"
+          {(pending === "prepare" || pending === "preview") && (
+            <button
+              type="button"
+              className={secondaryButton}
+              onClick={() => {
+                activePreparation.current?.finish();
+                update((current) =>
+                  invalidateDraft(current, "Preparation cancelled. No acquisition was submitted."),
+                );
+              }}
             >
-              <button
-                type="button"
-                disabled={
-                  !source ||
-                  !manualReady ||
-                  !actor.trim() ||
-                  Boolean(pending) ||
-                  Boolean(attempt) ||
-                  draft.needsReview ||
-                  recovery.conflict
-                }
-                aria-describedby={draft.workingInput ? workingStatusId : undefined}
-                onClick={() => {
-                  void start();
-                }}
-                className={primaryButton}
-              >
-                {pending === "submit" ? "Submitting acquisition…" : "Start acquisition"}
-              </button>
-            </fieldset>
+              Cancel preparation
+            </button>
           )}
         </div>
         {pending && (
           <p role="status">
-            {pending === "preview"
-              ? "Preparing the experiment preview. Acquisition has not been submitted."
-              : "Waiting for submission confirmation. Acquisition may already have started."}
+            {pending === "submit"
+              ? "Waiting for submission confirmation. Acquisition may already have started."
+              : "Checking the experiment inputs. Acquisition has not been submitted."}
           </p>
         )}
         <p className="text-sm text-text-dim">
           {attempt
             ? "A submission is already retained. Check its status above, or explicitly prepare a new run."
-            : result
-              ? "Preview ready. Review the checked configuration below before starting."
-              : "Start acquisition becomes available after a successful preview and validity check."}
+            : "Start preserves the exact checked inputs and an original submission receipt for recovery."}
         </p>
         {fence && !manualReady && (
           <p role={manual.isError ? "alert" : "status"}>
@@ -609,7 +635,7 @@ export function LaunchForm({
               scenario={result.reviewed.binding.scenario}
               label="Reviewed execution scenario"
             />
-            <PreflightSummary entry={entry} preview={result} />
+            <PreflightSummary preview={result} />
             <ControlSummary fields={entry.controls} values={result.controls} />
           </>
         )}

@@ -103,7 +103,7 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
   fireEvent.click(screen.getByRole("button", { name: "Use current working inputs" }));
   await screen.findByText(/Using working input revision 4/);
   expect(preview).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
   expect(screen.getByText(/Submitted experiments keep the inputs captured/)).toBeVisible();
 });
 it("waits for experiment input recovery even when the working table already matches", async () => {
