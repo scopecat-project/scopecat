@@ -471,6 +471,12 @@ export function RunComparison({
                     </button>
                     {candidate && (
                       <>
+                        <a
+                          className="text-accent underline"
+                          href={`?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(saved.id)}#runs`}
+                        >
+                          Review parameter changes and adoption steps
+                        </a>
                         <label>
                           Review actor
                           <input value={actor} onChange={(event) => setActor(event.target.value)} />

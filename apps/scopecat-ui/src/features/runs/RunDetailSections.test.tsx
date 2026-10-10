@@ -193,6 +193,7 @@ it("shows the exact publication identity even when a run analysis has a reusable
       />
     </QueryClientProvider>,
   );
+  expect(screen.getByText(/curves · revision 1/)).toBeVisible();
   const details = screen.getByText("Grouped curves").closest("details")!;
   details.open = true;
   fireEvent(details, new Event("toggle"));

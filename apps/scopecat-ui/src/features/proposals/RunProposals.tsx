@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -66,7 +66,7 @@ export function RunProposals({ runId }: { runId: string }) {
         <ProposalMessage
           icon={<LoaderCircle className="animate-spin" />}
           title="Reading proposals"
-          detail="Loading parameter changes and their operator approvals."
+          detail="Loading retained parameter changes and approval records."
         />
       ) : proposalsQuery.isError && proposalsQuery.data === undefined ? (
         <ProposalMessage
@@ -144,23 +144,7 @@ export function RunProposals({ runId }: { runId: string }) {
                 <ProposalDiff proposal={proposal} />
                 <ProposalApproval proposal={proposal} />
 
-                <details className="px-3.5 py-3 text-[0.65rem]">
-                  <summary className="cursor-pointer text-accent">
-                    Try this candidate in VS Code
-                  </summary>
-                  <p>
-                    Use your connected session and experiment. This selects the candidate for one
-                    run; it does not change a parameter branch.
-                  </p>
-                  <pre className="overflow-x-auto rounded border border-line bg-bg p-3">
-                    <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})
-prepared = session.prepare(experiment, candidate=candidate)`}</code>
-                  </pre>
-                  <p>
-                    Collect independent measurements, verify the result, then publish to the
-                    parameter branch you intend to update.
-                  </p>
-                </details>
+                <CandidateNextSteps proposal={proposal} />
               </section>
             );
           })}
@@ -194,10 +178,72 @@ prepared = session.prepare(experiment, candidate=candidate)`}</code>
   );
 }
 
+function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
+  return (
+    <section className="px-3.5 py-3 text-[0.7rem] leading-relaxed" aria-label="Candidate adoption">
+      <p>
+        Adoption currently requires an author session; this page does not publish parameters.
+        Collect independent verification using your laboratory's policy, then explicitly publish to
+        the reviewed parameter branch. Only that branch advances; existing runs and prepared
+        experiments keep their original inputs.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-accent underline">
+        <a
+          href="https://scopecat-project.github.io/scopecat/how-to/verify-parameter-candidates/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Verify a candidate
+        </a>
+        <a
+          href="https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Publish to a parameter branch
+        </a>
+      </div>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-accent">For authors: reopen this candidate</summary>
+        <p className="mt-2">
+          In a connected author session named <code>session</code>, reopen this saved proposal. The
+          guides above explain how to prepare an independent verification experiment, supply its
+          retained policy result and capture the destination branch.
+        </p>
+        <pre className="mt-2 max-h-40 overflow-auto rounded border border-line bg-bg p-3">
+          <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})`}</code>
+        </pre>
+      </details>
+    </section>
+  );
+}
+
+function ProposalValue({ value }: { value: unknown }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = formatParameterValue(value);
+  if (text.length <= 120) return <>{text}</>;
+  return (
+    <div className="min-w-0">
+      <span className="block max-h-16 overflow-hidden">{text.slice(0, 120)}…</span>
+      <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
+        <summary className="mt-1 cursor-pointer font-sans text-accent">View full value</summary>
+        {expanded && (
+          <pre
+            className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]"
+            aria-label="Full parameter value"
+          >
+            {text}
+          </pre>
+        )}
+      </details>
+    </div>
+  );
+}
+
 function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
   return (
     <div
-      className="mx-3.5 overflow-hidden rounded-[9px] border border-line bg-panel-soft max-[680px]:overflow-x-auto"
+      className="mx-3.5 max-h-96 overflow-auto rounded-[9px] border border-line bg-panel-soft"
       role="table"
     >
       <div
@@ -209,33 +255,54 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
         <span aria-hidden="true" />
         <span role="columnheader">Proposed</span>
       </div>
-      {proposal.deltas.map((delta) => (
-        <div
-          className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line px-[11px] py-[9px] last:border-b-0 max-[680px]:min-w-[650px] [&>svg]:text-text-dim"
-          role="row"
-          key={delta.parameterId}
-        >
-          <code
-            className="overflow-hidden text-[0.61rem] text-ellipsis whitespace-nowrap text-text-soft"
-            role="cell"
+      {proposal.deltas
+        .flatMap<{
+          parameterId: string;
+          before: unknown;
+          after: unknown;
+          changeKind?: string;
+        }>((delta) =>
+          delta.cells?.length
+            ? delta.cells.map((cell) => ({
+                parameterId: `${delta.parameterId}[${Object.entries(cell.key)
+                  .map(([key, value]) => `${key}=${formatParameterValue(value)}`)
+                  .join(", ")}].${cell.field}`,
+                before: cell.before,
+                after: cell.after,
+                changeKind: cell.change_kind,
+              }))
+            : [{ ...delta, changeKind: delta.cells ? "No changed keyed cells" : undefined }],
+        )
+        .map((delta) => (
+          <div
+            className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line px-[11px] py-[9px] last:border-b-0 max-[680px]:min-w-[650px] [&>svg]:text-text-dim"
+            role="row"
+            key={delta.parameterId}
           >
-            {delta.parameterId}
-          </code>
-          <span
-            className="rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
-            role="cell"
-          >
-            {formatParameterValue(delta.before)}
-          </span>
-          <ArrowRight size={14} aria-hidden="true" />
-          <span
-            className="rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
-            role="cell"
-          >
-            {formatParameterValue(delta.after)}
-          </span>
-        </div>
-      ))}
+            <div
+              className="font-mono text-[0.61rem] text-text-soft [overflow-wrap:anywhere]"
+              role="cell"
+            >
+              <ProposalValue value={delta.parameterId} />
+              {delta.changeKind && (
+                <span className="mt-1 block font-sans text-text-dim">{delta.changeKind}</span>
+              )}
+            </div>
+            <div
+              className="min-w-0 rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
+              role="cell"
+            >
+              <ProposalValue value={delta.before} />
+            </div>
+            <ArrowRight size={14} aria-hidden="true" />
+            <div
+              className="min-w-0 rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
+              role="cell"
+            >
+              <ProposalValue value={delta.after} />
+            </div>
+          </div>
+        ))}
     </div>
   );
 }
@@ -315,5 +382,5 @@ function formatParameterValue(value: unknown): string {
   }
   const serialized = JSON.stringify(value);
   if (serialized === undefined) return "—";
-  return serialized.length > 80 ? `${serialized.slice(0, 77)}…` : serialized;
+  return serialized;
 }

@@ -179,6 +179,9 @@ it("retains ordered selections and exact publication through explicit candidate,
   );
   fireEvent.click(screen.getByText("Create explicit candidate"));
   await screen.findByText("Publication candidate");
+  expect(
+    screen.getByRole("link", { name: "Review parameter changes and adoption steps" }),
+  ).toHaveAttribute("href", "?run=left&run-analysis=candidate#runs");
   expect(requests.find((item) => item.action === "candidate")).toMatchObject({
     analysis_id: "fit",
     analysis_hash: "hash-fit",

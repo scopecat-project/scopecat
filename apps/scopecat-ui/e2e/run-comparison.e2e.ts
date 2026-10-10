@@ -110,8 +110,28 @@ test("compares retained signals, saves independent results and imports a reviewe
     await page.locator("aside button").filter({ hasText: first.analysis_id }).click();
     const candidate = await action("Create explicit candidate");
     const comparisonUrl = page.url();
-    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(primary)}#runs`);
-    await page.getByText("Proposals and adaptive controls", { exact: true }).click();
+    const adoptionLink = page.getByRole("link", {
+      name: "Review parameter changes and adoption steps",
+    });
+    await expect(adoptionLink).toHaveAttribute(
+      "href",
+      `?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(candidate.analysis_id!)}#runs`,
+    );
+    await adoptionLink.click();
+    const proposals = page.getByTestId("run-proposals-card");
+    await expect(proposals).toBeVisible();
+    await expect(proposals.getByText(/this page does not publish parameters/)).toBeVisible();
+    await expect(proposals.getByRole("link", { name: "Verify a candidate" })).toBeVisible();
+    await proposals.screenshot({ path: testInfo.outputPath("candidate-adoption-steps.png") });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await proposals.evaluate((element) => {
+      element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 130);
+    });
+    await page.screenshot({ path: testInfo.outputPath("candidate-adoption-narrow.png") });
+    expect(
+      await page.locator("html").evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+    await page.setViewportSize({ width: 1280, height: 720 });
     const sourceAnalysis = page.getByRole("link", { name: "View source analysis", exact: true });
     await expect(sourceAnalysis).toHaveAttribute(
       "href",
@@ -151,6 +171,24 @@ test("compares retained signals, saves independent results and imports a reviewe
       path: screenshot,
       contentType: "image/png",
     });
+    // Exercise bounded rendering with a large retained-value response, without changing stored evidence.
+    const longRows = Array.from({ length: 1000 }, (_, id) => ({ id, value: "x".repeat(100) }));
+    await page.route(`**/api/v1/runs/${primary}/parameter-proposals?*`, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      const delta = body.items[0].proposal.deltas[0];
+      delta.cells = null;
+      delta.after = { id: delta.parameter_id, shape: "table", rows: longRows };
+      await route.fulfill({ response, json: body });
+    });
+    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(primary)}#runs`);
+    const longProposals = page.getByTestId("run-proposals-card");
+    await longProposals.getByText("View full value", { exact: true }).click();
+    const fullValue = longProposals.getByLabel("Full parameter value");
+    await expect(fullValue).toHaveText(JSON.stringify(longRows));
+    expect(await fullValue.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(192);
+    expect(await fullValue.evaluate((element) => element.scrollHeight)).toBeGreaterThan(192);
+    await longProposals.screenshot({ path: testInfo.outputPath("bounded-full-value.png") });
     passed = true;
   } finally {
     uv(["scopecat", "stop", project]);
