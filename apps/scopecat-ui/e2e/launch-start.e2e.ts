@@ -34,6 +34,48 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
+    let previewRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().endsWith("/experiment-launcher/preview")) previewRequests += 1;
+    });
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Recheck device connections", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Recheck device connections", exact: true }),
+    ).toBeEnabled();
+    expect(previewRequests).toBe(0);
+    await page.getByRole("button", { name: "Browse experiments", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Search experiments" }).fill("synthetic resonance");
+    await expect(page.getByRole("button", { name: "Prepare Exploratory signal" })).toBeDisabled();
+    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("signal");
+    await page.screenshot({ path: testInfo.outputPath("browse-experiments.png"), fullPage: true });
+    await page
+      .getByRole("searchbox", { name: "Search experiments" })
+      .fill("no matching experiment");
+    await expect(page.getByText(/No matching experiments/)).toBeVisible();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("1");
+    await page.getByRole("button", { name: "Close experiment browser" }).click();
+    await expect(
+      page.getByRole("region", { name: "Selected experiment", exact: true }),
+    ).toContainText("does not publish parameter changes");
+    await expect(page.getByRole("region", { name: "Parameter source", exact: true })).toContainText(
+      "no overrides",
+    );
+    await expect(
+      page.getByRole("region", { name: "Inputs for this run", exact: true }),
+    ).toContainText("does not publish a parameter version");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .getByRole("region", { name: "Preview and start", exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath("prepare-mobile.png") });
+    await page.setViewportSize({ width: 1280, height: 900 });
     const runs = async () =>
       (await (await page.request.get(`${endpoint.base_url}/api/v1/runs`)).json()).items;
     for (const action of ["cancel", "edit", "navigate"]) {

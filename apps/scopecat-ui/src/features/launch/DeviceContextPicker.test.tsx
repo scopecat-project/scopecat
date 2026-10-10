@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -66,12 +66,15 @@ it("keeps two drafts independent through refresh and parameter changes without c
       );
     }),
   );
+  const submitted = vi.fn((event: FormEvent) => event.preventDefault());
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <Draft name="First draft" />
-      <Draft name="Second draft" />
+      <form onSubmit={submitted}>
+        <Draft name="First draft" />
+        <Draft name="Second draft" />
+      </form>
     </QueryClientProvider>,
   );
   const first = within(screen.getByRole("region", { name: "First draft" }));
@@ -93,9 +96,16 @@ it("keeps two drafts independent through refresh and parameter changes without c
   expect(first.getByLabelText("Experiment setup")).toHaveValue("bench-a");
   expect(second.getByRole("status")).toHaveTextContent('"revision_id":"initial"');
   expect(second.getByLabelText("Experiment setup")).toHaveValue("bench-b");
+  fireEvent.click(first.getByRole("button", { name: "Recheck device connections" }));
+  await waitFor(() => expect(calls.filter((request) => request.method !== "GET")).toHaveLength(3));
+  expect(submitted).not.toHaveBeenCalled();
   expect(
     calls
       .filter((request) => request.method !== "GET")
       .map((request) => new URL(request.url).pathname),
-  ).toEqual(["/api/v1/setup/resolutions/bench-a", "/api/v1/setup/resolutions/bench-b"]);
+  ).toEqual([
+    "/api/v1/setup/resolutions/bench-a",
+    "/api/v1/setup/resolutions/bench-b",
+    "/api/v1/setup/resolutions/bench-a",
+  ]);
 });

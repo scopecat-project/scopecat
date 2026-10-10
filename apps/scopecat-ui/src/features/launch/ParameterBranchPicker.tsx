@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -44,6 +45,7 @@ export function ParameterBranchPicker({
             : "From selected working point or saved evidence"}
       </p>
       <button
+        className={`${secondaryButton} mr-2`}
         type="button"
         disabled={disabled}
         aria-expanded={browse}
@@ -79,6 +81,7 @@ export function ParameterBranchPicker({
             </p>
           )}
           <button
+            className={`${secondaryButton} mr-2`}
             type="button"
             disabled={disabled || !branch || heads.isFetching || heads.isError}
             onClick={() =>
@@ -94,6 +97,7 @@ export function ParameterBranchPicker({
             Use this parameter version
           </button>
           <button
+            className={`${secondaryButton} mr-2`}
             type="button"
             disabled={disabled || heads.isFetching}
             onClick={() => void heads.refetch()}
@@ -102,6 +106,7 @@ export function ParameterBranchPicker({
           </button>
           {heads.hasNextPage && (
             <button
+              className={`${secondaryButton} mr-2`}
               type="button"
               disabled={disabled || heads.isFetching}
               onClick={() => void heads.fetchNextPage()}
@@ -115,6 +120,7 @@ export function ParameterBranchPicker({
           )}
           {value.kind !== "unselected" && (
             <button
+              className={`${secondaryButton} mr-2`}
               type="button"
               disabled={disabled}
               onClick={() => onChange({ kind: "unselected" })}
