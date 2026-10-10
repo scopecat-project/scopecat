@@ -50,7 +50,7 @@ export function PreflightSummary({
       </p>
       <p>
         {entry.configuration_effect === "none"
-          ? "This experiment does not change the default configuration."
+          ? "This task does not change the default configuration."
           : entry.configuration_effect === "candidate"
             ? "Produces a candidate. Accepting it as default is a separate operator action."
             : "Changes the default configuration only after review."}
