@@ -37,9 +37,76 @@ describe("RunProposals", () => {
 
     expect(await screen.findByText("Approval recorded")).toBeVisible();
     expect(screen.getAllByText("selected-fit")).toHaveLength(2);
-    expect(screen.getAllByText("Try this candidate in VS Code")).toHaveLength(2);
+    expect(screen.getAllByText("Verify and adopt in an author session")).toHaveLength(2);
     expect(screen.getByText(/session.config.candidate\("run-1", "new-fit"\)/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept as default" })).not.toBeInTheDocument();
+  });
+
+  it("shows exact changed cells and the explicit verification and publication boundary", async () => {
+    const longValue = "retained-value-".repeat(12);
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({
+          deltas: [
+            {
+              parameterId: "drive",
+              before: [
+                { qubit: "q0", frequency: 5 },
+                { qubit: "q1", frequency: 6 },
+              ],
+              after: [
+                { qubit: "q0", frequency: 5.1 },
+                { qubit: "q1", frequency: 6 },
+              ],
+              cells: [
+                {
+                  key: { qubit: "q0" },
+                  field: "frequency",
+                  before: 5,
+                  after: 5.1,
+                  change_kind: "physical",
+                },
+                { key: { qubit: "q0" }, field: "label", after: longValue, change_kind: "added" },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    renderProposals();
+    expect(await screen.findByText("drive[qubit=q0].frequency")).toBeVisible();
+    expect(screen.getByText("drive[qubit=q0].label")).toBeVisible();
+    expect(screen.getByText(longValue)).toBeVisible();
+    expect(screen.queryByText(/q1/)).toBeNull();
+    fireEvent.click(screen.getByText("Verify and adopt in an author session"));
+    expect(screen.getByText("verified = candidate.verify(check_result)")).toBeVisible();
+    expect(
+      screen.getByText(/print\(baseline_branch.name, baseline_branch.revision\)/),
+    ).toBeVisible();
+    expect(screen.getByText(/This advances only the chosen branch/)).toBeVisible();
+    expect(
+      screen.getByText("session.use(parameters=published.revision, setup=setup)"),
+    ).toBeVisible();
+  });
+
+  it("distinguishes an empty cell diff from an atomic value change", async () => {
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({
+          deltas: [
+            { parameterId: "reordered-table", before: [1, 2], after: [2, 1], cells: [] },
+            { parameterId: "scalar", before: 5, after: 6 },
+          ],
+        }),
+      ),
+    );
+    renderProposals();
+    expect(await screen.findByText("No changed keyed cells")).toBeVisible();
+    expect(screen.getByText("[1,2]")).toBeVisible();
+    expect(screen.getByText("[2,1]")).toBeVisible();
+    expect(screen.getByText("scalar")).toBeVisible();
+    expect(screen.getByText("5")).toBeVisible();
+    expect(screen.getByText("6")).toBeVisible();
   });
 
   it("loads older proposal pages explicitly", async () => {

@@ -66,7 +66,7 @@ export function RunProposals({ runId }: { runId: string }) {
         <ProposalMessage
           icon={<LoaderCircle className="animate-spin" />}
           title="Reading proposals"
-          detail="Loading parameter changes and their operator approvals."
+          detail="Loading retained parameter changes and approval records."
         />
       ) : proposalsQuery.isError && proposalsQuery.data === undefined ? (
         <ProposalMessage
@@ -144,23 +144,7 @@ export function RunProposals({ runId }: { runId: string }) {
                 <ProposalDiff proposal={proposal} />
                 <ProposalApproval proposal={proposal} />
 
-                <details className="px-3.5 py-3 text-[0.65rem]">
-                  <summary className="cursor-pointer text-accent">
-                    Try this candidate in VS Code
-                  </summary>
-                  <p>
-                    Use your connected session and experiment. This selects the candidate for one
-                    run; it does not change a parameter branch.
-                  </p>
-                  <pre className="overflow-x-auto rounded border border-line bg-bg p-3">
-                    <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})
-prepared = session.prepare(experiment, candidate=candidate)`}</code>
-                  </pre>
-                  <p>
-                    Collect independent measurements, verify the result, then publish to the
-                    parameter branch you intend to update.
-                  </p>
-                </details>
+                <CandidateNextSteps proposal={proposal} />
               </section>
             );
           })}
@@ -194,6 +178,67 @@ prepared = session.prepare(experiment, candidate=candidate)`}</code>
   );
 }
 
+function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
+  return (
+    <details className="px-3.5 py-3 text-[0.7rem] leading-relaxed">
+      <summary className="cursor-pointer font-semibold text-accent">
+        Verify and adopt in an author session
+      </summary>
+      <p className="mt-3">
+        A fit, confidence score or recorded approval alone does not show which parameter branch was
+        updated. Review the branch publication receipt for the adopted revision.
+      </p>
+      <ol className="mt-3 list-decimal space-y-4 pl-5">
+        <li>
+          <strong>Try this exact candidate.</strong> In your connected author session, select your
+          verification experiment. Preparing it checks inputs; call <code>.run()</code> explicitly
+          when ready to collect independent measurements.
+          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
+            <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})
+prepared = session.prepare(experiment, candidate=candidate)`}</code>
+          </pre>
+        </li>
+        <li>
+          <strong>Apply your laboratory's verification policy.</strong> Analyze a separate,
+          completed run using this exact candidate and the same scientific context. Supply its
+          retained managed result as <code>check_result</code>; the author-defined result must
+          declare <code>accepted: bool</code>. A numerical fit is not an acceptance decision.
+          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
+            <code>{`verified = candidate.verify(check_result)`}</code>
+          </pre>
+        </li>
+        <li>
+          <strong>Review the destination and publish explicitly.</strong> Use the exact branch head
+          captured for the source run as <code>baseline_branch</code>. Check its name and revision
+          before publishing; choose a new revision name. A changed branch or mismatched baseline
+          requires review and new evidence, not a silent merge.
+          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
+            <code>{`print(baseline_branch.name, baseline_branch.revision)
+published = verified.publish_to_branch(
+    baseline_branch,
+    name="new-revision-name",
+    note="Independent verification reviewed",
+)`}</code>
+          </pre>
+          <p className="mt-2">
+            This advances only the chosen branch and records a publication receipt. It does not
+            change existing runs, prepared experiments, other branches, setup or the session's
+            selection. If a response is lost, retry the same captured branch, name and note.
+          </p>
+        </li>
+        <li>
+          <strong>Select the published revision for future work.</strong> Keep your explicitly
+          reviewed <code>setup</code> and select the returned exact revision before preparing
+          another experiment.
+          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
+            <code>{`session.use(parameters=published.revision, setup=setup)`}</code>
+          </pre>
+        </li>
+      </ol>
+    </details>
+  );
+}
+
 function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
   return (
     <div
@@ -209,33 +254,51 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
         <span aria-hidden="true" />
         <span role="columnheader">Proposed</span>
       </div>
-      {proposal.deltas.map((delta) => (
-        <div
-          className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line px-[11px] py-[9px] last:border-b-0 max-[680px]:min-w-[650px] [&>svg]:text-text-dim"
-          role="row"
-          key={delta.parameterId}
-        >
-          <code
-            className="overflow-hidden text-[0.61rem] text-ellipsis whitespace-nowrap text-text-soft"
-            role="cell"
+      {proposal.deltas
+        .flatMap<{
+          parameterId: string;
+          before: unknown;
+          after: unknown;
+          changeKind?: string;
+        }>((delta) =>
+          delta.cells?.length
+            ? delta.cells.map((cell) => ({
+                parameterId: `${delta.parameterId}[${Object.entries(cell.key)
+                  .map(([key, value]) => `${key}=${formatParameterValue(value)}`)
+                  .join(", ")}].${cell.field}`,
+                before: cell.before,
+                after: cell.after,
+                changeKind: cell.change_kind,
+              }))
+            : [{ ...delta, changeKind: delta.cells ? "No changed keyed cells" : undefined }],
+        )
+        .map((delta) => (
+          <div
+            className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line px-[11px] py-[9px] last:border-b-0 max-[680px]:min-w-[650px] [&>svg]:text-text-dim"
+            role="row"
+            key={delta.parameterId}
           >
-            {delta.parameterId}
-          </code>
-          <span
-            className="rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
-            role="cell"
-          >
-            {formatParameterValue(delta.before)}
-          </span>
-          <ArrowRight size={14} aria-hidden="true" />
-          <span
-            className="rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
-            role="cell"
-          >
-            {formatParameterValue(delta.after)}
-          </span>
-        </div>
-      ))}
+            <code className="text-[0.61rem] text-text-soft [overflow-wrap:anywhere]" role="cell">
+              {delta.parameterId}
+              {delta.changeKind && (
+                <span className="mt-1 block font-sans text-text-dim">{delta.changeKind}</span>
+              )}
+            </code>
+            <span
+              className="rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
+              role="cell"
+            >
+              {formatParameterValue(delta.before)}
+            </span>
+            <ArrowRight size={14} aria-hidden="true" />
+            <span
+              className="rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
+              role="cell"
+            >
+              {formatParameterValue(delta.after)}
+            </span>
+          </div>
+        ))}
     </div>
   );
 }
@@ -315,5 +378,5 @@ function formatParameterValue(value: unknown): string {
   }
   const serialized = JSON.stringify(value);
   if (serialized === undefined) return "—";
-  return serialized.length > 80 ? `${serialized.slice(0, 77)}…` : serialized;
+  return serialized;
 }

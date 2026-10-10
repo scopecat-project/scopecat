@@ -336,7 +336,7 @@ function RunAnalysisItem({ analysis, runId }: { analysis: RunAnalysisSummary; ru
             {analysis.title}
           </strong>
           <small className="text-[0.6rem] text-text-dim">
-            {analysis.key ?? analysis.id}
+            {analysis.key ?? analysis.id} · revision {analysis.revision}
             {analysis.stepId ? ` · ${analysis.stepId}` : ""}
             {analysis.inputCount > 0 ? ` · ${analysis.inputCount} inputs` : ""}
             {" · "}

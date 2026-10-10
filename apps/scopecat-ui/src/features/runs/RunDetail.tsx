@@ -324,14 +324,13 @@ export function RunDetail({
           loadingNextPage={analysesLoadingNextPage}
           onLoadOlder={onLoadOlderAnalyses}
         />
+        <RunProposals key={run.runId} runId={run.runId} />
         <RunAnalysisFollows runId={run.runId} />
         <details
           className="rounded-md border border-line p-4"
           open={run.plan.pointCount === undefined || undefined}
         >
-          <summary className="cursor-pointer text-sm font-semibold">
-            Proposals and adaptive controls
-          </summary>
+          <summary className="cursor-pointer text-sm font-semibold">Adaptive controls</summary>
           <div className="mt-3 grid gap-3">
             <RunDomainDecisionCard
               page={domainDecisions}
@@ -340,7 +339,6 @@ export function RunDetail({
               completedPointCount={run.progressCompleted ?? 0}
               run={run}
             />
-            <RunProposals key={run.runId} runId={run.runId} />
           </div>
         </details>
         <details className="rounded-md border border-line p-4">

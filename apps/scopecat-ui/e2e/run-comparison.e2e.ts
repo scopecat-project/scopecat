@@ -110,8 +110,28 @@ test("compares retained signals, saves independent results and imports a reviewe
     await page.locator("aside button").filter({ hasText: first.analysis_id }).click();
     const candidate = await action("Create explicit candidate");
     const comparisonUrl = page.url();
-    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(primary)}#runs`);
-    await page.getByText("Proposals and adaptive controls", { exact: true }).click();
+    const adoptionLink = page.getByRole("link", {
+      name: "Review parameter changes and adoption steps",
+    });
+    await expect(adoptionLink).toHaveAttribute(
+      "href",
+      `?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(candidate.analysis_id!)}#runs`,
+    );
+    await adoptionLink.click();
+    const proposals = page.getByTestId("run-proposals-card");
+    await expect(proposals).toBeVisible();
+    await proposals.getByText("Verify and adopt in an author session").click();
+    await expect(proposals.getByText(/This advances only the chosen branch/)).toBeVisible();
+    await proposals.screenshot({ path: testInfo.outputPath("candidate-adoption-steps.png") });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await proposals.evaluate((element) => {
+      element.ownerDocument.defaultView?.scrollBy(0, element.getBoundingClientRect().top - 130);
+    });
+    await page.screenshot({ path: testInfo.outputPath("candidate-adoption-narrow.png") });
+    expect(
+      await page.locator("html").evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+    await page.setViewportSize({ width: 1280, height: 720 });
     const sourceAnalysis = page.getByRole("link", { name: "View source analysis", exact: true });
     await expect(sourceAnalysis).toHaveAttribute(
       "href",
