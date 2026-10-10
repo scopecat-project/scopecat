@@ -9,8 +9,12 @@ from nbformat import read, v4, write
 import scopecat as sc
 from lab_teaching.project import create_project
 from lab_tools.notebook import kernel_command
-from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS, lesson_path
-from lab_tools.verify_maintenance import ADD_ANALYSIS
+from lab_tools.verify_groups import (
+    ADD_ANALYSIS,
+    GROUP_CHECKS,
+    GROUP_REOPEN_CELLS,
+    lesson_path,
+)
 from scopecat_server.lifecycle import start_project, stop_project
 
 

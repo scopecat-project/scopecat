@@ -48,13 +48,11 @@ def delivery(tmp_path: Path) -> Path:
     return root
 
 
-def test_gui_requires_current_runtime_and_unchanged_assets(delivery: Path):
-    assert bundle.gui_directory(delivery, {"scopecat": "current"}) == delivery / "gui"
-    with pytest.raises(ValueError, match="运行时代码不匹配"):
-        bundle.gui_directory(delivery, {"scopecat": "other-build-same-version"})
+def test_gui_assets_must_match_delivery(delivery: Path):
+    bundle.verify_bundle(delivery)
     (delivery / "gui/index.html").write_text("<html>stale GUI</html>")
     with pytest.raises(ValueError, match="被修改"):
-        bundle.gui_directory(delivery, {"scopecat": "current"})
+        bundle.verify_bundle(delivery)
 
 
 def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_path):
@@ -63,8 +61,6 @@ def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_
     with pytest.raises(ValueError, match="被修改"):
         bundle.install_bundle(delivery, destination)
     assert not destination.exists()
-    # Starting an installed GUI does not reread all third-party wheels.
-    assert bundle.gui_directory(delivery, {"scopecat": "current"}) == delivery / "gui"
 
 
 def add_toolchain(delivery, *, unsafe=False):
@@ -217,21 +213,16 @@ def test_start_checks_reused_service_gui(delivery, monkeypatch):
 
     import httpx2 as httpx
 
-    from lab_tools.cli import check_served_gui
-    from scopecat.daemon import endpoint
+    from lab_tools.application_runtime import _check_served_gui
 
-    monkeypatch.setattr(
-        endpoint,
-        "read_daemon_endpoint_record",
-        lambda _project: SimpleNamespace(base_url="http://127.0.0.1:12345"),
-    )
+    record = SimpleNamespace(base_url="http://127.0.0.1:12345")
     monkeypatch.setattr(
         httpx,
         "get",
         lambda *_args, **_kwargs: httpx.Response(404),
     )
     with pytest.raises(ValueError, match="服务保持运行"):
-        check_served_gui(delivery, delivery / "gui")
+        _check_served_gui(record, delivery / "gui")
     monkeypatch.setattr(
         httpx,
         "get",
@@ -239,7 +230,7 @@ def test_start_checks_reused_service_gui(delivery, monkeypatch):
             200, content=(delivery / "gui/index.html").read_bytes()
         ),
     )
-    check_served_gui(delivery, delivery / "gui")
+    _check_served_gui(record, delivery / "gui")
 
 
 def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):

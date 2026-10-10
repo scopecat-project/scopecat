@@ -1,136 +1,15 @@
-"""Portable launcher admission and kernel checks without starting services."""
+"""The retained default fixture rejects the wrong Notebook interpreter."""
 
 import json
-import sys
 
 import pytest
 
-from lab_teaching.lessons import TOPICS
-from lab_tools import project as cli
-
-
-def test_tools_check_preserves_store_and_detects_same_version_change(
-    tmp_path, monkeypatch
-):
-    monkeypatch.setattr(cli, "environment_identity", lambda: {"runtime": "original"})
-    root = tmp_path / "course"
-    cli.create_project(root)
-    store = root / ".scopecat"
-    store.mkdir()
-    data = store / "evidence"
-    data.write_bytes(b"retained")
-    assert cli.check_project(root) == root
-    monkeypatch.setattr(cli, "environment_identity", lambda: {"runtime": "modified"})
-    with pytest.raises(ValueError, match="不迁移旧库"):
-        cli.notebook_command(root)
-    assert data.read_bytes() == b"retained"
-    assert not (root / ".scopecat-notebook").exists()
-
-
-@pytest.mark.parametrize("topic", [None, *TOPICS])
-def test_generated_project_declares_capabilities_without_application_factory(
-    tmp_path, monkeypatch, topic
-):
-    import tomllib
-
-    monkeypatch.setattr(cli, "environment_identity", dict)
-    root = tmp_path / "course"
-    cli.create_project(root, topic=topic)
-    manifest = tomllib.loads((root / "scopecat.toml").read_text())
-    assert manifest["lab"]["capabilities"]["author_modules"] == ["my_experiment"]
-    assert "application" not in manifest["lab"]
-    assert "create_application" not in (root / "src/workspace_app.py").read_text()
-    assert cli.check_project(root) == root
-
-    # Teaching admission must not accept a user-edited device backend.
-    text = (
-        (root / "scopecat.toml")
-        .read_text()
-        .replace("[lab]", '[lab]\ninstrument_backend = "drivers:create_backend"')
-    )
-    (root / "scopecat.toml").write_text(text)
-    with pytest.raises(ValueError, match="无设备"):
-        cli.check_project(root)
-
-
-@pytest.mark.parametrize(
-    ("original", "replacement"),
-    [
-        ("calibration:calibrate", "calibration:unknown"),
-        (', "my_experiment.calibration:check_zero"', ""),
-        ("calibration:check_zero", "task_calibration:finalize"),
-        ("[lab.capabilities]", "[lab.capabilities]\nextra = []"),
-        ("[lab]", '[lab]\napplication = "other:create_application"'),
-    ],
-)
-def test_teaching_admission_rejects_unrecognized_capability_combinations(
-    tmp_path, monkeypatch, original, replacement
-):
-    monkeypatch.setattr(cli, "environment_identity", dict)
-    root = tmp_path / "course"
-    manifest = cli.create_project(root, topic="calibration")
-    text = manifest.read_text().replace(original, replacement)
-    manifest.write_text(text)
-    with pytest.raises(ValueError, match="无设备"):
-        cli.check_project(root)
-    assert manifest.read_text() == text
-
-
-def test_installed_notebook_uses_project_python_without_source_injection(
-    tmp_path, monkeypatch
-):
-    monkeypatch.setattr(cli, "environment_identity", dict)
-    root = tmp_path / "course"
-    cli.create_project(root)
-    python = (
-        root
-        / ".venv"
-        / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    )
-    python.parent.mkdir(parents=True)
-    python.touch()
-    command, env = cli.notebook_command(root)
-    spec = json.loads(
-        (root / ".scopecat-notebook/kernels/scopecat-lab/kernel.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert command[:3] == [str(python), "-m", "jupyterlab"]
-    assert spec["argv"][0] == str(python)
-    assert "PYTHONPATH" not in spec["env"]
-    assert str(root / ".scopecat-notebook") in env["JUPYTER_PATH"]
-    with pytest.raises(FileExistsError):
-        cli.create_project(root)
-
-
-def test_portable_entry_refuses_legacy_metadata(tmp_path):
-    (tmp_path / cli.METADATA).write_text(
-        json.dumps({"format": 2, "kind": "teaching"}), encoding="utf-8"
-    )
-    with pytest.raises(ValueError, match="原入口和环境"):
-        cli.check_project(tmp_path)
-
-
-def test_prepare_does_not_overwrite_existing_environment(tmp_path, monkeypatch):
-    from lab_tools import environment
-
-    monkeypatch.setattr(environment, "check_project", lambda path: path)
-    monkeypatch.setattr(environment, "environment_identity", dict)
-    monkeypatch.setattr(environment, "gui_directory", lambda *_args: tmp_path / "gui")
-    monkeypatch.setattr(environment, "find_uv_bin", lambda: "uv")
-    existing = tmp_path / ".venv"
-    existing.mkdir()
-    marker = existing / "keep"
-    marker.write_bytes(b"user environment")
-    with pytest.raises(FileExistsError):
-        environment.prepare_project(tmp_path)
-    assert marker.read_bytes() == b"user environment"
+from lab_teaching.project import create_project
 
 
 def test_course_rejects_wrong_kernel_before_author_import(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "environment_identity", dict)
     root = tmp_path / "course"
-    cli.create_project(root)
+    create_project(root)
     monkeypatch.chdir(root / "notebooks")
     for name in ("start", "reopen"):
         notebook = json.loads(

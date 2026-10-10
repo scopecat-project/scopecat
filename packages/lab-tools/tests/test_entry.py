@@ -6,21 +6,51 @@ import pytest
 from rich.text import Text
 from typer.testing import CliRunner
 
-from lab_tools import practice, project
+from lab_teaching.lessons import TOPICS
+from lab_tools import practice
 from lab_tools.public_cli import app
 
 
-def test_public_init_can_create_a_complete_topic(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("topic", TOPICS)
+def test_public_init_creates_ordinary_author_source_without_overwriting_edits(
+    tmp_path: Path,
+    topic: str,
 ) -> None:
-    monkeypatch.setattr(project, "environment_identity", dict)
-    root = tmp_path / "compute"
-    result = CliRunner().invoke(app, ["init", str(root), "--topic", "compute"])
+    import tomllib
+    from importlib.resources import files
+
+    root = tmp_path / "作者代码"
+    result = CliRunner().invoke(app, ["init", str(root), "--topic", topic])
     assert result.exit_code == 0, result.output
-    assert (root / "notebooks/compute.ipynb").is_file()
-    assert "def mean_iq" in (root / "src/my_experiment/teaching.py").read_text(
-        encoding="utf-8"
+    notebook = root / f"notebooks/{topic}.ipynb"
+    assert (
+        notebook.read_bytes()
+        == files("lab_teaching.course_material")
+        .joinpath(f"lessons/{topic}.ipynb")
+        .read_bytes()
     )
+    manifest = tomllib.loads((root / "scopecat.toml").read_text())
+    assert "bootstrap" not in manifest.get("lab", {})
+    assert not (root / ".vscode/tasks.json").exists()
+    assert not (root / ".venv").exists()
+    assert not (root / ".scopecat").exists()
+    assert not (root / "author-environment.json").exists()
+    notebook.write_bytes(notebook.read_bytes() + b"\n")
+    note = root / "notebooks/notes.md"
+    note.write_text("My notes")
+    retained = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    result = CliRunner().invoke(app, ["init", str(root), "--topic", topic])
+    assert result.exit_code == 1
+    assert retained == {
+        path: path.read_bytes() for path in root.rglob("*") if path.is_file()
+    }
+
+
+def test_unknown_cli_topic_leaves_no_source(tmp_path: Path) -> None:
+    root = tmp_path / "unknown"
+    result = CliRunner().invoke(app, ["init", str(root), "--topic", "unknown"])
+    assert result.exit_code == 1
+    assert not root.exists()
 
 
 def test_public_teach_forwards_application_practice_options(
@@ -96,6 +126,8 @@ import sys
 from importlib.metadata import distribution
 entry, = [ep for ep in distribution("scopecat-lab-tools").entry_points
           if ep.group == "console_scripts" and ep.name == "scopecat"]
+assert not any(ep.name == "scopecat-lab"
+               for ep in distribution("scopecat-lab-tools").entry_points)
 assert not any(ep.name == "scopecat"
                for ep in distribution("scopecat-server").entry_points)
 main = entry.load()

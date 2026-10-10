@@ -4,7 +4,7 @@
 完整标准课程；这些练习不需要 AI 助手、不连接真实设备。每次只选一个主题，约 15–25 分钟。
 请先由维护者确认安装包与本指南版本一致。
 
-在 VS Code 打开项目，选择项目 `.venv` 的 kernel，运行“启动实验服务”任务。
+在当前应用 Settings 登记并准备作者目录。打开应用，在 VS Code 选择此目录 `.venv` 的 kernel。
 在 `notebooks` 新建 Notebook，连接单元为：
 
 ```python
@@ -117,7 +117,7 @@ print([group.value for group in old.groups])
 
 ## E．用 GUI 整理研究历史
 
-运行 VS Code 的“打开实验界面”任务，进入 **History**：
+在当前 Scopecat 应用进入 **History**：
 
 1. 输入名称创建研究项目，选教学样品后点 **Associate sample**。
 2. 勾选 **Show runs outside this project to associate**，找到本次 run，点 **Associate run**。
@@ -126,7 +126,7 @@ print([group.value for group in old.groups])
 5. 原 run、另一个项目里的关联和历史分析都应继续存在。样品关联不会自动收进所有历史 run。
 
 这题不用写 CLI 或移动目录。记录能否看懂“关联”和“复制/删除”的区别，以及能否找到
-原结果和后做的分析。完成后关闭连接，使用“停止实验服务”任务。
+原结果和后做的分析。完成后关闭连接；应用仍由桌面入口管理。
 
 三题不必一次做完。反馈只需附练习名、你修改了什么、期望/实际结果和最先看不懂的位置；
 不要求先让 AI 修好再反馈。维护者备份恢复另见 [MAINTENANCE.md](MAINTENANCE.md)。

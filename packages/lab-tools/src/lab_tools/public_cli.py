@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 from rich.console import Console
@@ -59,21 +59,27 @@ def init_command(
         Path, typer.Argument(help="Directory to initialize.")
     ] = _CURRENT_DIRECTORY,
     topic: Annotated[
-        str | None, typer.Option(help="Initialize one standalone tutorial topic.")
+        str | None,
+        typer.Option(help="Create editable lesson source for the application."),
     ] = None,
 ) -> None:
     """Initialize a runnable local lab project."""
     if topic is None:
         initialize_project_command(project)
         return
-    from .project import create_project
+    from lab_teaching.lessons import LessonTopic
+
+    from .notebook_journey import create_lesson_source
 
     try:
-        created = create_project(project, topic=topic)
+        create_lesson_source(project.resolve(), cast("LessonTopic", topic))
     except (ImportError, ValueError, OSError) as error:
         Console(stderr=True).print(f"[red]error:[/red] {error}", soft_wrap=True)
         raise typer.Exit(code=1) from error
-    console.print(f"[green]initialized tutorial[/green] {created.parent}")
+    console.print(f"[green]initialized author source[/green] {project.resolve()}")
+    console.print(
+        "在 Scopecat Settings 添加此作者目录并准备环境；课程继续使用同一应用。"
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:

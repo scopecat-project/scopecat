@@ -101,7 +101,8 @@ def test_retry_and_continue_preserve_files_and_environment(
     pending = journey.current(runtime, topic)
     assert pending is not None and not pending.ready
     readme = (pending.directory / "README.md").read_text(encoding="utf-8")
-    assert "从 Scopecat Help 开始或继续" in readme
+    assert "Help 创建的目录可从原课程继续" in readme
+    assert "Scopecat Settings 添加并准备作者环境" in readme
     assert "运行与历史保存在同一应用中" in readme
     assert not (pending.directory / ".vscode/tasks.json").exists()
     source = pending.directory / "src/my_experiment/parameters.py"

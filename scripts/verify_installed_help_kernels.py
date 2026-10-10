@@ -110,8 +110,7 @@ def verify_installed(payload: Path, work: Path) -> None:
     from lab_tools.notebook import kernel_command
     from lab_tools.notebook_io import notebook_io
     from lab_tools.notebook_journey import current, prepare
-    from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
-    from lab_tools.verify_maintenance import ADD_ANALYSIS
+    from lab_tools.verify_groups import ADD_ANALYSIS, GROUP_CHECKS, GROUP_REOPEN_CELLS
     from scopecat.automation import ProcedureRun
     from scopecat.daemon.endpoint import DaemonEndpointRecord
     from scopecat.daemon.views import DaemonHealth, RunSummary, RunSummaryPage

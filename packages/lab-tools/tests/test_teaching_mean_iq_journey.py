@@ -190,9 +190,12 @@ def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, 
             stop_project(project)
 
     if topic is None:
-        from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
+        from lab_tools.verify_groups import (
+            ADD_ANALYSIS,
+            GROUP_CHECKS,
+            GROUP_REOPEN_CELLS,
+        )
         from lab_tools.verify_groups import lesson_path as groups_path
-        from lab_tools.verify_maintenance import ADD_ANALYSIS
 
         groups = read(groups_path(root), as_version=4)
         groups.cells.append(v4.new_code_cell(GROUP_CHECKS))
