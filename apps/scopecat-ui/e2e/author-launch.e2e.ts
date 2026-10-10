@@ -38,6 +38,15 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
+    const sourceBounds = await page.getByLabel("Code workspace", { exact: true }).boundingBox();
+    const refreshBounds = await page
+      .getByRole("button", { name: "Refresh author code", exact: true })
+      .boundingBox();
+    expect(sourceBounds!.x + sourceBounds!.width).toBeLessThanOrEqual(refreshBounds!.x);
+    await testInfo.attach("Preparation source controls", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Polarity", { exact: true }).selectOption("negative");

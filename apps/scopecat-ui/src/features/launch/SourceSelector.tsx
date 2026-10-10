@@ -13,12 +13,12 @@ export function SourceSelector({
   const sources = catalog.data?.items ?? [];
   const selected = sources.find((source) => source.id === workspaceId);
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <label className="block">
         Code workspace{" "}
         <select
           aria-label="Code workspace"
-          className="border rounded p-2 ml-2"
+          className="mt-1 block w-full min-w-0 border rounded p-2"
           value={workspaceId}
           onChange={(event) => onSelect(event.target.value)}
           disabled={catalog.isPending}
