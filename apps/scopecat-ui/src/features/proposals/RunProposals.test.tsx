@@ -37,13 +37,13 @@ describe("RunProposals", () => {
 
     expect(await screen.findByText("Approval recorded")).toBeVisible();
     expect(screen.getAllByText("selected-fit")).toHaveLength(2);
-    expect(screen.getAllByText("Verify and adopt in an author session")).toHaveLength(2);
+    expect(screen.getAllByText("For authors: reopen this candidate")).toHaveLength(2);
     expect(screen.getByText(/session.config.candidate\("run-1", "new-fit"\)/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept as default" })).not.toBeInTheDocument();
   });
 
   it("shows exact changed cells and the explicit verification and publication boundary", async () => {
-    const longValue = "retained-value-".repeat(12);
+    const longValue = "retained-value-".repeat(1200);
     vi.mocked(getRunParameterProposals).mockResolvedValue(
       proposalList(
         pendingProposal({
@@ -76,17 +76,42 @@ describe("RunProposals", () => {
     renderProposals();
     expect(await screen.findByText("drive[qubit=q0].frequency")).toBeVisible();
     expect(screen.getByText("drive[qubit=q0].label")).toBeVisible();
-    expect(screen.getByText(longValue)).toBeVisible();
+    expect(screen.queryByText(longValue)).toBeNull();
+    const valueDetails = screen.getByText("View full value").closest("details")!;
+    valueDetails.open = true;
+    fireEvent(valueDetails, new Event("toggle"));
+    expect(await screen.findByText(longValue)).toBeVisible();
     expect(screen.queryByText(/q1/)).toBeNull();
-    fireEvent.click(screen.getByText("Verify and adopt in an author session"));
-    expect(screen.getByText("verified = candidate.verify(check_result)")).toBeVisible();
-    expect(
-      screen.getByText(/print\(baseline_branch.name, baseline_branch.revision\)/),
-    ).toBeVisible();
-    expect(screen.getByText(/This advances only the chosen branch/)).toBeVisible();
-    expect(
-      screen.getByText("session.use(parameters=published.revision, setup=setup)"),
-    ).toBeVisible();
+    fireEvent.click(screen.getByText("For authors: reopen this candidate"));
+    expect(screen.getByText(/this page does not publish parameters/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Publish to a parameter branch" })).toHaveAttribute(
+      "href",
+      "https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/",
+    );
+  });
+
+  it("summarizes large atomic tables and reveals the complete value only on demand", async () => {
+    const rows = Array.from({ length: 1000 }, (_, id) => ({ id, value: "x".repeat(100) }));
+    const full = JSON.stringify(rows);
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({
+          deltas: [{ parameterId: "large-table", before: [], after: rows }],
+        }),
+      ),
+    );
+    renderProposals();
+    const summary = await screen.findByText("View full value");
+    expect(screen.queryByText(full)).toBeNull();
+    const details = summary.closest("details")!;
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
+    const value = await screen.findByLabelText("Full parameter value");
+    expect(value.textContent).toBe(full);
+    expect(value).toHaveClass("max-h-48", "overflow-auto");
+    details.open = false;
+    fireEvent(details, new Event("toggle"));
+    expect(screen.queryByLabelText("Full parameter value")).toBeNull();
   });
 
   it("distinguishes an empty cell diff from an atomic value change", async () => {

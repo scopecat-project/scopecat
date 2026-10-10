@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -180,69 +180,70 @@ export function RunProposals({ runId }: { runId: string }) {
 
 function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
   return (
-    <details className="px-3.5 py-3 text-[0.7rem] leading-relaxed">
-      <summary className="cursor-pointer font-semibold text-accent">
-        Verify and adopt in an author session
-      </summary>
-      <p className="mt-3">
-        A fit, confidence score or recorded approval alone does not show which parameter branch was
-        updated. Review the branch publication receipt for the adopted revision.
+    <section className="px-3.5 py-3 text-[0.7rem] leading-relaxed" aria-label="Candidate adoption">
+      <p>
+        Adoption currently requires an author session; this page does not publish parameters.
+        Collect independent verification using your laboratory's policy, then explicitly publish to
+        the reviewed parameter branch. Only that branch advances; existing runs and prepared
+        experiments keep their original inputs.
       </p>
-      <ol className="mt-3 list-decimal space-y-4 pl-5">
-        <li>
-          <strong>Try this exact candidate.</strong> In your connected author session, select your
-          verification experiment. Preparing it checks inputs; call <code>.run()</code> explicitly
-          when ready to collect independent measurements.
-          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
-            <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})
-prepared = session.prepare(experiment, candidate=candidate)`}</code>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-accent underline">
+        <a
+          href="https://scopecat-project.github.io/scopecat/how-to/verify-parameter-candidates/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Verify a candidate
+        </a>
+        <a
+          href="https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Publish to a parameter branch
+        </a>
+      </div>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-accent">For authors: reopen this candidate</summary>
+        <p className="mt-2">
+          In a connected author session named <code>session</code>, reopen this saved proposal. The
+          guides above explain how to prepare an independent verification experiment, supply its
+          retained policy result and capture the destination branch.
+        </p>
+        <pre className="mt-2 max-h-40 overflow-auto rounded border border-line bg-bg p-3">
+          <code>{`candidate = session.config.candidate(${JSON.stringify(proposal.sourceRunId)}, ${JSON.stringify(proposal.id)})`}</code>
+        </pre>
+      </details>
+    </section>
+  );
+}
+
+function ProposalValue({ value }: { value: unknown }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = formatParameterValue(value);
+  if (text.length <= 120) return <>{text}</>;
+  return (
+    <div className="min-w-0">
+      <span className="block max-h-16 overflow-hidden">{text.slice(0, 120)}…</span>
+      <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
+        <summary className="mt-1 cursor-pointer font-sans text-accent">View full value</summary>
+        {expanded && (
+          <pre
+            className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]"
+            aria-label="Full parameter value"
+          >
+            {text}
           </pre>
-        </li>
-        <li>
-          <strong>Apply your laboratory's verification policy.</strong> Analyze a separate,
-          completed run using this exact candidate and the same scientific context. Supply its
-          retained managed result as <code>check_result</code>; the author-defined result must
-          declare <code>accepted: bool</code>. A numerical fit is not an acceptance decision.
-          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
-            <code>{`verified = candidate.verify(check_result)`}</code>
-          </pre>
-        </li>
-        <li>
-          <strong>Review the destination and publish explicitly.</strong> Use the exact branch head
-          captured for the source run as <code>baseline_branch</code>. Check its name and revision
-          before publishing; choose a new revision name. A changed branch or mismatched baseline
-          requires review and new evidence, not a silent merge.
-          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
-            <code>{`print(baseline_branch.name, baseline_branch.revision)
-published = verified.publish_to_branch(
-    baseline_branch,
-    name="new-revision-name",
-    note="Independent verification reviewed",
-)`}</code>
-          </pre>
-          <p className="mt-2">
-            This advances only the chosen branch and records a publication receipt. It does not
-            change existing runs, prepared experiments, other branches, setup or the session's
-            selection. If a response is lost, retry the same captured branch, name and note.
-          </p>
-        </li>
-        <li>
-          <strong>Select the published revision for future work.</strong> Keep your explicitly
-          reviewed <code>setup</code> and select the returned exact revision before preparing
-          another experiment.
-          <pre className="mt-2 overflow-x-auto rounded border border-line bg-bg p-3">
-            <code>{`session.use(parameters=published.revision, setup=setup)`}</code>
-          </pre>
-        </li>
-      </ol>
-    </details>
+        )}
+      </details>
+    </div>
   );
 }
 
 function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
   return (
     <div
-      className="mx-3.5 overflow-hidden rounded-[9px] border border-line bg-panel-soft max-[680px]:overflow-x-auto"
+      className="mx-3.5 max-h-96 overflow-auto rounded-[9px] border border-line bg-panel-soft"
       role="table"
     >
       <div
@@ -278,25 +279,28 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
             role="row"
             key={delta.parameterId}
           >
-            <code className="text-[0.61rem] text-text-soft [overflow-wrap:anywhere]" role="cell">
-              {delta.parameterId}
+            <div
+              className="font-mono text-[0.61rem] text-text-soft [overflow-wrap:anywhere]"
+              role="cell"
+            >
+              <ProposalValue value={delta.parameterId} />
               {delta.changeKind && (
                 <span className="mt-1 block font-sans text-text-dim">{delta.changeKind}</span>
               )}
-            </code>
-            <span
-              className="rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
+            </div>
+            <div
+              className="min-w-0 rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
               role="cell"
             >
-              {formatParameterValue(delta.before)}
-            </span>
+              <ProposalValue value={delta.before} />
+            </div>
             <ArrowRight size={14} aria-hidden="true" />
-            <span
-              className="rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
+            <div
+              className="min-w-0 rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
               role="cell"
             >
-              {formatParameterValue(delta.after)}
-            </span>
+              <ProposalValue value={delta.after} />
+            </div>
           </div>
         ))}
     </div>

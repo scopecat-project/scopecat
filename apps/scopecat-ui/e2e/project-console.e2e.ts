@@ -431,12 +431,9 @@ test("reviews notebook candidate evidence without changing parameter branches", 
   await expect(proposals.getByText(candidate.proposalId, { exact: true })).toBeVisible();
   await expect(proposals.getByText("98% confidence", { exact: true })).toBeVisible();
   await expect(proposals.getByRole("button", { name: "Accept as default" })).toHaveCount(0);
-  await proposals.getByText("Verify and adopt in an author session", { exact: true }).click();
+  await proposals.getByText("For authors: reopen this candidate", { exact: true }).click();
   await expect(proposals.locator("pre").first()).toContainText(candidate.runId);
   await expect(proposals.locator("pre").first()).toContainText(candidate.proposalId);
-  await expect(proposals.locator("pre").first()).toContainText(
-    "session.prepare(experiment, candidate=candidate)",
-  );
   await page.reload();
   await expect(
     page.getByTestId("run-proposals-card").getByText(candidate.proposalId, { exact: true }),
