@@ -1,13 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
-  chooseReferenceContext,
-  prepareReferenceContexts,
+  chooseAuthorContext,
+  copyAuthorWorkspace,
+  prepareAuthorContexts,
   reviewRetainedExperiment,
-} from "./reference-context";
+} from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -28,18 +29,15 @@ test("discovers an ordinary author experiment and edits controls before submitti
   const project = await mkdtemp(join(tmpdir(), "scopecat-author-e2e-"));
   let completed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
+    await copyAuthorWorkspace(project);
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, project);
+    prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await chooseReferenceContext(page);
+    await chooseAuthorContext(page);
     await expect(page.getByLabel("Frequency", { exact: true })).toHaveValue("4.8");
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Polarity", { exact: true }).selectOption("negative");
@@ -65,7 +63,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
       ]),
     });
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    const sourcePath = join(project, "src/reference_lab_authors/authored/signal.py");
+    const sourcePath = join(project, "src/ui_author/signal.py");
     const originalSource = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
     await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
@@ -134,22 +132,19 @@ test("prepares B while A stays pinned in a separate result page", async ({
   });
   let completed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
-    const sourcePath = join(project, "src/reference_lab_authors/authored/signal.py");
+    await copyAuthorWorkspace(project);
+    const sourcePath = join(project, "src/ui_author/signal.py");
     const source = (await readFile(sourcePath, "utf8")).replace(
       "    detuning =",
       `    import time\n    from pathlib import Path\n    if gain == 2 and frequency.to("GHz").value > 4.7:\n        deadline = time.monotonic() + 90\n        while not Path(${JSON.stringify(release)}).exists():\n            if time.monotonic() > deadline:\n                raise RuntimeError("A was not released")\n            time.sleep(0.05)\n    detuning =`,
     );
     await writeFile(sourcePath, source);
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, project);
+    prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8"));
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await chooseReferenceContext(page);
+    await chooseAuthorContext(page);
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Frequency source").selectOption("range");
     await page.getByLabel("Frequency start").fill("4.7");

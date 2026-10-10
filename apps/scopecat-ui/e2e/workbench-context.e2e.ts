@@ -1,13 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import {
-  chooseReferenceContext,
-  prepareReferenceContexts,
+  chooseAuthorContext,
+  copyAuthorWorkspace,
+  prepareAuthorContexts,
   reviewRetainedExperiment,
-} from "./reference-context";
+} from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): void {
@@ -58,12 +59,9 @@ test("two workbench pages retain independent context and share collection number
   const project = await mkdtemp(join(tmpdir(), "scopecat-workbench-e2e-"));
   let completed = false;
   try {
-    for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
-        recursive: true,
-      });
+    await copyAuthorWorkspace(project);
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-    prepareReferenceContexts(uv, project);
+    prepareAuthorContexts(uv, project);
     const { base_url: url } = JSON.parse(
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
@@ -81,7 +79,7 @@ test("two workbench pages retain independent context and share collection number
     }
     await page.goto(`${url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await chooseReferenceContext(page);
+    await chooseAuthorContext(page);
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
       "operator",
@@ -92,9 +90,7 @@ test("two workbench pages retain independent context and share collection number
     const batchA = await createScope(page, "batch", "Cooldown A");
     const collection = await createScope(page, "collection", "Shared measurements");
     // Finish A's explicit experiment round trip before another page edits the shared draft.
-    await page
-      .getByLabel("Experiment", { exact: true })
-      .selectOption("reference_lab.frequency_amplitude");
+    await page.getByLabel("Experiment", { exact: true }).selectOption("constant");
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
@@ -116,7 +112,7 @@ test("two workbench pages retain independent context and share collection number
       other.getByRole("button", { name: "Start acquisition", exact: true }),
     ).toBeDisabled();
     await reviewRetainedExperiment(other);
-    await chooseReferenceContext(other, "browser-bench-b");
+    await chooseAuthorContext(other, "browser-bench-b");
     await other.getByRole("button", { name: "Browse samples, batches and collections" }).click();
     await other.getByLabel("Registered sample", { exact: true }).selectOption("chip-b");
     await other.getByRole("textbox", { name: "Operator", exact: true }).fill("Bob");

@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { prepareReferenceContexts } from "./reference-context";
+import { copyAuthorWorkspace, prepareAuthorContexts } from "./author-context";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
@@ -20,10 +20,9 @@ function uv(args: string[]): string {
 }
 
 async function start(project: string) {
-  for (const name of ["src", "config", "scopecat.toml"])
-    await cp(join(ROOT, "examples/reference_lab", name), join(project, name), { recursive: true });
+  await copyAuthorWorkspace(project);
   uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
-  prepareReferenceContexts(uv, project);
+  prepareAuthorContexts(uv, project);
   return (
     JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
@@ -96,7 +95,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     assert run.samples[0].sample_id == sys.argv[4]
     assert run.samples[0].revision == 1
     assert run.samples[0].batch_id == (sys.argv[6] or None)
-    assert run.config.parameter_snapshot.get("qubits").rows[0]["drive_carrier_frequency"] == sc.Quantity(float(sys.argv[5]), "GHz")
+    assert run.config.parameter_snapshot.get("signals").rows[0]["center"] == sc.Quantity(float(sys.argv[5]), "GHz")
     assert not lab.config.registry().entries
 `;
 
@@ -135,12 +134,8 @@ for (const scoped of [false, true]) {
         const frequency = 4.8 + index / 10;
         const name = `values-${index}`;
         await editVersion(page, "browser-values");
-        await page
-          .getByLabel("qubits[1].drive_carrier_frequency", { exact: true })
-          .fill(String(frequency));
-        await page
-          .getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true })
-          .fill("GHz");
+        await page.getByLabel("signals[1].center", { exact: true }).fill(String(frequency));
+        await page.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
         await saveVersion(page, name);
         await launchVersion(page);
         await page.getByLabel("Sample ID", { exact: true }).fill(`context-${sample}`);
@@ -224,14 +219,14 @@ import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     params = lab.parameters.workspace("browser")
-    params.add_column("qubits", "quality", float | None)
+    params.add_column("signals", "quality", float | None)
     print(params.save().id)
 `,
       project,
     ]);
     await page.goto(`${url}/#configuration`);
     await editVersion(page, optionalVersion);
-    await expect(page.getByLabel("qubits[1].quality", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("signals[1].quality", { exact: true })).toHaveValue("");
     await saveVersion(page, "gui-optional-quality");
     await launchVersion(page);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
@@ -246,9 +241,9 @@ import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     run = lab.get_run(sys.argv[2])
     assert run.snapshot.config_source.parameters == lab.parameters.get("gui-optional-quality").ref
-    table = run.config.parameter_catalog.get("qubits").value_type
+    table = run.config.parameter_catalog.get("signals").value_type
     assert any(column.id == "quality" for column in table.columns)
-    assert all("quality" not in row for row in run.config.parameter_snapshot.get("qubits").rows)
+    assert all("quality" not in row for row in run.config.parameter_snapshot.get("signals").rows)
 `,
       project,
       run,
@@ -273,18 +268,16 @@ import sys
 import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     params = lab.parameters.workspace("browser")
-    params['qubits']['q0']['drive_carrier_frequency'] = sc.Quantity(5100, 'MHz')
+    params['signals']['a']['center'] = sc.Quantity(5100, 'MHz')
     print(params.save().id)
 `,
       project,
     ]);
     await page.goto(`${url}/#configuration`);
     await editVersion(page, pythonVersion);
-    const frequency = page.getByLabel("qubits[1].drive_carrier_frequency", { exact: true });
+    const frequency = page.getByLabel("signals[1].center", { exact: true });
     await expect(frequency).toHaveValue("5100.0");
-    await expect(
-      page.getByLabel("qubits[1].drive_carrier_frequency unit", { exact: true }),
-    ).toHaveValue("MHz");
+    await expect(page.getByLabel("signals[1].center unit", { exact: true })).toHaveValue("MHz");
     await frequency.focus();
     await frequency.press("ControlOrMeta+A");
     await frequency.pressSequentially("5200");
@@ -312,9 +305,9 @@ import scopecat as sc
 with sc.open_project(sys.argv[1]).connect() as lab:
     old = lab.parameters.get(sys.argv[2])
     new = lab.parameters.get("gui-roundtrip")
-    assert old.parameters.get("qubits").rows[0]["drive_carrier_frequency"] == sc.Quantity(5100, "MHz")
-    assert new.parameters.get("qubits").rows[0]["drive_carrier_frequency"] == sc.Quantity(5200, "MHz")
-    untouched = lambda revision: {v.id: v for v in revision.parameters.values if v.id != "qubits"}
+    assert old.parameters.get("signals").rows[0]["center"] == sc.Quantity(5100, "MHz")
+    assert new.parameters.get("signals").rows[0]["center"] == sc.Quantity(5200, "MHz")
+    untouched = lambda revision: revision.parameters.get("signals").rows[1:]
     assert untouched(old) == untouched(new)
     assert old.catalog == new.catalog
     assert lab.parameters.checkout("browser").head.revision == old.ref
