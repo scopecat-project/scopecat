@@ -9,6 +9,17 @@ import { NotebookJourneyPanel } from "./NotebookJourneyPanel";
 
 type PrepareNotebook = NonNullable<Window["pywebview"]>["api"]["prepare_notebook_journey"];
 
+const courseNames: Record<string, string> = {
+  parameters: "Parameters and scans",
+  refresh: "Edit and refresh experiments",
+  compute: "Mean IQ and typed results",
+  groups: "Grouped analysis and history",
+  calibration: "Parameter calibration and recovery",
+  "joint-calibration": "Joint calibration and coupled checks",
+  "task-calibration": "Background calibration and publication",
+};
+const course = (topic: string) => screen.getByRole("radio", { name: courseNames[topic] });
+
 function savedStatus(journey: NotebookJourney | null) {
   return { state: journey ? (journey.ready ? "ready" : "retryable") : "not_started", journey };
 }
@@ -64,6 +75,9 @@ it("keeps desktop preparation distinct from browser-only Help", () => {
   show();
   expect(screen.getByText(/Open Help in the Scopecat desktop/)).toBeVisible();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  expect(screen.getAllByRole("radio")).toHaveLength(7);
+  fireEvent.click(course("groups"));
+  expect(course("groups")).toBeChecked();
 });
 it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "task-calibration"])(
   "selects %s without borrowing the parameters receipt and locks selection during preparation",
@@ -105,14 +119,12 @@ it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "ta
     });
     show();
     expect(await screen.findByText(parameters.notebook)).toBeVisible();
-    fireEvent.change(screen.getByRole("combobox", { name: "Course" }), {
-      target: { value: topic },
-    });
+    fireEvent.click(course(topic));
     const start = await screen.findByRole("button", { name: `Start ${topic} Notebook` });
     await vi.waitFor(() => expect(start).toBeEnabled());
     expect(screen.queryByText(parameters.notebook)).not.toBeInTheDocument();
     fireEvent.click(start);
-    await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
+    await vi.waitFor(() => expect(course(topic)).toBeDisabled());
     await vi.waitFor(() => expect(prepare).toHaveBeenCalledWith(undefined, topic));
     status.mockImplementation(async (selected) =>
       savedStatus(selected === "parameters" ? parameters : groups),
@@ -120,8 +132,8 @@ it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "ta
     finish(groups);
     expect(await screen.findByText(groups.notebook)).toBeVisible();
     await vi.waitFor(() => expect(open).toHaveBeenCalledWith(topic));
-    await vi.waitFor(() => expect(screen.getByRole("combobox")).toBeEnabled());
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "parameters" } });
+    await vi.waitFor(() => expect(course(topic)).toBeEnabled());
+    fireEvent.click(course("parameters"));
     expect(await screen.findByText(parameters.notebook)).toBeVisible();
     expect(screen.getByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
     expect(prepare).toHaveBeenCalledTimes(1);
@@ -142,9 +154,7 @@ it("returns to the selected course and opens its exact Settings folder without p
     value: { api: { notebook_journey: status, prepare_notebook_journey: prepare } },
   });
   const first = show();
-  fireEvent.change(screen.getByRole("combobox", { name: "Course" }), {
-    target: { value: "groups" },
-  });
+  fireEvent.click(course("groups"));
   expect(await screen.findByText(journey.notebook)).toBeVisible();
   fireEvent.click(screen.getByRole("link", { name: "Manage this code folder in Settings" }));
   expect(new URL(window.location.href).searchParams.get("source")).toBe(journey.directory);
@@ -152,7 +162,7 @@ it("returns to the selected course and opens its exact Settings folder without p
   first.unmount();
   // A newly mounted Help reads the page selection, not a component-local default.
   show();
-  expect(screen.getByRole("combobox", { name: "Course" })).toHaveValue("groups");
+  expect(course("groups")).toBeChecked();
   expect(await screen.findByRole("button", { name: "Continue groups Notebook" })).toBeEnabled();
   expect(status).toHaveBeenLastCalledWith("groups");
   expect(prepare).not.toHaveBeenCalled();
@@ -176,7 +186,7 @@ it("shows unfinished preparation without claiming the folder is ready", async ()
     },
   });
   show();
-  expect(await screen.findByText(/Preparation unfinished/)).toBeVisible();
+  expect(await screen.findByText("Preparation unfinished")).toBeVisible();
   expect(
     screen.queryByRole("link", { name: "Manage this code folder in Settings" }),
   ).not.toBeInTheDocument();
@@ -184,7 +194,7 @@ it("shows unfinished preparation without claiming the folder is ready", async ()
   expect(
     screen.queryByRole("button", { name: /Choose another save location/ }),
   ).not.toBeInTheDocument();
-  expect(screen.getByRole("combobox", { name: "Course" })).toHaveValue("parameters");
+  expect(course("parameters")).toBeChecked();
 });
 
 function goToCourse(topic: string, via: "navigate" | "popstate") {
@@ -438,4 +448,39 @@ it("still shows a Continue failure when the saved receipt was ready", async () =
   show();
   fireEvent.click(await screen.findByRole("button", { name: "Continue parameters Notebook" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Local Python is missing");
+});
+
+it("browses grouped goals without preparing or opening a course", async () => {
+  const status = vi
+    .fn()
+    .mockImplementation(async (topic) =>
+      savedStatus(topic === "parameters" ? parametersJourney : null),
+    );
+  const prepare = vi.fn();
+  const open = vi.fn();
+  Object.defineProperty(window, "pywebview", {
+    configurable: true,
+    value: {
+      api: {
+        notebook_journey: status,
+        prepare_notebook_journey: prepare,
+        open_lesson_notebook: open,
+      },
+    },
+  });
+  show();
+  for (const name of ["Basics", "Optional", "Advanced"]) {
+    expect(screen.getByRole("heading", { name })).toBeVisible();
+  }
+  expect(await screen.findByText("Ready to continue")).toBeVisible();
+  expect(course("parameters")).toHaveAccessibleDescription(
+    "Run, view a result, edit Python and run again.",
+  );
+  fireEvent.click(course("task-calibration"));
+  expect(await screen.findByText("Not prepared")).toBeVisible();
+  expect(course("task-calibration")).toBeChecked();
+  expect(screen.queryByText(parametersJourney.directory)).not.toBeInTheDocument();
+  expect(screen.getByText(/does not mark it complete/)).toBeVisible();
+  expect(prepare).not.toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
 });
