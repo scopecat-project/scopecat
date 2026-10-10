@@ -61,6 +61,23 @@ describe("RunProposals", () => {
       expect.any(AbortSignal),
     );
   });
+
+  it("links each candidate to its exact source run and analysis, including older publications", async () => {
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({ sourceRunId: "run/a & b", analysisRecordId: "fit/older#1" }),
+        pendingProposal({ id: "new-fit", analysisRecordId: "fit-newer" }),
+      ),
+    );
+    renderProposals();
+
+    const links = await screen.findAllByRole("link", { name: "View source analysis" });
+    expect(links[0]).toHaveAttribute(
+      "href",
+      "?run=run%2Fa%20%26%20b&run-analysis=fit%2Folder%231#runs",
+    );
+    expect(links[1]).toHaveAttribute("href", "?run=run-1&run-analysis=fit-newer#runs");
+  });
 });
 
 function renderProposals() {
