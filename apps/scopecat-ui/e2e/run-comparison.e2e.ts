@@ -117,6 +117,8 @@ test("compares retained signals, saves independent results and imports a reviewe
       "href",
       `?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(candidate.analysis_id!)}#runs`,
     );
+    await sourceAnalysis.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("candidate-evidence-link.png") });
     await sourceAnalysis.click();
     await expect(page.getByText(candidate.analysis_id!, { exact: true })).toBeVisible();
     expect(new URL(page.url()).searchParams.get("run")).toBe(primary);
