@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import type { useAuthorWorkspaces } from "./source-api";
 
 export function SourceSelector({
@@ -37,7 +38,12 @@ export function SourceSelector({
           ))}
         </select>
       </label>
-      <button type="button" disabled={catalog.isFetching} onClick={() => void catalog.refetch()}>
+      <button
+        className={secondaryButton}
+        type="button"
+        disabled={catalog.isFetching}
+        onClick={() => void catalog.refetch()}
+      >
         Refresh workspace list
       </button>
       {catalog.error && <p role="alert">Cannot read code workspaces: {catalog.error.message}</p>}

@@ -1,7 +1,7 @@
 import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import type { components } from "../../api-schema";
 import { PreflightSummary } from "./PreflightSummary";
@@ -116,6 +116,8 @@ it("separates exact stage scope, target bounds, unknown time and retention", () 
     />,
   );
   expect(screen.getByText(/2 initial points in the first experiment/)).toBeVisible();
+  expect(screen.getByText("Exact: 64 shots")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Estimates and planned measurements"));
   expect(screen.getByText("Exact: 64 shots")).toBeVisible();
   expect(screen.getByText("Bounded: 0–32 points")).toBeVisible();
   expect(screen.getByText("Unknown (s)")).toBeVisible();
@@ -172,6 +174,7 @@ it("shows planned settings with unit, order and truncation without claiming read
       }}
     />,
   );
+  fireEvent.click(screen.getByText("Estimates and planned measurements"));
   expect(screen.getByRole("region", { name: "Planned instrument settings" })).toBeVisible();
   expect(screen.getByText("5000000000 Hz")).toBeVisible();
   expect(screen.getByText(/Point 3.*3.1/)).toBeVisible();
@@ -193,6 +196,7 @@ it("distinguishes an uninspected point from an inspected point with no settings"
       }}
     />,
   );
+  fireEvent.click(screen.getByText("Estimates and planned measurements"));
   expect(screen.getByText(/No point was inspected.*settings are unknown/)).toBeVisible();
   expect(screen.queryByText("No instrument settings in the selected point.")).toBeNull();
   view.rerender(

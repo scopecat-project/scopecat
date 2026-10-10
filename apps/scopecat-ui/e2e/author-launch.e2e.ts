@@ -63,6 +63,13 @@ test("discovers an ordinary author experiment and edits controls before submitti
       ]),
     });
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await page
+      .getByRole("region", { name: "Preview and start", exact: true })
+      .scrollIntoViewIfNeeded();
+    await testInfo.attach("Preparation and launch actions", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
     const sourcePath = join(project, "src/ui_author/signal.py");
     const originalSource = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
@@ -103,6 +110,27 @@ test("discovers an ordinary author experiment and edits controls before submitti
     expect(admitted.request().postDataJSON().inputs).toEqual({ polarity: "negative" });
     expect(await admitted.json()).toMatchObject({ dispatch_error: null });
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    const execution = page.getByRole("region", { name: "Selected execution", exact: true });
+    await expect(execution).toBeFocused();
+    await expect(execution).toBeInViewport();
+    await expect
+      .poll(async () => {
+        const heading = await execution
+          .getByRole("heading", { name: "Execution progress" })
+          .boundingBox();
+        const navigation = await page.getByRole("banner").boundingBox();
+        return !!heading && !!navigation && heading.y >= navigation.y + navigation.height;
+      })
+      .toBe(true);
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeDisabled();
+    await expect(execution.getByText("Execution diagnostics", { exact: true })).toBeVisible();
+    await testInfo.attach("Selected execution above retained preparation", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
     await page.getByRole("link", { name: /^Open retained run:/ }).click();
     await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
     await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();

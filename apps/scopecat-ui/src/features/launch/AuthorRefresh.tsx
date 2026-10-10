@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiClient, apiData } from "../../api-client";
@@ -113,7 +114,7 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId, disabled = fa
     <div className="space-y-2">
       <button
         type="button"
-        className="border rounded px-3 py-2"
+        className={secondaryButton}
         disabled={
           disabled || Boolean(busy) || refresh.isPending || state.isPending || state.isError
         }
@@ -144,6 +145,7 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId, disabled = fa
       {identity && <p className="text-xs break-all">Preparation: {identity}</p>}
       {busy && (
         <button
+          className={secondaryButton}
           type="button"
           disabled={cancel.isPending || operation.data?.status === "cancelling"}
           onClick={() => cancel.mutate()}
@@ -152,7 +154,12 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId, disabled = fa
         </button>
       )}
       {refresh.error && request && (
-        <button type="button" disabled={refresh.isPending} onClick={() => refresh.mutate(request)}>
+        <button
+          className={secondaryButton}
+          type="button"
+          disabled={refresh.isPending}
+          onClick={() => refresh.mutate(request)}
+        >
           Retry same submission
         </button>
       )}

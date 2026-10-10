@@ -50,6 +50,8 @@ test("reopens a lost launch receipt after context changes without a second submi
       page.getByRole("heading", { name: "Original submission awaiting confirmation" }),
     ).toBeVisible();
     await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Original launch submission" })).toBeFocused();
+    await expect(page.getByRole("region", { name: "Original launch submission" })).toBeInViewport();
     await page
       .getByRole("navigation", { name: "Project sections" })
       .getByRole("button", { name: "Configuration", exact: true })
