@@ -172,6 +172,38 @@ def test_windows_editor_opens_folder_and_notebook_without_command_shell(
     assert "shell" not in launched.call_args.kwargs
 
 
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+@pytest.mark.parametrize("active_venv", [None, "application-venv"])
+def test_editor_does_not_inherit_application_virtual_env(
+    tmp_path, monkeypatch, platform, active_venv
+):
+    installation = tmp_path / "editor"
+    (installation / "bin").mkdir(parents=True)
+    (installation / "Code.exe").touch()
+    monkeypatch.setattr(journey.sys, "platform", platform)
+    monkeypatch.setattr(
+        journey.shutil, "which", lambda _: str(installation / "bin/code")
+    )
+    if active_venv is None:
+        monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    else:
+        monkeypatch.setenv("VIRTUAL_ENV", active_venv)
+    monkeypatch.setenv("SCOPECAT_EDITOR_TEST", "preserved")
+    original = journey.os.environ.copy()
+    launched = Mock(return_value=Mock(returncode=0))
+    monkeypatch.setattr(journey.subprocess, "Popen", launched)
+    monkeypatch.setattr(journey.subprocess, "run", launched)
+
+    journey.open_editor(journey.NotebookJourney(directory=tmp_path / "course"))
+
+    child_env = launched.call_args.kwargs["env"]
+    assert "VIRTUAL_ENV" not in child_env
+    assert child_env == {
+        key: value for key, value in original.items() if key != "VIRTUAL_ENV"
+    }
+    assert journey.os.environ == original
+
+
 def test_old_parameters_receipt_is_continued_without_replacement(tmp_path, monkeypatch):
     import json
 

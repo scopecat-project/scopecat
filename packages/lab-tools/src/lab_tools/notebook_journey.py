@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -213,14 +214,22 @@ def open_editor(journey: NotebookJourney) -> None:
             "未找到 VS Code 的 code 命令。请在编辑器手动打开下方目录与 Notebook，"
             "选择所列 Python 内核；文件和准备结果已保留。"
         )
+    # The application's environment is not the course's selected interpreter.
+    # Do not advertise its active venv to the editor's environment manager.
+    editor_env = os.environ.copy()
+    editor_env.pop("VIRTUAL_ENV", None)
     if sys.platform == "win32":
         # Code.exe owns a GUI lifetime; waiting for it would time out on first launch.
         _ = subprocess.Popen(  # noqa: S603 - native editor and argument vector
-            command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=editor_env,
         )
         return
     result = subprocess.run(  # noqa: S603 - fixed editor executable and argument vector
         command,
+        env=editor_env,
         capture_output=True,
         text=True,
         timeout=30,
