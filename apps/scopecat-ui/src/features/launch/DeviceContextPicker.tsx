@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getSetupDefinitions, getSetupRevision, resolveSetupDefinition } from "../config/setup-api";
 import type { ScientificSelection } from "./scientific-selection";
@@ -60,6 +61,7 @@ export function DeviceContextPicker({
         </select>
       </label>
       <button
+        className={`${secondaryButton} mr-2`}
         type="button"
         disabled={disabled || revisions.isFetching}
         onClick={() => void revisions.refetch()}
@@ -71,6 +73,8 @@ export function DeviceContextPicker({
       {retained.error && <p role="alert">{retained.error.message}</p>}
       {selectedDefinition && (
         <button
+          className={`${secondaryButton} mr-2`}
+          type="button"
           disabled={disabled || resolution.isPending}
           onClick={() => resolution.mutate(selectedDefinition)}
         >
