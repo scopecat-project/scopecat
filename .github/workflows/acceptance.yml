@@ -115,7 +115,7 @@ jobs:
             uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
           fi
       - name: Retain qualified preview installers
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scopecat-preview-${{ runner.os }}-${{ github.sha }}
           if-no-files-found: error
@@ -128,7 +128,7 @@ jobs:
             ${{ runner.temp }}/native-acceptance/bundle.json
       - name: Retain native acceptance logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.os }}
           path: |
@@ -213,7 +213,7 @@ jobs:
 
       - name: Retain test timings and startup diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tests-${{ matrix.os }}-${{ matrix.group.label }}
           path: |
@@ -376,7 +376,7 @@ jobs:
           --bundle ../../dist/framework --commit "$GITHUB_SHA"
 
       - name: Upload shared framework artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scopecat-framework
           path: dist/framework
@@ -430,7 +430,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/timings.json
       - name: Retain browser timings and failure evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-${{ matrix.shard }}-${{ github.run_attempt }}
           path: |
@@ -491,7 +491,7 @@ jobs:
 
       - name: Retain tutorial delivery and executed notebooks
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scopecat-tutorial-${{ matrix.os }}
           path: |
