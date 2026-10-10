@@ -315,7 +315,22 @@ export function LaunchForm({
       }}
       className="space-y-4 max-w-3xl"
     >
-      <p>{entry.description}</p>
+      <section
+        aria-label="Selected experiment"
+        className="rounded border border-line bg-panel p-4 space-y-2"
+      >
+        <p className="text-xs text-text-dim">Selected experiment</p>
+        <h3 className="font-semibold text-lg">{entry.title}</h3>
+        <p className="text-sm whitespace-pre-line">{entry.description}</p>
+        <p>
+          {entry.configuration_effect === "none"
+            ? "This task does not publish parameter changes."
+            : entry.configuration_effect === "candidate"
+              ? "This task produces a parameter candidate. Creating it does not publish it to a branch."
+              : "This task can publish parameter changes after its declared review. Review may be automated; starting does not add a separate human approval step."}
+        </p>
+        {entry.review && <p>{entry.review.instructions}</p>}
+      </section>
       <p role="status">{recovery.status}</p>
       {recovery.unsavedTargets.length > 0 && (
         <p role="alert">
@@ -445,17 +460,23 @@ export function LaunchForm({
         </section>
       )}
       {draft.selection.configuration.kind === "parameters" && (
-        <p>
-          Parameter baseline: revision {draft.selection.configuration.ref.revision_id}
-          {draft.selection.configuration.overrides.length > 0
-            ? ` with ${draft.selection.configuration.overrides.length} parameter override(s)`
-            : " with no overrides"}
-          .{" "}
-          {draft.workingInput &&
-            "The adopted working-table values are applied over this baseline. "}
-          The checked preview retains the exact setup used. This does not accept calibration or
-          change defaults.
-        </p>
+        <section
+          aria-label="Parameter source"
+          className="rounded border border-line bg-panel p-3 space-y-2"
+        >
+          <h4 className="font-semibold">Parameter source</h4>
+          <p className="text-sm break-words">
+            Parameter baseline: revision {draft.selection.configuration.ref.revision_id}
+            {draft.selection.configuration.overrides.length > 0
+              ? ` with ${draft.selection.configuration.overrides.length} parameter override(s)`
+              : " with no overrides"}
+            .{" "}
+            {draft.workingInput &&
+              "The adopted working-table values are applied over this baseline. "}
+            The checked preview retains the exact setup used. This does not accept calibration or
+            change defaults.
+          </p>
+        </section>
       )}
       {draft.selection.configuration.kind === "unselected" ? (
         <p>
@@ -481,87 +502,94 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </p>
       )}
-      <fieldset disabled={pending === "submit" || !recovery.ready}>
-        <ControlFields
-          controls={entry.controls}
-          drafts={drafts}
-          onChange={(id, controlDraft) => {
-            changeInput({ controls: { ...drafts, [id]: controlDraft } });
-          }}
-        />
-      </fieldset>
-      <fieldset
-        disabled={pending === "submit" || !recovery.ready}
-        className="grid grid-cols-2 gap-4"
+      <section aria-label="Inputs for this run" className="space-y-3 border-t border-line pt-4">
+        <div>
+          <h4 className="font-semibold">Inputs for this run</h4>
+          <p className="text-sm text-text-dim">
+            Choose fixed values, declared defaults or scans where available. These inputs belong to
+            this preparation; editing them does not publish a parameter version.
+          </p>
+        </div>
+        <fieldset disabled={pending === "submit" || !recovery.ready}>
+          <ControlFields
+            controls={entry.controls}
+            drafts={drafts}
+            onChange={(id, controlDraft) => {
+              changeInput({ controls: { ...drafts, [id]: controlDraft } });
+            }}
+          />
+        </fieldset>
+        <fieldset
+          disabled={pending === "submit" || !recovery.ready}
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+        >
+          {fields.map(([name, field]) => (
+            <label key={name} className="flex flex-col gap-1">
+              {field.title ?? name}
+              {field.type === "array" && field.items?.enum ? (
+                <select
+                  multiple
+                  aria-label={field.title ?? name}
+                  required={entry.request.required?.includes(name)}
+                  value={(values[name] ?? "").split("\n").filter(Boolean)}
+                  onChange={(event) =>
+                    change(
+                      name,
+                      Array.from(event.target.selectedOptions, (option) => option.value).join("\n"),
+                    )
+                  }
+                  className="border rounded p-2 min-h-32"
+                >
+                  {field.items.enum.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              ) : field.enum || field.type === "boolean" ? (
+                <select
+                  aria-label={field.title ?? name}
+                  required={entry.request.required?.includes(name)}
+                  value={values[name]}
+                  onChange={(event) => change(name, event.target.value)}
+                  className="border rounded p-2"
+                >
+                  <option value="">Select…</option>
+                  {(field.enum ?? ["true", "false"]).map((value) => (
+                    <option key={String(value)} value={String(value)}>
+                      {String(value)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  aria-label={field.title ?? name}
+                  required={entry.request.required?.includes(name)}
+                  type="text"
+                  inputMode={
+                    ["number", "integer"].includes(field.type ?? "") ? "decimal" : undefined
+                  }
+                  step={field.type === "integer" ? 1 : "any"}
+                  min={field.minimum ?? field.exclusiveMinimum ?? undefined}
+                  max={field.maximum ?? undefined}
+                  value={values[name]}
+                  onChange={(event) => change(name, event.target.value)}
+                  className="border rounded p-2"
+                />
+              )}
+            </label>
+          ))}
+        </fieldset>
+      </section>
+      <section
+        aria-label="Preview and start"
+        className="space-y-3 rounded-md border border-line-strong bg-panel p-4"
       >
-        {fields.map(([name, field]) => (
-          <label key={name} className="flex flex-col gap-1">
-            {field.title ?? name}
-            {field.type === "array" && field.items?.enum ? (
-              <select
-                multiple
-                aria-label={field.title ?? name}
-                required={entry.request.required?.includes(name)}
-                value={(values[name] ?? "").split("\n").filter(Boolean)}
-                onChange={(event) =>
-                  change(
-                    name,
-                    Array.from(event.target.selectedOptions, (option) => option.value).join("\n"),
-                  )
-                }
-                className="border rounded p-2 min-h-32"
-              >
-                {field.items.enum.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            ) : field.enum || field.type === "boolean" ? (
-              <select
-                aria-label={field.title ?? name}
-                required={entry.request.required?.includes(name)}
-                value={values[name]}
-                onChange={(event) => change(name, event.target.value)}
-                className="border rounded p-2"
-              >
-                <option value="">Select…</option>
-                {(field.enum ?? ["true", "false"]).map((value) => (
-                  <option key={String(value)} value={String(value)}>
-                    {String(value)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                aria-label={field.title ?? name}
-                required={entry.request.required?.includes(name)}
-                type="text"
-                inputMode={["number", "integer"].includes(field.type ?? "") ? "decimal" : undefined}
-                step={field.type === "integer" ? 1 : "any"}
-                min={field.minimum ?? field.exclusiveMinimum ?? undefined}
-                max={field.maximum ?? undefined}
-                value={values[name]}
-                onChange={(event) => change(name, event.target.value)}
-                className="border rounded p-2"
-              />
-            )}
-          </label>
-        ))}
-      </fieldset>
-      <section aria-label="Preview and start" className="space-y-3 border-t border-line pt-4">
+        <h4 className="font-semibold">Start or inspect</h4>
         <p className="text-sm text-text-dim">
           Start checks the current inputs before submitting acquisition. Preview is optional and
           never acquires data.
         </p>
-        <p>
-          {entry.configuration_effect === "none"
-            ? "This task does not publish parameter changes."
-            : entry.configuration_effect === "candidate"
-              ? "This task produces a parameter candidate. Creating it does not publish it to a branch."
-              : "This task can publish parameter changes after its declared review. Review may be automated; starting does not add a separate human approval step."}
-        </p>
-        {entry.review && <p>{entry.review.instructions}</p>}
         <div className="flex flex-wrap items-center gap-3">
           {entry.actions.includes("submit") && (
             <button
@@ -604,6 +632,10 @@ export function LaunchForm({
             </button>
           )}
         </div>
+        <p className="text-sm text-text-dim">
+          Use Preview to inspect planned measurements, available estimates and waveforms before
+          starting. Details appear below when supplied by the experiment.
+        </p>
         {pending && (
           <p role="status">
             {pending === "submit"

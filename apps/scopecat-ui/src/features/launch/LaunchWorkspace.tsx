@@ -10,6 +10,7 @@ import { SourceSelector } from "./SourceSelector";
 import { useAuthorWorkspaces } from "./source-api";
 import { AuthorRefresh } from "./AuthorRefresh";
 import { PlanLibrary } from "./PlanLibrary";
+import { ExperimentPicker } from "./ExperimentPicker";
 import { LaunchForm } from "./LaunchForm";
 import { OriginalSubmission } from "./OriginalSubmission";
 import { ProcedureHistory } from "./ProcedureHistory";
@@ -200,30 +201,13 @@ export function LaunchWorkspace({
         )}
         {(entry || draft) && (
           <>
-            <label className="block">
-              Experiment{" "}
-              <select
-                aria-label="Experiment"
-                disabled={!sourceAvailable || Boolean(handoff)}
-                value={draft?.experiment ?? entry?.id}
-                onChange={(event) => {
-                  const selected = catalog.data?.entries.find(
-                    (item) => item.id === event.target.value,
-                  );
-                  if (selected) select(selected, false, workspaceId);
-                }}
-                className="border rounded p-2 ml-2"
-              >
-                {!entry && draft && (
-                  <option value={draft.experiment}>{draft.experiment} (unavailable)</option>
-                )}
-                {catalog.data?.entries.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ExperimentPicker
+              key={workspaceId}
+              entries={catalog.data?.entries ?? []}
+              selectedId={draft?.experiment ?? entry?.id ?? ""}
+              disabled={!sourceAvailable || Boolean(handoff)}
+              onSelect={(selected) => select(selected, false, workspaceId)}
+            />
             {entry &&
               sourceAvailable &&
               !handoff &&
