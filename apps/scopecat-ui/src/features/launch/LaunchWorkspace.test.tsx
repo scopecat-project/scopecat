@@ -506,7 +506,7 @@ it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", asyn
   );
   fireEvent.change(screen.getByLabelText(label), { target: { value: "changed" } });
   expect(screen.queryByText("Preview ready")).toBeNull();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
 });
 
 it.each([{ type: "integer", enum: [1, "two"] }, { type: ["number", "null"] }, false])(
@@ -580,7 +580,7 @@ it("invalidates a preview after relevant manual changes and retains science inpu
       expect(screen.getByText(/Manual instrument changes invalidate this preview/)).toBeVisible(),
     { timeout: 3000 },
   );
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
   expect(screen.getByLabelText("Amplitude")).toHaveValue("0.4");
   expect(screen.getByLabelText("Qubit")).toHaveValue("Q12");
   expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled();

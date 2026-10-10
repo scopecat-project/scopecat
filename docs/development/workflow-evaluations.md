@@ -16,10 +16,12 @@ for the current evidence owners.
 ## Stable experiment goals
 
 The Experiments entry should make preparing and running one experiment the ordinary
-path. Preview is a preparation check tied to exact source, configuration and inputs;
-its current separate confirmation must remain until a combined start path preserves
-those checks, submission recovery and explicit review. Time/data estimates and
-waveform inspection are optional views of available evidence, not prerequisites for
+path. Start expresses execution intent and performs the existing preparation checks
+against exact source, configuration and inputs before submitting. Preview remains
+an optional compile-only inspection. Known task effects are shown before Start;
+changed inputs or failed checks stop that intent, and declared decisions remain
+explicit. Submission recovery never silently starts another acquisition. Time/data
+estimates and waveform inspection are optional views of available evidence, not prerequisites for
 understanding a procedure. Missing estimates must remain unknown.
 
 From a result, users should be able to request recommended or repeated analysis,

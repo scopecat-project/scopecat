@@ -1,5 +1,5 @@
 import type { components } from "../../api-schema";
-import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
+import type { LaunchPreview } from "./launch-api";
 import { PlannedSettings } from "./PlannedSettings";
 
 type Quantity =
@@ -29,13 +29,7 @@ const costLabels: Record<string, string> = {
   batch_point_capacity: "Batch point capacity",
 };
 
-export function PreflightSummary({
-  entry,
-  preview,
-}: {
-  entry: LaunchCatalogEntry;
-  preview: LaunchPreview;
-}) {
+export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
   return (
     <div className="space-y-3">
       <h3 role="status" className="font-semibold">
@@ -48,14 +42,6 @@ export function PreflightSummary({
           ? `Candidate ${preview.reviewed.config_source.proposal_id}`
           : `Parameters ${preview.reviewed.config_source.parameters.revision_id} / Setup ${preview.reviewed.config_source.setup.revision_id}`}
       </p>
-      <p>
-        {entry.configuration_effect === "none"
-          ? "This task does not change the default configuration."
-          : entry.configuration_effect === "candidate"
-            ? "Produces a candidate. Accepting it as default is a separate operator action."
-            : "Changes the default configuration only after review."}
-      </p>
-      {entry.review && <p>{entry.review.instructions}</p>}
       {!preview.preflight ? (
         <p>
           Detailed preflight not provided. Procedure scope, shots and cost estimates are unknown.

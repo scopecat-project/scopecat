@@ -830,7 +830,7 @@ it("ignores a pending preview from the previous source even when the experiment 
     previous(Response.json(preview()));
   });
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
   expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
   await screen.findByText("Experiment input saved in application data.", { exact: true });
   view.rerender(<Harness projectId="project-b" />);
@@ -916,3 +916,148 @@ it("follows an explicit historical procedure without replacing a newer draft", a
 function selectedProcedureLink() {
   return screen.getByRole("link", { name: "Reopen this procedure" });
 }
+
+it.each(["none", "candidate", "activation_after_review"] as const)(
+  "starts %s tasks with one click and retains the returned preview binding",
+  async (effect) => {
+    catalog = [{ ...prepared, configuration_effect: effect }];
+    render(<Harness />);
+    await screen.findByLabelText("Note");
+    const start = screen.getByRole("button", { name: "Start acquisition" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    await waitFor(() => expect(submissions).toHaveLength(1));
+    expect(submissions[0]).toMatchObject({
+      expected_request_hash: `sha256:${"a".repeat(64)}`,
+      manual_state: { event_id: 1 },
+      inputs: { note: "original" },
+    });
+    expect(manualEventId).toBe(1);
+    await screen.findByRole("heading", { name: "Original submission awaiting confirmation" });
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  },
+);
+
+it.each(["cancel", "edit", "context", "navigate"])(
+  "does not submit a late preparation after %s",
+  async (action) => {
+    render(<Harness />);
+    await selectPrepared();
+    deferPreview = true;
+    const start = screen.getByRole("button", { name: "Start acquisition" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    await waitFor(() => expect(previewResponse).toBeDefined());
+    fireEvent.click(screen.getByRole("button", { name: "Preparing acquisition…" }));
+    const finish = previewResponse!;
+    if (action === "cancel")
+      fireEvent.click(screen.getByRole("button", { name: "Cancel preparation" }));
+    if (action === "edit")
+      fireEvent.change(screen.getByLabelText("Note"), { target: { value: "new intent" } });
+    if (action === "context")
+      fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "another-sample" } });
+    if (action === "navigate")
+      fireEvent.click(screen.getByRole("button", { name: "configuration" }));
+    await act(async () => finish(Response.json(preview())));
+    expect(submissions).toHaveLength(0);
+    expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
+  },
+);
+
+it("stops when manual state changes during internal preparation and prepares afresh on the next Start", async () => {
+  const transport = globalThis.fetch;
+  let changed = true;
+  vi.stubGlobal("fetch", (request: Request) =>
+    request.url.endsWith("/validity") && changed
+      ? Promise.resolve(
+          Response.json({
+            valid: false,
+            changes: [{ instrument_ids: ["meter"], reason: "Manual write" }],
+          }),
+        )
+      : transport(request),
+  );
+  render(<Harness />);
+  await selectPrepared();
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await screen.findByText(/Instrument changes stopped this start/);
+  expect(submissions).toHaveLength(0);
+  changed = false;
+  fireEvent.click(start);
+  await waitFor(() => expect(submissions).toHaveLength(1));
+  expect(submissions[0]?.manual_state?.event_id).toBe(2);
+});
+
+it("cancels the internal Start while its original receipt is being retained", async () => {
+  const transport = globalThis.fetch;
+  let release!: () => void;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/launch-attempts") && request.method === "POST")
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    return transport(request);
+  });
+  render(<Harness />);
+  await selectPrepared();
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await waitFor(() => expect(release).toBeDefined());
+  expect(screen.getByRole("button", { name: "Preparing acquisition…" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel preparation" }));
+  await act(async () => release());
+  expect(submissions).toHaveLength(0);
+  expect(screen.getByText("Preparation cancelled. No acquisition was submitted.")).toBeVisible();
+});
+
+it("ignores an old preview after an edited input starts a new preparation", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  deferPreview = true;
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  const oldPreview = previewResponse!;
+  fireEvent.change(screen.getByLabelText("Note"), { target: { value: "new intent" } });
+  previewResponse = undefined;
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  await act(async () => oldPreview(Response.json(preview())));
+  expect(submissions).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "Preparing acquisition…" })).toBeDisabled();
+  await act(async () => previewResponse!(Response.json(preview())));
+  await waitFor(() => expect(submissions).toHaveLength(1));
+  expect(submissions[0]?.inputs).toEqual({ note: "new intent" });
+  expect(submissions[0]?.manual_state?.event_id).toBe(2);
+});
+
+it("reuses a matching optional preview without preparing a second time", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  await previewReady();
+  expect(submissions).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(submissions).toHaveLength(1));
+  expect(manualEventId).toBe(1);
+});
+
+it("reports invalid controls without retaining a preparation lock or submitting", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "fixed" } });
+  fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "not a number" } });
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await screen.findByText("Control values must be finite numbers.");
+  expect(submissions).toHaveLength(0);
+  expect(manualEventId).toBe(0);
+  fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4.8" } });
+  fireEvent.click(start);
+  await waitFor(() => expect(submissions).toHaveLength(1));
+});
