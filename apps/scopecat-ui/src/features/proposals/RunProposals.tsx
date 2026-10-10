@@ -108,6 +108,12 @@ export function RunProposals({ runId }: { runId: string }) {
                     <p className="mt-[5px] mb-0 text-[0.66rem] leading-[1.45] text-text-soft">
                       {proposal.reason}
                     </p>
+                    <a
+                      className="mt-2 inline-block text-[0.65rem] text-accent underline"
+                      href={`?run=${encodeURIComponent(proposal.sourceRunId)}&run-analysis=${encodeURIComponent(proposal.analysisRecordId)}#runs`}
+                    >
+                      View source analysis
+                    </a>
                     {proposal.evidenceOutputIds.length > 0 && (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.56rem] text-text-dim">
                         <span className="font-extrabold tracking-[0.05em] uppercase">Evidence</span>

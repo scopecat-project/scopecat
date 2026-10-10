@@ -109,6 +109,22 @@ test("compares retained signals, saves independent results and imports a reviewe
     );
     await page.locator("aside button").filter({ hasText: first.analysis_id }).click();
     const candidate = await action("Create explicit candidate");
+    const comparisonUrl = page.url();
+    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(primary)}#runs`);
+    await page.getByText("Proposals and adaptive controls", { exact: true }).click();
+    const sourceAnalysis = page.getByRole("link", { name: "View source analysis", exact: true });
+    await expect(sourceAnalysis).toHaveAttribute(
+      "href",
+      `?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(candidate.analysis_id!)}#runs`,
+    );
+    await sourceAnalysis.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("candidate-evidence-link.png") });
+    await sourceAnalysis.click();
+    await expect(page.getByText(candidate.analysis_id!, { exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("run")).toBe(primary);
+    expect(new URL(page.url()).searchParams.get("run-analysis")).toBe(candidate.analysis_id);
+    await page.screenshot({ path: testInfo.outputPath("candidate-source-analysis.png") });
+    await page.goto(comparisonUrl);
     await page.getByLabel("Rejection reason").fill("Need independent physical verification");
     await action("Record candidate rejection");
     await expect(
