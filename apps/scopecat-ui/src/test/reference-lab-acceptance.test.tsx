@@ -120,7 +120,7 @@ describe("shared reference-lab acceptance", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByText("Preview ready");
-    expect(screen.getByText("This task does not change the default configuration.")).toBeVisible();
+    expect(screen.getByText("This task does not publish parameter changes.")).toBeVisible();
     fireEvent.click(screen.getByText("Estimates and planned measurements"));
     expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
     expect(screen.getByText("Unknown (s)")).toBeVisible();
@@ -195,7 +195,7 @@ describe("shared reference-lab acceptance", () => {
     });
     fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
     expect(screen.queryByText("Resolved controls")).toBeNull();
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
     fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4.7" } });
     fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4.9" } });
     fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });

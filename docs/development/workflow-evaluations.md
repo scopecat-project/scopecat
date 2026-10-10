@@ -20,8 +20,8 @@ path. Start expresses execution intent and performs the existing preparation che
 against exact source, configuration and inputs before submitting. Preview remains
 an optional compile-only inspection. Known task effects are shown before Start;
 changed inputs or failed checks stop that intent, and declared decisions remain
-explicit. Submission recovery never silently starts another acquisition. Time/data estimates and
-waveform inspection are optional views of available evidence, not prerequisites for
+explicit. Submission recovery never silently starts another acquisition. Time/data
+estimates and waveform inspection are optional views of available evidence, not prerequisites for
 understanding a procedure. Missing estimates must remain unknown.
 
 From a result, users should be able to request recommended or repeated analysis,
