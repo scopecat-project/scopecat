@@ -37,9 +37,101 @@ describe("RunProposals", () => {
 
     expect(await screen.findByText("Approval recorded")).toBeVisible();
     expect(screen.getAllByText("selected-fit")).toHaveLength(2);
-    expect(screen.getAllByText("Try this candidate in VS Code")).toHaveLength(2);
+    expect(screen.getAllByText("For authors: reopen this candidate")).toHaveLength(2);
     expect(screen.getByText(/session.config.candidate\("run-1", "new-fit"\)/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept as default" })).not.toBeInTheDocument();
+  });
+
+  it("shows exact changed cells and the explicit verification and publication boundary", async () => {
+    const longValue = "retained-value-".repeat(1200);
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({
+          deltas: [
+            {
+              parameterId: "drive",
+              before: [
+                { qubit: "q0", frequency: 5 },
+                { qubit: "q1", frequency: 6 },
+              ],
+              after: [
+                { qubit: "q0", frequency: 5.1 },
+                { qubit: "q1", frequency: 6 },
+              ],
+              cells: [
+                {
+                  key: { qubit: "q0" },
+                  field: "frequency",
+                  before: 5,
+                  after: 5.1,
+                  change_kind: "physical",
+                },
+                { key: { qubit: "q0" }, field: "label", after: longValue, change_kind: "added" },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    renderProposals();
+    expect(await screen.findByText("drive[qubit=q0].frequency")).toBeVisible();
+    expect(screen.getByText("drive[qubit=q0].label")).toBeVisible();
+    expect(screen.queryByText(longValue)).toBeNull();
+    const valueDetails = screen.getByText("View full value").closest("details")!;
+    valueDetails.open = true;
+    fireEvent(valueDetails, new Event("toggle"));
+    expect(await screen.findByText(longValue)).toBeVisible();
+    expect(screen.queryByText(/q1/)).toBeNull();
+    fireEvent.click(screen.getByText("For authors: reopen this candidate"));
+    expect(screen.getByText(/this page does not publish parameters/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Publish to a parameter branch" })).toHaveAttribute(
+      "href",
+      "https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/",
+    );
+  });
+
+  it("summarizes large atomic tables and reveals the complete value only on demand", async () => {
+    const rows = Array.from({ length: 1000 }, (_, id) => ({ id, value: "x".repeat(100) }));
+    const full = JSON.stringify(rows);
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({
+          deltas: [{ parameterId: "large-table", before: [], after: rows }],
+        }),
+      ),
+    );
+    renderProposals();
+    const summary = await screen.findByText("View full value");
+    expect(screen.queryByText(full)).toBeNull();
+    const details = summary.closest("details")!;
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
+    const value = await screen.findByLabelText("Full parameter value");
+    expect(value.textContent).toBe(full);
+    expect(value).toHaveClass("max-h-48", "overflow-auto");
+    details.open = false;
+    fireEvent(details, new Event("toggle"));
+    expect(screen.queryByLabelText("Full parameter value")).toBeNull();
+  });
+
+  it("distinguishes an empty cell diff from an atomic value change", async () => {
+    vi.mocked(getRunParameterProposals).mockResolvedValue(
+      proposalList(
+        pendingProposal({
+          deltas: [
+            { parameterId: "reordered-table", before: [1, 2], after: [2, 1], cells: [] },
+            { parameterId: "scalar", before: 5, after: 6 },
+          ],
+        }),
+      ),
+    );
+    renderProposals();
+    expect(await screen.findByText("No changed keyed cells")).toBeVisible();
+    expect(screen.getByText("[1,2]")).toBeVisible();
+    expect(screen.getByText("[2,1]")).toBeVisible();
+    expect(screen.getByText("scalar")).toBeVisible();
+    expect(screen.getByText("5")).toBeVisible();
+    expect(screen.getByText("6")).toBeVisible();
   });
 
   it("loads older proposal pages explicitly", async () => {
