@@ -113,9 +113,9 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             )
             assert page.evaluate("window.continuationDocument") is True
             page.get_by_role("button", name="Help", exact=True).click()
-            expect(page.get_by_role("combobox", name="Course")).to_have_value(
-                "parameters"
-            )
+            expect(
+                page.get_by_role("radio", name="Parameters and scans")
+            ).to_be_checked()
             assert editor_files == [str(journey.notebook)]
             source = journey.directory
             notebook_bytes = journey.notebook.read_bytes()
@@ -312,7 +312,7 @@ def verify_groups(
     """Verify a second course with independent inputs in the same application."""
     nbformat = notebook_io()
     page.goto(endpoint + "/#help")
-    page.get_by_role("combobox", name="Course").select_option("groups")
+    page.get_by_role("radio", name="Grouped analysis and history").press("Space")
     page.get_by_role("button", name="Start groups Notebook", exact=True).click()
     expect(
         page.get_by_role("button", name="Continue groups Notebook", exact=True)
@@ -373,7 +373,7 @@ def verify_groups(
     endpoint = runtime.start().base_url
     desktop.connected(endpoint)
     page.goto(endpoint + "/#help")
-    page.get_by_role("combobox", name="Course").select_option("groups")
+    page.get_by_role("radio", name="Grouped analysis and history").press("Space")
     page.get_by_role("button", name="Continue groups Notebook", exact=True).click()
     expect(
         page.get_by_role("button", name="Continue groups Notebook", exact=True)
@@ -381,9 +381,13 @@ def verify_groups(
     assert current(runtime, "groups") == journey
     page.get_by_role("link", name="Runs", exact=True).click()
     page.get_by_role("button", name="Help", exact=True).click()
-    expect(page.get_by_role("combobox", name="Course")).to_have_value("groups")
+    expect(
+        page.get_by_role("radio", name="Grouped analysis and history")
+    ).to_be_checked()
     page.reload()
-    expect(page.get_by_role("combobox", name="Course")).to_have_value("groups")
+    expect(
+        page.get_by_role("radio", name="Grouped analysis and history")
+    ).to_be_checked()
     expect(
         page.get_by_role("button", name="Continue groups Notebook", exact=True)
     ).to_be_enabled()
