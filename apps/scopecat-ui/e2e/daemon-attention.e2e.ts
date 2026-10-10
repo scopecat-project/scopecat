@@ -234,7 +234,14 @@ async function assertSelectedResourceStatus(
   resourceId: string,
   status: string,
 ): Promise<void> {
-  const resource = page.getByTestId(`resource-${resourceId}`);
+  const diagnostics = page.locator("details").filter({
+    has: page.getByText("Execution diagnostics and provenance", { exact: true }),
+  });
+  if ((await diagnostics.getAttribute("open")) === null) {
+    await diagnostics.getByText("Execution diagnostics and provenance", { exact: true }).click();
+  }
+  const resource = diagnostics.getByTestId(`resource-${resourceId}`);
+  await expect(resource).toBeVisible();
   await expect(resource).toContainText(status);
 }
 

@@ -427,6 +427,7 @@ test("reviews notebook candidate evidence without changing parameter branches", 
     layeredFigure.getByText("Dataset output in this publication:").first(),
   ).toBeVisible();
   await layeredFigure.screenshot({ path: test.info().outputPath("layered-fit.png") });
+  await page.getByText("Proposals and adaptive controls", { exact: true }).click();
   const proposals = page.getByTestId("run-proposals-card");
   await expect(proposals.getByText(candidate.proposalId, { exact: true })).toBeVisible();
   await expect(proposals.getByText("98% confidence", { exact: true })).toBeVisible();
@@ -438,6 +439,7 @@ test("reviews notebook candidate evidence without changing parameter branches", 
     "session.prepare(experiment, candidate=candidate)",
   );
   await page.reload();
+  await page.getByText("Proposals and adaptive controls", { exact: true }).click();
   await expect(
     page.getByTestId("run-proposals-card").getByText(candidate.proposalId, { exact: true }),
   ).toBeVisible();
