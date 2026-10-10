@@ -1,3 +1,4 @@
+import { primaryButton, secondaryButton } from "../../ui/styles";
 import { readParameterDraft, freezeParameterDraft } from "../config/parameter-draft-api";
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
@@ -303,6 +304,7 @@ export function LaunchForm({
       )}
       <button
         type="button"
+        className={secondaryButton}
         onClick={() => {
           void recovery.retry();
         }}
@@ -313,7 +315,12 @@ export function LaunchForm({
         <section aria-label="Conflicting experiment input">
           <p>Both copies are retained. Review the other window’s saved input before choosing.</p>
           <pre>{JSON.stringify(recovery.head?.input, null, 2)}</pre>
-          <button type="button" disabled={recovery.writing} onClick={() => recovery.adoptLocal()}>
+          <button
+            className={secondaryButton}
+            type="button"
+            disabled={recovery.writing}
+            onClick={() => recovery.adoptLocal()}
+          >
             Keep my copy after review
           </button>
         </section>
@@ -332,6 +339,7 @@ export function LaunchForm({
           )}
           <button
             type="button"
+            className={secondaryButton}
             onClick={() =>
               update((current) => ({
                 ...invalidateDraft(current, "Input reviewed. Preview before starting."),
@@ -360,24 +368,6 @@ export function LaunchForm({
       <fieldset disabled={!recovery.ready}>
         <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
       </fieldset>
-      <PlanSave
-        key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
-        preview={result}
-        request={() => ({
-          workspace_id: draft.workspaceId,
-          scan_mode: "cartesian",
-          parameter_sweeps: [],
-          action: "preview",
-          request_key: "",
-          selection: draft.selection,
-          reviewed: result ? reviewedForRequest(result.reviewed) : undefined,
-          experiment: entry.id,
-          version: entry.version,
-          inputs: inputValues(),
-          control_edits: controlEdits(drafts),
-          actor,
-        })}
-      />
       {draft.workingInput && (
         <section aria-label="Working parameter input" className="border border-line rounded p-3">
           <p>
@@ -403,6 +393,7 @@ export function LaunchForm({
           {workingError && <p role="alert">{workingError}</p>}
           <button
             type="button"
+            className={secondaryButton}
             disabled={Boolean(pending) || !recovery.ready}
             onClick={async () => {
               const revision = draft.revision;
@@ -457,7 +448,7 @@ export function LaunchForm({
         type="button"
         disabled={Boolean(pending) || !recovery.ready}
         onClick={() => select(entry, true)}
-        className="border rounded px-3 py-1"
+        className={secondaryButton}
       >
         Reset launch draft
       </button>
@@ -531,84 +522,118 @@ export function LaunchForm({
           </label>
         ))}
       </fieldset>
-      {entry.actions.includes("preview") && (
-        <button
-          type="submit"
-          aria-describedby={draft.workingInput ? workingStatusId : undefined}
-          disabled={
-            Boolean(pending) ||
-            !recovery.ready ||
-            recovery.conflict ||
-            draft.needsReview ||
-            !supported ||
-            !actor.trim() ||
-            !catalogReady ||
-            !workingCurrent ||
-            (draft.selection.configuration.kind === "parameters" &&
-              !draft.selection.configuration.setup)
-          }
-          className="border rounded px-4 py-2"
-        >
-          {pending === "preview" ? "Preparing preview…" : "Preview"}
-        </button>
-      )}
-      {entry.actions.includes("submit") && (
-        <fieldset disabled={Boolean(pending) || !recovery.ready} className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            disabled={
-              !source ||
-              !manualReady ||
-              !actor.trim() ||
-              Boolean(pending) ||
-              Boolean(attempt) ||
-              draft.needsReview ||
-              recovery.conflict
-            }
-            aria-describedby={draft.workingInput ? workingStatusId : undefined}
-            onClick={() => {
-              void start();
-            }}
-            className="border rounded px-4 py-2"
-          >
-            {pending === "submit" ? "Submitting acquisition…" : "Start acquisition"}
-          </button>
-        </fieldset>
-      )}
-      {pending && (
-        <p role="status">
-          {pending === "preview"
-            ? "Preparing the experiment preview. Acquisition has not been submitted."
-            : "Waiting for submission confirmation. Acquisition may already have started."}
+      <section aria-label="Preview and start" className="space-y-3 border-t border-line pt-4">
+        <p className="text-sm text-text-dim">
+          Preview checks these inputs without acquiring data. Start acquisition runs the checked
+          experiment.
         </p>
-      )}
-      <p className="text-sm">
-        Preview compiles only. Start acquisition submits a durable procedure and retains its
-        results.
-      </p>
-      {fence && !manualReady && (
-        <p role={manual.isError ? "alert" : "status"}>
-          {manual.isError
-            ? "Cannot check recent instrument changes. Preview again or wait for the connection to recover."
-            : "Checking relevant instrument changes…"}
+        <div className="flex flex-wrap items-center gap-3">
+          {entry.actions.includes("preview") && (
+            <button
+              type="submit"
+              aria-describedby={draft.workingInput ? workingStatusId : undefined}
+              disabled={
+                Boolean(pending) ||
+                !recovery.ready ||
+                recovery.conflict ||
+                draft.needsReview ||
+                !supported ||
+                !actor.trim() ||
+                !catalogReady ||
+                !workingCurrent ||
+                (draft.selection.configuration.kind === "parameters" &&
+                  !draft.selection.configuration.setup)
+              }
+              className={result ? secondaryButton : primaryButton}
+            >
+              {pending === "preview" ? "Preparing preview…" : "Preview"}
+            </button>
+          )}
+          {entry.actions.includes("submit") && (
+            <fieldset
+              disabled={Boolean(pending) || !recovery.ready}
+              className="flex flex-wrap gap-3"
+            >
+              <button
+                type="button"
+                disabled={
+                  !source ||
+                  !manualReady ||
+                  !actor.trim() ||
+                  Boolean(pending) ||
+                  Boolean(attempt) ||
+                  draft.needsReview ||
+                  recovery.conflict
+                }
+                aria-describedby={draft.workingInput ? workingStatusId : undefined}
+                onClick={() => {
+                  void start();
+                }}
+                className={primaryButton}
+              >
+                {pending === "submit" ? "Submitting acquisition…" : "Start acquisition"}
+              </button>
+            </fieldset>
+          )}
+        </div>
+        {pending && (
+          <p role="status">
+            {pending === "preview"
+              ? "Preparing the experiment preview. Acquisition has not been submitted."
+              : "Waiting for submission confirmation. Acquisition may already have started."}
+          </p>
+        )}
+        <p className="text-sm text-text-dim">
+          {attempt
+            ? "A submission is already retained. Check its status above, or explicitly prepare a new run."
+            : result
+              ? "Preview ready. Review the checked configuration below before starting."
+              : "Start acquisition becomes available after a successful preview and validity check."}
         </p>
-      )}
-      {error &&
-        (draft.rejection ? (
-          <LaunchRejectionDetails rejection={draft.rejection} />
-        ) : (
-          <p role="alert">{error}</p>
-        ))}
-      {result && (
-        <>
-          <ExecutionScenario
-            scenario={result.reviewed.binding.scenario}
-            label="Reviewed execution scenario"
-          />
-          <PreflightSummary entry={entry} preview={result} />
-          <ControlSummary fields={entry.controls} values={result.controls} />
-        </>
-      )}
+        {fence && !manualReady && (
+          <p role={manual.isError ? "alert" : "status"}>
+            {manual.isError
+              ? "Cannot check recent instrument changes. Preview again or wait for the connection to recover."
+              : "Checking relevant instrument changes…"}
+          </p>
+        )}
+        {error &&
+          (draft.rejection ? (
+            <LaunchRejectionDetails rejection={draft.rejection} />
+          ) : (
+            <p role="alert">{error}</p>
+          ))}
+        {result && (
+          <>
+            <ExecutionScenario
+              scenario={result.reviewed.binding.scenario}
+              label="Reviewed execution scenario"
+            />
+            <PreflightSummary entry={entry} preview={result} />
+            <ControlSummary fields={entry.controls} values={result.controls} />
+          </>
+        )}
+      </section>
+      <section aria-label="Save this preparation" className="border-t border-line pt-4">
+        <PlanSave
+          key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
+          preview={result}
+          request={() => ({
+            workspace_id: draft.workspaceId,
+            scan_mode: "cartesian",
+            parameter_sweeps: [],
+            action: "preview",
+            request_key: "",
+            selection: draft.selection,
+            reviewed: result ? reviewedForRequest(result.reviewed) : undefined,
+            experiment: entry.id,
+            version: entry.version,
+            inputs: inputValues(),
+            control_edits: controlEdits(drafts),
+            actor,
+          })}
+        />
+      </section>
     </form>
   );
 }

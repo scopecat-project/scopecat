@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { subjectLabel } from "./scientific-selection";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -94,11 +95,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
       </p>
       {initializing && <p role="status">Loading experiments before opening a saved plan…</p>}
       {history && (
-        <button
-          className="border border-line rounded px-2 py-1 mr-2"
-          type="button"
-          onClick={() => setHistory(undefined)}
-        >
+        <button className={secondaryButton} type="button" onClick={() => setHistory(undefined)}>
           Back to named plans
         </button>
       )}
@@ -115,7 +112,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
             {plan.name} · revision {plan.ref.revision} · saved by {plan.saved_by}
           </span>
           <button
-            className="border border-line rounded px-2 py-1 mr-2"
+            className={secondaryButton}
             type="button"
             disabled={initializing}
             onClick={() => void open(plan)}
@@ -123,7 +120,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
             Open {plan.name} r{plan.ref.revision}
           </button>
           <button
-            className="border border-line rounded px-2 py-1 mr-2"
+            className={secondaryButton}
             type="button"
             onClick={() => {
               setSelected(plan);
@@ -133,20 +130,12 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
             History and compare
           </button>
           {!history && (
-            <button
-              className="border border-line rounded px-2 py-1 mr-2"
-              type="button"
-              onClick={() => void hide(plan)}
-            >
+            <button className={secondaryButton} type="button" onClick={() => void hide(plan)}>
               Delete {plan.name}
             </button>
           )}
           {history && (
-            <button
-              className="border border-line rounded px-2 py-1 mr-2"
-              type="button"
-              onClick={() => setSelected(plan)}
-            >
+            <button className={secondaryButton} type="button" onClick={() => setSelected(plan)}>
               Compare revision {plan.ref.revision}
             </button>
           )}

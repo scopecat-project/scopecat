@@ -1,6 +1,7 @@
+import { detailCard, eyebrow, secondaryButton } from "../../ui/styles";
 import { LaunchRecoveryPanel } from "./LaunchRecoveryPanel";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { navigate, useLocationUrl, type NavigationOptions } from "../../lib/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -65,6 +66,13 @@ export function LaunchWorkspace({
   }, [catalog.data, workspaceId, sourceObserved]);
   const location = useLocationUrl();
   const procedureId = location.searchParams.get("procedure") ?? draft?.admittedProcedureId ?? "";
+  const execution = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (procedureId) {
+      execution.current?.focus({ preventScroll: true });
+      execution.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    }
+  }, [procedureId]);
   const entry = draft?.experiment
     ? catalog.data?.entries.find((item) => item.id === draft.experiment)
     : catalog.data?.entries[0];
@@ -97,118 +105,151 @@ export function LaunchWorkspace({
     onHandoffImported?.();
   }, [handoff, handoffTarget, importHandoff, onHandoffImported]);
   return (
-    <section className="p-6 space-y-4">
-      <h2 className="text-lg font-semibold">Experiments</h2>
-      <LaunchRecoveryPanel />
-      <SourceSelector
-        catalog={sources}
-        workspaceId={workspaceId}
-        onSelect={(id) => {
-          onHandoffImported?.();
-          selectWorkspace(id);
-        }}
-      />
-      <AuthorRefresh
-        projectId={projectId}
-        workspaceId={workspaceId}
-        disabled={!sourceAvailable}
-        onRefreshed={() => authorRefreshed(workspaceId)}
-      />
-      {codeRevision && (
-        <div className="space-y-2">
-          <p>
-            This draft is pinned to author revision {codeRevision.content_hash}. Refresh prepares
-            the workspace's current code without changing this pinned plan.
-          </p>
-          <button
-            type="button"
-            disabled={!sourceAvailable}
-            onClick={() => {
-              onHandoffImported?.();
-              useCurrentSource(workspaceId);
-            }}
-          >
-            Use current source
-          </button>
-        </div>
-      )}
-      <PlanLibrary
-        key={`plans:${projectId}`}
-        initializing={catalog.isPending && draft === undefined}
-      />
-      {handoffUnavailable && (
-        <p role="alert">
-          The suggested experiment is unavailable. The source analysis is retained.
+    <section className="p-6 space-y-5 max-w-6xl mx-auto">
+      <header>
+        <p className={eyebrow}>Experiment workbench</p>
+        <h2 className="text-xl font-semibold">Experiments</h2>
+        <p className="mt-2 text-sm text-text-dim">
+          Prepare an experiment, check its inputs, then start acquisition.
         </p>
-      )}
-      {draft?.handoff && (
-        <p>
-          Suggested by{" "}
-          <a
-            className="underline"
-            href={`?compare=${encodeURIComponent(draft.handoff.source_run)}&comparison-analysis=${encodeURIComponent(draft.handoff.source_analysis)}#analyses`}
-          >
-            {draft.handoff.source_analysis}
-          </a>{" "}
-          · {draft.handoff.source_hash}. This source is retained only in the current draft, not yet
-          as destination-run provenance.
-        </p>
-      )}
-      <p>Select a maintained experiment and preview its configured parameters.</p>
-      {sourceAvailable && catalog.isPending && <p role="status">Loading experiments…</p>}
-      {catalog.error && <p role="alert">{catalog.error.message}</p>}
-      {catalog.data?.entries.length === 0 && <p>This project has no registered experiments.</p>}
-      {unavailable && draft && (
-        <p role="alert">
-          The selected experiment ({draft.experiment}) is unavailable. Its inputs are retained until
-          it returns or you explicitly choose another experiment.
-        </p>
-      )}
-      {(entry || draft) && (
-        <>
-          <label className="block">
-            Experiment{" "}
-            <select
-              aria-label="Experiment"
-              disabled={!sourceAvailable || Boolean(handoff)}
-              value={draft?.experiment ?? entry?.id}
-              onChange={(event) => {
-                const selected = catalog.data?.entries.find(
-                  (item) => item.id === event.target.value,
-                );
-                if (selected) select(selected, false, workspaceId);
-              }}
-              className="border rounded p-2 ml-2"
-            >
-              {!entry && draft && (
-                <option value={draft.experiment}>{draft.experiment} (unavailable)</option>
-              )}
-              {catalog.data?.entries.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          {entry &&
-            sourceAvailable &&
-            !handoff &&
-            draft?.workspaceId === workspaceId &&
-            draft.definition === definitionKey(entry) && (
-              <LaunchForm
-                key={`${workspaceId}:${codeRevision?.content_hash ?? "current"}:${draft.definition}`}
-                entry={entry}
-                onAdmitted={admitted}
-                catalogReady={sourceAvailable && catalog.isSuccess}
-              />
-            )}
-        </>
-      )}
+      </header>
       <OriginalSubmission
         onOpen={openProcedure}
         catalogReady={sourceAvailable && !handoff && Boolean(entry) && catalog.isSuccess}
       />
-      <ProcedureHistory selectedId={procedureId} onSelect={openProcedure} />
+      {procedureId && (
+        <section
+          ref={execution}
+          tabIndex={-1}
+          aria-label="Selected execution"
+          className="scroll-mt-24 rounded-md focus-visible:outline-accent"
+        >
+          <ProcedureProgress key={procedureId} procedureId={procedureId} />
+        </section>
+      )}
+      <section aria-labelledby="experiment-preparation" className={`${detailCard} space-y-4`}>
+        <div>
+          <h3 id="experiment-preparation" className="font-semibold">
+            Prepare an experiment
+          </h3>
+          <p className="text-sm text-text-dim">
+            Your editable inputs stay here while submitted work runs.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 border-b border-line pb-4">
+          <SourceSelector
+            catalog={sources}
+            workspaceId={workspaceId}
+            onSelect={(id) => {
+              onHandoffImported?.();
+              selectWorkspace(id);
+            }}
+          />
+          <AuthorRefresh
+            projectId={projectId}
+            workspaceId={workspaceId}
+            disabled={!sourceAvailable}
+            onRefreshed={() => authorRefreshed(workspaceId)}
+          />
+        </div>
+        {codeRevision && (
+          <div className="space-y-2">
+            <p>
+              This draft is pinned to author revision {codeRevision.content_hash}. Refresh prepares
+              the workspace's current code without changing this pinned plan.
+            </p>
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={!sourceAvailable}
+              onClick={() => {
+                onHandoffImported?.();
+                useCurrentSource(workspaceId);
+              }}
+            >
+              Use current source
+            </button>
+          </div>
+        )}
+        {handoffUnavailable && (
+          <p role="alert">
+            The suggested experiment is unavailable. The source analysis is retained.
+          </p>
+        )}
+        {draft?.handoff && (
+          <p>
+            Suggested by{" "}
+            <a
+              className="underline"
+              href={`?compare=${encodeURIComponent(draft.handoff.source_run)}&comparison-analysis=${encodeURIComponent(draft.handoff.source_analysis)}#analyses`}
+            >
+              {draft.handoff.source_analysis}
+            </a>{" "}
+            · {draft.handoff.source_hash}. This source is retained only in the current draft, not
+            yet as destination-run provenance.
+          </p>
+        )}
+        {sourceAvailable && catalog.isPending && <p role="status">Loading experiments…</p>}
+        {catalog.error && <p role="alert">{catalog.error.message}</p>}
+        {catalog.data?.entries.length === 0 && <p>This project has no registered experiments.</p>}
+        {unavailable && draft && (
+          <p role="alert">
+            The selected experiment ({draft.experiment}) is unavailable. Its inputs are retained
+            until it returns or you explicitly choose another experiment.
+          </p>
+        )}
+        {(entry || draft) && (
+          <>
+            <label className="block">
+              Experiment{" "}
+              <select
+                aria-label="Experiment"
+                disabled={!sourceAvailable || Boolean(handoff)}
+                value={draft?.experiment ?? entry?.id}
+                onChange={(event) => {
+                  const selected = catalog.data?.entries.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  if (selected) select(selected, false, workspaceId);
+                }}
+                className="border rounded p-2 ml-2"
+              >
+                {!entry && draft && (
+                  <option value={draft.experiment}>{draft.experiment} (unavailable)</option>
+                )}
+                {catalog.data?.entries.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {entry &&
+              sourceAvailable &&
+              !handoff &&
+              draft?.workspaceId === workspaceId &&
+              draft.definition === definitionKey(entry) && (
+                <LaunchForm
+                  key={`${workspaceId}:${codeRevision?.content_hash ?? "current"}:${draft.definition}`}
+                  entry={entry}
+                  onAdmitted={admitted}
+                  catalogReady={sourceAvailable && catalog.isSuccess}
+                />
+              )}
+          </>
+        )}
+      </section>
+      <section aria-labelledby="experiment-history" className="space-y-3">
+        <h3 id="experiment-history" className="font-semibold">
+          Reuse and recovery
+        </h3>
+        <PlanLibrary
+          key={`plans:${projectId}`}
+          initializing={catalog.isPending && draft === undefined}
+        />
+        <LaunchRecoveryPanel />
+        <ProcedureHistory selectedId={procedureId} onSelect={openProcedure} />
+      </section>
       {projectId && (
         <CalibrationTasks
           key={`calibration:${projectId}`}
@@ -216,7 +257,6 @@ export function LaunchWorkspace({
           onProcedure={admitted}
         />
       )}
-      {procedureId && <ProcedureProgress key={procedureId} procedureId={procedureId} />}
     </section>
   );
 }

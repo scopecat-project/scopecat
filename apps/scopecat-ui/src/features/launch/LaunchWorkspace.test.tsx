@@ -347,7 +347,7 @@ it("retains the submission key after a lost response and opens durable progress"
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
-  await screen.findByText("Procedure progress");
+  await screen.findByText("Execution progress");
   expect(submitted).toHaveLength(1);
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
 });

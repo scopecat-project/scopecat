@@ -226,6 +226,36 @@ with sc.open_project(sys.argv[1]).connect() as lab:
   },
 );
 
+retainedProcedureTest(
+  "cancels retained work before dispatch without acquiring and keeps the cancellation on reopen",
+  async ({ page, retainedProcedure }, testInfo) => {
+    const { baseUrl, procedureId } = retainedProcedure;
+    await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
+    await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+    await page.getByText("Cancel remaining procedure", { exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Cancel procedure", exact: true }),
+    ).toBeDisabled();
+    await page.getByLabel("Cancellation actor", { exact: true }).fill("browser operator");
+    await page.getByLabel("Cancellation reason", { exact: true }).fill("Cancel before acquisition");
+    await page.getByRole("button", { name: "Cancel procedure", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue task", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /^Open (current child|retained) run:/ }),
+    ).toHaveCount(0);
+    const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedureId}/operator`);
+    expect(response.ok()).toBe(true);
+    expect((await response.json()).child_runs).toEqual([]);
+    await testInfo.attach("Cancellation retained without acquisition", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+  },
+);
+
 const CHANGE_DRAFT_CONFIG = `
 import sys
 import scopecat as sc

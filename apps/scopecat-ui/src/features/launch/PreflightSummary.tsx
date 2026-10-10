@@ -50,7 +50,7 @@ export function PreflightSummary({
       </p>
       <p>
         {entry.configuration_effect === "none"
-          ? "This procedure does not change the default configuration."
+          ? "This task does not change the default configuration."
           : entry.configuration_effect === "candidate"
             ? "Produces a candidate. Accepting it as default is a separate operator action."
             : "Changes the default configuration only after review."}
@@ -61,7 +61,10 @@ export function PreflightSummary({
           Detailed preflight not provided. Procedure scope, shots and cost estimates are unknown.
         </p>
       ) : (
-        <>
+        <details className="rounded-md border border-line p-3 space-y-3">
+          <summary className="cursor-pointer font-semibold">
+            Estimates and planned measurements
+          </summary>
           <p>{preview.preflight.scope_basis}</p>
           {preview.preflight.stages.map((stage) => (
             <section
@@ -159,7 +162,7 @@ export function PreflightSummary({
               </details>
             </section>
           ))}
-        </>
+        </details>
       )}
       <details>
         <summary>Resolved inputs and configuration</summary>

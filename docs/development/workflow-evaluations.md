@@ -13,6 +13,28 @@ cross-surface journeys in integration checks. New scenarios need not enter the
 reference lab first. See [retirement boundaries](reference-gallery-retirement.md)
 for the current evidence owners.
 
+## Stable experiment goals
+
+The Experiments entry should make preparing and running one experiment the ordinary
+path. Preview is a preparation check tied to exact source, configuration and inputs;
+its current separate confirmation must remain until a combined start path preserves
+those checks, submission recovery and explicit review. Time/data estimates and
+waveform inspection are optional views of available evidence, not prerequisites for
+understanding a procedure. Missing estimates must remain unknown.
+
+From a result, users should be able to request recommended or repeated analysis,
+then explicitly decide whether to adopt its parameters. A delegated calibration task
+has a declared end, can be interrupted and resumed, and must retain its evidence
+without repeating uncertain work. Keep these goals distinct from source maintenance,
+saved plans, execution history and worker diagnostics in the page hierarchy.
+
+A later manual VNA batch journey needs a measurement checklist, object identity,
+operator confirmation, retakes, missing-item detection and continuation. It is not
+part of the first Experiments UI pass. A universal graph editor, generalized
+procedures, a new estimation engine and new waveform transport are also outside
+that pass. Existing exact snapshots, submission receipts, per-window drafts and
+cancellation boundaries remain authoritative.
+
 ## Learn, edit and reopen
 
 **Goal:** open a Help Notebook, edit ordinary author code, explicitly run it,

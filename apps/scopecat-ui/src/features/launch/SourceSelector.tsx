@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import type { useAuthorWorkspaces } from "./source-api";
 
 export function SourceSelector({
@@ -12,12 +13,12 @@ export function SourceSelector({
   const sources = catalog.data?.items ?? [];
   const selected = sources.find((source) => source.id === workspaceId);
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <label className="block">
         Code workspace{" "}
         <select
           aria-label="Code workspace"
-          className="border rounded p-2 ml-2"
+          className="mt-1 block w-full min-w-0 border rounded p-2"
           value={workspaceId}
           onChange={(event) => onSelect(event.target.value)}
           disabled={catalog.isPending}
@@ -37,7 +38,12 @@ export function SourceSelector({
           ))}
         </select>
       </label>
-      <button type="button" disabled={catalog.isFetching} onClick={() => void catalog.refetch()}>
+      <button
+        className={secondaryButton}
+        type="button"
+        disabled={catalog.isFetching}
+        onClick={() => void catalog.refetch()}
+      >
         Refresh workspace list
       </button>
       {catalog.error && <p role="alert">Cannot read code workspaces: {catalog.error.message}</p>}

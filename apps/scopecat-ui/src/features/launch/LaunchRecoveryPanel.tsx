@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useLaunchDraft } from "./LaunchDraft";
 import { draftHistory, attemptHistory } from "./launch-recovery";
@@ -21,13 +22,14 @@ export function LaunchRecoveryPanel() {
     refetchOnWindowFocus: true,
   });
   return (
-    <details>
+    <details className="rounded-md border border-line bg-panel-soft p-4 space-y-3">
       <summary>Recover experiment input or an original submission</summary>
       <p>
         Recovery never starts acquisition. Input versions and conflicting copies remain in
         application data.
       </p>
       <button
+        className={secondaryButton}
         type="button"
         onClick={() => {
           retryAttempts();
@@ -52,7 +54,7 @@ export function LaunchRecoveryPanel() {
             <li key={record.revision}>
               {record.target.experiment} · {record.target.workspace_id} · {record.state} ·{" "}
               {record.created_at}
-              <button type="button" onClick={() => recover(record)}>
+              <button className={secondaryButton} type="button" onClick={() => recover(record)}>
                 Review input revision {record.revision}
               </button>
             </li>
@@ -60,6 +62,7 @@ export function LaunchRecoveryPanel() {
       </ul>
       {drafts.hasNextPage && (
         <button
+          className={secondaryButton}
           type="button"
           onClick={() => {
             void drafts.fetchNextPage();
@@ -74,7 +77,11 @@ export function LaunchRecoveryPanel() {
           .map((record) => (
             <li key={record.sequence}>
               {record.request.experiment} · {record.request.request_key} · {record.created_at}
-              <button type="button" onClick={() => recoverAttempt(record)}>
+              <button
+                className={secondaryButton}
+                type="button"
+                onClick={() => recoverAttempt(record)}
+              >
                 Recover original submission {record.sequence}
               </button>
             </li>
@@ -82,6 +89,7 @@ export function LaunchRecoveryPanel() {
       </ul>
       {attempts.hasNextPage && (
         <button
+          className={secondaryButton}
           type="button"
           onClick={() => {
             void attempts.fetchNextPage();

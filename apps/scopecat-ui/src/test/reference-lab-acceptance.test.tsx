@@ -120,9 +120,8 @@ describe("shared reference-lab acceptance", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByText("Preview ready");
-    expect(
-      screen.getByText("This procedure does not change the default configuration."),
-    ).toBeVisible();
+    expect(screen.getByText("This task does not change the default configuration.")).toBeVisible();
+    fireEvent.click(screen.getByText("Estimates and planned measurements"));
     expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
     expect(screen.getByText("Unknown (s)")).toBeVisible();
     expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();

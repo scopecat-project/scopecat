@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { navigateLink } from "../../lib/navigation";
 import { PlanOrigin } from "./PlanOrigin";
 import { ClearData } from "../history/DataCleanup";
@@ -76,8 +77,8 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
     }
   }
   return (
-    <section className="border rounded p-4 space-y-3">
-      <h3 className="font-semibold">Procedure progress</h3>
+    <section className="border border-accent/40 bg-panel-soft rounded-md p-4 space-y-3 break-words">
+      <h3 className="font-semibold">Execution progress</h3>
       <PlanOrigin reference={run?.plan_ref} />
       {run?.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
       <p>{run?.definition.id ?? procedureId}</p>
@@ -115,12 +116,17 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
               </p>
             </div>
           )}
-          {view.dispatch.log_path && (
-            <p className="break-all">
-              Worker log: <code>{view.dispatch.log_path}</code>
-            </p>
-          )}
-          <ProcedureWorkerLog procedureId={procedureId} />
+          <details className="border border-line rounded-md p-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Execution diagnostics
+            </summary>
+            {view.dispatch.log_path && (
+              <p className="break-all">
+                Worker log: <code>{view.dispatch.log_path}</code>
+              </p>
+            )}
+            <ProcedureWorkerLog procedureId={procedureId} />
+          </details>
           {run.recovery && (
             <p>
               Recovery from{" "}
@@ -185,12 +191,12 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
           )}
           {view.dispatch_blocked_reason === null && !progress.isError && (
             <button
+              className={secondaryButton}
               type="button"
               disabled={pending}
               onClick={() => {
                 void dispatch();
               }}
-              className="border rounded px-3 py-1"
             >
               Continue task
             </button>
@@ -220,6 +226,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
                 />
               </label>
               <button
+                className={secondaryButton}
                 type="button"
                 disabled={pending || !cancelActor.trim() || !cancelReason.trim()}
                 onClick={() => {
@@ -285,6 +292,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
           </ul>
           {progress.hasNextPage && (
             <button
+              className={secondaryButton}
               type="button"
               disabled={progress.isFetchingNextPage}
               onClick={() => {

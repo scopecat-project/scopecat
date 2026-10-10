@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { normalizeSelection, subjectSample, reviewedForRequest } from "./scientific-selection";
 import type { PlanRevision } from "./experiment-plans";
 import { useState } from "react";
@@ -104,7 +105,7 @@ export function PlanSave({
           : "Save these inputs and exact configuration for later."}
       </p>
       <button
-        className="border border-line rounded px-2 py-1 mr-2"
+        className={secondaryButton}
         type="button"
         disabled={!preview?.definition_hash || !name.trim() || saving}
         onClick={() => void save(false)}
@@ -113,7 +114,7 @@ export function PlanSave({
       </button>
       {draft?.plan && (
         <button
-          className="border border-line rounded px-2 py-1 mr-2"
+          className={secondaryButton}
           type="button"
           disabled={!preview?.definition_hash || !name.trim() || saving}
           onClick={() => void save(true)}
