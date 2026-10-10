@@ -114,9 +114,25 @@ def verify(work: Path, static: Path) -> None:
                 set_window_title: async () => {},
             }};""")
             page.goto(endpoint + "/#help")
+            page.set_viewport_size({"width": 1440, "height": 1100})
+            courses = page.get_by_role("group", name="Choose a course")
+            expect(courses.get_by_role("radio")).to_have_count(7)
+            first = courses.get_by_role("radio", name="Parameters and scans")
+            first.focus()
+            first.press("ArrowRight")
+            selected = courses.get_by_role("radio", name="Edit and refresh experiments")
+            expect(selected).to_be_checked()
+            expect(selected).to_be_focused()
+            selected.press("ArrowRight")
+            expect(
+                courses.get_by_role("radio", name="Mean IQ and typed results")
+            ).to_be_focused()
+            assert not opened and not provisioned
+            page.evaluate("window.scrollTo(0, 0)")
+            page.screenshot(path=str(work / "course-browser-start.png"), full_page=True)
             source_ids: set[str] = set()
             for topic in TOPICS:
-                page.get_by_role("combobox", name="Course").select_option(topic)
+                page.locator(f'input[type="radio"][value="{topic}"]').press("Space")
                 page.get_by_role(
                     "button", name=f"Start {topic} Notebook", exact=True
                 ).click()
@@ -169,7 +185,7 @@ def verify(work: Path, static: Path) -> None:
             )
             page.goto(endpoint + "/#help")
             for topic in TOPICS:
-                page.get_by_role("combobox", name="Course").select_option(topic)
+                page.locator(f'input[type="radio"][value="{topic}"]').press("Space")
                 page.get_by_role(
                     "button", name=f"Continue {topic} Notebook", exact=True
                 ).click()
@@ -189,6 +205,20 @@ def verify(work: Path, static: Path) -> None:
                 page.screenshot(
                     path=str(work / f"{topic}-continue.png"), full_page=True
                 )
+            page.get_by_text("Repair Notebook environments", exact=True).click()
+            page.evaluate("window.scrollTo(0, 0)")
+            page.screenshot(
+                path=str(work / "course-browser-repair.png"), full_page=True
+            )
+            page.set_viewport_size({"width": 560, "height": 1000})
+            courses.scroll_into_view_if_needed()
+            page.evaluate("window.scrollTo(0, 0)")
+            page.screenshot(
+                path=str(work / "course-browser-narrow.png"), full_page=True
+            )
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            )
             assert len(provisioned) == execution.call_count == len(TOPICS)
             assert len(opened) == 2 * len(TOPICS)
             assert runs(endpoint) == before
