@@ -56,7 +56,7 @@ runtime.configure(static_dir=Path(sys.argv[3]))
 workspace = runtime.register_source(source)
 record = runtime.start()
 project = sc.open_project(source)
-assert project.runtime_binding.data_root == runtime.root / ".scopecat"
+assert project.runtime_binding.data_root == runtime.instance.runtime_binding.data_root
 _ = project.load_application()
 with project.authoring() as session:
     from scopecat_lab.authored.parameters import open_parameters

@@ -25,7 +25,10 @@ def test_author_source_run_and_reopen_direct_workbench(
     (gui / "index.html").write_text("<html>workbench</html>")
     selected = runtime.configure(static_dir=gui)
     identity = runtime.register_source(source)
-    assert open_project(source).runtime_binding.data_root == runtime.root / ".scopecat"
+    assert (
+        open_project(source).runtime_binding.data_root
+        == runtime.instance.runtime_binding.data_root
+    )
     opened = []
     monkeypatch.setattr(application.webbrowser, "open", opened.append)
     environment = dict(os.environ)

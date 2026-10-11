@@ -245,7 +245,7 @@ class AuthorRevisionService:
                 raise AuthorValidationCancelled("Author preparation cancelled")
             progress("materializing captured source")
             code_root = materialize_sources(
-                bundle, load_runtime_binding(self.root).data_root / "code"
+                bundle, load_runtime_binding(self.root).materialization_root / "code"
             )
             self.workers.publish_validated(
                 self.binding_for(bundle.manifest.ref),

@@ -31,7 +31,9 @@ def register_author_workspace(
     identity: str | None = None,
     python: Path | None = None,
 ) -> LocalAuthorWorkspace:
-    owner = open_project(service)
+    from scopecat.application_instance import open_instance
+
+    owner = open_instance(service)
     project = open_project(workspace, resolve_adapter=False)
     if service_workspace_root(owner.root) != owner.root:
         raise ValueError("Registration requires the deployment service workspace")
@@ -41,7 +43,7 @@ def register_author_workspace(
     try:
         with ExitStack() as locks:
             candidates = {
-                binding.data_root / "author-workspaces.lock",
+                binding.coordination_root / "author-workspaces.lock",
             }
             if project.runtime_binding.deployment_root != binding.deployment_root:
                 candidates.add(
@@ -51,6 +53,7 @@ def register_author_workspace(
             for path in sorted(candidates):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 locks.enter_context(FileLock(path, timeout=0))
+            binding.coordination_root.mkdir(parents=True, exist_ok=True)
             entries = list(local_author_workspaces(owner.root))
             previous = next(
                 (item for item in entries if item.root == project.root), None
@@ -119,7 +122,17 @@ def register_author_workspace(
                 location.write_text(
                     "[runtime]\n"
                     f"data_root = {json.dumps(str(binding.data_root))}\n"
-                    f"deployment_root = {json.dumps(str(binding.deployment_root))}\n",
+                    f"deployment_root = {json.dumps(str(binding.deployment_root))}\n"
+                    + (
+                        f"state_root = {json.dumps(str(binding.state_root))}\n"
+                        if binding.state_root
+                        else ""
+                    )
+                    + (
+                        f"cache_root = {json.dumps(str(binding.cache_root))}\n"
+                        if binding.cache_root
+                        else ""
+                    ),
                     encoding="utf-8",
                 )
             entries = [item for item in entries if item.id != selected.id]

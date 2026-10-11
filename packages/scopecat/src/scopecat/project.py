@@ -48,8 +48,17 @@ _loaded_project_code_root: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
+class SourceExecutionContext:
+    """An exact source executes through an explicitly registered client binding."""
+
+    binding: RuntimeBinding
+    workspace_id: str
+    revision: AuthorRevisionRef | None
+
+
+@dataclass(frozen=True, slots=True)
 class Project:
-    """One code project paired with its default daemon-owned instance."""
+    """Source declarations, optionally attached to an explicit execution context."""
 
     root: Path
     manifest: Path
@@ -66,11 +75,20 @@ class Project:
     adapter_packages: tuple[tuple[str, str], ...] = ()
     author_only: bool = False
     lab_adapter: AdapterReference | None = None
+    execution: SourceExecutionContext | None = None
 
     @property
     def runtime_binding(self) -> RuntimeBinding:
         """Local deployment locations; never resolved from captured code."""
-        return load_runtime_binding(self.root)
+        return (
+            self.execution.binding
+            if self.execution
+            else load_runtime_binding(self.root)
+        )
+
+    @property
+    def workspace_root(self) -> Path:
+        return self.execution.binding.workspace if self.execution else self.root
 
     def load_bootstrap(self) -> LabBootstrap:
         """Load the lightweight composition used by the daemon and config CLI."""
@@ -83,7 +101,7 @@ class Project:
             self.bootstrap_spec,
             self.code_root or self.root,
             installed_packages=self.adapter_packages,
-        )(self.root)
+        )(self.workspace_root)
 
     def load_application(self) -> LabApplication:
         """Load the version-controlled composition declared by this project."""
@@ -95,15 +113,21 @@ class Project:
         from scopecat.author_workspaces import local_author_workspaces
         from scopecat.project_sources import loading_revision, loading_workspace
 
-        workspace = next(
-            (
-                item.id
-                for item in local_author_workspaces(self.root)
-                if item.root == self.root
-            ),
-            None,
+        workspace = (
+            self.execution.workspace_id
+            if self.execution
+            else next(
+                (
+                    item.id
+                    for item in local_author_workspaces(self.root)
+                    if item.root == self.root
+                ),
+                None,
+            )
         )
-        token = loading_revision.set(self.code_revision)
+        token = loading_revision.set(
+            self.execution.revision if self.execution else self.code_revision
+        )
         workspace_token = loading_workspace.set(workspace)
         try:
             if self.capabilities is not None:
@@ -122,7 +146,7 @@ class Project:
             assert self.application_spec is not None
             return load_application_factory(
                 self.application_spec, self.code_root or self.root
-            )(self.root)
+            )(self.workspace_root)
         finally:
             loading_workspace.reset(workspace_token)
             loading_revision.reset(token)
@@ -141,9 +165,9 @@ class Project:
         from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
         return AuthorProject(
-            resolve_daemon_endpoint(self.root, explicit=daemon),
+            resolve_daemon_endpoint(self.workspace_root, explicit=daemon),
             receipts=self.runtime_binding.data_root / "author-jobs",
-            project_root=self.root,
+            project_root=self.workspace_root,
             source_project=self,
             timeout=120,
         )
@@ -159,7 +183,7 @@ class Project:
 
         from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
-        endpoint = resolve_daemon_endpoint(self.root, explicit=daemon)
+        endpoint = resolve_daemon_endpoint(self.workspace_root, explicit=daemon)
         application = self.load_application()
         if build_experiment_system is not None:
             application = replace(

@@ -29,7 +29,7 @@ def _start_worker(
 ) -> SubprocessInstrumentBackendEndpoint:
     check(bundle.manifest, python)
     source = materialize_sources(
-        bundle, load_runtime_binding(root).data_root / "driver-sources"
+        bundle, load_runtime_binding(root).materialization_root / "driver-sources"
     )
     return SubprocessInstrumentBackendEndpoint(
         root,

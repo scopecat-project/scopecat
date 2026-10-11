@@ -8,19 +8,25 @@ import sqlite3
 import sys
 import tempfile
 from collections.abc import Generator, Iterator
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, nullcontext
 from datetime import UTC, datetime
 from importlib.metadata import distributions
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
+from uuid import UUID
 
 from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
-from scopecat.author_workspaces import service_workspace_root
+from scopecat.application_instance import ApplicationInstance
+from scopecat.author_workspaces import (
+    LocalAuthorWorkspaces,
+    author_bindings_path,
+    service_workspace_root,
+)
 from scopecat.project import Project, load_project
 from scopecat.records.sample import SampleRevision
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
-from scopecat.runtime_binding import RUNTIME_BINDING_NAME
+from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, RUNTIME_BINDING_NAME
 
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
@@ -29,6 +35,7 @@ from scopecat_server.storage.sqlite.project_store import (
 )
 from scopecat_server.storage.sqlite.resource_objects import resource_directory
 
+_PROJECT_DATA = Path(".scopecat")
 _DATABASE = Path(".scopecat/control.sqlite3")
 _OBJECTS = Path(".scopecat/objects")
 _EXCLUDED = frozenset(
@@ -58,6 +65,7 @@ class SnapshotManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
+    instance_kind: Literal["project", "application"] = "project"
     format_version: Literal[1]
     created_at: str
     schema_version: int
@@ -67,7 +75,9 @@ class SnapshotManifest(BaseModel):
     files: dict[str, str]
 
 
-def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
+def create_snapshot(
+    project: Project | ApplicationInstance, destination: Path
+) -> SnapshotManifest:
     """Capture a stopped project under its existing process and SQLite locks."""
     if service_workspace_root(project.root) != project.root:
         raise SnapshotError("Create the snapshot from the deployment service workspace")
@@ -78,20 +88,50 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
         or destination.is_relative_to(project.runtime_binding.deployment_root)
     ):
         raise SnapshotError("snapshot destination must be outside the source project")
+    application = isinstance(project, ApplicationInstance)
+    data_relative = Path("data") if application else Path(".scopecat")
     data_root = project.runtime_binding.data_root
     database = data_root / "control.sqlite3"
     if database.parent.is_symlink() or database.is_symlink():
         raise SnapshotError("snapshot requires project-local database state")
     if not database.is_file():
         raise SnapshotError(f"project has no database: {database}")
+    inspect_project_schema(database)
     try:
         with (
+            FileLock(
+                project.runtime_binding.deployment_root / "deployment.lock", timeout=0
+            ),
             stopped_store(data_root) as source,
+            FileLock(
+                author_bindings_path(project.root).with_name("author-workspaces.lock"),
+                timeout=0,
+            )
+            if application
+            else nullcontext(),
             staged_directory(destination) as staged,
         ):
             captured = staged / "project"
             captured.mkdir()
-            for relative in _files(project.root, source=True):
+            if application:
+                (captured / APPLICATION_INSTANCE_NAME).write_text(
+                    ApplicationInstance(captured).declaration(), encoding="utf-8"
+                )
+                for path in (
+                    author_bindings_path(project.root),
+                    project.runtime_binding.deployment_root / "deployment-id",
+                ):
+                    if path.exists():
+                        if (
+                            path.is_symlink()
+                            or path.parent.is_symlink()
+                            or not path.is_file()
+                        ):
+                            raise SnapshotError(
+                                f"snapshot requires a regular state file: {path}"
+                            )
+                        _copy(path, captured / "state" / path.name)
+            for relative in () if application else _files(project.root, source=True):
                 source_path = project.root / relative
                 if (
                     relative == Path(RUNTIME_BINDING_NAME)
@@ -102,7 +142,7 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
                 ):
                     continue
                 _copy(source_path, captured / relative)
-            objects = captured / _OBJECTS
+            objects = captured / data_relative / "objects"
             objects.mkdir(parents=True)
             for relative in _files(data_root / "objects"):
                 # Unpublished object-store temporary files are not immutable content.
@@ -114,24 +154,36 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
                 for relative in _files(receipts):
                     _copy(
                         receipts / relative,
-                        captured / ".scopecat/author-jobs" / relative,
+                        captured / data_relative / "author-jobs" / relative,
                     )
             practice = data_root / "practice"
             if practice.exists():
                 for relative in _files(practice, source=True):
                     _copy(
-                        practice / relative, captured / ".scopecat/practice" / relative
+                        practice / relative,
+                        captured / data_relative / "practice" / relative,
                     )
             # SQLite's copy primitive is used only after stopped-project ownership
             # is acquired. It folds a retained WAL into a standalone destination
             # database without checkpointing or changing the source database.
-            with closing(sqlite3.connect(captured / _DATABASE)) as target:
+            with closing(
+                sqlite3.connect(captured / data_relative / "control.sqlite3")
+            ) as target:
                 source.backup(target)
                 target.execute("PRAGMA journal_mode = DELETE")
-            schema = verify_store_files(captured)
+            schema = verify_store_files(captured, data_relative=data_relative)
             manifest = SnapshotManifest(
+                instance_kind="application" if application else "project",
                 format_version=1,
                 created_at=datetime.now(UTC).isoformat(),
+                source_boundary=(
+                    "Application scientific data and local registrations only. "
+                    "Author source, "
+                    "external settings, environments and caches are not archived. "
+                    "Environment paths are references, not installed dependencies."
+                )
+                if application
+                else _SOURCE_BOUNDARY,
                 schema_version=schema,
                 python_version=sys.version,
                 packages={
@@ -148,7 +200,7 @@ def create_snapshot(project: Project, destination: Path) -> SnapshotManifest:
             )
             staged.rename(destination)
             return manifest
-    except (OSError, sqlite3.Error) as error:
+    except (OSError, sqlite3.Error, Timeout) as error:
         raise SnapshotError(f"cannot create snapshot: {error}") from error
 
 
@@ -166,16 +218,34 @@ def verify_snapshot(snapshot: Path) -> SnapshotManifest:
             relative = PurePosixPath(name)
             if (
                 relative.is_absolute()
+                or not relative.parts
                 or ".." in relative.parts
                 or "\\" in name
                 or relative.as_posix() != name
-                or not _allowed_path(relative)
+                or not _allowed_path(
+                    relative, application=manifest.instance_kind == "application"
+                )
             ):
                 raise SnapshotError(f"unsupported snapshot path: {name}")
             if file_digest(project / name) != digest:
                 raise SnapshotError(f"snapshot checksum mismatch: {name}")
-        load_project(project / "scopecat.toml")
-        schema = verify_store_files(project)
+        if manifest.instance_kind == "application":
+            if ApplicationInstance.open(project).layout != "application":
+                raise SnapshotError("application snapshot must use the current layout")
+            registry = project / "state/author-workspaces.json"
+            if registry.exists():
+                LocalAuthorWorkspaces.model_validate_json(registry.read_bytes())
+            deployment = project / "state/deployment-id"
+            if deployment.exists():
+                UUID(deployment.read_text(encoding="utf-8").strip())
+        else:
+            load_project(project / "scopecat.toml")
+        schema = verify_store_files(
+            project,
+            data_relative=Path("data")
+            if manifest.instance_kind == "application"
+            else Path(".scopecat"),
+        )
         if schema != manifest.schema_version:
             raise SnapshotError("snapshot schema does not match manifest")
         return manifest
@@ -193,10 +263,27 @@ def restore_snapshot(snapshot: Path, destination: Path) -> SnapshotManifest:
                 _copy(snapshot / "project" / name, staged / name)
                 if file_digest(staged / name) != manifest.files[name]:
                     raise SnapshotError(f"snapshot changed during restore: {name}")
-            (staged / _OBJECTS).mkdir(parents=True, exist_ok=True)
+            data_relative = (
+                Path("data")
+                if manifest.instance_kind == "application"
+                else Path(".scopecat")
+            )
+            (staged / data_relative / "objects").mkdir(parents=True, exist_ok=True)
+            if manifest.instance_kind == "application":
+                registry_path = staged / "state/author-workspaces.json"
+                if registry_path.exists():
+                    registry = LocalAuthorWorkspaces.model_validate_json(
+                        registry_path.read_bytes()
+                    )
+                    registry_path.write_text(
+                        registry.model_copy(
+                            update={"service_root": destination}
+                        ).model_dump_json(indent=2),
+                        encoding="utf-8",
+                    )
             # Preserve the version record with the restored project. Runtime
             # endpoint/lock/GUI management records cannot enter the inventory.
-            (staged / ".scopecat/restore-manifest.json").write_text(
+            (staged / data_relative / "restore-manifest.json").write_text(
                 manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )
             staged.rename(destination)
@@ -249,9 +336,11 @@ def read_snapshot_database(
     return connection
 
 
-def verify_store_files(project: Path) -> int:
+def verify_store_files(project: Path, *, data_relative: Path = _PROJECT_DATA) -> int:
     with closing(
-        read_snapshot_database(project / _DATABASE, immutable=True)
+        read_snapshot_database(
+            project / data_relative / "control.sqlite3", immutable=True
+        )
     ) as connection:
         version = require_current_schema(connection)
         integrity = cast(
@@ -261,7 +350,7 @@ def verify_store_files(project: Path) -> int:
             raise SnapshotError("snapshot SQLite integrity check failed")
         if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
             raise SnapshotError("snapshot SQLite foreign key check failed")
-        objects = ImmutableObjectStore(project / _OBJECTS)
+        objects = ImmutableObjectStore(project / data_relative / "objects")
         refs = cast(
             "list[sqlite3.Row]",
             connection.execute(
@@ -317,7 +406,17 @@ def verify_store_files(project: Path) -> int:
         return version
 
 
-def _allowed_path(path: PurePosixPath) -> bool:
+def _allowed_path(path: PurePosixPath, *, application: bool = False) -> bool:
+    if application:
+        if path.as_posix() in {
+            APPLICATION_INSTANCE_NAME,
+            "state/author-workspaces.json",
+            "state/deployment-id",
+        }:
+            return True
+        if path.parts[0] != "data":
+            return False
+        path = PurePosixPath(".scopecat", *path.parts[1:])
     if any(part in _EXCLUDED for part in path.parts):
         return False
     if path.parts[0] != ".scopecat":

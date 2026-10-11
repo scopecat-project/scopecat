@@ -19,7 +19,7 @@ from uuid import uuid4
 import psutil
 from filelock import FileLock, Timeout
 
-from scopecat.runtime_binding import RUNTIME_BINDING_NAME, load_runtime_binding
+from scopecat.runtime_binding import RUNTIME_BINDING_NAME
 from scopecat_server.services.project_workers import WorkerProcess
 from scopecat_server.storage.sqlite.project_store import (
     SchemaVersionError,
@@ -58,7 +58,7 @@ class ResetIncomplete(UnsupportedDataSpace):
 @contextmanager
 def _store_ownership(runtime: ApplicationRuntime) -> Generator[Path]:
     """Fence normal service starts without opening the original SQLite writable."""
-    binding = load_runtime_binding(runtime.root)
+    binding = runtime.instance.runtime_binding
     with ExitStack() as locks:
         try:
             for root, name in (
@@ -82,7 +82,7 @@ def check_format(runtime: ApplicationRuntime) -> None:
     """Inspect stopped stores before package preparation or author code loading."""
     if (runtime.home / "data-reset.json").exists():
         raise ResetIncomplete(runtime.home)
-    binding = load_runtime_binding(runtime.root)
+    binding = runtime.instance.runtime_binding
     database = binding.data_root / "control.sqlite3"
     if not database.exists():
         return
@@ -98,16 +98,23 @@ def check_format(runtime: ApplicationRuntime) -> None:
 
 
 def _standard_layout(runtime: ApplicationRuntime) -> None:
-    if (runtime.root / RUNTIME_BINDING_NAME).exists():
-        raise ValueError(
-            "此空间使用自定义数据/部署绑定，无法安全重新开始；原件保留，请联系维护者"
-        )
-    managed_path(runtime.home, runtime.root / ".scopecat" / "control.sqlite3")
-    if runtime.root.is_junction() or (runtime.root / ".scopecat").is_junction():
+    if runtime.instance.layout == "legacy":
+        if (runtime.root / RUNTIME_BINDING_NAME).exists():
+            raise ValueError(
+                "此空间使用自定义数据/部署绑定，无法安全重新开始；原件保留，请联系维护者"
+            )
+        declaration = runtime.root / "scopecat.toml"
+        if (
+            declaration.exists()
+            and declaration.read_text() != "[lab]\n[authors]\ndependencies = []\n"
+        ):
+            raise ValueError(
+                "此空间包含自定义应用配置，无法安全重新开始；源码和数据保留"
+            )
+    data = runtime.instance.runtime_binding.data_root
+    managed_path(runtime.home, data / "control.sqlite3")
+    if runtime.root.is_junction() or data.is_junction():
         raise ValueError("拒绝重置重定向目录")
-    declaration = "[lab]\n[authors]\ndependencies = []\n"
-    if (runtime.root / "scopecat.toml").read_text() != declaration:
-        raise ValueError("此空间包含自定义应用配置，无法安全重新开始；源码和数据保留")
 
 
 @contextmanager
@@ -130,7 +137,7 @@ def _worker_ownership(data: Path) -> Generator[None]:
         yield
 
 
-def _require_quiet(runtime: ApplicationRuntime, data: Path) -> None:
+def _require_quiet(runtime: ApplicationRuntime) -> None:
     status = runtime.status()
     if status.state != "stopped":
         raise ValueError("无法确认后台已停止；请先停止后台并重试，原数据保留")
@@ -149,9 +156,10 @@ def _require_quiet(runtime: ApplicationRuntime, data: Path) -> None:
             request = cast("dict[str, str]", json.loads(command[-1]))
             if Path(request["root"]).resolve() == runtime.root:
                 raise ValueError("仍有设备工作进程；请等待其退出，原数据保留")
-    workers = managed_path(data, data / "procedure-workers")
+    state = runtime.instance.runtime_binding.coordination_root
+    workers = managed_path(state, state / "procedure-workers")
     for receipt in workers.glob("*/process.json"):
-        managed_path(data, receipt)
+        managed_path(state, receipt)
         identity = WorkerProcess.model_validate_json(receipt.read_bytes())
         try:
             process = psutil.Process(identity.pid)
@@ -340,8 +348,11 @@ def reset_store(
         if expected.home != runtime.home:
             raise ValueError("应用目录已改变，请重新确认")
         _standard_layout(runtime)
-        with _store_ownership(runtime) as data, _worker_ownership(data):
-            _require_quiet(runtime, data)
+        with (
+            _store_ownership(runtime) as data,
+            _worker_ownership(runtime.instance.runtime_binding.coordination_root),
+        ):
+            _require_quiet(runtime)
             targets = _deletion_targets(runtime, data)
             marker = managed_path(runtime.home, runtime.home / "data-reset.json")
             receipt: dict[str, str | None] = {

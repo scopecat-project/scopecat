@@ -355,13 +355,12 @@ def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_
     )
 
     runtime = ApplicationRuntime(tmp_path / "home")
-    runtime.home.mkdir()
+    runtime.selection.parent.mkdir(parents=True)
     runtime.selection.write_text(
         Installation(
             python=Path(sys.executable),
             static_dir=tmp_path / "gui",
             environment={},
-            composition="[lab]",
         ).model_dump_json()
     )
     workspace = tmp_path / "authors"

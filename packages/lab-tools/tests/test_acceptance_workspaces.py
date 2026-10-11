@@ -274,7 +274,7 @@ def test_reset_failure_keeps_report_and_owned_logs(
             anchor = reports / "fixture/data"
             (anchor / "desktop").mkdir(parents=True)
             (anchor / "desktop/desktop.log").write_text("desktop failure")
-            candidate = anchor / "runtime/.scopecat"
+            candidate = anchor / "state"
             candidate.mkdir(parents=True)
             (candidate / "daemon.log").write_text("candidate failure")
             raise RuntimeError("original probe failure")

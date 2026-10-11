@@ -15,6 +15,7 @@ import httpx2
 from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
 
+from scopecat.application_instance import ApplicationInstance
 from scopecat.author_workspaces import (
     LocalAuthorWorkspaces,
     author_bindings_path,
@@ -23,6 +24,7 @@ from scopecat.author_workspaces import (
 from scopecat.daemon.endpoint import DaemonEndpointRecord
 from scopecat.daemon.health import ApplicationActivity
 from scopecat.project import open_project
+from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
 from .bundle import MANIFEST, file_hash, installed_bundle, managed_path, read_bundle
@@ -52,8 +54,6 @@ class Installation(BaseModel):
     delivery_manifest_sha256: str | None = None
     environment: dict[str, str]
     settings_identity: str | None = None
-    adapter_identity: str | None = None
-    composition: str
 
 
 def runtime_command(python: Path, request: dict[str, object]) -> dict[str, object]:
@@ -109,24 +109,52 @@ class ApplicationRuntime:
 
     def __init__(self, home: Path):
         self.home = home.resolve()
-        self.root = managed_path(self.home, self.home / "runtime")
-        self.selection = managed_path(self.home, self.home / "installation.json")
-        self.pending = managed_path(self.home, self.home / "installation-pending.json")
+        legacy = self.home / "runtime"
+        if not legacy.exists() and (self.home / "installation.json").exists():
+            raise ValueError("旧应用运行目录缺失；原数据保留，请联系维护者")
+        if legacy.exists() and any(
+            (self.home / name).exists()
+            for name in (
+                APPLICATION_INSTANCE_NAME,
+                "data/control.sqlite3",
+                "state/installation.json",
+            )
+        ):
+            raise ValueError("同时发现新旧应用布局；原件保留，请联系维护者")
+        self.instance = ApplicationInstance(
+            managed_path(self.home, legacy if legacy.exists() else self.home),
+            "legacy" if legacy.exists() else "application",
+        )
+        self.root = self.instance.root
+        state = self.home if self.instance.layout == "legacy" else self.home / "state"
+        self.selection = managed_path(self.home, state / "installation.json")
+        self.pending = managed_path(self.home, state / "installation-pending.json")
         self.lock = FileLock(self.home / "application.lock", timeout=30)
 
     def installation(self) -> Installation:
         if not self.selection.is_file():
             raise ValueError("应用尚未准备就绪，请重新打开 Scopecat 或在启动页面重试")
-        return Installation.model_validate_json(self.selection.read_bytes())
+        document = cast("dict[str, object]", json.loads(self.selection.read_bytes()))
+        if self.instance.layout == "legacy":
+            # The previous desktop stored a synthetic empty source declaration.
+            # Keep its data and owner paths, but never execute that declaration.
+            composition = document.pop("composition", None)
+            if composition not in (None, "[lab]\n[authors]\ndependencies = []\n"):
+                raise ValueError("旧应用包含自定义运行声明；原文件保留，请联系维护者")
+            if document.pop("adapter_identity", None) is not None:
+                raise ValueError("旧应用包含自定义能力包；原文件保留，请联系维护者")
+        return Installation.model_validate(document)
 
     def require_ready(self) -> None:
+        if ApplicationInstance.open(self.root) != self.instance:
+            raise ValueError("应用布局已改变；请重新打开应用")
         if (self.home / "data-reset.json").exists():
             raise ValueError("数据删除尚未完成；请在启动页面确认继续，不能直接启动")
         if self.pending.exists():
             raise ValueError("应用运行信息登记尚未完成，请在启动页面重试；数据保留")
 
     def status(self) -> DaemonStatus:
-        return inspect_daemon(open_project(self.root, resolve_adapter=False))
+        return inspect_daemon(self.instance)
 
     def activity(self) -> ApplicationActivity:
         status = self.status()
@@ -143,9 +171,7 @@ class ApplicationRuntime:
 
     def stop_if_idle(self) -> bool:
         with self.lock:
-            _ = stop_project(
-                open_project(self.root, resolve_adapter=False), only_if_idle=True
-            )
+            _ = stop_project(self.instance, only_if_idle=True)
             return self.status().state == "stopped"
 
     def qualify(
@@ -153,26 +179,16 @@ class ApplicationRuntime:
         python: Path,
         static_dir: Path | None,
         *,
-        composition: str | None = None,
         delivery_root: Path | None = None,
     ) -> Installation:
-        composition = composition or (self.root / "scopecat.toml").read_text()
-        descriptor, name = tempfile.mkstemp(prefix=".candidate-", dir=self.root)
-        manifest = Path(name)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-                stream.write(composition)
-            result = runtime_command(
-                python,
-                {
-                    "action": "probe",
-                    "root": str(self.root),
-                    "manifest": str(manifest),
-                    "static_dir": str(static_dir) if static_dir else None,
-                },
-            )
-        finally:
-            manifest.unlink(missing_ok=True)
+        result = runtime_command(
+            python,
+            {
+                "action": "probe",
+                "root": str(self.root),
+                "static_dir": str(static_dir) if static_dir else None,
+            },
+        )
         environment = cast("dict[str, str]", result["environment"])
         receipt_root = installed_bundle(Path(environment["prefix"]))
         if delivery_root is None:
@@ -189,8 +205,6 @@ class ApplicationRuntime:
             else None,
             environment=environment,
             settings_identity=cast("str | None", result["settings_identity"]),
-            adapter_identity=cast("str | None", result["adapter_identity"]),
-            composition=composition,
         )
 
     def configure(
@@ -204,13 +218,9 @@ class ApplicationRuntime:
         self.home.mkdir(parents=True, exist_ok=True)
         with self.lock:
             if self.selection.exists():
+                self._declare_instance()
                 return self.installation()
-            manifest = self.root / "scopecat.toml"
-            declaration = "[lab]\n[authors]\ndependencies = []\n"
-            if manifest.exists() and manifest.read_text() != declaration:
-                raise ValueError("已有应用声明与本次安装不符；原文件保留")
-            if not manifest.exists():
-                write_state(manifest, declaration)
+            self._declare_instance()
             selected = self.qualify(
                 python or Path(sys.executable),
                 static_dir,
@@ -218,6 +228,28 @@ class ApplicationRuntime:
             )
             write_state(self.selection, selected.model_dump_json(indent=2))
             return selected
+
+    def _declare_instance(self) -> None:
+        if self.instance.layout == "application" and any(
+            (self.root / name).exists()
+            for name in ("scopecat.toml", "scopecat.runtime.toml", ".scopecat")
+        ):
+            raise ValueError(
+                "此目录包含作者源码或其他数据绑定；原文件保留，请使用应用数据目录"
+            )
+        if self.instance.layout == "legacy":
+            declaration = self.root / "scopecat.toml"
+            if (
+                declaration.exists()
+                and declaration.read_text() != "[lab]\n[authors]\ndependencies = []\n"
+            ):
+                raise ValueError("旧应用包含自定义运行声明；原文件保留，请联系维护者")
+        path = managed_path(self.home, self.root / APPLICATION_INSTANCE_NAME)
+        content = self.instance.declaration()
+        if path.exists() and path.read_text() != content:
+            raise ValueError("应用布局声明已改变；原文件保留")
+        if not path.exists():
+            write_state(path, content)
 
     def start(self) -> DaemonEndpointRecord:
         with self.lock:
@@ -232,7 +264,6 @@ class ApplicationRuntime:
                         mode="json",
                         exclude={
                             "python",
-                            "composition",
                             "delivery_root",
                             "delivery_manifest_sha256",
                         },
@@ -248,7 +279,7 @@ class ApplicationRuntime:
     def stop(self) -> None:
         """Stop the exact recorded process even when its interpreter is unavailable."""
         with self.lock:
-            stop_project(open_project(self.root, resolve_adapter=False))
+            stop_project(self.instance)
             if self.status().state != "stopped":
                 raise ValueError("应用尚未停止，运行归属与数据保留；请查看诊断")
 
@@ -257,7 +288,7 @@ class ApplicationRuntime:
         if status.state == "stale" and status.record is not None:
             # Caller holds the data lock: a verified killed process can be
             # reconciled, while a live or ambiguous owner must remain untouched.
-            stop_project(open_project(self.root, resolve_adapter=False))
+            stop_project(self.instance)
             status = self.status()
         if status.state != "stopped":
             raise ValueError(f"请先退出正在运行的应用：{status.detail or status.state}")
@@ -265,7 +296,7 @@ class ApplicationRuntime:
     def select(self, candidate: Installation) -> None:
         """Record a verified runtime under the same locks that fence startup."""
         with self.lock, ExitStack() as locks:
-            binding = open_project(self.root, resolve_adapter=False).runtime_binding
+            binding = self.instance.runtime_binding
             try:
                 for path in (
                     binding.deployment_root / "deployment.lock",
@@ -281,7 +312,6 @@ class ApplicationRuntime:
             qualified = self.qualify(
                 candidate.python,
                 candidate.static_dir,
-                composition=candidate.composition,
                 delivery_root=candidate.delivery_root,
             )
             if qualified != candidate:
@@ -290,7 +320,7 @@ class ApplicationRuntime:
             # registration. The journal fences starts; it does not pin an old
             # package that may no longer be installed.
             write_state(self.pending, candidate.model_dump_json(indent=2))
-            write_state(self.root / "scopecat.toml", candidate.composition)
+            self._declare_instance()
             write_state(self.selection, candidate.model_dump_json(indent=2))
             self.pending.unlink()
 
@@ -309,7 +339,6 @@ class ApplicationRuntime:
                         mode="json",
                         exclude={
                             "python",
-                            "composition",
                             "delivery_root",
                             "delivery_manifest_sha256",
                         },
@@ -356,7 +385,7 @@ class ApplicationRuntime:
         """Opening registered code joins this home; it cannot create another owner."""
         self.require_ready()
         project = open_project(workspace, resolve_adapter=False)
-        owner = open_project(self.root, resolve_adapter=False).runtime_binding
+        owner = self.instance.runtime_binding
         binding = project.runtime_binding
         if (binding.data_root, binding.deployment_root) != (
             owner.data_root,

@@ -46,7 +46,7 @@ class DaemonEndpointRecord(BaseModel):
 def daemon_record_path(project_root: str | Path) -> Path:
     """Return the single dynamic endpoint record for ``project_root``."""
 
-    return load_runtime_binding(project_root).data_root / DAEMON_RECORD_NAME
+    return load_runtime_binding(project_root).coordination_root / DAEMON_RECORD_NAME
 
 
 def read_daemon_endpoint_record(

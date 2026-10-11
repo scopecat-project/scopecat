@@ -146,7 +146,7 @@ def _verify(previous: Path, current: Path, home: Path) -> None:
     installed.rename(home / "retired-package")
     shutil.copytree(current, installed)
     application_files = inventory(installed, (".",))
-    selection = home / "data/installation.json"
+    selection = home / "data/state/installation.json"
     before_failure = selection.read_bytes()
     gui = installed / resources / "payload/gui"
     unavailable = gui.with_name("gui-unavailable")

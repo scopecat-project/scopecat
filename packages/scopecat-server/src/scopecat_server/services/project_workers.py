@@ -68,7 +68,10 @@ class ProjectProcedureWorkers:
         self._thread: Thread | None = None
 
     def _path(self) -> Path:
-        return load_runtime_binding(self.root()).data_root / "console-procedures.json"
+        return (
+            load_runtime_binding(self.root()).coordination_root
+            / "console-procedures.json"
+        )
 
     def _worker_dir(self, procedure_id: str) -> Path:
         key = sha256(procedure_id.encode("utf-8")).hexdigest()

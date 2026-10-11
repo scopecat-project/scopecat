@@ -1,4 +1,4 @@
-# Back up and restore a stopped project
+# Back up and restore a stopped application or project
 
 This workflow supports the current runtime's development schema and snapshot
 format **1** only. The snapshot manifest records the exact schema version, and
@@ -28,6 +28,29 @@ SQLite writer reservation for the entire capture. A running daemon or active
 SQLite writer is rejected. This is a stopped-project workflow, not online backup;
 it does not coordinate concurrent source-file editors or third-party writers
 that bypass Scopecat's ownership contract.
+
+## Application homes
+
+The same stopped snapshot commands accept an explicit application home containing
+`scopecat.application.json`; they do not require an empty author project. For a
+recognized previous desktop layout, select its `runtime` directory.
+
+An application snapshot retains `data/` scientific records, immutable source bundles,
+original author-job receipts and practice files, plus `state/author-workspaces.json`
+and deployment identity. It excludes the installed application, editable external
+author folders, environment contents, caches, live endpoints and dispatch intent.
+Interpreter paths in registrations remain references; missing environments do not
+prevent reading the restored data. Preserve external code, SDKs and environment
+artifacts separately.
+
+Explicit restore creates a fresh application home in the current layout, retaining
+scientific identity and references. It updates only the registry's service location;
+it does not rewrite external author bindings or start work. Use the current package
+to prepare that home, then explicitly register a restored author folder with its existing workspace
+identity and retained environment before execution. A copied author folder must not
+carry the original machine's runtime binding; existing external bindings are never
+rewritten by restore. A recovered copy is not an independently writable clone: stop the
+original owner before adopting it.
 
 ## What is retained
 

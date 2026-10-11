@@ -15,9 +15,12 @@ from scopecat_server.lifecycle import inspect_daemon, stop_project
 def test_settings_edit_requires_stopped_recheck_and_missing_file_allows_stop(
     tmp_path: Path,
 ) -> None:
+    legacy = tmp_path / "home/runtime"
+    legacy.mkdir(parents=True)
+    (legacy / "scopecat.toml").write_text("[lab]\n[authors]\ndependencies = []\n")
     store = ApplicationRuntime(tmp_path / "home")
     root = store.root
-    root.mkdir(parents=True)
+    root.mkdir(parents=True, exist_ok=True)
     settings = tmp_path / "lab.json"
     settings.write_text('{"initial_configuration":"simulator"}')
     state = root / ".scopecat"

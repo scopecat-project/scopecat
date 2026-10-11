@@ -333,7 +333,7 @@ def verify(home: Path, payload: Path) -> None:
         sender.stop()
         receiver.stop()
         for name, runtime in (("sender", sender), ("receiver", receiver)):
-            log = runtime.root / ".scopecat/daemon.log"
+            log = runtime.instance.runtime_binding.coordination_root / "daemon.log"
             if log.is_file():
                 shutil.copyfile(log, home / f"{name}-daemon.log")
 

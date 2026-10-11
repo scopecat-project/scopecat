@@ -15,11 +15,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from scopecat.execution_environment import execution_packages
-from scopecat.installed_authors import capture_installed_authors
-from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.application_instance import ApplicationInstance
 from scopecat.lab_settings import lab_settings_identity
-from scopecat.project import load_project, open_project
 from scopecat_server.lifecycle import inspect_daemon, start_project, stop_project
 from scopecat_server.static_assets import select_static_dir
 
@@ -30,55 +27,27 @@ class Request(BaseModel):
     static_dir: str | None
     environment: dict[str, str] = Field(default_factory=dict)
     settings_identity: str | None = None
-    adapter_identity: str | None = None
     workspace: str | None = None
-    manifest: str | None = None
     author_python: Path | None = None
 
 
 def main() -> None:
     request = Request.model_validate_json(sys.argv[1])
+    # Qualification checks the application installation, not any author environment.
     project = (
-        load_project(request.manifest)
-        if request.action == "probe" and request.manifest is not None
-        else open_project(request.root, resolve_adapter=request.action != "stop")
+        ApplicationInstance.open(request.root) if request.action != "probe" else None
     )
     if request.action == "stop":
+        assert project is not None
         stop_project(project)
         Path(sys.argv[2]).write_text("{}", encoding="utf-8")
         return
-    if project.author_only:
-        raise ValueError("作者目录不能作为应用运行目录；请通过应用 Settings 登记源码")
-    settings_identity = lab_settings_identity(project.root)
-    adapter_identity = (
-        sha256_json_hash(
-            {
-                name: package.model_dump(mode="json")
-                for name, package in capture_installed_authors(
-                    project.adapter_packages
-                ).items()
-            }
-        )
-        if project.adapter_packages
-        else None
-    )
-    if (
-        request.action in ("start", "register_source")
-        and adapter_identity != request.adapter_identity
-    ):
-        raise ValueError("应用能力包已改变；请重新启动应用后重试")
+    settings_identity = lab_settings_identity(request.root)
     if (
         request.action in ("start", "register_source")
         and settings_identity != request.settings_identity
     ):
         raise ValueError("本机设置已改变；请重新启动应用后重试")
-    if request.action == "probe":
-        execution_packages(
-            (
-                *(project.dependencies or ()),
-                *(name for _, name in project.installed_packages),
-            )
-        )
     gui = select_static_dir(
         static_dir=Path(request.static_dir) if request.static_dir else None,
         api_only=False,
@@ -96,10 +65,12 @@ def main() -> None:
         if environment != request.environment:
             raise ValueError("应用运行环境已改变；请重新启动应用后重试")
         assert request.workspace is not None
+        assert project is not None
         source_id = register_author_workspace(
             project.root, Path(request.workspace), python=request.author_python
         ).id
     if request.action == "start":
+        assert project is not None
         if environment != request.environment:
             raise ValueError("应用运行环境已改变；请重新启动应用后重试。")
         status = inspect_daemon(project)
@@ -130,12 +101,11 @@ def main() -> None:
     Path(sys.argv[2]).write_text(
         json.dumps(
             {
-                "root": str(project.root),
+                "root": request.root,
                 "source_id": source_id,
                 "static_dir": str(gui),
                 "environment": environment,
                 "settings_identity": settings_identity,
-                "adapter_identity": adapter_identity,
             }
         ),
         encoding="utf-8",

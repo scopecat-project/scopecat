@@ -31,7 +31,7 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
     """Read original identity before importing any project implementation."""
     from scopecat.daemon.client import DaemonClient
     from scopecat.daemon.endpoint import resolve_daemon_endpoint
-    from scopecat.project import load_captured_project
+    from scopecat.project import SourceExecutionContext, load_captured_project
     from scopecat.project_sources import (
         materialize_sources,
         require_environment,
@@ -43,13 +43,13 @@ def revision_project(root: Path, ref: AuthorRevisionRef) -> Project:
         bundle = client.author_revision(ref)
     require_environment(bundle.manifest)
     code_root = materialize_sources(
-        bundle, load_runtime_binding(root).data_root / "code"
+        bundle, load_runtime_binding(root).materialization_root / "code"
     )
     return replace(
         load_captured_project(code_root),
-        root=root,
-        code_root=code_root,
-        code_revision=ref,
+        execution=SourceExecutionContext(
+            load_runtime_binding(root), author_workspace_id(root), ref
+        ),
     )
 
 
@@ -87,14 +87,14 @@ def validate(
     try:
         report_stage("framework imports")
         from scopecat.daemon.endpoint import DAEMON_URL_ENV
-        from scopecat.project import load_captured_project
+        from scopecat.project import SourceExecutionContext, load_captured_project
 
         os.environ.pop(DAEMON_URL_ENV, None)
         project = replace(
             load_captured_project(code_root),
-            root=root,
-            code_root=code_root,
-            code_revision=ref,
+            execution=SourceExecutionContext(
+                load_runtime_binding(root), author_workspace_id(root), ref
+            ),
         )
         started = time.perf_counter()
         report_stage("source compilation")
@@ -143,7 +143,7 @@ def analyze(
     from scopecat_server.author_analysis import analyze as analyze_run
 
     with application.connect(
-        resolve_daemon_endpoint(project.root), operator="author-analysis"
+        resolve_daemon_endpoint(project.workspace_root), operator="author-analysis"
     ) as lab:
         module_name, separator, name = request.analysis.partition(":")
         if not separator or not module_name or not name:

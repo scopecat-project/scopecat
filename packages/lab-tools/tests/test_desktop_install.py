@@ -71,6 +71,9 @@ def native_start(tmp_path, monkeypatch):
             assert home == paths.state
             self.home = home
             self.root = home / "runtime"
+            from scopecat.application_instance import ApplicationInstance
+
+            self.instance = ApplicationInstance(self.root, "legacy")
 
         def configure(self, **_kwargs):
             self.selection.write_text(receipt())
