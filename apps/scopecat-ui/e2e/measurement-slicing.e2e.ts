@@ -53,16 +53,18 @@ test("browses independent dimensions and keeps a compatible signal across slices
   let passed = false;
   try {
     for (const name of ["src", "scopecat.toml"])
-      await cp(join("e2e/fixtures/retained-signal", name), join(project, name), {
+      await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
     await cp("e2e/fixtures/slicing-signal.py", join(project, "src/ui_signal/slicing.py"));
     const app = join(project, "src/ui_signal/application.py");
+    const application = await readFile(app, "utf8");
+    expect(application).toContain('author_modules=("ui_signal.signal",');
     await writeFile(
       app,
-      (await readFile(app, "utf8")).replace(
-        'author_modules=("ui_signal.signal",)',
-        'author_modules=("ui_signal.signal", "ui_signal.slicing")',
+      application.replace(
+        'author_modules=("ui_signal.signal",',
+        'author_modules=("ui_signal.slicing", "ui_signal.signal",',
       ),
     );
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);

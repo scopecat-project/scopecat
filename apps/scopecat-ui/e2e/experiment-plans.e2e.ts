@@ -65,7 +65,8 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await expect(page.getByLabel("Plan name")).toHaveValue("Signal baseline");
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("bob");
     await preview();
     await page.getByLabel("Plan name").fill("Signal copy");

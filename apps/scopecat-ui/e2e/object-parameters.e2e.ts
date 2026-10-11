@@ -155,19 +155,23 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     );
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     const previewResponse = page.waitForResponse(
       (item) =>
         item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
     );
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    const submitting = page.waitForRequest((request) =>
+      request.url().endsWith("/experiment-launcher/submit"),
+    );
+    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const preview = await previewResponse;
     expect(preview.status(), await preview.text()).toBe(200);
     const captured = await preview.json();
     expect(captured.reviewed.binding.subject.ref.target_id).toBe("object-target");
     expect(captured.reviewed.config_source.overrides).toHaveLength(1);
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    expect((await submitting).postDataJSON().expected_request_hash).toBe(captured.request_hash);
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    expect((await (await page.request.get(`${url}/api/v1/runs`)).json()).items).toHaveLength(1);
     const runLink = page.getByRole("link", { name: /^Open retained run:/ });
     const runId = new URL((await runLink.getAttribute("href"))!, page.url()).searchParams.get(
       "run",
