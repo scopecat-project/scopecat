@@ -39,9 +39,21 @@ def analyze(
     step = definition(**bind_arguments(function, request.arguments))
     if request.grouping is not None:
         return _analyze_groups(run, step, request)
+    repeatable = (
+        isinstance(definition, AnalysisFunctionDefinition) and run.status == "completed"
+    )
     result = step.run(
         AnalysisContext(run=run, default_key=request.key or step.id, step_id=step.id)
     )
+    # Only an ordinary, whole, completed-run invocation has the replay scope
+    # represented by this request. Group children and context analyses must not
+    # silently acquire a different input selection through a generic repeat action.
+    if repeatable:
+        result = result.artifact(
+            "author_analysis_request",
+            text=canonical_json(request.model_dump(mode="json")),
+            title="Saved analysis settings",
+        )
     published = _publish(result, request, step)
     return AuthorAnalysisReceipt(
         code_revision=request.code_revision, analysis_id=published.id

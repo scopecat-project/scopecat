@@ -11,6 +11,7 @@ import pytest
 import scopecat as sc
 from scopecat.application import LabApplication
 from scopecat.project import load_project
+from scopecat.records.author_revision import AuthorAnalysisRequest
 from ui_signal.analysis import (
     PeakResult,
     PeakVerification,
@@ -82,6 +83,16 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             )
             original = authors.analyze_as(managed.id, name, PeakResult)
             assert original.value.status == "estimated"
+            repeat_request = AuthorAnalysisRequest.model_validate_json(
+                original.publication.artifact("author_analysis_request").text()
+            )
+            assert repeat_request.run_id == managed.id
+            assert repeat_request.analysis == name
+            assert repeat_request.arguments == {}
+            assert (
+                repeat_request.code_revision.content_hash
+                == original.publication.fact("author_code_revision").value
+            )
             with pytest.raises(ValueError, match="source='current'"):
                 authors.analyze_as(peaked, name, PeakResult)
             first = authors.analyze_as(peaked, name, PeakResult, source="current")
@@ -213,6 +224,8 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
                     source=selected_source,
                     arguments={"expected_frequency": sc.Quantity(4.8, "GHz")},
                 )
+                with pytest.raises(KeyError):
+                    context_result.publication.artifact("author_analysis_request")
                 assert context_result.value.tolerance == sc.Quantity(
                     50 if selected_source == "original" else 25, "MHz"
                 )
@@ -234,6 +247,18 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             assert lab.get_run(peaked).published_analysis(old.analysis_id).fact(
                 "result"
             ) == first.publication.fact("result")
+            repeated = authors.analyze_author_revision(repeat_request)
+            repeated_publication = authors.run(managed.id).published_analysis(
+                repeated.analysis_id
+            )
+            assert repeated_publication.fact("result") == original.publication.fact(
+                "result"
+            )
+            assert (
+                authors.analyze_author_revision(repeat_request).analysis_id
+                == repeated.analysis_id
+            )
+            assert repeated.code_revision == repeat_request.code_revision
             materialized = authors.run(peaked).measurements().materialize()
             publication_id = first.publication.id
             curve_schema = first.publication.dataset("curve").schema
@@ -250,6 +275,19 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
     endpoint = start_project(project)
     try:
         with LabApplication().connect(endpoint.base_url) as lab:
+            retained_request = AuthorAnalysisRequest.model_validate_json(
+                lab.get_run(managed.id)
+                .published_analysis(original.publication.id)
+                .artifact("author_analysis_request")
+                .text()
+            )
+            with project.authoring() as restarted_author:
+                assert (
+                    restarted_author.analyze_author_revision(
+                        retained_request
+                    ).analysis_id
+                    == repeated.analysis_id
+                )
             publication = lab.get_run(peaked).published_analysis(publication_id)
             assert publication.publication_hash == first.publication.publication_hash
             assert publication.fact("result") == first.publication.fact("result")
