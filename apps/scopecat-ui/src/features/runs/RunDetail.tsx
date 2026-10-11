@@ -1,3 +1,4 @@
+import { RunAnalysisActionsCard } from "./DeclaredRunAnalyses";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { CopyReadOnlyCode } from "../../ui/CopyReadOnlyCode";
 import { OpenRunWindow } from "./OpenRunWindow";
@@ -315,6 +316,7 @@ export function RunDetail({
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
+        {run.status === "succeeded" && <RunAnalysisActionsCard key={run.runId} runId={run.runId} />}
         <AnalysisCard
           analyses={analyses}
           error={analysesError}

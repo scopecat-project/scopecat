@@ -1206,6 +1206,7 @@ def experiment[ResultT, **P](
     kind: str | None = None,
     metadata: Mapping[str, MetadataValue] | None = None,
     controls: ControlSet | None = None,
+    analyses: Mapping[str, str] | None = None,
 ) -> Experiment[P, ResultT]: ...
 
 
@@ -1218,6 +1219,7 @@ def experiment[ResultT, **P](
     kind: str | None = None,
     metadata: Mapping[str, MetadataValue] | None = None,
     controls: ControlSet | None = None,
+    analyses: Mapping[str, str] | None = None,
 ) -> Callable[
     [Callable[Concatenate[ExperimentContext, P], ResultT]],
     Experiment[P, ResultT],
@@ -1232,6 +1234,7 @@ def experiment[ResultT, **P](
     kind: str | None = None,
     metadata: Mapping[str, MetadataValue] | None = None,
     controls: ControlSet | None = None,
+    analyses: Mapping[str, str] | None = None,
 ) -> (
     Experiment[P, ResultT]
     | Callable[
@@ -1255,6 +1258,7 @@ def experiment[ResultT, **P](
             kind=kind,
             metadata=metadata,
             controls=controls,
+            analyses=analyses,
         )
 
     return decorate(definition) if definition is not None else decorate
@@ -1382,6 +1386,7 @@ def _experiment_from_function[ResultT, **P](
     kind: str | None,
     metadata: Mapping[str, MetadataValue] | None,
     controls: ControlSet | None,
+    analyses: Mapping[str, str] | None,
 ) -> Experiment[P, ResultT]:
     source = cast("DefinitionFunction", fn)
     contract = _experiment_contract(source)
@@ -1515,6 +1520,7 @@ def _experiment_from_function[ResultT, **P](
         metadata=selected_metadata,
         inputs=contract.inputs,
         controls=controls,
+        analyses=analyses or {},
     )
     return authored
 

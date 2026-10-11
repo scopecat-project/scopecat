@@ -22,7 +22,13 @@ def response(
     return gain / (1 + detuning**2) * (1 if polarity == "positive" else -1)
 
 
-@sc.experiment(metadata={"title": "Exploratory signal"})
+@sc.experiment(
+    metadata={"title": "Exploratory signal"},
+    analyses={
+        "Estimate peak": "ui_signal.analysis:estimate_peak",
+        "Check expected peak": "ui_signal.analysis:verify_peak",
+    },
+)
 def signal(
     experiment: sc.ExperimentContext,
     gain: Annotated[sc.Input[float], sc.ControlSpec(title="Gain")] = 1.0,

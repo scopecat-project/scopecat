@@ -1973,6 +1973,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/analysis-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Analysis Actions */
+        get: operations["run_analysis_actions_api_v1_runs__run_id__analysis_actions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/analysis-follows": {
         parameters: {
             query?: never;
@@ -2867,6 +2884,24 @@ export interface components {
             /** Parameter Id */
             parameter_id: string;
             table: components["schemas"]["Table"];
+        };
+        /** AnalysisActionInput */
+        AnalysisActionInput: {
+            /**
+             * Choices
+             * @default []
+             */
+            choices: string[];
+            default?: components["schemas"]["pydantic__types__JsonValue"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "number" | "integer" | "text" | "boolean" | "quantity" | "choice";
+            /** Name */
+            name: string;
+            /** Required */
+            required: boolean;
         };
         /** AnalysisArtifactRecordOutput */
         AnalysisArtifactRecordOutput: {
@@ -10539,6 +10574,37 @@ export interface components {
              */
             tags: string[];
         };
+        /** RunAnalysisAction */
+        RunAnalysisAction: {
+            /** Analysis */
+            analysis: string;
+            /** Description */
+            description: string;
+            /**
+             * Inputs
+             * @default []
+             */
+            inputs: components["schemas"]["AnalysisActionInput"][];
+            /** Title */
+            title: string;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+        };
+        /** RunAnalysisActions */
+        RunAnalysisActions: {
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["RunAnalysisAction"][];
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            /** Experiment */
+            experiment: string;
+            /** Run Id */
+            run_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
         /**
          * RunAnalysisPage
          * @description Newest-first keyset page of run analysis summaries.
@@ -16697,6 +16763,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunAnalysisView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_analysis_actions_api_v1_runs__run_id__analysis_actions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAnalysisActions"] | null;
                 };
             };
             /** @description Validation Error */

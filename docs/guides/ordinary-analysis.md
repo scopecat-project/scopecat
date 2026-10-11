@@ -122,6 +122,36 @@ arguments (including defaults), output identities and publication hash. Repeatin
 identical content may return the same receipt; changed source or arguments cannot
 silently reuse that content. A candidate remains an estimate, not verified calibration.
 
+For a first analysis directly from **Runs**, declare the applicable ordinary
+functions on the experiment. Labels belong to the author; references use the
+existing `module:function` address, not an analysis display ID:
+
+```python
+@sc.experiment(
+    analyses={
+        "Estimate peak": "ui_signal.analysis:estimate_peak",
+        "Check expected peak": "ui_signal.analysis:verify_peak",
+    }
+)
+def signal(experiment: sc.ExperimentContext): ...
+```
+
+After a successful run, expand **Analyze this result** to load the experiment's
+declaration and input defaults from its retained workspace and code revision.
+Expanding may start an author worker and import retained code. Normal browsing and
+reloading keep this section closed and do not load author code through this entry.
+Enter the required inputs and select **Run** to execute; results remain separate
+publications. Editing current source does not change historical actions. Runs
+without an association stay readable without guessed actions.
+
+The form supports `str`, `bool`, `int`, `float`, `Quantity`, and string `Literal`
+inputs. Other input types and context analyses show an explanation; use Python for
+those calls. Quantity values keep their supplied units. The original author
+execution environment must be available. Source annotations still validate the call.
+The signal example's expected-frequency check evaluates retained data against
+explicit laboratory inputs; it does not independently remeasure or certify a
+calibration. Neither action acquires measurements or adopts parameter candidates.
+
 In **Runs**, open a saved ordinary analysis and choose **Repeat with saved settings**
 to analyze its completed run again using the retained function, arguments and author
 code revision. The result link opens the returned publication; existing analyses and

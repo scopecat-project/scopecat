@@ -17,9 +17,11 @@ from scopecat.kernel.content_identity import canonical_json
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.records.author_revision import AuthorRevisionRef
 
+from scopecat_server.analysis_actions_worker import describe
 from scopecat_server.author_worker import analyze, revision_project
 from scopecat_server.comparison_worker import compare
 from scopecat_server.retained_request import (
+    AnalysisActionsCall,
     AnalysisCall,
     ProcedureValidationCall,
     RetainedRequest,
@@ -54,6 +56,9 @@ def main() -> None:
             if isinstance(call, AnalysisCall):
                 report_stage("retained analysis")
                 result = analyze(project, application, call.request)
+            elif isinstance(call, AnalysisActionsCall):
+                report_stage("declared analysis inputs")
+                result = describe(project, application, root, call.request)
             elif isinstance(call, ProcedureValidationCall):
                 report_stage("procedure definition validation")
                 definition = application.procedures.resolve(call.request.definition)
