@@ -146,12 +146,12 @@ class ApplicationRuntime:
         return Installation.model_validate(document)
 
     def require_ready(self) -> None:
-        if ApplicationInstance.open(self.root) != self.instance:
-            raise ValueError("应用布局已改变；请重新打开应用")
         if (self.home / "data-reset.json").exists():
             raise ValueError("数据删除尚未完成；请在启动页面确认继续，不能直接启动")
         if self.pending.exists():
             raise ValueError("应用运行信息登记尚未完成，请在启动页面重试；数据保留")
+        if ApplicationInstance.open(self.root) != self.instance:
+            raise ValueError("应用布局已改变；请重新打开应用")
 
     def status(self) -> DaemonStatus:
         return inspect_daemon(self.instance)

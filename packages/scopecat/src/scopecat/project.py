@@ -49,10 +49,10 @@ _loaded_project_code_root: Path | None = None
 
 @dataclass(frozen=True, slots=True)
 class SourceExecutionContext:
-    """An exact source executes through an explicitly registered client binding."""
+    """Captured-source context; validation may precede workspace registration."""
 
     binding: RuntimeBinding
-    workspace_id: str
+    workspace_id: str | None
     revision: AuthorRevisionRef | None
 
 

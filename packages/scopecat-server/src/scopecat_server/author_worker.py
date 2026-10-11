@@ -12,7 +12,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from scopecat.author_workspaces import author_workspace_id
+from scopecat.author_workspaces import author_workspace_id, local_author_workspaces
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.worker_diagnostics import report_stage
@@ -93,7 +93,16 @@ def validate(
         project = replace(
             load_captured_project(code_root),
             execution=SourceExecutionContext(
-                load_runtime_binding(root), author_workspace_id(root), ref
+                load_runtime_binding(root),
+                next(
+                    (
+                        item.id
+                        for item in local_author_workspaces(root)
+                        if item.root == root
+                    ),
+                    None,
+                ),
+                ref,
             ),
         )
         started = time.perf_counter()
