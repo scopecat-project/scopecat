@@ -20,6 +20,7 @@ from scopecat.records.author_revision import AuthorRevisionRef, AuthorRevisionSt
 from scopecat.records.launch_request import LaunchRequest
 
 from scopecat_server.retained_request import (
+    AnalysisActionsCall,
     AnalysisCall,
     ComparisonCall,
     ProcedureValidationCall,
@@ -102,6 +103,7 @@ class _Worker:
     def call(
         self,
         command: LaunchRequest
+        | AnalysisActionsCall
         | AnalysisCall
         | ComparisonCall
         | ProcedureValidationCall,
@@ -302,6 +304,7 @@ class RevisionWorkers:
         self,
         binding: AuthorWorkerBinding,
         command: LaunchRequest
+        | AnalysisActionsCall
         | AnalysisCall
         | ComparisonCall
         | ProcedureValidationCall,

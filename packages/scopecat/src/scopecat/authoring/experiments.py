@@ -71,10 +71,23 @@ class Experiment(Generic[_P, _ExperimentResultT_co]):
     metadata: Mapping[str, object] = field(repr=False)
     inputs: tuple[ExperimentInput, ...]
     controls: ControlSet
+    analyses: Mapping[str, str] = field(default_factory=dict[str, str])
     code_revision: AuthorRevisionRef | None = field(default=None, repr=False)
     _source: Mapping[str, str] | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        for title, reference in self.analyses.items():
+            module, separator, name = reference.partition(":")
+            if (
+                not title.strip()
+                or not separator
+                or not all(part.isidentifier() for part in module.split("."))
+                or not name.isidentifier()
+            ):
+                raise ValueError(
+                    "experiment analyses need a title and module:function reference"
+                )
+        object.__setattr__(self, "analyses", MappingProxyType(dict(self.analyses)))
         # Capture while this callable is defined: rereading an edited file later
         # cannot identify the code already loaded in a notebook.
         try:

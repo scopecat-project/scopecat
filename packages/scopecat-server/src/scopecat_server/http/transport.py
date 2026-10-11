@@ -251,6 +251,10 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.planning.catalog import InstrumentContractCatalog
+from scopecat.records.analysis_actions import (
+    RunAnalysisActions,
+    RunAnalysisActionsRequest,
+)
 from scopecat.records.analysis_follow import (
     AnalysisFollowPage,
     AnalysisFollowRequest,
@@ -396,6 +400,7 @@ from scopecat_server.decision_drafts import (
     DecisionDraftTarget,
     DecisionDraftView,
 )
+from scopecat_server.http.analysis_actions import analysis_actions_router
 from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
@@ -418,6 +423,7 @@ from scopecat_server.parameter_drafts import (
     ParameterDraftView,
 )
 from scopecat_server.retained_request import (
+    AnalysisActionsCall,
     AnalysisCall,
     ComparisonCall,
     ProcedureValidationCall,
@@ -722,7 +728,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(404, "Author preparation not found") from error
 
     def retained_call(
-        command: AnalysisCall | ComparisonCall | ProcedureValidationCall,
+        command: AnalysisCall
+        | AnalysisActionsCall
+        | ComparisonCall
+        | ProcedureValidationCall,
         response: Response | None = None,
         *,
         started: float,
@@ -816,6 +825,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             return application.analysis_follows.get(identity)
         except KeyError as error:
             raise HTTPException(404, "Analysis follow not found") from error
+
+    def describe_actions(command: RunAnalysisActionsRequest) -> RunAnalysisActions:
+        return RunAnalysisActions.model_validate_json(
+            retained_call(
+                AnalysisActionsCall(request=command), started=time.perf_counter()
+            )
+        )
+
+    app.include_router(
+        analysis_actions_router(
+            lambda run_id: application.runs.get_run_request(run_id), describe_actions
+        )
+    )
 
     @app.post(f"{_API_PREFIX}/author-revisions/analyze")
     def analyze_author_revision(

@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from scopecat.automation.wire import ProcedureSubmitCommand
+from scopecat.records.analysis_actions import RunAnalysisActionsRequest
 from scopecat.records.author_revision import AuthorAnalysisRequest, AuthorRevisionRef
 from scopecat.records.comparison import ComparisonRequest
 
@@ -14,6 +15,16 @@ class AnalysisCall(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     kind: Literal["analysis"] = "analysis"
     request: AuthorAnalysisRequest
+
+    @property
+    def code_revision(self) -> AuthorRevisionRef:
+        return self.request.code_revision
+
+
+class AnalysisActionsCall(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: Literal["analysis_actions"] = "analysis_actions"
+    request: RunAnalysisActionsRequest
 
     @property
     def code_revision(self) -> AuthorRevisionRef:
@@ -43,5 +54,6 @@ class ProcedureValidationCall(BaseModel):
 
 
 type RetainedRequest = Annotated[
-    AnalysisCall | ComparisonCall | ProcedureValidationCall, Field(discriminator="kind")
+    AnalysisCall | AnalysisActionsCall | ComparisonCall | ProcedureValidationCall,
+    Field(discriminator="kind"),
 ]
