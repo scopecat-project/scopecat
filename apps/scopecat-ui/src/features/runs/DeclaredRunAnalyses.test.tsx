@@ -75,6 +75,9 @@ it("requires explicit input and execution, keeps units/source, and opens the ret
       },
     },
   ]);
+  fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "25" } });
+  expect(screen.queryByRole("link", { name: "View saved result" })).toBeNull();
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
 it("does not offer a guessed action when the retained declaration has none", () => {
   show({ ...catalog, actions: [] });

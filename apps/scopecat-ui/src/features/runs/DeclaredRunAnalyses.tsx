@@ -139,8 +139,10 @@ function AnalysisActionForm({
       ]);
     },
   });
-  const edit = (name: string, field: keyof Value, value: string) =>
+  const edit = (name: string, field: keyof Value, value: string) => {
+    execute.reset();
     setValues((old) => ({ ...old, [name]: { ...old[name]!, [field]: value } }));
+  };
   return (
     <form
       className="rounded border border-line bg-panel-soft p-3 text-sm"
