@@ -141,6 +141,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/author-revisions/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze Author Revision */
+        post: operations["analyze_author_revision_api_v1_author_revisions_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/author-workspaces": {
         parameters: {
             query?: never;
@@ -3446,6 +3463,30 @@ export interface components {
              * @enum {string}
              */
             state: "queued" | "closed";
+        };
+        /** AuthorAnalysisGroupReceipt */
+        AuthorAnalysisGroupReceipt: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Coordinates */
+            coordinates: {
+                [key: string]: components["schemas"]["pydantic__types__JsonValue"];
+            };
+            /** Error */
+            error?: string | null;
+            /** Point Indices */
+            point_indices: number[];
+        };
+        /** AuthorAnalysisReceipt */
+        AuthorAnalysisReceipt: {
+            /** Analysis Id */
+            analysis_id: string;
+            code_revision: components["schemas"]["AuthorRevisionRef"];
+            /**
+             * Groups
+             * @default []
+             */
+            groups: components["schemas"]["AuthorAnalysisGroupReceipt"][];
         };
         /** AuthorAnalysisRequest */
         AuthorAnalysisRequest: {
@@ -12862,6 +12903,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthorRevisionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_author_revision_api_v1_author_revisions_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorAnalysisReceipt"];
                 };
             };
             /** @description Validation Error */

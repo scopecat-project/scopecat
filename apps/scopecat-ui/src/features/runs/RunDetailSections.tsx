@@ -31,6 +31,7 @@ import type {
 } from "../../types";
 import { AnalysisPublicationView } from "../analyses/AnalysisPublicationView";
 import { MeasurementDataPreview } from "./MeasurementDataPreview";
+import { RepeatRunAnalysis } from "./RepeatRunAnalysis";
 import {
   canPreviewRunContent,
   getRunAnalysis,
@@ -309,6 +310,7 @@ function LinkedRunAnalysis({ runId, analysisId }: { runId: string; analysisId: s
   return (
     <section className="mb-3 border rounded p-3">
       <h4>{detail.data.title}</h4>
+      <RepeatRunAnalysis key={`${runId}:${detail.data.id}`} runId={runId} analysis={detail.data} />
       <AnalysisPublicationView
         analysis={detail.data}
         copyTarget={{ kind: "run", runId }}
@@ -353,11 +355,18 @@ function RunAnalysisItem({ analysis, runId }: { analysis: RunAnalysisSummary; ru
         ) : detail.isError ? (
           <InlineEmpty title="Analysis unavailable" detail={errorMessage(detail.error)} warning />
         ) : (
-          <AnalysisPublicationView
-            analysis={detail.data}
-            copyTarget={{ kind: "run", runId }}
-            getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
-          />
+          <>
+            <RepeatRunAnalysis
+              key={`${runId}:${detail.data.id}`}
+              runId={runId}
+              analysis={detail.data}
+            />
+            <AnalysisPublicationView
+              analysis={detail.data}
+              copyTarget={{ kind: "run", runId }}
+              getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
+            />
+          </>
         )}
       </div>
     </details>

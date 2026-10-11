@@ -122,6 +122,17 @@ arguments (including defaults), output identities and publication hash. Repeatin
 identical content may return the same receipt; changed source or arguments cannot
 silently reuse that content. A candidate remains an estimate, not verified calibration.
 
+In **Runs**, open a saved ordinary analysis and choose **Repeat with saved settings**
+to analyze its completed run again using the retained function, arguments and author
+code revision. The result link opens the returned publication; existing analyses and
+measurements remain unchanged. This does not submit another experiment or adopt
+parameters. The original author environment must still be available; failure never
+silently substitutes current source or retries the operation.
+
+This action is available for new whole-run ordinary publications that retain their
+invocation. Older publications remain readable without a guessed executable entry.
+Grouped results, live slices and context analyses do not expose this whole-run action.
+
 Reopen without executing analysis again:
 
 ```python

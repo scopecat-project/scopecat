@@ -103,6 +103,7 @@ _OPERATIONS = {
     ("/api/v1/research-projects/{project_id}/members/{kind}/{identity}", "put"),
     ("/api/v1/research-projects/{project_id}/members/{kind}/{identity}", "delete"),
     ("/api/v1/author-revisions", "get"),
+    ("/api/v1/author-revisions/analyze", "post"),
     ("/api/v1/author-preparations", "post"),
     ("/api/v1/author-preparations", "get"),
     ("/api/v1/author-preparations/{operation_id}", "get"),
