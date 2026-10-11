@@ -108,6 +108,7 @@ def inspect_daemon(
         record.project_root.resolve() != project.root
         or record.data_root.resolve() != project.runtime_binding.data_root
         or record.deployment_root.resolve() != project.runtime_binding.deployment_root
+        or record.record_path != daemon_record_path(project.root)
     ):
         return DaemonStatus(
             state="degraded",
@@ -202,6 +203,7 @@ def serve_project(
             project_root=project.root,
             data_root=runtime.binding.data_root,
             deployment_root=runtime.binding.deployment_root,
+            state_root=runtime.binding.state_root,
             pid=os.getpid(),
             process_create_time=psutil.Process().create_time(),
             base_url=_base_url(host, actual_port),
@@ -469,6 +471,7 @@ def _require_selected_binding(
         record.project_root.resolve() != project.root
         or record.data_root.resolve() != binding.data_root
         or record.deployment_root.resolve() != binding.deployment_root
+        or record.record_path != daemon_record_path(project.root)
     ):
         raise DaemonLifecycleError("service belongs to another workspace binding")
 
@@ -476,10 +479,10 @@ def _require_selected_binding(
 def write_daemon_endpoint_record(record: DaemonEndpointRecord) -> Path:
     """Atomically publish one private endpoint record."""
 
-    state_dir = daemon_record_path(record.project_root).parent
+    state_dir = record.record_path.parent
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
-    destination = daemon_record_path(record.project_root)
+    destination = record.record_path
     descriptor, temporary_name = tempfile.mkstemp(
         dir=state_dir,
         prefix=".daemon-",
@@ -606,7 +609,7 @@ def _remove_record_if_stale(project: Project | ApplicationInstance) -> None:
 def _remove_owned_record(owner: DaemonEndpointRecord) -> None:
     try:
         current = DaemonEndpointRecord.model_validate_json(
-            daemon_record_path(owner.project_root).read_text(encoding="utf-8")
+            owner.record_path.read_text(encoding="utf-8")
         )
     except OSError, ValidationError:
         return
@@ -620,7 +623,7 @@ def _remove_owned_record(owner: DaemonEndpointRecord) -> None:
         )
         and current.project_root.resolve() == owner.project_root.resolve()
     ):
-        daemon_record_path(owner.project_root).unlink(missing_ok=True)
+        owner.record_path.unlink(missing_ok=True)
 
 
 def _startup_failure_message(
