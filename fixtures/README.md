@@ -6,6 +6,6 @@ Repository fixtures are stable sample inputs used only by tests.
 
 - `core/simple_scan`: domain-neutral configuration test inputs.
 
-Runnable example configuration belongs beside the example that owns it. The
-reference lab keeps its version-controlled inputs under
+Integration configuration belongs beside the fixture that owns it. The retained
+reference lab keeps its version-controlled device inputs under
 `testing/reference_lab/config`.
