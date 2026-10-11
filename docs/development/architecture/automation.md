@@ -355,7 +355,7 @@ failed-analysis path. The adapter declares installed source and destination
 procedures, the successful run step, the failed analysis step, and a pure
 `build_intent(source_intent, retained_run)` function. That callback constructs
 only typed intent: it must not acquire, publish configuration, or perform effects.
-The [reference thermometer example](../../../examples/reference_lab/src/reference_lab/workflows/analysis_recovery.py)
+The [reference thermometer example](../../../testing/reference_lab/src/reference_lab/workflows/analysis_recovery.py)
 keeps its deliberately failing source definition installed and uses a separate
 analysis-only destination. It samples once and then analyzes the retained sample.
 

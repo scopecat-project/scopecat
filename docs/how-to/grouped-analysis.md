@@ -154,7 +154,7 @@ finish. Input cleanup is blocked until active analysis stops. These results do n
 automatically gate later acquisition; feedback requires an explicit execution
 dependency. Stateful streaming reducers are a separate capability.
 
-The reference lab's [ordinary trace examples](../../examples/reference_lab/src/reference_lab_authors/authored/group_traces.py)
+The reference lab's [ordinary trace examples](../../testing/reference_lab/src/reference_lab_authors/authored/group_traces.py)
 provide `power_trace` / `locate_resonance` and `synthetic_t1` / `fit_decay`.
 Use `by=("power",), fitting="trace/frequency"` for the first, and
 `by=(), fitting="delay", repeats="separate"` for the second. The virtual instrument

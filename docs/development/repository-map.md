@@ -13,7 +13,7 @@ selected Python/WebView host. This map describes their existing implementation.
 | `packages/scopecat-instruments` | Typed instrument capabilities, drivers, transports and virtual devices. Vendor SDKs belong to their explicitly prepared environments. |
 | `packages/scopecat-quantum` | Hardware-independent quantum building blocks and target contracts. |
 | `apps/scopecat-ui` | React/Vite workbench loaded by the native host; owns its Node graph and component/browser checks. |
-| `examples/reference_lab` | Retained scientific/device integration and acceptance fixtures; see the [fixture map](reference-fixtures.md). |
+| `testing/reference_lab` | Retained scientific/device integration and acceptance fixtures; see the [fixture map](reference-fixtures.md). |
 | `testing/scopecat-testkit` | Shared test support with explicit package boundaries. |
 | `fixtures` | Test-only serialized inputs. |
 | `scripts`, `.github/workflows` | Repository generation, quality, acceptance and release orchestration; not installed runtime entry points. |

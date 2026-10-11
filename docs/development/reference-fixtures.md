@@ -226,7 +226,7 @@ scientific candidate verification; the legacy timing launcher is retired.
 ## Shared generated acceptance
 
 `reference_lab/acceptance.py` produces the shared
-`examples/reference_lab/fixtures/acceptance.json` from production client responses.
+`testing/reference_lab/fixtures/acceptance.json` from production client responses.
 Python checks rerun the HTTP journey; UI tests consume the same records.
 Regenerate with `uv run python scripts/generate_reference_lab_acceptance.py`,
 or add `--check` to compare against the committed fixture.

@@ -64,9 +64,9 @@
       "type": "pickString",
       "description": "Scopecat project to start",
       "options": [
-        "examples/reference_lab"
+        "testing/reference_lab"
       ],
-      "default": "examples/reference_lab"
+      "default": "testing/reference_lab"
     }
   ]
 }

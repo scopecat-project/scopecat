@@ -26,7 +26,7 @@ test("registered devices share ownership across pages without setup selection", 
   let completed = false;
   try {
     for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+      await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
@@ -100,7 +100,7 @@ test("manual changes invalidate a retained preview before a fresh acquisition", 
   let completed = false;
   try {
     for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+      await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);

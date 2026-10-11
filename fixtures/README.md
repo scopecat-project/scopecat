@@ -8,4 +8,4 @@ Repository fixtures are stable sample inputs used only by tests.
 
 Runnable example configuration belongs beside the example that owns it. The
 reference lab keeps its version-controlled inputs under
-`examples/reference_lab/config`.
+`testing/reference_lab/config`.

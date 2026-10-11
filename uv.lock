@@ -2418,7 +2418,7 @@ wheels = [
 [[package]]
 name = "reference-lab"
 version = "0.1.0"
-source = { editable = "examples/reference_lab" }
+source = { editable = "testing/reference_lab" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },
@@ -2979,7 +2979,7 @@ platform-smoke = [
 
 [package.metadata]
 requires-dist = [
-    { name = "reference-lab", editable = "examples/reference_lab" },
+    { name = "reference-lab", editable = "testing/reference_lab" },
     { name = "scopecat", editable = "packages/scopecat" },
     { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
     { name = "scopecat-lab-tools", editable = "packages/lab-tools" },

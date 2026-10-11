@@ -26,7 +26,6 @@ establish an installed upgrade or human/device acceptance.
 
 | Scope | Owner |
 | --- | --- |
-| Remaining reference/device/compiler retirement | [#773](https://github.com/scopecat-project/scopecat/issues/773), audit umbrella [#615](https://github.com/scopecat-project/scopecat/issues/615) |
 | Broader Notebook/application learning journey | [#565](https://github.com/scopecat-project/scopecat/issues/565); supplied Help topics share ordinary-author preparation; remaining fixture consumers, teaching design and native editor/human acceptance separate |
 | First-use profiling | [#523](https://github.com/scopecat-project/scopecat/issues/523); closed iteration-cost issue #520 retains separate evidence gaps below |
 | Historical Windows startup/endpoint failures | [#465](https://github.com/scopecat-project/scopecat/issues/465), [#553](https://github.com/scopecat-project/scopecat/issues/553); do not infer a fix from later success |

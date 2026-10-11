@@ -30,7 +30,7 @@ Run one member's suite with its declared dependency group when iterating:
 ```sh
 uv run --locked --package scopecat --group test pytest packages/scopecat/tests
 uv run --locked --package scopecat-server --group test pytest packages/scopecat-server/tests
-uv run --locked --package reference-lab --group test pytest examples/reference_lab/tests
+uv run --locked --package reference-lab --group test pytest testing/reference_lab/tests
 ```
 
 ## Find the relevant documentation

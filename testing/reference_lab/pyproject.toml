@@ -1,7 +1,7 @@
 [project]
 name = "reference-lab"
 version = "0.1.0"
-description = "One hardware-free reference laboratory for the Scopecat gallery."
+description = "Hardware-free device, compiler, and scientific integration fixtures."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
