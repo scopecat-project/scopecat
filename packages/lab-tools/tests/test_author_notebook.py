@@ -103,6 +103,7 @@ def test_pending_runtime_registration_prevents_notebook_launch(tmp_path, monkeyp
     home = tmp_path / "application"
     home.mkdir()
     store = ApplicationRuntime(home)
+    store.pending.parent.mkdir(parents=True)
     store.pending.write_text("{}")
     monkeypatch.setattr(author_notebook.subprocess, "run", pytest.fail)
     with pytest.raises(ValueError, match="登记尚未完成"):

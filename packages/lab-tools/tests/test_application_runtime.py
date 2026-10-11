@@ -1,5 +1,6 @@
 """Application ownership is independent of source folders and live interpreters."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -33,19 +34,15 @@ def test_idle_exit_uses_live_service_and_releases_ownership(application):
     assert application.status().state == "stopped"
 
 
-def test_installation_qualification_does_not_load_driver_environment(application):
+def test_application_starts_without_source_manifest(application):
+    assert not (application.root / "scopecat.toml").exists()
     before = application.installation()
-    composition = (
-        '[lab]\ninstrument_backend = "unavailable_vendor_sdk:create_backend"\n'
-        "[authors]\ndependencies = []\n"
-    )
-    candidate = application.qualify(
-        before.python, before.static_dir, composition=composition
-    )
-    assert candidate.composition == composition
-    assert candidate.environment == before.environment
-    assert application.installation() == before
-    assert application.status().state == "stopped"
+    assert application.qualify(before.python, before.static_dir) == before
+    record = application.start()
+    assert record.data_root == application.home / "data"
+    assert record.deployment_root == application.home / "state"
+    assert (application.home / "state/daemon.json").is_file()
+    assert not (application.home / "data/daemon.json").exists()
 
 
 def test_unavailable_author_folder_does_not_block_application_update(
@@ -187,27 +184,41 @@ def test_failed_candidate_does_not_replace_selected_runtime(application):
         application.select(before)
     assert application.installation() == before
     application.stop()
-    changed = before.model_copy(update={"adapter_identity": "changed"})
+    changed = before.model_copy(update={"environment": {"changed": "yes"}})
     with pytest.raises(ValueError, match="应用文件在检查后改变"):
         application.select(changed)
     assert application.installation() == before
     assert not application.pending.exists()
 
 
-def test_missing_candidate_capability_preserves_running_application(application):
-    before = application.installation()
-    record = application.start()
-    declaration = (application.root / "scopecat.toml").read_bytes()
-    with pytest.raises(ValueError, match="missing-candidate"):
-        application.qualify(
-            before.python,
-            before.static_dir,
-            composition='[lab.adapter]\ndistribution="missing-candidate"\n'
-            'manifest="missing/adapter.toml"\n',
-        )
-    assert application.status().record == record
-    assert application.installation() == before
-    assert (application.root / "scopecat.toml").read_bytes() == declaration
+def test_legacy_home_keeps_exact_locations_without_loading_source(tmp_path):
+    root = tmp_path / "home/runtime"
+    root.mkdir(parents=True)
+    (root / "scopecat.toml").write_text("[lab]\n[authors]\ndependencies = []\n")
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("legacy")
+    runtime = ApplicationRuntime(root.parent)
+    selected = runtime.configure(static_dir=gui)
+    receipt = selected.model_dump(mode="json")
+    receipt.update(
+        composition="[lab]\n[authors]\ndependencies = []\n", adapter_identity=None
+    )
+    runtime.selection.write_text(json.dumps(receipt))
+    (root / "scopecat.application.json").unlink()
+    assert runtime.installation() == selected
+    runtime.select(runtime.qualify(selected.python, gui))
+    assert runtime.instance.layout == "legacy"
+    try:
+        record = runtime.start()
+        assert record.project_root == root
+        assert record.data_root == root / ".scopecat"
+        assert not (root.parent / "data").exists()
+        runtime.stop()
+        (root / "scopecat.toml").unlink()
+        assert runtime.start().data_root == record.data_root
+    finally:
+        runtime.stop()
 
 
 def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch):
@@ -215,7 +226,6 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
     candidate = application.qualify(
         before.python,
         before.static_dir,
-        composition=before.composition + "# candidate\n",
     )
     write = application_runtime.write_state
 
@@ -236,7 +246,6 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
     replacement = application.qualify(
         before.python,
         before.static_dir,
-        composition=before.composition + "# replacement\n",
     )
     application.select(replacement)
     assert not application.pending.exists()
@@ -282,3 +291,20 @@ def test_blank_real_backend_restarts_without_registering_authors(tmp_path):
         assert runtime.status().state == "stopped"
     finally:
         runtime.stop()
+
+
+@pytest.mark.parametrize("layout", ["orphan", "mixed"])
+def test_ambiguous_existing_home_is_not_replaced(tmp_path, layout):
+    home = tmp_path / "home"
+    home.mkdir()
+    if layout == "orphan":
+        original = home / "installation.json"
+    else:
+        (home / "runtime").mkdir()
+        (home / "data").mkdir()
+        original = home / "data/control.sqlite3"
+    original.write_bytes(b"preserve original")
+    with pytest.raises(ValueError, match=r"原.*保留"):
+        ApplicationRuntime(home)
+    assert original.read_bytes() == b"preserve original"
+    assert not (home / "scopecat.application.json").exists()

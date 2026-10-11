@@ -55,7 +55,7 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path):
     )
     bundle = build(payload, tmp_path / "bundle")
     runtime = ApplicationRuntime(tmp_path / "application-data")
-    runtime.home.mkdir()
+    runtime.selection.parent.mkdir(parents=True)
     runtime.selection.write_text(
         Installation(
             python=Path(sys.executable),
@@ -66,7 +66,6 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path):
                 "scopecat": version("scopecat"),
                 "server": version("scopecat-server"),
             },
-            composition="platform-smoke",
         ).model_dump_json(),
         encoding="utf-8",
     )

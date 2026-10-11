@@ -31,6 +31,7 @@ class DaemonEndpointRecord(BaseModel):
     project_root: Path
     data_root: Path
     deployment_root: Path
+    state_root: Path | None = None
     pid: int = Field(gt=0)
     process_create_time: float = Field(gt=0)
     base_url: str = Field(min_length=1)
@@ -42,11 +43,16 @@ class DaemonEndpointRecord(BaseModel):
     # Set by the owning server after shutdown authorization, before HTTP drain.
     shutdown_accepted: bool = False
 
+    @property
+    def record_path(self) -> Path:
+        """The owning process retains its endpoint location across binding edits."""
+        return (self.state_root or self.data_root) / DAEMON_RECORD_NAME
+
 
 def daemon_record_path(project_root: str | Path) -> Path:
     """Return the single dynamic endpoint record for ``project_root``."""
 
-    return load_runtime_binding(project_root).data_root / DAEMON_RECORD_NAME
+    return load_runtime_binding(project_root).coordination_root / DAEMON_RECORD_NAME
 
 
 def read_daemon_endpoint_record(
@@ -89,6 +95,7 @@ def resolve_daemon_endpoint(
     if (
         record.data_root.resolve() != binding.data_root
         or record.deployment_root.resolve() != binding.deployment_root
+        or record.record_path != daemon_record_path(root)
     ):
         raise DaemonEndpointError(
             f"daemon record belongs to another project binding: {record.project_root}"

@@ -36,7 +36,7 @@ def diagnostic_path(project: Path, generation: str) -> Path:
     if re.fullmatch(r"[0-9a-f]{32}", generation) is None:
         raise ValueError("invalid worker generation")
     return (
-        load_runtime_binding(project).data_root
+        load_runtime_binding(project).coordination_root
         / "worker-diagnostics"
         / f"{generation}.jsonl"
     )

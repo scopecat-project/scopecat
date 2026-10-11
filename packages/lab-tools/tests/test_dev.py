@@ -106,10 +106,17 @@ def test_existing_owner_reused_without_preparing_or_stopping(tmp_path, monkeypat
     assert (home / "desktop/activate").read_text() == "source-development"
 
 
-def test_installed_or_other_checkout_home_never_stopped(tmp_path, monkeypatch):
+@pytest.mark.parametrize("layout", ["legacy", "application"])
+def test_installed_or_other_checkout_home_never_stopped(tmp_path, monkeypatch, layout):
     home = tmp_path / "home"
     home.mkdir()
-    (home / "installation.json").write_text("{}")
+    if layout == "legacy":
+        (home / "runtime").mkdir()
+        (home / "installation.json").write_text("{}")
+    else:
+        (home / "scopecat.application.json").write_text(
+            '{"format": 1, "layout": "application"}'
+        )
     stop = Mock()
     monkeypatch.setattr(dev, "stop_when_idle", stop)
     with pytest.raises(ValueError, match="not an owned"):

@@ -785,3 +785,28 @@ def test_old_endpoint_record_does_not_imply_shutdown_acceptance(tmp_path: Path) 
     record = _record(tmp_path, pid=123, process_create_time=45)
     old = record.model_dump(exclude={"shutdown_accepted"})
     assert not DaemonEndpointRecord.model_validate(old).shutdown_accepted
+
+
+def test_application_endpoint_cleanup_uses_recorded_location(tmp_path: Path) -> None:
+    from scopecat.application_instance import ApplicationInstance
+    from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
+
+    from scopecat_server.lifecycle import _remove_owned_record
+
+    declaration = tmp_path / APPLICATION_INSTANCE_NAME
+    declaration.write_text(ApplicationInstance(tmp_path).declaration())
+    record = _record(tmp_path, pid=123, process_create_time=45).model_copy(
+        update={
+            "data_root": tmp_path / "data",
+            "deployment_root": tmp_path / "state",
+            "state_root": tmp_path / "state",
+        }
+    )
+    path = write_daemon_endpoint_record(record)
+    assert path == tmp_path / "state/daemon.json"
+    assert read_daemon_endpoint_record(tmp_path) == record
+    declaration.unlink()
+    # Losing/changing local discovery must not redirect the owner's cleanup.
+    _remove_owned_record(record)
+    assert not path.exists()
+    assert not (tmp_path / ".scopecat").exists()

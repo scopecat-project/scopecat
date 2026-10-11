@@ -23,7 +23,6 @@ import httpx2
 import psutil
 from filelock import FileLock, Timeout
 
-from scopecat.project import open_project
 from scopecat_server.validation_process import terminate_validation_process_tree
 
 from .application_runtime import ApplicationRuntime, write_state
@@ -226,7 +225,16 @@ def claim_home(source: Path, home: Path) -> None:
                 "This development home belongs to another checkout; choose "
                 "a different --home."
             )
-    elif any(home.joinpath(name).exists() for name in ("runtime", "installation.json")):
+    elif any(
+        home.joinpath(name).exists()
+        for name in (
+            "runtime",
+            "installation.json",
+            "scopecat.application.json",
+            "data",
+            "state",
+        )
+    ):
         raise ValueError(
             "This is not an owned development home; choose a new --home. "
             "Existing data retained."
@@ -311,7 +319,7 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
         }
         write_state(marker, json.dumps(report, indent=2))
         backend_log = (
-            open_project(session.runtime.root).runtime_binding.data_root / "daemon.log"
+            session.runtime.instance.runtime_binding.coordination_root / "daemon.log"
         )
         print(
             f"UI: {session.ui_url}\nBackend: {session.base_url}\n"

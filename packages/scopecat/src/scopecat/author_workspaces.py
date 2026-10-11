@@ -23,7 +23,7 @@ class LocalAuthorWorkspaces(BaseModel):
 
 
 def author_bindings_path(root: Path) -> Path:
-    return load_runtime_binding(root).data_root / "author-workspaces.json"
+    return load_runtime_binding(root).coordination_root / "author-workspaces.json"
 
 
 def local_author_workspaces(root: Path) -> tuple[LocalAuthorWorkspace, ...]:

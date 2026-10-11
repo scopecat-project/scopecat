@@ -106,9 +106,11 @@ def test_cli_roundtrip_retains_source_objects_and_versions_without_runtime_recor
     assert {
         name: data
         for name, data in _bytes(project.root).items()
-        if name != ".scopecat/daemon.lock"
+        if name not in {".scopecat/daemon.lock", ".scopecat/deployment.lock"}
     } == {
-        name: data for name, data in before.items() if name != ".scopecat/daemon.lock"
+        name: data
+        for name, data in before.items()
+        if name not in {".scopecat/daemon.lock", ".scopecat/deployment.lock"}
     }
 
 
@@ -133,7 +135,7 @@ def test_missing_or_corrupt_referenced_object_rejects_capture_without_touching_s
     assert {
         name: data
         for name, data in _bytes(project.root).items()
-        if name != ".scopecat/daemon.lock"
+        if name not in {".scopecat/daemon.lock", ".scopecat/deployment.lock"}
     } == before
 
 
@@ -330,3 +332,68 @@ def test_unsupported_snapshot_is_not_modified_or_restored(
     assert str(version) in result.output and "pinned Scopecat reader" in result.output
     assert _bytes(snapshot) == before
     assert not (tmp_path / "restored").exists()
+
+
+def test_application_snapshot_retains_science_receipts_and_bindings_not_processes(
+    tmp_path: Path,
+) -> None:
+    import shutil
+
+    from scopecat.application_instance import ApplicationInstance
+    from scopecat.author_workspaces import LocalAuthorWorkspace, LocalAuthorWorkspaces
+    from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
+
+    source = _project(tmp_path / "scientific-fixture")
+    home = tmp_path / "application"
+    home.mkdir()
+    instance = ApplicationInstance(home)
+    (home / APPLICATION_INSTANCE_NAME).write_text(instance.declaration())
+    shutil.copytree(source.runtime_binding.data_root, home / "data")
+    (home / "state").mkdir()
+    registry = LocalAuthorWorkspaces(
+        service_root=home,
+        items=(
+            LocalAuthorWorkspace(
+                id="author",
+                name="Unavailable author",
+                root=tmp_path / "author",
+                python=tmp_path / "environment/python",
+                retained_pythons=(tmp_path / "retained/python",),
+            ),
+        ),
+    )
+    (home / "state/author-workspaces.json").write_text(registry.model_dump_json())
+    (home / "state/deployment-id").write_text("00000000-0000-0000-0000-000000000001")
+    (home / "state/daemon.json").write_text("must not restore a live endpoint")
+    (home / "state/console-procedures.json").write_text("must not replay")
+    (home / "cache").mkdir()
+    (home / "cache/generated").write_text("regenerable")
+    (home / "data/author-jobs").mkdir()
+    (home / "data/author-jobs/original.json").write_bytes(b"original request bytes")
+    snapshot, restored = tmp_path / "snapshot", tmp_path / "restored"
+    manifest = create_snapshot(instance, snapshot)
+    assert manifest.instance_kind == "application"
+    assert not any(name.startswith("cache/") for name in manifest.files)
+    restore_snapshot(snapshot, restored)
+    verify_snapshot(snapshot)
+    assert (
+        ApplicationInstance.open(restored).runtime_binding.data_root
+        == restored / "data"
+    )
+    assert (
+        restored / "data/author-jobs/original.json"
+    ).read_bytes() == b"original request bytes"
+    recovered = LocalAuthorWorkspaces.model_validate_json(
+        (restored / "state/author-workspaces.json").read_bytes()
+    )
+    assert recovered.service_root == restored
+    assert recovered.items == registry.items
+    assert (
+        restored / "state/deployment-id"
+    ).read_text() == "00000000-0000-0000-0000-000000000001"
+    assert not (restored / "state/daemon.json").exists()
+    assert not (restored / "state/console-procedures.json").exists()
+    with sqlite3.connect(restored / "data/control.sqlite3") as database:
+        assert database.execute("SELECT run_id FROM runs").fetchall() == [("r1",)]
+    with FileLock(home / "state/deployment.lock"), pytest.raises(SnapshotError):
+        create_snapshot(instance, tmp_path / "locked")

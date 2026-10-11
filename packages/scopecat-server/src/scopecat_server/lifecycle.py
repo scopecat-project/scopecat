@@ -22,6 +22,7 @@ from typing import Literal, cast, override
 import httpx2
 import psutil
 from pydantic import ValidationError
+from scopecat.application_instance import ApplicationInstance
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
@@ -81,7 +82,9 @@ def initialize_project(target: str | Path) -> Project:
     return open_project(root)
 
 
-def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonStatus:
+def inspect_daemon(
+    project: Project | ApplicationInstance, *, health_timeout: float = 0.5
+) -> DaemonStatus:
     """Inspect endpoint identity first, then the daemon's HTTP health."""
 
     try:
@@ -105,6 +108,7 @@ def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonSt
         record.project_root.resolve() != project.root
         or record.data_root.resolve() != project.runtime_binding.data_root
         or record.deployment_root.resolve() != project.runtime_binding.deployment_root
+        or record.record_path != daemon_record_path(project.root)
     ):
         return DaemonStatus(
             state="degraded",
@@ -137,9 +141,9 @@ def inspect_daemon(project: Project, *, health_timeout: float = 0.5) -> DaemonSt
     return DaemonStatus(state="running", record=record)
 
 
-def _register_project_source(project: Project) -> None:
+def _register_project_source(project: Project | ApplicationInstance) -> None:
     """Explicit standalone source launch uses the ordinary registration contract."""
-    if not project.source_roots:
+    if isinstance(project, ApplicationInstance) or not project.source_roots:
         return
     from scopecat.author_workspaces import author_bindings_path
 
@@ -150,7 +154,7 @@ def _register_project_source(project: Project) -> None:
 
 
 def serve_project(
-    project: Project,
+    project: Project | ApplicationInstance,
     *,
     host: str = "127.0.0.1",
     port: int = 0,
@@ -182,9 +186,15 @@ def serve_project(
         _startup_diagnostics.stage("constructing runtime")
         runtime = LocalDaemonRuntime(
             project.root,
-            bootstrap_spec=project.bootstrap_spec,
-            adapter_packages=project.adapter_packages,
-            instrument_backend_spec=project.instrument_backend_spec,
+            bootstrap_spec=project.bootstrap_spec
+            if isinstance(project, Project)
+            else None,
+            adapter_packages=project.adapter_packages
+            if isinstance(project, Project)
+            else (),
+            instrument_backend_spec=project.instrument_backend_spec
+            if isinstance(project, Project)
+            else None,
             lease_ttl=lease_ttl,
         )
         _startup_diagnostics.stage("runtime constructed; publishing endpoint")
@@ -193,6 +203,7 @@ def serve_project(
             project_root=project.root,
             data_root=runtime.binding.data_root,
             deployment_root=runtime.binding.deployment_root,
+            state_root=runtime.binding.state_root,
             pid=os.getpid(),
             process_create_time=psutil.Process().create_time(),
             base_url=_base_url(host, actual_port),
@@ -248,7 +259,7 @@ def serve_project(
 
 
 def start_project(
-    project: Project,
+    project: Project | ApplicationInstance,
     *,
     host: str = "127.0.0.1",
     port: int = 0,
@@ -276,7 +287,7 @@ def start_project(
     if status.state == "stale":
         _remove_record_if_stale(project)
 
-    state_dir = project.runtime_binding.data_root
+    state_dir = project.runtime_binding.coordination_root
     _register_project_source(project)
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
@@ -393,7 +404,10 @@ def _latest_startup_stage(log_path: Path, offset: int) -> str:
 
 
 def stop_project(
-    project: Project, *, timeout: float = 10.0, only_if_idle: bool = False
+    project: Project | ApplicationInstance,
+    *,
+    timeout: float = 10.0,
+    only_if_idle: bool = False,
 ) -> DaemonStatus:
     """Stop only the process whose PID and creation time match the record."""
 
@@ -435,7 +449,7 @@ def stop_project(
     return status
 
 
-def open_project_gui(project: Project) -> str:
+def open_project_gui(project: Project | ApplicationInstance) -> str:
     """Open the recorded daemon GUI in the system browser."""
 
     status = inspect_daemon(project)
@@ -449,12 +463,15 @@ def open_project_gui(project: Project) -> str:
     return status.record.base_url
 
 
-def _require_selected_binding(project: Project, record: DaemonEndpointRecord) -> None:
+def _require_selected_binding(
+    project: Project | ApplicationInstance, record: DaemonEndpointRecord
+) -> None:
     binding = project.runtime_binding
     if (
         record.project_root.resolve() != project.root
         or record.data_root.resolve() != binding.data_root
         or record.deployment_root.resolve() != binding.deployment_root
+        or record.record_path != daemon_record_path(project.root)
     ):
         raise DaemonLifecycleError("service belongs to another workspace binding")
 
@@ -462,10 +479,10 @@ def _require_selected_binding(project: Project, record: DaemonEndpointRecord) ->
 def write_daemon_endpoint_record(record: DaemonEndpointRecord) -> Path:
     """Atomically publish one private endpoint record."""
 
-    state_dir = record.data_root
+    state_dir = record.record_path.parent
     state_dir.mkdir(parents=True, exist_ok=True)
     state_dir.chmod(0o700)
-    destination = record.data_root / "daemon.json"
+    destination = record.record_path
     descriptor, temporary_name = tempfile.mkstemp(
         dir=state_dir,
         prefix=".daemon-",
@@ -573,7 +590,7 @@ def _base_url(host: str, port: int) -> str:
     return f"http://{display_host}:{port}"
 
 
-def _remove_record_if_stale(project: Project) -> None:
+def _remove_record_if_stale(project: Project | ApplicationInstance) -> None:
     try:
         current = read_daemon_endpoint_record(project.root)
     except DaemonEndpointError:
@@ -592,7 +609,7 @@ def _remove_record_if_stale(project: Project) -> None:
 def _remove_owned_record(owner: DaemonEndpointRecord) -> None:
     try:
         current = DaemonEndpointRecord.model_validate_json(
-            (owner.data_root / "daemon.json").read_text(encoding="utf-8")
+            owner.record_path.read_text(encoding="utf-8")
         )
     except OSError, ValidationError:
         return
@@ -606,11 +623,13 @@ def _remove_owned_record(owner: DaemonEndpointRecord) -> None:
         )
         and current.project_root.resolve() == owner.project_root.resolve()
     ):
-        (owner.data_root / "daemon.json").unlink(missing_ok=True)
+        owner.record_path.unlink(missing_ok=True)
 
 
-def _startup_failure_message(project: Project, return_code: int | None) -> str:
-    log_path = project.runtime_binding.data_root / "daemon.log"
+def _startup_failure_message(
+    project: Project | ApplicationInstance, return_code: int | None
+) -> str:
+    log_path = project.runtime_binding.coordination_root / "daemon.log"
     try:
         tail = "\n".join(log_path.read_text(encoding="utf-8").splitlines()[-10:])
     except OSError:

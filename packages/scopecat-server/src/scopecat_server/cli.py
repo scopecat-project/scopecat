@@ -58,19 +58,21 @@ def diagnose(
 
 @snapshot_app.command("create")
 def snapshot_create(
-    project: Annotated[Path, typer.Argument(help="Stopped project directory.")],
+    project: Annotated[
+        Path, typer.Argument(help="Stopped application home or development project.")
+    ],
     destination: Annotated[
         Path, typer.Argument(help="New snapshot directory outside the project.")
     ],
 ) -> None:
     """Capture the database, immutable objects, source, and runtime versions."""
-    from scopecat.project import open_project
+    from scopecat.application_instance import open_instance
 
     from .snapshots import SnapshotError, create_snapshot
     from .storage.sqlite.project_store import ProjectStoreError
 
     try:
-        manifest = create_snapshot(open_project(project), destination)
+        manifest = create_snapshot(open_instance(project), destination)
     except (SnapshotError, ProjectStoreError, ValueError) as error:
         _fail(error)
     console.print(
@@ -100,7 +102,9 @@ def snapshot_verify(
 @snapshot_app.command("restore")
 def snapshot_restore(
     snapshot: Annotated[Path, typer.Argument(help="Snapshot directory.")],
-    destination: Annotated[Path, typer.Argument(help="Fresh project directory.")],
+    destination: Annotated[
+        Path, typer.Argument(help="Fresh application home or project directory.")
+    ],
 ) -> None:
     """Restore verified files; project code and procedures are not started."""
     from .snapshots import SnapshotError, restore_snapshot
@@ -349,7 +353,7 @@ def automation_work(
 def serve(
     project: Annotated[
         Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
+        typer.Argument(help="Application home or development project directory."),
     ] = _CURRENT_DIRECTORY,
     host: Annotated[
         str,
@@ -383,12 +387,13 @@ def serve(
 ) -> None:
     """Run the project daemon in the foreground."""
 
-    from scopecat.project import ProjectManifestError, open_project
+    from scopecat.application_instance import open_instance
+    from scopecat.project import ProjectManifestError
 
     from .lifecycle import DaemonLifecycleError, serve_project
 
     try:
-        selected = open_project(project)
+        selected = open_instance(project)
         selected_static_dir = select_static_dir(
             static_dir=static_dir,
             api_only=api_only,
@@ -407,7 +412,7 @@ def serve(
 def start(
     project: Annotated[
         Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
+        typer.Argument(help="Application home or development project directory."),
     ] = _CURRENT_DIRECTORY,
     host: Annotated[
         str,
@@ -451,12 +456,13 @@ def start(
 ) -> None:
     """Start the project daemon in the background."""
 
-    from scopecat.project import ProjectManifestError, open_project
+    from scopecat.application_instance import open_instance
+    from scopecat.project import ProjectManifestError
 
     from .lifecycle import DaemonLifecycleError, start_project
 
     try:
-        selected = open_project(project)
+        selected = open_instance(project)
         selected_static_dir = select_static_dir(
             static_dir=static_dir,
             api_only=api_only,
@@ -486,17 +492,18 @@ def _lease_ttl(seconds: float | None) -> timedelta | None:
 def stop(
     project: Annotated[
         Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
+        typer.Argument(help="Application home or development project directory."),
     ] = _CURRENT_DIRECTORY,
 ) -> None:
     """Stop the project's recorded daemon process."""
 
-    from scopecat.project import ProjectManifestError, open_project
+    from scopecat.application_instance import open_instance
+    from scopecat.project import ProjectManifestError
 
     from .lifecycle import DaemonLifecycleError, stop_project
 
     try:
-        selected = open_project(project, resolve_adapter=False)
+        selected = open_instance(project, resolve_adapter=False)
         previous = stop_project(selected)
     except (DaemonLifecycleError, ProjectManifestError, OSError) as error:
         _fail(error)
@@ -509,17 +516,18 @@ def stop(
 def status(
     project: Annotated[
         Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
+        typer.Argument(help="Application home or development project directory."),
     ] = _CURRENT_DIRECTORY,
 ) -> None:
     """Show process identity and daemon health."""
 
-    from scopecat.project import ProjectManifestError, open_project
+    from scopecat.application_instance import open_instance
+    from scopecat.project import ProjectManifestError
 
     from .lifecycle import inspect_daemon
 
     try:
-        selected = open_project(project, resolve_adapter=False)
+        selected = open_instance(project, resolve_adapter=False)
         observed = inspect_daemon(selected)
     except (ProjectManifestError, OSError) as error:
         _fail(error)
@@ -544,17 +552,18 @@ def status(
 def open_command(
     project: Annotated[
         Path,
-        typer.Argument(help="Project directory or scopecat.toml."),
+        typer.Argument(help="Application home or development project directory."),
     ] = _CURRENT_DIRECTORY,
 ) -> None:
     """Open the project GUI in the system browser."""
 
-    from scopecat.project import ProjectManifestError, open_project
+    from scopecat.application_instance import open_instance
+    from scopecat.project import ProjectManifestError
 
     from .lifecycle import DaemonLifecycleError, open_project_gui
 
     try:
-        selected = open_project(project)
+        selected = open_instance(project)
         endpoint = open_project_gui(selected)
     except (DaemonLifecycleError, ProjectManifestError, OSError) as error:
         _fail(error)

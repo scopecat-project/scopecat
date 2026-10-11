@@ -27,13 +27,17 @@ from scopecat_server.storage.sqlite.schema import PROJECT_SCHEMA_VERSION
 
 
 @pytest.fixture
-def legacy(tmp_path):
+def legacy(tmp_path, request):
     gui = tmp_path / "gui"
     gui.mkdir()
     (gui / "index.html").write_text("<html>empty application</html>")
+    if getattr(request, "param", "legacy") == "legacy":
+        root = tmp_path / "home/runtime"
+        root.mkdir(parents=True)
+        (root / "scopecat.toml").write_text("[lab]\n[authors]\ndependencies = []\n")
     runtime = ApplicationRuntime(tmp_path / "home")
     runtime.configure(static_dir=gui)
-    data = runtime.root / ".scopecat"
+    data = runtime.instance.runtime_binding.data_root
     data.mkdir(exist_ok=True)
     with sqlite3.connect(data / "control.sqlite3") as db:
         db.execute("PRAGMA journal_mode=WAL")
@@ -80,7 +84,9 @@ def legacy(tmp_path):
 
 
 def assert_empty(runtime):
-    with sqlite3.connect(runtime.root / ".scopecat/control.sqlite3") as db:
+    with sqlite3.connect(
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ) as db:
         assert (
             db.execute("SELECT version FROM project_schema").fetchone()[0]
             == PROJECT_SCHEMA_VERSION
@@ -99,7 +105,7 @@ def assert_empty(runtime):
 def test_host_confirm_reset_and_restart(legacy, backup_first):
     runtime, _, prepare, backup = legacy
     home = runtime.home
-    data = runtime.root / ".scopecat"
+    data = runtime.instance.runtime_binding.data_root
     old_db, old_wal = (
         (data / "control.sqlite3").read_bytes(),
         (data / "control.sqlite3-wal").read_bytes(),
@@ -163,7 +169,7 @@ def test_host_confirm_reset_and_restart(legacy, backup_first):
 )
 def test_refusal_preserves_database(legacy, unsafe):
     runtime, error, prepare, backup = legacy
-    data = runtime.root / ".scopecat"
+    data = runtime.instance.runtime_binding.data_root
     original = (data / "control.sqlite3").read_bytes()
     manifest = runtime.root / "scopecat.toml"
     saved = manifest.read_bytes()
@@ -211,7 +217,7 @@ def test_refusal_preserves_database(legacy, unsafe):
 
 def test_backup_failure_never_falls_back_to_delete(legacy, monkeypatch):
     runtime, error, prepare, backup = legacy
-    db = runtime.root / ".scopecat/control.sqlite3"
+    db = runtime.instance.runtime_binding.data_root / "control.sqlite3"
     before = db.read_bytes()
     monkeypatch.setattr(
         data_reset.shutil, "copyfileobj", Mock(side_effect=OSError("disk full"))
@@ -264,10 +270,14 @@ def test_folder_cancel_does_not_delete_or_remember_skip(legacy):
     api = DesktopAPI(session, lambda: window, lambda: check_format(runtime))
     with pytest.raises(UnsupportedDataSpace):
         api.retry()
-    before = (runtime.root / ".scopecat/control.sqlite3").read_bytes()
+    before = (
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ).read_bytes()
     assert api.reset_data() is False
     window.create_confirmation_dialog.assert_not_called()
-    assert (runtime.root / ".scopecat/control.sqlite3").read_bytes() == before
+    assert (
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ).read_bytes() == before
     assert not (runtime.home / "desktop/reset-backup.json").exists()
 
 
@@ -333,11 +343,17 @@ def test_resume_refuses_unbacked_or_corrupt_content(legacy, monkeypatch, damage)
     if damage == "archive":
         (archive / "store/control.sqlite3").write_bytes(b"damaged")
     else:
-        ImmutableObjectStore(runtime.root / ".scopecat/objects").put(b"not archived")
-    before = (runtime.root / ".scopecat/control.sqlite3").read_bytes()
+        ImmutableObjectStore(
+            runtime.instance.runtime_binding.data_root / "objects"
+        ).put(b"not archived")
+    before = (
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ).read_bytes()
     with pytest.raises(ValueError, match=r"校验失败|部分数据"):
         reset_store(runtime, ResetIncomplete(runtime.home), prepare, None)
-    assert (runtime.root / ".scopecat/control.sqlite3").read_bytes() == before
+    assert (
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ).read_bytes() == before
 
 
 def test_inventory_error_prevents_backup_and_deletion(legacy, monkeypatch):
@@ -350,10 +366,14 @@ def test_inventory_error_prevents_backup_and_deletion(legacy, monkeypatch):
         return walk(path, *args, **kwargs)
 
     monkeypatch.setattr(data_reset.os, "walk", denied)
-    before = (runtime.root / ".scopecat/control.sqlite3").read_bytes()
+    before = (
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ).read_bytes()
     with pytest.raises(PermissionError, match="unreadable"):
         reset_store(runtime, error, prepare, backup)
-    assert (runtime.root / ".scopecat/control.sqlite3").read_bytes() == before
+    assert (
+        runtime.instance.runtime_binding.data_root / "control.sqlite3"
+    ).read_bytes() == before
     assert not list(backup.iterdir())
 
 
@@ -376,7 +396,7 @@ def test_initialization_failure_has_separate_retry_phase(legacy, monkeypatch):
 @pytest.mark.parametrize("backup_first", [True, False])
 def test_sqlite_writer_blocks_backup_and_skip(legacy, backup_first):
     runtime, error, prepare, backup = legacy
-    database = runtime.root / ".scopecat/control.sqlite3"
+    database = runtime.instance.runtime_binding.data_root / "control.sqlite3"
     with sqlite3.connect(database, isolation_level=None) as writer:
         writer.setconfig(sqlite3.SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, True)
         writer.execute("BEGIN IMMEDIATE")
@@ -390,3 +410,13 @@ def test_sqlite_writer_blocks_backup_and_skip(legacy, backup_first):
         finally:
             writer.rollback()
     writer.close()
+
+
+@pytest.mark.parametrize("legacy", ["application"], indirect=True)
+def test_new_layout_reset_keeps_registrations_and_environments(legacy):
+    runtime, failure, prepare, backup = legacy
+    record = reset_store(runtime, failure, prepare, backup)
+    assert record.data_root == runtime.home / "data"
+    assert record.deployment_root == runtime.home / "state"
+    assert_empty(runtime)
+    assert list(backup.iterdir())

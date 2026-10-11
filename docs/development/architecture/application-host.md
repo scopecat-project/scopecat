@@ -14,19 +14,31 @@ concepts. Registered author folders share the application's device/data authorit
 
 ## Packaged runtime
 
-`ApplicationRuntime` owns a fixed `HOME/runtime` composition and an
-`installation.json` runtime registration. Native startup uses the Python and GUI
-inside the currently opened package. It does not install dependencies, retain
-application releases or select another interpreter from the data directory.
-Qualification obtains driver metadata without connecting devices. Unavailable
-author folders do not block an application update. Optional SDK imports belong
-to connection, not catalog discovery.
+`ApplicationRuntime` opens an explicit `ApplicationInstance`, independently of
+an author `scopecat.toml`. Native startup uses the Python and GUI inside the opened
+package. Qualification checks that installation without loading author code,
+probing author environments, or publishing scientific parameters and setups.
+Registered sources supply their own capabilities and optional laboratory adapters.
+Unavailable author folders do not prevent browsing data, stopping or replacing
+the application.
+
+New homes declare their layout in `scopecat.application.json`. Scientific data and
+original submission receipts live in `data/`; `state/` retains deployment identity,
+author registrations and installation selection alongside endpoint/worker
+coordination. Materialized source copies live in `cache/`; retained execution
+environments stay in `environments/`. See [installation layout](../installation-layout.md)
+for the ownership and retention rules.
+
+Recognized previous desktop homes keep `runtime/.scopecat` and their original
+owner root. The application does not relocate their files or need the synthetic
+empty source manifest to start. A custom old composition requires maintainer
+attention rather than silently discarding its behavior. Current-format checks and
+the explicit backup/reset flow use the selected layout's actual store.
 
 Registration requires the application/deployment/data locks and a stopped owner.
-The package is requalified, a pending marker fences startup while the composition
-and runtime record are written, and the marker is removed after completion.
-A verified current package can complete an interrupted registration even if the
-previous package is no longer installed. This does not rewrite scientific data.
+The package is requalified; a pending marker fences startup until the installation
+record commits. A verified current package can complete an interrupted registration
+even if the previous package is unavailable. This does not rewrite scientific data.
 Author interpreters remain independent.
 
 Users quit, replace the native application and reopen it. User-owned `.venv`
@@ -55,9 +67,12 @@ open launches a browser. Tests use temporary homes and serial real-process check
 
 ## Source and capability composition
 
-Author-only manifests inherit the selected application composition. Captured source
-pins even an empty capability declaration, so archived code does not consult today's
-registration. Source refresh and runtime replacement are separate operations.
+Author manifests own their source declarations. Captured source pins even an
+empty capability declaration. Revision workers retain the captured source root
+and receive a separate execution context with the registered workspace identity,
+client binding and exact revision. They do not resolve deployment paths from the
+captured directory or silently substitute today's source. Source refresh and
+runtime replacement are separate operations.
 
 Capabilities can register domain-system builders by target kind using
 `[lab.capabilities.domain_systems]`. No-domain tasks use the ordinary computation

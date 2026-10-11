@@ -370,7 +370,8 @@ class DesktopAPI:
                 )
             if not self._window().create_confirmation_dialog(
                 "删除应用数据并重新初始化？",
-                backup_notice + f"永久删除：{failure.home / 'runtime/.scopecat'} 下的 "
+                backup_notice
+                + f"永久删除：{self._runtime.instance.runtime_binding.data_root} 下的 "
                 "control.sqlite3、SQLite sidecar 和 objects/。\n"
                 "实验、参数、草稿、设备配置及其存储对象将不可恢复地删除。\n"
                 "保留原始源码、环境、安装文件、作者目录登记及其他内容；不自动运行任务或连接设备。\n"

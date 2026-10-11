@@ -115,19 +115,34 @@ An isolated validation uses a separate application package and `data`, `cache`,
 and `experiments` under its explicit root. It must not publish a daily Start Menu or
 Applications entry. The installer is headless in either mode.
 
-`ApplicationRuntime.home` is the **data** home. `installation.json` records the
-registered interpreter and GUI of the current package. There is no separate
-software home or retained application environment inside the data directory.
-There is no retained-release installer or generated `lab.py`. Native launchers
-resolve resources relative to their executable and pass the data home explicitly.
-Scientific records remain
-under `data-home/runtime`; retained background dependency environments remain under
-`data-home/environments`. Neither is cache. User `.venv` files remain in the author
-folder, with independent package copies and a base interpreter under
-`.scopecat-python`. Keep both directories together.
+`ApplicationRuntime.home` is the application data home, outside the installed
+package. There is no separate software home or retained application installation
+inside it. Native launchers resolve package resources relative to their executable
+and pass the home explicitly.
 
-There is no automatic migration from older development homes, nor any probing of
-`Scopecat Development`. Existing files are not deleted or silently rewritten.
+New homes use these ownership boundaries:
+
+| Location under the home | Contents and retention |
+| --- | --- |
+| `scopecat.application.json` | Explicit instance layout; no author manifest or generated `lab.py` |
+| `data/` | Scientific SQLite store, immutable objects, original author-job receipts and practice-owned files; never cache |
+| `state/` | Installation registration, author folders and retained interpreter references, deployment identity, daemon endpoint/logs and worker coordination; **not** a disposable directory |
+| `environments/` | Execution dependencies and their independent Python; retain while saved work can reference them |
+| `cache/` | Source/driver materializations reproducible from retained immutable bundles; regenerate only after stopping work |
+| `authors/` | Default Help-created editable user code, including local client environments; user-owned files |
+| `desktop/`, `learning/` and root lock/journal files | Native window coordination, recovery choices and Help continuation; stable host anchors, retained independently of scientific reset |
+
+User `.venv` directories remain with their author folder and its independent base
+Python under `.scopecat-python`. Keep both together. Developer delivery/build caches
+continue to use their explicit cache locations; worktrees have independent homes.
+
+Recognized existing desktop homes retain `runtime/.scopecat`, their deployment
+identity, registrations and environment references in place. Their scientific store
+is inspected at that location, including unsupported-format recovery with verified
+external backup or an explicit per-operation skip. Reset removes only the confirmed
+store files and initializes at the same location. No implicit move, generic historical
+migration, multiple-space manager or probing of `Scopecat Development` is added.
+
 The native app is relocatable; moving an author's virtual environment independently
 of its base Python is not supported.
 

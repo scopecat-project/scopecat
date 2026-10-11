@@ -52,7 +52,7 @@ def wait(check, label):
 if stage == "reset":
     paths.state.mkdir(parents=True)
     prepare()
-    data = paths.state / "runtime/.scopecat"
+    data = paths.state / "data"
     data.mkdir(exist_ok=True)
     with sqlite3.connect(data / "control.sqlite3") as db:
         db.execute("PRAGMA journal_mode=WAL")
@@ -64,7 +64,7 @@ if stage == "reset":
         db.execute("CREATE TABLE old_science(value TEXT)")
         db.execute("INSERT INTO old_science VALUES ('preserve me')")
     db.close()
-    (paths.state / "runtime/author.py").write_text("raise RuntimeError('never import')")
+    (paths.state / "author.py").write_text("raise RuntimeError('never import')")
     original = {
         str(p.relative_to(paths.state)): p.read_bytes().hex()
         for p in paths.state.rglob("*")
@@ -164,7 +164,7 @@ def observe():
             assert not (paths.state / "data-reset.json").exists()
             old_store = json.loads((home / "old-store.json").read_text())
             for name, content in old_store.items():
-                original_file = paths.state / "runtime/.scopecat" / name
+                original_file = paths.state / "data" / name
                 assert original_file.read_bytes().hex() == content
             checks.append("native cancel leaves original store unchanged")
             window.evaluate_js("document.getElementById('skip-backup').checked = true")
@@ -183,7 +183,7 @@ def observe():
         assert runtime.home == paths.state
         assert runtime.status().state == "running"
         checks.append("in-place backend running")
-        with sqlite3.connect(paths.state / "runtime/.scopecat/control.sqlite3") as db:
+        with sqlite3.connect(paths.state / "data/control.sqlite3") as db:
             assert (db.execute("SELECT version FROM project_schema").fetchone()[0]
                     == PROJECT_SCHEMA_VERSION)
             assert db.execute(
@@ -214,7 +214,7 @@ assert result.get("status") == "passed", result
 def retain_diagnostics(reports: Path) -> None:
     anchor = reports / "fixture/data"
     sources = {"desktop.log": anchor / "desktop/desktop.log"}
-    sources["daemon.log"] = anchor / "runtime/.scopecat/daemon.log"
+    sources["daemon.log"] = anchor / "state/daemon.log"
     for name, source in sources.items():
         if source.is_file():
             shutil.copyfile(source, reports / name)
