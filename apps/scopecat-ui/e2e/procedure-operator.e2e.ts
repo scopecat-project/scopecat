@@ -331,16 +331,28 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     await page.getByLabel("Delay points").fill("2");
     await expect(page.getByText("Preview ready", { exact: true })).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+    expect(submissions).toBe(0);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: /changed; prepare/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+    // Start must recheck the changed setup and reject it without submitting.
+    const rejected = page.waitForResponse((response) =>
+      response.url().endsWith("/experiment-launcher/preview"),
+    );
+    await page.getByRole("button", { name: "Start acquisition" }).click();
+    expect((await rejected).ok()).toBe(false);
+    await expect(page.getByRole("alert").filter({ hasText: /changed; prepare/ })).toBeVisible();
+    expect(submissions).toBe(0);
+    expect(
+      (await (await page.request.get(`${endpoint.base_url}/api/v1/runs`)).json()).items,
+    ).toHaveLength(0);
     const shot = testInfo.outputPath("retained-launch-draft.png");
     await page.screenshot({ path: shot, fullPage: true });
-    await testInfo.attach("Retained inputs require a new preview", {
+    await testInfo.attach("Changed setup is rejected before acquisition", {
       path: shot,
       contentType: "image/png",
     });

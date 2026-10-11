@@ -126,6 +126,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     expect(await runs()).toHaveLength(0);
     await page.getByLabel("Gain", { exact: true }).fill("3");
+    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
     const preview = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/preview"),
     );
@@ -135,6 +136,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const checked = await (await preview).json();
     const request = (await submitted).postDataJSON();
+    expect(request.control_edits.gain).toEqual({ mode: "fixed", value: 3 });
     expect(request.expected_request_hash).toBe(checked.request_hash);
     expect(request.manual_state).toEqual(checked.manual_state);
     expect(request.code_revision).toEqual(checked.code_revision);

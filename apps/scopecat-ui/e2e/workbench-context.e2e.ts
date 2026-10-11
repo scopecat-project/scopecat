@@ -165,7 +165,8 @@ test("two workbench pages retain independent context and share collection number
     await page.getByLabel("Record collection", { exact: true }).selectOption(collection);
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
     await preview(page);
     // Reload the other page's catalog without replacing its page-local selection.
     await other.getByRole("button", { name: "Refresh project data", exact: true }).click();
@@ -182,7 +183,8 @@ test("two workbench pages retain independent context and share collection number
     await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
     await expect(
       other.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+    await expect(other.getByText("Preview ready", { exact: true })).toHaveCount(0);
     await other.getByLabel("Registered sample", { exact: true }).selectOption("chip-b");
     await other.getByLabel("Experimental batch", { exact: true }).selectOption(batchB);
     await other.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-b");

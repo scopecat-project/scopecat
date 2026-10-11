@@ -162,7 +162,8 @@ for (const scoped of [false, true]) {
             .click();
           await expect(
             page.getByRole("button", { name: "Start acquisition", exact: true }),
-          ).toBeDisabled();
+          ).toBeEnabled();
+          await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
         }
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
