@@ -17,7 +17,7 @@ gallery API. Future changes follow the needs of those consumers.
 
 ## Current evidence owners
 
-Paths in this table are relative to `examples/reference_lab/tests/` unless stated
+Paths in this table are relative to `testing/reference_lab/tests/` unless stated
 otherwise. These are current owners, not a commitment to keep every fixture.
 
 | Goal or semantic boundary | Current evidence and limits |
@@ -81,7 +81,7 @@ real Ramsey planned settings and displays a trial DRAG-parameter proposal;
 execution alone is not scientific approval. No timing-calibration capability is
 claimed by that display fixture.
 
-The current source map is in the [reference lab README](https://github.com/scopecat-project/scopecat/blob/main/examples/reference_lab/README.md).
+The current source map is in the [reference lab README](https://github.com/scopecat-project/scopecat/blob/main/testing/reference_lab/README.md).
 
 ## Scientific and data limits
 
@@ -138,7 +138,7 @@ snapshot recovery retain the cross-layer boundaries. These are ongoing integrati
 fixtures, not a requirement to recreate old examples or prove a synthetic plant's
 physical validity before retiring them. No known generic shell or unused spare
 device remains in this inventory review. Keeping these current inputs does not
-require keeping #773 open solely because `examples/reference_lab` still exists.
+require keeping #773 open solely because `testing/reference_lab` still exists.
 
 Retire duplicate consumers and unused dependencies after checking their actual
 callers and current requirements. Move generic cases to existing core, starter or

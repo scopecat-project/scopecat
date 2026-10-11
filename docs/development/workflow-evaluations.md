@@ -62,7 +62,7 @@ the device or connection involved, and cleanup should leave outputs in a known s
 
 **Representative evidence:**
 
-- `examples/reference_lab/tests/test_device_sessions.py`: multi-device direct
+- `testing/reference_lab/tests/test_device_sessions.py`: multi-device direct
   control, calibrated physical routes, settled readback and parked/off state.
 - `test_flux_spectroscopy.py` in the same directory: bias scan, complex VNA
   spectrum, temperature, fit and review with exact parameter/setup/source inputs.

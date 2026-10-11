@@ -1,10 +1,8 @@
-# Examples
+# Learning examples
 
-Examples are executable learning paths built around one hardware-free reference
-laboratory.
+Start with the [authoring tutorial](../docs/tutorials/starter-authoring.md) and
+[teaching sandboxes](../docs/tutorials/teaching-sandboxes.md).
 
-- [`reference_lab/`](reference_lab/): direct instrument control, resonator
-  characterization, quantum calibration, data access, and operational recipes
-  using one project, instrument inventory, and parameter catalog.
-
-The lab package is copyable teaching code, not a product package.
+The retained [reference lab](../testing/reference_lab/README.md) lives under
+`testing/` as a device, compiler, and scientific integration fixture. It is not
+copyable teaching code or a user workspace template.

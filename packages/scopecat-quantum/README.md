@@ -154,7 +154,8 @@ Place it with `context.use(call)` inside either `@sc.module` or
 measurement compute, recording policy, and independent auxiliary-device work;
 the program call remains one domain effect rather than becoming the whole
 experiment. The
-[reference lab runner](../../examples/reference_lab/README.md) shows that path.
+[reference lab runner](../../testing/reference_lab/README.md) exercises that path
+as an integration fixture.
 
 Point-dependent Python elaboration uses an explicitly bounded program family:
 
@@ -286,8 +287,8 @@ remains useful for fixed-arity programs that deliberately expose one named
 product per concrete qubit.
 
 Compiler-owned defaults can use the pure row maps in
-`scopecat_quantum.pulse_recipes`. The complete supported example is the
-[DRAG-beta workflow](../../examples/reference_lab/README.md), including parameter-axis
+`scopecat_quantum.pulse_recipes`. The retained integration fixture is the
+[DRAG-beta workflow](../../testing/reference_lab/README.md), including parameter-axis
 overlays, analysis, candidate acceptance, target lowering, and production use.
 
 ## Scaling model

@@ -17,12 +17,12 @@ feeds responses into this normal device path.
 
 The lab originally probed user requirements through runnable scenarios. Its
 [workflow goals](../../docs/development/workflow-evaluations.md) remain separate
-from this replaceable implementation. The gallery is retired as teaching material. Do not translate its scripts to new
-APIs merely to keep their old interfaces working. New lessons belong in public
-tutorial sandboxes. Extract necessary scientific/device behaviors into focused
-tests, reassess assertions tied to obsolete configuration models, then retire
-the corresponding scripts and dependencies. Existing tests do not establish a
-compatibility promise. See the [retirement inventory](../../docs/development/reference-gallery-retirement.md).
+from this replaceable implementation. Gallery retirement is complete; the retained
+inputs exercise device, compiler, and scientific contracts. The
+[fixture ownership map](../../docs/development/reference-fixtures.md) and
+[retirement inventory](../../docs/development/reference-gallery-retirement.md)
+identify their current consumers. Existing tests do not establish a compatibility
+promise or physical-device qualification.
 
 First-time authors should use `scopecat init` and its two starter scripts; see
 [starter authoring](../../docs/tutorials/starter-authoring.md). This application
@@ -30,10 +30,9 @@ is not a user workspace template or a production laboratory distribution.
 Private laboratory training should consume shared framework capabilities, not
 copy this application or reproduce every generic lesson.
 
-Retain only the integration inputs still needed for a named behavior while its
-replacement is built. Framework fault injection and recovery are maintainer work.
-See the
-[fixture ownership map](../../docs/development/reference-fixtures.md).
+The workspace distribution remains `reference-lab`, with Python packages
+`reference_lab` and `reference_lab_authors`. Run the commands below from the
+repository root; `uv sync --locked` installs it from `testing/reference_lab`.
 
 ## Reproduce a retained integration case
 
@@ -45,9 +44,9 @@ cd apps/scopecat-ui
 pnpm install --frozen-lockfile
 pnpm run build
 cd ../..
-uv run scopecat config check examples/reference_lab
-uv run scopecat start examples/reference_lab --static-dir apps/scopecat-ui/dist
-uv run scopecat open examples/reference_lab
+uv run scopecat config check testing/reference_lab
+uv run scopecat start testing/reference_lab --static-dir apps/scopecat-ui/dist
+uv run scopecat open testing/reference_lab
 ```
 
 The daemon chooses a loopback port and records it inside the project.
@@ -94,7 +93,7 @@ independence between logical targets.
 | `src/reference_lab/physical_policies.py` | Lab-owned IQ-offset coupling and host preparation policy |
 | `src/reference_lab/provider.py` | Bare virtual device provider and shared AWG/digitizer trigger world |
 | `src/reference_lab/virtual_lab/` | Injected deterministic quantum plant adapter |
-| `src/reference_lab/workflows/` | Legacy integration inputs; extract valid behaviors before retirement |
+| `src/reference_lab/workflows/` | Retained scientific and device integration inputs |
 | `src/reference_lab_authors/authored/` | Editable author inputs used by integration journeys |
 | `tests/` | Daemon, worker, target, storage, analysis, and configuration checks |
 
@@ -154,9 +153,9 @@ target specification.
 ## Checks
 
 ```sh
-uv run pytest examples/reference_lab/tests
-uv run ruff check examples/reference_lab
-uv run basedpyright examples/reference_lab
+uv run pytest testing/reference_lab/tests
+uv run ruff check testing/reference_lab
+uv run basedpyright testing/reference_lab
 ```
 
 ## Shared pilot acceptance fixtures
@@ -170,7 +169,7 @@ entity-indexed analysis using the existing public workflows.
 
 ```sh
 uv run python scripts/generate_reference_lab_acceptance.py --check
-uv run pytest examples/reference_lab/tests/test_acceptance.py
+uv run pytest testing/reference_lab/tests/test_acceptance.py
 ```
 
 ## Bounded launch preflight

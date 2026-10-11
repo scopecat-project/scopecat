@@ -19,7 +19,7 @@ def test_reference_lab_snapshot_roundtrip_in_fresh_processes(
         [
             sys.executable,
             str(root / "packages/scopecat-server/tests/fixtures/snapshot_roundtrip.py"),
-            str(root / "examples/reference_lab"),
+            str(root / "testing/reference_lab"),
         ],
         capture_output=True,
         text=True,

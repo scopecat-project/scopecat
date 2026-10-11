@@ -98,7 +98,7 @@ def test_repository_tiers_cover_pytest_roots() -> None:
     )
     unit_files = {
         path.relative_to(root).as_posix()
-        for path in (root / "examples/reference_lab/tests/unit").glob("test_*.py")
+        for path in (root / "testing/reference_lab/tests/unit").glob("test_*.py")
     }
     assert unit_files <= set(select_files(root, "fast"))
     assert not unit_files & set(select_files(root, "journey"))

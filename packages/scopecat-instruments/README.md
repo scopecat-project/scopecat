@@ -19,8 +19,8 @@ The configured connection kinds are:
 The [instrument-control guide](../../docs/how-to/control-instruments.md) is the canonical
 user guide for live sessions, symbolic experiments, temporary devices, routing,
 roles, shared physical state, and multi-entity clients. The
-[reference-lab gallery](../../examples/reference_lab/README.md) contains runnable
-examples against coupled virtual devices and bare AWG/scope workflows.
+[reference lab](../../testing/reference_lab/README.md) retains integration fixtures
+for coupled virtual devices and bare AWG/scope workflows.
 
 Generated clients preserve concrete Python names and value types across both
 time models. Live `apply`, operations, and acquisitions act within a

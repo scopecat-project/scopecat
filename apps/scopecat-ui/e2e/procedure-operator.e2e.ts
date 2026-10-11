@@ -70,7 +70,7 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
   retainedProcedure: async ({}, use) => {
     const project = await mkdtemp(join(tmpdir(), "scopecat-operator-e2e-"));
     try {
-      const template = join(ROOT, "examples/reference_lab");
+      const template = join(ROOT, "testing/reference_lab");
       for (const name of ["src", "config", "scopecat.toml"])
         await cp(join(template, name), join(project, name), { recursive: true });
       uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
@@ -278,7 +278,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
   });
   try {
     for (const name of ["src", "config", "scopecat.toml"])
-      await cp(join(ROOT, "examples/reference_lab", name), join(project, name), {
+      await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);

@@ -61,7 +61,7 @@ with the installed application.
   coupled virtual devices.
 - `packages/scopecat-quantum`: hardware-independent quantum building blocks.
 - `apps/scopecat-ui`: React/Vite project console.
-- `examples/reference_lab`: retained integration fixtures; legacy author examples are being retired.
+- `testing/reference_lab`: retained device, compiler, and scientific integration fixtures.
 - `docs`: published user, extension, reference, and contributor documentation.
 
 ## Development
