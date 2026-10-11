@@ -3,7 +3,11 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { DeclaredRunAnalyses, type RunAnalysisActions } from "./DeclaredRunAnalyses";
+import {
+  DeclaredRunAnalyses,
+  RunAnalysisActionsCard,
+  type RunAnalysisActions,
+} from "./DeclaredRunAnalyses";
 
 const catalog: RunAnalysisActions = {
   run_id: "original-run",
@@ -126,4 +130,37 @@ it("preserves an explicitly empty string instead of silently restoring its defau
   fireEvent.click(screen.getByRole("button", { name: "Run Check expected peak" }));
   await screen.findByRole("link", { name: "View saved result" });
   expect(bodies[0]).toMatchObject({ arguments: { label: "" } });
+});
+
+it("loads the author directory only after expansion and explains old declarations", async () => {
+  const fetch = vi.fn(async () => Response.json({ ...catalog, actions: [] }));
+  vi.stubGlobal("fetch", fetch);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RunAnalysisActionsCard runId="original-run" />
+    </QueryClientProvider>,
+  );
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Analyze this result"));
+  expect(await screen.findByText(/No analyses were declared/)).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("Analyze this result"));
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("keeps edited inputs when the optional section is collapsed and reopened", async () => {
+  const fetch = vi.fn(async () => Response.json(catalog));
+  vi.stubGlobal("fetch", fetch);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RunAnalysisActionsCard runId="original-run" />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByText("Analyze this result"));
+  const tolerance = await screen.findByLabelText("Tolerance");
+  fireEvent.change(tolerance, { target: { value: "25" } });
+  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("Analyze this result"));
+  expect(screen.getByLabelText("Tolerance")).toHaveValue(25);
+  expect(fetch).toHaveBeenCalledTimes(1);
 });

@@ -136,11 +136,13 @@ existing `module:function` address, not an analysis display ID:
 def signal(experiment: sc.ExperimentContext): ...
 ```
 
-After a successful run, **Analyze this result** reads that experiment's declaration
-and input defaults from the run's retained workspace and code revision. Enter the
-required inputs and select **Run**. Reading or reloading does not execute an analysis;
-results remain separate publications. Editing current source does not change these
-historical actions. Runs without an association stay readable without guessed actions.
+After a successful run, expand **Analyze this result** to load the experiment's
+declaration and input defaults from its retained workspace and code revision.
+Expanding may start an author worker and import retained code. Normal browsing and
+reloading keep this section closed and do not load author code through this entry.
+Enter the required inputs and select **Run** to execute; results remain separate
+publications. Editing current source does not change historical actions. Runs
+without an association stay readable without guessed actions.
 
 The form supports `str`, `bool`, `int`, `float`, `Quantity`, and string `Literal`
 inputs. Other input types and context analyses show an explanation; use Python for

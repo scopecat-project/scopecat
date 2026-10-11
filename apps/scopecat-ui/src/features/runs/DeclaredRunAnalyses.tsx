@@ -11,6 +11,25 @@ export type RunAnalysisAction = components["schemas"]["RunAnalysisAction"];
 export type RunAnalysisActions = components["schemas"]["RunAnalysisActions"];
 
 export function RunAnalysisActionsCard({ runId }: { runId: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <details
+      className="rounded-md border border-line p-4"
+      onToggle={(event) => {
+        if (event.currentTarget.open) setLoaded(true);
+      }}
+    >
+      <summary className="cursor-pointer text-sm font-semibold">Analyze this result</summary>
+      {loaded && (
+        <div className="mt-3">
+          <DeclaredAnalysisCatalog runId={runId} />
+        </div>
+      )}
+    </details>
+  );
+}
+
+function DeclaredAnalysisCatalog({ runId }: { runId: string }) {
   const catalog = useQuery({
     queryKey: ["run-analysis-actions", runId],
     queryFn: async ({ signal }) => {
@@ -26,6 +45,8 @@ export function RunAnalysisActionsCard({ runId }: { runId: string }) {
     },
     staleTime: Infinity,
     retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   if (catalog.isPending)
     return <p className="text-sm text-text-soft">Loading declared analyses…</p>;
@@ -36,7 +57,13 @@ export function RunAnalysisActionsCard({ runId }: { runId: string }) {
         available.
       </p>
     );
-  return catalog.data ? <DeclaredRunAnalyses catalog={catalog.data} /> : null;
+  return catalog.data?.actions.length ? (
+    <DeclaredRunAnalyses catalog={catalog.data} />
+  ) : (
+    <p className="text-sm text-text-soft">
+      No analyses were declared for this run's saved source. Existing results remain available.
+    </p>
+  );
 }
 
 type Value = { value: string; unit: string };
@@ -64,8 +91,7 @@ function initialValue(input: AnalysisActionInput): Value {
 export function DeclaredRunAnalyses({ catalog }: { catalog: RunAnalysisActions }) {
   if (!catalog.actions?.length) return null;
   return (
-    <section className="rounded-md border border-line p-4" aria-label="Analyze this result">
-      <h3 className="text-sm font-semibold">Analyze this result</h3>
+    <section aria-label="Analyze this result">
       <p className="mt-1 text-sm text-text-soft">
         Actions declared for this experiment, using its saved author code. These actions analyze
         existing data; they do not acquire measurements or adopt parameters.
