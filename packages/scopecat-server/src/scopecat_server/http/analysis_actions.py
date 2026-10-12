@@ -45,10 +45,8 @@ def analysis_actions_router(
         except (KeyError, ValueError, OSError) as error:
             raise HTTPException(
                 503,
-                "The run's saved author source or execution environment "
-                "is unavailable: "
-                f"{error}. Restore the original author environment, then reload "
-                "declared analyses. Existing results remain available.",
+                "The saved analysis declarations could not be loaded. "
+                f"Details: {error}. Existing results remain available.",
             ) from error
 
     return router

@@ -61,9 +61,10 @@ function DeclaredAnalysisCatalog({ runId }: { runId: string }) {
       <div className="space-y-2 text-sm text-text-soft">
         <p role="status">Could not load declared analyses: {errorMessage(catalog.error)}</p>
         <p>
-          Check the daemon connection and the availability of this run's original author
-          environment, then reload. Reloading reads the saved source's declarations; it does not run
-          an analysis. Existing results remain available.
+          If the application connection was interrupted, reconnect and reload. Otherwise, use the
+          error details above to check this run's original source and environment, or ask its author
+          for help. Reloading reads the saved source's declarations; it does not run an analysis.
+          Existing results remain available.
         </p>
         <button
           type="button"

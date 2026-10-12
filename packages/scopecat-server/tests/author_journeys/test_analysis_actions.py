@@ -145,13 +145,19 @@ def test_non_form_input_is_unavailable_without_executing_analysis() -> None:
         (
             ValueError("Retained execution environment is unavailable"),
             503,
-            "Restore the original author environment",
+            "Retained execution environment is unavailable",
         ),
         (OSError("author interpreter missing"), 503, "author interpreter missing"),
         (KeyError("saved revision missing"), 503, "saved revision missing"),
+        (ValueError("invalid declaration payload"), 503, "invalid declaration payload"),
+        (
+            OSError("cannot read saved declaration"),
+            503,
+            "cannot read saved declaration",
+        ),
     ],
 )
-def test_catalog_environment_failures_remain_actionable(
+def test_catalog_load_failures_preserve_details_without_guessing_repair(
     failure: Exception, status: int, message: str
 ) -> None:
     from unittest.mock import Mock
@@ -171,7 +177,11 @@ def test_catalog_environment_failures_remain_actionable(
     app.include_router(analysis_actions_router(read, describe))
     response = TestClient(app).get("/api/v1/runs/run-original/analysis-actions")
     assert response.status_code == status
-    assert message in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail.startswith("The saved analysis declarations could not be loaded.")
+    assert f"Details: {failure}" in detail
+    assert message in detail
+    assert "Restore" not in detail
     describe.assert_called_once_with(REQUEST)
 
 

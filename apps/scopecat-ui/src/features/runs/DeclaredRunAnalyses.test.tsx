@@ -188,6 +188,12 @@ it("reloads a failed directory explicitly without executing or retrying on reope
   expect(await screen.findByRole("status")).toHaveTextContent(
     "Retained execution environment is unavailable",
   );
+  expect(screen.getByText(/If the application connection was interrupted/)).toHaveTextContent(
+    "or ask its author for help",
+  );
+  expect(
+    screen.queryByText(/daemon connection|Restore the original author environment/),
+  ).toBeNull();
   fireEvent.click(screen.getByText("Analyze this result"));
   fireEvent.click(screen.getByText("Analyze this result"));
   expect(fetch).toHaveBeenCalledTimes(1);
