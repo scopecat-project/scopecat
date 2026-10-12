@@ -44,7 +44,7 @@ or permission to control hardware.
 The workbench has collection-qualified run addresses, declared batches, Python
 session selection and independent GUI page selection. Exact single-member execution, independent setup authority and scoped publication
 are implemented; executable assemblies and cross-object applicability remain outside
-this boundary. See the [current platform status](../platform-status.md) for sequencing.
+this boundary. 当前能力边界见[平台说明](../platform-status.md)；目标建模任务见 [#612](https://github.com/scopecat-project/scopecat/issues/612)。
 
 | Area | Implemented | Next boundary |
 |---|---|---|

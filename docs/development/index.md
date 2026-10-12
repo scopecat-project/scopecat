@@ -42,7 +42,7 @@ uv run --locked --package reference-lab --group test pytest testing/reference_la
 
 ## Find the relevant documentation
 
-- [Platform status](platform-status.md): current capability boundaries and open work.
+- [Platform status](platform-status.md): 当前能力与证据边界。
 - [Architecture](architecture/index.md): product contracts and design decisions.
 - [Repository map](repository-map.md): package ownership and generated code.
 - [Source development and previews](public-preview.md): run and distribute a checkout.

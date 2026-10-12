@@ -91,10 +91,12 @@ This changes background execution for subsequent preparation, not the interprete
 selected in VS Code. Existing retained tasks keep their environment binding.
 Settings exposes the same operation. Adding a folder requires an explicit execution
 Python; preparing dependencies from `pyproject.toml` is a separate action. Registration
-is visible to the running application without restarting it. Managed preparation
-resolves the source requirements with compatible Scopecat execution packages, not
-the desktop application's complete dependency lock. Vendor SDKs can use another
-interpreter through the [SDK process protocol](architecture/sdk-process.md).
+is visible to the running application without restarting it.
+托管准备解析作者目录的 `pyproject.toml` 与 Scopecat 执行依赖，并以交付包完整的
+`requirements.lock` 约束共享依赖版本，与本地 Notebook 环境采用同一交付基线。
+这不会把整套桌面依赖安装进作者环境；可以增加声明的新包，但不能静默升级锁内共享依赖，
+冲突会报错并保留原环境选择。Vendor SDK 可通过
+[SDK process protocol](architecture/sdk-process.md) 使用独立解释器。
 
 | Purpose | macOS | Windows |
 | --- | --- | --- |

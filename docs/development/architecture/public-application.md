@@ -54,8 +54,8 @@ every source change below has reached an installed release; use
 | User journey | Default entry | Owned code or data | Present capability and remaining boundary |
 | --- | --- | --- | --- |
 | Receive and inspect data | Desktop **File → Open**, then Data | Portable scientific evidence and imported records; each window owns its selection | [Open/share recorded data](../../how-to/open-and-share-data.md) and independent Python reading work without the original author environment or devices; a capture is not a whole-store backup. |
-| Learn | **Help → Start peak practice** or **Learn with Notebooks** | Practice owns disposable records/notes; all seven topics each retain an ordinary author folder, teaching setup and parameter branch | [Help lessons](../../tutorials/teaching-sandboxes.md) cover manual decisions and all seven Notebook topics through shared preparation and continuation (#913). Course design, actual editor and unfamiliar-user observations remain separate. |
-| Write code | Continue the Help Notebook in VS Code; **Settings → Author code** for new/existing ordinary folders | User-owned Python/Notebooks, local SDK and declared dependencies; retained source revisions at submission | [First experiment](../../getting-started/quickstart.md) and [the prepared-folder author API guide](../../how-to/managed-author-session.md) use independent environments. Multiple folders share application data, not each other's implicit imports. Older teaching generators still need convergence. |
+| Learn | **Help → Start peak practice** or **Learn with Notebooks** | Practice owns disposable records/notes; all seven topics each retain an ordinary author folder, teaching setup and parameter branch | [Help lessons](../../tutorials/teaching-sandboxes.md) cover manual decisions and all seven Notebook topics through shared preparation and continuation (#913). 学习路线与材料导语已在 #970 交付；难度与衔接、实际编辑器和陌生用户观察仍待验证。 |
+| Write code | Continue the Help Notebook in VS Code; **Settings → Author code** for new/existing ordinary folders | User-owned Python/Notebooks, local SDK and declared dependencies; retained source revisions at submission | [First experiment](../../getting-started/quickstart.md) and [the prepared-folder author API guide](../../how-to/managed-author-session.md) use independent environments. Multiple folders share application data, not each other's implicit imports. CLI 教学生成器已在 #965 收敛到普通作者目录；已有目录保留原环境和数据，不承诺自动迁移。 |
 | Run, inspect and analyze | Notebook/Python or **Experiments**; **Runs**, **Analyses** and **Decisions** for retained work | Explicit source, setup and parameter references; application-owned tasks/results; author-owned analysis | Preview and explicit submission are distinct. Reopening history does not acquire again. Default entry is Runs history, not persisted last-viewed-task restoration; see #675. |
 | Share configuration or source | **Configuration → Share and import configuration**; ordinary source files/version control for code collaboration | Saved parameter definitions/values, optional setup and retained source; originals and derivation receipts | [Configuration sharing](../../how-to/share-configuration.md) creates editable local inputs. Source acceptance is inert; trust, dependencies, registration and local device binding remain explicit. General graphical authoring is still a proposal. |
 | Back up or change computer | Optional stopped-project snapshot commands and [restore guidance](../../how-to/backup-and-restore.md) | Current-format store/history and captured local files; external source/dependency artifacts retained separately | Restore preserves store identity, not an independently writable clone. No one-click whole-computer backup, cross-version baseline or automatic environment relocation is promised. |
@@ -77,28 +77,16 @@ Help remains a direct learning entry. This hierarchy is **not implemented** and
 does not prescribe a new order, hide capabilities or rename current GUI labels.
 Any later GUI change must demonstrate the journeys above before replacing entries.
 
-### Bounded follow-up order
+教学入口已统一为普通作者目录，七个主题共用 Help 准备与继续流程；学习路线与材料
+导语已交付。学习者观察见 [#565](https://github.com/scopecat-project/scopecat/issues/565)，
+实际编辑器、应用及物理验收见 [#616](https://github.com/scopecat-project/scopecat/issues/616)。
+实现完成不等于这些观察完成。
 
-1. **Teaching/source convergence (#565):** inventory the remaining generated
-   teaching consumers, carry editable scientific definitions and explanatory
-   Notebooks into ordinary author work, and update their callers together. The
-   seven supplied topics share Help preparation and continuation (#913); course
-   ordering, difficulty and grouping remain teaching-design work.
-   Preserve existing teaching/VS Code tasks until replacement journeys work.
-2. **Entry hierarchy:** evaluate a bounded navigation proposal against receiving
-   data, learning, authoring and returning to results. Measure whether users can
-   find the next action before committing to GUI changes. #675's bounded audit
-   found no remaining software gap; its closure decision does not authorize this
-   redesign or require last-task restoration.
-3. **Sharing and recovery guidance (#502/#574):** keep independent configuration
-   derivation distinct from same-store recovery, identify any concrete usability
-   gap after the merged installed-sharing journey, and retain external dependency
-   requirements. Do not add another archive format or compatibility promise.
-
-Actual editor, unfamiliar-user and supervised device observations remain #616.
-Use the [existing work owners](../platform-status.md#remaining-work-owners); this
-ordering is a limited proposal for subsequent work, not another implementation
-batch, new issues or approval to change product behavior in this documentation PR.
+配置分享产生独立的可编辑派生记录；同一存储的恢复保留原身份，两者不可互换。
+外部依赖仍需单独准备，见[配置分享](../../how-to/share-configuration.md)及
+[备份恢复](../../how-to/backup-and-restore.md)。结构化作者方向见
+[#502](https://github.com/scopecat-project/scopecat/issues/502)，数据支持基线见
+[#574](https://github.com/scopecat-project/scopecat/issues/574)。
 
 ## Recoverable editing
 
@@ -419,8 +407,7 @@ scan → verification → publication → reopen remain separate from software e
 
 Preserve current-format evidence and recovery. No development-store migration
 chains, supported data baseline or automatic replay are introduced by this work.
-Software UX convergence is the current P0, before physical acceptance. It can be
-developed on Mac; Windows uses the same product flow plus platform/hardware checks.
+软件体验可在 Mac 上开发；Windows 使用同一产品流程，并分别验证平台及硬件边界。
 Do not make this depend on a general workflow editor, remote service,
 arbitrary dependency isolation or a complete physical-state model. Keep targeted
 scientific, process-ownership and persistence tests; do not preserve retired service
