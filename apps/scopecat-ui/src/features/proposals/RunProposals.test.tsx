@@ -83,7 +83,7 @@ describe("RunProposals", () => {
     expect(await screen.findByText(longValue)).toBeVisible();
     expect(screen.queryByText(/q1/)).toBeNull();
     fireEvent.click(screen.getByText("For authors: reopen this candidate"));
-    expect(screen.getByText(/this page does not publish parameters/)).toBeVisible();
+    expect(screen.getByText(/Collect independent verification/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Publish to a parameter branch" })).toHaveAttribute(
       "href",
       "https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/",

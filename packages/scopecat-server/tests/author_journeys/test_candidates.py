@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
+import httpx2
 import pytest
 import scopecat as sc
 from scopecat.analysis.facts import ordinary_result_schema
@@ -158,6 +159,23 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         with pytest.raises(ValueError, match="exact candidate"):
             other.verify(check)
         verified = candidate.verify(check)
+        # Discovery applies the same exact-candidate gate as publication.
+        with httpx2.Client(base_url=endpoint.base_url) as client:
+            path = f"/api/v1/runs/{run.id}/parameter-proposals"
+            eligible = client.get(f"{path}/{candidate.name}/verifications").json()
+            assert any(
+                item["reference"]["analysis_record_id"] == verified.verification.id
+                and item["unavailable_reason"] is None
+                for item in eligible["items"]
+            )
+            wrong = client.get(f"{path}/{other.name}/verifications").json()
+            assert all(item["unavailable_reason"] for item in wrong["items"])
+            assert (
+                client.get(
+                    f"{path}/{candidate.name}/verifications", params={"limit": 0}
+                ).status_code
+                == 422
+            )
         assert lab.parameters.checkout("daily").head == branch
         next_prepared = author.prepare("signal", candidate=verified.select())
         assert (

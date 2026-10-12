@@ -1648,6 +1648,37 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
                 )
             )
 
+        old_data = lab.analysis("Old data only", key="old-data-only")
+        old_data.measurements(baseline, id="baseline", role="baseline")
+        if intermediate_id is not None:
+            old_data.measurements(
+                lab.get_run(intermediate_id), id="intermediate", role="baseline"
+            )
+        old_decision = (
+            old_data.result()
+            .fact(
+                "decision",
+                _CandidateDecision(accepted=True),
+                schema=_CANDIDATE_DECISION_SCHEMA,
+            )
+            .save()
+        )
+        discovered = {}
+        before = None
+        while True:
+            page = runtime.application.analyses.candidate_verifications(
+                baseline_id, proposal.id, limit=1, before=before
+            )
+            for item in page.items:
+                discovered[item.reference.analysis_record_id] = item.unavailable_reason
+            if page.next_cursor is None:
+                break
+            before = page.next_cursor
+        assert discovered[verification.id] is None
+        assert "independent successful run" in discovered[old_decision.id]
+        assert "independent successful run" in discovered[unrelated_decision.id]
+        assert "did not accept" in discovered[rejected.id]
+
         # Fail after writing both revision and branch receipt: none may survive.
         from scopecat.records.parameter_branch import ParameterBranch
 

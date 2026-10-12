@@ -1,3 +1,4 @@
+import { CandidateAdoption } from "./CandidateAdoption";
 import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
@@ -144,6 +145,7 @@ export function RunProposals({ runId }: { runId: string }) {
                 <ProposalDiff proposal={proposal} />
                 <ProposalApproval proposal={proposal} />
 
+                <CandidateAdoption proposal={proposal} />
                 <CandidateNextSteps proposal={proposal} />
               </section>
             );
@@ -182,10 +184,9 @@ function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
   return (
     <section className="px-3.5 py-3 text-[0.7rem] leading-relaxed" aria-label="Candidate adoption">
       <p>
-        Adoption currently requires an author session; this page does not publish parameters.
-        Collect independent verification using your laboratory's policy, then explicitly publish to
-        the reviewed parameter branch. Only that branch advances; existing runs and prepared
-        experiments keep their original inputs.
+        Collect independent verification using your laboratory's policy in an author session, then
+        explicitly publish to the reviewed parameter branch. Only that branch advances; existing
+        runs and prepared experiments keep their original inputs.
       </p>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-accent underline">
         <a

@@ -19,6 +19,8 @@ from scopecat.config.changes import (
 from scopecat.control.models import DurableEventInput
 from scopecat.daemon.views import (
     AnalysisContentBytesView,
+    CandidateVerificationPage,
+    CandidateVerificationView,
     ProjectAnalysisContentPage,
     ProjectAnalysisPage,
     ProjectAnalysisSummary,
@@ -418,6 +420,49 @@ class AnalysisService:
                     self._repository.read_bytes(publication.record.id, ref)
                 ).decode("ascii"),
             )
+
+    def candidate_verifications(
+        self, source_run_id: str, proposal_id: str, *, limit: int, before: int | None
+    ) -> CandidateVerificationPage:
+        """Inspect one page without replacing publication validation."""
+        load_parameter_change_proposal(
+            run_id=source_run_id, selector=proposal_id, services=self._services
+        )
+        page = self.list(limit=limit, before=before)
+        items: list[CandidateVerificationView] = []
+        for summary in page.items:
+            view = self._view(summary.entry.id)
+            for output in view.analysis.outputs:
+                if not isinstance(output, AnalysisFactRecordOutput):
+                    continue
+                value = output.content.value
+                if not isinstance(value, dict) or not isinstance(
+                    value.get("accepted"), bool
+                ):
+                    continue
+                reference = ProjectAnalysisDecisionReference(
+                    analysis_record_id=summary.entry.id,
+                    output_id=output.id,
+                    schema_id=output.content.schema_id,
+                    schema_hash=output.content.schema_hash,
+                )
+                reason = None
+                try:
+                    self.validate_candidate_verification(
+                        reference, source_run_id=source_run_id, proposal_id=proposal_id
+                    )
+                except BackendConflict as error:
+                    reason = str(error)
+                items.append(
+                    CandidateVerificationView(
+                        reference=reference,
+                        title=summary.title,
+                        unavailable_reason=reason,
+                    )
+                )
+        return CandidateVerificationPage(
+            items=tuple(items), next_cursor=page.next_cursor
+        )
 
     def validate_candidate_verification(
         self,

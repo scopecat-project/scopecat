@@ -182,6 +182,12 @@ class ParameterDraftService:
             draft=draft, head_revision=head.revision, branch_changed=changed
         )
 
+    def working_branch(self, name: str) -> ParameterDraftView | None:
+        """Read the active table without creating or replacing an editor."""
+        with self._database.read_connection() as connection:
+            draft = drafts.active(connection, "", name)
+            return self._view(connection, draft) if draft is not None else None
+
     def start(self, command: ParameterDraftStart) -> ParameterDraftView:
         with self._database.write_transaction() as connection:
             base = self._base(connection, command.base)

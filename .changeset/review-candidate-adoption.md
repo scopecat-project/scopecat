@@ -2,6 +2,4 @@
 default: patch
 ---
 
-Review candidate parameter changes and adoption steps directly after run analyses.
-
-Comparison candidates now lead to their retained run and analysis for review. Runs shows exact changed table cells, with expandable full values for long content, and links to the existing author guides for independent verification and publication to a reviewed parameter branch. Adoption still requires an author session.
+Compare candidate changes with a selected parameter branch, adopt with retained independent verification, and reopen adoption records. Branch conflicts preserve working edits; interrupted publication recovers the original request.
