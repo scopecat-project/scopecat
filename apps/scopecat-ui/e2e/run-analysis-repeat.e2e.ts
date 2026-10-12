@@ -68,6 +68,56 @@ test("repeats a retained ordinary analysis with its original source after author
     await page.goto(
       `${endpoint.base_url}/?run=${encodeURIComponent(seed.run)}&run-analysis=${encodeURIComponent(seed.first)}#runs`,
     );
+    // 在同一会话中从 Data 找回旧结果，独立窗口和返回不能丢失浏览条件。
+    await page.getByRole("button", { name: "Data", exact: true }).click();
+    const data = page.getByRole("region", { name: "Data", exact: true });
+    await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
+    await data.getByLabel("From (local time)").fill("2020-01-01T00:00");
+    await data.getByText("Research project management", { exact: true }).click();
+    await data.getByLabel("Project name", { exact: true }).fill("Retained comparison");
+    await data.getByRole("button", { name: "Create project", exact: true }).click();
+    await expect(data.getByLabel("Research project", { exact: true })).not.toHaveValue("");
+    await data.getByLabel("Show runs outside this project to associate").check();
+    await data.getByRole("button", { name: "Associate run", exact: true }).click();
+    await data.getByText("Research project management", { exact: true }).click();
+    await expect(data.getByRole("button", { name: "Associate run", exact: true })).toBeHidden();
+    await expect(data.getByText("Showing runs across all projects for association.")).toBeVisible();
+    const selectedProject = await data.getByLabel("Research project", { exact: true }).inputValue();
+    const popupPromise = page.waitForEvent("popup");
+    await data.getByRole("link", { name: "Open result in new tab or window" }).click();
+    const popup = await popupPromise;
+    await expect(popup).toHaveURL(new RegExp(encodeURIComponent(seed.run)));
+    await popup.close();
+    const row = data.locator("li").filter({ has: page.locator("code", { hasText: seed.run }) });
+    await row.getByRole("button").first().click();
+    await expect(page).toHaveURL(new RegExp(`\\?run=${encodeURIComponent(seed.run)}$`));
+    await page.goBack();
+    await expect(data.getByLabel("Research project", { exact: true })).toHaveValue(selectedProject);
+    await expect(data.getByLabel("From (local time)")).toHaveValue("2020-01-01T00:00");
+    await page.evaluate("window.scrollTo(0, 0)");
+    await page.screenshot({ path: testInfo.outputPath("data-results.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate("window.scrollTo(0, 0)");
+    await page.screenshot({ path: testInfo.outputPath("data-results-narrow.png"), fullPage: true });
+    expect(
+      await page.locator("html").evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(
+      `${endpoint.base_url}/?run=${encodeURIComponent(seed.run)}&run-analysis=${encodeURIComponent(seed.first)}#runs`,
+    );
+    await expect(page.getByTestId("publication-id").first()).toHaveText(seed.first);
+    const sources = page.getByText("Sources and execution evidence", { exact: true }).first();
+    await expect(sources.locator("..")).not.toHaveAttribute("open");
+    await sources.click();
+    await expect(page.getByRole("heading", { name: "Inputs", exact: true }).first()).toBeVisible();
+    await sources.click();
+    await expect(page.getByTestId("publication-id").first()).toHaveText(seed.first);
+    await page
+      .getByTestId("publication-id")
+      .first()
+      .locator("xpath=ancestor::section[1]")
+      .screenshot({ path: testInfo.outputPath("analysis-results.png") });
     const action = page.getByRole("region", { name: "Repeat saved analysis" });
     await expect(action.getByRole("button", { name: "Repeat with saved settings" })).toBeVisible();
     expect(posts).toBe(0);

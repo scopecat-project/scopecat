@@ -4,7 +4,16 @@ import type {
   ParameterWorkspaceHandle,
 } from "./features/config/object-parameters";
 import type { ComparisonHandoff } from "./features/analyses/RunComparison";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Activity as RetainedView,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Atom,
@@ -490,6 +499,14 @@ export default function App() {
             </Suspense>
           </div>
         </LaunchDraftProvider>
+        <RetainedView mode={view === "history" ? "visible" : "hidden"}>
+          <Suspense fallback={<p>Loading research history…</p>}>
+            <ResearchHistory
+              daemonUnavailable={daemonUnavailable}
+              onOpenRun={openConfigSourceRun}
+            />
+          </Suspense>
+        </RetainedView>
         {view === "help" ? (
           <Suspense fallback={<p>Loading help…</p>}>
             <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />
@@ -508,13 +525,6 @@ export default function App() {
             daemonUnavailable={daemonUnavailable}
             onOpenSample={openRunSample}
           />
-        ) : view === "history" ? (
-          <Suspense fallback={<p>Loading research history…</p>}>
-            <ResearchHistory
-              daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-            />
-          </Suspense>
         ) : view === "samples" ? (
           <Suspense
             fallback={
@@ -557,7 +567,7 @@ export default function App() {
               selectedAnalysisId={selectedAnalysisId}
             />
           </Suspense>
-        ) : view === "launch" ? null : view === "decisions" ? (
+        ) : view === "launch" || view === "history" ? null : view === "decisions" ? (
           <Suspense
             fallback={
               <DetailEmpty

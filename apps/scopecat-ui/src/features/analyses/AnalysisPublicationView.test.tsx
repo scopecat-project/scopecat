@@ -67,3 +67,44 @@ it("copies the supplied owner and exact publication rather than its input or log
     readOnlyCode({ kind: "project", publicationId: analysis.id }),
   );
 });
+
+it("keeps saved output and units visible while exact input evidence is collapsed", () => {
+  const openRun = vi.fn();
+  render(
+    <AnalysisPublicationView
+      analysis={{
+        ...analysis,
+        outputs: [
+          {
+            id: "fit",
+            kind: "table",
+            title: "Saved fit",
+            metadata: {},
+            content: {
+              source: { kind: "dataset", output_id: "fits" },
+              columns: ["frequency"],
+              total_rows: 2,
+              truncated: true,
+              preview: {
+                columns: [{ id: "frequency", label: "Frequency", unit: "GHz" }],
+                rows: [{ cells: [4.8] }],
+              },
+            },
+          },
+        ],
+      }}
+      getArtifactDownload={vi.fn()}
+      onOpenRun={openRun}
+    />,
+  );
+  expect(screen.getByRole("table", { name: "Saved fit" })).toBeVisible();
+  expect(screen.getByRole("columnheader", { name: "Frequency (GHz)" })).toBeVisible();
+  expect(screen.getByText("Showing 1 of 2 rows")).toBeVisible();
+  expect(screen.getByText("Inputs")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Sources and execution evidence"));
+  expect(screen.getByText("Inputs")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "input-not-owner" }));
+  expect(openRun).toHaveBeenCalledWith("input-not-owner");
+  fireEvent.click(screen.getByText("Sources and execution evidence"));
+  expect(screen.getByRole("table", { name: "Saved fit" })).toBeVisible();
+});

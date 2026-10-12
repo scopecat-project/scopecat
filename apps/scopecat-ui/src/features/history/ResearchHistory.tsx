@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OpenRunWindow } from "../runs/OpenRunWindow";
 import { DataCleanupHistory } from "./DataCleanup";
 import { ImportedCaptures } from "./ImportedCaptures";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import type { components } from "../../api-schema";
 import { detailCard, primaryButton, secondaryButton } from "../../ui/styles";
 
 type Project = components["schemas"]["ResearchProject"];
-const inputClass = "rounded border border-line bg-bg px-2 py-1 text-sm";
+const inputClass = "max-w-full min-w-0 rounded border border-line bg-bg px-2 py-1 text-sm";
 
 export function ResearchHistory({
   onOpenRun,
@@ -25,6 +26,7 @@ export function ResearchHistory({
   const [after, setAfter] = useState("");
   const [before, setBefore] = useState("");
   const [allRuns, setAllRuns] = useState(false);
+  const [managing, setManaging] = useState(false);
   const projects = useInfiniteQuery({
     queryKey: ["research", "projects"],
     initialPageParam: undefined as number | undefined,
@@ -136,15 +138,13 @@ export function ResearchHistory({
   return (
     <section className="space-y-4 p-4" aria-label="Data">
       <h2 className="text-lg font-semibold">Data</h2>
-      <ImportedCaptures unavailable={daemonUnavailable} />
-      <DataCleanupHistory />
       <p className="text-sm text-text-dim">
-        Organize retained evidence across projects. Associations do not move data or change
-        parameter selections. Open a run to inspect original measurements and separately saved
-        analyses.
+        Find retained runs by project, sample or time. Open a run for its measurements and saved
+        analyses, or open it independently alongside your current acquisition. Imported captures are
+        available under Import and manage data.
       </p>
       {error && <p role="alert">{error.message}</p>}
-      <div className={detailCard}>
+      <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
         <label>
           Research project{" "}
           <select
@@ -159,7 +159,7 @@ export function ResearchHistory({
               setName(project?.name ?? "");
             }}
           >
-            <option value="">All projects / new project</option>
+            <option value="">All projects</option>
             {projects.data?.pages
               .flatMap((page) => page.items)
               .map((project) => (
@@ -174,6 +174,155 @@ export function ResearchHistory({
             More projects
           </button>
         )}
+
+        <label>
+          Sample{" "}
+          <select
+            className={inputClass}
+            aria-label="Sample"
+            value={sample}
+            onChange={(event) => setSample(event.target.value)}
+          >
+            <option value="">All samples</option>
+            {samples.data?.pages
+              .flatMap((page) => page.items)
+              .map((item) => (
+                <option key={item.record.id} value={item.record.id}>
+                  {item.revision.content.display_name} ({item.record.id})
+                </option>
+              ))}
+          </select>
+        </label>
+        {samples.hasNextPage && (
+          <button className={secondaryButton} onClick={() => void samples.fetchNextPage()}>
+            More samples
+          </button>
+        )}
+        <label>
+          Working point{" "}
+          <input
+            className={inputClass}
+            value={workingPoint}
+            onChange={(event) => setWorkingPoint(event.target.value)}
+          />
+        </label>
+        <label>
+          Bench deployment{" "}
+          <input
+            className={inputClass}
+            value={bench}
+            onChange={(event) => setBench(event.target.value)}
+          />
+        </label>
+        <label>
+          From (local time){" "}
+          <input
+            className={inputClass}
+            type="datetime-local"
+            value={after}
+            onChange={(event) => setAfter(event.target.value)}
+          />
+        </label>
+        <label>
+          Before (local time){" "}
+          <input
+            className={inputClass}
+            type="datetime-local"
+            value={before}
+            onChange={(event) => setBefore(event.target.value)}
+          />
+        </label>
+      </div>
+      <div className={detailCard}>
+        <h3 className="mt-0 text-base font-semibold">Retained runs</h3>
+        {allRuns && selected && (
+          <p role="status">Showing runs across all projects for association.</p>
+        )}
+        {daemonUnavailable ? (
+          <p role="status">Data unavailable while the application service is offline.</p>
+        ) : runs.isPending ? (
+          <p>Loading history…</p>
+        ) : (
+          <ul className="space-y-3">
+            {runs.data?.pages
+              .flatMap((page) => page.items)
+              .map((run) => (
+                <li
+                  key={run.snapshot.run_id}
+                  className="flex min-w-0 flex-wrap items-center gap-3 border-b border-line pb-3 break-words"
+                >
+                  <button
+                    className={`${secondaryButton} max-w-full whitespace-normal break-all`}
+                    onClick={() => onOpenRun(run.snapshot.run_id)}
+                  >
+                    {run.control.admission.display_name || run.snapshot.run_id}
+                  </button>
+                  <code className="max-w-full break-all text-xs text-text-dim">
+                    {run.snapshot.run_id}
+                  </code>
+                  <OpenRunWindow runId={run.snapshot.run_id} />
+                  <span>
+                    {run.snapshot.created_at
+                      ? new Date(run.snapshot.created_at).toLocaleString()
+                      : "Unknown time"}
+                  </span>
+                  <span>{run.snapshot.outcome?.result ?? run.control.state}</span>
+                  {run.snapshot.outcome?.certainty === "indeterminate" && (
+                    <span>Outcome indeterminate</span>
+                  )}
+                  {run.control.attention_reason && <span>{run.control.attention_reason}</span>}
+                  <span>Bench: {run.deployment_id ?? "unknown"}</span>
+                  <span>
+                    {run.snapshot.samples
+                      ?.map(
+                        (binding) =>
+                          `${binding.display_name} / ${binding.context_id ?? "no working point"}`,
+                      )
+                      .join(", ")}
+                  </span>
+                  {managing && selected && (
+                    <button
+                      className={secondaryButton}
+                      disabled={pending}
+                      onClick={() =>
+                        associate.mutate({
+                          kind: "runs",
+                          identity: run.snapshot.run_id,
+                          present: allRuns,
+                        })
+                      }
+                    >
+                      {allRuns ? "Associate run" : "Remove run association"}
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+        )}
+        {runs.data?.pages[0]?.items.length === 0 && <p>No runs match these filters.</p>}
+        {runs.hasNextPage && (
+          <button
+            className={secondaryButton}
+            disabled={runs.isFetchingNextPage}
+            onClick={() => void runs.fetchNextPage()}
+          >
+            Older runs
+          </button>
+        )}
+      </div>
+      <details
+        className={detailCard}
+        open={managing}
+        onToggle={(event) => {
+          const open = event.currentTarget.open;
+          setManaging(open);
+        }}
+      >
+        <summary className="cursor-pointer font-semibold">Research project management</summary>
+        <p className="text-sm text-text-dim">
+          Manage the project selected above. Associations do not move data or change parameter
+          selections.
+        </p>
         <form
           className="mt-3 flex flex-wrap gap-2"
           onSubmit={(event) => {
@@ -225,31 +374,6 @@ export function ResearchHistory({
             )}
           </div>
         )}
-      </div>
-      <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
-        <label>
-          Sample{" "}
-          <select
-            className={inputClass}
-            aria-label="Sample"
-            value={sample}
-            onChange={(event) => setSample(event.target.value)}
-          >
-            <option value="">All samples</option>
-            {samples.data?.pages
-              .flatMap((page) => page.items)
-              .map((item) => (
-                <option key={item.record.id} value={item.record.id}>
-                  {item.revision.content.display_name} ({item.record.id})
-                </option>
-              ))}
-          </select>
-        </label>
-        {samples.hasNextPage && (
-          <button className={secondaryButton} onClick={() => void samples.fetchNextPage()}>
-            More samples
-          </button>
-        )}
         {selected && sample && (
           <button
             className={secondaryButton}
@@ -259,40 +383,6 @@ export function ResearchHistory({
             Associate sample
           </button>
         )}
-        <label>
-          Working point{" "}
-          <input
-            className={inputClass}
-            value={workingPoint}
-            onChange={(event) => setWorkingPoint(event.target.value)}
-          />
-        </label>
-        <label>
-          Bench deployment{" "}
-          <input
-            className={inputClass}
-            value={bench}
-            onChange={(event) => setBench(event.target.value)}
-          />
-        </label>
-        <label>
-          From (local time){" "}
-          <input
-            className={inputClass}
-            type="datetime-local"
-            value={after}
-            onChange={(event) => setAfter(event.target.value)}
-          />
-        </label>
-        <label>
-          Before (local time){" "}
-          <input
-            className={inputClass}
-            type="datetime-local"
-            value={before}
-            onChange={(event) => setBefore(event.target.value)}
-          />
-        </label>
         {selected && (
           <label>
             <input
@@ -303,70 +393,14 @@ export function ResearchHistory({
             Show runs outside this project to associate
           </label>
         )}
-      </div>
-      <div className={detailCard}>
-        {runs.isPending ? (
-          <p>Loading history…</p>
-        ) : (
-          <ul className="space-y-3">
-            {runs.data?.pages
-              .flatMap((page) => page.items)
-              .map((run) => (
-                <li
-                  key={run.snapshot.run_id}
-                  className="flex flex-wrap items-center gap-3 border-b border-line pb-3"
-                >
-                  <button
-                    className={secondaryButton}
-                    onClick={() => onOpenRun(run.snapshot.run_id)}
-                  >
-                    {run.control.admission.display_name || run.snapshot.run_id}
-                  </button>
-                  <span>
-                    {run.snapshot.created_at
-                      ? new Date(run.snapshot.created_at).toLocaleString()
-                      : "Unknown time"}
-                  </span>
-                  <span>{run.control.state}</span>
-                  <span>Bench: {run.deployment_id ?? "unknown"}</span>
-                  <span>
-                    {run.snapshot.samples
-                      ?.map(
-                        (binding) =>
-                          `${binding.display_name} / ${binding.context_id ?? "no working point"}`,
-                      )
-                      .join(", ")}
-                  </span>
-                  {selected && (
-                    <button
-                      className={secondaryButton}
-                      disabled={pending}
-                      onClick={() =>
-                        associate.mutate({
-                          kind: "runs",
-                          identity: run.snapshot.run_id,
-                          present: allRuns,
-                        })
-                      }
-                    >
-                      {allRuns ? "Associate run" : "Remove run association"}
-                    </button>
-                  )}
-                </li>
-              ))}
-          </ul>
-        )}
-        {runs.data?.pages[0]?.items.length === 0 && <p>No runs match these filters.</p>}
-        {runs.hasNextPage && (
-          <button
-            className={secondaryButton}
-            disabled={runs.isFetchingNextPage}
-            onClick={() => void runs.fetchNextPage()}
-          >
-            Older runs
-          </button>
-        )}
-      </div>
+      </details>
+      <details className={detailCard}>
+        <summary className="cursor-pointer font-semibold">Import and manage data</summary>
+        <div className="mt-3 space-y-4">
+          <ImportedCaptures unavailable={daemonUnavailable} />
+          <DataCleanupHistory />
+        </div>
+      </details>
     </section>
   );
 }

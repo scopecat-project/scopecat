@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -47,7 +48,12 @@ it("filters retained runs and removes only their project association", async () 
         return Response.json({
           items: [
             {
-              snapshot: { run_id: "run-1", created_at: "2026-09-17T00:00:00Z", samples: [] },
+              snapshot: {
+                run_id: "run-1",
+                created_at: "2026-09-17T00:00:00Z",
+                samples: [],
+                outcome: { result: "failed", certainty: "indeterminate" },
+              },
               control: { state: "closed", admission: { display_name: "Retained scan" } },
               deployment_id: "bench-1",
             },
@@ -84,7 +90,15 @@ it("filters retained runs and removes only their project association", async () 
   );
   fireEvent.click(await screen.findByRole("button", { name: "Retained scan" }));
   expect(open).toHaveBeenCalledWith("run-1");
-  fireEvent.click(screen.getByRole("button", { name: "Remove run association" }));
+  expect(screen.getByText("failed")).toBeVisible();
+  expect(screen.getByText("Outcome indeterminate")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Remove run association" })).toBeNull();
+  expect(screen.getByRole("link", { name: "Open result in new tab or window" })).toHaveAttribute(
+    "href",
+    "/?run=run-1",
+  );
+  fireEvent.click(screen.getByText("Research project management"));
+  fireEvent.click(await screen.findByRole("button", { name: "Remove run association" }));
   await waitFor(() =>
     expect(
       requests.some(
@@ -94,6 +108,14 @@ it("filters retained runs and removes only their project association", async () 
       ),
     ).toBe(true),
   );
+  fireEvent.click(screen.getByLabelText("Show runs outside this project to associate"));
+  fireEvent.click(screen.getByText("Research project management"));
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Remove run association" })).toBeNull(),
+  );
+  expect(screen.getByText("Showing runs across all projects for association.")).toBeVisible();
+  expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
+  expect(screen.getByLabelText("Sample", { exact: true })).toHaveValue("chip");
   expect(
     requests.some(
       (request) =>

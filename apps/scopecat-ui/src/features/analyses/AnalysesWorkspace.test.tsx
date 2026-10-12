@@ -42,6 +42,7 @@ describe("AnalysesWorkspace", () => {
     expect(screen.getByText("sha256:publication")).toHaveAttribute("title", "sha256:publication");
     expect(screen.getByText("verification.v1")).toBeVisible();
 
+    fireEvent.click(screen.getByText("Sources and execution evidence"));
     fireEvent.click(screen.getByRole("button", { name: "run-candidate" }));
 
     expect(openRun).toHaveBeenCalledWith("run-candidate");
@@ -71,6 +72,7 @@ describe("AnalysesWorkspace", () => {
       "title",
       "sha256:response",
     );
+    fireEvent.click(screen.getByText("Sources and execution evidence"));
     expect(screen.getByText("Procedure decision")).toBeVisible();
     expect(screen.queryByRole("button", { name: "procedure-test" })).toBeNull();
   });
