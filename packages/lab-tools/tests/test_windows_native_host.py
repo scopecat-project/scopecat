@@ -32,8 +32,7 @@ def test_host_preserves_process_identity_and_python_subprocesses(tmp_path):
     )
     executable = app / "Scopecat.exe"
     source = Path(__file__).resolve().parents[1] / "src/lab_tools/native_launcher.c"
-    compiler = shutil.which("cl.exe")
-    assert compiler is not None
+    compiler, environment = dev_host_windows.compiler_environment()
     subprocess.run(  # noqa: S603 - compile the repository host into a disposable path
         [
             compiler,
@@ -50,6 +49,7 @@ def test_host_preserves_process_identity_and_python_subprocesses(tmp_path):
             "/SUBSYSTEM:WINDOWS",
         ],
         check=True,
+        env=environment,
         capture_output=True,
         timeout=60,
     )
