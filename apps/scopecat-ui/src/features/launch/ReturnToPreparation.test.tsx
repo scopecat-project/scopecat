@@ -29,3 +29,21 @@ it("also offers the existing preparation from a run opened without procedure con
     "?preparation=1#launch",
   );
 });
+
+it("focuses preparation again when its return URL is already selected", () => {
+  window.history.replaceState(null, "", "/?preparation=1&procedure=p1#launch");
+  render(
+    <>
+      <ReturnToPreparation />
+      <section tabIndex={-1} aria-labelledby="experiment-preparation">
+        <h3 id="experiment-preparation">Prepare an experiment</h3>
+      </section>
+    </>,
+  );
+  const preparation = screen.getByRole("region", { name: "Prepare an experiment" });
+  const link = screen.getByRole("link", { name: "Return to preparation" });
+  fireEvent.click(link, { ctrlKey: true });
+  expect(preparation).not.toBeFocused();
+  fireEvent.click(link);
+  expect(preparation).toBeFocused();
+});
