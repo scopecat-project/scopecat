@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 import stat
 import subprocess
@@ -12,6 +13,7 @@ from pathlib import Path
 import httpx2
 import psutil
 import pytest
+from pydantic import ValidationError
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import (
     DAEMON_URL_ENV,
@@ -124,6 +126,7 @@ def test_endpoint_record_is_private_and_round_trips(tmp_path: Path) -> None:
     if os.name != "nt":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert read_daemon_endpoint_record(tmp_path) == record
+    assert "state_root" not in json.loads(path.read_text())
 
 
 @pytest.mark.parametrize("accepted", [False, True])
@@ -810,3 +813,27 @@ def test_application_endpoint_cleanup_uses_recorded_location(tmp_path: Path) -> 
     _remove_owned_record(record)
     assert not path.exists()
     assert not (tmp_path / ".scopecat").exists()
+
+
+@pytest.mark.parametrize("shutdown_accepted", [False, True])
+@pytest.mark.parametrize("separate_state", [False, True])
+def test_endpoint_wire_shape_preserves_only_meaningful_state_root(
+    tmp_path: Path, shutdown_accepted: bool, separate_state: bool
+) -> None:
+    record = _record(tmp_path, pid=123, process_create_time=45).model_copy(
+        update={
+            "state_root": tmp_path / "state" if separate_state else None,
+            "shutdown_accepted": shutdown_accepted,
+            "python": None,
+        }
+    )
+    path = write_daemon_endpoint_record(record)
+    payload = json.loads(path.read_text())
+    assert ("state_root" in payload) is separate_state
+    if separate_state:
+        assert payload["state_root"] == str(tmp_path / "state")
+    assert payload["python"] is None
+    assert payload["shutdown_accepted"] is shutdown_accepted
+    assert DaemonEndpointRecord.model_validate_json(path.read_text()) == record
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        DaemonEndpointRecord.model_validate({**payload, "unexpected": None})

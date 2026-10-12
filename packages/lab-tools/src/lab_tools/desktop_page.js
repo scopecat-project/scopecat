@@ -25,7 +25,10 @@ function retry() {
 
 function resetData() {
   return operate("正在确认备份与删除应用数据，请稍候…", async () => {
-    const changed = await pywebview.api.reset_data(document.getElementById("skip-backup").checked);
+    const checkbox = document.getElementById("skip-backup");
+    const skipBackup = checkbox.checked;
+    checkbox.checked = false;
+    const changed = await pywebview.api.reset_data(skipBackup);
     if (!changed) progress("");
   });
 }

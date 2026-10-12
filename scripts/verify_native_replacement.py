@@ -75,6 +75,32 @@ assert runtime.status().state == "stopped"
 """
 
 
+def installation_selection(
+    python: Path, home: Path, environment: dict[str, str]
+) -> Path:
+    """Ask the candidate runtime to resolve (or reject) the retained layout."""
+    result = subprocess.run(  # noqa: S603 - candidate Python in isolated acceptance home
+        [
+            str(python),
+            "-I",
+            "-B",
+            "-c",
+            (
+                "from pathlib import Path; import json, sys; "
+                "from lab_tools.application_runtime import ApplicationRuntime; "
+                "runtime = ApplicationRuntime(Path(sys.argv[1]) / 'data'); "
+                "print(json.dumps(str(runtime.selection)))"
+            ),
+            str(home),
+        ],
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return Path(cast("str", json.loads(result.stdout)))
+
+
 def verify(
     previous: Path, current: Path, home: Path, *, keep_work: bool = False
 ) -> None:
@@ -146,7 +172,7 @@ def _verify(previous: Path, current: Path, home: Path) -> None:
     installed.rename(home / "retired-package")
     shutil.copytree(current, installed)
     application_files = inventory(installed, (".",))
-    selection = home / "data/state/installation.json"
+    selection = installation_selection(python, home, environment)
     before_failure = selection.read_bytes()
     gui = installed / resources / "payload/gui"
     unavailable = gui.with_name("gui-unavailable")
