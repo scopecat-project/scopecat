@@ -32,6 +32,23 @@ def analysis_actions_router(
             )
         except ValueError as error:
             raise HTTPException(422, "Invalid retained author identity") from error
-        return describe(request)
+        try:
+            return describe(request)
+        except HTTPException as error:
+            if error.status_code == 504:
+                raise HTTPException(
+                    504,
+                    "Loading declared analyses timed out. No analysis was submitted. "
+                    "Reload the declarations to try again.",
+                ) from error
+            raise
+        except (KeyError, ValueError, OSError) as error:
+            raise HTTPException(
+                503,
+                "The run's saved author source or execution environment "
+                "is unavailable: "
+                f"{error}. Restore the original author environment, then reload "
+                "declared analyses. Existing results remain available.",
+            ) from error
 
     return router

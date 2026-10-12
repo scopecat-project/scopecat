@@ -92,7 +92,7 @@ it("explains unsupported inputs and makes no execute button", () => {
     ...catalog,
     actions: [{ ...catalog.actions[0]!, unavailable_reason: "Use Python for this input type." }],
   });
-  expect(screen.getByText("Use Python for this input type.")).toBeInTheDocument();
+  expect(screen.getByText(/Use Python for this input type./)).toBeInTheDocument();
   expect(screen.queryByRole("button")).toBeNull();
 });
 it("does not automatically retry a lost analysis response", async () => {
@@ -163,4 +163,189 @@ it("keeps edited inputs when the optional section is collapsed and reopened", as
   fireEvent.click(screen.getByText("Analyze this result"));
   expect(screen.getByLabelText("Tolerance")).toHaveValue(25);
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("reloads a failed directory explicitly without executing or retrying on reopen", async () => {
+  let finish!: (response: Response) => void;
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ detail: "Retained execution environment is unavailable" }, { status: 503 }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RunAnalysisActionsCard runId={catalog.run_id} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByText("Analyze this result"));
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Retained execution environment is unavailable",
+  );
+  fireEvent.click(screen.getByText("Analyze this result"));
+  fireEvent.click(screen.getByText("Analyze this result"));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Reload declared analyses" }));
+  fireEvent.click(screen.getByRole("button", { name: /Reload/ }));
+  expect(fetch).toHaveBeenCalledTimes(2);
+  finish(Response.json(catalog));
+  expect(await screen.findByLabelText("Tolerance")).toHaveValue(50);
+  expect(fetch.mock.calls.every(([request]) => request.method === "GET")).toBe(true);
+});
+
+it("does not confuse missing retained identity with an empty declaration", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(null)),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <RunAnalysisActionsCard runId={catalog.run_id} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByText("Analyze this result"));
+  expect(await screen.findByText(/no saved author source identity/)).toBeInTheDocument();
+  expect(screen.queryByText(/No analyses were declared/)).toBeNull();
+});
+
+it("resets expansion on run change and ignores the preceding run's pending directory", async () => {
+  let finish!: (response: Response) => void;
+  const fetch = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(Response.json({ ...catalog, run_id: "second-run" }));
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient();
+  const card = (runId: string) => (
+    <QueryClientProvider client={client}>
+      <RunAnalysisActionsCard runId={runId} />
+    </QueryClientProvider>
+  );
+  const view = render(card(catalog.run_id));
+  fireEvent.click(screen.getByText("Analyze this result"));
+  await screen.findByText("Loading declared analyses…");
+  view.rerender(card("second-run"));
+  finish(Response.json(catalog));
+  expect(screen.getByText("Analyze this result").closest("details")).not.toHaveAttribute("open");
+  expect(screen.queryByLabelText("Tolerance")).toBeNull();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByText("Analyze this result"));
+  await screen.findByLabelText("Tolerance");
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("blocks duplicate submits while preserving edits after an execution failure", async () => {
+  let finish!: (response: Response) => void;
+  const fetch = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  show({
+    ...catalog,
+    actions: [
+      {
+        ...catalog.actions[0]!,
+        inputs: [
+          { name: "label", kind: "text", required: false, default: "original", choices: [] },
+        ],
+      },
+    ],
+  });
+  fireEvent.change(screen.getByLabelText("Label"), { target: { value: "my edit" } });
+  const form = screen.getByRole("form");
+  fireEvent.submit(form);
+  fireEvent.submit(form);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  finish(Response.json({ detail: "Original environment unavailable" }, { status: 503 }));
+  await screen.findByRole("alert");
+  expect(screen.getByLabelText("Label")).toHaveValue("my edit");
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("does not show a preceding run's edits or late analysis receipt on the next run", async () => {
+  let finish!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+  );
+  const first = {
+    ...catalog,
+    actions: [
+      {
+        ...catalog.actions[0]!,
+        inputs: [
+          {
+            name: "label",
+            kind: "text" as const,
+            required: false,
+            default: "original",
+            choices: [],
+          },
+        ],
+      },
+    ],
+  };
+  const client = new QueryClient();
+  const form = (value: RunAnalysisActions) => (
+    <QueryClientProvider client={client}>
+      <DeclaredRunAnalyses catalog={value} />
+    </QueryClientProvider>
+  );
+  const view = render(form(first));
+  fireEvent.change(screen.getByLabelText("Label"), { target: { value: "first run edit" } });
+  fireEvent.submit(screen.getByRole("form"));
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  view.rerender(form({ ...first, run_id: "second-run" }));
+  finish(Response.json({ code_revision: catalog.code_revision, analysis_id: "first-result" }));
+  await vi.waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(screen.getByLabelText("Label")).toHaveValue("original");
+  expect(screen.queryByRole("link", { name: "View saved result" })).toBeNull();
+});
+
+it("keeps an in-flight action locked when navigating away and back", async () => {
+  let finish!: (response: Response) => void;
+  const fetch = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const value = { ...catalog, actions: [{ ...catalog.actions[0]!, inputs: [] }] };
+  const client = new QueryClient();
+  const form = (runId: string) => (
+    <QueryClientProvider client={client}>
+      <DeclaredRunAnalyses catalog={{ ...value, run_id: runId }} />
+    </QueryClientProvider>
+  );
+  const view = render(form(catalog.run_id));
+  fireEvent.submit(screen.getByRole("form"));
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  view.rerender(form("second-run"));
+  expect(screen.getByRole("button")).toBeEnabled();
+  view.rerender(form(catalog.run_id));
+  expect(screen.getByRole("button", { name: "Analyzing…" })).toBeDisabled();
+  fireEvent.submit(screen.getByRole("form"));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  finish(Response.json({ code_revision: catalog.code_revision, analysis_id: "first-result" }));
+  await vi.waitFor(() => expect(screen.getByRole("button")).toBeEnabled());
 });

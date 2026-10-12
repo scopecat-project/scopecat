@@ -137,3 +137,65 @@ def test_non_form_input_is_unavailable_without_executing_analysis() -> None:
     assert result.actions[0].unavailable_reason == (
         "values: input type is not supported in Runs; use Python."
     )
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "message"),
+    [
+        (
+            ValueError("Retained execution environment is unavailable"),
+            503,
+            "Restore the original author environment",
+        ),
+        (OSError("author interpreter missing"), 503, "author interpreter missing"),
+        (KeyError("saved revision missing"), 503, "saved revision missing"),
+    ],
+)
+def test_catalog_environment_failures_remain_actionable(
+    failure: Exception, status: int, message: str
+) -> None:
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from scopecat_server.http.analysis_actions import analysis_actions_router
+
+    read = Mock()
+    read.return_value.request.metadata = {
+        "author_workspace": REQUEST.workspace_id,
+        "author_code_revision": REVISION.content_hash,
+    }
+    describe = Mock(side_effect=failure)
+    app = FastAPI()
+    app.include_router(analysis_actions_router(read, describe))
+    response = TestClient(app).get("/api/v1/runs/run-original/analysis-actions")
+    assert response.status_code == status
+    assert message in response.json()["detail"]
+    describe.assert_called_once_with(REQUEST)
+
+
+def test_catalog_timeout_does_not_suggest_unknown_analysis_publication() -> None:
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI, HTTPException
+    from fastapi.testclient import TestClient
+
+    from scopecat_server.http.analysis_actions import analysis_actions_router
+
+    read = Mock()
+    read.return_value.request.metadata = {
+        "author_workspace": REQUEST.workspace_id,
+        "author_code_revision": REVISION.content_hash,
+    }
+    app = FastAPI()
+    app.include_router(
+        analysis_actions_router(
+            read,
+            Mock(side_effect=HTTPException(504, "Publication outcome may be unknown.")),
+        )
+    )
+    response = TestClient(app).get("/api/v1/runs/run-original/analysis-actions")
+    assert response.status_code == 504
+    assert "No analysis was submitted" in response.json()["detail"]
+    assert "Publication" not in response.json()["detail"]
