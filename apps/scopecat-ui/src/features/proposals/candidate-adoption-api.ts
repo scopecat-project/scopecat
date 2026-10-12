@@ -28,5 +28,10 @@ export const verifications = (run_id: string, proposal_id: string, before?: numb
       params: { path: { run_id, proposal_id }, query: { before, limit: 20 } },
     }),
   );
-export const publish = (body: Publication) =>
-  apiData(apiClient.POST("/api/v1/parameters/branch-publications", { body }));
+export const publish = (body: Publication, projectId: string) =>
+  apiData(
+    apiClient.POST("/api/v1/parameters/branch-publications", {
+      body,
+      params: { header: { "X-Scopecat-Project-ID": projectId } },
+    }),
+  );

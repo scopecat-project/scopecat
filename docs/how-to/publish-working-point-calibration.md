@@ -61,6 +61,7 @@ verification records is explicit. Old-data reanalysis, rejection and verificatio
 of a different candidate cannot authorize publication.
 
 If the response is lost or unreadable, **Recover original adoption** repeats the
-same retained request. The browser tab retains that request through reload;
+same retained request. The browser tab retains that request through reload, bound to the application
+data identity and exact candidate. A different or reset data space cannot replay it;
 publication history on the selected branch is the durable adoption record. Reopen
 it here to find the accepted revision, operator, note and exact verification.

@@ -15929,7 +15929,9 @@ export interface operations {
     publish_parameter_branch_api_v1_parameters_branch_publications_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Scopecat-Project-ID"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

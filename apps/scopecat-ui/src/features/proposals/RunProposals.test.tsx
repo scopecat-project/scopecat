@@ -14,6 +14,10 @@ import type {
 } from "../../data/parameter-proposals/types";
 import { RunProposals } from "./RunProposals";
 
+vi.mock("../../data/project-api", () => ({
+  getHealth: vi.fn(async () => ({ projectId: "space-a", status: "ok", details: {} })),
+}));
+
 vi.mock("../../data/parameter-proposals/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../data/parameter-proposals/api")>();
   return {

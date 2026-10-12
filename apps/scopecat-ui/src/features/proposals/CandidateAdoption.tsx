@@ -1,29 +1,75 @@
 import { useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { getHealth } from "../../data/project-api";
 import { ApiError } from "../../api-client";
 import type { ParameterProposal } from "../../data/parameter-proposals/types";
 import { errorMessage } from "../../lib/presentation";
 import { secondaryButton } from "../../ui/styles";
 import * as api from "./candidate-adoption-api";
 
-export function CandidateAdoption({ proposal }: { proposal: ParameterProposal }) {
+export function CandidateAdoption({
+  proposal,
+  projectId,
+}: {
+  proposal: ParameterProposal;
+  projectId: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <section className="px-3.5 py-3 text-sm">
       <button className={secondaryButton} onClick={() => setOpen(!open)} aria-expanded={open}>
         {open ? "Hide adoption review" : "Review adoption and records"}
       </button>
-      {open && <AdoptionReview proposal={proposal} />}
+      {open && (
+        <AdoptionReview
+          key={JSON.stringify([
+            projectId,
+            proposal.sourceRunId,
+            proposal.id,
+            proposal.analysisRecordId,
+          ])}
+          proposal={proposal}
+          projectId={projectId}
+        />
+      )}
     </section>
   );
 }
 
-function AdoptionReview({ proposal }: { proposal: ParameterProposal }) {
-  const storageKey = `candidate-publication:${proposal.sourceRunId}:${proposal.id}`;
+function AdoptionReview({
+  proposal,
+  projectId,
+}: {
+  proposal: ParameterProposal;
+  projectId: string;
+}) {
+  const storageKey = `candidate-publication-v2:${JSON.stringify([projectId, proposal.sourceRunId, proposal.id])}`;
+  const candidateIdentity = {
+    runId: proposal.sourceRunId,
+    proposalId: proposal.id,
+    analysisId: proposal.analysisRecordId,
+    baseHash: proposal.baseContentHash,
+    deltas: proposal.deltas,
+  };
   const [recovery] = useState(() => {
     try {
       const saved = sessionStorage.getItem(storageKey);
-      const command = saved ? (JSON.parse(saved) as api.Publication) : undefined;
+      const stored = saved
+        ? (JSON.parse(saved) as {
+            projectId: string;
+            candidate: typeof candidateIdentity;
+            command: api.Publication;
+          })
+        : undefined;
+      if (stored && (stored.projectId !== projectId || !equal(stored.candidate, candidateIdentity)))
+        throw new Error(
+          "Stored adoption belongs to a different data space or candidate. Reopen its original data space to recover it.",
+        );
+      const command = stored?.command;
+      if (stored && !command)
+        throw new Error(
+          "Original adoption request is unreadable. Inspect branch history before continuing.",
+        );
       if (
         command &&
         (command.run_id !== proposal.sourceRunId ||
@@ -53,34 +99,34 @@ function AdoptionReview({ proposal }: { proposal: ParameterProposal }) {
   const [error, setError] = useState<string>();
   const [receipt, setReceipt] = useState<api.Branch>();
   const heads = useInfiniteQuery({
-    queryKey: ["adoption-branches"],
+    queryKey: ["adoption-branches", projectId],
     queryFn: ({ pageParam }) => api.branches(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
   const evidence = useInfiniteQuery({
-    queryKey: ["candidate-verifications", proposal.sourceRunId, proposal.id],
+    queryKey: ["candidate-verifications", projectId, proposal.sourceRunId, proposal.id],
     queryFn: ({ pageParam }) => api.verifications(proposal.sourceRunId, proposal.id, pageParam),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
   const run = useQuery({
-    queryKey: ["adoption-source", proposal.sourceRunId],
+    queryKey: ["adoption-source", projectId, proposal.sourceRunId],
     queryFn: () => api.sourceRun(proposal.sourceRunId),
   });
   const records = useQuery({
-    queryKey: ["adoption-history", name],
+    queryKey: ["adoption-history", projectId, name],
     enabled: !!name,
     queryFn: () => api.history(name),
   });
   const currentHead = records.data?.items[0] ?? head;
   const current = useQuery({
-    queryKey: ["adoption-current", currentHead?.revision.revision_id],
+    queryKey: ["adoption-current", projectId, currentHead?.revision.revision_id],
     enabled: !!currentHead,
     queryFn: () => api.revision(currentHead!.revision.revision_id),
   });
   const draft = useQuery({
-    queryKey: ["adoption-working-table", name],
+    queryKey: ["adoption-working-table", projectId, name],
     enabled: !!name,
     queryFn: () => api.workingTable(name),
   });
@@ -115,9 +161,17 @@ function AdoptionReview({ proposal }: { proposal: ParameterProposal }) {
     setError(undefined);
     try {
       // Freeze and retain the original request before the first side effect.
-      sessionStorage.setItem(storageKey, JSON.stringify(body));
+      const identity = await getHealth();
+      if (identity.projectId !== projectId)
+        throw new Error(
+          "Application data space changed. Reopen the candidate before adopting; the original request is preserved.",
+        );
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({ projectId, candidate: candidateIdentity, command: body }),
+      );
       setAttempt(body);
-      const result = await api.publish(body);
+      const result = await api.publish(body, projectId);
       if (
         result.name !== body.name ||
         result.generation !== body.expected_generation + 1 ||
@@ -139,7 +193,8 @@ function AdoptionReview({ proposal }: { proposal: ParameterProposal }) {
         failure instanceof ApiError &&
         failure.status &&
         failure.status >= 400 &&
-        failure.status < 500
+        failure.status < 500 &&
+        !failure.message.startsWith("Application data space changed")
       ) {
         sessionStorage.removeItem(storageKey);
         setAttempt(undefined);

@@ -3,9 +3,11 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { getHealth } from "../../data/project-api";
 import { ApiError } from "../../api-client";
 import { CandidateAdoption } from "./CandidateAdoption";
 import * as api from "./candidate-adoption-api";
+vi.mock("../../data/project-api", () => ({ getHealth: vi.fn() }));
 vi.mock("./candidate-adoption-api", () => ({
   branches: vi.fn(),
   history: vi.fn(),
@@ -44,6 +46,13 @@ const proposal = {
 beforeEach(() => {
   vi.resetAllMocks();
   sessionStorage.clear();
+  vi.mocked(getHealth).mockResolvedValue({
+    status: "ok",
+    projectId: "space-a",
+    projectName: "A",
+    projectRoot: "/a",
+    details: {},
+  });
   vi.mocked(api.branches).mockResolvedValue({ items: [head] });
   vi.mocked(api.history).mockResolvedValue({ items: [head] });
   vi.mocked(api.sourceRun).mockResolvedValue({
@@ -58,14 +67,15 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-function mount() {
-  return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <CandidateAdoption proposal={proposal} />
-    </QueryClientProvider>,
+function mount(projectId = "space-a", currentProposal = proposal) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const content = (id: string) => (
+    <QueryClientProvider client={client}>
+      <CandidateAdoption proposal={currentProposal} projectId={id} />
+    </QueryClientProvider>
   );
+  const view = render(content(projectId));
+  return { ...view, switchProject: (id: string) => view.rerender(content(id)) };
 }
 async function select() {
   fireEvent.click(screen.getByText("Review adoption and records"));
@@ -104,7 +114,7 @@ it("retains the original request across unmount and rejects an unverified respon
   await screen.findByText(
     "The adoption response could not be verified. Recover the original request.",
   );
-  expect(api.publish).toHaveBeenNthCalledWith(2, command);
+  expect(api.publish).toHaveBeenNthCalledWith(2, command, "space-a");
   vi.mocked(api.publish).mockResolvedValueOnce({
     ...head,
     generation: 5,
@@ -113,7 +123,7 @@ it("retains the original request across unmount and rejects an unverified respon
   });
   fireEvent.click(screen.getByText("Recover original adoption"));
   await screen.findByRole("status");
-  expect(api.publish).toHaveBeenNthCalledWith(3, command);
+  expect(api.publish).toHaveBeenNthCalledWith(3, command, "space-a");
   expect(sessionStorage.length).toBe(0);
 });
 it("keeps the reviewed generation fixed while refreshing current branch conflicts", async () => {
@@ -177,6 +187,83 @@ it("shows raw working edits separately without adding them to publication", asyn
   expect(api.publish).toHaveBeenCalledTimes(1);
   expect(api.publish).toHaveBeenCalledWith(
     expect.objectContaining({ base, expected_generation: 4, proposal_id: "carrier" }),
+    "space-a",
   );
   expect(sessionStorage.length).toBe(0);
+});
+
+it("isolates recovery and query caches when the data space changes at the same origin", async () => {
+  vi.mocked(api.publish).mockRejectedValue(new ApiError("lost response"));
+  const view = mount();
+  await select();
+  fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+  await screen.findByText("lost response");
+  const key = sessionStorage.key(0)!;
+  const saved = sessionStorage.getItem(key);
+  view.switchProject("space-b");
+  await screen.findByLabelText("Target parameter branch");
+  expect(screen.queryByText("Recover original adoption")).toBeNull();
+  expect(screen.getByLabelText("Target parameter branch")).toHaveValue("");
+  await waitFor(() => expect(api.branches).toHaveBeenCalledTimes(2));
+  expect(sessionStorage.getItem(key)).toBe(saved);
+  expect(api.publish).toHaveBeenCalledTimes(1);
+});
+it("ignores legacy unscoped requests instead of migrating them into the current space", async () => {
+  sessionStorage.setItem(
+    "candidate-publication:run:carrier",
+    JSON.stringify({ name: "daily", run_id: "run", proposal_id: "carrier" }),
+  );
+  mount();
+  await select();
+  expect(screen.queryByText("Recover original adoption")).toBeNull();
+  expect(api.publish).not.toHaveBeenCalled();
+  expect(sessionStorage.length).toBe(1);
+});
+it.each(["space", "candidate"])(
+  "rejects cached requests whose %s binding differs",
+  async (binding) => {
+    vi.mocked(api.publish).mockRejectedValue(new ApiError("lost response"));
+    const view = mount();
+    await select();
+    fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+    await screen.findByText("lost response");
+    const key = sessionStorage.key(0)!;
+    const stored = JSON.parse(sessionStorage.getItem(key)!);
+    if (binding === "space") stored.projectId = "space-b";
+    else stored.candidate.analysisId = "different-analysis";
+    sessionStorage.setItem(key, JSON.stringify(stored));
+    view.unmount();
+    mount();
+    fireEvent.click(screen.getByText("Review adoption and records"));
+    await screen.findByText(/Stored adoption belongs to a different data space or candidate/);
+    expect(screen.queryByText("Recover original adoption")).toBeNull();
+    expect(api.publish).toHaveBeenCalledTimes(1);
+  },
+);
+it("rechecks current space before recovery and preserves the request on a server space fence", async () => {
+  vi.mocked(api.publish).mockRejectedValueOnce(new ApiError("lost response"));
+  mount();
+  await select();
+  fireEvent.click(screen.getByText("Adopt verified candidate into daily"));
+  await screen.findByText("lost response");
+  const saved = sessionStorage.getItem(sessionStorage.key(0)!);
+  vi.mocked(getHealth).mockResolvedValueOnce({
+    status: "ok",
+    projectId: "space-b",
+    projectName: "B",
+    projectRoot: "/b",
+    details: {},
+  });
+  fireEvent.click(screen.getByText("Recover original adoption"));
+  await screen.findByText(/Application data space changed. Reopen the candidate/);
+  expect(api.publish).toHaveBeenCalledTimes(1);
+  expect(sessionStorage.getItem(sessionStorage.key(0)!)).toBe(saved);
+  vi.mocked(api.publish).mockRejectedValueOnce(
+    new ApiError("Application data space changed; reopen the candidate before adopting", 409),
+  );
+  fireEvent.click(screen.getByText("Recover original adoption"));
+  await screen.findByText("Application data space changed; reopen the candidate before adopting");
+  expect(api.publish).toHaveBeenCalledTimes(2);
+  expect(api.publish).toHaveBeenLastCalledWith(JSON.parse(saved!).command, "space-a");
+  expect(sessionStorage.getItem(sessionStorage.key(0)!)).toBe(saved);
 });

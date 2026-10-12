@@ -1258,7 +1258,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/parameters/branch-publications")
     def publish_parameter_branch(
         command: ParameterBranchPublishCommand,
+        expected_project_id: Annotated[
+            str | None, Header(alias="X-Scopecat-Project-ID", min_length=1)
+        ] = None,
     ) -> ParameterBranch:
+        if (
+            expected_project_id is not None
+            and expected_project_id != application.health().project_id
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Application data space changed; "
+                    "reopen the candidate before adopting"
+                ),
+            )
         return application.config.publish_parameter_branch(command)
 
     @app.get(f"{_API_PREFIX}/parameters/revisions")

@@ -1,6 +1,7 @@
 import { CandidateAdoption } from "./CandidateAdoption";
 import { useMemo, useState, type ReactNode } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { getHealth } from "../../data/project-api";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   ChevronDown,
@@ -20,8 +21,29 @@ import { errorMessage, formatDateTime, shorten } from "../../lib/presentation";
 import { classes, countBadge, detailCard } from "../../ui/styles";
 
 export function RunProposals({ runId }: { runId: string }) {
+  const health = useQuery({
+    queryKey: ["health"],
+    queryFn: ({ signal }) => getHealth(signal),
+    refetchInterval: 5_000,
+  });
+  if (!health.data?.projectId)
+    return (
+      <p role="status">
+        {health.error ? errorMessage(health.error) : "Reading application identity…"}
+      </p>
+    );
+  return (
+    <ProjectRunProposals
+      key={health.data.projectId}
+      runId={runId}
+      projectId={health.data.projectId}
+    />
+  );
+}
+
+function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: string }) {
   const proposalsQuery = useInfiniteQuery({
-    queryKey: parameterProposalKeys.infinite(runId),
+    queryKey: [...parameterProposalKeys.infinite(runId), projectId],
     queryFn: ({ pageParam, signal }) =>
       pageParam === undefined
         ? getRunParameterProposals(runId, signal)
@@ -145,7 +167,7 @@ export function RunProposals({ runId }: { runId: string }) {
                 <ProposalDiff proposal={proposal} />
                 <ProposalApproval proposal={proposal} />
 
-                <CandidateAdoption proposal={proposal} />
+                <CandidateAdoption proposal={proposal} projectId={projectId} />
                 <CandidateNextSteps proposal={proposal} />
               </section>
             );

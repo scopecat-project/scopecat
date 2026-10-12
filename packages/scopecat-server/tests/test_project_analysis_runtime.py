@@ -1553,6 +1553,17 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
             revision_id="accepted",
             actor="operator",
         )
+        # Origin/port reuse must reject an old space before any publication work.
+        wrong_space = transport.post(
+            "/api/v1/parameters/branch-publications",
+            headers={"X-Scopecat-Project-ID": "different-data-space"},
+            json=command.model_dump(mode="json"),
+        )
+        assert wrong_space.status_code == 409
+        assert "data space changed" in wrong_space.json()["detail"]
+        assert lab.parameters.checkout("daily").head == branch
+        with pytest.raises(DaemonNotFoundError):
+            lab.parameters.get("accepted")
         registry = lab.config.registry()
         assert not registry.entries
         setup = lab.setup.get("initial")
@@ -1697,7 +1708,46 @@ def test_verified_parameter_branch_publication_is_atomic_and_restorable(
         assert lab.parameters.checkout("daily").head == branch
         with pytest.raises(DaemonNotFoundError):
             lab.parameters.get("accepted")
+        from uuid import uuid4
+
+        from scopecat_server.errors import BackendConflict
+        from scopecat_server.parameter_drafts import (
+            ParameterDraftCommit,
+            ParameterDraftSave,
+            ParameterDraftStart,
+        )
+
+        drafts = runtime.application.parameter_drafts
+        working = drafts.start(
+            ParameterDraftStart(
+                draft_id=uuid4(),
+                base=revision.ref,
+                actor="editor",
+                working_branch="daily",
+                branch_generation=branch.generation,
+            )
+        )
+        edited_input = working.draft.input.model_copy(deep=True)
+        value = edited_input.values[0].value
+        assert value is not None
+        edited_input.values[0] = edited_input.values[0].model_copy(
+            update={"value": value.model_copy(update={"text": "1e"})}
+        )
+        working = drafts.save(
+            working.draft.draft_id,
+            ParameterDraftSave(
+                expected_revision=working.head_revision, input=edited_input
+            ),
+        )
         published = lab.config.client.publish_parameter_branch(command)
+        retained = drafts.read(working.draft.draft_id)
+        assert retained.draft == working.draft
+        assert retained.branch_changed
+        with pytest.raises(BackendConflict, match="Branch changed"):
+            drafts.commit(
+                working.draft.draft_id,
+                ParameterDraftCommit(expected_revision=working.head_revision),
+            )
         assert published.previous == revision.ref
         assert published.publication is not None
         assert published.publication.verification == command.verification
