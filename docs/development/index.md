@@ -50,10 +50,10 @@ Package-specific implementation details stay in package READMEs and docstrings.
 
 ## Changes and evidence
 
-Public changes use CI, self-review and squash merging. Select local checks for the
-behavior changed; documentation changes need link/build checks, while a changed
-process or installed workflow needs its relevant integration coverage. CI remains
-required. See [test feedback](test-feedback.md) for commands and coverage limits.
+Select local checks for the behavior changed; documentation changes need link/build
+checks, while a changed process or installed workflow needs its relevant integration
+coverage. CI remains required. See [test feedback](test-feedback.md) for commands
+and coverage limits.
 
 Issues describe unresolved scope and acceptance; PRs record delivered changes and
 validation. Update a related issue when a change affects that scope or conclusion.
