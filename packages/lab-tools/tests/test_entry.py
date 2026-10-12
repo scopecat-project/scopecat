@@ -29,6 +29,9 @@ def test_public_init_creates_ordinary_author_source_without_overwriting_edits(
         .joinpath(f"lessons/{topic}.ipynb")
         .read_bytes()
     )
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text())
+    # 当前 CLI 生成可编辑作者源码；build backend 由独立安装 fixture 验证。
+    assert "build-system" not in pyproject
     manifest = tomllib.loads((root / "scopecat.toml").read_text())
     assert "bootstrap" not in manifest.get("lab", {})
     assert not (root / ".vscode/tasks.json").exists()

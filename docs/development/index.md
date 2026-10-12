@@ -13,6 +13,25 @@ uv sync --locked
 Add `--group notebook` only when a local Jupyter kernel is needed. The React
 project console has its own locked pnpm workspace under `apps/scopecat-ui`.
 
+## uv toolchain 维护
+
+Renovate 将 `pep621` 提取的 `uv` 和规范化包名 `uv-build` 放入同一
+`uv toolchain` 组；`astral-sh/setup-uv` Action 独立更新。CI 的
+`version-file: uv.lock` 从实际 checkout（包括 reusable workflow 的目标 ref）
+读取 CLI 精确版本。分组用于一起审查，不要求 CLI 与 backend 每个 patch 同版。
+保留 lab-tools 的 `uv` 运行依赖、delivery 的 `uv_build` 和独立的
+`delivery-build` 构建环境声明。
+
+审查 backend 升级时，核对以下维护点，避免只更新 `pyproject.toml` 后遗漏嵌入文本：
+
+- 当前 `scopecat init --topic` 调用 `lab_tools.notebook_journey.create_lesson_source`，
+  不声明 build backend；无 topic 的 server scaffold 也不生成 backend 声明。
+- `lab_teaching/project.py` 的 `PYPROJECT` 是教学回归 fixture；
+  `test_installed_adapter_journey.py` 的内嵌项目直接调用已安装的 backend 构建 wheel。
+  两者不经 `pep621` 自动提取，升级时人工确认其约束是否仍适用。
+- `fixtures/installed_author_lab/pyproject.toml` 是独立安装兼容 fixture，继续保留
+  Renovate 忽略；仅在兼容契约确实改变时调整，不机械同步所有历史版本下限。
+
 ## Run repository checks
 
 ```sh

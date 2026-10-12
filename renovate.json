@@ -27,6 +27,12 @@
   ],
   "packageRules": [
     {
+      "description": "将 Python uv CLI 与规范化的 uv-build 包更新放在同一组审查",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["uv", "uv-build"],
+      "groupName": "uv toolchain"
+    },
+    {
       "description": "Override config:best-practices dev-only pinning by pinning all npm dependencies except peer dependencies",
       "matchManagers": ["npm"],
       "extends": [":pinAllExceptPeerDependencies"]
