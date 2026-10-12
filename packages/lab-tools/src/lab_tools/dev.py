@@ -405,6 +405,10 @@ def main() -> None:
             from .dev_host import enter_host
 
             enter_host(source, home)
+        elif sys.platform == "win32" and not args.browser:
+            from .dev_host_windows import enter_host
+
+            enter_host(source, home)
         run(source, home, browser=args.browser)
     except KeyboardInterrupt:
         print("Development preparation cancelled; existing data retained.", flush=True)

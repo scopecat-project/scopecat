@@ -105,6 +105,13 @@ jobs:
         run: >-
           uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
           packages/lab-tools/tests/test_native_console.py
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: runner.os == 'Windows'
+      - name: Check Windows native host
+        if: runner.os == 'Windows'
+        run: >-
+          uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
+          packages/lab-tools/tests/test_windows_native_host.py
       - name: Run exact platform selection (no skips)
         env:
           SMOKE_EXPECTED_SHA: ${{ inputs.ref || github.sha }}
