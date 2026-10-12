@@ -238,6 +238,11 @@ These are maintainer prerequisites, not end-user prerequisites.
 The native executable runs the complete bundled Python runtime and enters the
 desktop workbench. It does not install application dependencies or open
 a browser. Laboratory initialization scripts are not part of native startup.
+On Windows, `Scopecat.exe` hosts Python in its own process, with the same explicit
+AppUserModelID as the installed shortcut. GUI windows therefore belong to the
+application executable; backend and author subprocesses still use their selected
+ordinary Python interpreters. The Windows platform smoke job compiles and checks
+this process identity, interpreter selection, argument forwarding and exit status.
 Create or register ordinary source explicitly after opening the application.
 Updates replace the native application after work has stopped. Startup registers
 the installed runtime; it never selects a separately prepared candidate.

@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from lab_tools import dev, dev_host
+from lab_tools import dev, dev_host, dev_host_windows
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ def test_build_is_thin_seals_icon_and_reuses_without_recompile(builder):
     assert sum(command[0] == "/usr/bin/clang" for command in commands) == 1
     app = executable.parents[2]
     assert {
-        str(path.relative_to(app)) for path in app.rglob("*") if path.is_file()
+        path.relative_to(app).as_posix() for path in app.rglob("*") if path.is_file()
     } == {
         "Contents/Info.plist",
         "Contents/MacOS/scopecat-dev",
@@ -204,7 +204,8 @@ def test_exec_preserves_process_terminal_and_passes_one_home(inputs, monkeypatch
     [
         ("darwin", False, 1),
         ("darwin", True, 0),
-        ("win32", False, 0),
+        ("win32", False, 1),
+        ("win32", True, 0),
         ("linux", False, 0),
     ],
 )
@@ -220,6 +221,9 @@ def test_entry_selects_host_before_application_owner(
     )
     monkeypatch.setattr(dev, "source_root", lambda: tmp_path)
     monkeypatch.setattr(dev_host, "enter_host", lambda *_a: events.append("host"))
+    monkeypatch.setattr(
+        dev_host_windows, "enter_host", lambda *_a: events.append("host")
+    )
     monkeypatch.setattr(dev, "run", lambda *_a, **_k: events.append("owner"))
     dev.main()
     assert events == [*(["host"] if host_calls else []), "owner"]

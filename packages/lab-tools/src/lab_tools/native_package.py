@@ -261,7 +261,8 @@ def package(app: Path, destination: Path) -> Path:
                 f'Source: "{app}\\*"; DestDir: "{{app}}"; '
                 "Flags: ignoreversion recursesubdirs createallsubdirs\n"
                 "[Icons]\n"
-                'Name: "{userprograms}\\Scopecat"; Filename: "{app}\\Scopecat.exe"\n',
+                'Name: "{userprograms}\\Scopecat"; Filename: "{app}\\Scopecat.exe"; '
+                'AppUserModelID: "org.scopecat.desktop"\n',
                 encoding="utf-8-sig",
             )
             _run([compiler, str(script)])

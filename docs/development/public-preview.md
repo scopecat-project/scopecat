@@ -228,6 +228,16 @@ stdin, signals and exit status; it does not copy Python, dependencies, source or
 GUI into the `.app`. The printed host path can be used to identify it in native
 tools. It is a local development host, not a distributable installation.
 
+Windows similarly prepares a cached **Scopecat Dev.exe**, with a stable
+worktree-specific AppUserModelID distinct from the installed application. Install
+Visual Studio C++ Build Tools with the Windows SDK (Desktop development with C++);
+the entry discovers the installed compiler or uses an active Native Tools prompt.
+The window belongs to this executable rather than Python. The host loads the
+current Python in-process, keeps the editable virtual environment and uses its
+ordinary Python executable for backend subprocesses. It inherits the development
+terminal for restart commands and Ctrl+C; the waiting launcher forwards its exit
+status. No application package or copied Python environment is required.
+
 Host caches change only for checkout/interpreter/ABI/libpython, icon or host
 construction inputs. Ordinary GUI and application-source edits do not rebuild
 the host. After changing the host's own inputs, safely quit the existing owner
