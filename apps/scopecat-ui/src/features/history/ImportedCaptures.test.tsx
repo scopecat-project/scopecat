@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -69,11 +70,12 @@ it("imports through the native picker and preserves data after cancelled or fail
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <ImportedCaptures unavailable={false} />
+      <ImportedCaptures projectId="space-a" unavailable={false} />
       <DesktopFiles />
     </QueryClientProvider>,
   );
   await screen.findByText("No imported data yet.");
+  fireEvent.click(screen.getByText("Import data", { exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Open Scopecat file…" }));
   await screen.findByText("Opening and checking the selected file…");
   fireEvent.click(screen.getByRole("button", { name: "Open Scopecat file…" }));
@@ -81,6 +83,10 @@ it("imports through the native picker and preserves data after cancelled or fail
   finishOpen!();
   await screen.findByText("This data is already available.");
   await screen.findByText("Runs: scan-A");
+  fireEvent.click(screen.getByText("Import data", { exact: true }));
+  expect(screen.getByText("Runs: scan-A")).toBeVisible();
+  expect(screen.getByRole("button", { name: "View data" })).toBeVisible();
+  expect(screen.getByText("Review data cleanup…")).not.toBeVisible();
   await screen.findByRole("region", { name: "Captured run" });
   act(() => window.history.back());
   await waitFor(() => expect(screen.queryByRole("region", { name: "Captured run" })).toBeNull());

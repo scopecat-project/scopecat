@@ -1149,3 +1149,101 @@ it("retains the calibration route and procedure when navigating back", async () 
   expect(window.location.hash).toBe("#launch");
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
 });
+
+it("suspends hidden Data queries, resumes same-space drafts, and resets them across data spaces", async () => {
+  window.history.replaceState(null, "", "/#history");
+  let space = "space-a";
+  const requests: Request[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      requests.push(request);
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/research-projects")
+        return Response.json({
+          items: [
+            {
+              id: space === "space-a" ? "alpha" : "beta",
+              name: space === "space-a" ? "Alpha" : "Beta",
+              description: "",
+              revision: 1,
+            },
+          ],
+        });
+      if (request.method === "PUT")
+        return Response.json({
+          id: url.pathname.split("/").at(-1),
+          ...(await request.json()),
+          revision: 1,
+        });
+      if (url.pathname.endsWith("/members/samples")) return Response.json({ ids: [] });
+      if (url.pathname === "/api/v1/data/captures")
+        return Response.json([{ content_hash: space, roots: [space], source_project_id: space }]);
+      return Response.json({ items: [] });
+    }),
+  );
+  const health = () => ({
+    status: "ok",
+    projectId: space,
+    projectName: space,
+    projectRoot: `/tmp/${space}`,
+    details: {},
+  });
+  vi.mocked(getHealth).mockResolvedValue(health());
+  const cache = createQueryClient();
+  renderApp(cache);
+  await screen.findByRole("option", { name: "Alpha" });
+  fireEvent.change(screen.getByLabelText("Research project"), { target: { value: "alpha" } });
+  fireEvent.click(screen.getByText("Research project management"));
+  fireEvent.change(screen.getByLabelText("Project name"), {
+    target: { value: "Unsubmitted Alpha rename" },
+  });
+  fireEvent.change(screen.getByLabelText("Working point"), { target: { value: "bias-a" } });
+  await waitFor(() => expect(cache.isFetching({ queryKey: ["research"] })).toBe(0));
+  await screen.findByText("Source: space-a");
+  fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+  await waitFor(() => {
+    expect(
+      cache
+        .getQueryCache()
+        .findAll({ queryKey: ["research"] })
+        .every((query) => query.getObserversCount() === 0),
+    ).toBe(true);
+    expect(
+      cache
+        .getQueryCache()
+        .findAll({ queryKey: ["data", "captures"] })
+        .every((query) => query.getObserversCount() === 0),
+    ).toBe(true);
+  });
+  const before = requests.length;
+  await act(async () => {
+    await cache.invalidateQueries({ queryKey: ["research"] });
+    await cache.invalidateQueries({ queryKey: ["data", "captures"] });
+  });
+  expect(requests).toHaveLength(before);
+  fireEvent.click(screen.getByRole("button", { name: "Data" }));
+  await waitFor(() => expect(requests.length).toBeGreaterThan(before));
+  expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
+  expect(screen.getByLabelText("Project name")).toHaveValue("Unsubmitted Alpha rename");
+  expect(screen.getByLabelText("Working point")).toHaveValue("bias-a");
+
+  fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+  space = "space-b";
+  vi.mocked(getHealth).mockResolvedValue(health());
+  act(() => {
+    cache.setQueryData(["health"], health());
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Data" }));
+  await screen.findByRole("option", { name: "Beta" });
+  expect(screen.queryByRole("option", { name: "Alpha" })).toBeNull();
+  expect(screen.getByLabelText("Research project")).toHaveValue("");
+  expect(screen.getByLabelText("Working point")).toHaveValue("");
+  expect(screen.getByText("Research project management").parentElement).not.toHaveAttribute("open");
+  fireEvent.click(screen.getByText("Research project management"));
+  expect(screen.getByLabelText("Project name")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
+  await screen.findByText("Source: space-b");
+  expect(screen.queryByText("Source: space-a")).toBeNull();
+  expect(requests.every((request) => request.method === "GET")).toBe(true);
+});

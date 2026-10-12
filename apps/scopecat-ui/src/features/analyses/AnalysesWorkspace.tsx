@@ -239,21 +239,6 @@ function AnalysisDetail({
         <span className={countBadge}>{selected.outputs.length} outputs</span>
       </header>
 
-      <ClearData key={selected.id} analyses={[selected.id]} />
-
-      <dl className="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-md border border-line bg-panel-soft p-3 text-[0.61rem]">
-        <dt className="font-bold text-text-dim">Key</dt>
-        <dd className="m-0 font-mono text-text-soft">{selected.key ?? "—"}</dd>
-        <dt className="font-bold text-text-dim">Publication</dt>
-        <dd className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-text-soft">
-          <span title={selected.publicationHash}>{selected.publicationHash}</span>
-        </dd>
-        <dt className="font-bold text-text-dim">Published</dt>
-        <dd className="m-0 text-text-soft">
-          <time dateTime={selected.publishedAt}>{formatDateTime(selected.publishedAt)}</time>
-        </dd>
-      </dl>
-
       <AnalysisPublicationView
         analysis={selected}
         copyTarget={{ kind: "project" }}
@@ -262,6 +247,24 @@ function AnalysisDetail({
         }
         onOpenRun={onOpenRun}
       />
+      <details className="mt-3 rounded-md border border-line p-3">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Publication details and data management
+        </summary>
+        <dl className="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-md border border-line bg-panel-soft p-3 text-[0.61rem]">
+          <dt className="font-bold text-text-dim">Key</dt>
+          <dd className="m-0 font-mono text-text-soft">{selected.key ?? "—"}</dd>
+          <dt className="font-bold text-text-dim">Publication</dt>
+          <dd className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-text-soft">
+            <span title={selected.publicationHash}>{selected.publicationHash}</span>
+          </dd>
+          <dt className="font-bold text-text-dim">Published</dt>
+          <dd className="m-0 text-text-soft">
+            <time dateTime={selected.publishedAt}>{formatDateTime(selected.publishedAt)}</time>
+          </dd>
+        </dl>
+        <ClearData key={selected.id} analyses={[selected.id]} />
+      </details>
     </>
   );
 }
