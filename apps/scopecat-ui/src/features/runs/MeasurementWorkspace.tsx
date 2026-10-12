@@ -8,10 +8,12 @@ export const useMeasurementFocus = () => useContext(MeasurementFocus);
 export function MeasurementWorkspace({
   title,
   progress,
+  notices,
   children,
 }: {
   title: string;
   progress?: ReactNode;
+  notices?: ReactNode;
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -62,8 +64,11 @@ export function MeasurementWorkspace({
               }
             }}
           >
-            {focused ? "Exit chart focus" : "Focus chart"}
+            {focused ? "Exit focus to view run details" : "Focus chart"}
           </button>
+        </div>
+        <div className="flex-none space-y-2 [&:empty]:hidden" aria-live="polite">
+          {notices}
         </div>
         {children}
       </dialog>

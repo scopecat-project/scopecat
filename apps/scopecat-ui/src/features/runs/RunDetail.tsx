@@ -7,14 +7,14 @@ import { WindowTitle } from "../application/WindowTitle";
 import { ExportRun } from "./ExportRun";
 import { RunPlanOrigin } from "../launch/PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
-import { AlertTriangle, Boxes, ChevronRight, Unlock } from "lucide-react";
+import { Boxes, ChevronRight } from "lucide-react";
 import { RunCancellationNotice } from "./RunCancellationNotice";
 import type {
   MeasurementTracePreview,
   RunDomainDecisionPage,
   RunExecutionSegmentPage,
 } from "../../api-contract";
-import { errorMessage, formatDateTime, shorten } from "../../lib/presentation";
+import { formatDateTime, shorten } from "../../lib/presentation";
 import { classes } from "../../ui/styles";
 import type {
   MeasurementPreview,
@@ -26,6 +26,7 @@ import type {
 import { RunProposals } from "../proposals/RunProposals";
 import { RunMeasuredCosts } from "./RunMeasuredCosts";
 import { RunAnalysisFollows } from "./RunAnalysisFollows";
+import { RunAttentionNotice } from "./RunAttentionNotice";
 import { RunFailureEvidence } from "./RunFailureEvidence";
 import { RunDomainDecisionCard } from "./RunDomainDecisionCard";
 import type {
@@ -215,7 +216,6 @@ export function RunDetail({
         </details>
       </div>
       <RunPlanOrigin runId={run.runId} />
-      <RunFailureEvidence runId={run.runId} />
 
       {run.samples.length > 0 && (
         <section
@@ -248,47 +248,22 @@ export function RunDetail({
         </section>
       )}
 
-      {run.resources.some(
-        (resource) => resource.blockedBy || resource.status === "quarantined",
-      ) && <ResourceCard run={run} />}
-      {run.status === "attention_required" && (
-        <div
-          className="mt-[18px] flex items-start gap-[11px] rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3.5 py-[13px]"
-          role="alert"
-        >
-          <AlertTriangle className="flex-none text-yellow" size={19} aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <strong className="text-[0.77rem] text-[#fae4ad]">Operator attention required</strong>
-            <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
-              {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
-            </p>
-            <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
-              Inspect retained data and reconcile external state using the project workflow. Unknown
-              hardware effects cannot be retried here. Closing this record does not establish that
-              the hardware is safe.
-            </p>
-            <div className="mt-[11px] flex flex-wrap gap-[7px]">
-              <button
-                className="inline-flex min-h-[31px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[rgb(255_140_136_/_35%)] bg-red-soft px-2.5 text-red hover:not-disabled:bg-panel-strong hover:not-disabled:text-text disabled:cursor-wait disabled:opacity-55"
-                type="button"
-                onClick={onResolveAttention}
-                disabled={attentionPending}
-              >
-                <Unlock size={15} aria-hidden="true" />
-                {attentionPending ? "Closing…" : "Close without resuming"}
-              </button>
-            </div>
-            {attentionError && (
-              <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-red" role="status">
-                {errorMessage(attentionError)}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
       <div className="mt-2 grid min-w-0 gap-3">
         <DataCard
+          notices={
+            <>
+              <RunAttentionNotice
+                run={run}
+                onResolve={onResolveAttention}
+                pending={attentionPending}
+                error={attentionError}
+              />
+              <RunFailureEvidence runId={run.runId} />
+              {run.resources.some(
+                (resource) => resource.blockedBy || resource.status === "quarantined",
+              ) && <ResourceCard run={run} />}
+            </>
+          }
           progress={
             <>
               <RunCancellationNotice run={run} />

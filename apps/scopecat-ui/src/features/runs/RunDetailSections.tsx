@@ -509,6 +509,7 @@ export function TimelineCard({
 export function DataCard({
   run,
   progress,
+  notices,
   measurements,
   error,
   pending,
@@ -535,6 +536,7 @@ export function DataCard({
 }: {
   run: ProjectRun;
   progress?: ReactNode;
+  notices?: ReactNode;
   measurements?: MeasurementPreview;
   error: Error | null;
   pending: boolean;
@@ -586,6 +588,7 @@ export function DataCard({
         key={run.runId}
         title={run.displayName ?? run.experimentId}
         progress={progress}
+        notices={notices}
       >
         <MeasurementRecords
           key={run.runId}

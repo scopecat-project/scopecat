@@ -1,0 +1,58 @@
+import { AlertTriangle, Unlock } from "lucide-react";
+import { errorMessage } from "../../lib/presentation";
+import type { ProjectRun } from "../../types";
+import { useMeasurementFocus } from "./MeasurementWorkspace";
+
+export function RunAttentionNotice({
+  run,
+  onResolve,
+  pending,
+  error,
+}: {
+  run: Pick<ProjectRun, "status" | "attentionReason">;
+  onResolve: () => void;
+  pending: boolean;
+  error: Error | null;
+}) {
+  const focused = useMeasurementFocus();
+  if (run.status !== "attention_required") return null;
+  return (
+    <div
+      className="mt-[18px] flex items-start gap-[11px] rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3.5 py-[13px]"
+      role="alert"
+    >
+      <AlertTriangle className="flex-none text-yellow" size={19} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <strong className="text-[0.77rem] text-[#fae4ad]">Operator attention required</strong>
+        <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
+          {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
+        </p>
+        <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
+          Inspect retained data and reconcile external state using the project workflow. Unknown
+          hardware effects cannot be retried here. Closing this record does not establish that the
+          hardware is safe.
+        </p>
+        {!focused && (
+          <>
+            <div className="mt-[11px] flex flex-wrap gap-[7px]">
+              <button
+                className="inline-flex min-h-[31px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[rgb(255_140_136_/_35%)] bg-red-soft px-2.5 text-red hover:not-disabled:bg-panel-strong hover:not-disabled:text-text disabled:cursor-wait disabled:opacity-55"
+                type="button"
+                onClick={onResolve}
+                disabled={pending}
+              >
+                <Unlock size={15} aria-hidden="true" />
+                {pending ? "Closing…" : "Close without resuming"}
+              </button>
+            </div>
+          </>
+        )}
+        {error && (
+          <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-red" role="status">
+            {errorMessage(error)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
