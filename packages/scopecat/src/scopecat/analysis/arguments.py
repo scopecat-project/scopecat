@@ -5,9 +5,18 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Mapping, Sequence
 from types import UnionType
-from typing import Annotated, Literal, cast, get_args, get_origin, get_type_hints
+from typing import (
+    Annotated,
+    Literal,
+    TypeGuard,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from pydantic import JsonValue, TypeAdapter, ValidationError
+from typing_extensions import TypeForm
 
 from scopecat.kernel.quantity import Quantity
 
@@ -53,7 +62,7 @@ def _encode(value: object, label: str) -> JsonValue:
     )
 
 
-def _supported(annotation: object) -> bool:
+def _supported(annotation: object) -> TypeGuard[TypeForm[object]]:
     if any(
         annotation is item for item in (bool, int, float, str, type(None), Quantity)
     ):

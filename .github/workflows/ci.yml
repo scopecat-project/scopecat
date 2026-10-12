@@ -73,8 +73,9 @@ jobs:
       - name: Test data ecosystem adapters
         if: matrix.group.label == 'core-1'
         run: >-
-          uv run --locked --package scopecat --extra pandas pytest -q
+          uv run --locked --package scopecat --extra pandas --extra polars pytest -q
           packages/scopecat/tests/measurements/test_dataset.py
+          packages/scopecat/tests/analysis/test_datasets.py
 
   # Six explicit cases per OS; measured cold/warm in docs/development/platform-smoke.md.
   platform-smoke:

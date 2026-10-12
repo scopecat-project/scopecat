@@ -161,6 +161,12 @@ analysis after refresh, retained analysis after restart, and rejection/restorati
 of changed installed bytes. This extends the installed framework journey instead of adding a
 second full runtime job or a dependency on private laboratory code.
 
+Renovate excludes this fixture's `pyproject.toml` from automatic updates. It
+intentionally depends on the installed `scopecat` wheel without a workspace source
+or its own lock file. Resolving it from the registry cannot succeed before SDK
+publication; the installed verifier supplies the local wheels. Keep its build
+backend constraint aligned manually when updating the workspace build backend.
+
 ## Teaching capability is not fixture retirement
 
 The reference lab's retired teaching role is distinct from generic teaching in

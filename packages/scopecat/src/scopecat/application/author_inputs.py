@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Annotated, Literal, TypeAliasType, cast, get_args, get_origin
+from typing import (
+    Annotated,
+    Literal,
+    TypeAliasType,
+    TypeGuard,
+    cast,
+    get_args,
+    get_origin,
+)
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, create_model
+from typing_extensions import TypeForm
 
 from scopecat.authoring.definitions import Input
 from scopecat.authoring.experiments import Experiment
@@ -18,7 +27,7 @@ def _unalias(annotation: object) -> object:
     return annotation
 
 
-def _json_scalar(annotation: object) -> bool:
+def _json_scalar(annotation: object) -> TypeGuard[TypeForm[object]]:
     if any(annotation is scalar for scalar in (str, int, float, bool)):
         return True
     origin = get_origin(annotation)
