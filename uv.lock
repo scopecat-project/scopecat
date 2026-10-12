@@ -2676,6 +2676,7 @@ dependencies = [
     { name = "packaging" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "typing-extensions" },
     { name = "xarray" },
 ]
 
@@ -2703,6 +2704,7 @@ requires-dist = [
     { name = "polars", marker = "extra == 'polars'", specifier = ">=1" },
     { name = "pyarrow", specifier = ">=15" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "typing-extensions", specifier = ">=4.13" },
     { name = "xarray", specifier = ">=2024.1" },
 ]
 provides-extras = ["pandas", "polars"]
