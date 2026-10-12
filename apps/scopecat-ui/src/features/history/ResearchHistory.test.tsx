@@ -70,7 +70,7 @@ it("filters retained runs and removes only their project association", async () 
         })
       }
     >
-      <ResearchHistory daemonUnavailable={false} onOpenRun={open} />
+      <ResearchHistory projectId="space-a" daemonUnavailable={false} onOpenRun={open} />
     </QueryClientProvider>,
   );
   await screen.findByRole("option", { name: "Alpha" });

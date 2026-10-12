@@ -8,11 +8,17 @@ import { selectCapture } from "./capture-location";
 import { useDesktopAvailable } from "../application/DesktopSession";
 import { ClearData } from "./DataCleanup";
 
-export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
+export function ImportedCaptures({
+  unavailable,
+  projectId,
+}: {
+  unavailable: boolean;
+  projectId: string;
+}) {
   const selectedCapture = useLocationUrl().searchParams.get("capture");
   const desktop = useDesktopAvailable();
   const captures = useInfiniteQuery({
-    queryKey: ["data", "captures"],
+    queryKey: ["data", "captures", projectId],
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) =>
       apiData(
@@ -31,20 +37,23 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
   const pending = save.isPending;
   const error = save.error ?? captures.error;
   return (
-    <section className={detailCard} aria-label="Imported data">
+    <section className={detailCard} aria-label="Imported results">
       <div className="flex items-center gap-3">
-        <h3 className="font-semibold">Imported data</h3>
+        <h3 className="font-semibold">Imported results</h3>
         {desktop && (
-          <button
-            className={secondaryButton}
-            disabled={unavailable || pending}
-            onClick={() => {
-              save.reset();
-              requestOpenFile();
-            }}
-          >
-            Open Scopecat file…
-          </button>
+          <details>
+            <summary className="cursor-pointer text-sm">Import data</summary>
+            <button
+              className={secondaryButton}
+              disabled={unavailable || pending}
+              onClick={() => {
+                save.reset();
+                requestOpenFile();
+              }}
+            >
+              Open Scopecat file…
+            </button>
+          </details>
         )}
       </div>
       {pending && <p role="status">Saving file…</p>}
@@ -54,7 +63,7 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
       {captures.data?.pages[0]?.length === 0 && <p>No imported data yet.</p>}
       <ul className="space-y-3">
         {captures.data?.pages.flat().map((capture) => (
-          <li key={capture.content_hash} className="border-b border-line py-3">
+          <li key={capture.content_hash} className="min-w-0 break-words border-b border-line py-3">
             <p>Runs: {capture.roots.join(", ")}</p>
             <p className="text-sm text-text-dim">Source: {capture.source_project_id}</p>
             <button
@@ -75,12 +84,15 @@ export function ImportedCaptures({ unavailable }: { unavailable: boolean }) {
                 Save a copy…
               </button>
             )}
-            <ClearData
-              captures={[capture.content_hash]}
-              onCleared={() => {
-                if (selectedCapture === capture.content_hash) selectCapture(undefined);
-              }}
-            />
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm">Manage imported result</summary>
+              <ClearData
+                captures={[capture.content_hash]}
+                onCleared={() => {
+                  if (selectedCapture === capture.content_hash) selectCapture(undefined);
+                }}
+              />
+            </details>
           </li>
         ))}
       </ul>

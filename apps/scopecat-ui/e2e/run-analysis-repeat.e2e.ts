@@ -60,6 +60,15 @@ test("repeats a retained ordinary analysis with its original source after author
       source: string;
     };
     expect(seed.first).not.toBe(seed.second);
+    const exported = await page.request.get(
+      `${endpoint.base_url}/api/v1/data/runs/${seed.run}/file`,
+    );
+    expect(exported.status(), await exported.text()).toBe(200);
+    const imported = await page.request.post(`${endpoint.base_url}/api/v1/data/captures`, {
+      data: await exported.body(),
+      headers: { "content-type": "application/octet-stream" },
+    });
+    expect(imported.status(), await imported.text()).toBe(200);
     let posts = 0;
     page.on("request", (request) => {
       if (request.method() === "POST" && request.url().endsWith("/author-revisions/analyze"))
@@ -73,6 +82,16 @@ test("repeats a retained ordinary analysis with its original source after author
     const data = page.getByRole("region", { name: "Data", exact: true });
     await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
     await data.getByLabel("From (local time)").fill("2020-01-01T00:00");
+    const importedResults = data.getByRole("region", { name: "Imported results" });
+    await expect(importedResults.getByText(`Runs: ${seed.run}`, { exact: true })).toBeVisible();
+    await expect(
+      importedResults.getByRole("button", { name: "Review data cleanup…" }),
+    ).toBeHidden();
+    await importedResults.getByRole("button", { name: "View data", exact: true }).click();
+    await expect(data.getByRole("region", { name: "Captured run" })).toBeVisible();
+    await page.goBack();
+    await expect(data.getByRole("region", { name: "Captured run" })).toBeHidden();
+    await expect(data.getByLabel("From (local time)")).toHaveValue("2020-01-01T00:00");
     await data.getByText("Research project management", { exact: true }).click();
     await data.getByLabel("Project name", { exact: true }).fill("Retained comparison");
     await data.getByRole("button", { name: "Create project", exact: true }).click();

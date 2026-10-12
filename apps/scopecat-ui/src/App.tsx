@@ -499,14 +499,20 @@ export default function App() {
             </Suspense>
           </div>
         </LaunchDraftProvider>
-        <RetainedView mode={view === "history" ? "visible" : "hidden"}>
-          <Suspense fallback={<p>Loading research history…</p>}>
-            <ResearchHistory
-              daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-            />
-          </Suspense>
-        </RetainedView>
+        {healthQuery.data?.projectId && (
+          <RetainedView
+            key={healthQuery.data.projectId}
+            mode={view === "history" ? "visible" : "hidden"}
+          >
+            <Suspense fallback={<p>Loading research history…</p>}>
+              <ResearchHistory
+                projectId={healthQuery.data.projectId}
+                daemonUnavailable={daemonUnavailable}
+                onOpenRun={openConfigSourceRun}
+              />
+            </Suspense>
+          </RetainedView>
+        )}
         {view === "help" ? (
           <Suspense fallback={<p>Loading help…</p>}>
             <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />

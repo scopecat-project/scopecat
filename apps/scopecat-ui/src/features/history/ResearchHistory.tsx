@@ -13,9 +13,11 @@ const inputClass = "max-w-full min-w-0 rounded border border-line bg-bg px-2 py-
 export function ResearchHistory({
   onOpenRun,
   daemonUnavailable,
+  projectId,
 }: {
   onOpenRun: (runId: string) => void;
   daemonUnavailable: boolean;
+  projectId: string;
 }) {
   const cache = useQueryClient();
   const [selected, setSelected] = useState<Project>();
@@ -28,7 +30,7 @@ export function ResearchHistory({
   const [allRuns, setAllRuns] = useState(false);
   const [managing, setManaging] = useState(false);
   const projects = useInfiniteQuery({
-    queryKey: ["research", "projects"],
+    queryKey: ["research", "projects", projectId],
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam, signal }) =>
       apiData(
@@ -41,7 +43,7 @@ export function ResearchHistory({
     enabled: !daemonUnavailable,
   });
   const samples = useInfiniteQuery({
-    queryKey: ["research", "samples"],
+    queryKey: ["research", "samples", projectId],
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam, signal }) =>
       apiData(
@@ -54,7 +56,7 @@ export function ResearchHistory({
     enabled: !daemonUnavailable,
   });
   const members = useInfiniteQuery({
-    queryKey: ["research", "members", selected?.id],
+    queryKey: ["research", "members", projectId, selected?.id],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
       apiData(
@@ -78,7 +80,7 @@ export function ResearchHistory({
     created_before: before ? new Date(before).toISOString() : undefined,
   };
   const runs = useInfiniteQuery({
-    queryKey: ["research", "runs", filters],
+    queryKey: ["research", "runs", projectId, filters],
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam, signal }) =>
       apiData(
@@ -140,8 +142,8 @@ export function ResearchHistory({
       <h2 className="text-lg font-semibold">Data</h2>
       <p className="text-sm text-text-dim">
         Find retained runs by project, sample or time. Open a run for its measurements and saved
-        analyses, or open it independently alongside your current acquisition. Imported captures are
-        available under Import and manage data.
+        analyses, or open it independently alongside your current acquisition. Imported results
+        remain available below with their original source.
       </p>
       {error && <p role="alert">{error.message}</p>}
       <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
@@ -310,6 +312,7 @@ export function ResearchHistory({
           </button>
         )}
       </div>
+      <ImportedCaptures unavailable={daemonUnavailable} projectId={projectId} />
       <details
         className={detailCard}
         open={managing}
@@ -395,9 +398,8 @@ export function ResearchHistory({
         )}
       </details>
       <details className={detailCard}>
-        <summary className="cursor-pointer font-semibold">Import and manage data</summary>
+        <summary className="cursor-pointer font-semibold">Data cleanup</summary>
         <div className="mt-3 space-y-4">
-          <ImportedCaptures unavailable={daemonUnavailable} />
           <DataCleanupHistory />
         </div>
       </details>
