@@ -43,7 +43,7 @@ it("focuses preparation again when its return URL is already selected", () => {
   const preparation = screen.getByRole("region", { name: "Prepare an experiment" });
   const link = screen.getByRole("link", { name: "Return to preparation" });
   fireEvent.click(link, { ctrlKey: true });
-  expect(preparation).not.toBeFocused();
+  expect(preparation).not.toHaveFocus();
   fireEvent.click(link);
-  expect(preparation).toBeFocused();
+  expect(preparation).toHaveFocus();
 });
