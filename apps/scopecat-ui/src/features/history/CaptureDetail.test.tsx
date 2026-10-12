@@ -92,7 +92,7 @@ it("keeps captures with the same run ID separate and requests retained selection
   await second.findByText("22 V");
   expect((await first.findByTestId("chart-values")).textContent).toBe("[[[0,11]]]");
   expect(first.getByText("Charts show only this page (1 record).")).toBeTruthy();
-  fireEvent.click(first.getByRole("button", { name: "Expand chart", exact: true }));
+  fireEvent.click(first.getByRole("button", { name: "Expand chart" }));
   expect(first.getByTestId("chart-values").getAttribute("data-height")).toBe("540");
   fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
   await first.findByText("12 V");
