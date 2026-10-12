@@ -61,8 +61,8 @@ def test_host_preserves_process_identity_and_python_subprocesses(tmp_path):
         "identity = ctypes.c_wchar_p()\n"
         "get_id = ctypes.windll.shell32.GetCurrentProcessExplicitAppUserModelID\n"
         "assert get_id(ctypes.byref(identity)) == 0\n"
-        "child = subprocess.check_output([sys.executable, '-I', '-c',\n"
-        "    'import sys; print(sys.executable)'], text=True).strip()\n"
+        "child = subprocess.check_output([sys.executable, '-I', '-X', 'utf8', '-c',\n"
+        "    'import sys; print(sys.executable)'], encoding='utf-8').strip()\n"
         "Path(sys.argv[1]).write_text(json.dumps({\n"
         "    'host': name.value, 'identity': identity.value,\n"
         "    'python': sys.executable, 'child': child, 'args': sys.argv[2:],\n"
@@ -77,9 +77,12 @@ def test_host_preserves_process_identity_and_python_subprocesses(tmp_path):
         [str(executable), str(report), *args],
         env=dict(os.environ, PATH="", PYTHONHOME=str(tmp_path / "wrong")),
         check=False,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=60,
     )
-    assert completed.returncode == 23
+    assert completed.returncode == 23, completed.stderr
     state = json.loads(report.read_text())
     assert Path(state["host"]) == executable
     assert state["identity"] == "org.scopecat.desktop"
