@@ -389,3 +389,48 @@ def test_current_backup_restores_raw_conflicting_and_completed_history(tmp_path:
     restore_snapshot(tmp_path / "backup", tmp_path / "restored")
     with LocalDaemonRuntime(tmp_path / "restored") as runtime:
         assert runtime.application.parameter_drafts.history(base.id) == history
+
+
+def test_branch_draft_read_is_scoped_and_non_mutating(tmp_path: Path) -> None:
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        base = seed(runtime)
+        for name in ("chip/daily", "other"):
+            runtime.application.config.commit_parameter_branch(
+                ParameterBranchCommitCommand(
+                    name=name, expected_generation=0, actor="author", source=base.ref
+                )
+            )
+        service = runtime.application.parameter_drafts
+        url = "/api/v1/parameter-drafts/working-branch/chip/daily"
+        assert client.get(url).json() is None
+        assert not service.history(base.id).items
+        draft = service.start(
+            ParameterDraftStart(
+                draft_id=uuid4(),
+                base=base.ref,
+                actor="author",
+                working_branch="chip/daily",
+                branch_generation=1,
+            )
+        )
+        saved = service.save(draft.draft.draft_id, edit(draft))
+        assert client.get(url).json() == saved.model_dump(mode="json")
+        assert (
+            client.get("/api/v1/parameter-drafts/working-branch/other").json() is None
+        )
+        runtime.application.config.commit_parameter_branch(
+            ParameterBranchCommitCommand(
+                name="chip/daily",
+                expected_generation=1,
+                actor="author",
+                source=base.ref,
+            )
+        )
+        recovered = client.get(url).json()
+        assert recovered["branch_changed"] is True
+        assert recovered["draft"] == saved.draft.model_dump(mode="json")
+        with pytest.raises(BackendConflict, match="branch"):
+            service.commit(
+                saved.draft.draft_id,
+                ParameterDraftCommit(expected_revision=saved.head_revision),
+            )

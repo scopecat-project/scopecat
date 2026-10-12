@@ -146,6 +146,7 @@ from scopecat.daemon.reviews import (
 )
 from scopecat.daemon.views import (
     AnalysisContentBytesView,
+    CandidateVerificationPage,
     ConfigContextResolution,
     ConfigEntryView,
     ConfigRegistryPage,
@@ -1257,7 +1258,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.post(f"{_API_PREFIX}/parameters/branch-publications")
     def publish_parameter_branch(
         command: ParameterBranchPublishCommand,
+        expected_project_id: Annotated[
+            str | None, Header(alias="X-Scopecat-Project-ID", min_length=1)
+        ] = None,
     ) -> ParameterBranch:
+        if (
+            expected_project_id is not None
+            and expected_project_id != application.health().project_id
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Application data space changed; "
+                    "reopen the candidate before adopting"
+                ),
+            )
         return application.config.publish_parameter_branch(command)
 
     @app.get(f"{_API_PREFIX}/parameters/revisions")
@@ -2365,6 +2380,10 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ParameterDraftPage:
         return application.parameter_drafts.history(base_id, before, limit)
 
+    @app.get(f"{_API_PREFIX}/parameter-drafts/working-branch/{{name:path}}")
+    def working_branch_draft(name: str) -> ParameterDraftView | None:
+        return application.parameter_drafts.working_branch(name)
+
     @app.get(f"{_API_PREFIX}/parameter-drafts/{{draft_id}}")
     def read_parameter_draft(draft_id: UUID) -> ParameterDraftView:
         return application.parameter_drafts.read(draft_id)
@@ -2588,6 +2607,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             run_id,
             limit=limit,
             before=before,
+        )
+
+    @app.get(
+        f"{_API_PREFIX}/runs/{{run_id}}/parameter-proposals/{{proposal_id}}/verifications"
+    )
+    def candidate_verifications(
+        run_id: str,
+        proposal_id: str,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> CandidateVerificationPage:
+        return application.analyses.candidate_verifications(
+            run_id, proposal_id, limit=limit, before=before
         )
 
     @app.post(f"{_API_PREFIX}/runs/{{run_id}}/parameter-compositions", status_code=201)

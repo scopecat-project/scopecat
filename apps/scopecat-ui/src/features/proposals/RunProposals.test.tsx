@@ -14,6 +14,10 @@ import type {
 } from "../../data/parameter-proposals/types";
 import { RunProposals } from "./RunProposals";
 
+vi.mock("../../data/project-api", () => ({
+  getHealth: vi.fn(async () => ({ projectId: "space-a", status: "ok", details: {} })),
+}));
+
 vi.mock("../../data/parameter-proposals/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../data/parameter-proposals/api")>();
   return {
@@ -83,7 +87,7 @@ describe("RunProposals", () => {
     expect(await screen.findByText(longValue)).toBeVisible();
     expect(screen.queryByText(/q1/)).toBeNull();
     fireEvent.click(screen.getByText("For authors: reopen this candidate"));
-    expect(screen.getByText(/this page does not publish parameters/)).toBeVisible();
+    expect(screen.getByText(/Collect independent verification/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Publish to a parameter branch" })).toHaveAttribute(
       "href",
       "https://scopecat-project.github.io/scopecat/how-to/publish-working-point-calibration/",

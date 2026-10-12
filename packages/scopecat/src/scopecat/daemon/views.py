@@ -38,7 +38,7 @@ from scopecat.measurements.traces import (
     TraceLayout,
     TraceValueMode,
 )
-from scopecat.records.analysis import AnalysisRecord
+from scopecat.records.analysis import AnalysisRecord, ProjectAnalysisDecisionReference
 from scopecat.records.config import (
     ConfigContentHash,
     ConfigProfileSnapshot,
@@ -547,6 +547,19 @@ class RunDatasetBytesView(_ViewModel):
         return b64decode(self.content_base64, validate=True)
 
 
+class CandidateVerificationView(_ViewModel):
+    """A retained decision checked with the publication evidence gate."""
+
+    reference: ProjectAnalysisDecisionReference
+    title: str
+    unavailable_reason: str | None = None
+
+
+class CandidateVerificationPage(_ViewModel):
+    items: tuple[CandidateVerificationView, ...] = ()
+    next_cursor: int | None = Field(default=None, ge=1)
+
+
 class ParameterProposalView(_ViewModel):
     """One proposal and its optional immutable operator approval."""
 
@@ -920,6 +933,8 @@ def _validate_base64(value: str) -> None:
 
 __all__ = [
     "AnalysisContentBytesView",
+    "CandidateVerificationPage",
+    "CandidateVerificationView",
     "ConfigDraftPreview",
     "ConfigEntryView",
     "ConfigRegistryPage",

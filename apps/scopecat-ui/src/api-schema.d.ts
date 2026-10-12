@@ -1476,6 +1476,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parameter-drafts/working-branch/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Working Branch Draft */
+        get: operations["working_branch_draft_api_v1_parameter_drafts_working_branch__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parameters/branch-commits": {
         parameters: {
             query?: never;
@@ -1487,6 +1504,40 @@ export interface paths {
         put?: never;
         /** Commit Parameter Branch */
         post: operations["commit_parameter_branch_api_v1_parameters_branch_commits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameters/branch-history/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Parameter Branch History */
+        get: operations["get_parameter_branch_history_api_v1_parameters_branch_history__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parameters/branch-publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Parameter Branch */
+        post: operations["publish_parameter_branch_api_v1_parameters_branch_publications_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2254,6 +2305,23 @@ export interface paths {
         };
         /** List Parameter Proposals */
         get: operations["list_parameter_proposals_api_v1_runs__run_id__parameter_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/parameter-proposals/{proposal_id}/verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Candidate Verifications */
+        get: operations["candidate_verifications_api_v1_runs__run_id__parameter_proposals__proposal_id__verifications_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4177,6 +4245,27 @@ export interface components {
              */
             kind: "candidate";
             source: components["schemas"]["AnalysisCandidateRunConfigSource"];
+        };
+        /** CandidateVerificationPage */
+        CandidateVerificationPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["CandidateVerificationView"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /**
+         * CandidateVerificationView
+         * @description A retained decision checked with the publication evidence gate.
+         */
+        CandidateVerificationView: {
+            reference: components["schemas"]["ProjectAnalysisDecisionReference"];
+            /** Title */
+            title: string;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
         };
         /**
          * CapabilityAvailability
@@ -8778,6 +8867,11 @@ export interface components {
             /** Source */
             source: components["schemas"]["ParameterSaveCommand"] | components["schemas"]["ParameterRevisionRef"];
         };
+        /** ParameterBranchHistory */
+        ParameterBranchHistory: {
+            /** Items */
+            items: components["schemas"]["ParameterBranch"][];
+        };
         /** ParameterBranchPage */
         ParameterBranchPage: {
             /** Items */
@@ -8794,6 +8888,26 @@ export interface components {
             proposal_id: string;
             /** Run Id */
             run_id: string;
+            verification: components["schemas"]["ProjectAnalysisDecisionReference"];
+        };
+        /**
+         * ParameterBranchPublishCommand
+         * @description Publish a verified candidate against one captured branch generation.
+         */
+        ParameterBranchPublishCommand: {
+            actor: components["schemas"]["NonEmptyText"];
+            base: components["schemas"]["ParameterRevisionRef"];
+            /** Expected Generation */
+            expected_generation: number;
+            name: components["schemas"]["NonEmptyText"];
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            proposal_id: components["schemas"]["NonEmptyText"];
+            revision_id: components["schemas"]["NonEmptyText"];
+            run_id: components["schemas"]["NonEmptyText"];
             verification: components["schemas"]["ProjectAnalysisDecisionReference"];
         };
         /**
@@ -15717,6 +15831,37 @@ export interface operations {
             };
         };
     };
+    working_branch_draft_api_v1_parameter_drafts_working_branch__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterDraftView"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     commit_parameter_branch_api_v1_parameters_branch_commits_post: {
         parameters: {
             query?: never;
@@ -15727,6 +15872,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ParameterBranchCommitCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterBranch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_parameter_branch_history_api_v1_parameters_branch_history__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParameterBranchHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_parameter_branch_api_v1_parameters_branch_publications_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Scopecat-Project-ID"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParameterBranchPublishCommand"];
             };
         };
         responses: {
@@ -17329,6 +17540,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParameterProposalPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    candidate_verifications_api_v1_runs__run_id__parameter_proposals__proposal_id__verifications_get: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                proposal_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateVerificationPage"];
                 };
             };
             /** @description Validation Error */

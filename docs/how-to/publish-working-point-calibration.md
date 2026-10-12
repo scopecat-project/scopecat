@@ -40,3 +40,28 @@ context, not to every value in the branch or another sample.
 
 For automated procedures, see
 [joint calibration procedures](automate-parameter-calibration.md).
+
+## Adopt from the workbench
+
+In Runs, open a candidate's **Review adoption and records**. Select the destination
+branch, compare its current values with the candidate's original and proposed
+values, and choose an eligible retained independent verification. The reviewed
+branch revision and generation stay fixed. Refreshing evidence does not rebase
+the candidate; a moved branch blocks adoption.
+
+**Adopt verified candidate** advances only that branch. Its working table remains
+intact, including invalid raw edits; review the changed branch in Configuration
+before checkpointing that table. Other branches' working tables do not block
+adoption. The comparison shows acknowledged working input separately from the
+values being published.
+
+Without eligible verification, leave the retained candidate pending and follow
+[the author verification workflow](verify-parameter-candidates.md). Loading older
+verification records is explicit. Old-data reanalysis, rejection and verification
+of a different candidate cannot authorize publication.
+
+If the response is lost or unreadable, **Recover original adoption** repeats the
+same retained request. The browser tab retains that request through reload, bound to the application
+data identity and exact candidate. A different or reset data space cannot replay it;
+publication history on the selected branch is the durable adoption record. Reopen
+it here to find the accepted revision, operator, note and exact verification.
