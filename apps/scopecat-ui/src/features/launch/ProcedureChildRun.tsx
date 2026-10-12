@@ -21,12 +21,24 @@ export function ProcedureChildRun({
         href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.runId)}#runs`}
         onClick={navigateLink}
       >
-        Open {current ? "current child run" : "retained run"}: {run.displayName ?? run.experimentId}
+        View {current && !run.result ? "current data" : "saved data"}:{" "}
+        {run.displayName ?? run.experimentId}
       </a>
       <p>
-        {run.stateLabel} · {run.progressCompleted ?? 0} completed points · Result:{" "}
-        {run.result ?? "pending"} · Certainty: {run.certainty ?? "pending"}
+        {run.stateLabel} · {run.progressCompleted ?? 0} completed points
       </p>
+      {run.certainty && run.certainty !== "known" && (
+        <p role="alert">
+          The acquisition outcome is uncertain. Inspect the available data and reconcile external
+          state before starting another acquisition.
+        </p>
+      )}
+      <details>
+        <summary>Acquisition diagnostics</summary>
+        <p>
+          Result: {run.result ?? "pending"} · Certainty: {run.certainty ?? "pending"}
+        </p>
+      </details>
       <OpenRunWindow key={run.runId} runId={run.runId} />
       <RunCancellationNotice run={run} />
       {run.attentionReason && <p>{run.attentionReason}</p>}

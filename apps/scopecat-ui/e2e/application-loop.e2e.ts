@@ -119,7 +119,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     expect(new URL(page.url()).searchParams.get("workspace")).toBe(prepared.workspace);
     await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
-    const result = page.getByRole("link", { name: /^Open retained run:/ });
+    const result = page.getByRole("link", { name: /^View saved data:/ });
     const href = (await result.getAttribute("href"))!;
     const run = new URL(href, page.url()).searchParams.get("run")!;
     await result.click();

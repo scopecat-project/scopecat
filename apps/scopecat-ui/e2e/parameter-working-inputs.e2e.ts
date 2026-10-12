@@ -51,7 +51,7 @@ async function submit(page: Page) {
 }
 async function retainedRun(page: Page) {
   await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-  const link = page.getByRole("link", { name: /^Open retained run:/ });
+  const link = page.getByRole("link", { name: /^View saved data:/ });
   await expect(link).toBeVisible();
   const href = await link.getAttribute("href");
   return new URL(href!, page.url()).searchParams.get("run")!;
@@ -163,7 +163,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     ]);
     expect(JSON.parse(evidence).parameters).toEqual(previewB.reviewed.config_source.parameters);
     // Keep the original result selected while another window submits a newer run.
-    await work.getByRole("link", { name: /^Open retained run:/ }).click();
+    await work.getByRole("link", { name: /^View saved data:/ }).click();
     await expect(work.getByTitle(runB, { exact: true })).toBeVisible();
     await editor
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
@@ -197,7 +197,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       runB,
       runC,
     ]);
-    await editor.getByRole("link", { name: /^Open retained run:/ }).click();
+    await editor.getByRole("link", { name: /^View saved data:/ }).click();
     await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
     await work.getByRole("button", { name: "Configuration", exact: true }).click();
     const continuedField = work.getByLabel("signals[1].center", { exact: true });
@@ -213,7 +213,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
     await work.getByRole("button", { name: "Experiments", exact: true }).click();
     expect(new URL(work.url()).searchParams.get("procedure")).toBe(procedureB);
-    await expect(work.getByRole("link", { name: /^Open retained run:/ })).toHaveAttribute(
+    await expect(work.getByRole("link", { name: /^View saved data:/ })).toHaveAttribute(
       "href",
       `?procedure=${encodeURIComponent(procedureB)}&run=${encodeURIComponent(runB)}#runs`,
     );

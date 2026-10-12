@@ -30,10 +30,16 @@ export function ProcedureHistory({
       className="border rounded p-4 space-y-2"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary className="font-semibold">Retained procedures</summary>
-      <p>Reopen admitted work and its results after a browser or daemon restart.</p>
-      {history.isPending && <p role="status">Loading retained procedures…</p>}
+      <summary className="font-semibold">Experiment history</summary>
+      <p>
+        Open previous experiments and multi-step procedures to view their saved data. Opening
+        history does not start another acquisition.
+      </p>
+      {history.isPending && <p role="status">Loading experiment history…</p>}
       {history.error && <p role="alert">{history.error.message}</p>}
+      {history.isSuccess && history.data.pages.every((page) => page.items.length === 0) && (
+        <p>No experiments have been started yet.</p>
+      )}
       <ul className="space-y-1">
         {history.data?.pages
           .flatMap((page) => page.items)

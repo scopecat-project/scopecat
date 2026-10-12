@@ -114,7 +114,7 @@ retainedProcedureTest(
       const catalogResponse = await catalogReady;
       expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
       await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-      await page.getByText("Retained procedures", { exact: true }).click();
+      await page.getByText("Experiment history", { exact: true }).click();
       await page
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
         .click();
@@ -138,14 +138,14 @@ retainedProcedureTest(
       expect(receipt.dispatch_error).toBeNull();
       // Observe the real child-run admission separately from its acquisition,
       // just as the source/candidate workflow below observes each durable step.
-      const childRun = page.getByRole("link", { name: /^Open (current child|retained) run:/ });
+      const childRun = page.getByRole("link", { name: /^View (current|saved) data:/ });
       await expect(childRun).toBeVisible();
       const childHref = await childRun.getAttribute("href");
       expect(childHref).toContain(`procedure=${procedureId}`);
       await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
-      const retainedRun = page.getByRole("link", { name: /^Open retained run:/ });
+      const retainedRun = page.getByRole("link", { name: /^View saved data:/ });
       await expect(retainedRun).toHaveAttribute("href", childHref!);
       await retainedRun.click();
       await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
@@ -243,9 +243,7 @@ retainedProcedureTest(
     await page.reload();
     await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue task", exact: true })).toHaveCount(0);
-    await expect(
-      page.getByRole("link", { name: /^Open (current child|retained) run:/ }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^View (current|saved) data:/ })).toHaveCount(0);
     const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedureId}/operator`);
     expect(response.ok()).toBe(true);
     expect((await response.json()).child_runs).toEqual([]);

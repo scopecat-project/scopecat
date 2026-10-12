@@ -144,7 +144,7 @@ with LabApplication().connect(sys.argv[1]) as lab:
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     expect((await submitted).status()).toBe(200);
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: /^Open retained run:/ }).click();
+    await page.getByRole("link", { name: /^View saved data:/ }).click();
     await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
     completed = true;
   } finally {

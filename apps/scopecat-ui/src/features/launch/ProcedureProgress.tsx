@@ -1,3 +1,4 @@
+import { ReturnToPreparation } from "./ReturnToPreparation";
 import { secondaryButton } from "../../ui/styles";
 import { navigateLink } from "../../lib/navigation";
 import { PlanOrigin } from "./PlanOrigin";
@@ -79,8 +80,8 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
   return (
     <section className="border border-accent/40 bg-panel-soft rounded-md p-4 space-y-3 break-words">
       <h3 className="font-semibold">Execution progress</h3>
+      <ReturnToPreparation />
       <PlanOrigin reference={run?.plan_ref} />
-      {run?.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
       <p>{run?.definition.id ?? procedureId}</p>
       <a
         onClick={navigateLink}
@@ -96,17 +97,19 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
           <p role="status" className="font-semibold">
             {procedurePhase(view)}
           </p>
-          <p>
-            {view.dispatch.worker_running
-              ? "Worker process active"
-              : view.dispatch.management === "paused"
-                ? view.dispatch.failure
-                  ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
-                  : "Waiting for your explicit Continue action. Recorded decisions do not automatically run the next step."
-                : view.dispatch.management === "active"
-                  ? "Managed by the console; ready work can continue when a worker is available."
-                  : "No console worker is assigned to this admitted procedure."}
-          </p>
+          {!run.closure && (
+            <p>
+              {view.dispatch.worker_running
+                ? "Worker process active"
+                : view.dispatch.management === "paused"
+                  ? view.dispatch.failure
+                    ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
+                    : "Waiting for your explicit Continue action. Recorded decisions do not automatically run the next step."
+                  : view.dispatch.management === "active"
+                    ? "Managed by the console; ready work can continue when a worker is available."
+                    : "No console worker is assigned to this admitted procedure."}
+            </p>
+          )}
           {view.dispatch.failure && (
             <div role="alert" className="space-y-1">
               <p>Worker diagnostic: {view.dispatch.failure.message}</p>
@@ -126,6 +129,7 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
               </p>
             )}
             <ProcedureWorkerLog procedureId={procedureId} />
+            {run.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
           </details>
           {run.recovery && (
             <p>
