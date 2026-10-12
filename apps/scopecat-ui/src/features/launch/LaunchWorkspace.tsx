@@ -144,7 +144,9 @@ export function LaunchWorkspace({
             Prepare an experiment
           </h3>
           <p className="text-sm text-text-dim">
-            Your editable inputs stay here while submitted work runs.
+            {preparing
+              ? "Showing your current editable inputs. Returning from a run does not load its historical inputs."
+              : "Your editable inputs stay here while submitted work runs."}
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 border-b border-line pb-4">

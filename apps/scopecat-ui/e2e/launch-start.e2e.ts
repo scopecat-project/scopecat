@@ -188,6 +188,11 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("historical-data.png"), fullPage: true });
     await page.getByRole("link", { name: "Return to preparation", exact: true }).click();
+    await expect(
+      page.getByText(
+        "Showing your current editable inputs. Returning from a run does not load its historical inputs.",
+      ),
+    ).toBeVisible();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");
     await page.getByLabel("Gain", { exact: true }).fill("4");
@@ -204,6 +209,25 @@ test("Start prepares internally while cancelled and edited preparations never ac
       path: testInfo.outputPath("adjust-without-acquisition.png"),
       fullPage: true,
     });
+    // Only this explicit Start may acquire again, and it must leave preparation focus behind.
+    const nextSubmission = page.waitForResponse((response) =>
+      response.url().endsWith("/experiment-launcher/submit"),
+    );
+    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    const nextResponse = await nextSubmission;
+    expect(nextResponse.request().postDataJSON().control_edits.gain).toEqual({
+      mode: "fixed",
+      value: 4,
+    });
+    const nextProcedure = (await nextResponse.json()).procedure_id;
+    expect(nextProcedure).not.toBe(procedureId);
+    await expect(
+      page.getByRole("region", { name: "Selected execution", exact: true }),
+    ).toBeFocused();
+    expect(new URL(page.url()).searchParams.has("preparation")).toBe(false);
+    expect(new URL(page.url()).searchParams.get("procedure")).toBe(nextProcedure);
+    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    expect(await runs()).toHaveLength(2);
   } finally {
     await writeFile(releasePath, "release");
     uv(["scopecat", "stop", project]);
