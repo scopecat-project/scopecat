@@ -18,6 +18,7 @@ it("filters retained runs and removes only their project association", async () 
     vi.fn(async (request: Request) => {
       requests.push(request);
       const url = new URL(request.url);
+      if (url.pathname === "/api/v1/record-collections") return Response.json({ items: [] });
       if (url.pathname === "/api/v1/data/captures") return Response.json([]);
       if (url.pathname === "/api/v1/research-projects")
         return Response.json({
@@ -122,4 +123,78 @@ it("filters retained runs and removes only their project association", async () 
         request.method === "DELETE" && new URL(request.url).pathname === "/api/v1/runs/run-1",
     ),
   ).toBe(false);
+});
+
+it("scopes short numbers to a collection and retains that filter after renaming", async () => {
+  const open = vi.fn();
+  const requests: Request[] = [];
+  let name = "Cooldown A";
+  const collection = () => ({
+    id: "a",
+    name,
+    description: "original",
+    revision: name === "Cooldown A" ? 1 : 2,
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      requests.push(request);
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/record-collections")
+        return Response.json({
+          items: [collection(), { ...collection(), id: "b", name: "Cooldown B" }],
+        });
+      if (url.pathname === "/api/v1/record-collections/a" && request.method === "PUT") {
+        const body = await request.clone().json();
+        name = body.name;
+        return Response.json(collection());
+      }
+      if (url.pathname.match(/record-collections\/[ab]\/runs\/1$/))
+        return Response.json({
+          collection_id: url.pathname.split("/")[4],
+          number: 1,
+          run_id: url.pathname.includes("/a/") ? "a-1" : "b-1",
+        });
+      if (url.pathname === "/api/v1/data/captures") return Response.json([]);
+      return Response.json({ items: [] });
+    }),
+  );
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ResearchHistory projectId="space-a" daemonUnavailable={false} onOpenRun={open} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByLabelText("Collection run number")).toBeDisabled();
+  await screen.findByRole("option", { name: "Cooldown A" });
+  fireEvent.change(screen.getByLabelText("Record collection filter"), { target: { value: "a" } });
+  await waitFor(() =>
+    expect(requests.some((r) => new URL(r.url).searchParams.get("record_collection") === "a")).toBe(
+      true,
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "Find run" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open collection run #1" }));
+  expect(open).toHaveBeenLastCalledWith("a-1");
+  fireEvent.click(screen.getByRole("button", { name: "Rename collection" }));
+  fireEvent.change(screen.getByLabelText("New collection name"), { target: { value: "Renamed" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save collection name" }));
+  await screen.findByRole("option", { name: "Renamed" });
+  const rename = requests.find((request) => request.method === "PUT")!;
+  expect(await rename.clone().json()).toEqual({
+    name: "Renamed",
+    description: "original",
+    expected_revision: 1,
+  });
+  expect(screen.getByLabelText("Record collection filter")).toHaveValue("a");
+  expect(screen.getByLabelText("Collection run number")).toHaveValue("1");
+  fireEvent.change(screen.getByLabelText("Record collection filter"), { target: { value: "b" } });
+  expect(screen.queryByRole("button", { name: "Open collection run #1" })).toBeNull();
+  expect(screen.getByLabelText("Collection run number")).toHaveValue("");
+  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "Find run" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open collection run #1" }));
+  expect(open).toHaveBeenLastCalledWith("b-1");
 });

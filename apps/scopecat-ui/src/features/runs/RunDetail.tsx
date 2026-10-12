@@ -1,7 +1,9 @@
+import { RunCollectionName } from "./RunCollectionName";
+import { RunAddressLabel } from "./RunAddressLabel";
 import { ReturnToPreparation } from "../launch/ReturnToPreparation";
 import { RunAnalysisActionsCard } from "./DeclaredRunAnalyses";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
-import { CopyReadOnlyCode } from "../../ui/CopyReadOnlyCode";
+import { CopyReadOnlyCode, CopyRunReference } from "../../ui/CopyReadOnlyCode";
 import { OpenRunWindow } from "./OpenRunWindow";
 import { WindowTitle } from "../application/WindowTitle";
 import { ExportRun } from "./ExportRun";
@@ -47,6 +49,7 @@ import { ClearData } from "../history/DataCleanup";
 
 export function RunDetail({
   run,
+  projectId,
   events,
   eventsError,
   eventsPending,
@@ -92,6 +95,7 @@ export function RunDetail({
   onOpenSample,
 }: {
   run: ProjectRun;
+  projectId?: string;
   events: ProjectEvent[];
   eventsError: Error | null;
   eventsPending: boolean;
@@ -138,7 +142,9 @@ export function RunDetail({
 }) {
   return (
     <>
-      <WindowTitle title={`${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`} />
+      <WindowTitle
+        title={`${run.address ? `${run.address.collection_id} #${run.address.number} · ` : ""}${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`}
+      />
       <header
         className="flex items-start justify-between gap-3 border-b border-line px-0.5 pb-2 max-[680px]:flex-wrap"
         data-testid="run-detail-header"
@@ -158,8 +164,20 @@ export function RunDetail({
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
               {run.stateLabel}
             </span>
-            <CopyReadOnlyCode target={{ kind: "run", runId: run.runId }} compact />
+            {run.address && <CopyRunReference runId={run.runId} address={run.address} />}
+            <CopyReadOnlyCode
+              target={{ kind: "run", runId: run.runId, address: run.address }}
+              compact
+            />
           </div>
+          {run.address && (
+            <RunCollectionName
+              projectId={projectId}
+              runId={run.runId}
+              collectionId={run.address.collection_id}
+            />
+          )}
+          <RunAddressLabel address={run.address} sequence={run.sequence} />
           <div className="flex max-w-[min(60vw,620px)] items-center gap-2 overflow-hidden text-[0.68rem] text-text-dim max-[680px]:max-w-full">
             {run.displayName && (
               <code

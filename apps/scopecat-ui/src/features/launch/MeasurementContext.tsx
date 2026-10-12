@@ -94,6 +94,16 @@ export function MeasurementContext({
           />
         </label>
       </div>
+      <ScopeCatalog
+        kind="collection"
+        owner={projectId}
+        value={draft.collection}
+        onChange={(collection) => onChange({ collection })}
+      />
+      <p className="text-sm text-text-dim">
+        New runs keep this collection. Named collections number independently from 1; default
+        collection numbers may have gaps.
+      </p>
       <TargetPicker
         value={subject.kind === "registered_target" ? subject.ref : undefined}
         projectId={projectId}
@@ -174,12 +184,6 @@ export function MeasurementContext({
                   },
                 })
               }
-            />
-            <ScopeCatalog
-              kind="collection"
-              owner={projectId}
-              value={draft.collection}
-              onChange={(collection) => onChange({ collection })}
             />
           </div>
         </>

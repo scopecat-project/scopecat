@@ -76,6 +76,7 @@ export interface RunPointPlanProgress {
 
 export interface ProjectRun {
   scenario?: SoftwareExecutionScenario;
+  address?: { collection_id: string; number: number; run_id: string };
   sequence?: number;
   runId: string;
   experimentId: string;

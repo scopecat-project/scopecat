@@ -439,6 +439,11 @@ describe("run daemon reads", () => {
         jsonResponse({
           items: [
             {
+              address: {
+                collection_id: path.includes("before=") ? "a" : "b",
+                number: 1,
+                run_id: path.includes("before=") ? "run-old" : "run-new",
+              },
               control: {
                 sequence: path.includes("before=") ? 1 : 2,
                 state: "queued",
@@ -471,11 +476,23 @@ describe("run daemon reads", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getRuns()).resolves.toMatchObject({
-      items: [{ runId: "run-new", sequence: 2 }],
+      items: [
+        {
+          runId: "run-new",
+          sequence: 2,
+          address: { collection_id: "b", number: 1, run_id: "run-new" },
+        },
+      ],
       nextCursor: 2,
     });
     await expect(getOlderRuns(2)).resolves.toMatchObject({
-      items: [{ runId: "run-old", sequence: 1 }],
+      items: [
+        {
+          runId: "run-old",
+          sequence: 1,
+          address: { collection_id: "a", number: 1, run_id: "run-old" },
+        },
+      ],
       nextCursor: undefined,
     });
     await expect(getRunEvents("run/1")).resolves.toMatchObject([

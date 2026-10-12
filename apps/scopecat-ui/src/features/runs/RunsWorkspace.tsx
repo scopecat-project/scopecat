@@ -1,3 +1,4 @@
+import { RunAddressLabel } from "./RunAddressLabel";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { NavigationOptions } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -589,6 +590,7 @@ export function RunsWorkspace({
             />
           ) : selectedRun ? (
             <RunDetail
+              projectId={health?.projectId}
               run={selectedRun}
               events={selectedEvents}
               eventsError={selectedEventsQuery.error}
@@ -802,6 +804,7 @@ function RunListItem({
             {shorten(run.runId, 18)}
           </code>
         </span>
+        <RunAddressLabel address={run.address} sequence={run.sequence} />
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
           <span
             className={classes(

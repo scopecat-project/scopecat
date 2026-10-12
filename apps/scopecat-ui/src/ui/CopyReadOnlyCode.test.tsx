@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { readOnlyCode, type ReadOnlyCopyTarget } from "../lib/read-only-code";
-import { CopyReadOnlyCode } from "./CopyReadOnlyCode";
+import { CopyReadOnlyCode, CopyRunReference } from "./CopyReadOnlyCode";
 
 afterEach(() => {
   cleanup();
@@ -106,4 +106,20 @@ it("clears pending feedback when detail is replaced by loading/error and reopene
   expect(screen.queryByRole("button")).toBeNull();
   rerender(<CopyReadOnlyCode target={first} />);
   expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("copies a scoped human reference and offers the same text without clipboard access", async () => {
+  const write = vi.fn(async () => {});
+  clipboard(write);
+  const view = render(
+    <CopyRunReference runId="run-a" address={{ collection_id: "a", number: 1 }} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Copy run reference" }));
+  expect(write).toHaveBeenCalledWith("a #1 (run run-a)");
+  await screen.findByText("Run reference copied.");
+  clipboard();
+  view.rerender(<CopyRunReference runId="run-b" address={{ collection_id: "b", number: 1 }} />);
+  expect(screen.queryByText("Run reference copied.")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Copy run reference" }));
+  expect(await screen.findByLabelText("Run reference")).toHaveValue("b #1 (run run-b)");
 });

@@ -66,3 +66,32 @@ This is the storage and Python/HTTP foundation for the
 per client/kernel, and the experiment workbench has page-local selection. There
 is no cross-store catalog. A collection alone neither isolates hardware
 nor copies working-point parameters; teaching still uses its existing isolation.
+
+## Collect and find results in the application
+
+The experiment workbench keeps **Record collection** visible in measurement
+context. Create a collection once, explicitly choose **Use**, then keep that
+selection for successive acquisitions. **Return to preparation** keeps the
+page's destination; opening retained data in another window does not change it.
+
+In **Data**, choose **Record collection** to browse its runs, including failed or
+cancelled admissions. **All collections** includes the default and named
+collections; it is not the default collection itself. Select the actual default
+collection from the list to restrict browsing to it. Enter **Collection run
+number** and choose **Find run** to resolve an exact address, independently of
+the project, sample, time and advanced source filters. A missing number is not
+replaced with a global-number lookup. Imported results remain separate below.
+
+Rows, acquisition receipts and run details show the collection ID with its short
+number and label the scheduler number **Global**. Details also show the current
+collection name. **Rename collection** changes only that label; research
+associations also leave acquisition addresses intact. **Copy run reference**
+copies the collection ID, short number and stable run ID for the current data
+space. **Copy read-only code**
+includes the explicit `session.run(number, collection="collection-id")`
+alternative and executes the stable run ID, so a different Notebook selection
+cannot silently open another run. Connect the Notebook to the same data space.
+
+Working point and bench deployment are exact technical identifiers under
+**Advanced source filters**. Collections are flat numbering namespaces; directory
+hierarchies and scientific-condition tags are not provided by this workflow.

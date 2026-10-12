@@ -1,3 +1,4 @@
+import { RunAddressLabel } from "../runs/RunAddressLabel";
 import { navigateLink } from "../../lib/navigation";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
 import type { ProcedureOperatorView } from "../../api-contract";
@@ -13,7 +14,12 @@ export function ProcedureChildRun({
   procedureId: string;
   current?: boolean;
 }) {
-  const run = normalizeRun(child.run.control, child.run.snapshot, child.run.resources);
+  const run = normalizeRun(
+    child.run.control,
+    child.run.snapshot,
+    child.run.resources,
+    child.run.address,
+  );
   return (
     <div className="space-y-1">
       <a
@@ -24,6 +30,7 @@ export function ProcedureChildRun({
         View {current && !run.result ? "current data" : "saved data"}:{" "}
         {run.displayName ?? run.experimentId}
       </a>
+      <RunAddressLabel address={run.address} sequence={run.sequence} />
       <p>
         {run.stateLabel} · {run.progressCompleted ?? 0} completed points
       </p>

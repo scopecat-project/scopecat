@@ -25,3 +25,16 @@ it("opens exact IDs for both owners, preserving an older revision of the same ke
     /run = session.run\("run-a"\)\nrun$/,
   );
 });
+
+it("keeps a collection-qualified alternative while executing the stable run ID", () => {
+  const code = readOnlyCode({
+    kind: "run",
+    runId: "run-a",
+    address: { collection_id: "cooldown-a", number: 1 },
+  });
+  expect(code).toContain('# Collection address: session.run(1, collection="cooldown-a")');
+  expect(code.split("\n").filter((line) => !line.startsWith("#"))).toEqual([
+    'run = session.run("run-a")',
+    "run",
+  ]);
+});

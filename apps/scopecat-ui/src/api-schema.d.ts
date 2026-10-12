@@ -1819,6 +1819,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/record-collections/{collection_id}/runs/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve Run Number */
+        get: operations["resolve_run_number_api_v1_record_collections__collection_id__runs__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/research-projects": {
         parameters: {
             query?: never;
@@ -16549,6 +16566,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordCollection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_run_number_api_v1_record_collections__collection_id__runs__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAddress"];
                 };
             };
             /** @description Validation Error */

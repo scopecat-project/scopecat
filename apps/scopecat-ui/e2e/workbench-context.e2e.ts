@@ -214,6 +214,74 @@ test("two workbench pages retain independent context and share collection number
     await page.screenshot({ path: testInfo.outputPath("page-context.png"), fullPage: true });
     const first = await acquire(page);
     const second = await acquire(other);
+    // A subsequent acquisition keeps its page's collection until explicitly changed.
+    await other.getByRole("link", { name: "Return to preparation", exact: true }).first().click();
+    await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
+    await other.getByRole("button", { name: "Prepare another acquisition", exact: true }).click();
+    await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
+    const separate = await createScope(other, "collection", "Separate measurements");
+    await preview(other);
+    await acquire(other);
+    const readAddress = async (id: string, number: number) => {
+      const response = await page.request.get(
+        `${url}/api/v1/record-collections/${id}/runs/${number}`,
+      );
+      expect(response.ok()).toBe(true);
+      return response.json() as Promise<{ run_id: string; collection_id: string; number: number }>;
+    };
+    const firstAddress = await readAddress(collection, 1);
+    const secondAddress = await readAddress(collection, 2);
+    const separateAddress = await readAddress(separate, 1);
+    expect(new Set([firstAddress.run_id, secondAddress.run_id, separateAddress.run_id]).size).toBe(
+      3,
+    );
+    await other.getByRole("link", { name: "Return to preparation", exact: true }).first().click();
+    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await page.getByLabel("Record collection filter", { exact: true }).selectOption(collection);
+    await expect(
+      page.getByRole("region", { name: "Data", exact: true }).getByTestId("run-address"),
+    ).toHaveCount(2);
+    await page.getByRole("button", { name: "Rename collection", exact: true }).click();
+    await page.getByLabel("New collection name", { exact: true }).fill("Renamed measurements");
+    await page.getByRole("button", { name: "Save collection name", exact: true }).click();
+    await expect(
+      page.getByRole("option", { name: "Renamed measurements", exact: true }),
+    ).toBeAttached();
+    await page.getByLabel("Collection run number", { exact: true }).fill("1");
+    await page.getByRole("button", { name: "Find run", exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath("collection-browser.png"), fullPage: true });
+    await page.getByRole("button", { name: "Open collection run #1", exact: true }).click();
+    const header = page.getByTestId("run-detail-header");
+    await expect(header).toContainText(firstAddress.run_id);
+    await expect(header).toContainText("Renamed measurements");
+    await expect(header.getByTestId("run-address")).toContainText(`${collection} · #1`);
+    await expect(header.getByTestId("run-address")).toContainText("Global #");
+    // Copy the UI's actual snippet, without using the host clipboard.
+    await page.evaluate(() =>
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined }),
+    );
+    await header.getByRole("button", { name: "Copy read-only code" }).click();
+    const copiedCode = await header.getByLabel("Read-only code").inputValue();
+    expect(copiedCode).toContain(`session.run(1, collection="${collection}")`);
+    const opened = context.waitForEvent("page");
+    await page.getByRole("link", { name: "Open result in new tab or window" }).click();
+    const resultWindow = await opened;
+    await expect(resultWindow.getByTestId("run-detail-header")).toContainText(firstAddress.run_id);
+    await expect(resultWindow).toHaveTitle(new RegExp(`${collection} #1`));
+    await resultWindow.close();
+    await page.goBack();
+    await expect(page.getByLabel("Record collection filter", { exact: true })).toHaveValue(
+      collection,
+    );
+    await expect(page.getByLabel("Collection run number")).toHaveValue("1");
+    await page.getByLabel("Record collection filter", { exact: true }).selectOption(separate);
+    await page.getByLabel("Collection run number").fill("1");
+    await page.getByRole("button", { name: "Find run", exact: true }).click();
+    await page.getByRole("button", { name: "Open collection run #1", exact: true }).click();
+    await expect(header).toContainText(separateAddress.run_id);
+    await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(separate);
+    await expect(page.getByTestId("measurement-charts")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("collection-result.png"), fullPage: true });
     uv(["scopecat", "stop", project]);
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
     uv([
@@ -232,6 +300,16 @@ with project.connect() as lab:
     assert {s.samples[0].batch_id for s in snapshots} == {sys.argv[3], sys.argv[4]}
     assert {lab.setup.revision(s.config_source.setup.revision_id).resolution.definition_id for s in snapshots} == {"browser-bench-a", "browser-bench-b"}
     assert {lab._client.get_run(s.run_id).address.number for s in snapshots} == {1, 2}
+from IPython.core.interactiveshell import InteractiveShell
+InteractiveShell.instance()
+with sc.notebook(sys.argv[1], live=False) as session:
+    session.use(collection=sys.argv[7])
+    assert session.run(1).id == sys.argv[8]
+    assert session.run(1, collection=sys.argv[2]).id == sys.argv[9]
+    exec(sys.argv[10])
+    assert run.id == sys.argv[9]
+    assert session.run_number(run, collection=sys.argv[2]) == 1
+    assert session.run(session.run_number(run, collection=None), collection=None).id == run.id
 `,
       project,
       collection,
@@ -239,6 +317,10 @@ with project.connect() as lab:
       batchB,
       first,
       second,
+      separate,
+      separateAddress.run_id,
+      firstAddress.run_id,
+      copiedCode,
     ]);
     completed = true;
     await other.close();

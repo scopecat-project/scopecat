@@ -1159,6 +1159,10 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
     vi.fn(async (request: Request) => {
       requests.push(request);
       const url = new URL(request.url);
+      if (url.pathname === "/api/v1/record-collections")
+        return Response.json({
+          items: [{ id: "same-id", name: `${space} collection`, description: "", revision: 1 }],
+        });
       if (url.pathname === "/api/v1/research-projects")
         return Response.json({
           items: [
@@ -1194,6 +1198,11 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   renderApp(cache);
   await screen.findByRole("option", { name: "Alpha" });
   fireEvent.change(screen.getByLabelText("Research project"), { target: { value: "alpha" } });
+  await screen.findByRole("option", { name: "space-a collection" });
+  fireEvent.change(screen.getByLabelText("Record collection filter"), {
+    target: { value: "same-id" },
+  });
+  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "17" } });
   fireEvent.click(screen.getByText("Research project management"));
   fireEvent.change(screen.getByLabelText("Project name"), {
     target: { value: "Unsubmitted Alpha rename" },
@@ -1227,6 +1236,8 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
   expect(screen.getByLabelText("Project name")).toHaveValue("Unsubmitted Alpha rename");
   expect(screen.getByLabelText("Working point")).toHaveValue("bias-a");
+  expect(screen.getByLabelText("Record collection filter")).toHaveValue("same-id");
+  expect(screen.getByLabelText("Collection run number")).toHaveValue("17");
 
   fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
   space = "space-b";
@@ -1239,6 +1250,10 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(screen.queryByRole("option", { name: "Alpha" })).toBeNull();
   expect(screen.getByLabelText("Research project")).toHaveValue("");
   expect(screen.getByLabelText("Working point")).toHaveValue("");
+  expect(screen.getByLabelText("Record collection filter")).toHaveValue("");
+  expect(screen.getByLabelText("Collection run number")).toHaveValue("");
+  await screen.findByRole("option", { name: "space-b collection" });
+  expect(screen.queryByRole("option", { name: "space-a collection" })).toBeNull();
   expect(screen.getByText("Research project management").parentElement).not.toHaveAttribute("open");
   fireEvent.click(screen.getByText("Research project management"));
   expect(screen.getByLabelText("Project name")).toHaveValue("");

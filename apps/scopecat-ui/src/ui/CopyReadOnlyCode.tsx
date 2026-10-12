@@ -14,7 +14,27 @@ export function CopyReadOnlyCode({
   return <CopyCode key={code} code={code} compact={compact} />;
 }
 
-function CopyCode({ code, compact }: { code: string; compact: boolean }) {
+export function CopyRunReference({
+  runId,
+  address,
+}: {
+  runId: string;
+  address: { collection_id: string; number: number };
+}) {
+  const reference = `${address.collection_id} #${address.number} (run ${runId})`;
+  return <CopyCode key={reference} code={reference} compact kind="reference" />;
+}
+
+function CopyCode({
+  code,
+  compact,
+  kind = "code",
+}: {
+  code: string;
+  compact: boolean;
+  kind?: "code" | "reference";
+}) {
+  const reference = kind === "reference";
   const [status, setStatus] = useState<"idle" | "copying" | "copied" | "manual">("idle");
   const mounted = useRef(true);
   useEffect(() => {
@@ -41,14 +61,22 @@ function CopyCode({ code, compact }: { code: string; compact: boolean }) {
     >
       <button
         className={secondaryButton}
-        title="Copy a read-only Notebook snippet for this exact saved record"
+        title={
+          reference
+            ? "Copy the collection ID, local number and stable run ID in this data space"
+            : "Copy a read-only Notebook snippet for this exact saved record"
+        }
         type="button"
         disabled={status === "copying"}
         onClick={copy}
       >
-        {status === "copying" ? "Copying…" : "Copy read-only code"}
+        {status === "copying"
+          ? "Copying…"
+          : reference
+            ? "Copy run reference"
+            : "Copy read-only code"}
       </button>
-      {(!compact || status !== "idle") && (
+      {!reference && (!compact || status !== "idle") && (
         <p className="m-0 text-text-dim">
           First run the connection cell for this data space. Paste into a separate cell and run only
           that cell, not Run All. Custom typed/group objects are not reconstructed.
@@ -56,16 +84,16 @@ function CopyCode({ code, compact }: { code: string; compact: boolean }) {
       )}
       {status === "copied" && (
         <p className="m-0 text-text-soft" role="status">
-          Read-only code copied.
+          {reference ? "Run reference copied." : "Read-only code copied."}
         </p>
       )}
       {status === "manual" && (
         <>
           <p className="m-0 text-text-soft" role="status">
-            Clipboard unavailable. Select and copy the code below.
+            Clipboard unavailable. Select and copy the {reference ? "reference" : "code"} below.
           </p>
           <textarea
-            aria-label="Read-only code"
+            aria-label={reference ? "Run reference" : "Read-only code"}
             className="w-full min-w-0 rounded border border-line bg-panel p-2 font-mono text-text-soft"
             readOnly
             rows={code.split("\n").length + 1}
