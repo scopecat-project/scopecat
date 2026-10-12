@@ -7,14 +7,14 @@ import { WindowTitle } from "../application/WindowTitle";
 import { ExportRun } from "./ExportRun";
 import { RunPlanOrigin } from "../launch/PlanOrigin";
 import { ComparisonLink } from "../analyses/ComparisonLink";
-import { AlertTriangle, Boxes, ChevronRight, Unlock } from "lucide-react";
+import { Boxes, ChevronRight } from "lucide-react";
 import { RunCancellationNotice } from "./RunCancellationNotice";
 import type {
   MeasurementTracePreview,
   RunDomainDecisionPage,
   RunExecutionSegmentPage,
 } from "../../api-contract";
-import { errorMessage, formatDateTime, shorten } from "../../lib/presentation";
+import { formatDateTime, shorten } from "../../lib/presentation";
 import { classes } from "../../ui/styles";
 import type {
   MeasurementPreview,
@@ -26,6 +26,7 @@ import type {
 import { RunProposals } from "../proposals/RunProposals";
 import { RunMeasuredCosts } from "./RunMeasuredCosts";
 import { RunAnalysisFollows } from "./RunAnalysisFollows";
+import { RunAttentionNotice } from "./RunAttentionNotice";
 import { RunFailureEvidence } from "./RunFailureEvidence";
 import { RunDomainDecisionCard } from "./RunDomainDecisionCard";
 import type {
@@ -139,11 +140,11 @@ export function RunDetail({
     <>
       <WindowTitle title={`${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`} />
       <header
-        className="flex items-start justify-between gap-7 border-b border-line px-0.5 pb-3 max-[680px]:block"
+        className="flex items-start justify-between gap-3 border-b border-line px-0.5 pb-2 max-[680px]:flex-wrap"
         data-testid="run-detail-header"
       >
         <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-3">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
             <h2 className="m-0 text-[clamp(1.2rem,1.8vw,1.55rem)] font-[650] tracking-[-0.035em] [overflow-wrap:anywhere]">
               {run.displayName ?? run.experimentId}
             </h2>
@@ -174,32 +175,35 @@ export function RunDetail({
             </code>
           </div>
         </div>
-        <dl className="mt-1 flex flex-none gap-7 max-[1100px]:gap-[18px] max-[680px]:mt-5 max-[680px]:grid max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
-          <div className="grid gap-1.5">
-            <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
-              Accepted
-            </dt>
-            <dd className="m-0 text-[0.69rem] text-text-soft">
-              {run.createdAt ? (
-                <time dateTime={run.createdAt}>{formatDateTime(run.createdAt)}</time>
-              ) : (
-                "Not reported"
-              )}
-            </dd>
-          </div>
-          <div className="grid gap-1.5">
-            <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
-              Config
-            </dt>
-            <dd className="m-0 text-[0.69rem] text-text-soft">
-              <code title={run.configHash}>
-                {run.configHash ? shorten(run.configHash, 15) : "Not reported"}
-              </code>
-            </dd>
-          </div>
-        </dl>
+        <details className="text-xs text-text-soft">
+          <summary className="cursor-pointer py-1">Run details</summary>
+          <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <div className="grid gap-1.5">
+              <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
+                Accepted
+              </dt>
+              <dd className="m-0 text-[0.69rem] text-text-soft">
+                {run.createdAt ? (
+                  <time dateTime={run.createdAt}>{formatDateTime(run.createdAt)}</time>
+                ) : (
+                  "Not reported"
+                )}
+              </dd>
+            </div>
+            <div className="grid gap-1.5">
+              <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
+                Config
+              </dt>
+              <dd className="m-0 text-[0.69rem] text-text-soft">
+                <code title={run.configHash}>
+                  {run.configHash ? shorten(run.configHash, 15) : "Not reported"}
+                </code>
+              </dd>
+            </div>
+          </dl>
+        </details>
       </header>
-      <div className="my-3 flex flex-wrap items-center gap-3 text-sm">
+      <div className="my-2 flex flex-wrap items-center gap-2 text-sm">
         <ReturnToPreparation />
         <OpenRunWindow key={`open:${run.runId}`} runId={run.runId} />
         <ComparisonLink runId={run.runId} />
@@ -212,7 +216,6 @@ export function RunDetail({
         </details>
       </div>
       <RunPlanOrigin runId={run.runId} />
-      <RunFailureEvidence runId={run.runId} />
 
       {run.samples.length > 0 && (
         <section
@@ -245,54 +248,33 @@ export function RunDetail({
         </section>
       )}
 
-      {run.resources.some(
-        (resource) => resource.blockedBy || resource.status === "quarantined",
-      ) && <ResourceCard run={run} />}
-      <RunCancellationNotice run={run} />
-      {run.status === "attention_required" && (
-        <div
-          className="mt-[18px] flex items-start gap-[11px] rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3.5 py-[13px]"
-          role="alert"
-        >
-          <AlertTriangle className="flex-none text-yellow" size={19} aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <strong className="text-[0.77rem] text-[#fae4ad]">Operator attention required</strong>
-            <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
-              {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
-            </p>
-            <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
-              Inspect retained data and reconcile external state using the project workflow. Unknown
-              hardware effects cannot be retried here. Closing this record does not establish that
-              the hardware is safe.
-            </p>
-            <div className="mt-[11px] flex flex-wrap gap-[7px]">
-              <button
-                className="inline-flex min-h-[31px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[rgb(255_140_136_/_35%)] bg-red-soft px-2.5 text-red hover:not-disabled:bg-panel-strong hover:not-disabled:text-text disabled:cursor-wait disabled:opacity-55"
-                type="button"
-                onClick={onResolveAttention}
-                disabled={attentionPending}
-              >
-                <Unlock size={15} aria-hidden="true" />
-                {attentionPending ? "Closing…" : "Close without resuming"}
-              </button>
-            </div>
-            {attentionError && (
-              <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-red" role="status">
-                {errorMessage(attentionError)}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 grid min-w-0 gap-4">
-        <ProgressCard
-          run={run}
-          events={events}
-          measurements={measurements}
-          receiptError={liveMeasurementsError}
-        />
+      <div className="mt-2 grid min-w-0 gap-3">
         <DataCard
+          notices={
+            <>
+              <RunAttentionNotice
+                run={run}
+                onResolve={onResolveAttention}
+                pending={attentionPending}
+                error={attentionError}
+              />
+              <RunFailureEvidence runId={run.runId} />
+              {run.resources.some(
+                (resource) => resource.blockedBy || resource.status === "quarantined",
+              ) && <ResourceCard run={run} />}
+            </>
+          }
+          progress={
+            <>
+              <RunCancellationNotice run={run} />
+              <ProgressCard
+                run={run}
+                events={events}
+                measurements={measurements}
+                receiptError={liveMeasurementsError}
+              />
+            </>
+          }
           run={run}
           measurements={measurements}
           error={measurementsError}

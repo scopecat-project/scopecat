@@ -1,5 +1,7 @@
+import { useMeasurementFocus } from "./MeasurementWorkspace";
+import { classes } from "../../ui/styles";
 import { MeasurementRecordTable } from "./MeasurementRecordTable";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import type { MeasurementTracePreview } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
@@ -63,6 +65,7 @@ export function MeasurementDataPreview({
   onTracePlanChange?: (planId: string) => void;
   onEntitySelectionChange?: (selection: MeasurementEntitySelection) => void;
 }) {
+  const focused = useMeasurementFocus();
   const slicePlan = useMemo(
     () => measurementSlicePlan(preview.schema, measurementAxes),
     [preview.schema, measurementAxes],
@@ -174,7 +177,12 @@ export function MeasurementDataPreview({
     });
   };
   return (
-    <div className="overflow-hidden rounded-md border border-line bg-panel">
+    <div
+      className={classes(
+        "rounded-md border border-line bg-panel",
+        focused ? "flex min-h-0 flex-1 flex-col overflow-auto [&>*]:shrink-0" : "overflow-hidden",
+      )}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2 text-xs font-bold tracking-[0.06em] text-text-dim uppercase">
         <strong className="text-sm text-text-soft">Measurement data</strong>
         <span>
@@ -316,10 +324,7 @@ export function MeasurementDataPreview({
                 );
               })}
             </div>
-            <p
-              className="basis-full text-xs text-text-soft"
-              data-testid="measurement-slice-summary"
-            >
+            <p className="text-xs text-text-soft" data-testid="measurement-slice-summary">
               Current slice:{" "}
               {slicePlan.varyingAxes
                 .map((axis) => `${axis.label}${axis.unit ? ` [${axis.unit}]` : ""} varying`)
@@ -453,7 +458,13 @@ export function MeasurementDataPreview({
       )}
 
       {tracePlans.length > 0 && (
-        <div className="border-b border-line p-2.5" data-testid="measurement-trace-preview">
+        <div
+          className={classes(
+            "border-b border-line p-2.5",
+            focused && "flex min-h-64 flex-1 flex-col",
+          )}
+          data-testid="measurement-trace-preview"
+        >
           <p className="mb-2 text-xs text-text-dim">
             Each query reads a finite saved snapshot; refreshing issues a new query.
           </p>
@@ -516,7 +527,12 @@ export function MeasurementDataPreview({
         </p>
       )}
       {(slicePlan || tracePlans.length > 0 || entityAxes.length > 0) && (
-        <details className="border-b border-line bg-panel-soft px-3 py-2 text-xs text-text-dim">
+        <details
+          className={classes(
+            "border-b border-line bg-panel-soft px-3 py-2 text-xs text-text-dim",
+            focused && "hidden",
+          )}
+        >
           <summary className="cursor-pointer">About this data view</summary>
           <p className="mt-2">
             Product-grid scalar signals offer numeric plot axes; other dimensions stay fixed at
@@ -532,9 +548,23 @@ export function MeasurementDataPreview({
         </details>
       )}
 
-      <MeasurementRecordTable table={table} />
+      <details
+        className={classes("border-t border-line text-xs text-text-soft", focused && "hidden")}
+      >
+        <summary className="cursor-pointer px-3 py-2 font-semibold">
+          Record table · {table.rows.length} rows in this view
+        </summary>
+        <div className="max-h-80 overflow-auto">
+          <MeasurementRecordTable table={table} />
+        </div>
+      </details>
 
-      <details className="border-t border-line text-[0.64rem] text-text-dim">
+      <details
+        className={classes(
+          "border-t border-line text-[0.64rem] text-text-dim",
+          focused && "hidden",
+        )}
+      >
         <summary className="cursor-pointer px-3 py-2 font-bold hover:text-text-soft">
           <span>Raw records</span>
           <span className="ml-1 font-medium text-text-dim">in preview</span>
@@ -803,12 +833,16 @@ export function MeasurementChartPicker({
   requestedChartId?: string;
   onChartChange?: (id: string) => void;
 }) {
+  const focused = useMeasurementFocus();
   const [localChartId, setLocalChartId] = useState<string>();
   const signalViews = charts.every((chart) => chart.id.startsWith("slice:"));
   const selectedChart =
     charts.find((chart) => chart.id === (requestedChartId ?? localChartId)) ?? charts[0];
   return (
-    <div className="border-b border-line p-2.5" data-testid="measurement-charts">
+    <div
+      className={classes("border-b border-line p-2.5", focused && "flex min-h-64 flex-1 flex-col")}
+      data-testid="measurement-charts"
+    >
       <div
         className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-text-dim"
         hidden={charts.length === 1}
@@ -845,7 +879,18 @@ export function MeasurementChartPicker({
 }
 
 export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
+  const focused = useMeasurementFocus();
   const [expanded, setExpanded] = useState(false);
+  const hasPoints = chart.series.some((series) => series.points.length > 0);
+  const plotArea = useRef<HTMLDivElement>(null);
+  const [focusHeight, setFocusHeight] = useState(240);
+  useEffect(() => {
+    const element = plotArea.current;
+    if (!focused || !element) return;
+    const observer = new ResizeObserver(() => setFocusHeight(element.clientHeight));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [focused, hasPoints, chart.layout]);
   const [compact, setCompact] = useState(
     () => window.matchMedia?.("(max-height: 800px)").matches ?? false,
   );
@@ -867,7 +912,12 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
     ? `${chartDescription}, fixed at ${fixedCoordinates}`
     : chartDescription;
   return (
-    <figure className="m-0 min-w-0 rounded-md border border-line bg-panel-soft p-2.5">
+    <figure
+      className={classes(
+        "m-0 min-w-0 rounded-md border border-line bg-panel-soft p-2.5",
+        focused && "flex min-h-0 flex-1 flex-col",
+      )}
+    >
       <figcaption className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
         <span>
           <strong className="block text-sm text-text-soft">{chart.title}</strong>
@@ -878,14 +928,16 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           </span>
         </span>
         <span className="flex items-center gap-2 text-xs text-text-dim">
-          <button
-            type="button"
-            aria-pressed={expanded}
-            onClick={() => setExpanded(!expanded)}
-            className="rounded-md border border-line px-3 py-1.5 text-xs text-text-soft hover:bg-panel-strong"
-          >
-            {expanded ? "Standard chart height" : "Expand chart"}
-          </button>
+          {focused === undefined && (
+            <button
+              type="button"
+              aria-pressed={expanded}
+              onClick={() => setExpanded(!expanded)}
+              className="rounded-md border border-line px-3 py-1.5 text-xs text-text-soft hover:bg-panel-strong"
+            >
+              {expanded ? "Standard chart height" : "Expand chart"}
+            </button>
+          )}
           {chart.layout === "small-multiples" ? "small multiples" : chart.kind.replace("-", " ")}
         </span>
       </figcaption>
@@ -898,14 +950,16 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           ))}
         </div>
       ) : (
-        <EChart
-          ariaLabel={accessibleTitle}
-          height={expanded ? 540 : compact ? 240 : 340}
-          option={option}
-          pointCount={points.length}
-          seriesLabels={chart.series.map((series) => series.label)}
-          seriesCount={chart.series.length}
-        />
+        <div ref={plotArea} className={focused ? "min-h-48 flex-1" : undefined}>
+          <EChart
+            ariaLabel={accessibleTitle}
+            height={focused ? focusHeight : expanded ? 540 : compact ? 240 : 340}
+            option={option}
+            pointCount={points.length}
+            seriesLabels={chart.series.map((series) => series.label)}
+            seriesCount={chart.series.length}
+          />
+        </div>
       )}
       {chart.note && <p className="mt-1.5 mb-0 text-xs text-text-dim">{chart.note}</p>}
     </figure>

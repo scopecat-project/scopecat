@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test, type TestInfo } from "@playwright/test";
+import type { components } from "../src/api-schema";
 
 const ROOT = resolve(process.cwd(), "../..");
 function uv(args: string[]): string {
@@ -125,10 +126,126 @@ test("browses independent dimensions and keeps a compatible signal across slices
       .toBe(false);
     await page.getByLabel("Horizontal axis").selectOption(frequency);
     await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("1");
-    await page.getByRole("button", { name: "Expand chart", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Standard chart height", exact: true }),
-    ).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+    const focused = page.getByRole("dialog", { name: /measurements$/ });
+    await expect(focused).toBeVisible();
+    await expect(focused.getByRole("region", { name: "Run progress" })).toBeVisible();
+    await expect(chart).toHaveValue(phase);
+    await page.getByLabel("Repeat slice", { exact: true }).selectOption("2");
+    await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 2");
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const plot = focused.getByRole("img").first();
+      await expect
+        .poll(async () => {
+          const rect = await plot.boundingBox();
+          return (
+            rect !== null &&
+            rect.height >= 190 &&
+            rect.y >= 0 &&
+            rect.y + rect.height <= viewport.height &&
+            rect.x + rect.width <= viewport.width
+          );
+        })
+        .toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`chart-focus-${viewport.width}.png`) });
+    }
+    // Presentation-only fault injection over the real retained run. No hardware state is changed.
+    const runUrl = `${endpoint.base_url}/api/v1/runs/${runId}`;
+    const retained = (await (
+      await page.request.get(runUrl)
+    ).json()) as components["schemas"]["RunDetail"];
+    let state: "running" | "attention_required" | "failed" = "running";
+    await page.route(runUrl, (route) =>
+      route.fulfill({
+        json: {
+          ...retained,
+          control: {
+            ...retained.control,
+            state: state === "running" ? "leased" : state === "failed" ? "closed" : state,
+            attention_reason:
+              state === "attention_required" ? "Synthetic cleanup state is unknown" : null,
+          },
+          snapshot: {
+            ...retained.snapshot,
+            outcome:
+              state === "failed" ? { ...retained.snapshot.outcome!, result: "failed" } : null,
+          },
+          resources:
+            state === "running"
+              ? []
+              : [
+                  {
+                    resource: { id: "synthetic-resource", kind: "instrument" },
+                    status: "quarantined",
+                  },
+                ],
+        },
+      }),
+    );
+    await page.route(`${runUrl}/failure-evidence`, (route) =>
+      route.fulfill({
+        json: {
+          primary:
+            state === "running"
+              ? null
+              : {
+                  code: "synthetic_failure",
+                  message: "Synthetic computation failed",
+                  phase: "execution",
+                  related_locations: [],
+                },
+          terminal_persistence: "unconfirmed",
+          secondary: [],
+          diagnostics: [],
+          truncated: false,
+        },
+      }),
+    );
+    // Invoke the normal refresh handler as a fixture stimulus; the toolbar is inert in focus.
+    const refreshState = () =>
+      page.locator('[aria-label="Refresh project data"]').evaluate((button) => button.click());
+    for (const problem of ["attention_required", "failed"] as const) {
+      state = "running";
+      await refreshState();
+      await expect(focused.getByRole("region", { name: "Run progress" })).toContainText("Running");
+      state = problem;
+      await refreshState();
+      await expect(
+        focused.getByText("Synthetic computation failed", { exact: true }),
+      ).toBeVisible();
+      await expect(focused.getByText("Quarantined", { exact: true })).toBeVisible();
+      await expect(focused.getByText(/Terminal persistence is unconfirmed/)).toBeVisible();
+      await expect(focused.getByRole("button", { name: "Close without resuming" })).toHaveCount(0);
+      if (problem === "attention_required") {
+        await expect(
+          focused.getByText("Synthetic cleanup state is unknown", { exact: true }),
+        ).toBeVisible();
+        await expect(focused.getByText(/Closing this record does not establish/)).toBeVisible();
+      } else {
+        await expect(focused.getByRole("region", { name: "Run progress" })).toContainText("Failed");
+      }
+      await page.screenshot({ path: testInfo.outputPath(`chart-focus-${problem}.png`) });
+      if (problem === "attention_required") {
+        await focused.getByRole("button", { name: "Exit focus to view run details" }).click();
+        await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+        await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("2");
+        await expect(page.getByRole("button", { name: "Close without resuming" })).toBeVisible();
+        await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+      }
+    }
+    await page.keyboard.press("Escape");
+    await expect(focused).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+    await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("2");
+    await expect(chart).toHaveValue(phase);
+    await expect(page.getByTestId("measurement-table")).not.toBeVisible();
+    await page.locator("summary").filter({ hasText: "Record table" }).click();
+    await expect(page.getByTestId("measurement-table")).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath("multidimensional-curve.png"),
       fullPage: true,

@@ -5,8 +5,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { CaptureDetail } from "./CaptureDetail";
 
 vi.mock("../../ui/EChartRuntime", () => ({
-  EChartRuntime: ({ option }: { option: { series: { data: number[][] }[] } }) => (
-    <output data-testid="chart-values">
+  EChartRuntime: ({
+    height,
+    option,
+  }: {
+    height: number;
+    option: { series: { data: number[][] }[] };
+  }) => (
+    <output data-testid="chart-values" data-height={height}>
       {JSON.stringify(option.series.map((series) => series.data))}
     </output>
   ),
@@ -86,6 +92,8 @@ it("keeps captures with the same run ID separate and requests retained selection
   await second.findByText("22 V");
   expect((await first.findByTestId("chart-values")).textContent).toBe("[[[0,11]]]");
   expect(first.getByText("Charts show only this page (1 record).")).toBeTruthy();
+  fireEvent.click(first.getByRole("button", { name: "Expand chart" }));
+  expect(first.getByTestId("chart-values").getAttribute("data-height")).toBe("540");
   fireEvent.change(first.getByLabelText("Measurements"), { target: { value: "selected" } });
   await first.findByText("12 V");
   expect(first.getByTestId("chart-values").textContent).toBe("[[[0,12]]]");

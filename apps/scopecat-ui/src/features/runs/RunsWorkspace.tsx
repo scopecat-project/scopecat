@@ -368,7 +368,9 @@ export function RunsWorkspace({
       ),
     enabled: selectedRunId !== undefined && selectedTracePlan !== undefined,
   });
-  const [showRunBrowser, setShowRunBrowser] = useState(true);
+  const [showRunBrowser, setShowRunBrowser] = useState(
+    () => !window.matchMedia?.("(max-width: 880px)").matches,
+  );
   const filteredRuns = useMemo(() => filterRuns(runs, filter, search), [runs, filter, search]);
 
   useEffect(() => {
@@ -397,7 +399,7 @@ export function RunsWorkspace({
           {showRunBrowser ? "Hide run browser" : "Browse runs"}
         </button>
         <section
-          className="grid flex-1 grid-cols-3 overflow-hidden rounded-lg border border-line bg-panel max-[460px]:grid-cols-[minmax(0,1fr)]"
+          className="grid flex-1 grid-cols-3 overflow-hidden rounded-lg border border-line bg-panel max-[680px]:grid-cols-1"
           aria-label="Project status"
         >
           <StatusItem
@@ -576,7 +578,7 @@ export function RunsWorkspace({
         )}
 
         <section
-          className="min-h-[620px] min-w-0 bg-panel p-5 max-[880px]:min-h-[580px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-3.5 max-[680px]:py-5"
+          className="min-h-[620px] min-w-0 bg-panel p-3 max-[880px]:min-h-[580px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-3.5 max-[680px]:py-3"
           aria-label="Selected run details"
         >
           {daemonUnavailable ? (
@@ -710,7 +712,7 @@ function StatusItem({
   tone: "good" | "active" | "warning" | "muted";
 }) {
   return (
-    <article className="grid min-h-11 min-w-0 grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-[9px] border-r border-line px-3 py-2 last:border-r-0 max-[680px]:grid-cols-[auto_auto] max-[680px]:[&>small]:col-span-full max-[460px]:border-r-0 max-[460px]:not-first:border-t max-[460px]:not-first:border-line">
+    <article className="grid min-h-0 min-w-0 grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-2 border-r border-line px-3 py-1 last:border-r-0 max-[680px]:grid-cols-[auto_auto_minmax(0,1fr)] max-[460px]:border-r-0 max-[460px]:not-first:border-t max-[460px]:not-first:border-line">
       <span className="text-[0.59rem] font-extrabold tracking-[0.1em] text-text-dim uppercase">
         {label}
       </span>

@@ -1363,7 +1363,7 @@ describe("measurement visualization", () => {
     expect(screen.queryByText(/3 plotted points/)).not.toBeInTheDocument();
   });
 
-  it("renders plots and a typed table while keeping raw JSON secondary", () => {
+  it("shows the plot first and opens the bounded record table on demand", () => {
     const schema = scalarSchema();
     const items = [
       record(0, { bias: scalar(0, "V") }, { signal: scalar(1, "ratio") }),
@@ -1384,6 +1384,8 @@ describe("measurement visualization", () => {
     expect(
       screen.getByRole("img", { name: "Response: Response [ratio] by Bias [V]" }),
     ).toBeVisible();
+    expect(screen.getByRole("table")).not.toBeVisible();
+    fireEvent.click(screen.getByText(/Record table/));
     expect(screen.getByRole("columnheader", { name: /Bias \[V\]/ })).toBeVisible();
     expect(screen.getByText(/Raw records/)).toBeVisible();
     expect(screen.getByTestId("measurement-preview")).not.toBeVisible();
