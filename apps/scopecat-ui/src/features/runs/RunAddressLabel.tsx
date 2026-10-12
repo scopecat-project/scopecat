@@ -1,24 +1,30 @@
 import type { ProjectRun } from "../../types";
 
-// Names can change or collide; always retain the namespace beside the short number.
+// Names are for reading; exact identity remains available for disambiguation.
 export function RunAddressLabel({
   address,
   sequence,
   collectionName,
 }: Pick<ProjectRun, "address" | "sequence"> & { collectionName?: string }) {
+  const identity = [
+    address && `Collection ID: ${address.collection_id}`,
+    sequence !== undefined && `Global #${sequence}`,
+    address && `Run ID: ${address.run_id}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
   return (
-    <span className="block break-words text-xs text-text-soft" data-testid="run-address">
+    <span
+      className="block cursor-help break-words text-xs text-text-soft"
+      data-testid="run-address"
+      title={identity}
+    >
       {address ? (
         <>
-          Collection <code className="break-all">{collectionName ?? address.collection_id}</code> ·
-          #{address.number}
-          {collectionName && <span className="text-text-dim"> ({address.collection_id})</span>}
+          {collectionName ?? "Collection name unavailable"} · #{address.number}
         </>
       ) : (
         "Collection address unavailable"
-      )}
-      {sequence !== undefined && (
-        <span className="inline-block whitespace-nowrap text-text-dim"> · Global #{sequence}</span>
       )}
     </span>
   );

@@ -5,11 +5,13 @@ import { secondaryButton } from "../../ui/styles";
 
 export function CollectionRunLookup({
   collection,
+  collectionName,
   projectId,
   unavailable,
   onOpenRun,
 }: {
   collection?: string;
+  collectionName?: string;
   projectId: string;
   unavailable: boolean;
   onOpenRun: (runId: string) => void;
@@ -32,7 +34,7 @@ export function CollectionRunLookup({
     <div className="mt-3 space-y-2">
       <p className="text-sm text-text-dim">
         {collection
-          ? `Look up a number in collection ${collection}, independently of the filters below.`
+          ? `Look up a number in ${collectionName ?? "the selected collection"}, independently of the filters below.`
           : "Choose a collection to look up its short number. All collections has no unqualified short number."}
       </p>
       <form

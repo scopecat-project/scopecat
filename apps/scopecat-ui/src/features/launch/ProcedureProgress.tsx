@@ -1,3 +1,4 @@
+import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ReturnToPreparation } from "./ReturnToPreparation";
 import { secondaryButton } from "../../ui/styles";
 import { navigateLink } from "../../lib/navigation";
@@ -11,7 +12,13 @@ import { apiClient, apiData } from "../../api-client";
 import { ProcedureChildRun } from "./ProcedureChildRun";
 import { outputHref, procedurePhase, stateLabel } from "./procedure-operator";
 
-export function ProcedureProgress({ procedureId }: { procedureId: string }) {
+export function ProcedureProgress({
+  procedureId,
+  projectId,
+}: {
+  procedureId: string;
+  projectId?: string;
+}) {
   const [cancelActor, setCancelActor] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [pending, setPending] = useState(false);
@@ -35,6 +42,14 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
   const children = new Map(
     progress.data?.pages.flatMap((page) =>
       page.child_runs.map((child) => [child.step_key, child] as const),
+    ),
+  );
+  const collectionNames = useRecordCollectionNames(
+    projectId,
+    Boolean(
+      projectId &&
+      (view?.current_child?.run.address ||
+        [...children.values()].some((child) => child.run.address)),
     ),
   );
   async function cancel() {
@@ -248,7 +263,16 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
             </p>
           )}
           {view.current_child && (
-            <ProcedureChildRun child={view.current_child} procedureId={procedureId} current />
+            <ProcedureChildRun
+              child={view.current_child}
+              collectionName={
+                view.current_child.run.address
+                  ? collectionNames.get(view.current_child.run.address.collection_id)
+                  : undefined
+              }
+              procedureId={procedureId}
+              current
+            />
           )}
           <ul className="space-y-3">
             {steps.map((step) => {
@@ -270,7 +294,15 @@ export function ProcedureProgress({ procedureId }: { procedureId: string }) {
                     <p>{step.failure_reason ?? step.attention_reason}</p>
                   )}
                   {child && child.step_key !== view.current_child?.step_key && (
-                    <ProcedureChildRun child={child} procedureId={procedureId} />
+                    <ProcedureChildRun
+                      child={child}
+                      collectionName={
+                        child.run.address
+                          ? collectionNames.get(child.run.address.collection_id)
+                          : undefined
+                      }
+                      procedureId={procedureId}
+                    />
                   )}
                   {step.output?.kind === "interpretation" && (
                     <details>

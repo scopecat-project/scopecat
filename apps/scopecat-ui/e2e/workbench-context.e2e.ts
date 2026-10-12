@@ -254,8 +254,12 @@ test("two workbench pages retain independent context and share collection number
     const header = page.getByTestId("run-detail-header");
     await expect(header).toContainText(firstAddress.run_id);
     await expect(header).toContainText("Renamed measurements");
-    await expect(header.getByTestId("run-address")).toContainText(`${collection} · #1`);
-    await expect(header.getByTestId("run-address")).toContainText("Global #");
+    await expect(header.getByTestId("run-address")).toHaveText("Renamed measurements · #1");
+    await expect(header.getByTestId("run-address")).toHaveAttribute(
+      "title",
+      new RegExp(collection),
+    );
+    await expect(header.getByTestId("run-address")).toHaveAttribute("title", /Global #/);
     // Copy the UI's actual snippet, without using the host clipboard.
     await page.evaluate(() =>
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined }),
@@ -267,7 +271,7 @@ test("two workbench pages retain independent context and share collection number
     await page.getByRole("link", { name: "Open result in new tab or window" }).click();
     const resultWindow = await opened;
     await expect(resultWindow.getByTestId("run-detail-header")).toContainText(firstAddress.run_id);
-    await expect(resultWindow).toHaveTitle(new RegExp(`${collection} #1`));
+    await expect(resultWindow).toHaveTitle(/Renamed measurements #1/);
     await resultWindow.close();
     await page.goBack();
     await expect(page.getByLabel("Record collection filter", { exact: true })).toHaveValue(

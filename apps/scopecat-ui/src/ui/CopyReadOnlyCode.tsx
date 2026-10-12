@@ -17,11 +17,13 @@ export function CopyReadOnlyCode({
 export function CopyRunReference({
   runId,
   address,
+  collectionName,
 }: {
   runId: string;
   address: { collection_id: string; number: number };
+  collectionName?: string;
 }) {
-  const reference = `${address.collection_id} #${address.number} (run ${runId})`;
+  const reference = `${collectionName ?? "Collection"} #${address.number} (collection ${address.collection_id}; run ${runId})`;
   return <CopyCode key={reference} code={reference} compact kind="reference" />;
 }
 

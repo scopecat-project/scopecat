@@ -1,3 +1,4 @@
+import { primaryButton, secondaryButton } from "../../ui/styles";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -33,9 +34,10 @@ export function RenameCollection({
   });
   return (
     <div className="space-y-2">
-      <p className="break-all text-xs text-text-dim">
-        Collection ID: <code>{collection.id}</code>
-      </p>
+      <details className="text-xs text-text-dim">
+        <summary className="cursor-pointer">Collection identity</summary>
+        <code className="break-all">{collection.id}</code>
+      </details>
       {editing ? (
         <div className="flex flex-wrap gap-2">
           <label>
@@ -50,6 +52,7 @@ export function RenameCollection({
             />
           </label>
           <button
+            className={primaryButton}
             type="button"
             disabled={disabled || save.isPending || !name.trim()}
             onClick={() => save.mutate()}
@@ -57,6 +60,7 @@ export function RenameCollection({
             Save collection name
           </button>
           <button
+            className={secondaryButton}
             type="button"
             disabled={save.isPending}
             onClick={() => {
@@ -70,6 +74,7 @@ export function RenameCollection({
         </div>
       ) : (
         <button
+          className={secondaryButton}
           type="button"
           disabled={disabled}
           onClick={() => {

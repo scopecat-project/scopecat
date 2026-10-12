@@ -1,4 +1,4 @@
-import { RunCollectionName } from "./RunCollectionName";
+import { useRunCollectionName } from "./use-run-collection-name";
 import { RunAddressLabel } from "./RunAddressLabel";
 import { ReturnToPreparation } from "../launch/ReturnToPreparation";
 import { RunAnalysisActionsCard } from "./DeclaredRunAnalyses";
@@ -50,6 +50,7 @@ import { ClearData } from "../history/DataCleanup";
 export function RunDetail({
   run,
   projectId,
+  collectionNames,
   events,
   eventsError,
   eventsPending,
@@ -96,6 +97,7 @@ export function RunDetail({
 }: {
   run: ProjectRun;
   projectId?: string;
+  collectionNames: Map<string, string>;
   events: ProjectEvent[];
   eventsError: Error | null;
   eventsPending: boolean;
@@ -140,10 +142,12 @@ export function RunDetail({
   onResolveAttention: () => void;
   onOpenSample?: (sampleId: string, revision: number) => void;
 }) {
+  const collection = useRunCollectionName(projectId, run.address?.collection_id, collectionNames);
+  const collectionName = collection.name;
   return (
     <>
       <WindowTitle
-        title={`${run.address ? `${run.address.collection_id} #${run.address.number} · ` : ""}${run.displayName ?? run.experimentId} · ${run.runId} — Scopecat`}
+        title={`${run.address ? `${collectionName ?? "Collection name unavailable"} #${run.address.number} · ` : ""}${run.displayName ?? run.experimentId} — Scopecat`}
       />
       <header
         className="flex items-start justify-between gap-3 border-b border-line px-0.5 pb-2 max-[680px]:flex-wrap"
@@ -164,38 +168,55 @@ export function RunDetail({
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
               {run.stateLabel}
             </span>
-            {run.address && <CopyRunReference runId={run.runId} address={run.address} />}
+            {run.address && (
+              <CopyRunReference
+                runId={run.runId}
+                address={run.address}
+                collectionName={collectionName}
+              />
+            )}
             <CopyReadOnlyCode
               target={{ kind: "run", runId: run.runId, address: run.address }}
               compact
             />
           </div>
-          {run.address && (
-            <RunCollectionName
-              projectId={projectId}
-              runId={run.runId}
-              collectionId={run.address.collection_id}
-            />
+          <RunAddressLabel
+            address={run.address}
+            sequence={run.sequence}
+            collectionName={collectionName}
+          />
+          {collection.error && (
+            <p role="alert" className="text-xs">
+              {collection.error.message}
+            </p>
           )}
-          <RunAddressLabel address={run.address} sequence={run.sequence} />
-          <div className="flex max-w-[min(60vw,620px)] items-center gap-2 overflow-hidden text-[0.68rem] text-text-dim max-[680px]:max-w-full">
-            {run.displayName && (
-              <code
-                className="overflow-hidden text-ellipsis whitespace-nowrap"
-                title={run.experimentId}
-              >
-                {run.experimentId}
-              </code>
-            )}
-            {run.displayName && <span aria-hidden="true">·</span>}
-            <code className="overflow-hidden text-ellipsis whitespace-nowrap" title={run.runId}>
-              {run.runId}
-            </code>
-          </div>
         </div>
         <details className="text-xs text-text-soft">
           <summary className="cursor-pointer py-1">Run details</summary>
           <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <div>
+              <dt>Experiment</dt>
+              <dd className="m-0 break-all">
+                <code>{run.experimentId}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Run ID</dt>
+              <dd className="m-0 break-all">
+                <code title={run.runId}>{run.runId}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Collection ID</dt>
+              <dd className="m-0 break-all">
+                <code>{run.address?.collection_id ?? "Not reported"}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Global number</dt>
+              <dd className="m-0">{run.sequence ?? "Not reported"}</dd>
+            </div>
+
             <div className="grid gap-1.5">
               <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
                 Accepted

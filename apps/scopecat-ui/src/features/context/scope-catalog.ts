@@ -17,3 +17,10 @@ export function useScopeCatalog(kind: "batch" | "collection", owner?: string, av
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
 }
+
+export function useRecordCollectionNames(owner?: string, available = true) {
+  const catalog = useScopeCatalog("collection", owner, available);
+  return new Map(
+    catalog.data?.pages.flatMap((page) => page.items.map((item) => [item.id, item.name] as const)),
+  );
+}

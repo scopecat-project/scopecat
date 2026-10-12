@@ -224,13 +224,16 @@ describe("config provenance navigation", () => {
     await screen.findByText("Calibration launcher");
     fireEvent.click(screen.getByRole("button", { name: "Runs" }));
     await waitFor(() => expect(window.location.search).toBe("?run=run-2"));
-    expect(await screen.findByTitle("run-2")).toBeVisible();
+    expect(await screen.findByTitle("run-2")).toHaveTextContent("run-2");
+    expect(screen.getByTitle("Inspect run run-2")).toHaveAttribute("aria-current", "true");
     fireEvent.click(screen.getByTitle("Inspect run run-1"));
     await screen.findByTitle("run-1");
     act(() => window.history.back());
-    expect(await screen.findByTitle("run-2")).toBeVisible();
+    expect(await screen.findByTitle("run-2")).toHaveTextContent("run-2");
+    expect(screen.getByTitle("Inspect run run-2")).toHaveAttribute("aria-current", "true");
     act(() => window.history.forward());
-    expect(await screen.findByTitle("run-1")).toBeVisible();
+    expect(await screen.findByTitle("run-1")).toHaveTextContent("run-1");
+    expect(screen.getByTitle("Inspect run run-1")).toHaveAttribute("aria-current", "true");
   });
 
   it("retains sample revision and analysis selection while their pages are inactive", async () => {

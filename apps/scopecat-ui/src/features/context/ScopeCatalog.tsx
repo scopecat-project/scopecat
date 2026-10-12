@@ -1,3 +1,4 @@
+import { secondaryButton } from "../../ui/styles";
 import { useScopeCatalog } from "./scope-catalog";
 import { RenameCollection } from "./RenameCollection";
 import { useRef, useState } from "react";
@@ -100,6 +101,7 @@ export function ScopeCatalog({
         {label}
         <select
           aria-label={selectLabel ?? label}
+          title={value}
           value={value ?? ""}
           disabled={disabled || pending}
           onChange={(event) => onChange(event.target.value || undefined)}
@@ -125,6 +127,7 @@ export function ScopeCatalog({
       {pages.isPending && <p role="status">Loading {label.toLowerCase()} choices…</p>}
       {pages.hasNextPage && (
         <button
+          className={secondaryButton}
           type="button"
           disabled={pages.isFetchingNextPage}
           onClick={() => void pages.fetchNextPage()}
@@ -133,7 +136,7 @@ export function ScopeCatalog({
         </button>
       )}
       {pages.isError && (
-        <button type="button" onClick={() => void pages.refetch()}>
+        <button className={secondaryButton} type="button" onClick={() => void pages.refetch()}>
           Retry {label.toLowerCase()} list
         </button>
       )}
@@ -144,6 +147,7 @@ export function ScopeCatalog({
         <p role="status">
           Created {created.name}.{" "}
           <button
+            className={secondaryButton}
             type="button"
             disabled={disabled}
             onClick={() => {
@@ -175,15 +179,25 @@ export function ScopeCatalog({
                 className="border rounded p-2"
               />
             </label>
-            <button type="button" disabled={pending || !name.trim()} onClick={() => void create()}>
+            <button
+              className={secondaryButton}
+              type="button"
+              disabled={pending || !name.trim()}
+              onClick={() => void create()}
+            >
               Create {kind === "batch" ? "batch" : "collection"}
             </button>
-            <button type="button" disabled={pending} onClick={() => setCreating(false)}>
+            <button
+              className={secondaryButton}
+              type="button"
+              disabled={pending}
+              onClick={() => setCreating(false)}
+            >
               Cancel new {kind}
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => setCreating(true)}>
+          <button className={secondaryButton} type="button" onClick={() => setCreating(true)}>
             New {kind === "batch" ? "batch" : "collection"}
           </button>
         ))}

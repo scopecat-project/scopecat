@@ -112,14 +112,20 @@ it("copies a scoped human reference and offers the same text without clipboard a
   const write = vi.fn(async () => {});
   clipboard(write);
   const view = render(
-    <CopyRunReference runId="run-a" address={{ collection_id: "a", number: 1 }} />,
+    <CopyRunReference
+      runId="run-a"
+      address={{ collection_id: "a", number: 1 }}
+      collectionName="Cooldown"
+    />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Copy run reference" }));
-  expect(write).toHaveBeenCalledWith("a #1 (run run-a)");
+  expect(write).toHaveBeenCalledWith("Cooldown #1 (collection a; run run-a)");
   await screen.findByText("Run reference copied.");
   clipboard();
   view.rerender(<CopyRunReference runId="run-b" address={{ collection_id: "b", number: 1 }} />);
   expect(screen.queryByText("Run reference copied.")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Copy run reference" }));
-  expect(await screen.findByLabelText("Run reference")).toHaveValue("b #1 (run run-b)");
+  expect(await screen.findByLabelText("Run reference")).toHaveValue(
+    "Collection #1 (collection b; run run-b)",
+  );
 });

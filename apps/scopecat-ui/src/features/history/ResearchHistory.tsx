@@ -1,4 +1,4 @@
-import { useScopeCatalog } from "../context/scope-catalog";
+import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ScopeCatalog } from "../context/ScopeCatalog";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
 import { CollectionRunLookup } from "./CollectionRunLookup";
@@ -76,12 +76,7 @@ export function ResearchHistory({
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: !!selected && !daemonUnavailable,
   });
-  const collections = useScopeCatalog("collection", projectId, !daemonUnavailable);
-  const collectionNames = new Map(
-    collections.data?.pages.flatMap((page) =>
-      page.items.map((item) => [item.id, item.name] as const),
-    ),
-  );
+  const collectionNames = useRecordCollectionNames(projectId, !daemonUnavailable);
   const filters = {
     record_collection: collection,
     research_project: allRuns ? undefined : selected?.id,
@@ -173,6 +168,7 @@ export function ResearchHistory({
           key={JSON.stringify([projectId, collection])}
           projectId={projectId}
           collection={collection}
+          collectionName={collection ? collectionNames.get(collection) : undefined}
           unavailable={daemonUnavailable}
           onOpenRun={onOpenRun}
         />
@@ -299,7 +295,9 @@ export function ResearchHistory({
                     className={`${secondaryButton} max-w-full whitespace-normal break-all`}
                     onClick={() => onOpenRun(run.snapshot.run_id)}
                   >
-                    {run.control.admission.display_name || run.snapshot.run_id}
+                    {run.control.admission.display_name ||
+                      run.control.admission.plan?.experiment_id ||
+                      "Open run"}
                   </button>
                   <RunAddressLabel
                     address={run.address ?? undefined}
@@ -308,9 +306,6 @@ export function ResearchHistory({
                     }
                     sequence={run.control.sequence}
                   />
-                  <code className="max-w-full break-all text-xs text-text-dim">
-                    {run.snapshot.run_id}
-                  </code>
                   <OpenRunWindow runId={run.snapshot.run_id} />
                   <span>
                     {run.snapshot.created_at

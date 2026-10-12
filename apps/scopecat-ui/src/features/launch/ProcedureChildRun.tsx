@@ -9,10 +9,12 @@ export function ProcedureChildRun({
   child,
   procedureId,
   current = false,
+  collectionName,
 }: {
   child: ProcedureOperatorView["child_runs"][number];
   procedureId: string;
   current?: boolean;
+  collectionName?: string;
 }) {
   const run = normalizeRun(
     child.run.control,
@@ -30,7 +32,11 @@ export function ProcedureChildRun({
         View {current && !run.result ? "current data" : "saved data"}:{" "}
         {run.displayName ?? run.experimentId}
       </a>
-      <RunAddressLabel address={run.address} sequence={run.sequence} />
+      <RunAddressLabel
+        address={run.address}
+        sequence={run.sequence}
+        collectionName={collectionName}
+      />
       <p>
         {run.stateLabel} · {run.progressCompleted ?? 0} completed points
       </p>
