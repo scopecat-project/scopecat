@@ -880,6 +880,7 @@ export function MeasurementChartPicker({
 
 export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
   const focused = useMeasurementFocus();
+  const [expanded, setExpanded] = useState(false);
   const hasPoints = chart.series.some((series) => series.points.length > 0);
   const plotArea = useRef<HTMLDivElement>(null);
   const [focusHeight, setFocusHeight] = useState(240);
@@ -927,6 +928,16 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           </span>
         </span>
         <span className="flex items-center gap-2 text-xs text-text-dim">
+          {focused === undefined && (
+            <button
+              type="button"
+              aria-pressed={expanded}
+              onClick={() => setExpanded(!expanded)}
+              className="rounded-md border border-line px-3 py-1.5 text-xs text-text-soft hover:bg-panel-strong"
+            >
+              {expanded ? "Standard chart height" : "Expand chart"}
+            </button>
+          )}
           {chart.layout === "small-multiples" ? "small multiples" : chart.kind.replace("-", " ")}
         </span>
       </figcaption>
@@ -942,7 +953,7 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
         <div ref={plotArea} className={focused ? "min-h-48 flex-1" : undefined}>
           <EChart
             ariaLabel={accessibleTitle}
-            height={focused ? focusHeight : compact ? 240 : 340}
+            height={focused ? focusHeight : expanded ? 540 : compact ? 240 : 340}
             option={option}
             pointCount={points.length}
             seriesLabels={chart.series.map((series) => series.label)}

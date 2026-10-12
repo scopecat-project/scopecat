@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { classes, secondaryButton } from "../../ui/styles";
 
-const MeasurementFocus = createContext(false);
+const MeasurementFocus = createContext<boolean | undefined>(undefined);
 export const useMeasurementFocus = () => useContext(MeasurementFocus);
 
 /** Keep the same controls mounted when entering/leaving the browser's modal top layer. */
