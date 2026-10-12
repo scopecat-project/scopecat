@@ -84,7 +84,8 @@ export function RenameCollection({
       )}
       {save.error && (
         <p role="alert">
-          {save.error.message} Refresh the collection before retrying a conflicting edit.
+          {save.error.message} Cancel this rename, refresh the collection, and reopen Rename
+          collection before retrying a conflicting edit.
         </p>
       )}
     </div>

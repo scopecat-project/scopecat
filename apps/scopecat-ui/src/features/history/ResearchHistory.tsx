@@ -170,7 +170,7 @@ export function ResearchHistory({
           available={!daemonUnavailable}
         />
         <CollectionRunLookup
-          key={`${projectId}:${collection ?? "all"}`}
+          key={JSON.stringify([projectId, collection])}
           projectId={projectId}
           collection={collection}
           unavailable={daemonUnavailable}
