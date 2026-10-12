@@ -16,7 +16,7 @@ directions to Scopecat contributors:
   specialization, domain lowering, effects, completion, and evidence.
 - [Experiment workbench and session contexts](experiment-contexts.md) defines the
   selected product direction, implemented ownership boundaries and staged
-  acceptance. Use the [current platform status](../platform-status.md) for remaining work.
+  acceptance. 当前能力边界见[平台说明](../platform-status.md)。
 - [Local application host](application-host.md) describes the packaged application
   runtime registration, process ownership and native window lifecycle.
 - [Configuration ownership](configuration-ownership.md) separates fixed scientific

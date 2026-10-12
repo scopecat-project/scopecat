@@ -1,9 +1,7 @@
-# Platform status and remaining work
+# Platform capability boundaries
 
-This index links current contracts and unresolved work. Issues describe remaining
-conditions; PRs retain implementation and validation evidence. Release manifests
-and consumer locks identify distributed versions. A source merge alone does not
-establish an installed upgrade or human/device acceptance.
+本页说明已实现能力及其边界。具体任务和验收条件见 GitHub issues；实现与验证证据
+保留在对应 PR。发布清单和消费者锁标识实际分发版本，源码合并不等于安装升级或真人/设备验收。
 
 ## Delivered boundaries
 
@@ -17,53 +15,24 @@ establish an installed upgrade or human/device acceptance.
 | Automation | Durable tasks, explicit candidate output binding, dependency-checked admission, sequential advancement, controls and recovery | Fresh checks may trigger one declared repair and exact-candidate verification; admission budgets survive restart; no continuous scheduler |
 | Workbench | Task controls and drill-down; sample capability reports from retained runs, branches or exact revisions | Explicit bounded queries, not a continuously maintained health dashboard |
 | Application | Ready-to-run public desktop, independent data and author environments, shared devices and same-application practice | Composition/release qualification is separate from unfamiliar-user and hardware acceptance |
-| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | No supported persistent-data baseline is designated |
+| Recovery | Current-format backup/restore and non-mutating rejection of unsupported formats | 尚未指定持久数据支持基线，见 [#574](https://github.com/scopecat-project/scopecat/issues/574) |
 | Editing recovery | Application-owned Decision, parameter and experiment drafts, conflicts and explicit adoption; exact original-submission recovery | See [experiment recovery](architecture/experiment-drafts.md), [Decision drafts](architecture/decision-drafts.md), [parameter drafts](architecture/parameter-drafts.md) and [native acceptance](native-window-acceptance.md) for their distinct coverage. |
-| Configuration sharing | Inert inspection, atomic editable derivations and installed continuation | [Data exchange](architecture/data-exchange.md); broader structured authoring remains #502. |
-| Teaching | Same-application manual-peak practice and persistent Help continuation for the supplied Notebook topics | Course design and actual editor/unfamiliar-user evidence remain #565/#616. |
-
-## Remaining work owners
-
-| Scope | Owner |
-| --- | --- |
-| Broader Notebook/application learning journey | [#565](https://github.com/scopecat-project/scopecat/issues/565); supplied Help topics share ordinary-author preparation; remaining fixture consumers, teaching design and native editor/human acceptance separate |
-| First-use profiling | [#523](https://github.com/scopecat-project/scopecat/issues/523); closed iteration-cost issue #520 retains separate evidence gaps below |
-| Historical Windows startup/endpoint failures | [#465](https://github.com/scopecat-project/scopecat/issues/465), [#553](https://github.com/scopecat-project/scopecat/issues/553); do not infer a fix from later success |
-| Finer observed dependency coverage | [#783](https://github.com/scopecat-project/scopecat/issues/783); unknown reads cannot prove physical independence |
-| Other live domains and stateful analysis | [#561](https://github.com/scopecat-project/scopecat/issues/561) |
-| Symbolic argument typing and target models | [#581](https://github.com/scopecat-project/scopecat/issues/581), [#612](https://github.com/scopecat-project/scopecat/issues/612) |
-| Actual editor, unfamiliar user, physical qualification | [#616](https://github.com/scopecat-project/scopecat/issues/616); accepted native observations are not automatically repeated |
-| Future data baseline and remaining structured authoring/sharing | [#574](https://github.com/scopecat-project/scopecat/issues/574), [#502](https://github.com/scopecat-project/scopecat/issues/502) |
+| Configuration sharing | Inert inspection, atomic editable derivations and installed continuation | [Data exchange](architecture/data-exchange.md); 结构化作者方向见 [#502](https://github.com/scopecat-project/scopecat/issues/502)。 |
+| Teaching | Same-application manual-peak practice and persistent Help continuation for the supplied Notebook topics | 普通作者入口与学习路线已交付；学习者观察见 [#565](https://github.com/scopecat-project/scopecat/issues/565)，实际编辑器及用户验收见 [#616](https://github.com/scopecat-project/scopecat/issues/616)。 |
 
 ## Evidence and distribution
 
-- Iteration-cost issue [#520](https://github.com/scopecat-project/scopecat/issues/520)
-  is closed. Its remaining checklist still records browser-seed measurement,
-  displaced-assertion mapping, comparable consumer/runner costs, the historical
-  manual-launch completion wait and the unpinned-provider limitation. Closure
-  does not establish that these were resolved or a sustained five-minute CI result.
-- Desktop composition: [#829](https://github.com/scopecat-project/scopecat/pull/829),
-  [#837](https://github.com/scopecat-project/scopecat/pull/837),
-  [#844](https://github.com/scopecat-project/scopecat/pull/844) and
-  [#845](https://github.com/scopecat-project/scopecat/pull/845).
-- Configuration retirement, ordinary analysis, live groups, declared dependency
-  comparison and bounded repair: #849–#853, linked from their contracts and issues.
-- Entry audit and Help correction: [#675](https://github.com/scopecat-project/scopecat/issues/675)
-  and [#859](https://github.com/scopecat-project/scopecat/pull/859).
-- Configuration sharing: [#861](https://github.com/scopecat-project/scopecat/pull/861)
-  and [#871](https://github.com/scopecat-project/scopecat/pull/871).
-- Teaching source and material identity: #875/#877/#880. Shipped grouping and
-  refresh/compute real-kernel checks: [#903](https://github.com/scopecat-project/scopecat/pull/903)
-  and [#904](https://github.com/scopecat-project/scopecat/pull/904). All seven Help
-  topics share preparation/continuation in [#913](https://github.com/scopecat-project/scopecat/pull/913);
-  exact-folder Settings and course navigation are covered by
-  [#918](https://github.com/scopecat-project/scopecat/pull/918). Course design,
-  remaining fixture consumers and actual editor/user observations remain #565/#616.
-- Configuration derivation now limits actual request bytes before parsing:
-  [#901](https://github.com/scopecat-project/scopecat/pull/901). Broader structured
-  authoring and sharing decisions remain #502.
-- Native window/storage repair: [acceptance record](native-window-acceptance.md),
-  including failed candidates and checks still pending. Source tests do not replace it.
+版本以发布清单和消费者锁为准；源码合并、安装态软件检查、原生观察和真人/物理
+验收是不同证据。当前操作与报告入口见[原生验收](native-window-acceptance.md)、
+[测试反馈](test-feedback.md)和[发布流程](public-preview.md)。
+
+具体任务见 [GitHub issues](https://github.com/scopecat-project/scopecat/issues)；
+验收入口为 [#616](https://github.com/scopecat-project/scopecat/issues/616)，
+首次使用性能为 [#523](https://github.com/scopecat-project/scopecat/issues/523)，
+历史 Windows 故障分别见 [#465](https://github.com/scopecat-project/scopecat/issues/465) 与
+[#553](https://github.com/scopecat-project/scopecat/issues/553)。
+已关闭的 [#520](https://github.com/scopecat-project/scopecat/issues/520) 保留历史测量和
+未决证据；关闭状态本身不证明问题已修复或持续达到五分钟 CI 目标。
 
 Current product direction is in the [application contract](architecture/public-application.md).
 Release procedures and artifact identities are in [public previews](public-preview.md).

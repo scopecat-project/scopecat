@@ -7,8 +7,8 @@ also exist. Explicit candidate edges now bind a passing prerequisite's adopted
 proposal to a later check. #853 adds one declared repair after a fresh scientific
 rejection, followed by exact-candidate verification. General adaptive loops and
 large-scale scheduling remain separate.
-See the [implementation order](../platform-status.md) and
-[parameter-flow contract](task-parameter-flow.md).
+当前能力边界见[平台说明](../platform-status.md)和
+[参数流契约](task-parameter-flow.md)。
 
 ## Ownership
 

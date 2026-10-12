@@ -77,28 +77,16 @@ Help remains a direct learning entry. This hierarchy is **not implemented** and
 does not prescribe a new order, hide capabilities or rename current GUI labels.
 Any later GUI change must demonstrate the journeys above before replacing entries.
 
-### Bounded follow-up order
+教学入口已统一为普通作者目录，七个主题共用 Help 准备与继续流程；学习路线与材料
+导语已交付。学习者观察见 [#565](https://github.com/scopecat-project/scopecat/issues/565)，
+实际编辑器、应用及物理验收见 [#616](https://github.com/scopecat-project/scopecat/issues/616)。
+实现完成不等于这些观察完成。
 
-[#565](https://github.com/scopecat-project/scopecat/issues/565) 的教学源码收敛已完成：
-七个主题共用 Help 准备与继续流程（#913），独立 CLI 教学生成入口已改用普通作者目录，
-旧服务任务与生命周期包装已退役（#965），学习路线及 Notebook 导语已交付（#970）。
-这些不再是待实施的第一优先级。剩余工作是按已采用路线观察学习难度与衔接，并完成
-#616 下的实际编辑器、应用和陌生用户观察；实现完成不等于学习者验收完成。
-
-1. **Entry hierarchy:** evaluate a bounded navigation proposal against receiving
-   data, learning, authoring and returning to results. Measure whether users can
-   find the next action before committing to GUI changes. #675's bounded audit
-   found no remaining software gap; its closure decision does not authorize this
-   redesign or require last-task restoration.
-2. **Sharing and recovery guidance (#502/#574):** keep independent configuration
-   derivation distinct from same-store recovery, identify any concrete usability
-   gap after the merged installed-sharing journey, and retain external dependency
-   requirements. Do not add another archive format or compatibility promise.
-
-Actual editor, unfamiliar-user and supervised device observations remain #616.
-Use the [existing work owners](../platform-status.md#remaining-work-owners); this
-ordering is a limited proposal for subsequent work, not another implementation
-batch, new issues or approval to change product behavior in this documentation PR.
+配置分享产生独立的可编辑派生记录；同一存储的恢复保留原身份，两者不可互换。
+外部依赖仍需单独准备，见[配置分享](../../how-to/share-configuration.md)及
+[备份恢复](../../how-to/backup-and-restore.md)。结构化作者方向见
+[#502](https://github.com/scopecat-project/scopecat/issues/502)，数据支持基线见
+[#574](https://github.com/scopecat-project/scopecat/issues/574)。
 
 ## Recoverable editing
 
@@ -419,8 +407,7 @@ scan → verification → publication → reopen remain separate from software e
 
 Preserve current-format evidence and recovery. No development-store migration
 chains, supported data baseline or automatic replay are introduced by this work.
-Software UX convergence is the current P0, before physical acceptance. It can be
-developed on Mac; Windows uses the same product flow plus platform/hardware checks.
+软件体验可在 Mac 上开发；Windows 使用同一产品流程，并分别验证平台及硬件边界。
 Do not make this depend on a general workflow editor, remote service,
 arbitrary dependency isolation or a complete physical-state model. Keep targeted
 scientific, process-ownership and persistence tests; do not preserve retired service
