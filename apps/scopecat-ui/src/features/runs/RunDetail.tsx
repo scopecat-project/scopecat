@@ -1,3 +1,4 @@
+import { ReturnToPreparation } from "../launch/ReturnToPreparation";
 import { RunAnalysisActionsCard } from "./DeclaredRunAnalyses";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
 import { CopyReadOnlyCode } from "../../ui/CopyReadOnlyCode";
@@ -199,6 +200,7 @@ export function RunDetail({
         </dl>
       </header>
       <div className="my-3 flex flex-wrap items-center gap-3 text-sm">
+        <ReturnToPreparation />
         <OpenRunWindow key={`open:${run.runId}`} runId={run.runId} />
         <ComparisonLink runId={run.runId} />
         <ExportRun key={`export:${run.runId}`} runId={run.runId} />

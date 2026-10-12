@@ -172,7 +172,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     expect((await submitting).postDataJSON().expected_request_hash).toBe(captured.request_hash);
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
     expect((await (await page.request.get(`${url}/api/v1/runs`)).json()).items).toHaveLength(1);
-    const runLink = page.getByRole("link", { name: /^Open retained run:/ });
+    const runLink = page.getByRole("link", { name: /^View saved data:/ });
     const runId = new URL((await runLink.getAttribute("href"))!, page.url()).searchParams.get(
       "run",
     )!;

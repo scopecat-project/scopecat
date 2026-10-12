@@ -188,9 +188,10 @@ it("shows an uncertain current child as attention even when its parent is ready 
     "role",
     "status",
   );
+  expect(screen.getByRole("alert")).toHaveTextContent("The acquisition outcome is uncertain");
   expect(screen.queryByText("Queued for a worker")).toBeNull();
   expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
-  expect(screen.getByRole("link", { name: /Open current child run/ })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: /View saved data/ })).toHaveAttribute(
     "href",
     "?procedure=p1&run=retained-child#runs",
   );
@@ -198,7 +199,7 @@ it("shows an uncertain current child as attention even when its parent is ready 
     "href",
     "/?run=retained-child",
   );
-  fireEvent.click(screen.getByRole("link", { name: /Open current child run/ }));
+  fireEvent.click(screen.getByRole("link", { name: /View saved data/ }));
   expect(window.location.search).toBe("?procedure=p1&run=retained-child");
   expect(window.location.hash).toBe("#runs");
   expect(window.history.state.scopecatPosition).toBe(1);
@@ -216,6 +217,7 @@ it("shows failed closure and its reason without suggesting retry", async () => {
   mount();
   await screen.findByText("Failed");
   expect(screen.getByText("Source failed")).toBeVisible();
+  expect(screen.queryByText(/Waiting for your explicit Continue/)).toBeNull();
   expect(screen.queryByRole("button", { name: /dispatch|retry/i })).toBeNull();
 });
 
@@ -285,7 +287,7 @@ it("finds durable work from history without copying an ID", async () => {
       <LaunchWorkspace />
     </LaunchDraftProvider>,
   );
-  fireEvent.click(screen.getByText("Retained procedures"));
+  fireEvent.click(screen.getByText("Experiment history"));
   fireEvent.click(await screen.findByRole("button", { name: /temperature-diagnostic/ }));
   await screen.findByText("Dispatch paused");
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");

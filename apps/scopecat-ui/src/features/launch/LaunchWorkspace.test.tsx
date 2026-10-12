@@ -345,6 +345,8 @@ it("retains the submission key after a lost response and opens durable progress"
   );
   fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
   await screen.findByRole("alert");
+  expect(screen.queryByRole("button", { name: "Prepare another acquisition" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
   await screen.findByText("Execution progress");

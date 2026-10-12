@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -24,8 +24,18 @@ test("Start prepares internally while cancelled and edited preparations never ac
 }, testInfo) => {
   test.setTimeout(120_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-start-e2e-"));
+  const releasePath = join(project, "release-second-point");
   try {
     await copyAuthorWorkspace(project);
+    // Hold the second synthetic point so the browser can open the running acquisition.
+    const sourcePath = join(project, "src/ui_author/signal.py");
+    await writeFile(
+      sourcePath,
+      (await readFile(sourcePath, "utf8")).replace(
+        "    detuning =",
+        `    if frequency.to("GHz").value > 4.8:\n        import time\n        from pathlib import Path\n        deadline = time.monotonic() + 60\n        while not Path(${JSON.stringify(releasePath)}).exists():\n            if time.monotonic() > deadline:\n                raise TimeoutError("Browser did not release second point")\n            time.sleep(0.05)\n    detuning =`,
+      ),
+    );
     uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
@@ -127,6 +137,10 @@ test("Start prepares internally while cancelled and edited preparations never ac
     expect(await runs()).toHaveLength(0);
     await page.getByLabel("Gain", { exact: true }).fill("3");
     await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+    await page.getByLabel("Frequency source").selectOption("range");
+    await page.getByLabel("Frequency start").fill("4.8");
+    await page.getByLabel("Frequency stop").fill("4.9");
+    await page.getByLabel("Frequency points").fill("2");
     const preview = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/preview"),
     );
@@ -141,10 +155,81 @@ test("Start prepares internally while cancelled and edited preparations never ac
     expect(request.manual_state).toEqual(checked.manual_state);
     expect(request.code_revision).toEqual(checked.code_revision);
     expect(request.reviewed).toEqual(checked.reviewed);
+    const current = page.getByRole("link", { name: /View current data:/ });
+    await expect(current).toBeVisible();
+    const currentHref = await current.getAttribute("href");
+    const runId = new URL(currentHref!, endpoint.base_url).searchParams.get("run");
+    const procedureId = new URL(currentHref!, endpoint.base_url).searchParams.get("procedure");
+    await current.click();
+    await expect(page.getByTestId("run-status")).toHaveText("Running");
+    await expect(
+      page.getByTestId("data-card").getByText("Measurement data", { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("current-data.png"), fullPage: true });
+    await writeFile(releasePath, "release");
+    // The current view receives the completed batch without reopening or collecting again.
+    await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
+    await page.getByRole("link", { name: "Return to preparation", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "Prepare an experiment", exact: true }),
+    ).toBeFocused();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
+    await expect(page.getByLabel("Frequency points")).toHaveValue("2");
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    await page.getByText("Experiment history", { exact: true }).click();
+    await page.getByRole("button", { name: /signal.*Completed/ }).click();
+    expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
+    const saved = page.getByRole("link", { name: /View saved data:/ });
+    expect(
+      new URL((await saved.getAttribute("href"))!, endpoint.base_url).searchParams.get("run"),
+    ).toBe(runId);
+    await saved.click();
+    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("historical-data.png"), fullPage: true });
+    await page.getByRole("link", { name: "Return to preparation", exact: true }).click();
+    await expect(
+      page.getByText(
+        "Showing your current editable inputs. Returning from a run does not load its historical inputs.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
+    await expect(page.getByLabel("Frequency points")).toHaveValue("2");
+    await page.getByLabel("Gain", { exact: true }).fill("4");
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Prepare another acquisition", exact: true }).click();
+    await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("4");
+    await expect(page.getByLabel("Frequency points")).toHaveValue("2");
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeEnabled();
     expect(await runs()).toHaveLength(1);
-    await page.screenshot({ path: testInfo.outputPath("started-once.png") });
+    await page.screenshot({
+      path: testInfo.outputPath("adjust-without-acquisition.png"),
+      fullPage: true,
+    });
+    // Only this explicit Start may acquire again, and it must leave preparation focus behind.
+    const nextSubmission = page.waitForResponse((response) =>
+      response.url().endsWith("/experiment-launcher/submit"),
+    );
+    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    const nextResponse = await nextSubmission;
+    expect(nextResponse.request().postDataJSON().control_edits.gain).toEqual({
+      mode: "fixed",
+      value: 4,
+    });
+    const nextProcedure = (await nextResponse.json()).procedure_id;
+    expect(nextProcedure).not.toBe(procedureId);
+    await expect(
+      page.getByRole("region", { name: "Selected execution", exact: true }),
+    ).toBeFocused();
+    expect(new URL(page.url()).searchParams.has("preparation")).toBe(false);
+    expect(new URL(page.url()).searchParams.get("procedure")).toBe(nextProcedure);
+    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    expect(await runs()).toHaveLength(2);
   } finally {
+    await writeFile(releasePath, "release");
     uv(["scopecat", "stop", project]);
     await rm(project, { recursive: true, force: true });
   }

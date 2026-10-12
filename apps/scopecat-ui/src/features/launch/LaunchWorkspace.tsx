@@ -68,12 +68,17 @@ export function LaunchWorkspace({
   const location = useLocationUrl();
   const procedureId = location.searchParams.get("procedure") ?? draft?.admittedProcedureId ?? "";
   const execution = useRef<HTMLElement>(null);
+  const preparation = useRef<HTMLElement>(null);
+  const preparing = location.searchParams.has("preparation");
   useEffect(() => {
-    if (procedureId) {
+    if (preparing) {
+      preparation.current?.focus({ preventScroll: true });
+      preparation.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    } else if (procedureId) {
       execution.current?.focus({ preventScroll: true });
       execution.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
     }
-  }, [procedureId]);
+  }, [procedureId, preparing]);
   const entry = draft?.experiment
     ? catalog.data?.entries.find((item) => item.id === draft.experiment)
     : catalog.data?.entries[0];
@@ -128,13 +133,20 @@ export function LaunchWorkspace({
           <ProcedureProgress key={procedureId} procedureId={procedureId} />
         </section>
       )}
-      <section aria-labelledby="experiment-preparation" className={`${detailCard} space-y-4`}>
+      <section
+        ref={preparation}
+        tabIndex={-1}
+        aria-labelledby="experiment-preparation"
+        className={`${detailCard} space-y-4 scroll-mt-24`}
+      >
         <div>
           <h3 id="experiment-preparation" className="font-semibold">
             Prepare an experiment
           </h3>
           <p className="text-sm text-text-dim">
-            Your editable inputs stay here while submitted work runs.
+            {preparing
+              ? "Showing your current editable inputs. Returning from a run does not load its historical inputs."
+              : "Your editable inputs stay here while submitted work runs."}
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 border-b border-line pb-4">
@@ -247,6 +259,7 @@ export function LaunchWorkspace({
 
 function openProcedure(id: string, options?: NavigationOptions) {
   const url = new URL(window.location.href);
+  url.searchParams.delete("preparation");
   url.searchParams.set("procedure", id);
   navigate(url, options);
 }

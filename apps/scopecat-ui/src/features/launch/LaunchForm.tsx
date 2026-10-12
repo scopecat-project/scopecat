@@ -43,6 +43,7 @@ export function LaunchForm({
     beginPreparation,
     attemptsReady,
     attempt,
+    rerun,
     recovery,
   } = useLaunchDraft();
   if (!retained) throw new Error("Select a launch draft before rendering its form");
@@ -615,6 +616,16 @@ export function LaunchForm({
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
               {pending === "preview" ? "Preparing preview…" : "Preview"}
+            </button>
+          )}
+          {attempt?.status === "confirmed" && (
+            <button
+              type="button"
+              className={secondaryButton}
+              disabled={Boolean(pending)}
+              onClick={rerun}
+            >
+              Prepare another acquisition
             </button>
           )}
           {(pending === "prepare" || pending === "preview") && (

@@ -140,7 +140,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
       body: await page.screenshot(),
       contentType: "image/png",
     });
-    await page.getByRole("link", { name: /^Open retained run:/ }).click();
+    await page.getByRole("link", { name: /^View saved data:/ }).click();
     await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
     await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
     completed = true;
@@ -268,10 +268,10 @@ test("prepares B while A stays pinned in a separate result page", async ({
       contentType: "application/json",
     });
     // A historical selection must survive an ordinary page round trip even after B was admitted.
-    await page.getByText("Retained procedures", { exact: true }).click();
+    await page.getByText("Experiment history", { exact: true }).click();
     const historicalA = page
       .locator("details")
-      .filter({ has: page.getByText("Retained procedures", { exact: true }) })
+      .filter({ has: page.getByText("Experiment history", { exact: true }) })
       .getByRole("button")
       .last();
     await historicalA.focus();
