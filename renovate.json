@@ -3,6 +3,12 @@
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__fixtures__/**",
     "fixtures/installed_author_lab/pyproject.toml"
   ],
   "minimumReleaseAge": "3 days",
