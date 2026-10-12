@@ -296,7 +296,7 @@ retains the project decision publication, and rejects missing decisions or chang
 decision schemas. These are local scientific-graph checks, not evidence of the
 complete desktop interaction requirements.
 
-For changes to this capability, run affected checks locally before CI and self-review. The current data/evidence checks are:
+For changes to this capability, run affected checks locally before CI. The current data/evidence checks are:
 
 ```sh
 uv run --locked pytest -q \

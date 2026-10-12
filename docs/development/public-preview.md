@@ -101,7 +101,7 @@ automatic version selection does not replace this editorial pass.
    or change repository permissions. If PR creation is disabled, use the local
    preparation path and the normal maintainer PR workflow.
 3. Review the exact version, build number and user-visible notes; merge through
-   the normal CI/self-review process. No tag or release is created by that merge.
+   the normal CI process. No tag or release is created by that merge.
 4. Run **Full acceptance → full** on the integrated commit, then dispatch
    **Publish release** with its full SHA. It verifies
    main ancestry and successful full acceptance for that exact commit, runs CI
