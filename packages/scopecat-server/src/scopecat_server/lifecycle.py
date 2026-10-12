@@ -493,7 +493,10 @@ def write_daemon_endpoint_record(record: DaemonEndpointRecord) -> Path:
     try:
         os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            stream.write(record.model_dump_json(indent=2))
+            # Legacy endpoints have no separate coordination directory. Keep
+            # their wire shape readable by the observed strict author client.
+            excluded: set[str] = {"state_root"} if record.state_root is None else set()
+            stream.write(record.model_dump_json(indent=2, exclude=excluded))
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
