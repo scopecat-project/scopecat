@@ -173,9 +173,12 @@ If it fails, the window retains the error and retry controls. Install a correcte
 application package to repair application dependencies; do not use pip inside it.
 **Technical diagnostics** contains interpreter and capability details for maintainers.
 
-The native log is `HOME/desktop/desktop.log`; runtime logs and data are under
-`HOME/runtime/.scopecat` unless explicitly bound elsewhere. Record the exact error
-and installation path. Historical directories are never automatically deleted.
+原生日志位于 `HOME/desktop/desktop.log`。新建应用的科学数据位于 `HOME/data/`，
+daemon 日志位于 `HOME/state/daemon.log`；`state/` 还保存安装登记、作者目录登记、
+解释器引用和运行协调信息，**不是可丢弃的缓存**。已识别的旧布局（legacy）保留
+`HOME/runtime/.scopecat/` 下原有的数据和 daemon 日志，不会自动搬迁。
+记录准确错误和应用路径；历史目录不会自动删除。完整边界见
+[安装布局](../development/installation-layout.md#installed-application-directories)。
 
 ## Ownership and limits
 
@@ -199,13 +202,13 @@ only this folder. Each recovery starts with backup enabled; **本次跳过备份
 it only for this confirmation. Cancelling either dialog deletes nothing. A failed
 backup never falls back to deletion.
 
-The operation deletes only `runtime/.scopecat/control.sqlite3`, its SQLite sidecars
-and `objects/`, then initializes a current empty store at the same path. This
-removes experiments, parameters, drafts, device configuration and stored evidence.
-Original source folders, Python environments, application files, author-folder
-registrations and other files remain. No task runs or device connects automatically.
-This does not free environments, materialized source or unknown auxiliary files.
-There are no new spaces, current-space selection or retained-space manager.
+操作只删除确认的数据目录中的 `control.sqlite3`、其 SQLite sidecar 文件和 `objects/`，
+再在原路径初始化当前格式的空存储。新布局的数据目录为 `HOME/data/`；已识别的
+legacy 布局仍为 `HOME/runtime/.scopecat/`。不会删除整个数据目录或应用 home。
+这会移除实验、参数、草稿、设备配置和已存证据；原始作者目录、Python 环境、
+应用文件、作者目录登记及其他文件保留。新布局的 `state/` 也保留，不属于科学数据重置范围。
+不会自动运行任务或连接设备，也不会清理环境、物化源码或未知辅助文件。
+此操作不创建新数据空间或空间管理入口。
 
 The backup is a uniquely named directory in the chosen folder, containing raw
 store files and a SHA-256 manifest. It preserves the original format; it is **not**

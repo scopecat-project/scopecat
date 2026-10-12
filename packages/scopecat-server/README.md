@@ -4,37 +4,41 @@ The installed application console `scopecat` belongs to `scopecat-lab-tools`.
 Server-only development uses `python -m scopecat_server.cli` for project commands;
 the server never imports the application host or delivery tools.
 
-Local FastAPI and SSE transport plus the default SQLite daemon runtime.
-Published distributions include the project GUI; source checkouts may use the
-Vite development server or pass `apps/scopecat-ui/dist` with `--static-dir`.
+本包提供本地 FastAPI、SSE 传输和默认 SQLite daemon runtime。标准 server wheel
+不内嵌 GUI；匹配 GUI 是单独 ZIP，维护者可用 `--static-dir` 指向其解压目录。
+源码调试也可使用 Vite 或已构建的 `apps/scopecat-ui/dist`。
+这些是 server 维护与集成入口；普通桌面安装和首次实验见
+[快速开始](../../docs/getting-started/quickstart.md)。
 
-From the repository root:
+在仓库根目录，选择尚不存在的临时目录，验证当前生成器与 bootstrap：
 
 ```console
-uv run python -m scopecat_server.cli init ./my-lab
-uv run python -m scopecat_server.cli config check ./my-lab
-uv run python -m scopecat_server.cli start ./my-lab --static-dir apps/scopecat-ui/dist
-uv run python -m scopecat_server.cli open ./my-lab
-uv run python ./my-lab/notebooks/01_first_run.py
+uv run --locked python -m scopecat_server.cli init /tmp/scopecat-server-example
+uv run --locked python -m scopecat_server.cli config check /tmp/scopecat-server-example
 ```
 
-`init` creates a project without replacing existing files. `config check`
-validates its bootstrap source without starting a daemon or writing project
-state. Configuration reconciliation commands and the complete runnable
-walkthrough live in the [repository README](../../README.md).
+Windows 可将示例路径换成自己的临时目录。`init` 不覆盖已有文件；`config check`
+验证初始 setup 和可选 parameter defaults，不启动 daemon 或创建项目运行状态。
+当前生成器使用 setup 与 configuration templates，预期输出
+`valid setup=… parameter_defaults=none`。模板内容不由此命令校验。
+命令与当前配置操作见 [CLI 参考](../../docs/reference/cli.md#configuration)；
+原 `config diff/apply/export` 已退役。
 
-Each `scopecat.toml` names a lightweight daemon bootstrap, declarative worker
-capabilities and, when devices are configured, an instrument backend:
+生成的 `scopecat.toml` 分开声明轻量 bootstrap、作者模块和 instrument backend：
 
 ```toml
 [lab]
-bootstrap = "my_lab.application:create_bootstrap"
-instrument_backend = "my_lab.backend:create_backend"
+bootstrap = "scopecat_lab.application:create_bootstrap"
+instrument_backend = "scopecat_lab.backend:create_backend"
 
-[lab.capabilities]
-author_modules = ["my_lab.experiments"]
-experiment_system = "my_lab.system:build_experiment_system"
+[authors]
+modules = ["scopecat_lab.authored"]
+dependencies = ["scopecat-instruments"]
+source_roots = ["src"]
 ```
+
+需要自定义系统时可另加 `[lab.capabilities]`，例如
+`experiment_system = "my_lab.system:build_experiment_system"`。
 
 The system builder is optional: the generated starter uses the default system.
 When supplied, it accepts the accepted configuration and instrument contract
@@ -43,42 +47,55 @@ capabilities declare procedure and schedule symbols, calibration registries,
 publication policies and launch/comparison providers. These are existing values
 or callables, not project-root factories.
 
+下面是生成的 `src/scopecat_lab/application.py` 的精简示例，使用当前 `LabBootstrap` 字段：
+
 ```python
 from pathlib import Path
 
 from scopecat.application import LabBootstrap
-from my_lab.configuration import build_initial_config
+from scopecat.records.configuration_template import ConfigurationTemplate
+
+from .authored.parameters import initial_parameters
+from .configuration import initial_setup
 
 
-def create_bootstrap(project: Path) -> LabBootstrap:
+def create_bootstrap(_project_root: Path) -> LabBootstrap:
     return LabBootstrap(
-        bootstrap_config=lambda: build_initial_config(project),
+        setup=initial_setup,
+        configuration_templates=configuration_templates,
+    )
+
+
+def configuration_templates() -> tuple[ConfigurationTemplate, ...]:
+    parameters = initial_parameters()
+    return (
+        ConfigurationTemplate(
+            id="starter-software",
+            label="软件实验台",
+            setup=initial_setup(),
+            catalog=parameters.parameter_catalog,
+            parameters=parameters.parameter_snapshot,
+        ),
     )
 ```
 
-```python
-from pathlib import Path
+`setup` 在首次使用时创建名为 `initial` 的设备 setup；可选 `parameter_defaults`
+返回独立的 `ParameterRevisionContent`，并要求同时声明 setup。已初始化的存储重启
+不会重新求值这两个初始工厂。`configuration_templates` 返回供显式导入的模板，
+与初始参数默认值分别声明；当前生成器不设置 `parameter_defaults`。
 
-from scopecat.sdk.instruments import InstrumentBackend
-from my_lab.drivers import LabProvider
-
-
-def create_backend(project: Path) -> InstrumentBackend:
-    return InstrumentBackend(provider=LabProvider.from_project(project))
-```
-
-Bootstrap and backend factories accept the resolved project `Path`. The bootstrap
-config is a lazy seed used only for an empty registry. Capability symbols are
-resolved in the notebook or project worker; the daemon loads only
-`create_bootstrap`. A custom `lab.application` factory remains available for special
-composition and cannot be combined with `[lab.capabilities]`.
+Bootstrap 与 backend 工厂接收解析后的项目 `Path`。上例依赖 `init` 生成的其他模块；
+backend 实现在生成的 `scopecat_lab/backend.py`，使用软件 instrument provider。
+能力符号在 Notebook 或项目 worker 中解析；daemon 只加载轻量 bootstrap。
+自定义 `lab.application` 工厂仍用于特殊组合，不能与 `[lab.capabilities]` 同用。
 Notebook planning receives the accepted snapshot and the
 daemon-resolved contract catalog. Backend code, transports, codecs, and drivers
 are imported and constructed only in the long-lived instrument worker.
 
-Only one daemon owns a project. It stores SQLite and immutable objects below
-`.scopecat`, records its loopback endpoint in `.scopecat/daemon.json`, and
-serves the replayable event stream used by GUI and notebook clients. See the
+同一项目只由一个 daemon 持有。上述生成项目在没有自定义 runtime binding 时，
+将 SQLite 和不可变对象存入 `.scopecat/`，回环端点记入 `.scopecat/daemon.json`，
+并为 GUI 与 Notebook 客户端提供可重放事件流。新桌面应用的数据与状态目录另见
+[安装布局](../../docs/development/installation-layout.md#installed-application-directories)。See the
 [daemon model](../../docs/development/architecture/daemon.md) for ownership, fencing, quarantine,
 and security boundaries.
 
