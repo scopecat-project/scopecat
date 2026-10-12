@@ -137,3 +137,75 @@ def test_non_form_input_is_unavailable_without_executing_analysis() -> None:
     assert result.actions[0].unavailable_reason == (
         "values: input type is not supported in Runs; use Python."
     )
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "message"),
+    [
+        (
+            ValueError("Retained execution environment is unavailable"),
+            503,
+            "Retained execution environment is unavailable",
+        ),
+        (OSError("author interpreter missing"), 503, "author interpreter missing"),
+        (KeyError("saved revision missing"), 503, "saved revision missing"),
+        (ValueError("invalid declaration payload"), 503, "invalid declaration payload"),
+        (
+            OSError("cannot read saved declaration"),
+            503,
+            "cannot read saved declaration",
+        ),
+    ],
+)
+def test_catalog_load_failures_preserve_details_without_guessing_repair(
+    failure: Exception, status: int, message: str
+) -> None:
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from scopecat_server.http.analysis_actions import analysis_actions_router
+
+    read = Mock()
+    read.return_value.request.metadata = {
+        "author_workspace": REQUEST.workspace_id,
+        "author_code_revision": REVISION.content_hash,
+    }
+    describe = Mock(side_effect=failure)
+    app = FastAPI()
+    app.include_router(analysis_actions_router(read, describe))
+    response = TestClient(app).get("/api/v1/runs/run-original/analysis-actions")
+    assert response.status_code == status
+    detail = response.json()["detail"]
+    assert detail.startswith("The saved analysis declarations could not be loaded.")
+    assert f"Details: {failure}" in detail
+    assert message in detail
+    assert "Restore" not in detail
+    describe.assert_called_once_with(REQUEST)
+
+
+def test_catalog_timeout_does_not_suggest_unknown_analysis_publication() -> None:
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI, HTTPException
+    from fastapi.testclient import TestClient
+
+    from scopecat_server.http.analysis_actions import analysis_actions_router
+
+    read = Mock()
+    read.return_value.request.metadata = {
+        "author_workspace": REQUEST.workspace_id,
+        "author_code_revision": REVISION.content_hash,
+    }
+    app = FastAPI()
+    app.include_router(
+        analysis_actions_router(
+            read,
+            Mock(side_effect=HTTPException(504, "Publication outcome may be unknown.")),
+        )
+    )
+    response = TestClient(app).get("/api/v1/runs/run-original/analysis-actions")
+    assert response.status_code == 504
+    assert "No analysis was submitted" in response.json()["detail"]
+    assert "Publication" not in response.json()["detail"]

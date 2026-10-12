@@ -55,7 +55,7 @@ with project.authoring() as author:
                      "workspace": run.request.metadata["author_workspace"]}))
 `;
 
-test("starts the declared first analysis from a retained result after current source edits", async ({
+test("recovers directory loading and starts declared analyses from the retained source", async ({
   page,
 }, testInfo) => {
   test.setTimeout(90_000);
@@ -87,14 +87,32 @@ test("starts the declared first analysis from a retained result after current so
     await expect(page.locator("summary").filter({ hasText: "Analyze this result" })).toBeVisible();
     expect(directoryReads).toBe(0);
     expect(retainedWorkers(project)).toEqual([]);
+    // A real browser transport failure must not start an author worker or an analysis.
+    await page.route("**/analysis-actions", (route) => route.abort("connectionfailed"), {
+      times: 1,
+    });
     await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Could not load declared analyses" }),
+    ).toBeVisible();
+    expect(retainedWorkers(project)).toEqual([]);
+    expect(posts).toBe(0);
+    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    expect(directoryReads).toBe(1);
+    await page.getByRole("button", { name: "Reload declared analyses" }).click();
     const actions = page.getByRole("region", { name: "Analyze this result" });
     await expect(actions.getByRole("button", { name: "Run Estimate peak" })).toBeVisible();
     expect(posts).toBe(0);
-    expect(directoryReads).toBe(1);
+    expect(directoryReads).toBe(2);
     const workers = retainedWorkers(project);
     expect(workers).toHaveLength(1);
     await expect(actions.getByLabel("Minimum Contrast")).toHaveValue("0.2");
+    await actions.getByLabel("Minimum Contrast").fill("0.3");
+    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await page.locator("summary").filter({ hasText: "Analyze this result" }).click();
+    await expect(actions.getByLabel("Minimum Contrast")).toHaveValue("0.3");
+    expect(directoryReads).toBe(2);
     await expect(page.getByRole("button", { name: "Run Changed peak action" })).toHaveCount(0);
     await actions.screenshot({ path: testInfo.outputPath("declared-analyses-wide.png") });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -114,7 +132,7 @@ test("starts the declared first analysis from a retained result after current so
       run_id: seed.run,
       workspace_id: seed.workspace,
       code_revision: { content_hash: seed.source },
-      arguments: { minimum_contrast: 0.2 },
+      arguments: { minimum_contrast: 0.3 },
     });
     const fitReceipt = await fit.json();
     const estimate = actions.getByRole("form", { name: "Estimate peak" });

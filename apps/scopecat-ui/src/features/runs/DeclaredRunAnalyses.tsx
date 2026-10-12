@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { errorMessage, titleCase } from "../../lib/presentation";
 import { secondaryButton } from "../../ui/styles";
@@ -11,6 +11,10 @@ export type RunAnalysisAction = components["schemas"]["RunAnalysisAction"];
 export type RunAnalysisActions = components["schemas"]["RunAnalysisActions"];
 
 export function RunAnalysisActionsCard({ runId }: { runId: string }) {
+  return <RunAnalysisActionsSection key={runId} runId={runId} />;
+}
+
+function RunAnalysisActionsSection({ runId }: { runId: string }) {
   const [loaded, setLoaded] = useState(false);
   return (
     <details
@@ -45,6 +49,8 @@ function DeclaredAnalysisCatalog({ runId }: { runId: string }) {
     },
     staleTime: Infinity,
     retry: false,
+    retryOnMount: false,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -52,16 +58,39 @@ function DeclaredAnalysisCatalog({ runId }: { runId: string }) {
     return <p className="text-sm text-text-soft">Loading declared analyses…</p>;
   if (catalog.isError)
     return (
-      <p role="status" className="text-sm text-text-soft">
-        Declared analyses unavailable: {errorMessage(catalog.error)} Existing results remain
-        available.
+      <div className="space-y-2 text-sm text-text-soft">
+        <p role="status">Could not load declared analyses: {errorMessage(catalog.error)}</p>
+        <p>
+          If the application connection was interrupted, reconnect and reload. Otherwise, use the
+          error details above to check this run's original source and environment, or ask its author
+          for help. Reloading reads the saved source's declarations; it does not run an analysis.
+          Existing results remain available.
+        </p>
+        <button
+          type="button"
+          className={secondaryButton}
+          disabled={catalog.isFetching}
+          onClick={() => {
+            void catalog.refetch({ cancelRefetch: false });
+          }}
+        >
+          {catalog.isFetching ? "Reloading analyses…" : "Reload declared analyses"}
+        </button>
+      </div>
+    );
+  if (!catalog.data)
+    return (
+      <p className="text-sm text-text-soft">
+        This run has no saved author source identity, so its declared analyses cannot be loaded. You
+        can still read existing results or analyze the saved data in Python.
       </p>
     );
-  return catalog.data?.actions.length ? (
+  return catalog.data.actions.length ? (
     <DeclaredRunAnalyses catalog={catalog.data} />
   ) : (
     <p className="text-sm text-text-soft">
-      No analyses were declared for this run's saved source. Existing results remain available.
+      No analyses were declared for this run's saved source. Read existing results or analyze the
+      saved data in Python. Adding declarations to current code applies to new runs.
     </p>
   );
 }
@@ -121,7 +150,16 @@ function AnalysisActionForm({
   const [values, setValues] = useState<Record<string, Value>>(() =>
     Object.fromEntries(inputs.map((input) => [input.name, initialValue(input)])),
   );
+  const mutationKey = [
+    "declared-run-analysis",
+    catalog.run_id,
+    catalog.code_revision.content_hash,
+    action.analysis,
+  ];
+  const pending = useIsMutating({ mutationKey }) > 0;
+  const submitting = useRef(false);
   const execute = useMutation({
+    mutationKey,
     mutationFn: async () => {
       const args: Record<string, string | number | boolean | { value: number; unit: string }> = {};
       for (const input of inputs) {
@@ -158,6 +196,9 @@ function AnalysisActionForm({
       );
     },
     retry: false,
+    onSettled: () => {
+      submitting.current = false;
+    },
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ["analyses", "run", catalog.run_id] }),
@@ -175,6 +216,9 @@ function AnalysisActionForm({
       aria-label={action.title}
       onSubmit={(event) => {
         event.preventDefault();
+        if (submitting.current || client.isMutating({ mutationKey }) || action.unavailable_reason)
+          return;
+        submitting.current = true;
         execute.mutate();
       }}
     >
@@ -183,10 +227,14 @@ function AnalysisActionForm({
         <p className="mt-1 whitespace-pre-wrap text-text-soft">{action.description}</p>
       )}
       {action.unavailable_reason ? (
-        <p className="mt-2 text-text-soft">{action.unavailable_reason}</p>
+        <p className="mt-2 text-text-soft">
+          {action.unavailable_reason} This action cannot run from this form. Use Python with the
+          saved data and original author source, or ask the author for help. Existing results remain
+          available.
+        </p>
       ) : (
         <>
-          <fieldset disabled={execute.isPending} className="my-3 grid gap-3 sm:grid-cols-2">
+          <fieldset disabled={pending} className="my-3 grid gap-3 sm:grid-cols-2">
             {inputs.map((input) => (
               <label key={input.name} className="grid min-w-0 gap-1">
                 <span>
@@ -243,8 +291,8 @@ function AnalysisActionForm({
               </label>
             ))}
           </fieldset>
-          <button type="submit" className={secondaryButton} disabled={execute.isPending}>
-            {execute.isPending ? "Analyzing…" : `Run ${action.title}`}
+          <button type="submit" className={secondaryButton} disabled={pending}>
+            {pending ? "Analyzing…" : `Run ${action.title}`}
           </button>
         </>
       )}
