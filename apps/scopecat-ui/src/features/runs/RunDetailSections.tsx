@@ -30,6 +30,7 @@ import type {
   RunAnalysisSummary,
 } from "../../types";
 import { AnalysisPublicationView } from "../analyses/AnalysisPublicationView";
+import { MeasurementWorkspace } from "./MeasurementWorkspace";
 import { MeasurementDataPreview } from "./MeasurementDataPreview";
 import { RepeatRunAnalysis } from "./RepeatRunAnalysis";
 import {
@@ -507,6 +508,7 @@ export function TimelineCard({
 
 export function DataCard({
   run,
+  progress,
   measurements,
   error,
   pending,
@@ -532,6 +534,7 @@ export function DataCard({
   onMeasurementFixedAxisIndexChange,
 }: {
   run: ProjectRun;
+  progress?: ReactNode;
   measurements?: MeasurementPreview;
   error: Error | null;
   pending: boolean;
@@ -579,27 +582,33 @@ export function DataCard({
     run.plan.recordIds.length > 0;
   return (
     <article className="min-w-0 [&>.run-inline-empty]:mt-2.5" data-testid="data-card">
-      <MeasurementRecords
+      <MeasurementWorkspace
         key={run.runId}
-        preview={measurements}
-        error={error}
-        pending={pending}
-        slice={measurementSlice}
-        sliceError={measurementSliceError}
-        slicePending={measurementSlicePending}
-        tracePlans={tracePlans}
-        selectedTracePlanId={selectedTracePlanId}
-        tracePreview={tracePreview}
-        traceError={traceError}
-        tracePending={tracePending}
-        onTracePlanChange={onTracePlanChange}
-        onMeasurementEntitySelectionChange={onMeasurementEntitySelectionChange}
-        fixedAxisIndices={measurementFixedAxisIndices}
-        measurementAxes={measurementAxes}
-        onMeasurementAxesChange={onMeasurementAxesChange}
-        onSliceOffsetChange={onMeasurementSliceOffsetChange}
-        onFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
-      />
+        title={run.displayName ?? run.experimentId}
+        progress={progress}
+      >
+        <MeasurementRecords
+          key={run.runId}
+          preview={measurements}
+          error={error}
+          pending={pending}
+          slice={measurementSlice}
+          sliceError={measurementSliceError}
+          slicePending={measurementSlicePending}
+          tracePlans={tracePlans}
+          selectedTracePlanId={selectedTracePlanId}
+          tracePreview={tracePreview}
+          traceError={traceError}
+          tracePending={tracePending}
+          onTracePlanChange={onTracePlanChange}
+          onMeasurementEntitySelectionChange={onMeasurementEntitySelectionChange}
+          fixedAxisIndices={measurementFixedAxisIndices}
+          measurementAxes={measurementAxes}
+          onMeasurementAxesChange={onMeasurementAxesChange}
+          onSliceOffsetChange={onMeasurementSliceOffsetChange}
+          onFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
+        />
+      </MeasurementWorkspace>
       <details className="mt-4 rounded-md border border-line p-3">
         <summary className="cursor-pointer text-sm font-semibold text-text-soft">
           Saved files and record metadata

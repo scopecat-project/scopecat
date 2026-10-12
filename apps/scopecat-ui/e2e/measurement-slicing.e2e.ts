@@ -125,10 +125,42 @@ test("browses independent dimensions and keeps a compatible signal across slices
       .toBe(false);
     await page.getByLabel("Horizontal axis").selectOption(frequency);
     await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("1");
-    await page.getByRole("button", { name: "Expand chart", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Standard chart height", exact: true }),
-    ).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+    const focused = page.getByRole("dialog", { name: /measurements$/ });
+    await expect(focused).toBeVisible();
+    await expect(focused.getByRole("region", { name: "Run progress" })).toBeVisible();
+    await expect(chart).toHaveValue(phase);
+    await page.getByLabel("Repeat slice", { exact: true }).selectOption("2");
+    await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 2");
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const plot = focused.getByRole("img").first();
+      await expect
+        .poll(async () => {
+          const rect = await plot.boundingBox();
+          return (
+            rect !== null &&
+            rect.height >= 190 &&
+            rect.y >= 0 &&
+            rect.y + rect.height <= viewport.height &&
+            rect.x + rect.width <= viewport.width
+          );
+        })
+        .toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`chart-focus-${viewport.width}.png`) });
+    }
+    await page.keyboard.press("Escape");
+    await expect(focused).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+    await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("2");
+    await expect(chart).toHaveValue(phase);
+    await expect(page.getByTestId("measurement-table")).not.toBeVisible();
+    await page.locator("summary").filter({ hasText: "Record table" }).click();
+    await expect(page.getByTestId("measurement-table")).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath("multidimensional-curve.png"),
       fullPage: true,
