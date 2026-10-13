@@ -85,6 +85,7 @@ def test_nested_analysis_identity_preserves_run_and_container_types() -> None:
 
 class _ImmediateProcedureContext:
     plan_ref = None
+    decision_source = None
     scientific_binding = None
     procedure_run_id = "procedure-test"
     samples: tuple[object, ...] = ()
