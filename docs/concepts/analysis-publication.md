@@ -262,19 +262,35 @@ changing configuration still requires one run-scoped analysis with one
 unambiguous base configuration. A project verification may gate whether that
 existing proposal is accepted.
 
+## Find results from an input run
+
+Open a run's **Related analyses** section to find publications that directly use
+its measurements or configuration, including results saved under another run,
+a sample, or the data space. Expand a result to see the same immutable publication
+and its input sources; no publication is copied. The existing **Analyses** section
+continues to show results owned by this run, including those with no direct inputs.
+
+The bounded `GET /api/v1/analysis-publications?input_run_id=...` endpoint returns
+newest-first summaries with the original subject and publication ID. Pagination
+counts each publication once even when it reads multiple inputs from one run.
+Discovery stays within the connected data space and does not traverse upstream
+analyses. Comparison's primary run remains the candidate-parameter baseline.
+
 ## Logical keys and immutable revisions
 
-The author supplies one logical analysis `key`, not a version number. Durable
-record IDs always make the revision explicit: the first publication uses
-`analysis-<key>-r1`, followed by `-r2`, then `-r3`. This keeps record identity
-unambiguous even when a logical key itself ends in revision-shaped text.
-Repeating the same logical content is an idempotent notebook or step retry and
+The author supplies one logical analysis `key`, not a version number. Each
+publication has an independent UUID. Its series is identified by its stored
+subject (run, sample, or data space) and key; `revision` orders that series.
+Keys are never concatenated into publication IDs, so sample and data-space
+keys cannot collide. The data space is the persistent owner; it is not a UI
+research project.
+Repeating the latest logical content is an idempotent notebook or step retry and
 returns the existing publication; changing an input snapshot, output content,
 title, metadata, or other durable meaning appends a new record without replacing
 an earlier one.
 
-Datasets, artifacts, and parameter proposals use the allocated analysis record
-ID as part of their durable identity, so a revision never leaves a supposedly
+Datasets and artifacts use the allocated publication UUID in their IDs. Parameter
+proposals retain revisioned proposal IDs and reference the exact publication UUID, so a revision never leaves a supposedly
 immutable payload pointing at overwritten content. Proposal timestamps are not
 part of logical content identity: rebuilding the same proposal in a later
 notebook execution resolves to the already-published proposal and its original

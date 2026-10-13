@@ -41,7 +41,7 @@ from scopecat.daemon.client import (
     DaemonConflictError,
     DaemonNotFoundError,
 )
-from scopecat.daemon.views import RunAnalysisView
+from scopecat.daemon.views import ProjectAnalysisPage, RunAnalysisView
 from scopecat.daemon.wire import (
     ParameterBranchPublishCommand,
 )
@@ -53,7 +53,6 @@ from scopecat.records.analysis import (
     MeasurementAnalysisRecordInput,
     ProjectAnalysisSubject,
     RunAnalysisSubject,
-    analysis_record_id,
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import ContentEntry, Sha256ContentHash
@@ -212,6 +211,15 @@ class _UnavailableAnalysisSession:
         del step, key
         raise AssertionError("analysis publication is outside this acceptance test")
 
+    def analysis_summaries(
+        self,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+    ) -> ProjectAnalysisPage:
+        del limit, before
+        raise AssertionError("history lookup is outside this acceptance test")
+
     def published_analysis(
         self,
         selector: str,
@@ -290,6 +298,15 @@ class _ExactAnalysisSession:
         del step, key
         raise AssertionError("analysis publication is outside this acceptance test")
 
+    def analysis_summaries(
+        self,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+    ) -> ProjectAnalysisPage:
+        del limit, before
+        raise AssertionError("history lookup is outside this acceptance test")
+
     def published_analysis(
         self,
         selector: str,
@@ -367,6 +384,15 @@ class _UnknownProjectAnalysisSession:
     ) -> PublishedAnalysis:
         del step, key
         raise httpx2.ReadError("analysis response was lost")
+
+    def analysis_summaries(
+        self,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+    ) -> ProjectAnalysisPage:
+        del limit, before
+        raise AssertionError("history lookup is outside this acceptance test")
 
     def published_analysis(
         self,
@@ -465,7 +491,7 @@ def test_run_analysis_rejects_durable_upstream_mismatch() -> None:
     run_id = "run-subject"
     step_id = "fit-step"
     key = "procedure-fit-key"
-    record_id = analysis_record_id(key, 1)
+    record_id = "8180c67c-2416-4a70-b5fc-3a4c6e1b659a"
     published = PublishedAnalysis(
         source=object(),  # pyright: ignore[reportArgumentType]
         view=RunAnalysisView(

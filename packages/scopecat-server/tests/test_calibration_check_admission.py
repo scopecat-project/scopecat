@@ -625,7 +625,7 @@ def test_candidate_context_is_resolved_admitted_and_bound_to_child(
         reason="candidate context fixture",
         confidence=None,
     )
-    app.runs.save_run_analysis(
+    receipt = app.runs.save_run_analysis(
         baseline.run_id,
         AnalysisSaveCommand(
             title="fit",
@@ -640,6 +640,7 @@ def test_candidate_context_is_resolved_admitted_and_bound_to_child(
             ),
         ),
     )
+    [proposal] = receipt.parameter_proposals
     config = resolve_candidate_config_from_snapshot(
         CandidateConfig(proposal),
         source_config=child.config,

@@ -13,7 +13,10 @@ from scopecat.analysis.repository import (
     AnalysisPublicationSummary,
 )
 from scopecat.records.analysis import (
+    AnalysisRecord,
     AnalysisSubject,
+    ConfigurationAnalysisRecordInput,
+    MeasurementAnalysisRecordInput,
     ProjectAnalysisSubject,
     RunAnalysisSubject,
     SampleAnalysisSubject,
@@ -92,19 +95,45 @@ def insert_publication(
             output_count,
         ),
     )
-    return cast("int", inserted.lastrowid), True
+    sequence = cast("int", inserted.lastrowid)
+    run_ids = {
+        item.run_id
+        for model in publication.models
+        if isinstance(model.value, AnalysisRecord)
+        for item in model.value.inputs
+        if isinstance(
+            item, MeasurementAnalysisRecordInput | ConfigurationAnalysisRecordInput
+        )
+    }
+    connection.executemany(
+        "INSERT INTO analysis_input_runs(publication_sequence, run_id) VALUES (?, ?)",
+        ((sequence, run_id) for run_id in sorted(run_ids)),
+    )
+    return sequence, True
 
 
 def list_publications(
     connection: sqlite3.Connection,
     *,
-    subject: AnalysisSubject,
+    subject: AnalysisSubject | None,
     limit: int,
     before: int | None,
+    input_run_id: str | None = None,
 ) -> AnalysisPublicationPage:
-    owner_clause, owner_parameters = _owner_clause(subject)
-    clauses = [owner_clause]
-    parameters: list[str | int] = list(owner_parameters)
+    clauses: list[str] = []
+    parameters: list[str | int] = []
+    if subject is not None:
+        owner_clause, owner_parameters = _owner_clause(subject)
+        clauses.append(owner_clause)
+        parameters.extend(owner_parameters)
+    if input_run_id is not None:
+        clauses.append(
+            "sequence IN (SELECT publication_sequence FROM analysis_input_runs "
+            "WHERE run_id = ?)"
+        )
+        parameters.append(input_run_id)
+    if not clauses:
+        raise ValueError("publication listing requires a subject or direct input")
     if before is not None:
         clauses.append("sequence < ?")
         parameters.append(before)

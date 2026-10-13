@@ -30,6 +30,7 @@ export function RepeatRunAnalysis({ runId, analysis }: { runId: string; analysis
     },
     onSuccess: async () => {
       await Promise.all([
+        client.invalidateQueries({ queryKey: ["analyses", "related"] }),
         client.invalidateQueries({ queryKey: ["analyses", "run", runId] }),
         client.invalidateQueries({ queryKey: ["run-contents", runId] }),
       ]);

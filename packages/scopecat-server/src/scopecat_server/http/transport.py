@@ -24,6 +24,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from scopecat.analysis.repository import AnalysisPublicationPage
 from scopecat.api.comparison import reopen_comparison
 from scopecat.application.comparison import ComparisonResult
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
@@ -2638,6 +2639,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/runs/{{run_id}}/analyses/{{selector}}")
     def get_run_analysis(run_id: str, selector: str) -> RunAnalysisView:
         return application.runs.get_run_analysis(run_id, selector)
+
+    @app.get(f"{_API_PREFIX}/analysis-publications")
+    def related_analysis_publications(
+        input_run_id: str,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> AnalysisPublicationPage:
+        return application.analyses.related(input_run_id, limit=limit, before=before)
 
     @app.get(f"{_API_PREFIX}/analyses")
     def list_project_analyses(

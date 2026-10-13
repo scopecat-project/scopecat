@@ -42,7 +42,7 @@ from scopecat.records.analysis import (
     ProjectAnalysisDecisionReference,
     ProjectAnalysisSubject,
     SampleAnalysisSubject,
-    analysis_record_id,
+    analysis_proposal_source_token,
 )
 from scopecat.records.config import (
     ConfigProfileSnapshot,
@@ -481,7 +481,7 @@ class AnalysisSaveCommand(_WireModel):
             for output in self.outputs
             if isinstance(output, AnalysisParameterProposalOutputPayload)
         )
-        expected_analysis_record_id = analysis_record_id(self.analysis_key, 1)
+        expected_analysis_record_id = analysis_proposal_source_token(self.analysis_key)
         if any(
             proposal.analysis_record_id != expected_analysis_record_id
             for proposal in proposals

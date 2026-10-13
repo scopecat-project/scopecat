@@ -2528,7 +2528,7 @@ def test_analysis_candidate_run_keeps_connection_until_shutdown(
             reason="candidate",
             confidence=None,
         )
-        runtime.application.runs.save_run_analysis(
+        receipt = runtime.application.runs.save_run_analysis(
             source_admission.run_id,
             AnalysisSaveCommand(
                 title="candidate",
@@ -2543,6 +2543,7 @@ def test_analysis_candidate_run_keeps_connection_until_shutdown(
                 ),
             ),
         )
+        [proposal] = receipt.parameter_proposals
         candidate = resolve_candidate_config_from_snapshot(
             CandidateConfig(parameter_proposal=proposal),
             source_config=config,

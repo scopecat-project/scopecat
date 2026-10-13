@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analysis-publications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Related Analysis Publications */
+        get: operations["related_analysis_publications_api_v1_analysis_publications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/author-preparations": {
         parameters: {
             query?: never;
@@ -3420,6 +3437,46 @@ export interface components {
              */
             kind: "analysis";
             subject: components["schemas"]["AnalysisSubject"];
+        };
+        /**
+         * AnalysisPublicationPage
+         * @description Newest-first keyset page from the project analysis index.
+         */
+        AnalysisPublicationPage: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["AnalysisPublicationSummary"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /**
+         * AnalysisPublicationSummary
+         * @description Bounded index projection for one analysis publication.
+         */
+        AnalysisPublicationSummary: {
+            /** Analysis Key */
+            analysis_key: string;
+            /** Input Count */
+            input_count: number;
+            /** Output Count */
+            output_count: number;
+            /** Publication Hash */
+            publication_hash: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            record: components["schemas"]["ContentEntry"];
+            /** Revision */
+            revision: number;
+            /** Step Id */
+            step_id?: string | null;
+            subject: components["schemas"]["AnalysisSubject"];
+            /** Title */
+            title: string;
         };
         /**
          * AnalysisPublishedDatasetViewSource
@@ -12937,6 +12994,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisFollowView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    related_analysis_publications_api_v1_analysis_publications_get: {
+        parameters: {
+            query: {
+                before?: number | null;
+                input_run_id: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisPublicationPage"];
                 };
             };
             /** @description Validation Error */

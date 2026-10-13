@@ -1,3 +1,4 @@
+import { RelatedAnalyses } from "../analyses/RelatedAnalyses";
 import { useRunCollectionName } from "./use-run-collection-name";
 import { RunAddressLabel } from "./RunAddressLabel";
 import { ReturnToPreparation } from "../launch/ReturnToPreparation";
@@ -350,6 +351,7 @@ export function RunDetail({
           onLoadOlder={onLoadOlderAnalyses}
         />
         <RunProposals key={run.runId} runId={run.runId} />
+        <RelatedAnalyses key={run.runId} runId={run.runId} />
         <RunAnalysisFollows runId={run.runId} />
         <details
           className="rounded-md border border-line p-4"

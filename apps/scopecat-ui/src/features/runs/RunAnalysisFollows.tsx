@@ -21,7 +21,10 @@ export function RunAnalysisFollows({ runId }: { runId: string }) {
     ?.map((item) => `${item.request.id}:${item.state}:${item.finished_count}`)
     .join(";");
   useEffect(() => {
-    if (progress) void client.invalidateQueries({ queryKey: ["analyses", "run", runId] });
+    if (progress) {
+      void client.invalidateQueries({ queryKey: ["analyses", "run", runId] });
+      void client.invalidateQueries({ queryKey: ["analyses", "related"] });
+    }
   }, [client, runId, progress]);
   const stop = useMutation({
     mutationFn: (identity: string) =>

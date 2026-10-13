@@ -100,8 +100,9 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
         ),
       );
     const publicationsBefore = await publicationHistory();
-    expect(saved.run).toEqual(["analysis-copy-fit-r1", "analysis-copy-fit-r2"]);
-    expect(saved.project).toEqual(saved.run);
+    expect(new Set([...saved.run, ...saved.project]).size).toBe(4);
+    for (const id of [...saved.run, ...saved.project])
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     // Exercise browser interactions without touching the host/system clipboard.
     await page.addInitScript(`
       Object.defineProperty(navigator, "clipboard", {
