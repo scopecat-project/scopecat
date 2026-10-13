@@ -3,16 +3,33 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 import { errorMessage } from "../../lib/presentation";
-import { getRunAnalysis, getRunArtifactDownload } from "../runs/run-api";
-import { getSampleAnalysis, getSampleAnalysisArtifactDownload } from "../samples/sample-api";
+import { secondaryButton } from "../../ui/styles";
+import { useRunCollectionName } from "../runs/use-run-collection-name";
+import { getRun, getRunAnalysis, getRunArtifactDownload } from "../runs/run-api";
+import {
+  getSample,
+  getSampleAnalysis,
+  getSampleAnalysisArtifactDownload,
+} from "../samples/sample-api";
 import { getProjectAnalysis, getProjectAnalysisArtifactDownload } from "./analysis-api";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
 
 type Summary = components["schemas"]["AnalysisPublicationSummary"];
 
-export function RelatedAnalyses({ runId }: { runId: string }) {
+interface RelatedContext {
+  projectId: string;
+  collectionNames: Map<string, string>;
+  onOpenRun?: (runId: string) => void;
+}
+
+export function RelatedAnalyses({
+  runId,
+  projectId,
+  collectionNames,
+  onOpenRun,
+}: RelatedContext & { runId: string }) {
   const query = useInfiniteQuery({
-    queryKey: ["analyses", "related", runId],
+    queryKey: ["analyses", "related", projectId, runId],
     queryFn: ({ pageParam, signal }) =>
       apiData(
         apiClient.GET("/api/v1/analysis-publications", {
@@ -40,10 +57,17 @@ export function RelatedAnalyses({ runId }: { runId: string }) {
         <p className="text-xs text-text-dim">No related analyses yet.</p>
       )}
       {items.map((item) => (
-        <RelatedAnalysis key={item.record.id} summary={item} />
+        <RelatedAnalysis
+          key={`${projectId}:${item.record.id}`}
+          summary={item}
+          projectId={projectId}
+          collectionNames={collectionNames}
+          onOpenRun={onOpenRun}
+        />
       ))}
       {query.hasNextPage && (
         <button
+          className={secondaryButton}
           type="button"
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
@@ -55,12 +79,17 @@ export function RelatedAnalyses({ runId }: { runId: string }) {
   );
 }
 
-function RelatedAnalysis({ summary }: { summary: Summary }) {
+function RelatedAnalysis({
+  summary,
+  projectId,
+  collectionNames,
+  onOpenRun,
+}: RelatedContext & { summary: Summary }) {
   const [expanded, setExpanded] = useState(false);
   const subject = summary.subject;
   const id = summary.record.id;
   const detail = useQuery({
-    queryKey: ["analysis", "publication", id],
+    queryKey: ["analysis", "publication", projectId, id],
     queryFn: ({ signal }) =>
       subject.kind === "run"
         ? getRunAnalysis(subject.run_id, id, signal)
@@ -69,12 +98,6 @@ function RelatedAnalysis({ summary }: { summary: Summary }) {
           : getProjectAnalysis(id, signal),
     enabled: expanded,
   });
-  const source =
-    subject.kind === "run"
-      ? `Run ${subject.run_id}`
-      : subject.kind === "sample"
-        ? `Sample ${subject.sample_id}`
-        : "Data space";
   return (
     <details
       className="rounded-md border border-line p-2"
@@ -83,7 +106,12 @@ function RelatedAnalysis({ summary }: { summary: Summary }) {
       <summary className="cursor-pointer text-sm">
         <strong>{summary.title}</strong>
         <span className="block text-xs text-text-dim">
-          {source} · revision {summary.revision} · {summary.input_count} inputs
+          <PublicationSource
+            subject={subject}
+            projectId={projectId}
+            collectionNames={collectionNames}
+          />{" "}
+          · revision {summary.revision} · {summary.input_count} inputs
         </span>
       </summary>
       {expanded &&
@@ -94,9 +122,7 @@ function RelatedAnalysis({ summary }: { summary: Summary }) {
         ) : (
           <AnalysisPublicationView
             analysis={detail.data}
-            onOpenRun={(run) => {
-              window.location.href = `/?run=${encodeURIComponent(run)}#runs`;
-            }}
+            onOpenRun={onOpenRun}
             getArtifactDownload={(selector) =>
               subject.kind === "run"
                 ? getRunArtifactDownload(subject.run_id, selector)
@@ -107,5 +133,53 @@ function RelatedAnalysis({ summary }: { summary: Summary }) {
           />
         ))}
     </details>
+  );
+}
+
+function PublicationSource({
+  subject,
+  projectId,
+  collectionNames,
+}: Pick<RelatedContext, "projectId" | "collectionNames"> & { subject: Summary["subject"] }) {
+  if (subject.kind === "run")
+    return (
+      <RunSource runId={subject.run_id} projectId={projectId} collectionNames={collectionNames} />
+    );
+  if (subject.kind === "sample")
+    return <SampleSource sampleId={subject.sample_id} projectId={projectId} />;
+  return <>Data space</>;
+}
+
+function RunSource({
+  runId,
+  projectId,
+  collectionNames,
+}: Pick<RelatedContext, "projectId" | "collectionNames"> & { runId: string }) {
+  const run = useQuery({
+    queryKey: ["run", "related-analysis-source", projectId, runId],
+    queryFn: ({ signal }) => getRun(runId, signal),
+  });
+  const address = run.data?.address;
+  const collection = useRunCollectionName(projectId, address?.collection_id, collectionNames);
+  const name = run.data?.displayName ?? run.data?.experimentId;
+  return (
+    <span title={`Run ${runId}`}>
+      {address
+        ? `${collection.name ?? "Collection name unavailable"} #${address.number}`
+        : (name ?? "Run name unavailable")}
+      {address && name ? ` · ${name}` : ""}
+    </span>
+  );
+}
+
+function SampleSource({ sampleId, projectId }: { sampleId: string; projectId: string }) {
+  const sample = useQuery({
+    queryKey: ["sample", "related-analysis-source", projectId, sampleId],
+    queryFn: ({ signal }) => getSample(sampleId, signal),
+  });
+  return (
+    <span title={`Sample ${sampleId}`}>
+      Sample {sample.data?.revision.content.display_name ?? "name unavailable"}
+    </span>
   );
 }

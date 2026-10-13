@@ -14,10 +14,9 @@ turn that format into a supported baseline.
 
 ## What remains supported now
 
-Schema 114 gives analysis publications independent UUIDs and indexes their direct
-measurement/configuration input runs in the same publication transaction. Series
-keys, revisions and content hashes remain explicit. No schema-113 reader, index
-backfill or migration is added; preserve old stores and use a fresh data space.
+Schema 114 为分析结果分配独立 UUID，并保存直接测量／配置输入关系。
+修订系列与幂等约束保持明确。它不兼容 schema 113，不提供迁移或旧格式读取；
+请保留旧数据，并使用新数据空间。
 
 Schema 113 adds application-owned experiment input revisions and immutable
 original-submission receipts. Current-format backups retain raw invalid input,

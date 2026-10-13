@@ -1,5 +1,8 @@
 ---
-default: patch
+default: major
 ---
 
-Give analysis publications independent UUIDs and let each direct input run find the same run, sample, or data-space result, with source details and deduplicated pagination. Preserve revision, retry, and candidate-baseline semantics. Development storage advances to schema 114 without migration.
+从参与分析的运行找回同一份结果。
+
+相关分析会显示保存来源，并打开原始结果；分析修订和重复保存继续保留明确身份。
+本次升级不兼容旧开发数据格式。请保留原数据，并使用新数据空间；不提供自动迁移。

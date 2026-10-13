@@ -262,39 +262,25 @@ changing configuration still requires one run-scoped analysis with one
 unambiguous base configuration. A project verification may gate whether that
 existing proposal is accepted.
 
-## Find results from an input run
+## 从输入运行找回分析
 
-Open a run's **Related analyses** section to find publications that directly use
-its measurements or configuration, including results saved under another run,
-a sample, or the data space. Expand a result to see the same immutable publication
-and its input sources; no publication is copied. The existing **Analyses** section
-continues to show results owned by this run, including those with no direct inputs.
+运行详情的 **Related analyses** 列出直接使用该运行测量或配置的结果，
+包括保存在其他运行、样品或数据空间下的分析。来源优先显示集合短号或样品名；
+展开后可查看原始结果及精确输入，并沿输入跳转、前进或返回，不复制结果。
+原有 **Analyses** 列表仍展示归属该运行的分析，包括没有直接输入的记录。
 
-The bounded `GET /api/v1/analysis-publications?input_run_id=...` endpoint returns
-newest-first summaries with the original subject and publication ID. Pagination
-counts each publication once even when it reads multiple inputs from one run.
-Discovery stays within the connected data space and does not traverse upstream
-analyses. Comparison's primary run remains the candidate-parameter baseline.
+相关分析只在当前数据空间内查询；同一结果不会因多条输入而重复计入分页。
+它不追溯上游分析。比较分析的 primary run 仍是候选参数的基准。
+接口为 `GET /api/v1/analysis-publications?input_run_id=...`。
 
-## Logical keys and immutable revisions
+## 分析身份与修订
 
-The author supplies one logical analysis `key`, not a version number. Each
-publication has an independent UUID. Its series is identified by its stored
-subject (run, sample, or data space) and key; `revision` orders that series.
-Keys are never concatenated into publication IDs, so sample and data-space
-keys cannot collide. The data space is the persistent owner; it is not a UI
-research project.
-Repeating the latest logical content is an idempotent notebook or step retry and
-returns the existing publication; changing an input snapshot, output content,
-title, metadata, or other durable meaning appends a new record without replacing
-an earlier one.
+每份已发布结果拥有独立 UUID，归属 subject 与逻辑 key 定义修订系列，
+revision 和内容哈希单独保存。数据空间是持久化 owner，不等同于 UI 研究课题。
+重复保存最新的相同内容返回原结果；改变内容则追加修订，保留历史结果。
 
-Datasets and artifacts use the allocated publication UUID in their IDs. Parameter
-proposals retain revisioned proposal IDs and reference the exact publication UUID, so a revision never leaves a supposedly
-immutable payload pointing at overwritten content. Proposal timestamps are not
-part of logical content identity: rebuilding the same proposal in a later
-notebook execution resolves to the already-published proposal and its original
-timestamp.
+数据集和附件使用结果 UUID，参数建议引用保存后的精确结果；
+重试仍返回原参数建议及其时间，不会用新 UUID 制造重复结果。
 
 Reading by logical key returns the latest revision. Reading by an exact analysis
 record ID returns that historical revision. `PublishedAnalysis.revision` and

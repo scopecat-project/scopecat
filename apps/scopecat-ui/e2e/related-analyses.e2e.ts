@@ -81,9 +81,20 @@ test("finds the same run, sample and space publications from either direct input
       await related.getByText("Sources and execution evidence", { exact: true }).first().click();
       for (const input of seed.runs)
         await expect(related.getByRole("button", { name: input, exact: true })).toBeVisible();
-      await expect(related.getByText(/Sample related-chip/)).toBeVisible();
+      await expect(related.getByText(/Sample Related chip/)).toBeVisible();
       await expect(related.getByText(/Data space · revision/)).toBeVisible();
     }
+    await page.evaluate("window.__relatedJourneyContext = 'retained'");
+    await page
+      .getByRole("region", { name: "Related analyses", exact: true })
+      .getByRole("button", { name: seed.runs[0], exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
+    expect(await page.evaluate("window.__relatedJourneyContext")).toBe("retained");
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await page.goForward();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
       await page.locator("html").evaluate((element) => element.scrollWidth),
