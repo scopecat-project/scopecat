@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
+from uuid import UUID
 from weakref import ReferenceType, ref
 
 import pytest
@@ -69,6 +70,9 @@ from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
+RUN_ID = "0199a9c0-0000-7000-8000-000000000002"
+OTHER_RUN_ID = "0199a9c0-0000-7000-8000-000000000003"
+
 
 def test_recording_page_does_not_retain_a_page_of_raw_arrays(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -124,7 +128,7 @@ def _evidence() -> ScientificEvidence:
     run = RunEvidence(
         source_project_id="source",
         snapshot=RunSnapshot(
-            run_id="portable",
+            run_id=RUN_ID,
             config_content_hash=digest,
             scientific_binding=ResolvedScientificBinding(
                 subject=UnboundSubject(),
@@ -136,9 +140,7 @@ def _evidence() -> ScientificEvidence:
         configuration=config,
         contents=(),
     )
-    return ScientificEvidence(
-        source_project_id="source", roots=("portable",), runs=(run,)
-    )
+    return ScientificEvidence(source_project_id="source", roots=(RUN_ID,), runs=(run,))
 
 
 def test_external_analysis_import_preserves_existing_source_identity(tmp_path: Path):
@@ -146,7 +148,7 @@ def test_external_analysis_import_preserves_existing_source_identity(tmp_path: P
     write_scientific_exchange(source, _evidence(), {})
     result = tmp_path / "result.scopecat"
     with open_capture(source, output=result) as captured:
-        context = captured.analysis("portable", title="External result", key="external")
+        context = captured.analysis(RUN_ID, title="External result", key="external")
         digest = config_content_hash(context.config)
         publication = context.result().fact("configuration", digest).save()
         record = publication.view.analysis
@@ -208,6 +210,8 @@ def test_current_run_export_is_portable_without_device_activation(
             with store.sqlite.write_transaction() as connection:
                 runs.commit_run_skeleton_in_transaction(connection, prepared)
             run_id = skeleton.snapshot.run_id
+            assert UUID(run_id).version == 7
+            assert runs.read_snapshot(run_id) == skeleton.snapshot
             response = client.get(f"/api/v1/data/runs/{run_id}/file")
             assert response.status_code == 200, response.text
             assert "run.scopecat" in response.headers["content-disposition"]
@@ -216,6 +220,7 @@ def test_current_run_export_is_portable_without_device_activation(
             with ScientificExchange(exported) as capture:
                 capture.verify()
                 assert capture.evidence.roots == (run_id,)
+                assert capture.evidence.runs[0].snapshot == skeleton.snapshot
                 assert capture.evidence.runs[0].request.experiment_id == "retained"
             assert client.get("/api/v1/data/runs/missing/file").status_code == 404
         finally:
@@ -249,7 +254,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
     records = (
         *(
             MeasurementRecord(
-                run_id="portable",
+                run_id=RUN_ID,
                 point_index=0,
                 coordinates={},
                 observables={
@@ -263,7 +268,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
             for peak in (100.0, 200.0)
         ),
         MeasurementRecord(
-            run_id="portable",
+            run_id=RUN_ID,
             point_index=1,
             coordinates={},
             observables={
@@ -278,7 +283,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
         ),
     )
     header = MeasurementDatasetHeader(
-        run_id="portable",
+        run_id=RUN_ID,
         recording_contract_fingerprint="test",
         dataset_schema=schema,
         expected_record_count=2,
@@ -290,7 +295,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
         header,
         tuple(
             MeasurementDatasetAppend(
-                run_id="portable",
+                run_id=RUN_ID,
                 header_content_hash=header.content_hash,
                 acquisition_start=index,
                 records=(record,),
@@ -303,7 +308,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
         ),
     )
     source = tmp_path / "traces.scopecat"
-    write_scientific_exchange(source, _evidence(), {"portable": recording})
+    write_scientific_exchange(source, _evidence(), {RUN_ID: recording})
     with (
         LocalDaemonRuntime(tmp_path / "application") as runtime,
         TestClient(runtime.app()) as client,
@@ -315,7 +320,7 @@ def test_captured_traces_keep_selection_failures_and_sampling_budget(
         )
         assert imported.status_code == 200, imported.text
         capture_hash = imported.json()["capture"]["content_hash"]
-        url = f"/api/v1/data/captures/{capture_hash}/runs/portable/recording/traces"
+        url = f"/api/v1/data/captures/{capture_hash}/runs/{RUN_ID}/recording/traces"
         table = client.get(url.removesuffix("/traces"))
         assert table.status_code == 200, table.text
         value = table.json()["items"][0]["observables"]["signal"]
@@ -356,7 +361,7 @@ def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -
                 )
             }
         )
-        for run_id in ("first", "second")
+        for run_id in (RUN_ID, OTHER_RUN_ID)
     )
     analyses: list[AnalysisEvidence] = []
     payloads: list[PayloadSource] = []
@@ -426,7 +431,7 @@ def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -
         source,
         evidence.model_copy(
             update={
-                "roots": ("first", "second"),
+                "roots": (RUN_ID, OTHER_RUN_ID),
                 "runs": runs,
                 "analyses": tuple(analyses),
             }
@@ -445,7 +450,7 @@ def test_captured_analysis_artifacts_use_exact_record_identity(tmp_path: Path) -
         )
         assert receipt.status_code == 200, receipt.text
         capture_hash = receipt.json()["capture"]["content_hash"]
-        for run_id, analysis in zip(("first", "second"), analyses, strict=True):
+        for run_id, analysis in zip((RUN_ID, OTHER_RUN_ID), analyses, strict=True):
             url = (
                 f"/api/v1/data/captures/{capture_hash}/analyses/"
                 f"{analysis.entry.content_hash}/artifacts/attachment"
@@ -484,7 +489,7 @@ def test_capture_http_without_device_activation(
         ),
     )
     header = MeasurementDatasetHeader(
-        run_id="portable",
+        run_id=RUN_ID,
         recording_contract_fingerprint="test",
         dataset_schema=schema,
         expected_record_count=2,
@@ -492,7 +497,7 @@ def test_capture_http_without_device_activation(
     )
     records = tuple(
         MeasurementRecord(
-            run_id="portable",
+            run_id=RUN_ID,
             point_index=point,
             logical_point_id=f"point-{point}",
             coordinates={},
@@ -508,13 +513,13 @@ def test_capture_http_without_device_activation(
         header,
         (
             MeasurementDatasetAppend(
-                run_id="portable",
+                run_id=RUN_ID,
                 header_content_hash=header.content_hash,
                 acquisition_start=0,
                 records=records[:2],
             ),
             MeasurementDatasetAppend(
-                run_id="portable",
+                run_id=RUN_ID,
                 header_content_hash=header.content_hash,
                 acquisition_start=2,
                 records=records[2:],
@@ -525,7 +530,7 @@ def test_capture_http_without_device_activation(
             RecordSelection(point_index=1, acquisition_index=2),
         ),
     )
-    write_scientific_exchange(source, evidence, {"portable": recording})
+    write_scientific_exchange(source, evidence, {RUN_ID: recording})
     content = source.read_bytes()
     conflict = tmp_path / "conflict.scopecat"
     write_scientific_exchange(
@@ -565,7 +570,7 @@ def test_capture_http_without_device_activation(
             f"{url}/{capture_hash}/evidence"
         ).json() == evidence.model_dump(mode="json")
         assert client.get(f"{url}/{capture_hash}/file").content == content
-        recording_url = f"{url}/{capture_hash}/runs/portable/recording"
+        recording_url = f"{url}/{capture_hash}/runs/{RUN_ID}/recording"
         acquired = client.get(recording_url, params={"limit": 2}).json()
         assert acquired["record_count"] == 3
         assert acquired["next_offset"] == 2

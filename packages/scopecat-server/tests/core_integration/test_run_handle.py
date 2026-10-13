@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Protocol, cast
+from uuid import UUID
 
 import pytest
 import scopecat as sc
@@ -497,7 +498,7 @@ def test_in_process_lab_closed_loop_uses_notebook_first_candidate_config(
     candidate_config = outcome.candidate_config()
     candidate = lab.prepare(experiment, config=candidate_config).run()
 
-    assert baseline.id.startswith("run_")
+    assert UUID(baseline.id).version == 7
     assert dataset.entry.id == "raw-measurements"
     assert [input_ref.target for input_ref in outcome.inputs] == ["raw-measurements"]
     assert not any(

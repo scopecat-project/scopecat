@@ -467,6 +467,40 @@ def test_research_history_associations_and_bench_survive_restart(
         }
 
 
+def test_run_pagination_and_numeric_address_ignore_uuid_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identities = iter(
+        (
+            "0199a9c0-0001-7000-8000-000000000001",
+            "0199a9c0-0000-7000-8000-000000000001",
+        )
+    )
+    monkeypatch.setattr("scopecat.runs.admission.new_run_id", lambda: next(identities))
+    with (
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as client,
+    ):
+        request = _submission(runtime)
+        first = client.submit_run(request)
+        second = client.submit_run(
+            request.model_copy(update={"submission_id": "second"})
+        )
+        assert first.run_id > second.run_id
+        assert client.submit_run(request) == first
+        default = client.record_collections().items[0]
+        assert client.resolve_run_number(default.id, 1).run_id == first.run_id
+        assert client.resolve_run_number(default.id, 2).run_id == second.run_id
+        page = client.list_runs(limit=1)
+        assert page.items[0].run_id == second.run_id
+        assert page.next_cursor is not None
+        tail = client.list_runs(limit=1, before=page.next_cursor)
+        assert tail.items[0].run_id == first.run_id
+
+
 def test_collection_addresses_are_atomic_scoped_and_retained(tmp_path: Path) -> None:
     from concurrent.futures import ThreadPoolExecutor
 

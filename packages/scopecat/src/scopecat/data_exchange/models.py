@@ -13,6 +13,7 @@ from scopecat.automation.models import (
 )
 from scopecat.config.registry.records import ConfigRegistryEntry
 from scopecat.kernel.content_identity import model_wire_content_hash
+from scopecat.kernel.ids import validate_run_id
 from scopecat.measurements.previews import MeasurementRecordPreview
 from scopecat.records.analysis import (
     AnalysisArtifactRecordOutput,
@@ -79,6 +80,7 @@ class RunEvidence(BaseModel):
 
     @model_validator(mode="after")
     def validate_evidence(self) -> Self:
+        validate_run_id(self.snapshot.run_id)
         if config_content_hash(self.configuration) != self.snapshot.config_content_hash:
             raise ValueError("run evidence configuration differs from accepted content")
         identities = {(item.role, item.id) for item in self.contents}

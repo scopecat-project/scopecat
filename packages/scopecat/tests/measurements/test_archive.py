@@ -46,17 +46,19 @@ from scopecat.records.run import RunSnapshot
 from scopecat.records.run_request import RunRequest
 from scopecat.runs.refs import content_entry_ref
 
+RUN_ID = "0199a9c0-0000-7000-8000-000000000001"
+
 
 def exchange_evidence() -> ScientificEvidence:
     config = load_config()
     return ScientificEvidence(
         source_project_id="source-project",
-        roots=("synthetic",),
+        roots=(RUN_ID,),
         runs=(
             RunEvidence(
                 source_project_id="source-project",
                 snapshot=RunSnapshot(
-                    run_id="synthetic",
+                    run_id=RUN_ID,
                     scientific_binding=bind_scientific_evidence(
                         catalog_id="source-project",
                         config=config,
@@ -139,7 +141,7 @@ def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing:
             PublishedAnalysisRecordInput(
                 kind="analysis_fact",
                 source=AnalysisPublishedOutputReference(
-                    subject=RunAnalysisSubject(run_id="synthetic"),
+                    subject=RunAnalysisSubject(run_id=RUN_ID),
                     analysis_record_id="absent",
                     output_id="value",
                 ),
@@ -151,9 +153,7 @@ def test_exchange_rejects_missing_analysis_dependencies(tmp_path: Path, missing:
             )
         )
     record = AnalysisRecord(
-        subject=RunAnalysisSubject(
-            run_id="absent" if missing == "subject" else "synthetic"
-        ),
+        subject=RunAnalysisSubject(run_id="absent" if missing == "subject" else RUN_ID),
         title="Dependent",
         revision=1,
         publication_hash="publication",
@@ -208,7 +208,7 @@ def test_exchange_requires_indexed_payload_and_its_scientific_identity(
     assert not destination.exists()
     reference = PayloadReference(
         owner_kind="run",
-        owner_id="synthetic",
+        owner_id=RUN_ID,
         ref=content_entry_ref(entry),
         digest=digest,
         size=len(raw),
@@ -276,15 +276,15 @@ def test_capture_uses_ordinary_analysis_and_retains_execution_provenance(
     )
     source = tmp_path / "source.scopecat"
     output = tmp_path / "analyzed.scopecat"
-    write_scientific_exchange(source, evidence, {"synthetic": recording_file})
+    write_scientific_exchange(source, evidence, {RUN_ID: recording_file})
 
     def reject_dataset_serialization(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("analysis inputs must use dataset identity, not raw JSON")
 
     monkeypatch.setattr(MeasurementDataset, "model_dump", reject_dataset_serialization)
     with sc.open_capture(source, output=output) as captured:
-        assert captured.run_ids == ("synthetic",)
-        ctx = captured.analysis("synthetic", title="Local analysis", key="fit")
+        assert captured.run_ids == (RUN_ID,)
+        ctx = captured.analysis(RUN_ID, title="Local analysis", key="fit")
         data = ctx.measurements()
         count = ctx.trace(fn=count_points, data=data)
         result = (
@@ -308,14 +308,10 @@ def test_capture_uses_ordinary_analysis_and_retains_execution_provenance(
         assert output.exists()
         with ScientificExchange(output) as durable:
             assert durable.evidence.analyses[0].published_at == saved.published_at
-        counted = captured.analyze(
-            "synthetic", count_capture_points(offset=2), key="count"
-        )
+        counted = captured.analyze(RUN_ID, count_capture_points(offset=2), key="count")
         assert counted.result_as(PointCount).value == PointCount(6)
         assert (
-            captured.analyze(
-                "synthetic", count_capture_points(offset=2), key="count"
-            ).id
+            captured.analyze(RUN_ID, count_capture_points(offset=2), key="count").id
             == counted.id
         )
 
@@ -325,15 +321,11 @@ def test_capture_uses_ordinary_analysis_and_retains_execution_provenance(
         with monkeypatch.context() as failure:
             failure.setattr(Path, "replace", unavailable_destination)
             with pytest.raises(OSError, match="destination unavailable"):
-                captured.analyze(
-                    "synthetic", count_capture_points(offset=999), key="count"
-                )
+                captured.analyze(RUN_ID, count_capture_points(offset=999), key="count")
         assert captured.published_analysis("count").result_as(
             PointCount
         ).value == PointCount(6)
-        revised = captured.analyze(
-            "synthetic", count_capture_points(offset=3), key="count"
-        )
+        revised = captured.analyze(RUN_ID, count_capture_points(offset=3), key="count")
         assert revised.revision == 2
     with sc.open_capture(output) as reopened:
         saved = reopened.published_analysis("fit")
@@ -357,7 +349,7 @@ def test_capture_uses_ordinary_analysis_and_retains_execution_provenance(
         pytest.raises(RuntimeError, match="analysis interrupted"),
         sc.open_capture(source, output=failed) as captured,
     ):
-        ctx = captured.analysis("synthetic")
+        ctx = captured.analysis(RUN_ID)
         ctx.measurements()
         ctx.result().fact("count", 4).save()
         raise RuntimeError("analysis interrupted")
@@ -427,7 +419,7 @@ def test_external_publication_preserves_source_evidence_and_recordings(tmp_path:
         inputs=[
             ConfigurationAnalysisRecordInput(
                 id="config",
-                run_id="synthetic",
+                run_id=RUN_ID,
                 target=CONFIG_PROFILE_SNAPSHOT_REF,
                 content_hash=evidence.runs[0].snapshot.config_content_hash,
                 codec=CONFIGURATION_ANALYSIS_INPUT_CODEC,
@@ -476,10 +468,10 @@ def test_external_publication_preserves_source_evidence_and_recordings(tmp_path:
             assert analyzed.evidence.runs == original.evidence.runs
             assert analyzed.evidence.analyses[0].record == record
             assert (
-                analyzed.recording("synthetic").content_hash
-                == original.recording("synthetic").content_hash
+                analyzed.recording(RUN_ID).content_hash
+                == original.recording(RUN_ID).content_hash
             )
-            assert tuple(analyzed.recording("synthetic").records()) == records
+            assert tuple(analyzed.recording(RUN_ID).records()) == records
             attachment = next(
                 item
                 for item in analyzed.payloads
@@ -564,7 +556,7 @@ def test_exchange_corrupt_payload_fails_without_publication(tmp_path: Path):
     artifact.write_bytes(b"changed")
     reference = PayloadReference(
         owner_kind="run",
-        owner_id="synthetic",
+        owner_id=RUN_ID,
         ref="artifacts/report/report",
         digest=sha256_content_hash(b"original"),
         size=8,
@@ -619,7 +611,7 @@ def recording():
         ),
     )
     header = MeasurementDatasetHeader(
-        run_id="synthetic",
+        run_id=RUN_ID,
         recording_contract_fingerprint="test-contract",
         dataset_schema=schema,
         expected_record_count=4,
@@ -904,3 +896,13 @@ def test_snapshot_uses_ordinary_dataset_analysis_after_close(tmp_path: Path):
         dataset = snapshot.dataset()
     values = dataset.to_xarray()
     assert values["iq"].values.tolist() == [0j, 1 - 1j, 2 - 2j, 3 - 3j]
+
+
+@pytest.mark.parametrize("run_id", ["run_20261013T120000Z_12345678", "run-1"])
+def test_exchange_rejects_non_uuid_run_identity(run_id: str) -> None:
+    evidence = exchange_evidence().runs[0]
+    invalid = evidence.model_copy(
+        update={"snapshot": evidence.snapshot.model_copy(update={"run_id": run_id})}
+    )
+    with pytest.raises(ValueError, match="canonical UUIDv7"):
+        RunEvidence.model_validate_json(invalid.model_dump_json())
