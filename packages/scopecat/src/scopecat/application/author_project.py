@@ -656,8 +656,13 @@ class AuthorProject(DaemonClient):
         actor: str | SessionDefault = INHERIT,
         batch: str | SessionDefault | None = INHERIT,
         record_collection: str | SessionDefault | None = INHERIT,
+        decision_source: PlanAnalysisSource | None = None,
     ) -> AuthorPreparedLaunch:
-        """Select the current declaration and retain a preview's exact submission."""
+        """Freeze inputs and an optional exact saved conclusion for this launch.
+
+        The source records why this experiment was chosen, independently of its
+        actual inputs. Admission verifies it in the current data space.
+        """
         defaults = self._selection
         science = self._prepare_science(
             selection=selection,
@@ -764,6 +769,7 @@ class AuthorProject(DaemonClient):
             selection=science,
             actor=actor,
             record_collection=record_collection,
+            decision_source=decision_source,
             code_revision=catalog.code_revision,
             workspace_id=catalog.workspace_id,
         )

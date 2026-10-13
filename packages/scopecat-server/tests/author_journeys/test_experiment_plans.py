@@ -161,17 +161,15 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         )
         # A direct Start has no saved plan. Edited inputs and its decision source
         # are retained independently, under the same idempotent admission.
-        direct_request = handoff.request.model_copy(
-            update={
-                "decision_source": decision_source,
-                "control_edits": {
-                    "frequency": ControlEdit(mode="fixed", value=Quantity(4.87, "GHz"))
-                },
-            }
+        direct = author.prepare(
+            handoff.request.experiment,
+            inputs=handoff.request.inputs,
+            selection=handoff.request.selection,
+            code_revision=handoff.request.code_revision,
+            fixed={"frequency": Quantity(4.87, "GHz")},
+            decision_source=decision_source,
         )
-        direct = AuthorPreparedLaunch(
-            author, direct_request, author.preview(direct_request)
-        )
+        direct_request = direct.request
         direct_submission = direct.submit(request_key=f"{key}-direct")
         direct_run = child(direct_submission.procedure_id)
         admitted_direct = author.get_procedure(direct_submission.procedure_id)
