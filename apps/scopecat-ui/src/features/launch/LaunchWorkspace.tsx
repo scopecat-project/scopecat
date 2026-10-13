@@ -130,7 +130,7 @@ export function LaunchWorkspace({
           aria-label="Selected execution"
           className="scroll-mt-24 rounded-md focus-visible:outline-accent"
         >
-          <ProcedureProgress key={procedureId} procedureId={procedureId} />
+          <ProcedureProgress key={procedureId} procedureId={procedureId} projectId={projectId} />
         </section>
       )}
       <section

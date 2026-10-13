@@ -1,3 +1,7 @@
+import { useRecordCollectionNames } from "../context/scope-catalog";
+import { ScopeCatalog } from "../context/ScopeCatalog";
+import { RunAddressLabel } from "../runs/RunAddressLabel";
+import { CollectionRunLookup } from "./CollectionRunLookup";
 import { useState } from "react";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
 import { DataCleanupHistory } from "./DataCleanup";
@@ -22,6 +26,7 @@ export function ResearchHistory({
   const cache = useQueryClient();
   const [selected, setSelected] = useState<Project>();
   const [name, setName] = useState("");
+  const [collection, setCollection] = useState<string>();
   const [sample, setSample] = useState("");
   const [workingPoint, setWorkingPoint] = useState("");
   const [bench, setBench] = useState("");
@@ -71,7 +76,9 @@ export function ResearchHistory({
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: !!selected && !daemonUnavailable,
   });
+  const collectionNames = useRecordCollectionNames(projectId, !daemonUnavailable);
   const filters = {
+    record_collection: collection,
     research_project: allRuns ? undefined : selected?.id,
     sample_id: sample || undefined,
     working_point: workingPoint || undefined,
@@ -141,11 +148,31 @@ export function ResearchHistory({
     <section className="space-y-4 p-4" aria-label="Data">
       <h2 className="text-lg font-semibold">Data</h2>
       <p className="text-sm text-text-dim">
-        Find retained runs by project, sample or time. Open a run for its measurements and saved
-        analyses, or open it independently alongside your current acquisition. Imported results
-        remain available below with their original source.
+        Find retained runs by collection, project, sample or time. Open a run for its measurements
+        and saved analyses, or open it independently alongside your current acquisition. Imported
+        results remain available below with their original source.
       </p>
       {error && <p role="alert">{error.message}</p>}
+      <div className={detailCard}>
+        <ScopeCatalog
+          kind="collection"
+          owner={projectId}
+          value={collection}
+          onChange={setCollection}
+          emptyLabel="All collections"
+          selectLabel="Record collection filter"
+          disabled={daemonUnavailable}
+          available={!daemonUnavailable}
+        />
+        <CollectionRunLookup
+          key={JSON.stringify([projectId, collection])}
+          projectId={projectId}
+          collection={collection}
+          collectionName={collection ? collectionNames.get(collection) : undefined}
+          unavailable={daemonUnavailable}
+          onOpenRun={onOpenRun}
+        />
+      </div>
       <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
         <label>
           Research project{" "}
@@ -201,22 +228,6 @@ export function ResearchHistory({
           </button>
         )}
         <label>
-          Working point{" "}
-          <input
-            className={inputClass}
-            value={workingPoint}
-            onChange={(event) => setWorkingPoint(event.target.value)}
-          />
-        </label>
-        <label>
-          Bench deployment{" "}
-          <input
-            className={inputClass}
-            value={bench}
-            onChange={(event) => setBench(event.target.value)}
-          />
-        </label>
-        <label>
           From (local time){" "}
           <input
             className={inputClass}
@@ -235,6 +246,33 @@ export function ResearchHistory({
           />
         </label>
       </div>
+      <details className={detailCard}>
+        <summary className="cursor-pointer">
+          Advanced source filters{workingPoint || bench ? " · active" : ""}
+        </summary>
+        <p className="text-sm text-text-dim">
+          Exact working-point context ID and deployment ID; these do not describe scientific
+          conditions.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <label>
+            Working point{" "}
+            <input
+              className={inputClass}
+              value={workingPoint}
+              onChange={(event) => setWorkingPoint(event.target.value)}
+            />
+          </label>
+          <label>
+            Bench deployment{" "}
+            <input
+              className={inputClass}
+              value={bench}
+              onChange={(event) => setBench(event.target.value)}
+            />
+          </label>
+        </div>
+      </details>
       <div className={detailCard}>
         <h3 className="mt-0 text-base font-semibold">Retained runs</h3>
         {allRuns && selected && (
@@ -257,11 +295,17 @@ export function ResearchHistory({
                     className={`${secondaryButton} max-w-full whitespace-normal break-all`}
                     onClick={() => onOpenRun(run.snapshot.run_id)}
                   >
-                    {run.control.admission.display_name || run.snapshot.run_id}
+                    {run.control.admission.display_name ||
+                      run.control.admission.plan?.experiment_id ||
+                      "Open run"}
                   </button>
-                  <code className="max-w-full break-all text-xs text-text-dim">
-                    {run.snapshot.run_id}
-                  </code>
+                  <RunAddressLabel
+                    address={run.address ?? undefined}
+                    collectionName={
+                      run.address ? collectionNames.get(run.address.collection_id) : undefined
+                    }
+                    sequence={run.control.sequence}
+                  />
                   <OpenRunWindow runId={run.snapshot.run_id} />
                   <span>
                     {run.snapshot.created_at
@@ -273,7 +317,6 @@ export function ResearchHistory({
                     <span>Outcome indeterminate</span>
                   )}
                   {run.control.attention_reason && <span>{run.control.attention_reason}</span>}
-                  <span>Bench: {run.deployment_id ?? "unknown"}</span>
                   <span>
                     {run.snapshot.samples
                       ?.map(

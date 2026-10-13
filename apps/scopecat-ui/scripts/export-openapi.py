@@ -99,6 +99,7 @@ _OPERATIONS = {
     ("/api/v1/experimental-batches", "get"),
     ("/api/v1/experimental-batches/{batch_id}", "get"),
     ("/api/v1/experimental-batches/{batch_id}", "put"),
+    ("/api/v1/record-collections/{collection_id}/runs/{number}", "get"),
     ("/api/v1/record-collections", "get"),
     ("/api/v1/record-collections/{collection_id}", "get"),
     ("/api/v1/record-collections/{collection_id}", "put"),

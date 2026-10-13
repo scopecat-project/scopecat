@@ -124,7 +124,12 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     await header.getByRole("button", { name: "Copy read-only code" }).click();
     await expect(header.getByRole("status")).toHaveText("Read-only code copied.");
     const runCode = await page.locator("html").getAttribute("data-copied");
-    expect(runCode).toBe(readOnlyCode({ kind: "run", runId: saved.runId }));
+    const detail = await (
+      await page.request.get(`${endpoint.base_url}/api/v1/runs/${saved.runId}`)
+    ).json();
+    expect(runCode).toBe(
+      readOnlyCode({ kind: "run", runId: saved.runId, address: detail.address }),
+    );
     snippets.push({ kind: "run", runId: saved.runId, code: runCode! });
 
     const old = page.locator("details").filter({ hasText: "Saved run version 1" });

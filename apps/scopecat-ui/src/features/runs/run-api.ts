@@ -78,7 +78,9 @@ export async function getOlderRuns(
 
 function normalizeRunPage(response: RunSummaryPage): ProjectRunPage {
   return {
-    items: response.items.map((run) => normalizeRun(run.control, run.snapshot)).sort(compareRuns),
+    items: response.items
+      .map((run) => normalizeRun(run.control, run.snapshot, undefined, run.address))
+      .sort(compareRuns),
     nextCursor: response.next_cursor ?? undefined,
   };
 }
@@ -90,7 +92,12 @@ export async function getRun(runId: string, signal?: AbortSignal): Promise<Proje
       signal,
     }),
   );
-  return normalizeRun(response.control, response.snapshot, response.resources ?? []);
+  return normalizeRun(
+    response.control,
+    response.snapshot,
+    response.resources ?? [],
+    response.address,
+  );
 }
 
 export async function getRunContents(
@@ -526,12 +533,14 @@ export function normalizeRun(
   control: RunControlView,
   snapshot: RunSnapshot,
   detailResources?: RunResourceView[],
+  address?: ProjectRun["address"] | null,
 ): ProjectRun {
   const admission = control.admission;
   const outcome = snapshot.outcome ?? undefined;
   const plan = admission.plan;
   const status = normalizeStatus(control, snapshot);
   return {
+    address: address ?? undefined,
     sequence: control.sequence,
     runId: admission.run_id,
     experimentId: plan.experiment_id,

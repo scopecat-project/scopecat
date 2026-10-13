@@ -1,3 +1,5 @@
+import { useRecordCollectionNames } from "../context/scope-catalog";
+import { RunAddressLabel } from "./RunAddressLabel";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { NavigationOptions } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -238,6 +240,14 @@ export function RunsWorkspace({
         )
       : indexedRuns;
   }, [olderRunPages, runDetailQuery.data, runsQuery.data]);
+  const collectionNames = useRecordCollectionNames(
+    health?.projectId,
+    Boolean(
+      health?.projectId &&
+      healthReachable &&
+      (runDetailQuery.data?.address || runs.some((run) => run.address)),
+    ),
+  );
   const nextRunCursor = olderRunPages.length > 0 ? olderRunPages.at(-1)?.nextCursor : runHeadCursor;
   const measurements = useMemo(
     () => mergeMeasurementPreviews(measurementsQuery.data, liveMeasurementsQuery.data),
@@ -540,6 +550,9 @@ export function RunsWorkspace({
                 <RunListItem
                   key={run.runId}
                   run={run}
+                  collectionName={
+                    run.address ? collectionNames.get(run.address.collection_id) : undefined
+                  }
                   selected={run.runId === selectedRunId}
                   onSelect={() => onSelectRun(run.runId)}
                 />
@@ -589,6 +602,8 @@ export function RunsWorkspace({
             />
           ) : selectedRun ? (
             <RunDetail
+              projectId={health?.projectId}
+              collectionNames={collectionNames}
               run={selectedRun}
               events={selectedEvents}
               eventsError={selectedEventsQuery.error}
@@ -757,11 +772,13 @@ function mergeMeasurementPreviews(
 
 function RunListItem({
   run,
+  collectionName,
   selected,
   onSelect,
 }: {
   run: ProjectRun;
   selected: boolean;
+  collectionName?: string;
   onSelect: () => void;
 }) {
   return (
@@ -789,19 +806,11 @@ function RunListItem({
             {run.updatedAt ? formatRelative(run.updatedAt) : "No timestamp"}
           </time>
         </span>
-        <span className="mt-1.5 flex items-center gap-[5px] overflow-hidden text-[0.67rem] whitespace-nowrap text-text-dim">
-          {run.displayName && (
-            <>
-              <code className="overflow-hidden text-ellipsis text-text-soft">
-                {run.experimentId}
-              </code>
-              <span aria-hidden="true">·</span>
-            </>
-          )}
-          <code className="overflow-hidden text-ellipsis text-text-soft">
-            {shorten(run.runId, 18)}
-          </code>
-        </span>
+        <RunAddressLabel
+          address={run.address}
+          sequence={run.sequence}
+          collectionName={collectionName}
+        />
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
           <span
             className={classes(

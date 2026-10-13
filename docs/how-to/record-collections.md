@@ -66,3 +66,24 @@ This is the storage and Python/HTTP foundation for the
 per client/kernel, and the experiment workbench has page-local selection. There
 is no cross-store catalog. A collection alone neither isolates hardware
 nor copies working-point parameters; teaching still uses its existing isolation.
+
+## 在应用中连续采集和找回结果
+
+工作台常驻 **Record collection** 选择。集合只需创建一次，再选择 **Use**。
+通过 **Return to preparation** 返回并选择 **Prepare another acquisition**，
+可沿用本页集合继续采集；独立结果窗口不会改变采集页的选择。
+
+在 **Data** 选择集合浏览记录。**All collections** 包含默认集合和命名集合，
+不等于默认集合本身。输入 **Collection run number** 后选择 **Find run**，
+按该集合的短号精确找回，不受下方课题、样品、时间和高级筛选影响；
+查无此号不会转为查找全局号。失败、取消的记录保留编号，导入结果仍在下方。
+
+地址优先显示集合名称和集合内号。提示或展开的身份信息提供精确集合 ID、
+全局编号和稳定 run ID，用于重名消歧。**Rename collection** 只改名称，
+课题关联也不移动或重编号。**Copy run reference** 同时复制可读名称和精确身份；
+**Copy read-only code** 执行稳定 run ID，并附显式
+`session.run(number, collection="collection-id")` 写法。
+Notebook 须连接同一数据空间，其当前集合选择不会改变复制代码指向的记录。
+
+工作点和部署的精确 ID 筛选位于 **Advanced source filters**。
+集合仍是平面的编号空间；本轮不提供层级目录或科学条件标签。

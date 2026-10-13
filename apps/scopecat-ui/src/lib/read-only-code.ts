@@ -1,7 +1,12 @@
 export type PublicationCopyTarget = { kind: "run"; runId: string } | { kind: "project" };
 
 export type ReadOnlyCopyTarget =
-  | { kind: "run"; runId: string; publicationId?: string }
+  | {
+      kind: "run";
+      runId: string;
+      publicationId?: string;
+      address?: { collection_id: string; number: number };
+    }
   | { kind: "project"; publicationId: string };
 
 // ASCII-only Python literals also keep invisible/control characters out of cells.
@@ -26,7 +31,14 @@ export function readOnlyCode(target: ReadOnlyCopyTarget): string {
     "# Paste into a separate cell and run only that cell, not Run All.",
     "# Read saved records only; custom typed/group objects are not reconstructed.",
   ];
-  if (target.kind === "run") lines.push(`run = session.run(${pythonStringLiteral(target.runId)})`);
+  if (target.kind === "run") {
+    if (target.address)
+      lines.push(
+        `# Collection address: session.run(${target.address.number}, collection=${pythonStringLiteral(target.address.collection_id)})`,
+        "# The stable run ID below is independent of the selected collection or its name.",
+      );
+    lines.push(`run = session.run(${pythonStringLiteral(target.runId)})`);
+  }
   if (target.publicationId !== undefined) {
     lines.push(
       `publication = ${target.kind === "run" ? "run" : "session"}.published_analysis(${pythonStringLiteral(target.publicationId)})`,

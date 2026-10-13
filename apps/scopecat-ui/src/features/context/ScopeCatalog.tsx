@@ -1,5 +1,8 @@
+import { secondaryButton } from "../../ui/styles";
+import { useScopeCatalog } from "./scope-catalog";
+import { RenameCollection } from "./RenameCollection";
 import { useRef, useState } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 
 // Catalog state is shared; the selection is always owned by the calling page.
@@ -9,34 +12,29 @@ export function ScopeCatalog({
   value,
   onChange,
   disabled = false,
+  emptyLabel,
+  selectLabel,
+  available = true,
 }: {
   kind: "batch" | "collection";
   owner?: string;
   value?: string;
   onChange: (id: string | undefined) => void;
   disabled?: boolean;
+  emptyLabel?: string;
+  selectLabel?: string;
+  available?: boolean;
 }) {
   const label = kind === "batch" ? "Experimental batch" : "Record collection";
-  const empty = kind === "batch" ? "Unspecified batch" : "Default record collection";
-  const path = kind === "batch" ? "/api/v1/experimental-batches" : "/api/v1/record-collections";
+  const empty =
+    emptyLabel ?? (kind === "batch" ? "Unspecified batch" : "Default record collection");
   const key = ["context-catalog", owner, kind];
   const cache = useQueryClient();
-  const pages = useInfiniteQuery({
-    queryKey: key,
-    initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      apiData(
-        apiClient.GET(path, {
-          params: { query: { limit: 100, before: pageParam } },
-          signal,
-        }),
-      ),
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
-  });
+  const pages = useScopeCatalog(kind, owner, available);
   const items = pages.data?.pages.flatMap((page) => page.items) ?? [];
   const selected = useQuery({
     queryKey: [...key, value],
-    enabled: Boolean(value && !items.some((item) => item.id === value)),
+    enabled: available && Boolean(value && !items.some((item) => item.id === value)),
     queryFn: ({ signal }) =>
       kind === "batch"
         ? apiData(
@@ -52,6 +50,7 @@ export function ScopeCatalog({
             }),
           ),
   });
+  const current = items.find((item) => item.id === value) ?? selected.data;
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState(false);
@@ -101,7 +100,8 @@ export function ScopeCatalog({
       <label className="flex flex-col gap-1">
         {label}
         <select
-          aria-label={label}
+          aria-label={selectLabel ?? label}
+          title={value}
           value={value ?? ""}
           disabled={disabled || pending}
           onChange={(event) => onChange(event.target.value || undefined)}
@@ -127,6 +127,7 @@ export function ScopeCatalog({
       {pages.isPending && <p role="status">Loading {label.toLowerCase()} choices…</p>}
       {pages.hasNextPage && (
         <button
+          className={secondaryButton}
           type="button"
           disabled={pages.isFetchingNextPage}
           onClick={() => void pages.fetchNextPage()}
@@ -135,14 +136,18 @@ export function ScopeCatalog({
         </button>
       )}
       {pages.isError && (
-        <button type="button" onClick={() => void pages.refetch()}>
+        <button className={secondaryButton} type="button" onClick={() => void pages.refetch()}>
           Retry {label.toLowerCase()} list
         </button>
+      )}
+      {kind === "collection" && current && (
+        <RenameCollection key={current.id} collection={current} disabled={disabled || pending} />
       )}
       {created && (
         <p role="status">
           Created {created.name}.{" "}
           <button
+            className={secondaryButton}
             type="button"
             disabled={disabled}
             onClick={() => {
@@ -174,15 +179,25 @@ export function ScopeCatalog({
                 className="border rounded p-2"
               />
             </label>
-            <button type="button" disabled={pending || !name.trim()} onClick={() => void create()}>
+            <button
+              className={secondaryButton}
+              type="button"
+              disabled={pending || !name.trim()}
+              onClick={() => void create()}
+            >
               Create {kind === "batch" ? "batch" : "collection"}
             </button>
-            <button type="button" disabled={pending} onClick={() => setCreating(false)}>
+            <button
+              className={secondaryButton}
+              type="button"
+              disabled={pending}
+              onClick={() => setCreating(false)}
+            >
               Cancel new {kind}
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => setCreating(true)}>
+          <button className={secondaryButton} type="button" onClick={() => setCreating(true)}>
             New {kind === "batch" ? "batch" : "collection"}
           </button>
         ))}

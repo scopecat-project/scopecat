@@ -132,7 +132,8 @@ function mount(
   vi.stubGlobal("fetch", (request: Request) =>
     new URL(request.url).pathname.endsWith("/author-workspaces")
       ? Promise.resolve(Response.json(serviceWorkspaceCatalog))
-      : new URL(request.url).pathname.endsWith("/experiment-plans")
+      : new URL(request.url).pathname.endsWith("/experiment-plans") ||
+          new URL(request.url).pathname.endsWith("/record-collections")
         ? Promise.resolve(Response.json({ items: [] }))
         : new URL(request.url).pathname.endsWith("/config-registry")
           ? Promise.resolve(configuration())

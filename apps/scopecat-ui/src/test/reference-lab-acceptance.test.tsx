@@ -76,7 +76,8 @@ describe("shared reference-lab acceptance", () => {
           Response.json(
             new URL(request.url).pathname.endsWith("/author-workspaces")
               ? serviceWorkspaceCatalog
-              : new URL(request.url).pathname.endsWith("/experiment-plans")
+              : new URL(request.url).pathname.endsWith("/experiment-plans") ||
+                  new URL(request.url).pathname.endsWith("/record-collections")
                 ? { items: [] }
                 : new URL(request.url).pathname.endsWith("/config-registry")
                   ? {
@@ -138,7 +139,8 @@ describe("shared reference-lab acceptance", () => {
       vi.fn(async (request: Request) => {
         const path = new URL(request.url).pathname;
         if (path.endsWith("/author-workspaces")) return Response.json(serviceWorkspaceCatalog);
-        if (path.endsWith("/experiment-plans")) return Response.json({ items: [] });
+        if (path.endsWith("/experiment-plans") || path.endsWith("/record-collections"))
+          return Response.json({ items: [] });
         if (path.endsWith("/config-registry"))
           return Response.json({
             activation: {
