@@ -46,12 +46,13 @@ with project.connect() as lab, project.authoring() as author:
     space.measurements(a, id="first")
     space.measurements(b, id="second")
     space_result = space.result().fact("score", 4).save()
-    print(json.dumps({"runs": [a.id, b.id], "ids": [first.id, revised.id, summary.id, space_result.id]}))
+    owner_note = a.analysis("Owner note", key="owner-note").result().fact("note", "no direct inputs").save()
+    print(json.dumps({"runs": [a.id, b.id], "ids": [first.id, revised.id, summary.id, space_result.id], "owner_note":owner_note.id}))
 `;
 
 test("finds the same run, sample and space publications from either direct input", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-related-analyses-"));
   let passed = false;
@@ -67,38 +68,98 @@ test("finds the same run, sample and space publications from either direct input
     const seed = JSON.parse(uv(["python", "-c", SEED, project])) as {
       runs: string[];
       ids: string[];
+      owner_note: string;
     };
+    // Bound each response through the real endpoint, so navigation exercises multiple pages.
+    await page.route("**/api/v1/analysis-publications?*", async (route) => {
+      const url = new URL(route.request().url());
+      url.searchParams.set("limit", "2");
+      await route.fulfill({ response: await route.fetch({ url: url.toString() }) });
+    });
     for (const run of seed.runs) {
       await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(run)}#runs`);
-      const related = page.getByRole("region", { name: "Related analyses", exact: true });
-      await expect(related.locator(":scope > details > summary")).toHaveCount(4);
+      const header = page.getByTestId("run-detail-header");
+      await header.getByText("Run details", { exact: true }).click();
+      const copiedId = await header.locator("code").filter({ hasText: run }).first().textContent();
+      expect(copiedId).toBe(run);
+      await page.getByRole("button", { name: "Data", exact: true }).click();
+      await page.getByText("Find by full run ID", { exact: true }).click();
+      await page.getByLabel("Full run ID", { exact: true }).fill(copiedId!);
+      // Deliberately exclude all rows; exact ID lookup must still find this run.
+      await page.getByLabel("From (local time)", { exact: true }).fill("2099-01-01T00:00");
+      await page.getByRole("button", { name: "Find exact run", exact: true }).click();
+      await page.getByRole("button", { name: "Open found run", exact: true }).click();
+      const related = page.getByRole("region", { name: "Analyses", exact: true });
+      await expect(related.locator(":scope > details > summary")).toHaveCount(2);
+      while (
+        await related.getByRole("button", { name: "Load older analyses", exact: true }).count()
+      ) {
+        const previous = await related.locator(":scope > details > summary").count();
+        await related.getByRole("button", { name: "Load older analyses", exact: true }).click();
+        await expect
+          .poll(() => related.locator(":scope > details > summary").count())
+          .toBeGreaterThan(previous);
+      }
+      const expected = run === seed.runs[0] ? [...seed.ids, seed.owner_note] : seed.ids;
+      await expect(related.locator(":scope > details > summary")).toHaveCount(expected.length);
       for (const summary of await related.locator(":scope > details > summary").all())
         await summary.click();
-      await expect(related.getByTestId("publication-id")).toHaveCount(4);
+      await expect(related.getByTestId("publication-id")).toHaveCount(expected.length);
       expect((await related.getByTestId("publication-id").allTextContents()).sort()).toEqual(
-        [...seed.ids].sort(),
+        [...expected].sort(),
       );
-      await related.getByText("Sources and execution evidence", { exact: true }).first().click();
-      for (const input of seed.runs)
-        await expect(related.getByRole("button", { name: input, exact: true })).toBeVisible();
-      await expect(related.getByText(/Sample Related chip/)).toBeVisible();
-      await expect(related.getByText(/Data space · revision/)).toBeVisible();
+      if (run === seed.runs[0])
+        await expect(related.getByText("None declared", { exact: true })).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath(
+          run === seed.runs[0] ? "results-from-owner.png" : "results-from-input.png",
+        ),
+        fullPage: true,
+      });
     }
-    await page.evaluate("window.__relatedJourneyContext = 'retained'");
-    await page
-      .getByRole("region", { name: "Related analyses", exact: true })
-      .getByRole("button", { name: seed.runs[0], exact: true })
-      .click();
+    const related = page.getByRole("region", { name: "Analyses", exact: true });
+    const row = related
+      .locator(":scope > details")
+      .filter({ has: page.getByTestId("publication-id").filter({ hasText: seed.ids[0] }) });
+    const source = row
+      .locator('[aria-label="Direct run inputs"]')
+      .getByRole("button")
+      .filter({ has: page.locator(`[title="Run ${seed.runs[0]}"]`) });
+    await source.scrollIntoViewIfNeeded();
+    const originalScroll = await page
+      .locator("html")
+      .evaluate((element) => element.ownerDocument.defaultView!.scrollY);
+    await source.click();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
-    expect(await page.evaluate("window.__relatedJourneyContext")).toBe("retained");
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await expect(
+      page.getByRole("region", { name: "Analyses", exact: true }).getByTestId("publication-id"),
+    ).toHaveCount(4);
+    await expect
+      .poll(async () =>
+        Math.abs(
+          (await page
+            .locator("html")
+            .evaluate((element) => element.ownerDocument.defaultView!.scrollY)) - originalScroll,
+        ),
+      )
+      .toBeLessThan(120);
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
+    await page.goto(
+      `${endpoint.base_url}/?run=${encodeURIComponent(seed.runs[0])}&run-analysis=${encodeURIComponent(seed.ids[0])}#runs`,
+    );
+    const pinned = page.getByRole("region", { name: "Analyses", exact: true });
+    await expect(pinned.getByTestId("publication-id")).toHaveText(seed.ids[0]);
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
       await page.locator("html").evaluate((element) => element.scrollWidth),
     ).toBeLessThanOrEqual(390);
+    await page.screenshot({
+      path: testInfo.outputPath("exact-conclusion-narrow.png"),
+      fullPage: true,
+    });
     passed = true;
   } finally {
     uv(["scopecat", "stop", project]);

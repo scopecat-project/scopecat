@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
+import type { AnalysisPublication } from "../../types";
 import { errorMessage } from "../../lib/presentation";
+import { navigateLink, useLocationUrl } from "../../lib/navigation";
 import { secondaryButton } from "../../ui/styles";
 import { useRunCollectionName } from "../runs/use-run-collection-name";
 import { getRun, getRunAnalysis, getRunArtifactDownload } from "../runs/run-api";
+import { RepeatRunAnalysis } from "../runs/RepeatRunAnalysis";
 import {
   getSample,
   getSampleAnalysis,
@@ -15,64 +18,158 @@ import { getProjectAnalysis, getProjectAnalysisArtifactDownload } from "./analys
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
 
 type Summary = components["schemas"]["AnalysisPublicationSummary"];
-
 interface RelatedContext {
   projectId: string;
   collectionNames: Map<string, string>;
   onOpenRun?: (runId: string) => void;
+  restorePosition?: () => void;
 }
 
-export function RelatedAnalyses({
+export function RelatedAnalyses(props: RelatedContext & { runId: string }) {
+  useLocationUrl();
+  return (
+    <RunResults
+      key={`${props.projectId}:${props.runId}:${window.history.state?.scopecatPosition ?? 0}`}
+      {...props}
+    />
+  );
+}
+
+function RunResults({
   runId,
   projectId,
   collectionNames,
   onOpenRun,
 }: RelatedContext & { runId: string }) {
+  const linked = new URLSearchParams(location.search).get("run-analysis");
+  const [expanded, setExpanded] = useState<string[]>(() => {
+    const saved = window.history.state?.runResults;
+    return saved?.projectId === projectId && saved.runId === runId && Array.isArray(saved.expanded)
+      ? saved.expanded.filter((id: unknown) => typeof id === "string")
+      : [];
+  });
+  const remember = (ids: string[]) => {
+    setExpanded(ids);
+    window.history.replaceState(
+      { ...window.history.state, runResults: { projectId, runId, expanded: ids } },
+      "",
+      location.href,
+    );
+  };
+  const restored = useRef(false);
+  const restorePosition = () => {
+    const saved = window.history.state?.runResults;
+    if (
+      !restored.current &&
+      saved?.projectId === projectId &&
+      saved.runId === runId &&
+      typeof saved.scroll === "number"
+    ) {
+      restored.current = true;
+      requestAnimationFrame(() => window.scrollTo(0, saved.scroll));
+    }
+  };
+  const openInput = (id: string) => {
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        runResults: { projectId, runId, expanded, scroll: window.scrollY },
+      },
+      "",
+      location.href,
+    );
+    onOpenRun?.(id);
+  };
   const query = useInfiniteQuery({
-    queryKey: ["analyses", "related", projectId, runId],
+    queryKey: ["analyses", "related", projectId, runId, "including-owned"],
     queryFn: ({ pageParam, signal }) =>
       apiData(
         apiClient.GET("/api/v1/analysis-publications", {
-          params: { query: { input_run_id: runId, limit: 100, before: pageParam } },
+          params: {
+            query: { input_run_id: runId, include_owned: true, limit: 100, before: pageParam },
+          },
           signal,
         }),
       ),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
+  const linkedDetail = useQuery({
+    queryKey: ["analysis", "linked-run", projectId, runId, linked],
+    queryFn: ({ signal }) => getRunAnalysis(runId, linked!, signal),
+    enabled: Boolean(linked),
+  });
   const items = [
     ...new Map(
       query.data?.pages.flatMap((page) => page.items ?? []).map((item) => [item.record.id, item]),
     ).values(),
   ];
+  const linkedId = linkedDetail.data?.id ?? linked;
   return (
-    <section className="grid gap-2 rounded-lg border border-line p-4" aria-label="Related analyses">
-      <h3 className="m-0 text-sm font-semibold">Related analyses</h3>
+    <section className="grid min-w-0 gap-2 rounded-lg border border-line p-4" aria-label="Analyses">
+      <h3 className="m-0 text-sm font-semibold">Analyses</h3>
       <p className="m-0 text-xs text-text-dim">
-        Results that directly use this run’s measurements or configuration, wherever saved.
+        Results saved on this run or directly using its measurements or configuration, wherever
+        saved. Each publication appears once.
       </p>
-      {query.isPending && <p>Reading related analyses…</p>}
-      {query.isError && <p role="alert">{errorMessage(query.error)}</p>}
-      {query.isSuccess && items.length === 0 && (
-        <p className="text-xs text-text-dim">No related analyses yet.</p>
+      {linked && (
+        <section className="min-w-0 rounded border border-line p-3" aria-label="Linked analysis">
+          {linkedDetail.isPending ? (
+            <p>Reading linked analysis…</p>
+          ) : linkedDetail.isError ? (
+            <p role="alert">Linked analysis unavailable: {errorMessage(linkedDetail.error)}</p>
+          ) : (
+            <>
+              <h4>
+                {linkedDetail.data.title} · revision {linkedDetail.data.revision}
+              </h4>
+              <p className="text-xs text-text-soft">
+                Saved on this run · {linkedDetail.data.inputs.length} declared inputs
+              </p>
+              <PublicationBody
+                analysis={linkedDetail.data}
+                subject={{ kind: "run", run_id: runId }}
+                projectId={projectId}
+                collectionNames={collectionNames}
+                onOpenRun={openInput}
+                restorePosition={restorePosition}
+              />
+            </>
+          )}
+        </section>
       )}
-      {items.map((item) => (
-        <RelatedAnalysis
-          key={`${projectId}:${item.record.id}`}
-          summary={item}
-          projectId={projectId}
-          collectionNames={collectionNames}
-          onOpenRun={onOpenRun}
-        />
-      ))}
+      {query.isPending && <p>Reading analyses…</p>}
+      {query.isError && <p role="alert">{errorMessage(query.error)}</p>}
+      {query.isSuccess && !items.length && !linked && (
+        <p className="text-xs text-text-dim">No analyses saved or directly linked yet.</p>
+      )}
+      {items
+        .filter((item) => item.record.id !== linkedId)
+        .map((item) => (
+          <RelatedAnalysis
+            key={`${projectId}:${item.record.id}`}
+            summary={item}
+            projectId={projectId}
+            collectionNames={collectionNames}
+            onOpenRun={openInput}
+            restorePosition={restorePosition}
+            expanded={expanded.includes(item.record.id)}
+            onExpanded={(open) =>
+              remember(
+                open
+                  ? [...new Set([...expanded, item.record.id])]
+                  : expanded.filter((id) => id !== item.record.id),
+              )
+            }
+          />
+        ))}
       {query.hasNextPage && (
         <button
           className={secondaryButton}
-          type="button"
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
         >
-          Load older related analyses
+          Load older analyses
         </button>
       )}
     </section>
@@ -81,15 +178,14 @@ export function RelatedAnalyses({
 
 function RelatedAnalysis({
   summary,
-  projectId,
-  collectionNames,
-  onOpenRun,
-}: RelatedContext & { summary: Summary }) {
-  const [expanded, setExpanded] = useState(false);
+  expanded,
+  onExpanded,
+  ...context
+}: RelatedContext & { summary: Summary; expanded: boolean; onExpanded: (open: boolean) => void }) {
   const subject = summary.subject;
   const id = summary.record.id;
   const detail = useQuery({
-    queryKey: ["analysis", "publication", projectId, id],
+    queryKey: ["analysis", "publication", context.projectId, id],
     queryFn: ({ signal }) =>
       subject.kind === "run"
         ? getRunAnalysis(subject.run_id, id, signal)
@@ -100,18 +196,22 @@ function RelatedAnalysis({
   });
   return (
     <details
-      className="rounded-md border border-line p-2"
-      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      className="min-w-0 rounded-md border border-line p-2"
+      open={expanded}
+      onToggle={(event) => {
+        if (event.currentTarget.open !== expanded) onExpanded(event.currentTarget.open);
+      }}
     >
-      <summary className="cursor-pointer text-sm">
+      <summary className="cursor-pointer text-sm break-words">
         <strong>{summary.title}</strong>
         <span className="block text-xs text-text-dim">
+          Saved on{" "}
           <PublicationSource
             subject={subject}
-            projectId={projectId}
-            collectionNames={collectionNames}
+            projectId={context.projectId}
+            collectionNames={context.collectionNames}
           />{" "}
-          · revision {summary.revision} · {summary.input_count} inputs
+          · revision {summary.revision} · {summary.input_count} declared inputs
         </span>
       </summary>
       {expanded &&
@@ -120,19 +220,88 @@ function RelatedAnalysis({
         ) : detail.isError ? (
           <p role="alert">{errorMessage(detail.error)}</p>
         ) : (
-          <AnalysisPublicationView
-            analysis={detail.data}
-            onOpenRun={onOpenRun}
-            getArtifactDownload={(selector) =>
-              subject.kind === "run"
-                ? getRunArtifactDownload(subject.run_id, selector)
-                : subject.kind === "sample"
-                  ? getSampleAnalysisArtifactDownload(subject.sample_id, id, selector)
-                  : getProjectAnalysisArtifactDownload(id, selector)
-            }
-          />
+          <PublicationBody analysis={detail.data} subject={subject} {...context} />
         ))}
     </details>
+  );
+}
+
+function PublicationBody({
+  analysis,
+  subject,
+  ...context
+}: RelatedContext & { analysis: AnalysisPublication; subject: Summary["subject"] }) {
+  const restorePosition = context.restorePosition;
+  useEffect(() => {
+    restorePosition?.();
+  }, [restorePosition]);
+  const exact =
+    subject.kind === "run"
+      ? `?run=${encodeURIComponent(subject.run_id)}&run-analysis=${encodeURIComponent(analysis.id)}#runs`
+      : subject.kind === "sample"
+        ? `?sample=${encodeURIComponent(subject.sample_id)}&sample-analysis=${encodeURIComponent(analysis.id)}#samples`
+        : `?analysis=${encodeURIComponent(analysis.id)}#analyses`;
+  const direct = [
+    ...new Set(
+      analysis.inputs
+        .filter(
+          (input) =>
+            input.kind === "measurement_dataset" || input.kind === "configuration_snapshot",
+        )
+        .map((input) => input.run_id),
+    ),
+  ];
+  return (
+    <div className="mt-3 min-w-0 space-y-3">
+      <AnalysisPublicationView
+        analysis={analysis}
+        onOpenRun={context.onOpenRun}
+        copyTarget={
+          subject.kind === "run"
+            ? { kind: "run", runId: subject.run_id }
+            : subject.kind === "sample"
+              ? undefined
+              : { kind: "project" }
+        }
+        getArtifactDownload={(selector) =>
+          subject.kind === "run"
+            ? getRunArtifactDownload(subject.run_id, selector)
+            : subject.kind === "sample"
+              ? getSampleAnalysisArtifactDownload(subject.sample_id, analysis.id, selector)
+              : getProjectAnalysisArtifactDownload(analysis.id, selector)
+        }
+      />
+      <div
+        className="flex flex-wrap items-center gap-2 text-xs text-text-soft"
+        aria-label="Direct run inputs"
+      >
+        <span>Direct run inputs:</span>
+        {direct.length === 0 ? (
+          <span>None declared</span>
+        ) : (
+          direct.map((id) => (
+            <button
+              key={id}
+              className={secondaryButton}
+              title={id}
+              onClick={() => context.onOpenRun?.(id)}
+            >
+              <RunSource
+                runId={id}
+                projectId={context.projectId}
+                collectionNames={context.collectionNames}
+              />
+            </button>
+          ))
+        )}
+      </div>
+      <a href={exact} onClick={navigateLink} className="text-sm text-accent underline">
+        Open saved version
+      </a>
+      {subject.kind === "run" && analysis.subject === "run" && (
+        <RepeatRunAnalysis runId={subject.run_id} analysis={{ ...analysis, subject: "run" }} />
+      )}
+    </div>
   );
 }
 

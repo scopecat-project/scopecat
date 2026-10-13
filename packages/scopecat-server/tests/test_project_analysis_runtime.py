@@ -1287,6 +1287,39 @@ def test_primary_run_analysis_checks_secondary_owner_and_exact_content(
                     if before is None:
                         break
                 assert ids == [revised.id, space_result.id, saved.id]
+            owner_only = (
+                primary.analysis("Owner note", key="owner-note")
+                .result()
+                .fact("note", "no direct inputs")
+                .save()
+            )
+            union_ids: list[str] = []
+            before = None
+            while True:
+                union_params: dict[str, str | int] = {
+                    "input_run_id": primary_id,
+                    "include_owned": "true",
+                    "limit": 1,
+                }
+                if before is not None:
+                    union_params["before"] = before
+                union_page = transport.get(
+                    "/api/v1/analysis-publications", params=union_params
+                )
+                assert union_page.status_code == 200
+                union_body = union_page.json()
+                union_ids.extend(item["record"]["id"] for item in union_body["items"])
+                before = union_body["next_cursor"]
+                if before is None:
+                    break
+            assert union_ids == [owner_only.id, revised.id, space_result.id, saved.id]
+            assert owner_only.id not in {
+                item["record"]["id"]
+                for item in transport.get(
+                    "/api/v1/analysis-publications",
+                    params={"input_run_id": secondary_id, "include_owned": "true"},
+                ).json()["items"]
+            }
             # Foreign run identities are not discoverable from another data space.
             with (
                 LocalDaemonRuntime(tmp_path / "other") as other,

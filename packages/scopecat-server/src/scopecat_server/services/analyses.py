@@ -122,11 +122,12 @@ class AnalysisService:
         *,
         limit: int = 100,
         before: int | None = None,
+        include_owned: bool = False,
     ) -> AnalysisPublicationPage:
         with self._analysis_errors():
             self._services.runs.read_snapshot(input_run_id)
             return self._repository.list_related(
-                input_run_id, limit=limit, before=before
+                input_run_id, limit=limit, before=before, include_owned=include_owned
             )
 
     def list_sample(

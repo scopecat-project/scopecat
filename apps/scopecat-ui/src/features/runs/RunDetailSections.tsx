@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
-  Atom,
   Box,
   CheckCircle2,
   ChevronDown,
@@ -27,18 +26,10 @@ import type {
   MeasurementSlicePreview,
   ProjectEvent,
   ProjectRun,
-  RunAnalysisSummary,
 } from "../../types";
-import { AnalysisPublicationView } from "../analyses/AnalysisPublicationView";
 import { MeasurementWorkspace } from "./MeasurementWorkspace";
 import { MeasurementDataPreview } from "./MeasurementDataPreview";
-import { RepeatRunAnalysis } from "./RepeatRunAnalysis";
-import {
-  canPreviewRunContent,
-  getRunAnalysis,
-  getRunArtifactDownload,
-  getRunContent,
-} from "./run-api";
+import { canPreviewRunContent, getRunContent } from "./run-api";
 import type {
   MeasurementSliceSelection,
   MeasurementEntitySelection,
@@ -130,79 +121,6 @@ export function ProgressCard({
   );
 }
 
-export function AnalysisCard({
-  analyses,
-  error,
-  pending,
-  runId,
-  hasNextPage,
-  loadingNextPage,
-  onLoadOlder,
-}: {
-  analyses?: RunAnalysisSummary[];
-  error: Error | null;
-  pending: boolean;
-  runId: string;
-  hasNextPage: boolean;
-  loadingNextPage: boolean;
-  onLoadOlder: () => void;
-}) {
-  const linkedAnalysis = new URLSearchParams(window.location.search).get("run-analysis");
-  return (
-    <article className={detailCard} data-testid="resource-card">
-      <CardHeading
-        icon={<Atom size={17} />}
-        title="Analyses"
-        accessory={
-          <span className={countBadge}>
-            {analyses?.length ?? 0}
-            {hasNextPage ? "+" : ""}
-          </span>
-        }
-      />
-      {linkedAnalysis && <LinkedRunAnalysis runId={runId} analysisId={linkedAnalysis} />}
-      {error ? (
-        <InlineEmpty title="Analyses unavailable" detail={errorMessage(error)} warning />
-      ) : pending ? (
-        <InlineEmpty
-          title="Reading analyses"
-          detail="Waiting for the daemon's persisted analysis records."
-        />
-      ) : !analyses || analyses.length === 0 ? (
-        !linkedAnalysis && (
-          <InlineEmpty
-            title="No analyses saved"
-            detail="Notebook and automated analysis outputs will appear here."
-          />
-        )
-      ) : (
-        <div className="grid gap-2">
-          {analyses
-            .filter((analysis) => analysis.id !== linkedAnalysis)
-            .map((analysis) => (
-              <RunAnalysisItem analysis={analysis} key={analysis.id} runId={runId} />
-            ))}
-          {hasNextPage && (
-            <button
-              className={classes(secondaryButton, "w-full")}
-              disabled={loadingNextPage}
-              onClick={onLoadOlder}
-              type="button"
-            >
-              {loadingNextPage ? (
-                <LoaderCircle className="animate-spin" size={14} aria-hidden="true" />
-              ) : (
-                <ChevronDown size={14} aria-hidden="true" />
-              )}
-              {loadingNextPage ? "Loading older analyses…" : "Load older analyses"}
-            </button>
-          )}
-        </div>
-      )}
-    </article>
-  );
-}
-
 export function ExecutionSegmentsCard({
   page,
   error,
@@ -285,92 +203,6 @@ function ExecutionSegmentItem({ segment }: { segment: RunExecutionSegment }) {
         {segment.reason ? ` · ${titleCase(segment.reason)}` : ""}
       </p>
     </li>
-  );
-}
-
-function LinkedRunAnalysis({ runId, analysisId }: { runId: string; analysisId: string }) {
-  const detail = useQuery({
-    queryKey: ["analysis", runId, analysisId],
-    queryFn: ({ signal }) => getRunAnalysis(runId, analysisId, signal),
-  });
-  if (detail.isPending)
-    return (
-      <InlineEmpty
-        title="Reading linked analysis"
-        detail="Loading the exact retained publication."
-      />
-    );
-  if (detail.isError)
-    return (
-      <InlineEmpty
-        title="Linked analysis unavailable"
-        detail={errorMessage(detail.error)}
-        warning
-      />
-    );
-  return (
-    <section className="mb-3 border rounded p-3">
-      <h4>{detail.data.title}</h4>
-      <RepeatRunAnalysis key={`${runId}:${detail.data.id}`} runId={runId} analysis={detail.data} />
-      <AnalysisPublicationView
-        analysis={detail.data}
-        copyTarget={{ kind: "run", runId }}
-        getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
-      />
-    </section>
-  );
-}
-
-function RunAnalysisItem({ analysis, runId }: { analysis: RunAnalysisSummary; runId: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const detail = useQuery({
-    queryKey: ["analysis", runId, analysis.id],
-    queryFn: ({ signal }) => getRunAnalysis(runId, analysis.id, signal),
-    enabled: expanded,
-  });
-  return (
-    <details
-      className="overflow-hidden rounded-[8px] border border-line bg-[rgb(255_255_255_/_1.2%)]"
-      onToggle={(event) => setExpanded(event.currentTarget.open)}
-    >
-      <summary className="flex cursor-pointer items-center justify-between gap-2.5 p-2.5">
-        <span className="grid min-w-0 gap-[3px]">
-          <strong className="overflow-hidden text-[0.7rem] text-ellipsis whitespace-nowrap">
-            {analysis.title}
-          </strong>
-          <small className="text-[0.6rem] text-text-dim">
-            {analysis.key ?? analysis.id} · revision {analysis.revision}
-            {analysis.stepId ? ` · ${analysis.stepId}` : ""}
-            {analysis.inputCount > 0 ? ` · ${analysis.inputCount} inputs` : ""}
-            {" · "}
-            <time dateTime={analysis.publishedAt} title={formatDateTime(analysis.publishedAt)}>
-              {formatRelative(analysis.publishedAt)}
-            </time>
-          </small>
-        </span>
-        <span className={countBadge}>{analysis.outputCount}</span>
-      </summary>
-      <div className="px-2.5 pb-2.5">
-        {detail.isPending ? (
-          <InlineEmpty title="Reading analysis" detail="Loading exact publication details." />
-        ) : detail.isError ? (
-          <InlineEmpty title="Analysis unavailable" detail={errorMessage(detail.error)} warning />
-        ) : (
-          <>
-            <RepeatRunAnalysis
-              key={`${runId}:${detail.data.id}`}
-              runId={runId}
-              analysis={detail.data}
-            />
-            <AnalysisPublicationView
-              analysis={detail.data}
-              copyTarget={{ kind: "run", runId }}
-              getArtifactDownload={(selector) => getRunArtifactDownload(runId, selector)}
-            />
-          </>
-        )}
-      </div>
-    </details>
   );
 }
 

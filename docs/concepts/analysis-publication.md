@@ -471,3 +471,18 @@ They should not be encoded as hidden state in an analysis. Future streaming
 analysis may reuse the same execution and publication primitives, but its
 cursors, windows, checkpoint state, and finalization policy belong to that
 workflow rather than to the analysis record.
+
+## 从运行找回分析结论
+
+Run 详情的 **Analyses** 合并两类已发布结果：保存在该运行上的分析，以及直接使用
+该运行测量数据或配置快照的分析。相同 publication ID 只展示一次，保留各修订版本，
+也保留没有声明直接输入的运行所属分析。样品和数据空间所属分析沿用原归属；
+此入口不推断间接依赖，不改变删除或归属规则。
+
+展开后先显示图表和结论，再提供来源、直接输入和 **Open saved version** 精确版本链接。
+可从直接输入返回运行；浏览器返回会恢复该历史条目的已展开分析与阅读位置。
+运行所属分析仍支持已有的重新分析和候选参数入口。
+
+HTTP `GET /api/v1/analysis-publications?input_run_id=…&include_owned=true`
+使用同一排序和游标分页查询“所属或直接输入”的并集。省略 `include_owned`
+保持原来的仅直接输入行为；查询只在当前数据空间执行，不新增存储格式。

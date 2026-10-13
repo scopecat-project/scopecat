@@ -2643,10 +2643,13 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/analysis-publications")
     def related_analysis_publications(
         input_run_id: str,
+        include_owned: bool = False,
         limit: Annotated[int, Query(ge=1, le=500)] = 100,
         before: Annotated[int | None, Query(ge=1)] = None,
     ) -> AnalysisPublicationPage:
-        return application.analyses.related(input_run_id, limit=limit, before=before)
+        return application.analyses.related(
+            input_run_id, limit=limit, before=before, include_owned=include_owned
+        )
 
     @app.get(f"{_API_PREFIX}/analyses")
     def list_project_analyses(
