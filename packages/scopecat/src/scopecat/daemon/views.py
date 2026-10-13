@@ -329,6 +329,13 @@ class RunConfigView(_ViewModel):
         return self
 
 
+class DecisionRunPage(_ViewModel):
+    """Admitted runs whose launch cited one exact analysis as a decision source."""
+
+    run_ids: tuple[str, ...]
+    next_cursor: int | None = None
+
+
 class RunRequestView(_ViewModel):
     """The operator request accepted with one run."""
 

@@ -1,3 +1,4 @@
+import { DecisionRuns } from "./DecisionRuns";
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -306,6 +307,15 @@ function PublicationBody({
           ))
         )}
       </div>
+      {subject.kind === "run" && (
+        <DecisionRuns
+          projectId={context.projectId}
+          runId={subject.run_id}
+          analysisId={analysis.id}
+          publicationHash={analysis.publicationHash}
+          onOpenRun={context.onOpenRun}
+        />
+      )}
       <a href={exact} onClick={navigateLink} className="text-sm text-accent underline">
         Open saved version
       </a>

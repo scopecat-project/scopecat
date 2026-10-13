@@ -33,7 +33,7 @@ from scopecat.records.author_workspace import AuthorWorkspaceId
 from scopecat.records.config import ConfigContentHash
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.parameter_branch import ParameterBranch
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 
@@ -116,6 +116,7 @@ def procedure_intent_hash(
     scientific_binding: ResolvedScientificBinding | None = None,
     recovery: ProcedureRecoverySource | None = None,
     plan_ref: ExperimentPlanRef | None = None,
+    decision_source: PlanAnalysisSource | None = None,
     source: ProcedureSource | None = None,
 ) -> Sha256ContentHash:
     """Hash the exact definition, intent, and sample scope used by a worker."""
@@ -129,6 +130,8 @@ def procedure_intent_hash(
         identity["scientific_binding"] = scientific_binding.model_dump(mode="json")
     if plan_ref is not None:
         identity["plan_ref"] = plan_ref.model_dump(mode="json")
+    if decision_source is not None:
+        identity["decision_source"] = decision_source.model_dump(mode="json")
     if recovery is not None:
         identity["recovery"] = recovery.model_dump(mode="json")
     if source is not None:
@@ -282,6 +285,7 @@ class ProcedureRun(_ProcedureModel):
     resource_wait: ProcedureResourceWait | None = None
     recovery: ProcedureRecoverySource | None = None
     plan_ref: ExperimentPlanRef | None = None
+    decision_source: PlanAnalysisSource | None = None
     source: ProcedureSource | None = None
 
     @field_validator("samples", "resolved_samples")
@@ -331,6 +335,7 @@ class ProcedureRun(_ProcedureModel):
             scientific_binding=self.scientific_binding,
             recovery=self.recovery,
             plan_ref=self.plan_ref,
+            decision_source=self.decision_source,
             source=self.source,
         )
         if self.intent_hash != expected_intent_hash:

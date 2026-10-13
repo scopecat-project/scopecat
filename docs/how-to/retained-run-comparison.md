@@ -65,24 +65,27 @@ proposal IDs and the candidate analysis ID/publication hash. This is neither
 procedure approval nor global deletion of the candidate. Configuration
 acceptance, default activation and calibration validity remain separate acts.
 
-**Import suggested inputs into Launch** reads the saved next-input fact and
-returns an existing typed `LaunchRequest` inside a `ComparisonHandoff`, including
-the source run, analysis and publication hash. Only an explicit action imports
-it. The draft retains that structured reference across console navigation and
-requires fresh preview in the selected configuration. A suggestion without an
-explicit parameter context clears the previous draft's sample and working point;
-the console identifies the current default as awaiting review, and users can
-explicitly choose a sample/context before preview. A suggestion with an exact
-context must first use the existing Configuration resolver and selector; no
-context or override is silently dropped. No configuration is declared valid merely
-because it belonged to the source run. An uncertain previous
-submission remains separately recoverable. Source provenance is session state:
-the destination run does **not** yet retain a durable analysis-origin reference.
-Saved-plan integration owns that future bridge. Reopen the saved source analysis
-to recover suggestions after closing the console.
+## 从结论直接启动下一实验
 
-Save an imported suggestion as a [named experiment plan](save-experiment-plans.md)
-to retain its exact analysis source through later admission and child runs.
+在保存的结论中选择 **Import suggested inputs into Launch**，审阅配置并按需编辑建议，
+然后直接 **Start acquisition**。无需先命名保存 plan，也无需单独点击 Preview；
+Start 沿用现有准备检查，不跳过配置或接纳校验。
+
+接纳时固定原运行 ID、analysis publication ID 和 publication hash，作为独立的
+`decision_source`；实际提交的控制、输入和配置另行保留。修改建议不会把来源换成新修订，
+该关系也不表示分析读取了后续运行，不进入直接数据输入索引。
+
+新运行的 **Open exact source conclusion** 打开原结论的精确版本；结论中的
+**Experiments started from this conclusion** 分页列出由它启动的运行。来源只在当前
+数据空间解析，错误 hash 或另一空间的记录无法作为新接纳的来源。
+
+草稿中的编辑及普通页面往返保留来源；重置、切换实验或显式导入另一组输入沿用草稿替换规则。
+已经提交的来源不随草稿清除而改变。响应丢失时用 **Check original submission**
+恢复原任务，不重新开始采集。重启及当前格式备份恢复保留关联；科学数据导出携带精确
+来源证据，导入的 capture 仍是只读证据，不创建可执行任务。
+
+也可将建议保存为 [named experiment plan](save-experiment-plans.md)，其来源和计划引用
+继续沿已有路径固定。来源说明的是发起依据，不代表建议已经采纳为默认配置或取得设备执行资格。
 
 ## 找回记录并继续比较
 

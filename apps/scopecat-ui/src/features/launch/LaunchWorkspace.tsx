@@ -198,8 +198,8 @@ export function LaunchWorkspace({
             >
               {draft.handoff.source_analysis}
             </a>{" "}
-            · {draft.handoff.source_hash}. This source is retained only in the current draft, not
-            yet as destination-run provenance.
+            · {draft.handoff.source_hash}. Starting will retain this exact decision source, together
+            with the inputs you submit. You can edit the suggestion first.
           </p>
         )}
         {sourceAvailable && catalog.isPending && <p role="status">Loading experiments…</p>}

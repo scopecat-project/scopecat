@@ -38,7 +38,7 @@ from scopecat.records.configuration_fence import ProcedureConfigurationFence
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 
@@ -65,6 +65,7 @@ class ProcedureSubmitCommand(_WireModel):
     expected_configuration: ProcedureConfigurationFence | None = None
     recovery: ProcedureRecoverySource | None = None
     plan_ref: ExperimentPlanRef | None = None
+    decision_source: PlanAnalysisSource | None = None
     plan_request: LaunchRequest | None = None
     source: ProcedureSource | None = None
 
@@ -77,6 +78,7 @@ class ProcedureSubmitCommand(_WireModel):
             scientific_binding=self.scientific_binding,
             recovery=self.recovery,
             plan_ref=self.plan_ref,
+            decision_source=self.decision_source,
             source=self.source,
         )
 

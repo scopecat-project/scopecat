@@ -57,7 +57,11 @@ from scopecat.planning.system import (
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.config_context import ContextRunConfigSource
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
+from scopecat.records.plan_ref import (
+    ExperimentPlanRef,
+    PlanAnalysisSource,
+    ProcedureChildSubmission,
+)
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ParameterRunConfigSource,
@@ -333,6 +337,7 @@ class _DaemonRunner:
         scientific_binding: ResolvedScientificBinding | None = None,
         setup: SetupRevisionRef | None = None,
         plan_ref: ExperimentPlanRef | None = None,
+        decision_source: PlanAnalysisSource | None = None,
         record_collection: str | None = None,
     ) -> PlannedRun:
         if isinstance(config_source, ContextRunConfigSource):
@@ -413,7 +418,10 @@ class _DaemonRunner:
             scientific_binding=scientific_binding,
             execution_setup=execution_setup,
             request=planned.request.model_copy(
-                update={"record_collection": record_collection}
+                update={
+                    "record_collection": record_collection,
+                    "decision_source": decision_source,
+                }
             ),
         )
 

@@ -425,10 +425,11 @@ class AuthorExperiments:
         if selected is None:
             if (
                 request.record_collection is not None
+                or request.decision_source is not None
                 or request.selection.batch.kind != "unscoped"
             ):
                 raise LaunchRequestRejected(
-                    "record collection or batch selection "
+                    "record collection, decision source or batch selection "
                     "requires an authored experiment"
                 )
             if maintained is None:
@@ -532,6 +533,7 @@ class AuthorExperiments:
             expected_manual_preview=request.manual_state,
             expected_configuration=launch_configuration_fence(resolved.reviewed),
             plan_ref=request.plan_ref,
+            decision_source=request.decision_source,
             plan_request=request if request.plan_ref is not None else None,
         )
         return LaunchSubmission(procedure_id=admitted.id)

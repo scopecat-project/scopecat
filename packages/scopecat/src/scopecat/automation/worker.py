@@ -44,7 +44,7 @@ from scopecat.automation.wire import (
     ProcedureWorkerLeaseReleaseReceipt,
 )
 from scopecat.records.content import Sha256ContentHash
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
 
@@ -194,6 +194,7 @@ class ProcedureContext:
     __slots__ = (
         "_authority",
         "_control",
+        "_decision_source",
         "_plan_ref",
         "_samples",
         "_scientific_binding",
@@ -207,6 +208,7 @@ class ProcedureContext:
         *,
         samples: tuple[SampleSelector, ...] = (),
         plan_ref: ExperimentPlanRef | None = None,
+        decision_source: PlanAnalysisSource | None = None,
         scientific_binding: ResolvedScientificBinding | None = None,
         should_yield: Callable[[], bool] | None = None,
     ) -> None:
@@ -214,6 +216,7 @@ class ProcedureContext:
         self._authority = authority
         self._samples = samples
         self._plan_ref = plan_ref
+        self._decision_source = decision_source
         self._scientific_binding = scientific_binding
         self._should_yield = should_yield
 
@@ -232,6 +235,10 @@ class ProcedureContext:
     @property
     def plan_ref(self) -> ExperimentPlanRef | None:
         return self._plan_ref
+
+    @property
+    def decision_source(self) -> PlanAnalysisSource | None:
+        return self._decision_source
 
     @property
     def scientific_binding(self) -> ResolvedScientificBinding | None:
@@ -532,6 +539,7 @@ class ProcedureWorker:
             authority,
             samples=acquired.run.resolved_samples,
             plan_ref=acquired.run.plan_ref,
+            decision_source=acquired.run.decision_source,
             scientific_binding=acquired.run.scientific_binding,
             should_yield=should_yield,
         )

@@ -9,6 +9,16 @@ CREATE TABLE IF NOT EXISTS runs (
     execution_setup_json TEXT
 );
 
+CREATE TABLE IF NOT EXISTS run_decision_sources (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id) ON DELETE CASCADE,
+    source_run_id TEXT NOT NULL,
+    analysis_id TEXT NOT NULL,
+    publication_hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS run_decision_sources_publication
+ON run_decision_sources(source_run_id, analysis_id, publication_hash, sequence DESC);
+
 CREATE TABLE IF NOT EXISTS run_outcomes (
     run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
     result TEXT NOT NULL CHECK (result IN ('succeeded', 'failed', 'cancelled')),

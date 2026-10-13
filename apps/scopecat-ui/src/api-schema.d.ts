@@ -2041,6 +2041,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/analyses/{analysis_id}/decision-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Decision Runs */
+        get: operations["decision_runs_api_v1_runs__run_id__analyses__analysis_id__decision_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/analyses/{selector}": {
         parameters: {
             query?: never;
@@ -5725,6 +5742,16 @@ export interface components {
              */
             validity: "current" | "baseline_changed" | "no_longer_waiting";
         };
+        /**
+         * DecisionRunPage
+         * @description Admitted runs whose launch cited one exact analysis as a decision source.
+         */
+        DecisionRunPage: {
+            /** Next Cursor */
+            next_cursor?: number | null;
+            /** Run Ids */
+            run_ids: string[];
+        };
         /** DeclaredBatch */
         DeclaredBatch: {
             /** Id */
@@ -7825,6 +7852,7 @@ export interface components {
             control_edits?: {
                 [key: string]: components["schemas"]["ControlEdit-Input"];
             };
+            decision_source?: components["schemas"]["PlanAnalysisSource"] | null;
             expected_request_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /**
              * Experiment
@@ -7882,6 +7910,7 @@ export interface components {
             control_edits?: {
                 [key: string]: components["schemas"]["ControlEdit-Output"];
             };
+            decision_source?: components["schemas"]["PlanAnalysisSource"] | null;
             expected_request_hash?: components["schemas"]["Sha256ContentHash"] | null;
             /**
              * Experiment
@@ -9981,6 +10010,7 @@ export interface components {
              * Format: date-time
              */
             created_at?: string;
+            decision_source?: components["schemas"]["PlanAnalysisSource"] | null;
             definition: components["schemas"]["ProcedureDefinitionRef"];
             intent: components["schemas"]["ProcedureIntent-Output"];
             intent_hash: components["schemas"]["Sha256ContentHash"];
@@ -11495,6 +11525,7 @@ export interface components {
          */
         "RunRequest-Output": {
             adaptive_domain_plan?: components["schemas"]["AdaptiveDomainPlanRecord"] | null;
+            decision_source?: components["schemas"]["PlanAnalysisSource"] | null;
             /** Description */
             description?: string | null;
             /** Display Name */
@@ -17082,6 +17113,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunAnalysisPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decision_runs_api_v1_runs__run_id__analyses__analysis_id__decision_runs_get: {
+        parameters: {
+            query: {
+                before?: number | null;
+                limit?: number;
+                publication_hash: string;
+            };
+            header?: never;
+            path: {
+                analysis_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionRunPage"];
                 };
             };
             /** @description Validation Error */

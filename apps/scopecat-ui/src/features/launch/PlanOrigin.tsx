@@ -33,13 +33,41 @@ export function PlanOrigin({ reference }: { reference?: PlanRef | null }) {
   );
 }
 
-export function RunPlanOrigin({ runId }: { runId: string }) {
+export function RunPlanOrigin({ runId, projectId }: { runId: string; projectId?: string }) {
   const request = useQuery({
-    queryKey: ["run-request", runId],
+    queryKey: ["run-request", projectId, runId],
     queryFn: () =>
       apiData(
         apiClient.GET("/api/v1/runs/{run_id}/request", { params: { path: { run_id: runId } } }),
       ),
   });
-  return <PlanOrigin reference={request.data?.plan_ref} />;
+  const source = request.data?.request.decision_source;
+  return (
+    <>
+      <PlanOrigin reference={request.data?.plan_ref} />
+      {source && (
+        <section
+          aria-label="Decision source"
+          className="min-w-0 rounded border border-line p-3 text-sm"
+        >
+          <p>
+            Started from this saved conclusion. Submitted inputs may differ from its suggestion.
+          </p>
+          <a
+            className="text-accent underline"
+            href={`?run=${encodeURIComponent(source.run_id)}&run-analysis=${encodeURIComponent(source.analysis_id)}#runs`}
+          >
+            Open exact source conclusion
+          </a>
+          <details>
+            <summary>Exact source identity</summary>
+            <p className="break-all">
+              Run {source.run_id} · Publication {source.analysis_id} · {source.publication_hash}
+            </p>
+          </details>
+        </section>
+      )}
+      {request.error && <p role="alert">Decision source unavailable: {request.error.message}</p>}
+    </>
+  );
 }

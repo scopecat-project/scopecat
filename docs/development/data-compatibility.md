@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **114** is a development format identifier, not the start of a compatibility
+schema **115** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,10 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 115 将精确分析决策来源写入 procedure／子运行接纳记录，并增加按来源 publication
+查询后续运行的索引。来源参与幂等身份；当前格式备份保留正向引用与反向索引。
+这是持久契约和索引的变更，不兼容 schema 114，不提供迁移或旧格式读取。
 
 Schema 114 为分析结果分配独立 UUID，并保存直接测量／配置输入关系。
 修订系列与幂等约束保持明确。它不兼容 schema 113，不提供迁移或旧格式读取；
