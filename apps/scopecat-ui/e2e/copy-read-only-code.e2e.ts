@@ -133,7 +133,9 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     );
     snippets.push({ kind: "run", runId: saved.runId, code: runCode! });
 
-    const old = page.locator("details").filter({ hasText: "Saved run version 1" });
+    const old = page
+      .locator('article[data-testid="resource-card"] details')
+      .filter({ hasText: "Saved run version 1" });
     await old.locator("summary").click();
     await expect(old.getByTestId("publication-id")).toHaveText(saved.run[0]);
     await old.getByRole("button", { name: "Copy read-only code" }).click();
