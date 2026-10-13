@@ -55,13 +55,10 @@ New named collections start at 1 and allocate independently. Use the collection 
 alongside its number when sharing a short address; retain `run.id` for existing
 machine references. Collection names are labels, not identifiers.
 
-New run IDs are complete, lowercase, hyphenated UUIDv7 strings. Treat them as
-opaque identities: keep the entire string in URLs, references and exported data.
-Run admission and scientific evidence exchange require this canonical form.
-Use collection names and local numbers for human addresses. Global numeric SDK
-addresses and pagination still use the scheduler sequence; use `created_at` for
-run timestamps, without decoding or sorting by the UUID. No old-ID conversion or
-automatic data migration is provided.
+新运行的 `run.id` 使用完整、小写、带连字符的 UUIDv7，接纳和科学数据交换入口要求此规范格式。
+URL、引用和导出数据应保留完整字符串，不解析其含义。人工寻址使用集合名称＋局部编号；
+SDK 全局数字寻址和分页仍使用调度序号，运行时间以 `created_at` 为准，不按 UUID 排序。
+不提供旧标识转换或自动数据迁移。
 
 The default collection ID derives from the current store identity.
 [Current-format backup/restore](backup-and-restore.md) retains its addresses;

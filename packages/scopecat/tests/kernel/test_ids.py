@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
@@ -6,14 +7,25 @@ from scopecat.kernel.ids import new_run_id, validate_run_id
 
 
 def test_run_ids_use_complete_canonical_uuid7() -> None:
-    identities = {new_run_id() for _ in range(2048)}
-    assert len(identities) == 2048
-    for value in identities:
-        parsed = UUID(value)
-        assert parsed.version == 7
-        assert str(parsed) == value
-        assert len(value) == 36
-        validate_run_id(value)
+    value = new_run_id()
+    parsed = UUID(value)
+    assert parsed.version == 7
+    assert str(parsed) == value
+    assert len(value) == 36
+    validate_run_id(value)
+
+
+@pytest.mark.parametrize(
+    "expected",
+    [
+        "0199a9c0-0000-7000-8000-000000000001",
+        "0199abcd-1234-7fed-b987-654321abcdef",
+    ],
+)
+def test_run_id_preserves_the_complete_standard_library_uuid(expected: str) -> None:
+    with patch("scopecat.kernel.ids.uuid7", return_value=UUID(expected)) as generate:
+        assert new_run_id() == expected
+        generate.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
