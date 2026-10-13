@@ -83,8 +83,8 @@ export function RunIdLookup({
         ) : (
           submitted && (
             <>
-              {result.isPending && <p role="status">Finding run…</p>}
-              {error && (
+              {(result.isPending || result.isFetching) && <p role="status">Finding run…</p>}
+              {error && !result.isFetching && (
                 <p role="alert">
                   {error instanceof ApiError && error.status === 404
                     ? "Run not found in this data space. Check the complete ID and data space."
@@ -93,7 +93,7 @@ export function RunIdLookup({
                       : `Run lookup unavailable: ${error.message}`}
                 </p>
               )}
-              {result.data && !error && (
+              {result.data && !error && !result.isFetching && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <RunAddressLabel
                     address={result.data.address}

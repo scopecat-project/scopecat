@@ -220,6 +220,64 @@ it("ignores an old-space list response arriving after a switch", async () => {
   finish(Response.json({ items: [publication("space-a")], next_cursor: null }));
   await waitFor(() => expect(screen.queryByText("space-a")).not.toBeInTheDocument());
 });
+it("waits for every expanded cold detail before restoring the saved reading position", async () => {
+  window.history.replaceState(
+    {
+      runResults: {
+        projectId: "space",
+        runId: "owner",
+        expanded: ["first", "second"],
+        scroll: 900,
+      },
+    },
+    "",
+    "/",
+  );
+  const scroll = vi.fn();
+  vi.stubGlobal("scrollTo", scroll);
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({ items: [publication("first"), publication("second")], next_cursor: null }),
+    ),
+  );
+  vi.mocked(getRun).mockResolvedValue({ runId: "owner", experimentId: "Signal" } as ProjectRun);
+  let finish!: (value: Awaited<ReturnType<typeof getRunAnalysis>>) => void;
+  const detail = {
+    id: "first",
+    title: "First detail",
+    revision: 1,
+    publicationHash: "hash",
+    publishedAt: "2026-10-13T00:00:00Z",
+    subject: "run" as const,
+    inputs: [],
+    outputs: [],
+    executions: [],
+  };
+  vi.mocked(getRunAnalysis).mockImplementation(async (_run, id) =>
+    id === "first"
+      ? detail
+      : new Promise((resolve) => {
+          finish = resolve;
+        }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <RelatedAnalyses projectId="space" runId="owner" collectionNames={new Map()} />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("First detail");
+  expect(scroll).not.toHaveBeenCalled();
+  finish({ ...detail, id: "second", title: "Second detail" });
+  await screen.findByText("Second detail");
+  await waitFor(() => expect(scroll).toHaveBeenCalledExactlyOnceWith(0, 900));
+});
+
 function publication(id: string) {
   return {
     subject: { kind: "run", run_id: "owner" },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 import type { AnalysisPublication } from "../../types";
@@ -41,6 +41,7 @@ function RunResults({
   collectionNames,
   onOpenRun,
 }: RelatedContext & { runId: string }) {
+  const client = useQueryClient();
   const linked = new URLSearchParams(location.search).get("run-analysis");
   const [expanded, setExpanded] = useState<string[]>(() => {
     const saved = window.history.state?.runResults;
@@ -59,7 +60,13 @@ function RunResults({
   const restored = useRef(false);
   const restorePosition = () => {
     const saved = window.history.state?.runResults;
+    // A cold detail above the saved position must finish before scroll restoration.
+    const settled = expanded.every((id) => {
+      const state = client.getQueryState(["analysis", "publication", projectId, id]);
+      return state?.status === "success" || state?.status === "error";
+    });
     if (
+      settled &&
       !restored.current &&
       saved?.projectId === projectId &&
       saved.runId === runId &&
@@ -194,6 +201,10 @@ function RelatedAnalysis({
           : getProjectAnalysis(id, signal),
     enabled: expanded,
   });
+  const restorePosition = context.restorePosition;
+  useEffect(() => {
+    if (expanded && !detail.isPending) restorePosition?.();
+  }, [expanded, detail.isPending, restorePosition]);
   return (
     <details
       className="min-w-0 rounded-md border border-line p-2"

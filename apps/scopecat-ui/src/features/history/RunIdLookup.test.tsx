@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError } from "../../api-client";
@@ -75,6 +75,27 @@ it("ignores late requests and separates identical IDs across data spaces and off
   expect(
     screen.queryByRole("button", { name: "Open found run", hidden: true }),
   ).not.toBeInTheDocument();
+});
+
+it("hides the cached result while repeating an exact lookup and reports its failure", async () => {
+  vi.mocked(getRun).mockResolvedValueOnce(subject("same-id"));
+  const { find } = setup();
+  find("same-id");
+  await screen.findByRole("button", { name: "Open found run" });
+  let fail!: (error: Error) => void;
+  vi.mocked(getRun).mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Find exact run" }));
+  await waitFor(() => expect(getRun).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole("button", { name: "Open found run" })).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Finding run");
+  await act(async () => fail(new ApiError("Unavailable", 503)));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Run lookup unavailable");
+  expect(screen.queryByRole("button", { name: "Open found run" })).not.toBeInTheDocument();
 });
 
 const find = (id: string) => {
