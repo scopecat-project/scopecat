@@ -9,8 +9,9 @@ needs no devices. To inspect a received file instead, use
    to appear. This explicit preparation is separate from application startup.
 2. Open that folder in VS Code. With the Python and Jupyter extensions installed,
    select the displayed Python and open `notebooks/02_edit_scan.py`.
-3. Run **Imports**, **Connect** and **Preview** one cell at a time. Inspect the
-   preview before running **Submit**, which creates one acquisition. **Result and
+3. Run **Imports**, **Connect** and **Preview** one cell at a time. The cell named
+   **Preview** refreshes source and prepares the request; displaying or inspecting
+   `prepared.preview` is optional. **Submit** creates one acquisition. **Result and
    analysis** reads `[0.5, 1.0, 0.5]`. Keep the printed receipt path with your notes.
    Do not use Run All when continuing an existing experiment.
 4. Inspect the saved run in **Runs**, or open the exact URL printed by **Reopen**.

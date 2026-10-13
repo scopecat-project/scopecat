@@ -4,12 +4,18 @@
 不连接真实设备。开发者从公库运行 `uv run --locked python -m lab_tools.dev`，
 需要隔离试用时使用该入口的 `--home /absolute/path/to/dev-trial`，下次沿用同一路径。
 
+这是熟悉 Python 作者可执行的一条路径：下面仍需手工填写两个 run ID，并编写
+`continuation.json` 笔记。它验证跨次继续的能力，不代表完整桌面体验已消除这些操作成本；
+该笔记文件也不是所有实验必须采用的格式。
+
 ## 修改、运行、比较后继续
 
 1. 在 Settings 创建作者目录，选其 Python 打开 `notebooks/02_edit_scan.py`，逐格完成首次运行。
    记下 run ID；**Submit** 才采集，重看结果不要 Run All。
 2. 保存 `src/scopecat_lab/authored/signal.py` 的源码修改，例如将响应改为 `2 * scale / ...`。
-   在执行 Close 前重跑 Preview，确认预览后 Submit。已有记录仍保留原来的数值与源码。
+   在执行 Close 前重跑名为 Preview 的 cell，刷新源码并重建请求和准备对象，再按需 Submit。
+   该 cell 的名称不表示必须显示或查看预览；其中 `print(prepared.preview)` 可省略。
+   已有记录仍保留原来的数值与源码。
 3. 在同一 kernel 比较两次结果。若已 Close，先重新执行 Imports、Connect、Preview。
    把下面两个 ID 换成上述保存的记录；它们不会因后续编辑而变化。
 
@@ -53,12 +59,15 @@ source_ref = PlanAnalysisSource(
 params["response"]["signal"]["scale"] = conclusion.fact("suggested_scale").value
 params.save(note="采用本次比较选择")
 prepared = author.prepare(request, parameters=params, decision_source=source_ref)
-print(prepared.preview)
+# 可选：print(prepared.preview)
 # 单独执行下一行才创建新运行。
 next_run = prepared.run().wait(timeout=120).result()
 print(next_run.id)
 author.close()
 ```
+
+准备对象仍执行已有输入校验；显示或查看预览不是运行前置。
+不需要分格操作时，可直接使用 `author.prepare(..., decision_source=source_ref).run()`。
 
 决策来源与实际输入分别保留。后续修改参数不替换结论，新修订也不改旧引用。
 `decision_source` 必须属于当前数据空间且 hash 一致。下一次运行的 **Decision source**
@@ -82,9 +91,9 @@ conclusion = author.run(notes["second"]).published_analysis(source_ref.analysis_
 assert conclusion.publication_hash == source_ref.publication_hash
 ```
 
-要继续采集，再执行 Preview 以刷新已保存源码、重新打开参数和构建请求；
+要继续采集，再执行此例的 Preview cell 以刷新已保存源码、重新打开参数和构建请求；
 随后修改 `request.values["center"] = 0.5`，使用上面的 `prepare(..., decision_source=source_ref)`，
-检查预览，再单独运行。旧结果保持原值，保存的参数选择仍可读取。
+按需查看预览或直接 `.run()`。旧结果保持原值，保存的参数选择仍可读取。
 等待超时只等待原 job；提交不确定时按原 receipt 找回，不重复 Submit。
 
 此路径的云验证使用真实独立 Python kernel、应用后端和 Chromium。
