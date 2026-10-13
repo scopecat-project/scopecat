@@ -83,3 +83,13 @@ to recover suggestions after closing the console.
 
 Save an imported suggestion as a [named experiment plan](save-experiment-plans.md)
 to retain its exact analysis source through later admission and child runs.
+
+## 找回记录并继续比较
+
+Data 的集合筛选和短号查找位于紧凑工具栏；查号不受课题、样品或时间筛选限制。
+比较选项与图例显示集合名和集合内号，重名时附集合 ID，缺失名称不会伪造。
+代码工作区、刷新操作和技术身份位于 **Analysis code and source details**。
+
+同一窗口的 Back/Forward 保留当前比较对象、选点和输入；状态按数据空间隔离。
+刷新后恢复输入，但须显式 **Inspect compatible data** 后才能拟合，不会自动重跑分析。
+已保存分析仍从历史读取。未保存输入属于当前浏览历史条目，不是跨窗口共享草稿。

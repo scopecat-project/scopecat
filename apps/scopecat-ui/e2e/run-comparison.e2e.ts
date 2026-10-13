@@ -48,13 +48,34 @@ test("compares retained signals, saves independent results and imports a reviewe
       base_url: string;
     };
     const [primary, secondary] = JSON.parse(uv(["python", "-c", SEED, project])) as string[];
-    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(primary)}#runs`);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto(`${endpoint.base_url}/#history`);
+    await expect(page.getByLabel("Collection run number", { exact: true })).toHaveCount(0);
+    await page
+      .getByLabel("Record collection filter", { exact: true })
+      .selectOption({ label: "Default records" });
+    await page.getByLabel("Collection run number", { exact: true }).fill("1");
+    await page.getByRole("button", { name: "Find run", exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath("compact-data.png"), fullPage: true });
+    await page.getByRole("button", { name: "Open collection run #1", exact: true }).click();
+    await expect(page.getByTestId("run-detail-header")).toContainText(primary);
+
     await page.getByRole("link", { name: "Compare retained runs", exact: true }).click();
     await expect(page.getByLabel("Primary run")).toHaveValue(primary);
     await page.getByLabel("Secondary run").selectOption(secondary);
     async function action(label: string) {
+      const actions: Record<string, string> = {
+        "Inspect compatible data": "inspect",
+        "Fit selected data and save analysis": "fit",
+        "Create explicit candidate": "candidate",
+        "Import suggested inputs into Launch": "handoff",
+        "Record candidate rejection": "reject",
+      };
       const response = page.waitForResponse(
-        (value) => value.url().endsWith("/run-comparison") && value.request().method() === "POST",
+        (value) =>
+          value.url().endsWith("/run-comparison") &&
+          value.request().method() === "POST" &&
+          value.request().postDataJSON().action === actions[label],
       );
       await page.getByRole("button", { name: label, exact: true }).click();
       const result = await response;
@@ -62,7 +83,39 @@ test("compares retained signals, saves independent results and imports a reviewe
       return (await result.json()) as { analysis_id?: string; publication_hash?: string };
     }
     await action("Inspect compatible data");
+    await expect(
+      page.getByRole("option", { name: "Default records · #1", exact: true }),
+    ).toHaveCount(2);
+    await expect(
+      page
+        .getByRole("region", { name: "Retained run comparison" })
+        .locator("svg text")
+        .filter({ hasText: "Default records · #1" }),
+    ).toHaveCount(1);
+    await page.screenshot({ path: testInfo.outputPath("comparison-dark.png"), fullPage: true });
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.setViewportSize({ width: 800, height: 720 });
+    expect(
+      await page.locator("html").evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(800);
+    await page.screenshot({
+      path: testInfo.outputPath("comparison-light-preference.png"),
+      fullPage: true,
+    });
     await page.getByLabel("Primary selected positions").fill("4,1,2,3");
+    await page.goBack();
+    await expect(page.getByTestId("run-detail-header")).toBeVisible();
+    await page.goForward();
+    await expect(page.getByLabel("Secondary run")).toHaveValue(secondary);
+    await expect(page.getByLabel("Primary selected positions")).toHaveValue("4,1,2,3");
+    await page.reload();
+    await expect(page.getByLabel("Secondary run")).toHaveValue(secondary);
+    await expect(page.getByLabel("Primary selected positions")).toHaveValue("4,1,2,3");
+    await expect(
+      page.getByRole("button", { name: "Fit selected data and save analysis", exact: true }),
+    ).toBeDisabled();
+    await action("Inspect compatible data");
+    await expect(page.getByLabel("Primary selected positions")).toHaveValue("4,1,2,3");
     const first = await action("Fit selected data and save analysis");
     await expect(
       page.getByRole("button", { name: "Create explicit candidate", exact: true }),
@@ -78,6 +131,7 @@ test("compares retained signals, saves independent results and imports a reviewe
           "center = -coefficients[1] / (2 * coefficients[2]) + offset_ghz + 0.02",
         ),
     );
+    await page.getByText(/Analysis code and source details/).click();
     const refreshed = page.waitForResponse(
       (value) =>
         value.request().method() === "POST" && value.url().endsWith("/author-preparations"),
@@ -109,7 +163,6 @@ test("compares retained signals, saves independent results and imports a reviewe
     );
     await page.locator("aside button").filter({ hasText: first.analysis_id }).click();
     const candidate = await action("Create explicit candidate");
-    const comparisonUrl = page.url();
     const adoptionLink = page.getByRole("link", {
       name: "Review parameter changes and adoption steps",
     });
@@ -117,10 +170,11 @@ test("compares retained signals, saves independent results and imports a reviewe
       "href",
       `?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(candidate.analysis_id!)}#runs`,
     );
+    const comparisonUrl = page.url();
     await adoptionLink.click();
     const proposals = page.getByTestId("run-proposals-card");
     await expect(proposals).toBeVisible();
-    await expect(proposals.getByText(/this page does not publish parameters/)).toBeVisible();
+    await expect(proposals.getByText(/Collect independent verification/)).toBeVisible();
     await expect(proposals.getByRole("link", { name: "Verify a candidate" })).toBeVisible();
     await proposals.screenshot({ path: testInfo.outputPath("candidate-adoption-steps.png") });
     await page.setViewportSize({ width: 390, height: 844 });

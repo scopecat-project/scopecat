@@ -241,6 +241,7 @@ test("two workbench pages retain independent context and share collection number
     await expect(
       page.getByRole("region", { name: "Data", exact: true }).getByTestId("run-address"),
     ).toHaveCount(2);
+    await page.getByText("Manage collection", { exact: true }).click();
     await page.getByRole("button", { name: "Rename collection", exact: true }).click();
     await page.getByLabel("New collection name", { exact: true }).fill("Renamed measurements");
     await page.getByRole("button", { name: "Save collection name", exact: true }).click();

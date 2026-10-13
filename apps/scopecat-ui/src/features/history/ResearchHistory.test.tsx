@@ -166,7 +166,7 @@ it("scopes short numbers to a collection and retains that filter after renaming"
       <ResearchHistory projectId="space-a" daemonUnavailable={false} onOpenRun={open} />
     </QueryClientProvider>,
   );
-  expect(screen.getByLabelText("Collection run number")).toBeDisabled();
+  expect(screen.queryByLabelText("Collection run number")).not.toBeInTheDocument();
   await screen.findByRole("option", { name: "Cooldown A" });
   fireEvent.change(screen.getByLabelText("Record collection filter"), { target: { value: "a" } });
   await waitFor(() =>
@@ -178,6 +178,7 @@ it("scopes short numbers to a collection and retains that filter after renaming"
   fireEvent.click(screen.getByRole("button", { name: "Find run" }));
   fireEvent.click(await screen.findByRole("button", { name: "Open collection run #1" }));
   expect(open).toHaveBeenLastCalledWith("a-1");
+  fireEvent.click(screen.getByText("Manage collection"));
   fireEvent.click(screen.getByRole("button", { name: "Rename collection" }));
   fireEvent.change(screen.getByLabelText("New collection name"), { target: { value: "Renamed" } });
   fireEvent.click(screen.getByRole("button", { name: "Save collection name" }));
