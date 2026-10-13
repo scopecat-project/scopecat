@@ -152,6 +152,7 @@ from scopecat.daemon.views import (
     ConfigEntryView,
     ConfigRegistryPage,
     DaemonHealth,
+    DecisionRunPage,
     InstrumentListView,
     InstrumentView,
     MeasurementArrowQuery,
@@ -2639,6 +2640,18 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get(f"{_API_PREFIX}/runs/{{run_id}}/analyses/{{selector}}")
     def get_run_analysis(run_id: str, selector: str) -> RunAnalysisView:
         return application.runs.get_run_analysis(run_id, selector)
+
+    @app.get(f"{_API_PREFIX}/runs/{{run_id}}/analyses/{{analysis_id}}/decision-runs")
+    def decision_runs(
+        run_id: str,
+        analysis_id: str,
+        publication_hash: str,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        before: Annotated[int | None, Query(ge=1)] = None,
+    ) -> DecisionRunPage:
+        return application.runs.decision_runs(
+            run_id, analysis_id, publication_hash, limit=limit, before=before
+        )
 
     @app.get(f"{_API_PREFIX}/analysis-publications")
     def related_analysis_publications(

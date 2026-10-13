@@ -81,7 +81,7 @@ export function importLaunchRequest(
   return {
     ...invalidateDraft(
       current,
-      "Suggested inputs imported from saved analysis. Preview in the selected configuration before starting. Source provenance is retained only in this console draft.",
+      "Suggested inputs imported from saved analysis. Edit them as needed, then Start. The exact decision source and submitted inputs will be retained.",
     ),
     experiment: entry.id,
     workspaceId: request.workspace_id,

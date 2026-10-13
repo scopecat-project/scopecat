@@ -76,6 +76,7 @@ class LaunchRecoveryService:
                     if request.manual_state
                     else None
                 )
+                and run.decision_source == request.decision_source
                 and run.plan_ref == request.plan_ref
                 and source_matches
             ):

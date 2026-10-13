@@ -14,7 +14,7 @@ from scopecat.records.author_workspace import (
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.manual_preview import ManualPreviewFence
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
 from scopecat.records.scientific_selection import (
@@ -51,6 +51,7 @@ class LaunchRequest(BaseModel):
     manual_state: ManualPreviewFence | None = None
     expected_request_hash: Sha256ContentHash | None = None
     plan_ref: ExperimentPlanRef | None = None
+    decision_source: PlanAnalysisSource | None = None
 
     @model_validator(mode="after")
     def validate_action(self) -> LaunchRequest:
@@ -89,6 +90,9 @@ class LaunchRequest(BaseModel):
                 else None,
                 "actor": self.actor,
                 "record_collection": self.record_collection,
+                "decision_source": self.decision_source.model_dump(mode="json")
+                if self.decision_source
+                else None,
                 "plan_ref": self.plan_ref.model_dump(mode="json")
                 if self.plan_ref
                 else None,

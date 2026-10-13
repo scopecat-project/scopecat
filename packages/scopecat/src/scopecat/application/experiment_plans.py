@@ -40,6 +40,7 @@ def plan_launch_request(
         code_revision=definition.code_revision,
         workspace_id=definition.workspace_id,
         plan_ref=plan.ref,
+        decision_source=definition.source,
     )
 
 

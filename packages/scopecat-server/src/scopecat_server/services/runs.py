@@ -25,6 +25,7 @@ from scopecat.control.models import (
 )
 from scopecat.daemon.points import RunPointPlanView
 from scopecat.daemon.views import (
+    DecisionRunPage,
     MeasurementArrowQuery,
     MeasurementLivePreview,
     MeasurementPreview,
@@ -512,6 +513,28 @@ class RunService:
                 run_id=run_id,
                 request=request,
             )
+
+    def decision_runs(
+        self,
+        run_id: str,
+        analysis_id: str,
+        publication_hash: str,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+    ) -> DecisionRunPage:
+        publication = self.get_run_analysis(run_id, analysis_id)
+        if (
+            publication.entry.id != analysis_id
+            or publication.analysis.publication_hash != publication_hash
+        ):
+            raise BackendConflict(
+                "decision source does not match its exact publication"
+            )
+        ids, cursor = self._runs.decision_runs(
+            run_id, analysis_id, publication_hash, limit=limit, before=before
+        )
+        return DecisionRunPage(run_ids=ids, next_cursor=cursor)
 
     def list_run_contents(
         self,

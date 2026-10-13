@@ -113,7 +113,11 @@ from scopecat.records.parameter_change import (
     ParameterChangeProposal,
     ParameterProposalRef,
 )
-from scopecat.records.plan_ref import ExperimentPlanRef, ProcedureChildSubmission
+from scopecat.records.plan_ref import (
+    ExperimentPlanRef,
+    PlanAnalysisSource,
+    ProcedureChildSubmission,
+)
 from scopecat.records.run import RunConfigSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import ResolvedScientificBinding
@@ -430,6 +434,7 @@ class LabProcedureContext:
         planned = self._runner._plan(  # pyright: ignore[reportPrivateUsage]
             invocation,
             plan_ref=self._durable.plan_ref,
+            decision_source=self._durable.decision_source,
             scientific_binding=scientific_binding,
             record_collection=record_collection,
             config=selected_config,
@@ -878,6 +883,7 @@ class LabProcedureOperations:
         request_key: str,
         expected_manual_preview: ManualPreviewFence | None = None,
         plan_ref: ExperimentPlanRef | None = None,
+        decision_source: PlanAnalysisSource | None = None,
         plan_request: LaunchRequest | None = None,
         source: ProcedureSource | None = None,
         scientific_binding: ResolvedScientificBinding | None = None,
@@ -897,6 +903,7 @@ class LabProcedureOperations:
                 source=source or (self._source() if self._source else None),
                 expected_manual_preview=expected_manual_preview,
                 plan_ref=plan_ref,
+                decision_source=decision_source,
                 plan_request=plan_request,
                 scientific_binding=scientific_binding,
                 expected_configuration=expected_configuration,

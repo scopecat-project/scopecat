@@ -264,9 +264,12 @@ class AdmissionService:
     ) -> None:
         source = submission.procedure_child
         if source is None:
-            if submission.request.plan_ref is not None:
+            if (
+                submission.request.plan_ref is not None
+                or submission.request.decision_source is not None
+            ):
                 raise BackendConflict(
-                    "plan-derived run requires its admitted procedure step"
+                    "plan or decision-source run requires its admitted procedure step"
                 )
             return
         store = SQLiteAutomationStore(self._control.sqlite)
@@ -302,6 +305,7 @@ class AdmissionService:
                     )
                 )
             )
+            or parent.decision_source != submission.request.decision_source
             or parent.plan_ref != submission.request.plan_ref
             or parent.state != "leased"
             or lease is None

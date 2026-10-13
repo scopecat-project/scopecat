@@ -1,3 +1,4 @@
+import { DecisionRuns } from "./DecisionRuns";
 import type { MethodResponse } from "openapi-fetch";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -601,6 +602,13 @@ function ComparisonPage({
                     onOpenRun={onOpenRun}
                   />
                 </details>
+                <DecisionRuns
+                  projectId={projectId}
+                  runId={primary}
+                  analysisId={saved.id}
+                  publicationHash={saved.publicationHash}
+                  onOpenRun={onOpenRun}
+                />
                 {fit && (
                   <div className="mt-4 flex flex-wrap gap-3">
                     {!candidate && (

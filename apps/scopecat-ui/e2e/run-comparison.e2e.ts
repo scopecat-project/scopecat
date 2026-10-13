@@ -30,14 +30,15 @@ with project.connect() as lab:
     runs=[lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(v,"GHz") for v in (4.6,4.7,4.8,4.9,5.0)])).with_axis(sc.axis(AMPLITUDE.ref,[sc.Quantity(a,"V")])), config=inputs) for a in (.1,.08)]
     print(json.dumps([r.id for r in runs]))
 `;
-test("compares retained signals, saves independent results and imports a reviewed suggestion without acquisition", async ({
+test("compares retained signals, saves independent results and starts edited suggestions with exact bidirectional decision provenance", async ({
   page,
 }, testInfo) => {
   // Include cold acquisition, author refresh, retained actions, and daemon cleanup.
   // CI completes individual assertions within their existing limits.
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   const project = await mkdtemp(join(tmpdir(), "scopecat-comparison-e2e-"));
   let passed = false;
+  let restoredProject: string | undefined;
   try {
     for (const name of ["src", "scopecat.toml"])
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
@@ -211,10 +212,106 @@ test("compares retained signals, saves independent results and imports a reviewe
       Math.abs(Number(await page.getByLabel("Frequency", { exact: true }).inputValue()) - 4.8),
     ).toBeLessThan(0.02);
     await expect(
-      page.getByText(/Source provenance is retained only in this console draft/),
+      page.getByText(/The exact decision source and submitted inputs will be retained/),
     ).toBeVisible();
     const retained = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
     expect((await retained.json()).items).toHaveLength(2);
+    await page.getByLabel("Frequency", { exact: true }).fill("4.87");
+    let submissions = 0;
+    let procedure = "";
+    await page.route("**/experiment-launcher/submit", async (route) => {
+      submissions++;
+      const command = route.request().postDataJSON();
+      expect(command.plan_ref ?? null).toBeNull();
+      expect(command.decision_source).toEqual({
+        run_id: primary,
+        analysis_id: candidate.analysis_id,
+        publication_hash: candidate.publication_hash,
+      });
+      const response = await route.fetch();
+      expect(response.status(), await response.text()).toBe(200);
+      procedure = (await response.json()).procedure_id;
+      await route.abort("connectionfailed");
+    });
+    // No separate Preview and no named plan: Start checks and admits the edited input.
+    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "Check original submission", exact: true }).click();
+    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await (
+              await page.request.get(`${endpoint.base_url}/api/v1/procedures/${procedure}/operator`)
+            ).json()
+          ).procedure.state,
+      )
+      .toBe("closed");
+    const launched = (
+      await (await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`)).json()
+    ).items;
+    expect(launched).toHaveLength(3);
+    expect(submissions).toBe(1);
+    const nextRun = launched[0].control.admission.run_id as string;
+    const accepted = await (
+      await page.request.get(`${endpoint.base_url}/api/v1/runs/${nextRun}/request`)
+    ).json();
+    expect(accepted.request.decision_source).toEqual({
+      run_id: primary,
+      analysis_id: candidate.analysis_id,
+      publication_hash: candidate.publication_hash,
+    });
+    expect(JSON.stringify(accepted.request)).toContain("4.87");
+    await page.goto(`${endpoint.base_url}/?run=${nextRun}#runs`);
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    await page.getByRole("link", { name: "Open exact source conclusion" }).click();
+    await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`run=${nextRun}#runs`));
+    await expect(page.getByRole("region", { name: "Decision source" })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    const followups = page.getByRole("region", {
+      name: "Experiments started from this conclusion",
+    });
+    await followups.getByRole("button").filter({ hasText: "#3" }).click();
+    await expect(page).toHaveURL(new RegExp(`run=${nextRun}`));
+    const exported = await page.request.get(
+      `${endpoint.base_url}/api/v1/data/runs/${nextRun}/file`,
+    );
+    expect(exported.status(), await exported.text()).toBe(200);
+    const capture = join(project, "decision-source.scopecat");
+    await writeFile(capture, await exported.body());
+    uv([
+      "python",
+      "-c",
+      `
+from scopecat.data_exchange import ScientificExchange
+import sys
+with ScientificExchange(sys.argv[1]) as capture:
+    capture.verify()
+    target = next(r for r in capture.evidence.runs if r.snapshot.run_id == sys.argv[2])
+    source = target.request.decision_source
+    assert source.analysis_id == sys.argv[3]
+    assert any(a.entry.id == source.analysis_id and a.record.publication_hash == source.publication_hash for a in capture.evidence.analyses)
+    assert {sys.argv[4], sys.argv[5]} <= {r.snapshot.run_id for r in capture.evidence.runs}
+    for run_id in (sys.argv[4], sys.argv[5]):
+        recording = capture.recording(run_id)
+        assert recording.header.run_id == run_id
+        recording.verify()
+        assert len(tuple(recording.records())) == 5
+    assert capture.payloads
+    for payload in capture.payloads:
+        assert len(capture.read_payload(payload)) == payload.size
+`,
+      capture,
+      nextRun,
+      candidate.analysis_id!,
+      primary,
+      secondary,
+    ]);
     await page.goto(
       `${endpoint.base_url}/?compare=${encodeURIComponent(primary)}&comparison-analysis=${encodeURIComponent(first.analysis_id!)}#analyses`,
     );
@@ -243,9 +340,40 @@ test("compares retained signals, saves independent results and imports a reviewe
     expect(await fullValue.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(192);
     expect(await fullValue.evaluate((element) => element.scrollHeight)).toBeGreaterThan(192);
     await longProposals.screenshot({ path: testInfo.outputPath("bounded-full-value.png") });
+    // Stopped current-format backup restores the same exact source and reverse index.
+    uv(["scopecat", "stop", project]);
+    const snapshot = `${project}-snapshot`;
+    restoredProject = `${project}-restored`;
+    uv(["scopecat", "snapshot", "create", project, snapshot]);
+    uv(["scopecat", "snapshot", "restore", snapshot, restoredProject]);
+    uv(["scopecat", "start", restoredProject, "--port", "0", "--static-dir", resolve("dist")]);
+    const restored = JSON.parse(
+      await readFile(join(restoredProject, ".scopecat/daemon.json"), "utf8"),
+    ) as { base_url: string };
+    await page.goto(`${restored.base_url}/?run=${nextRun}#runs`);
+    await page.getByRole("link", { name: "Open exact source conclusion" }).click();
+    await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
+    await page
+      .getByRole("region", { name: "Experiments started from this conclusion" })
+      .getByRole("button")
+      .filter({ hasText: "#3" })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`run=${nextRun}`));
+    await page
+      .locator("html")
+      .evaluate((element) => element.ownerDocument.defaultView?.scrollTo(0, 0));
+    await page.screenshot({
+      path: testInfo.outputPath("restored-decision-source.png"),
+      fullPage: true,
+    });
+    expect(
+      (await (await page.request.get(`${restored.base_url}/api/v1/runs?limit=100`)).json()).items,
+    ).toHaveLength(3);
+    await rm(snapshot, { recursive: true, force: true });
     passed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["scopecat", "stop", restoredProject ?? project]);
+    if (restoredProject && passed) await rm(restoredProject, { recursive: true, force: true });
     if (passed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved comparison project", {

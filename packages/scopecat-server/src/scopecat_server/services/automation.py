@@ -71,6 +71,7 @@ from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
+from scopecat.records.analysis import RunAnalysisSubject
 from scopecat.records.configuration_fence import (
     ProcedureConfigurationFence,
     SetupRevisionFence,
@@ -78,7 +79,7 @@ from scopecat.records.configuration_fence import (
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
 from scopecat.records.manual_preview import ManualPreviewFence
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.sample import SampleSelector
 from scopecat.records.scientific_binding import (
     RegisteredTargetSubject,
@@ -87,6 +88,7 @@ from scopecat.records.scientific_binding import (
 
 from scopecat_server.services.manual_previews import ManualPreviewService
 from scopecat_server.services.practice_admission import procedure_scope
+from scopecat_server.storage.sqlite.analysis_index import read_publication
 from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
     AutomationNotFound,
@@ -245,6 +247,7 @@ class AutomationService:
                 expected_configuration=command.expected_configuration,
                 recovery=command.recovery,
                 plan_ref=command.plan_ref,
+                decision_source=command.decision_source,
                 plan_request=command.plan_request,
                 source=command.source,
             )
@@ -563,6 +566,7 @@ class AutomationService:
         expected_configuration: ProcedureConfigurationFence | None = None,
         recovery: ProcedureRecoverySource | None = None,
         plan_ref: ExperimentPlanRef | None = None,
+        decision_source: PlanAnalysisSource | None = None,
         plan_request: LaunchRequest | None = None,
         source: ProcedureSource | None = None,
     ) -> ProcedureRun:
@@ -585,6 +589,7 @@ class AutomationService:
                 expected_configuration=expected_configuration,
                 recovery=recovery,
                 plan_ref=plan_ref,
+                decision_source=decision_source,
                 plan_request=plan_request,
                 source=source,
             )
@@ -602,6 +607,7 @@ class AutomationService:
         expected_configuration: ProcedureConfigurationFence | None = None,
         recovery: ProcedureRecoverySource | None = None,
         plan_ref: ExperimentPlanRef | None = None,
+        decision_source: PlanAnalysisSource | None = None,
         plan_request: LaunchRequest | None = None,
         source: ProcedureSource | None = None,
         at: datetime | None = None,
@@ -622,6 +628,7 @@ class AutomationService:
             scientific_binding=scientific_binding,
             recovery=recovery,
             plan_ref=plan_ref,
+            decision_source=decision_source,
             source=source,
         )
         existing = self._store.find_run_by_request_in_transaction(
@@ -639,6 +646,9 @@ class AutomationService:
                     "procedure request key already has a durable run"
                 )
             return existing
+        self._require_decision_source(
+            connection, decision_source, plan_ref, plan_request
+        )
         require_batches(connection, (sample.batch_id for sample in samples))
         if plan_ref is not None:
             self._require_plan_request(
@@ -739,6 +749,7 @@ class AutomationService:
             resolved_samples=resolved_samples,
             recovery=recovery,
             plan_ref=plan_ref,
+            decision_source=decision_source,
             source=source,
             revision=1,
             state="ready",
@@ -751,6 +762,36 @@ class AutomationService:
                 scope, "procedure", run.procedure_run_id
             )
         return run
+
+    @staticmethod
+    def _require_decision_source(
+        connection: sqlite3.Connection,
+        decision_source: PlanAnalysisSource | None,
+        plan_ref: ExperimentPlanRef | None,
+        plan_request: LaunchRequest | None,
+    ) -> None:
+        if decision_source is not None:
+            publication = read_publication(
+                connection,
+                subject=RunAnalysisSubject(run_id=decision_source.run_id),
+                record_id=decision_source.analysis_id,
+            )
+            if (
+                publication is None
+                or publication.publication_hash != decision_source.publication_hash
+            ):
+                raise AutomationConflict(
+                    "decision source does not match an exact publication "
+                    "in this data space"
+                )
+        if (
+            plan_ref is not None
+            and plan_request is not None
+            and decision_source != plan_request.decision_source
+        ):
+            raise AutomationConflict(
+                "decision source differs from the checked plan request"
+            )
 
     def _require_plan_request(
         self,

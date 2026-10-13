@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from uuid import uuid4
 
 import httpx2
+import pytest
+from fastapi.testclient import TestClient
 from pydantic import JsonValue, TypeAdapter
+from scopecat.analysis.repository import AnalysisPublicationPage
 from scopecat.api.lab import LabClient
 from scopecat.application.author_project import AuthorPreparedLaunch, AuthorProject
 from scopecat.application.comparison import ComparisonHandoff
 from scopecat.automation import RunOutputRef
 from scopecat.automation.wire import ProcedureSubmitCommand
 from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.views import DecisionRunPage, RunAnalysisView
 from scopecat.kernel.quantity import Quantity
 from scopecat.records.comparison import (
     ComparisonInspection,
@@ -28,9 +33,13 @@ from scopecat.records.run import ParameterRunConfigSource
 from scopecat.records.run_request import AxisValuesSourceRecord
 from scopecat_testkit.authoring import source_workspace_id
 
+from scopecat_server.runtime import LocalDaemonRuntime
+
 
 def test_retained_analysis_plan_copy_revalidate_and_child_origin(
-    independent_lab_daemon: str, independent_parameters: ParameterRevision
+    independent_lab_daemon: str,
+    independent_parameters: ParameterRevision,
+    tmp_path: Path,
 ) -> None:
     endpoint = independent_lab_daemon
     key = uuid4().hex
@@ -145,6 +154,91 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
         )
         assert response.status_code == 200, response.text
         handoff = ComparisonHandoff.model_validate_json(response.text)
+        decision_source = PlanAnalysisSource(
+            run_id=handoff.source_run,
+            analysis_id=handoff.source_analysis,
+            publication_hash=handoff.source_hash,
+        )
+        # A direct Start has no saved plan. Edited inputs and its decision source
+        # are retained independently, under the same idempotent admission.
+        direct_request = handoff.request.model_copy(
+            update={
+                "decision_source": decision_source,
+                "control_edits": {
+                    "frequency": ControlEdit(mode="fixed", value=Quantity(4.87, "GHz"))
+                },
+            }
+        )
+        direct = AuthorPreparedLaunch(
+            author, direct_request, author.preview(direct_request)
+        )
+        direct_submission = direct.submit(request_key=f"{key}-direct")
+        direct_run = child(direct_submission.procedure_id)
+        admitted_direct = author.get_procedure(direct_submission.procedure_id)
+        assert admitted_direct.decision_source == decision_source
+        with (
+            LocalDaemonRuntime(tmp_path / "foreign-space") as other,
+            TestClient(other.app()) as foreign,
+        ):
+            foreign_command = ProcedureSubmitCommand(
+                request_key=f"{key}-foreign",
+                definition=admitted_direct.definition,
+                intent=admitted_direct.intent,
+                decision_source=decision_source,
+            )
+            wrong_space = foreign.post(
+                "/api/v1/procedures", json=foreign_command.model_dump(mode="json")
+            )
+            assert wrong_space.status_code == 409, wrong_space.text
+            assert "decision source" in wrong_space.text
+
+        retained_request = author.run_request(direct_run.id).request
+        assert retained_request.decision_source == decision_source
+        assert retained_request.plan_ref is None
+        assert (
+            direct.submit(request_key=f"{key}-direct").procedure_id
+            == direct_submission.procedure_id
+        )
+        related_url = (
+            f"/api/v1/runs/{decision_source.run_id}/analyses/"
+            f"{decision_source.analysis_id}/decision-runs"
+        )
+        found = http.get(
+            related_url,
+            params={"publication_hash": decision_source.publication_hash, "limit": 1},
+        )
+        assert found.status_code == 200, found.text
+        assert DecisionRunPage.model_validate_json(found.text).run_ids == (
+            direct_run.id,
+        )
+        assert (
+            http.get(
+                related_url, params={"publication_hash": "sha256:" + "0" * 64}
+            ).status_code
+            == 409
+        )
+        # Neither a wrong hash nor an absent foreign-space source may admit work.
+        for invalid in (
+            decision_source.model_copy(
+                update={"publication_hash": "sha256:" + "0" * 64}
+            ),
+            decision_source.model_copy(update={"run_id": str(uuid4())}),
+        ):
+            request_with_invalid_source = direct_request.model_copy(
+                update={"decision_source": invalid}
+            )
+            rejected = AuthorPreparedLaunch(
+                author,
+                request_with_invalid_source,
+                author.preview(request_with_invalid_source),
+            )
+            with pytest.raises(httpx2.HTTPStatusError) as error:
+                rejected.submit(
+                    request_key=f"{key}-{invalid.run_id}-{invalid.publication_hash}"
+                )
+            assert error.value.response.status_code in (409, 422)
+        assert run_count() == original_count + 1
+        original_count += 1
         suggested = AuthorPreparedLaunch(
             author, handoff.request, author.preview(handoff.request)
         )
@@ -204,8 +298,78 @@ def test_retained_analysis_plan_copy_revalidate_and_child_origin(
             assert target.snapshot.config_source.setup == setup.ref
             assert author.get_procedure(submitted.procedure_id).plan_ref == copied.ref
             assert author.run_request(target.id).request.plan_ref == copied.ref
+            assert (
+                author.run_request(target.id).request.decision_source == decision_source
+            )
+            assert (
+                author.get_procedure(submitted.procedure_id).decision_source
+                == decision_source
+            )
             assert target.snapshot.config_content_hash == original_hash
             assert copied.definition.source == saved.definition.source
+            first_page = DecisionRunPage.model_validate_json(
+                http.get(
+                    related_url,
+                    params={
+                        "publication_hash": decision_source.publication_hash,
+                        "limit": 1,
+                    },
+                ).text
+            )
+            assert first_page.run_ids == (target.id,)
+            second_page = DecisionRunPage.model_validate_json(
+                http.get(
+                    related_url,
+                    params={
+                        "publication_hash": decision_source.publication_hash,
+                        "limit": 1,
+                        "before": first_page.next_cursor,
+                    },
+                ).text
+            )
+            assert second_page.run_ids == (direct_run.id,)
+            assert second_page.next_cursor is None
+            original_publication = RunAnalysisView.model_validate_json(
+                http.get(
+                    f"/api/v1/runs/{decision_source.run_id}/analyses/{decision_source.analysis_id}"
+                ).text
+            ).analysis
+            assert original_publication.key is not None
+            newer = (
+                primary.analysis("Newer conclusion", key=original_publication.key)
+                .result()
+                .fact("note", "a later revision")
+                .save()
+            )
+            assert newer.id != decision_source.analysis_id
+            assert (
+                author.run_request(target.id).request.decision_source == decision_source
+            )
+            assert DecisionRunPage.model_validate_json(
+                http.get(
+                    related_url,
+                    params={"publication_hash": decision_source.publication_hash},
+                ).text
+            ).run_ids == (target.id, direct_run.id)
+            assert (
+                DecisionRunPage.model_validate_json(
+                    http.get(
+                        f"/api/v1/runs/{primary.id}/analyses/{newer.id}/decision-runs",
+                        params={"publication_hash": newer.publication_hash},
+                    ).text
+                ).run_ids
+                == ()
+            )
+
+            assert (
+                AnalysisPublicationPage.model_validate_json(
+                    http.get(
+                        "/api/v1/analysis-publications",
+                        params={"input_run_id": direct_run.id},
+                    ).text
+                ).items
+                == ()
+            )
             # After lease closure and another lab change, exact replay
             # still returns the original id.
             lab.parameters.checkout(branch.name).save(

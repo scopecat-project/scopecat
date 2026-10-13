@@ -26,7 +26,7 @@ from scopecat.records._run_request_values import (
     normalize_json_value,
     normalize_run_request_value,
 )
-from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.sample import SampleSelector
 
@@ -333,7 +333,7 @@ def _point_domain_ids(domain: PointDomainRecord) -> set[str]:
     return set(domain.columns)
 
 
-def _absent_plan(value: ExperimentPlanRef | None) -> bool:
+def _absent_plan(value: object) -> bool:
     return value is None
 
 
@@ -344,6 +344,9 @@ class RunRequest(_RunRequestModel):
         default=None, exclude_if=_absent_plan
     )
     plan_ref: ExperimentPlanRef | None = Field(default=None, exclude_if=_absent_plan)
+    decision_source: PlanAnalysisSource | None = Field(
+        default=None, exclude_if=_absent_plan
+    )
     experiment_id: str | None = None
     display_name: str | None = Field(default=None, min_length=1)
     tags: tuple[Annotated[str, Field(min_length=1)], ...] = ()

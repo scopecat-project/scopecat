@@ -32,12 +32,11 @@ submission retains its separate original-request recovery entry.
 
 ## Start from a retained analysis
 
-From a retained comparison result, import the suggested inputs into Experiments.
-Review the configuration and sample, preview, then save a plan. The plan retains
-the source run, exact analysis publication and content identity. The admitted
-procedure and each child run retain the same immutable plan reference, so their
-**Source analysis** link remains available after closing the console. Importing
-suggestions alone remains a session draft; saving establishes the durable bridge.
+从保存的比较结论显式导入建议后，可以审阅、编辑并直接 **Start acquisition**，
+不必先命名保存 plan。接纳的 procedure 和子运行保留精确分析决策来源，实际输入独立记录。
+如需重复使用配方，再按已有流程预览并保存 plan；plan 的精确来源也会随每次接纳传递。
+运行可打开原结论，原结论可分页找回后续实验，详见
+[从结论直接启动下一实验](retained-run-comparison.md)。
 
 ## Python
 

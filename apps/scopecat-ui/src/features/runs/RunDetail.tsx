@@ -243,7 +243,7 @@ export function RunDetail({
           <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
         </details>
       </div>
-      <RunPlanOrigin runId={run.runId} />
+      <RunPlanOrigin runId={run.runId} projectId={projectId} />
 
       {run.samples.length > 0 && (
         <section

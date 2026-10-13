@@ -226,6 +226,13 @@ export function LaunchForm({
         selection: draft.selection,
         record_collection: draft.collection || undefined,
         plan_ref: draft.planDirty ? undefined : draft.plan?.ref,
+        decision_source: draft.handoff
+          ? {
+              run_id: draft.handoff.source_run,
+              analysis_id: draft.handoff.source_analysis,
+              publication_hash: draft.handoff.source_hash,
+            }
+          : draft.plan?.definition.source,
         inputs: inputValues(),
         control_edits: controlEdits(drafts),
         actor,

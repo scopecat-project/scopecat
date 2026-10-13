@@ -43,6 +43,7 @@ from scopecat.records.measurement_recording import (
     measurement_record_content_hash,
 )
 from scopecat.records.measurement_slice import MEASUREMENT_SLICE_KIND, MeasurementSlice
+from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.sample import SampleBinding
 from scopecat.records.scientific_binding import ResolvedScientificBinding
@@ -101,6 +102,7 @@ class PreparedRunSkeleton:
     """Immutable admission objects prepared before the database write lock."""
 
     snapshot: RunSnapshot
+    decision_source: PlanAnalysisSource | None
     refs: tuple[_PreparedRef, ...]
 
 
@@ -348,6 +350,36 @@ class SQLiteRunRepository:
         except (sqlite3.Error, ValidationError) as error:
             raise _storage_failure(run_id=run_id) from error
 
+    def decision_runs(
+        self,
+        source_run_id: str,
+        analysis_id: str,
+        publication_hash: str,
+        *,
+        limit: int,
+        before: int | None,
+    ) -> tuple[tuple[str, ...], int | None]:
+        with self.sqlite.read_connection() as connection:
+            rows = cast(
+                "list[sqlite3.Row]",
+                connection.execute(
+                    "SELECT sequence, run_id FROM run_decision_sources "
+                    "WHERE source_run_id=? AND analysis_id=? AND publication_hash=? "
+                    "AND (? IS NULL OR sequence < ?) ORDER BY sequence DESC LIMIT ?",
+                    (
+                        source_run_id,
+                        analysis_id,
+                        publication_hash,
+                        before,
+                        before,
+                        limit + 1,
+                    ),
+                ).fetchall(),
+            )
+        return tuple(_text(row, "run_id") for row in rows[:limit]), cast(
+            "int", rows[limit - 1]["sequence"]
+        ) if len(rows) > limit else None
+
     def prepare_run_skeleton(self, skeleton: RunSkeleton) -> PreparedRunSkeleton:
         """Write immutable admission objects before acquiring the SQLite writer."""
 
@@ -366,6 +398,7 @@ class SQLiteRunRepository:
         ]
         return PreparedRunSkeleton(
             snapshot=snapshot,
+            decision_source=skeleton.request.decision_source,
             refs=tuple(prepared),
         )
 
@@ -378,6 +411,18 @@ class SQLiteRunRepository:
 
         self._replace_run_snapshot(connection, prepared.snapshot)
         self._publish_refs(connection, prepared.snapshot.run_id, prepared.refs)
+        if (source := prepared.decision_source) is not None:
+            connection.execute(
+                "INSERT INTO run_decision_sources"
+                "(run_id, source_run_id, analysis_id, publication_hash) "
+                "VALUES (?,?,?,?)",
+                (
+                    prepared.snapshot.run_id,
+                    source.run_id,
+                    source.analysis_id,
+                    source.publication_hash,
+                ),
+            )
 
     def commit_terminal(self, commit: TerminalRunCommit) -> RunSnapshot:
         run_id = commit.run_id
