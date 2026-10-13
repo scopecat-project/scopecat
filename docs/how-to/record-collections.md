@@ -55,6 +55,14 @@ New named collections start at 1 and allocate independently. Use the collection 
 alongside its number when sharing a short address; retain `run.id` for existing
 machine references. Collection names are labels, not identifiers.
 
+New run IDs are complete, lowercase, hyphenated UUIDv7 strings. Treat them as
+opaque identities: keep the entire string in URLs, references and exported data.
+Run admission and scientific evidence exchange require this canonical form.
+Use collection names and local numbers for human addresses. Global numeric SDK
+addresses and pagination still use the scheduler sequence; use `created_at` for
+run timestamps, without decoding or sorting by the UUID. No old-ID conversion or
+automatic data migration is provided.
+
 The default collection ID derives from the current store identity.
 [Current-format backup/restore](backup-and-restore.md) retains its addresses;
 there is no supported import or upgrade of earlier development stores. Keep old

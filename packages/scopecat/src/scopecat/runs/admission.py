@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from scopecat.kernel.ids import new_run_id
+from scopecat.kernel.ids import new_run_id, validate_run_id
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.run import RunConfigSource, RunSnapshot
 from scopecat.records.run_request import RunRequest
@@ -20,6 +20,9 @@ class RunSkeleton:
     snapshot: RunSnapshot
     request: RunRequest
     config: ConfigProfileSnapshot
+
+    def __post_init__(self) -> None:
+        validate_run_id(self.snapshot.run_id)
 
 
 def build_run_admission(

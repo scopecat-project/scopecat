@@ -17,6 +17,7 @@ from scopecat.kernel.errors import (
     NotFound,
     StorageError,
 )
+from scopecat.kernel.ids import new_run_id
 from scopecat.kernel.run_outcome import RunOutcome
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.content import BytesWrite, ContentEntry, ModelWrite
@@ -329,7 +330,7 @@ def test_structured_run_inputs_bind_source_and_snapshot_hashes(
     tmp_path: Path,
 ) -> None:
     repository = _repository(tmp_path)
-    skeleton = _structured_run_inputs("run-provenance-round-trip")
+    skeleton = _structured_run_inputs(new_run_id())
 
     repository.write_run_skeleton(skeleton)
     assert (
@@ -346,7 +347,7 @@ def test_run_evidence_captures_accepted_inputs_without_execution(
     from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
 
     repository = _repository(tmp_path)
-    skeleton = _structured_run_inputs("run-evidence", with_source=False)
+    skeleton = _structured_run_inputs(new_run_id(), with_source=False)
     repository.write_run_skeleton(skeleton)
     with repository.sqlite.read_transaction() as connection:
         evidence = capture_run_evidence(
@@ -388,12 +389,13 @@ def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(
     from scopecat_server.storage.sqlite.exchange_import import import_scientific_capture
 
     source_repository = _repository(tmp_path / "source")
-    skeleton = _structured_run_inputs("portable", with_source=False)
+    run_id = new_run_id()
+    skeleton = _structured_run_inputs(run_id, with_source=False)
     source_repository.write_run_skeleton(skeleton)
     with source_repository.sqlite.read_transaction() as connection:
-        run = capture_run_evidence(connection, source_repository, "portable")
+        run = capture_run_evidence(connection, source_repository, run_id)
     evidence = ScientificEvidence(
-        source_project_id=run.source_project_id, roots=("portable",), runs=(run,)
+        source_project_id=run.source_project_id, roots=(run_id,), runs=(run,)
     )
     source = tmp_path / "capture.scopecat"
     write_scientific_exchange(source, evidence, {})
@@ -412,11 +414,12 @@ def test_capture_import_is_idempotent_and_keeps_execution_tables_empty(
         assert captured.evidence == evidence
         captured.verify()
 
+    another_id = new_run_id()
     another_run = run.model_copy(
-        update={"snapshot": run.snapshot.model_copy(update={"run_id": "another"})}
+        update={"snapshot": run.snapshot.model_copy(update={"run_id": another_id})}
     )
     overlapping = evidence.model_copy(
-        update={"roots": ("another",), "runs": (run, another_run)}
+        update={"roots": (another_id,), "runs": (run, another_run)}
     )
     overlap_path = tmp_path / "overlapping.scopecat"
     write_scientific_exchange(overlap_path, overlapping, {})
@@ -524,7 +527,7 @@ def test_captured_exchange_survives_store_close_and_rejects_missing_bytes(
 
     repository = _repository(tmp_path)
     store = SQLiteProjectStore(repository.sqlite, repository.objects.root)
-    skeleton = _structured_run_inputs("portable-evidence", with_source=False)
+    skeleton = _structured_run_inputs(new_run_id(), with_source=False)
     repository.write_run_skeleton(skeleton)
     content = b"retained experiment notes"
     entry = ContentEntry(
@@ -591,9 +594,10 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
 
     from scopecat_server.storage.sqlite.evidence_graph import export_scientific_capture
 
+    upstream, selected = new_run_id(), new_run_id()
     runs = _repository(tmp_path)
     store = SQLiteProjectStore(runs.sqlite, runs.objects.root)
-    for run_id in ("upstream", "selected"):
+    for run_id in (upstream, selected):
         runs.write_run_skeleton(_structured_run_inputs(run_id, with_source=False))
     fact = AnalysisFactRecordOutput(
         kind="fact",
@@ -607,7 +611,7 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
             value=1,
         ),
     )
-    for run_id in ("upstream", "selected"):
+    for run_id in (upstream, selected):
         record = AnalysisRecord(
             subject=RunAnalysisSubject(run_id=run_id),
             title=run_id,
@@ -615,7 +619,7 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
             publication_hash=sha256_content_hash(run_id.encode()),
             outputs=[fact],
             inputs=[]
-            if run_id == "upstream"
+            if run_id == upstream
             else [
                 PublishedAnalysisRecordInput(
                     id="source",
@@ -625,7 +629,7 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
                     codec=fact.content.codec,
                     role="input",
                     source=AnalysisPublishedOutputReference(
-                        subject=RunAnalysisSubject(run_id="upstream"),
+                        subject=RunAnalysisSubject(run_id=upstream),
                         analysis_record_id="analysis",
                         output_id=fact.id,
                     ),
@@ -660,12 +664,12 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
             )
         )
     destination = tmp_path / "selected.scopecat"
-    export_scientific_capture(store, ("selected",), destination)
+    export_scientific_capture(store, (selected,), destination)
     with ScientificExchange(destination) as package:
-        assert package.evidence.roots == ("selected",)
+        assert package.evidence.roots == (selected,)
         assert {item.snapshot.run_id for item in package.evidence.runs} == {
-            "selected",
-            "upstream",
+            selected,
+            upstream,
         }
         assert len(package.evidence.analyses) == 2
         assert len(package.payloads) == 2  # Each run-owned publication appears once.
@@ -673,11 +677,11 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
     with store.sqlite.write_transaction() as connection:
         connection.execute(
             "DELETE FROM run_repository_refs WHERE run_id=? AND ref=?",
-            ("upstream", RUN_REQUEST_REF),
+            (upstream, RUN_REQUEST_REF),
         )
     rejected = tmp_path / "incomplete.scopecat"
     with pytest.raises(DataIntegrityError):
-        export_scientific_capture(store, ("selected",), rejected)
+        export_scientific_capture(store, (selected,), rejected)
     assert not rejected.exists()
     store.close()
 
@@ -688,7 +692,7 @@ def test_run_evidence_requires_the_original_request(tmp_path: Path) -> None:
     from scopecat_server.storage.sqlite.evidence_export import capture_run_evidence
 
     repository = _repository(tmp_path)
-    skeleton = _structured_run_inputs("run-missing-evidence", with_source=False)
+    skeleton = _structured_run_inputs(new_run_id(), with_source=False)
     repository.write_run_skeleton(skeleton)
     with repository.sqlite.write_transaction() as connection:
         connection.execute(
@@ -949,7 +953,7 @@ def test_duplicate_immutable_refs_conflict_within_one_publication(
 
 def test_structured_run_reads_detect_snapshot_drift(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    skeleton = _structured_run_inputs("run-snapshot-drift")
+    skeleton = _structured_run_inputs(new_run_id())
     repository.write_run_skeleton(skeleton)
     drifted = skeleton.config.model_copy(update={"id": "drifted-config"})
     repository.write_model(
@@ -968,7 +972,7 @@ def test_direct_snapshot_run_is_protected_by_its_config_hash(
 ) -> None:
     repository = _repository(tmp_path)
     skeleton = _structured_run_inputs(
-        "run-direct-snapshot",
+        new_run_id(),
         with_source=False,
     )
     repository.write_run_skeleton(skeleton)
@@ -1349,3 +1353,9 @@ def test_corrupt_indexed_object_is_data_integrity_failure(tmp_path: Path) -> Non
         repository.read_bytes("run-corrupt", "artifacts/value.bin")
 
     assert captured.value.problems[0].code == "run.ref_invalid"
+
+
+@pytest.mark.parametrize("run_id", ["run_20261013T120000Z_12345678", "run-1"])
+def test_admission_rejects_non_uuid_run_identity(run_id: str) -> None:
+    with pytest.raises(ValueError, match="canonical UUIDv7"):
+        _structured_run_inputs(run_id)

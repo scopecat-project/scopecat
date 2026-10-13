@@ -3,17 +3,26 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid7
 
 SAFE_ARTIFACT_ID_RE = re.compile(r"[^A-Za-z0-9_-]+")
 
 
 def new_run_id() -> str:
-    """Return a sortable, human-readable run id."""
+    """Return an opaque run identity in canonical UUIDv7 string form."""
 
-    stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
-    return f"run_{stamp}_{uuid4().hex[:8]}"
+    return str(uuid7())
+
+
+def validate_run_id(value: str) -> None:
+    """Require the exact UUIDv7 spelling without rewriting stable references."""
+
+    try:
+        parsed = UUID(value)
+    except ValueError:
+        raise ValueError("run_id must be a canonical UUIDv7 string") from None
+    if parsed.version != 7 or str(parsed) != value:
+        raise ValueError("run_id must be a canonical UUIDv7 string")
 
 
 def artifact_slug(value: str, *, fallback: str = "artifact") -> str:
