@@ -295,9 +295,12 @@ notes = {{"first": first.id, "second": second.id, "third": third.id,
 (project.root / "continuation.json").write_text(json.dumps(notes))
 author.close()
 """)
-            notes = json.loads((source / "continuation.json").read_text())
+            notes = cast(
+                "dict[str, object]",
+                json.loads((source / "continuation.json").read_text()),
+            )
             assert len(runs()) == 3
-            page.goto(endpoint + "/?run=" + notes["third"] + "#runs")
+            page.goto(endpoint + "/?run=" + str(notes["third"]) + "#runs")
             page.get_by_role("link", name="Open exact source conclusion").click()
             expect(
                 page.get_by_role(

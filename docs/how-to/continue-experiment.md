@@ -22,19 +22,27 @@ second = author.run("第二次的 run ID")
 comparison = second.analysis("比较响应幅度", key="scale-comparison")
 left = comparison.measurements(run=first, id="before")["result"].require_values()
 right = comparison.measurements(id="after")["result"].require_values()
-conclusion = (comparison.result()
+conclusion = (
+    comparison.result()
     .fact("peak_ratio", max(right) / max(left))
     .fact("suggested_scale", 0.75)
-    .save())
+    .save()
+)
 source_ref = PlanAnalysisSource(
-    run_id=second.id, analysis_id=conclusion.id,
+    run_id=second.id,
+    analysis_id=conclusion.id,
     publication_hash=conclusion.publication_hash,
 )
 # 普通作者笔记，用于下次准确找回，不是应用迁移或自动恢复协议。
-(project.root / "continuation.json").write_text(json.dumps({
-    "first": first.id, "second": second.id,
-    "decision_source": source_ref.model_dump(mode="json"),
-}))
+(project.root / "continuation.json").write_text(
+    json.dumps(
+        {
+            "first": first.id,
+            "second": second.id,
+            "decision_source": source_ref.model_dump(mode="json"),
+        }
+    )
+)
 ```
 
 `0.75` 是本合成例子中作者选择的下一步参数，不是自动接受的校准建议。
