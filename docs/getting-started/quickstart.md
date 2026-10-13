@@ -25,6 +25,8 @@ needs no devices. To inspect a received file instead, use
    receipt path")`, then run **Reopen** and **Close**. This reads the same run
    without executing **Preview**, **Submit** or another analysis.
 
+需要比较后继续并在隔次打开后接着实验，见[同一个实验，隔次打开继续做](../how-to/continue-experiment.md)。
+
 Install extra analysis packages in your selected Python, never application Python.
 For existing laboratory code or background dependency changes, follow
 [application maintenance](../how-to/maintain-application.md#author-folders).

@@ -172,8 +172,10 @@ uv run --locked python scripts/verify_ordinary_author.py /tmp/ordinary-evidence 
 
 Use fresh paths and install Playwright Chromium, or set `SCOPECAT_TEST_CHROMIUM`.
 Preview and rejected syntax leave zero runs; repaired source creates one acquisition
-visible in Notebook and GUI. Restart uses GUI-copied read-only code without another
-acquisition. Evidence includes cells, source/payload identity and screenshots.
+visible in Notebook and GUI. Restart first uses GUI-copied read-only code without another
+acquisition, then explicitly prepares and runs again from a saved two-run comparison.
+The same author folder retains source edits, saved parameter choices and exact
+decision provenance through application and kernel shutdown. Evidence includes cells, source/payload identity and screenshots.
 Native picker/window plumbing, editor activation and VS Code `__file__` injection
 are substituted. [Experiment-form draft recovery](architecture/draft-recovery.md#experiment-form-boundary)
 is a separate contract from this retained-receipt journey.

@@ -1,4 +1,4 @@
-"""Settings → ordinary starter → explicit acquisition → exact result → restart.
+"""Settings → edited experiment → retained comparison → restart and continue.
 
 Usage: uv run --locked python scripts/verify_ordinary_author.py WORK PAYLOAD [GUI]
 PAYLOAD is a development delivery with lab_tools.toolchain added. No provisioning,
@@ -239,7 +239,12 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
             page.get_by_role("button", name="Runs", exact=True).click()
             page.get_by_title(f"Inspect run {run_id}", exact=True).click()
             expect(page.get_by_test_id("run-status")).to_have_text("Succeeded")
+            page.get_by_text("Run details", exact=True).click()
             expect(page.get_by_title(run_id, exact=True)).to_be_visible()
+            expect(
+                page.get_by_role("figure", name="Result Position → Result line")
+            ).to_be_visible()
+            page.get_by_text("Record table · 3 rows in this view", exact=True).click()
             table = page.get_by_test_id("measurement-table")
             expect(table.locator("tbody tr")).to_have_count(3)
             assert table.locator("tbody tr").evaluate_all(
@@ -255,6 +260,51 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
             page.screenshot(path=str(work / "exact-run.png"), full_page=True)
             evidence["run_id"] = run_id
             evidence["values"] = [1.0, 2.0, 1.0]
+            # Continue in the same ordinary author folder, using actual kernel state.
+            with client.setup_kernel():
+                execute(f"__file__ = {str(notebook)!r}")
+                execute(parts[0])
+                execute(parts[1])
+                execute(parts[2])
+                execute(parts[3])
+                execute(f"""
+import json
+from scopecat.records.plan_ref import PlanAnalysisSource
+first = author.run({run_id!r})
+params["response"]["signal"]["scale"] = 1.5
+params.save(note="Try a larger response")
+second = author.prepare(request, parameters=params).run().wait(timeout=120).result()
+assert list(second.measurements()["result"].require_values()) == [1.5, 3.0, 1.5]
+comparison = second.analysis("Compare scale choices", key="scale-comparison")
+left = comparison.measurements(run=first, id="before")["result"].require_values()
+right = comparison.measurements(id="after")["result"].require_values()
+conclusion = (comparison.result()
+    .fact("peak_ratio", max(right) / max(left))
+    .fact("suggested_scale", 0.75)
+    .save())
+source_ref = PlanAnalysisSource(run_id=second.id, analysis_id=conclusion.id,
+    publication_hash=conclusion.publication_hash)
+params["response"]["signal"]["scale"] = conclusion.fact("suggested_scale").value
+params.save(note="Use saved comparison suggestion")
+continued = author.prepare(request, parameters=params, decision_source=source_ref)
+third = continued.run().wait(timeout=120).result()
+assert list(third.measurements()["result"].require_values()) == [0.75, 1.5, 0.75]
+assert third.request.decision_source == source_ref
+notes = {{"first": first.id, "second": second.id, "third": third.id,
+    "decision_source": source_ref.model_dump(mode="json")}}
+(project.root / "continuation.json").write_text(json.dumps(notes))
+author.close()
+""")
+            notes = json.loads((source / "continuation.json").read_text())
+            assert len(runs()) == 3
+            page.goto(endpoint + "/?run=" + notes["third"] + "#runs")
+            page.get_by_role("link", name="Open exact source conclusion").click()
+            expect(
+                page.get_by_role(
+                    "region", name="Experiments started from this conclusion"
+                )
+            ).to_be_visible()
+            evidence["comparison_and_continue"] = notes
             before = runs()
             runtime.stop()
             runtime = ApplicationRuntime(work / "application")
@@ -285,18 +335,56 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                 execute(parts[-2])
                 execute("assert list(values) == [1.0, 2.0, 1.0]")
                 execute(parts[-1])
-            assert runs() == before
+                assert runs() == before
+                execute(parts[2])
+                execute(parts[3])
+                execute("""
+import json
+from scopecat.records.plan_ref import PlanAnalysisSource
+notes = json.loads((project.root / "continuation.json").read_text())
+assert params["response"]["signal"]["scale"] == 0.75
+source_ref = PlanAnalysisSource.model_validate(notes["decision_source"])
+old = author.run(notes["first"])
+assert list(old.measurements()["result"].require_values()) == [1, 2, 1]
+conclusion = author.run(notes["second"]).published_analysis(source_ref.analysis_id)
+assert conclusion.publication_hash == source_ref.publication_hash
+assert conclusion.fact("peak_ratio").value == 1.5
+request.values["center"] = 0.5
+prepared = author.prepare(request, parameters=params, decision_source=source_ref)
+next_run = prepared.run().wait(timeout=120).result()
+assert next_run.request.decision_source == source_ref
+values = next_run.measurements()["result"].require_values()
+assert list(values) == [1.5 / 3.25, 1.2, 1.2]
+assert list(old.measurements()["result"].require_values()) == [1, 2, 1]
+(project.root / "continued-run.txt").write_text(next_run.id)
+author.close()
+""")
+            assert len(runs()) == len(before) + 1 == 4
             assert code.read_text() == original.replace(
                 "return scale /", "return 2 * scale /"
             )
             page.get_by_role("button", name="Runs", exact=True).click()
             page.get_by_title(f"Inspect run {run_id}", exact=True).click()
             expect(page.get_by_test_id("run-status")).to_have_text("Succeeded")
+            page.get_by_text("Record table · 3 rows in this view", exact=True).click()
             expect(table.locator("tbody tr")).to_have_count(3)
             assert table.locator("tbody tr").evaluate_all(
                 "rows => rows.map(row => row.lastElementChild.textContent)"
             ) == ["1", "2", "1"]
             evidence["restart_reopen_without_acquisition"] = "passed"
+            evidence["restart_then_explicit_continue"] = "passed"
+            evidence["continued_run"] = (source / "continued-run.txt").read_text()
+            page.goto(endpoint + "/?run=" + str(evidence["continued_run"]) + "#runs")
+            expect(page.get_by_test_id("run-status")).to_have_text("Succeeded")
+            page.get_by_role("link", name="Open exact source conclusion").click()
+            followups = page.get_by_role(
+                "region", name="Experiments started from this conclusion"
+            )
+            expect(followups.get_by_role("button")).to_have_count(2)
+            expect(followups).to_contain_text("#3")
+            expect(followups).to_contain_text("#4")
+            page.screenshot(path=str(work / "continued-source.png"), full_page=True)
+            evidence["gui_source_after_restart"] = "two explicit follow-up runs"
             evidence["substitutions"] = [
                 "native window and folder picker",
                 "VS Code activation and __file__ injection",
