@@ -1275,6 +1275,38 @@ describe("instrument workspace", () => {
     expect(saveDevice).not.toHaveBeenCalled();
   });
 
+  it("keeps a test error on its revision and removes it when another connection is saved", async () => {
+    const device = registeredDevice(instrument());
+    vi.mocked(testDeviceConnection).mockRejectedValue(
+      new ApiError("Virtual endpoint unavailable", 409),
+    );
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
+
+    // A refresh or name-only edit must not clear an error for the same connection.
+    vi.mocked(getDevices).mockResolvedValue({
+      items: [{ ...device, device: { ...device.device, label: "Renamed source" } }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+    await screen.findByRole("heading", { name: "Renamed source" });
+    expect(screen.getByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
+
+    const updated = structuredClone(device);
+    updated.device.head.revision_id = updated.revision.id = "connection-v2";
+    updated.revision.content.connection.options = { gain: 2 };
+    vi.mocked(getDevices).mockResolvedValue({ items: [updated] });
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+    await screen.findByRole("heading", { name: "Drive source" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("This connection version has not been tested.")).toBeVisible();
+
+    // Failures belonging to the new version must still be shown.
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
+    expect(testDeviceConnection).toHaveBeenLastCalledWith(updated, expect.any(String));
+  });
+
   it("shows quarantined ownership and the operator resolution action", async () => {
     mockInventory({
       setup: { revision_id: "lab-default", content_hash: "sha256:active" },

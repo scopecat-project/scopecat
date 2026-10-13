@@ -1,8 +1,9 @@
-"""Isolated software-only device registry for the save/replay browser journey."""
+"""Isolated software-only registry for device save and connection browser journeys."""
 
 import socket
 import sys
 from pathlib import Path
+from typing import override
 
 import uvicorn
 from scopecat.sdk.instruments import (
@@ -10,14 +11,28 @@ from scopecat.sdk.instruments import (
     DriverConnectionSpec,
     DriverSpec,
     InstrumentBackend,
+    InstrumentConnectionContext,
 )
-from scopecat_testkit.signal_instruments import TestSignalInstrumentProvider
+from scopecat_testkit.signal_instruments import (
+    TestSignalInstrument,
+    TestSignalInstrumentProvider,
+)
 
 from scopecat_server.instruments.backend import LocalInstrumentBackendEndpoint
 from scopecat_server.runtime import LocalDaemonRuntime
 
 root, static = map(Path, sys.argv[1:])
-provider = TestSignalInstrumentProvider()
+
+
+class ConnectionTestProvider(TestSignalInstrumentProvider):
+    @override
+    def connect(self, context: InstrumentConnectionContext) -> TestSignalInstrument:
+        if context.binding.connection.options.get("gain") == -1:
+            raise ValueError("Virtual endpoint unavailable for gain -1")
+        return super().connect(context)
+
+
+provider = ConnectionTestProvider()
 endpoint = LocalInstrumentBackendEndpoint(
     InstrumentBackend(
         provider=provider,
@@ -29,7 +44,15 @@ endpoint = LocalInstrumentBackendEndpoint(
                     implementation_version="v0",
                     label="Software signal",
                     connections=(
-                        DriverConnectionSpec(kind="virtual", options_schema={}),
+                        DriverConnectionSpec(
+                            kind="virtual",
+                            options_schema={
+                                "type": "object",
+                                "properties": {
+                                    "gain": {"type": "number", "default": 1}
+                                },
+                            },
+                        ),
                     ),
                 ),
             ),
