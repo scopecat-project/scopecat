@@ -1,3 +1,4 @@
+import { createRandomId } from "../../lib/random-id";
 import { apiClient, apiData } from "../../api-client";
 import type { ConfigProfileSnapshot, ConfigRegistryEntry } from "../../api-contract";
 import type { components } from "../../api-schema";
@@ -35,11 +36,7 @@ export async function getConfigRegistryEntry(
 }
 
 export function createConfigOperationId(purpose: string): string {
-  const random =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `ui-config-${purpose}-${random}`;
+  return createRandomId(`ui-config-${purpose}`);
 }
 
 function summarizeConfigSnapshot(config: ConfigProfileSnapshot): ConfigSnapshotSummary {

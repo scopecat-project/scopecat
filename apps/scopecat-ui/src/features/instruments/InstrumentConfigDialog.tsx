@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -6,6 +6,7 @@ import type {
   InstrumentDescription,
   InstrumentStateSetting,
 } from "../../api-contract";
+import { ApiError } from "../../api-client";
 import { errorMessage } from "../../lib/presentation";
 import {
   dialogBackdrop,
@@ -23,6 +24,7 @@ import {
   saveDevice,
   renameDevice,
   type DeviceView,
+  type DeviceSaveCommand,
   type DeviceConnection,
 } from "./device-api";
 import {
@@ -57,7 +59,7 @@ export function InstrumentConfigDialog({
   const first =
     catalog.drivers.find((item) => item.driver_id === existing?.driver.driver_id) ??
     catalog.drivers[0];
-  const [deviceId] = useState(device?.device.id ?? createInstrumentCommandId("device"));
+  const [deviceId] = useState(() => device?.device.id ?? createInstrumentCommandId("device"));
   const [label, setLabel] = useState(device?.device.label ?? "");
   const [driverId, setDriverId] = useState(first?.driver_id ?? "");
   const [connection, setConnection] = useState(() =>
@@ -80,6 +82,11 @@ export function InstrumentConfigDialog({
   const [invalidOptions, setInvalidOptions] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
+  const connectionSaveStarted = useRef(false);
+  const attempt = useRef<{ key: string; command: DeviceSaveCommand; saved?: DeviceView } | null>(
+    null,
+  );
   const [error, setError] = useState<string>();
   const drivers = useQuery({
     queryKey: ["device-implementations"],
@@ -107,7 +114,9 @@ export function InstrumentConfigDialog({
     ) ||
       hasSafety);
   const save = async () => {
-    if (!valid || !implementation) return;
+    if (!valid || !implementation || saving.current) return;
+    saving.current = true;
+    let saved: DeviceView | undefined;
     setBusy(true);
     setError(undefined);
     try {
@@ -121,6 +130,7 @@ export function InstrumentConfigDialog({
         safety: { ...safety, safe_state: safeState },
       };
       if (
+        !connectionSaveStarted.current &&
         device &&
         existing &&
         JSON.stringify(content.driver) === JSON.stringify(existing.driver) &&
@@ -128,23 +138,45 @@ export function InstrumentConfigDialog({
         JSON.stringify(content.access_aliases) === JSON.stringify(existing.access_aliases) &&
         JSON.stringify(content.safety) === JSON.stringify(existing.safety)
       ) {
-        await onPublished(await renameDevice(device, label.trim()));
+        saved = await renameDevice(device, label.trim());
+        await onPublished(saved);
         return;
       }
-      await onPublished(
-        await saveDevice({
-          device_id: deviceId,
-          label: label.trim(),
-          revision_id: createInstrumentCommandId("connection"),
-          expected_head: device?.device.head ?? null,
-          actor: "local-operator",
-          note,
-          connection: content,
-        }),
-      );
+      const input = {
+        device_id: deviceId,
+        label: label.trim(),
+        expected_head: device?.device.head ?? null,
+        actor: "local-operator",
+        note,
+        connection: content,
+      };
+      const key = JSON.stringify(input);
+      if (attempt.current?.key !== key) {
+        attempt.current = {
+          key,
+          command: { ...input, revision_id: createInstrumentCommandId("connection") },
+        };
+      }
+      connectionSaveStarted.current = true;
+      saved = attempt.current.saved ?? (await saveDevice(attempt.current.command));
+      attempt.current.saved = saved;
+      await onPublished(saved);
     } catch (cause) {
-      setError(errorMessage(cause));
+      if (saved) {
+        setError(`Device saved, but the view could not refresh. Try again. ${errorMessage(cause)}`);
+      } else if (cause instanceof ApiError && cause.status === 409) {
+        setError(
+          `Save conflict. Close and reopen the device to review its current configuration. ${errorMessage(cause)}`,
+        );
+      } else if (cause instanceof ApiError && (cause.status === undefined || cause.status >= 500)) {
+        setError(
+          `Save not confirmed. Retry without editing to check the same submission. Editing starts a new submission and may require reviewing the current configuration. ${errorMessage(cause)}`,
+        );
+      } else {
+        setError(errorMessage(cause));
+      }
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   };
@@ -162,7 +194,13 @@ export function InstrumentConfigDialog({
                 Save the connection once for all experiments. Saving does not connect hardware.
               </Dialog.Description>
             </header>
-            <div className="grid gap-4 p-4 [&_label]:grid [&_label]:gap-1 [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-line [&_input:not([type=checkbox])]:p-2 [&_select]:rounded [&_select]:border [&_select]:border-line [&_select]:p-2">
+            <fieldset
+              disabled={busy}
+              onChange={() => {
+                attempt.current = null;
+              }}
+              className="grid gap-4 p-4 [&_label]:grid [&_label]:gap-1 [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-line [&_input:not([type=checkbox])]:p-2 [&_select]:rounded [&_select]:border [&_select]:border-line [&_select]:p-2"
+            >
               <label>
                 Device name
                 <input value={label} onChange={(event) => setLabel(event.target.value)} />
@@ -314,7 +352,7 @@ export function InstrumentConfigDialog({
                 After saving, use Test connection in the device detail. Stop affected work before
                 changing a connection.
               </p>
-            </div>
+            </fieldset>
             <footer className="flex justify-end gap-2 border-t border-line p-4">
               <Dialog.Close className={secondaryButton} disabled={busy}>
                 Cancel
