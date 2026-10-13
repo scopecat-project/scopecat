@@ -5,7 +5,13 @@ import { errorMessage } from "../../lib/presentation";
 import { InstrumentConfigDialog } from "./InstrumentConfigDialog";
 import { InstrumentInspector } from "./InstrumentInspector";
 import { DriverSourcePanel } from "./DriverSourcePanel";
-import { getDevices, prepareDeviceAccess, testDeviceConnection, retireDevice } from "./device-api";
+import {
+  getDevices,
+  prepareDeviceAccess,
+  testDeviceConnection,
+  retireDevice,
+  type DeviceView,
+} from "./device-api";
 import {
   abortInstrumentSession,
   closeInstrumentSession,
@@ -109,12 +115,14 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     onError: (error) => setSessionError(errorMessage(error)),
   });
   const probe = useMutation({
-    mutationFn: () => {
-      if (!selectedDevice) throw new Error("Choose a device.");
-      return testDeviceConnection(selectedDevice, createInstrumentCommandId("test"));
-    },
+    mutationFn: (device: DeviceView) =>
+      testDeviceConnection(device, createInstrumentCommandId("test")),
     onSettled: refresh,
   });
+  const probeError =
+    probe.variables?.device.head.revision_id === selectedDevice?.device.head.revision_id
+      ? probe.error
+      : null;
   const retire = useMutation({
     mutationFn: () => {
       if (!selectedDevice) throw new Error("Choose a device.");
@@ -304,7 +312,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               <div className="flex gap-3">
                 <button
                   disabled={selectedDevice.device.state === "retired" || !!session || busy || owned}
-                  onClick={() => probe.mutate()}
+                  onClick={() => probe.mutate(selectedDevice)}
                 >
                   Test connection
                 </button>
@@ -346,8 +354,8 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               ) : (
                 <p>This connection version has not been tested.</p>
               )}
-              {(probe.error || retire.error) && (
-                <p role="alert">{errorMessage(probe.error ?? retire.error)}</p>
+              {(probeError || retire.error) && (
+                <p role="alert">{errorMessage(probeError ?? retire.error)}</p>
               )}
               {selectedDevice.device.state === "retired" && (
                 <p>This device is retired. Its execution records are retained.</p>
