@@ -1,3 +1,4 @@
+import { createRandomId } from "../../lib/random-id";
 import { ApiError } from "../../api-client";
 import { apiClient, apiData } from "../../api-client";
 import type {
@@ -329,11 +330,7 @@ export function connectionSummary(connection: InstrumentView["connection"]): str
 }
 
 export function createInstrumentCommandId(prefix: string): string {
-  const random =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `ui-${prefix}-${random}`;
+  return createRandomId(`ui-${prefix}`);
 }
 
 export function retryTransientInstrumentMutation(failureCount: number, error: unknown): boolean {

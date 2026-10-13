@@ -824,3 +824,50 @@ def test_current_format_backup_retains_device_and_setup_ownership(
         assert restored.application.devices.get("signal") == device
         assert restored.application.setup.resolve("bench").ref == setup.ref
         assert restored.application.setup.get(setup.id) == setup
+
+
+def test_save_response_loss_replay_and_reviewed_head_conflicts(tmp_path: Path) -> None:
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=_endpoint()) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        device = _register(client)
+        command = {
+            "device_id": "signal",
+            "label": "Signal source",
+            "revision_id": "edited-connection",
+            "connection": {
+                **device["revision"]["content"],
+                "access_aliases": ["serial:COM7"],
+            },
+            "expected_head": device["device"]["head"],
+            "actor": "operator",
+        }
+        committed = client.post("/api/v1/devices", json=command)
+        assert committed.status_code == 200, committed.text
+        # Discarding the first response must not force a new revision.
+        assert client.post("/api/v1/devices", json=command).json() == committed.json()
+        stale = client.post(
+            "/api/v1/devices", json={**command, "revision_id": "new-intent"}
+        )
+        assert stale.status_code == 409
+        changed = client.post("/api/v1/devices", json={**command, "note": "changed"})
+        assert changed.status_code == 409
+        assert (
+            runtime.application.devices.get("signal").device.head.revision_id
+            == "edited-connection"
+        )
+        reviewed = {
+            **command,
+            "revision_id": "new-intent",
+            "expected_head": committed.json()["device"]["head"],
+            "note": "reviewed",
+        }
+        current = client.post("/api/v1/devices", json=reviewed)
+        assert current.status_code == 200, current.text
+        # Replaying an old receipt must not hide a subsequently changed head.
+        assert client.post("/api/v1/devices", json=command).status_code == 409
+        assert (
+            runtime.application.devices.get("signal").device.head.revision_id
+            == "new-intent"
+        )

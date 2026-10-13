@@ -1176,6 +1176,76 @@ describe("instrument workspace", () => {
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
+  it("replays a save after its committed response is lost and blocks duplicate clicks", async () => {
+    const registered = registeredDevice(
+      instrument({
+        driver_id: "keysight.pna",
+        connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
+      }),
+    );
+    vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
+    let rejectFirst!: (error: Error) => void;
+    vi.mocked(saveDevice).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit device" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Host"), { target: { value: "192.0.2.24" } });
+    const save = within(dialog).getByRole("button", { name: "Save device" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(saveDevice).toHaveBeenCalledTimes(1);
+    const committed = vi.mocked(saveDevice).mock.calls[0]![0];
+    vi.mocked(saveDevice).mockImplementation(async (command) => {
+      if (JSON.stringify(command) !== JSON.stringify(committed)) {
+        throw new ApiError("device connection changed; reload and review before saving", 409);
+      }
+      return registered;
+    });
+    await act(async () => rejectFirst(new ApiError("The local daemon did not respond.")));
+    await within(dialog).findByRole("alert");
+    fireEvent.click(save);
+    await waitFor(() => expect(saveDevice).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(saveDevice).mock.calls[1]![0]).toEqual(committed);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it.each(["192.0.2.25", "192.0.2.20"])(
+    "uses a new revision for edited input %s and preserves the reviewed head on conflict",
+    async (editedHost) => {
+      const registered = registeredDevice(
+        instrument({
+          driver_id: "keysight.pna",
+          connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
+        }),
+      );
+      vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
+      vi.mocked(saveDevice)
+        .mockRejectedValueOnce(new ApiError("The local daemon did not respond."))
+        .mockRejectedValueOnce(
+          new ApiError("device connection changed; reload and review before saving", 409),
+        );
+      renderWorkspace();
+      fireEvent.click(await screen.findByRole("button", { name: "Edit device" }));
+      const dialog = await screen.findByRole("dialog");
+      const host = within(dialog).getByLabelText("Host");
+      fireEvent.change(host, { target: { value: "192.0.2.24" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save device" }));
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(/not confirmed/i);
+      fireEvent.change(host, { target: { value: editedHost } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save device" }));
+      await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent(/conflict/i));
+      const [first, second] = vi.mocked(saveDevice).mock.calls.map(([command]) => command);
+      expect(second!.revision_id).not.toBe(first!.revision_id);
+      expect(second!.expected_head).toEqual(registered.device.head);
+      expect(second!.connection.connection).toMatchObject({ host: editedHost });
+    },
+  );
+
   it("tests a registered device without publishing experiment configuration", async () => {
     const device = registeredDevice(instrument());
     vi.mocked(testDeviceConnection).mockImplementation(async () => {
