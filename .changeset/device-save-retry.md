@@ -2,4 +2,6 @@
 default: patch
 ---
 
-Retry an unconfirmed device save with the original request, preventing a lost response from creating a false revision conflict. Device and configuration IDs now always use secure browser randomness, including browsers without randomUUID.
+设备配置保存中断后可安全重试。
+
+未确认的保存可使用原请求重试，减少因响应丢失导致的错误冲突。
