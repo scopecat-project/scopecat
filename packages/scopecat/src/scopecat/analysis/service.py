@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Literal, NoReturn
+from uuid import uuid4
 
 from scopecat.analysis.dataset_wire import DerivedDatasetSchema
 from scopecat.analysis.datasets import (
@@ -80,7 +81,7 @@ from scopecat.records.analysis import (
     PublishedAnalysisRecordInput,
     RunAnalysisSubject,
     SampleAnalysisSubject,
-    analysis_record_id,
+    analysis_proposal_source_token,
     published_output_input_identity,
     validate_analysis_output_content_budget,
 )
@@ -312,7 +313,7 @@ def prepare_analysis(
 ) -> PreparedAnalysis:
     """Prepare analysis content for publication in a caller-owned unit."""
 
-    proposed_record_id = analysis_record_id(analysis_key, 1)
+    proposed_record_id = analysis_proposal_source_token(analysis_key)
     _validate_analysis_output_ids(outputs)
     _validate_analysis_input_ids(inputs)
     _validate_analysis_execution_outputs(executions, outputs)
@@ -408,7 +409,7 @@ def prepare_analysis(
         )
 
     revision = 1 if existing is None else existing.record.revision + 1
-    selected_record_id = analysis_record_id(analysis_key, revision)
+    selected_record_id = str(uuid4())
     saved_outputs = _revisioned_outputs(
         outputs,
         analysis_record_id=selected_record_id,
@@ -584,11 +585,7 @@ def prepare_independent_analysis(
         )
 
     revision = 1 if existing is None else existing.record.revision + 1
-    record_id = _project_owned_analysis_record_id(
-        subject,
-        analysis_key=analysis_key,
-        revision=revision,
-    )
+    record_id = str(uuid4())
     prepared_contents = _prepare_analysis_contents(
         subject=subject,
         record_id=record_id,
@@ -1051,18 +1048,6 @@ def _latest_project_analysis(
             AnalysisRecord,
         ),
     )
-
-
-def _project_owned_analysis_record_id(
-    subject: ProjectAnalysisSubject | SampleAnalysisSubject,
-    *,
-    analysis_key: str,
-    revision: int,
-) -> str:
-    if isinstance(subject, ProjectAnalysisSubject):
-        return analysis_record_id(analysis_key, revision)
-    scope = stable_content_hash({"kind": "sample", "sample_id": subject.sample_id})[:12]
-    return analysis_record_id(f"sample-{scope}-{analysis_key}", revision)
 
 
 def _revisioned_outputs(

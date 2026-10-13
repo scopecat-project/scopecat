@@ -27,7 +27,7 @@ from scopecat.daemon.wire import (
     ParameterCandidateComposeCommand,
 )
 from scopecat.project import load_project
-from scopecat.records.analysis import analysis_record_id
+from scopecat.records.analysis import analysis_proposal_source_token
 from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
@@ -443,7 +443,7 @@ def test_drag_candidate_publishes_to_branch_and_runs_accepted_gate(
         forged = joint.config.parameter_proposal.model_copy(
             update={
                 "id": "forged",
-                "analysis_record_id": analysis_record_id("forged", 1),
+                "analysis_record_id": analysis_proposal_source_token("forged"),
                 "deltas": candidate.parameter_proposal.deltas,
             }
         )

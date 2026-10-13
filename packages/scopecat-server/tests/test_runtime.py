@@ -1141,6 +1141,7 @@ def test_run_analysis_history_is_paged_and_logical_keys_resolve_latest(
             _submission(runtime, "analysis-history")
         )
         analysis_url = f"/api/v1/runs/{admission.run_id}/analyses"
+        publication_ids: list[str] = []
         for revision in range(1, 4):
             command = AnalysisSaveCommand(
                 title=f"History revision {revision}",
@@ -1163,6 +1164,7 @@ def test_run_analysis_history_is_paged_and_logical_keys_resolve_latest(
                 json=command.model_dump(mode="json"),
             )
             assert response.status_code == 201
+            publication_ids.append(response.json()["record"]["id"])
 
         head = RunAnalysisPage.model_validate(
             client.get(analysis_url, params={"limit": 2}).json()
@@ -1177,17 +1179,17 @@ def test_run_analysis_history_is_paged_and_logical_keys_resolve_latest(
             client.get(f"{analysis_url}/history").json()
         )
         exact = RunAnalysisView.model_validate(
-            client.get(f"{analysis_url}/analysis-history-r1").json()
+            client.get(f"{analysis_url}/{publication_ids[0]}").json()
         )
 
         assert [item.entry.id for item in head.items] == [
-            "analysis-history-r3",
-            "analysis-history-r2",
+            publication_ids[2],
+            publication_ids[1],
         ]
         assert head.next_cursor is not None
-        assert [item.entry.id for item in tail.items] == ["analysis-history-r1"]
+        assert [item.entry.id for item in tail.items] == [publication_ids[0]]
         assert tail.next_cursor is None
-        assert latest.entry.id == "analysis-history-r3"
+        assert latest.entry.id == publication_ids[2]
         assert latest.analysis.revision == 3
         assert exact.analysis.revision == 1
 
@@ -1257,10 +1259,7 @@ def test_run_analysis_allocates_distinct_revisions_for_concurrent_saves(
         with ThreadPoolExecutor(max_workers=len(commands)) as executor:
             saved = tuple(executor.map(save, commands))
 
-        assert {item.record.id for item in saved} == {
-            "analysis-concurrent-analysis-r1",
-            "analysis-concurrent-analysis-r2",
-        }
+        assert len({item.record.id for item in saved}) == 2
         page = runtime.application.runs.list_run_analyses(admission.run_id)
         assert len(page.items) == 2
 
@@ -1333,7 +1332,12 @@ def test_analysis_publication_rolls_back_refs_index_and_event_together(
             command,
         )
 
-        assert saved.record.id == "analysis-fit-r1"
+        assert (
+            runtime.application.runs.get_run_analysis(
+                admission.run_id, saved.record.id
+            ).analysis.revision
+            == 1
+        )
         assert (
             len(runtime.application.runs.list_run_analyses(admission.run_id).items) == 1
         )

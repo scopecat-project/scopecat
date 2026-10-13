@@ -1,3 +1,4 @@
+import { RelatedAnalyses } from "../analyses/RelatedAnalyses";
 import { useRunCollectionName } from "./use-run-collection-name";
 import { RunAddressLabel } from "./RunAddressLabel";
 import { ReturnToPreparation } from "../launch/ReturnToPreparation";
@@ -94,6 +95,7 @@ export function RunDetail({
   attentionPending,
   onResolveAttention,
   onOpenSample,
+  onOpenRun,
 }: {
   run: ProjectRun;
   projectId?: string;
@@ -140,6 +142,7 @@ export function RunDetail({
   attentionError: Error | null;
   attentionPending: boolean;
   onResolveAttention: () => void;
+  onOpenRun?: (runId: string) => void;
   onOpenSample?: (sampleId: string, revision: number) => void;
 }) {
   const collection = useRunCollectionName(projectId, run.address?.collection_id, collectionNames);
@@ -350,6 +353,15 @@ export function RunDetail({
           onLoadOlder={onLoadOlderAnalyses}
         />
         <RunProposals key={run.runId} runId={run.runId} />
+        {projectId && (
+          <RelatedAnalyses
+            key={`${projectId}:${run.runId}`}
+            projectId={projectId}
+            runId={run.runId}
+            collectionNames={collectionNames}
+            onOpenRun={onOpenRun}
+          />
+        )}
         <RunAnalysisFollows runId={run.runId} />
         <details
           className="rounded-md border border-line p-4"

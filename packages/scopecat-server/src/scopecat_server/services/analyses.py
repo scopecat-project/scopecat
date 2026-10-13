@@ -9,6 +9,7 @@ from threading import Lock
 from typing import cast
 
 from pydantic import JsonValue
+from scopecat.analysis.repository import AnalysisPublicationPage
 from scopecat.config.candidates import (
     CandidateConfig,
     resolve_candidate_config_snapshot,
@@ -113,6 +114,19 @@ class AnalysisService:
                     for summary in page.items
                 ),
                 next_cursor=page.next_cursor,
+            )
+
+    def related(
+        self,
+        input_run_id: str,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+    ) -> AnalysisPublicationPage:
+        with self._analysis_errors():
+            self._services.runs.read_snapshot(input_run_id)
+            return self._repository.list_related(
+                input_run_id, limit=limit, before=before
             )
 
     def list_sample(

@@ -95,7 +95,7 @@ from scopecat.records.analysis import (
     AnalysisPublishedDatasetViewSource,
     AnalysisPublishedOutputReference,
     AnalysisTableViewSpec,
-    analysis_record_id,
+    analysis_proposal_source_token,
     is_analysis_rows,
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
@@ -608,7 +608,7 @@ class Analysis:
                 source_run_id=self._required_proposal_run().id,
                 source_config=self._required_proposal_run().config,
                 analysis_title=self.title,
-                analysis_record_id=analysis_record_id(self.analysis_key, 1),
+                analysis_record_id=analysis_proposal_source_token(self.analysis_key),
                 proposal_id=proposal_id,
                 updates=updates,
                 reason=reason,

@@ -90,6 +90,26 @@ class SQLiteAnalysisRepository:
         except (sqlite3.Error, ValidationError) as error:
             raise _storage_failure("analyses") from error
 
+    def list_related(
+        self,
+        input_run_id: str,
+        *,
+        limit: int,
+        before: int | None,
+    ) -> AnalysisPublicationPage:
+        """Direct measurement/configuration inputs in this data space only."""
+        try:
+            with self.sqlite.read_connection() as connection:
+                return list_publications(
+                    connection,
+                    subject=None,
+                    input_run_id=input_run_id,
+                    limit=limit,
+                    before=before,
+                )
+        except (sqlite3.Error, ValidationError) as error:
+            raise _storage_failure("analyses") from error
+
     def latest_publication(
         self,
         analysis_key: str,

@@ -602,6 +602,7 @@ export function RunsWorkspace({
             />
           ) : selectedRun ? (
             <RunDetail
+              onOpenRun={onSelectRun}
               projectId={health?.projectId}
               collectionNames={collectionNames}
               run={selectedRun}

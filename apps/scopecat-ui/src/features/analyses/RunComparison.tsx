@@ -313,6 +313,7 @@ function ComparisonPage({
       } else if (result.kind === "publication") {
         selectAnalysis(result.analysis_id);
         await client.invalidateQueries({ queryKey: ["comparison", projectId, "history", primary] });
+        await client.invalidateQueries({ queryKey: ["analyses"] });
       } else if (result.kind === "handoff") onHandoff(result);
     } catch (caught) {
       if (alive.current) setError(errorMessage(caught));

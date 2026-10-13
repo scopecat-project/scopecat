@@ -309,7 +309,7 @@ def test_parameter_change_proposal_round_trips_and_is_persisted(
     proposal = analysis.parameter_proposals[0]
 
     restored = ParameterChangeProposal.model_validate_json(proposal.model_dump_json())
-    analysis.save()
+    saved = analysis.save()
     persisted = load_parameter_change_proposal(
         run_id=run.id,
         selector=proposal.id,
@@ -317,7 +317,8 @@ def test_parameter_change_proposal_round_trips_and_is_persisted(
     )
 
     assert restored == proposal
-    assert persisted == proposal
+    assert persisted == saved.parameter_proposals[0]
+    assert persisted.analysis_record_id == saved.id
     assert persisted.deltas == proposal.deltas
 
 

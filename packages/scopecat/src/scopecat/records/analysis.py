@@ -49,10 +49,10 @@ MAX_ANALYSIS_TOTAL_FIGURE_POINTS = 16_384
 ANALYSIS_ARTIFACT_CODEC = "scopecat.artifact-bytes.v1"
 
 
-def analysis_record_id(analysis_key: str, revision: int) -> str:
-    """Return the unambiguous persisted record identity for one revision."""
+def analysis_proposal_source_token(analysis_key: str) -> str:
+    """Return a provisional proposal source token, replaced on publication."""
 
-    return f"analysis-{analysis_key}-r{revision}"
+    return f"analysis-{analysis_key}-r1"
 
 
 def _reject_unsafe_table_integer(value: object) -> object:

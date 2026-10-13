@@ -201,6 +201,7 @@ function AnalysisActionForm({
     },
     onSuccess: async () => {
       await Promise.all([
+        client.invalidateQueries({ queryKey: ["analyses", "related"] }),
         client.invalidateQueries({ queryKey: ["analyses", "run", catalog.run_id] }),
         client.invalidateQueries({ queryKey: ["run-contents", catalog.run_id] }),
       ]);

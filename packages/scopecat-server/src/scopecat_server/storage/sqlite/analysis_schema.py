@@ -24,6 +24,18 @@ CREATE TABLE IF NOT EXISTS analysis_publications (
     )
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS analysis_publications_identity
+ON analysis_publications(record_id);
+
+CREATE TABLE IF NOT EXISTS analysis_input_runs (
+    publication_sequence INTEGER NOT NULL REFERENCES analysis_publications(sequence)
+        ON DELETE CASCADE,
+    run_id TEXT NOT NULL,
+    PRIMARY KEY (publication_sequence, run_id)
+);
+CREATE INDEX IF NOT EXISTS analysis_input_runs_lookup
+ON analysis_input_runs(run_id, publication_sequence DESC);
+
 CREATE UNIQUE INDEX IF NOT EXISTS analysis_publications_project_record
 ON analysis_publications(record_id)
 WHERE subject_kind = 'project';

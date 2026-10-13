@@ -630,7 +630,7 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
                     role="input",
                     source=AnalysisPublishedOutputReference(
                         subject=RunAnalysisSubject(run_id=upstream),
-                        analysis_record_id="analysis",
+                        analysis_record_id=f"analysis-{upstream}",
                         output_id=fact.id,
                     ),
                 )
@@ -639,7 +639,7 @@ def test_selected_run_export_follows_upstream_analysis_and_run(tmp_path: Path):
         entry = ContentEntry(
             role="record",
             kind="analysis",
-            id="analysis",
+            id=f"analysis-{run_id}",
             content_hash=model_wire_content_hash(record),
         )
         runs.publish_analysis(

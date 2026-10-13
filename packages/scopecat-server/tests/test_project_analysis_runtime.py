@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Barrier
 from typing import cast
+from uuid import UUID
 
 import httpx2
 import numpy as np
@@ -20,6 +21,7 @@ from scopecat.analysis.service import MeasurementAnalysisInput
 from scopecat.api.analysis import Analysis, AnalysisContext, analysis_step
 from scopecat.api.lab import LabClient
 from scopecat.api.parameter_candidates import ParameterCandidate
+from scopecat.api.procedures import _existing_project_analysis, _existing_run_analysis
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.config.changes import parameter_change_proposal_from_updates
 from scopecat.config.documents import load_config_snapshot_document
@@ -55,6 +57,7 @@ from scopecat.daemon.wire import (
     TerminalRunCommitCommand,
 )
 from scopecat.execution.evidence import build_terminal_contents
+from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.run_outcome import RunOutcome
@@ -446,9 +449,11 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
             retry = publish("# Candidate verification\n\nInitial comparison.\n")
             revised = publish("# Candidate verification\n\nReviewed comparison.\n")
 
-            assert first.id == "analysis-candidate-verification-r1"
+            assert UUID(first.id).version == 4
             assert retry.id == first.id
-            assert revised.id == "analysis-candidate-verification-r2"
+            assert revised.id != first.id
+            recovered = _existing_project_analysis(lab, key="candidate-verification")
+            assert recovered is not None and recovered.id == first.id
             assert retry.published_at == first.published_at
             assert revised.published_at >= first.published_at
             assert revised.revision == 2
@@ -583,7 +588,7 @@ def test_project_analysis_compares_completed_runs_and_reloads_outputs(
         restored = LabClient(_daemon_client(transport)).published_analysis(
             "candidate-verification"
         )
-        assert restored.id == "analysis-candidate-verification-r2"
+        assert restored.id == revised.id
         assert restored.artifact("report").text().endswith("Reviewed comparison.\n")
 
 
@@ -669,8 +674,31 @@ def test_sample_analysis_is_scoped_to_runs_bound_to_that_sample(tmp_path: Path) 
 
             assert isinstance(published.view.analysis.subject, SampleAnalysisSubject)
             assert published.view.analysis.subject.sample_id == "die-1"
-            assert published.id.startswith("analysis-sample-")
+            assert UUID(published.id).version == 4
             assert lab.analysis_summaries().items == ()
+            # This legal project key collided with the former sample record ID.
+            scope = stable_content_hash({"kind": "sample", "sample_id": "die-1"})[:12]
+            collision = lab.analysis(
+                "Space summary", key=f"sample-{scope}-sample-health"
+            )
+            collision.measurements(sample_run, id="signal")
+            project_result = collision.result().fact("score", 1).save()
+            assert project_result.id != published.id
+            related = transport.get(
+                "/api/v1/analysis-publications",
+                params={
+                    "input_run_id": sample_run.id,
+                },
+            )
+            assert related.status_code == 200
+            assert {item["record"]["id"] for item in related.json()["items"]} == {
+                project_result.id,
+                published.id,
+            }
+            assert lab.published_analysis(project_result.id).fact("score").value == 1
+            assert (
+                lab.published_analysis(published.id, sample="die-1").id == published.id
+            )
             sample_page = lab.analysis_summaries(sample="die-1")
             assert [item.entry.id for item in sample_page.items] == [published.id]
             assert (
@@ -766,10 +794,7 @@ def test_project_analysis_allocates_distinct_revisions_for_concurrent_saves(
             with ThreadPoolExecutor(max_workers=len(pending)) as executor:
                 saved = tuple(executor.map(save, pending))
 
-            assert {item.id for item in saved} == {
-                "analysis-concurrent-comparison-r1",
-                "analysis-concurrent-comparison-r2",
-            }
+            assert len({item.id for item in saved}) == 2
             assert {item.revision for item in saved} == {1, 2}
             assert {cast("str", item.fact("verdict").value) for item in saved} == {
                 "first",
@@ -838,6 +863,8 @@ def test_project_analysis_consumes_project_datasets_facts_and_artifacts(
             )
 
             assert consumer.fact("consumed").value is True
+            related = runtime.application.analyses.related(run_id)
+            assert [item.record.id for item in related.items] == [source.id]
             assert {input_ref.kind for input_ref in consumer.inputs} == {
                 "analysis_dataset",
                 "analysis_fact",
@@ -908,6 +935,7 @@ def test_project_analysis_publication_rolls_back_index_and_event_together(
                     result.save()
 
             assert runtime.application.analyses.list().items == ()
+            assert runtime.application.analyses.related(run_id).items == ()
             assert [
                 event.kind
                 for event in _events(runtime).items
@@ -916,7 +944,7 @@ def test_project_analysis_publication_rolls_back_index_and_event_together(
 
             saved = result.save()
 
-            assert saved.id == "analysis-atomic-comparison-r1"
+            assert UUID(saved.id).version == 4
             assert [
                 event.kind
                 for event in _events(runtime).items
@@ -945,6 +973,7 @@ def test_retained_registry_candidate_export_requires_exact_decision(
             lab = LabClient(_daemon_client(transport))
             baseline = lab.get_run(baseline_id)
             proposal_analysis = baseline.published_analysis("fit")
+            [proposal] = proposal_analysis.parameter_proposals
             candidate = proposal_analysis.candidate_config()
             candidate_config, candidate_source = lab.config.resolve_with_source(
                 candidate
@@ -1230,6 +1259,49 @@ def test_primary_run_analysis_checks_secondary_owner_and_exact_content(
             analysis = context.result().fact("compared", True)
             saved = analysis.save()
             assert saved.view.analysis.subject == RunAnalysisSubject(run_id=primary_id)
+            assert analysis.save().id == saved.id
+            # Multiple input edges from the same run produce one discoverable row.
+            space = lab.analysis("Space comparison", key="comparison")
+            space.measurements(primary, id="first")
+            space.measurements(primary, id="repeated")
+            space.measurements(secondary, id="second")
+            space_result = space.result().fact("compared", True).save()
+            revised = context.result().fact("compared", False).save()
+            assert revised.id != saved.id and revised.revision == 2
+            recovered = _existing_run_analysis(primary, key="comparison")
+            assert recovered is not None and recovered.id == saved.id
+            for run_id in (primary_id, secondary_id):
+                ids: list[str] = []
+                before = None
+                while True:
+                    params: dict[str, str | int] = {"input_run_id": run_id, "limit": 1}
+                    if before is not None:
+                        params["before"] = before
+                    response = transport.get(
+                        "/api/v1/analysis-publications", params=params
+                    )
+                    assert response.status_code == 200
+                    body = response.json()
+                    ids.extend(item["record"]["id"] for item in body["items"])
+                    before = body["next_cursor"]
+                    if before is None:
+                        break
+                assert ids == [revised.id, space_result.id, saved.id]
+            # Foreign run identities are not discoverable from another data space.
+            with (
+                LocalDaemonRuntime(tmp_path / "other") as other,
+                TestClient(other.app()) as client,
+            ):
+                assert (
+                    client.get(
+                        "/api/v1/analysis-publications",
+                        params={
+                            "input_run_id": primary_id,
+                        },
+                    ).status_code
+                    == 404
+                )
+            assert primary.published_analysis(saved.id).fact("compared").value is True
             first, second = analysis.inputs
             assert isinstance(first, MeasurementAnalysisInput)
             assert isinstance(second, MeasurementAnalysisInput)

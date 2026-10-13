@@ -624,7 +624,7 @@ class RunService:
         self, run_id: str, command: ParameterCandidateComposeCommand
     ) -> AnalysisSaveReceipt:
         from scopecat.config.parameter_composition import resolve_parameter_composition
-        from scopecat.records.analysis import analysis_record_id
+        from scopecat.records.analysis import analysis_proposal_source_token
         from scopecat.records.parameter_change import ParameterChangeProposal
 
         with self._config_errors():
@@ -640,7 +640,7 @@ class RunService:
             proposal = ParameterChangeProposal(
                 id=name,
                 source_run_id=run_id,
-                analysis_record_id=analysis_record_id(name, 1),
+                analysis_record_id=analysis_proposal_source_token(name),
                 base_config_id=config.id,
                 base_config_content_hash=snapshot.config_content_hash,
                 reason=command.note or "Compose retained parameter candidates",

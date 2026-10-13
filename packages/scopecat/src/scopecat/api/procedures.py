@@ -76,6 +76,7 @@ from scopecat.daemon.client import (
     DaemonNotFoundError,
     DaemonUnavailableError,
 )
+from scopecat.daemon.views import ProjectAnalysisPage, SampleAnalysisPage
 from scopecat.daemon.wire import (
     ParameterBranchPublishCommand,
     ParameterCandidateComposeCommand,
@@ -98,7 +99,6 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
     RunAnalysisSubject,
     SampleAnalysisSubject,
-    analysis_record_id,
 )
 from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.configuration_fence import ProcedureConfigurationFence
@@ -140,6 +140,13 @@ class ProcedureLabSession(Protocol):
         *,
         key: str | None = None,
     ) -> PublishedAnalysis: ...
+
+    def analysis_summaries(
+        self,
+        *,
+        limit: int = 100,
+        before: int | None = None,
+    ) -> ProjectAnalysisPage | SampleAnalysisPage: ...
 
     def published_analysis(
         self,
@@ -1389,7 +1396,18 @@ def _existing_run_analysis(
     key: str,
 ) -> PublishedAnalysis | None:
     try:
-        return run.published_analysis(analysis_record_id(key, 1))
+        latest = run.published_analysis(key)
+        if latest.revision == 1:
+            return latest
+        before = None
+        while True:
+            page = run.analysis_summaries(before=before)
+            for item in page.items:
+                if item.key == key and item.revision == 1:
+                    return run.published_analysis(item.entry.id)
+            if page.next_cursor is None:
+                raise ValueError("procedure analysis first revision is missing")
+            before = page.next_cursor
     except DaemonNotFoundError:
         return None
 
@@ -1400,7 +1418,18 @@ def _existing_project_analysis(
     key: str,
 ) -> PublishedAnalysis | None:
     try:
-        return lab.published_analysis(analysis_record_id(key, 1))
+        latest = lab.published_analysis(key)
+        if latest.revision == 1:
+            return latest
+        before = None
+        while True:
+            page = lab.analysis_summaries(before=before)
+            for item in page.items:
+                if item.key == key and item.revision == 1:
+                    return lab.published_analysis(item.entry.id)
+            if page.next_cursor is None:
+                raise ValueError("procedure analysis first revision is missing")
+            before = page.next_cursor
     except DaemonNotFoundError:
         return None
 
@@ -1418,7 +1447,7 @@ def _validate_run_analysis(
         raise ValueError("procedure run analysis has the wrong exact subject")
     if published.step_id != step_id or published.key != key:
         raise ValueError("procedure run analysis identity does not match its step")
-    if published.id != analysis_record_id(key, 1) or published.revision != 1:
+    if published.revision != 1:
         raise ValueError("procedure run analysis must resolve the exact first revision")
     _validate_analysis_upstreams(published, inputs=inputs)
 
@@ -1434,7 +1463,7 @@ def _validate_project_analysis(
         raise ValueError("procedure project analysis has the wrong subject")
     if published.step_id != step_id or published.key != key:
         raise ValueError("procedure project analysis identity does not match its step")
-    if published.id != analysis_record_id(key, 1) or published.revision != 1:
+    if published.revision != 1:
         raise ValueError(
             "procedure project analysis must resolve the exact first revision"
         )

@@ -81,7 +81,7 @@ export function ClearData({
         cache.invalidateQueries({ queryKey: ["runs"] }),
         cache.invalidateQueries({ queryKey: ["data"] }),
         cache.invalidateQueries({ queryKey: ["research", "runs"] }),
-        cache.invalidateQueries({ queryKey: ["analyses", "project"], exact: true }),
+        cache.invalidateQueries({ queryKey: ["analyses"] }),
       ]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
