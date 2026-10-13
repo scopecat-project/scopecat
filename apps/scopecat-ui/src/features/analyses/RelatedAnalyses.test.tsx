@@ -28,6 +28,7 @@ vi.mock("./AnalysisPublicationView", () => ({
   }) => (
     <div>
       {analysis.title}
+      <span data-testid="publication-id">{analysis.id}</span>
       <button onClick={() => onOpenRun("other-input")}>Open input</button>
     </div>
   ),
@@ -36,6 +37,7 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
 it("isolates the same run, publication and source references across data spaces without clearing the cache", async () => {
@@ -70,9 +72,10 @@ it("isolates the same run, publication and source references across data spaces 
         return Response.json({ id: "collection", name: `Collection ${space}` });
       expect(url.pathname).toBe("/api/v1/analysis-publications");
       expect(url.searchParams.get("input_run_id")).toBe("same-run");
+      expect(url.searchParams.get("include_owned")).toBe("true");
       return Response.json(
         url.searchParams.has("before")
-          ? { items: [summary(true)], next_cursor: null }
+          ? { items: [summary(), summary(true)], next_cursor: null }
           : { items: [summary()], next_cursor: 2 },
       );
     }),
@@ -91,12 +94,17 @@ it("isolates the same run, publication and source references across data spaces 
         ReturnType<typeof getSample>
       >,
   );
-  vi.mocked(getRunAnalysis).mockImplementation(
-    async () =>
-      ({ id: "same-publication", title: `Detail ${space}` }) as Awaited<
-        ReturnType<typeof getRunAnalysis>
-      >,
-  );
+  vi.mocked(getRunAnalysis).mockImplementation(async () => ({
+    id: "same-publication",
+    title: `Detail ${space}`,
+    inputs: [],
+    outputs: [],
+    subject: "run",
+    revision: 1,
+    publicationHash: "hash",
+    publishedAt: "2026-10-13T00:00:00Z",
+    executions: [],
+  }));
   const view = () => (
     <QueryClientProvider client={client}>
       <RelatedAnalyses
@@ -109,8 +117,9 @@ it("isolates the same run, publication and source references across data spaces 
   );
   const mounted = render(view());
   await screen.findByText("Collection a #7 · Experiment a");
-  fireEvent.click(screen.getByRole("button", { name: "Load older related analyses" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load older analyses" }));
   await screen.findByText("Sample Chip a");
+  expect(screen.getAllByText("a run result")).toHaveLength(1);
   const open = async (title: string) => {
     const row = screen.getByText(title).closest("details")!;
     row.open = true;
@@ -127,7 +136,7 @@ it("isolates the same run, publication and source references across data spaces 
   expect(screen.queryByText("Detail a")).not.toBeInTheDocument();
   expect(screen.queryByText("a sample result")).not.toBeInTheDocument();
   expect(screen.getByText("b run result").closest("details")).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByRole("button", { name: "Load older related analyses" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load older analyses" }));
   await screen.findByText("Sample Chip b");
   await open("b run result");
   await waitFor(() => expect(getRunAnalysis).toHaveBeenCalledTimes(2));
@@ -139,3 +148,146 @@ it("isolates the same run, publication and source references across data spaces 
   expect(getRunAnalysis).toHaveBeenCalledTimes(2);
   client.clear();
 });
+
+it("keeps an exact off-page publication once when its list page arrives", async () => {
+  window.history.replaceState(null, "", "/?run-analysis=exact#runs");
+  vi.mocked(getRun).mockResolvedValue({ runId: "owner", experimentId: "Signal" } as ProjectRun);
+  vi.mocked(getRunAnalysis).mockResolvedValue({
+    id: "exact",
+    title: "Exact version",
+    revision: 2,
+    publicationHash: "hash",
+    publishedAt: "2026-10-13T00:00:00Z",
+    subject: "run",
+    inputs: [],
+    outputs: [],
+    executions: [],
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) =>
+      Response.json(
+        new URL(request.url).searchParams.has("before")
+          ? { items: [publication("exact")], next_cursor: null }
+          : { items: [publication("newer")], next_cursor: 2 },
+      ),
+    ),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <RelatedAnalyses projectId="space" runId="owner" collectionNames={new Map()} />
+    </QueryClientProvider>,
+  );
+  await screen.findByTestId("publication-id");
+  fireEvent.click(await screen.findByRole("button", { name: "Load older analyses" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Load older analyses" })).not.toBeInTheDocument(),
+  );
+  expect(screen.getAllByTestId("publication-id")).toHaveLength(1);
+  expect(screen.getByTestId("publication-id")).toHaveTextContent("exact");
+  expect(screen.getByRole("link", { name: "Open saved version" })).toHaveAttribute(
+    "href",
+    "?run=owner&run-analysis=exact#runs",
+  );
+  expect(screen.getByText("None declared")).toBeVisible();
+});
+
+it("ignores an old-space list response arriving after a switch", async () => {
+  let finish!: (value: Response) => void;
+  vi.mocked(getRun).mockResolvedValue({ runId: "owner", experimentId: "Signal" } as ProjectRun);
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValue(Response.json({ items: [publication("space-b")], next_cursor: null })),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (space: string) => (
+    <QueryClientProvider client={client}>
+      <RelatedAnalyses projectId={space} runId="owner" collectionNames={new Map()} />
+    </QueryClientProvider>
+  );
+  const mounted = render(view("a"));
+  mounted.rerender(view("b"));
+  await screen.findByText("space-b");
+  finish(Response.json({ items: [publication("space-a")], next_cursor: null }));
+  await waitFor(() => expect(screen.queryByText("space-a")).not.toBeInTheDocument());
+});
+it("waits for every expanded cold detail before restoring the saved reading position", async () => {
+  window.history.replaceState(
+    {
+      runResults: {
+        projectId: "space",
+        runId: "owner",
+        expanded: ["first", "second"],
+        scroll: 900,
+      },
+    },
+    "",
+    "/",
+  );
+  const scroll = vi.fn();
+  vi.stubGlobal("scrollTo", scroll);
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({ items: [publication("first"), publication("second")], next_cursor: null }),
+    ),
+  );
+  vi.mocked(getRun).mockResolvedValue({ runId: "owner", experimentId: "Signal" } as ProjectRun);
+  let finish!: (value: Awaited<ReturnType<typeof getRunAnalysis>>) => void;
+  const detail = {
+    id: "first",
+    title: "First detail",
+    revision: 1,
+    publicationHash: "hash",
+    publishedAt: "2026-10-13T00:00:00Z",
+    subject: "run" as const,
+    inputs: [],
+    outputs: [],
+    executions: [],
+  };
+  vi.mocked(getRunAnalysis).mockImplementation(async (_run, id) =>
+    id === "first"
+      ? detail
+      : new Promise((resolve) => {
+          finish = resolve;
+        }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <RelatedAnalyses projectId="space" runId="owner" collectionNames={new Map()} />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("First detail");
+  expect(scroll).not.toHaveBeenCalled();
+  finish({ ...detail, id: "second", title: "Second detail" });
+  await screen.findByText("Second detail");
+  await waitFor(() => expect(scroll).toHaveBeenCalledExactlyOnceWith(0, 900));
+});
+
+function publication(id: string) {
+  return {
+    subject: { kind: "run", run_id: "owner" },
+    record: { id, role: "record", kind: "analysis", content_hash: "hash" },
+    title: id,
+    analysis_key: "series",
+    revision: 1,
+    publication_hash: "hash",
+    published_at: "2026-10-13T00:00:00Z",
+    input_count: 0,
+    output_count: 0,
+  };
+}

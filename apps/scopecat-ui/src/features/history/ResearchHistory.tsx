@@ -1,6 +1,7 @@
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ScopeCatalog } from "../context/ScopeCatalog";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
+import { RunIdLookup } from "./RunIdLookup";
 import { CollectionRunLookup } from "./CollectionRunLookup";
 import { useState } from "react";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
@@ -181,6 +182,13 @@ export function ResearchHistory({
           <span className="text-xs text-text-dim">Choose a collection to find a short number.</span>
         )}
       </div>
+      <RunIdLookup
+        key={projectId}
+        projectId={projectId}
+        unavailable={daemonUnavailable}
+        names={collectionNames}
+        onOpenRun={onOpenRun}
+      />
       <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
         <label>
           Research project{" "}

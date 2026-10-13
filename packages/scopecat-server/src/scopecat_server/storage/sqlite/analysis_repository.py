@@ -96,6 +96,7 @@ class SQLiteAnalysisRepository:
         *,
         limit: int,
         before: int | None,
+        include_owned: bool = False,
     ) -> AnalysisPublicationPage:
         """Direct measurement/configuration inputs in this data space only."""
         try:
@@ -104,6 +105,7 @@ class SQLiteAnalysisRepository:
                     connection,
                     subject=None,
                     input_run_id=input_run_id,
+                    include_owned=include_owned,
                     limit=limit,
                     before=before,
                 )

@@ -1140,7 +1140,6 @@ function canonicalQueryCallCounts(): number[] {
     vi.mocked(getRun).mock.calls.length,
     vi.mocked(getRunEvents).mock.calls.length,
     vi.mocked(getMeasurementPreview).mock.calls.length,
-    vi.mocked(getRunAnalysisSummaries).mock.calls.length,
   ];
 }
 

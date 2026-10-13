@@ -119,6 +119,7 @@ def list_publications(
     limit: int,
     before: int | None,
     input_run_id: str | None = None,
+    include_owned: bool = False,
 ) -> AnalysisPublicationPage:
     clauses: list[str] = []
     parameters: list[str | int] = []
@@ -127,11 +128,18 @@ def list_publications(
         clauses.append(owner_clause)
         parameters.extend(owner_parameters)
     if input_run_id is not None:
-        clauses.append(
+        input_clause = (
             "sequence IN (SELECT publication_sequence FROM analysis_input_runs "
             "WHERE run_id = ?)"
         )
         parameters.append(input_run_id)
+        if include_owned:
+            owner_clause, owner_parameters = _owner_clause(
+                RunAnalysisSubject(run_id=input_run_id)
+            )
+            input_clause = f"({input_clause} OR {owner_clause})"
+            parameters.extend(owner_parameters)
+        clauses.append(input_clause)
     if not clauses:
         raise ValueError("publication listing requires a subject or direct input")
     if before is not None:

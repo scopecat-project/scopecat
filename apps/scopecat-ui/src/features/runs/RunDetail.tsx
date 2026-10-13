@@ -24,7 +24,6 @@ import type {
   MeasurementSlicePreview,
   ProjectEvent,
   ProjectRun,
-  RunAnalysisSummary,
 } from "../../types";
 import { RunProposals } from "../proposals/RunProposals";
 import { RunMeasuredCosts } from "./RunMeasuredCosts";
@@ -38,7 +37,6 @@ import type {
   MeasurementTraceQueryPlan,
 } from "./measurement-visualization";
 import {
-  AnalysisCard,
   DataCard,
   ExecutionSegmentsCard,
   ProgressCard,
@@ -80,12 +78,6 @@ export function RunDetail({
   onMeasurementAxesChange,
   onMeasurementSliceOffsetChange,
   onMeasurementFixedAxisIndexChange,
-  analyses,
-  analysesError,
-  analysesPending,
-  analysesHasNextPage,
-  analysesLoadingNextPage,
-  onLoadOlderAnalyses,
   contentsError,
   contentsPending,
   contentsHasNextPage,
@@ -128,12 +120,6 @@ export function RunDetail({
   onMeasurementAxesChange?: (selection: MeasurementSliceSelection) => void;
   onMeasurementSliceOffsetChange: (offset: number) => void;
   onMeasurementFixedAxisIndexChange: (axisId: string, index: number) => void;
-  analyses?: RunAnalysisSummary[];
-  analysesError: Error | null;
-  analysesPending: boolean;
-  analysesHasNextPage: boolean;
-  analysesLoadingNextPage: boolean;
-  onLoadOlderAnalyses: () => void;
   contentsError: Error | null;
   contentsPending: boolean;
   contentsHasNextPage: boolean;
@@ -343,16 +329,6 @@ export function RunDetail({
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
         {run.status === "succeeded" && <RunAnalysisActionsCard key={run.runId} runId={run.runId} />}
-        <AnalysisCard
-          analyses={analyses}
-          error={analysesError}
-          pending={analysesPending}
-          runId={run.runId}
-          hasNextPage={analysesHasNextPage}
-          loadingNextPage={analysesLoadingNextPage}
-          onLoadOlder={onLoadOlderAnalyses}
-        />
-        <RunProposals key={run.runId} runId={run.runId} />
         {projectId && (
           <RelatedAnalyses
             key={`${projectId}:${run.runId}`}
@@ -362,6 +338,7 @@ export function RunDetail({
             onOpenRun={onOpenRun}
           />
         )}
+        <RunProposals key={run.runId} runId={run.runId} />
         <RunAnalysisFollows runId={run.runId} />
         <details
           className="rounded-md border border-line p-4"

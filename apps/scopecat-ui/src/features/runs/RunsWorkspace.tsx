@@ -21,8 +21,6 @@ import {
   getOlderRuns,
   getRun,
   getRunContents,
-  getOlderRunAnalysisSummaries,
-  getRunAnalysisSummaries,
   getRunDomainDecisions,
   getRunExecutionSegments,
   getRunEvents,
@@ -36,7 +34,6 @@ import type {
   ProjectHealth,
   ProjectRun,
   ProjectRunPage,
-  RunAnalysisSummary,
 } from "../../types";
 import { useConfirmationDialog, type ConfirmationRequest } from "../../ui/ConfirmationDialog";
 import { classes, eyebrow, secondaryButton } from "../../ui/styles";
@@ -202,16 +199,6 @@ export function RunsWorkspace({
     enabled: selectedRunId !== undefined,
     refetchInterval: selectedRunIsActive ? 250 : false,
   });
-  const analysesQuery = useInfiniteQuery({
-    queryKey: ["analyses", "run", selectedRunId],
-    queryFn: ({ pageParam, signal }) =>
-      pageParam === undefined
-        ? getRunAnalysisSummaries(selectedRunId!, signal)
-        : getOlderRunAnalysisSummaries(selectedRunId!, pageParam, signal),
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (page) => page.nextCursor,
-    enabled: selectedRunId !== undefined,
-  });
   const attentionMutation = useMutation({
     mutationFn: (runId: string) => closeAttentionRun(runId),
     onSuccess: async () => {
@@ -253,13 +240,6 @@ export function RunsWorkspace({
     () => mergeMeasurementPreviews(measurementsQuery.data, liveMeasurementsQuery.data),
     [liveMeasurementsQuery.data, measurementsQuery.data],
   );
-  const runAnalyses = useMemo(() => {
-    const items = new Map<string, RunAnalysisSummary>();
-    for (const page of analysesQuery.data?.pages ?? []) {
-      for (const analysis of page.items) items.set(analysis.id, analysis);
-    }
-    return [...items.values()];
-  }, [analysesQuery.data]);
   const runContents = useMemo(() => {
     const items = new Map<string, ProjectRun["contents"][number]>();
     for (const page of runContentsQuery.data?.pages ?? []) {
@@ -674,12 +654,6 @@ export function RunsWorkspace({
                   offset: 0,
                 });
               }}
-              analyses={runAnalyses}
-              analysesError={analysesQuery.error}
-              analysesPending={analysesQuery.isPending}
-              analysesHasNextPage={analysesQuery.hasNextPage}
-              analysesLoadingNextPage={analysesQuery.isFetchingNextPage}
-              onLoadOlderAnalyses={() => void analysesQuery.fetchNextPage()}
               contentsError={runContentsQuery.error}
               contentsPending={runContentsQuery.isPending}
               contentsHasNextPage={runContentsQuery.hasNextPage}
