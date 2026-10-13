@@ -31,12 +31,10 @@ export function CollectionRunLookup({
       ),
   });
   return (
-    <div className="mt-3 space-y-2">
-      <p className="text-sm text-text-dim">
-        {collection
-          ? `Look up a number in ${collectionName ?? "the selected collection"}, independently of the filters below.`
-          : "Choose a collection to look up its short number. All collections has no unqualified short number."}
-      </p>
+    <div
+      className="space-y-2"
+      title={`Find a number in ${collectionName ?? "the selected collection"}, independently of other filters.`}
+    >
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
@@ -48,11 +46,11 @@ export function CollectionRunLookup({
           }
         }}
       >
-        <label>
+        <label className="flex flex-col gap-1">
           Collection run number{" "}
           <input
             aria-label="Collection run number"
-            className="rounded border border-line p-2"
+            className="w-28 rounded border border-line p-2"
             value={input}
             type="text"
             inputMode="numeric"
@@ -72,6 +70,7 @@ export function CollectionRunLookup({
           Find run
         </button>
       </form>
+      <p className="text-xs text-text-dim">Collection only · ignores the filters below.</p>
       {number && !unavailable && result.isPending && (
         <p role="status">Finding collection run #{number}…</p>
       )}

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ProjectRun, RunAnalysis } from "../../types";
 import { RunComparison, selectedPoints } from "./RunComparison";
-import { getRuns, getRunAnalysis, getRunAnalysisSummaries } from "../runs/run-api";
+import { getRun, getRuns, getRunAnalysis, getRunAnalysisSummaries } from "../runs/run-api";
 
 vi.mock("../launch/AuthorRefresh", () => ({ AuthorRefresh: () => null }));
 vi.mock("../../ui/EChartRuntime", () => ({ EChartRuntime: () => <div>Two retained curves</div> }));
@@ -16,6 +16,7 @@ vi.mock("./AnalysisPublicationView", () => ({
 }));
 vi.mock("../runs/run-api", () => ({
   getRuns: vi.fn(),
+  getRun: vi.fn(),
   getOlderRuns: vi.fn(),
   getRunAnalysis: vi.fn(),
   getRunAnalysisSummaries: vi.fn(),
@@ -31,7 +32,13 @@ afterEach(() => {
 it("retains ordered selections and exact publication through explicit candidate, rejection and handoff", async () => {
   vi.mocked(getRuns).mockResolvedValue({
     items: ["left", "right"].map(
-      (runId) => ({ runId, experimentId: "signal", status: "succeeded" }) as ProjectRun,
+      (runId, index) =>
+        ({
+          runId,
+          experimentId: "signal",
+          status: "succeeded",
+          address: { collection_id: "collection", number: index + 1, run_id: runId },
+        }) as ProjectRun,
     ),
   });
   vi.mocked(getRunAnalysisSummaries).mockResolvedValue({ items: [] });
@@ -77,6 +84,11 @@ it("retains ordered selections and exact publication through explicit candidate,
   vi.stubGlobal(
     "fetch",
     vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname.endsWith("/record-collections"))
+        return Response.json({
+          items: [{ id: "collection", name: "Morning sweep" }],
+          next_cursor: null,
+        });
       if (new URL(request.url).pathname.endsWith("/author-workspaces"))
         return Response.json({
           items: [{ id: "test-source", name: "Test code", available: true }],
@@ -144,14 +156,24 @@ it("retains ordered selections and exact publication through explicit candidate,
     }),
   );
   const handoff = vi.fn();
-  render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <RunComparison projectId="project" onOpenRun={vi.fn()} onHandoff={handoff} />
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (projectId = "project") => (
+    <QueryClientProvider client={client}>
+      <RunComparison projectId={projectId} onOpenRun={vi.fn()} onHandoff={handoff} />
+    </QueryClientProvider>
+  );
+  window.history.replaceState(null, "", "/?compare=left&comparison-analysis=fit#analyses");
+  const waiting = render(
+    <QueryClientProvider client={client}>
+      <RunComparison projectId={undefined} onOpenRun={vi.fn()} onHandoff={handoff} />
     </QueryClientProvider>,
   );
+  expect(window.history.state).toBeNull();
+  waiting.unmount();
+  window.history.replaceState(null, "", "/");
+  let mounted = render(view());
   await screen.findByRole("option", { name: "User model · v1" });
+  expect(screen.getAllByRole("option", { name: "Morning sweep · #1" })).toHaveLength(2);
   fireEvent.change(screen.getByLabelText("Primary run"), { target: { value: "left" } });
   fireEvent.change(screen.getByLabelText("Secondary run"), { target: { value: "right" } });
   fireEvent.click(screen.getByText("Inspect compatible data"));
@@ -163,6 +185,23 @@ it("retains ordered selections and exact publication through explicit candidate,
     target: { value: "1,2" },
   });
   fireEvent.change(screen.getByLabelText("Offset"), { target: { value: "0.01" } });
+  const beforeRecovery = requests.filter((request) => request.action !== "list").length;
+  mounted.unmount();
+  mounted = render(view());
+  await screen.findByText("Two retained curves");
+  expect(screen.getByLabelText("Secondary run")).toHaveValue("right");
+  expect(screen.getByLabelText("Primary selected positions")).toHaveValue("2,0");
+  expect(screen.getByLabelText("Offset")).toHaveValue(0.01);
+  mounted.unmount();
+  client.removeQueries({ queryKey: ["comparison-preview"] });
+  mounted = render(view());
+  expect(screen.queryByText("Two retained curves")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Primary selected positions")).toHaveValue("2,0");
+  expect(screen.getByText("Fit selected data and save analysis")).toBeDisabled();
+  expect(requests.filter((request) => request.action !== "list")).toHaveLength(beforeRecovery);
+  fireEvent.click(screen.getByText("Inspect compatible data"));
+  await screen.findByText("Two retained curves");
+  expect(screen.getByLabelText("Primary selected positions")).toHaveValue("2,0");
   fireEvent.click(screen.getByText("Fit selected data and save analysis"));
   await screen.findByText("Publication fit");
   expect(requests.find((item) => item.action === "fit")).toMatchObject({
@@ -196,6 +235,11 @@ it("retains ordered selections and exact publication through explicit candidate,
     analysis_hash: "hash-candidate",
     reason: "Insufficient evidence",
   });
+  mounted.rerender(view("another-data-space"));
+  await act(async () => {});
+  expect(screen.getByLabelText("Primary run")).toHaveValue("");
+  expect(screen.getByLabelText("Secondary run")).toHaveValue("");
+  expect(screen.queryByText("Two retained curves")).not.toBeInTheDocument();
 });
 
 it("rejects empty, duplicated and out-of-range positions", () => {
@@ -203,3 +247,43 @@ it("rejects empty, duplicated and out-of-range positions", () => {
     expect(() => selectedPoints(selection, 3)).toThrow(/Select at least one point|Point positions/);
   expect(selectedPoints("2, 0", 3)).toEqual([2, 0]);
 });
+
+it("resolves an older selected run and disambiguates equal collection names and numbers", async () => {
+  vi.mocked(getRuns).mockResolvedValue({ items: [addressedRun("recent", "b")] });
+  vi.mocked(getRun).mockResolvedValue(addressedRun("old", "a"));
+  vi.mocked(getRunAnalysisSummaries).mockResolvedValue({ items: [] });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname.endsWith("/record-collections"))
+        return Response.json({
+          items: [
+            { id: "a", name: "Repeated" },
+            { id: "b", name: "Repeated" },
+          ],
+          next_cursor: null,
+        });
+      return Response.json({ items: [] });
+    }),
+  );
+  window.history.replaceState(null, "", "/?compare=old#analyses");
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <RunComparison projectId="space" onOpenRun={vi.fn()} onHandoff={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  await screen.findAllByRole("option", { name: "Repeated [a] · #1" });
+  expect(screen.getAllByRole("option", { name: "Repeated [b] · #1" })).toHaveLength(2);
+  expect(screen.getByLabelText("Primary run")).toHaveValue("old");
+  expect(getRun).toHaveBeenCalledWith("old", expect.any(AbortSignal));
+});
+
+const addressedRun = (runId: string, collection: string) =>
+  ({
+    runId,
+    experimentId: "signal",
+    status: "succeeded",
+    address: { run_id: runId, collection_id: collection, number: 1 },
+  }) as ProjectRun;

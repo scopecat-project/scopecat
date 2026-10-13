@@ -153,25 +153,33 @@ export function ResearchHistory({
         results remain available below with their original source.
       </p>
       {error && <p role="alert">{error.message}</p>}
-      <div className={detailCard}>
-        <ScopeCatalog
-          kind="collection"
-          owner={projectId}
-          value={collection}
-          onChange={setCollection}
-          emptyLabel="All collections"
-          selectLabel="Record collection filter"
-          disabled={daemonUnavailable}
-          available={!daemonUnavailable}
-        />
-        <CollectionRunLookup
-          key={JSON.stringify([projectId, collection])}
-          projectId={projectId}
-          collection={collection}
-          collectionName={collection ? collectionNames.get(collection) : undefined}
-          unavailable={daemonUnavailable}
-          onOpenRun={onOpenRun}
-        />
+      <div className={`${detailCard} flex flex-wrap items-start gap-3`}>
+        <div className="min-w-0 flex-1 basis-80">
+          <ScopeCatalog
+            compact
+            kind="collection"
+            owner={projectId}
+            value={collection}
+            onChange={setCollection}
+            emptyLabel="All collections"
+            selectLabel="Record collection filter"
+            disabled={daemonUnavailable}
+            available={!daemonUnavailable}
+          />
+        </div>
+        {collection && (
+          <CollectionRunLookup
+            key={JSON.stringify([projectId, collection])}
+            projectId={projectId}
+            collection={collection}
+            collectionName={collection ? collectionNames.get(collection) : undefined}
+            unavailable={daemonUnavailable}
+            onOpenRun={onOpenRun}
+          />
+        )}
+        {!collection && (
+          <span className="text-xs text-text-dim">Choose a collection to find a short number.</span>
+        )}
       </div>
       <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
         <label>

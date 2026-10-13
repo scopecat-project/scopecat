@@ -9,6 +9,7 @@ const terminal = (status: Preparation["status"]) =>
 type Request = { operation_id: string; expected_generation: number };
 
 type Props = {
+  context?: "acquisition" | "analysis";
   projectId: string | undefined;
   workspaceId: string;
   disabled?: boolean;
@@ -19,7 +20,13 @@ export function AuthorRefresh(props: Props) {
   return <AuthorRefreshPanel key={`${props.projectId}:${props.workspaceId}`} {...props} />;
 }
 
-function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId, disabled = false }: Props) {
+function AuthorRefreshPanel({
+  projectId,
+  onRefreshed,
+  workspaceId,
+  disabled = false,
+  context = "acquisition",
+}: Props) {
   const queryClient = useQueryClient();
   const headers = { "X-Scopecat-Workspace": workspaceId };
   const [request, setRequest] = useState<Request>();
@@ -140,7 +147,11 @@ function AuthorRefreshPanel({ projectId, onRefreshed, workspaceId, disabled = fa
         </p>
       )}
       {identity && synchronized === identity && (
-        <p role="status">Author code refreshed. Preview the updated experiment before starting.</p>
+        <p role="status">
+          {context === "analysis"
+            ? "Author code refreshed. Inspect compatible data before fitting with this code."
+            : "Author code refreshed. Preview the updated experiment before starting."}
+        </p>
       )}
       {identity && <p className="text-xs break-all">Preparation: {identity}</p>}
       {busy && (

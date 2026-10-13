@@ -2,10 +2,12 @@ import { secondaryButton } from "../../ui/styles";
 import type { useAuthorWorkspaces } from "./source-api";
 
 export function SourceSelector({
+  context = "acquisition",
   catalog,
   workspaceId,
   onSelect,
 }: {
+  context?: "acquisition" | "analysis";
   catalog: ReturnType<typeof useAuthorWorkspaces>;
   workspaceId: string;
   onSelect: (id: string) => void;
@@ -69,8 +71,9 @@ export function SourceSelector({
         </p>
       )}
       <p>
-        Code selection belongs to this page. Switching workspaces retains the measurement context
-        and clears old experiment inputs and previews.
+        {context === "analysis"
+          ? "Switching code workspaces clears the comparison preview. Inspect data again before fitting."
+          : "Code selection belongs to this page. Switching workspaces retains the measurement context and clears old experiment inputs and previews."}
       </p>
     </div>
   );

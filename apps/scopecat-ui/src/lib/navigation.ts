@@ -9,9 +9,13 @@ export function navigate(target: URL | string, options: NavigationOptions = {}) 
   if (url.href === window.location.href) return;
   const position: number = window.history.state?.scopecatPosition ?? 0;
   if (options.replace) {
-    window.history.replaceState({ scopecatPosition: position }, "", url);
+    window.history.replaceState({ ...window.history.state, scopecatPosition: position }, "", url);
   } else {
-    window.history.replaceState({ scopecatPosition: position }, "", window.location.href);
+    window.history.replaceState(
+      { ...window.history.state, scopecatPosition: position },
+      "",
+      window.location.href,
+    );
     window.history.pushState({ scopecatPosition: position + 1 }, "", url);
   }
   window.dispatchEvent(new HashChangeEvent("hashchange"));

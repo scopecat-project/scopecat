@@ -15,6 +15,7 @@ export function ScopeCatalog({
   emptyLabel,
   selectLabel,
   available = true,
+  compact = false,
 }: {
   kind: "batch" | "collection";
   owner?: string;
@@ -24,6 +25,7 @@ export function ScopeCatalog({
   emptyLabel?: string;
   selectLabel?: string;
   available?: boolean;
+  compact?: boolean;
 }) {
   const label = kind === "batch" ? "Experimental batch" : "Record collection";
   const empty =
@@ -95,51 +97,8 @@ export function ScopeCatalog({
     }
   }
   const [created, setCreated] = useState<{ id: string; name: string }>();
-  return (
-    <div className="space-y-2 min-w-0">
-      <label className="flex flex-col gap-1">
-        {label}
-        <select
-          aria-label={selectLabel ?? label}
-          title={value}
-          value={value ?? ""}
-          disabled={disabled || pending}
-          onChange={(event) => onChange(event.target.value || undefined)}
-          className="border rounded p-2"
-        >
-          <option value="">{empty}</option>
-          {value && !items.some((item) => item.id === value) && (
-            <option value={value}>{selected.data?.name ?? value}</option>
-          )}
-          {items.map((item) => (
-            <option key={item.id} value={item.id} title={item.id}>
-              {item.name}
-              {items.some((other) => other.id !== item.id && other.name === item.name)
-                ? ` · ${item.id}`
-                : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-      {(error || pages.error || selected.error) && (
-        <p role="alert">{error || pages.error?.message || selected.error?.message}</p>
-      )}
-      {pages.isPending && <p role="status">Loading {label.toLowerCase()} choices…</p>}
-      {pages.hasNextPage && (
-        <button
-          className={secondaryButton}
-          type="button"
-          disabled={pages.isFetchingNextPage}
-          onClick={() => void pages.fetchNextPage()}
-        >
-          Load more {kind === "batch" ? "batches" : "collections"}
-        </button>
-      )}
-      {pages.isError && (
-        <button className={secondaryButton} type="button" onClick={() => void pages.refetch()}>
-          Retry {label.toLowerCase()} list
-        </button>
-      )}
+  const management = (
+    <>
       {kind === "collection" && current && (
         <RenameCollection key={current.id} collection={current} disabled={disabled || pending} />
       )}
@@ -201,6 +160,61 @@ export function ScopeCatalog({
             New {kind === "batch" ? "batch" : "collection"}
           </button>
         ))}
+    </>
+  );
+  return (
+    <div className={compact ? "flex min-w-0 flex-wrap items-end gap-2" : "space-y-2 min-w-0"}>
+      <label className={compact ? "flex min-w-0 flex-1 flex-col gap-1" : "flex flex-col gap-1"}>
+        {label}
+        <select
+          aria-label={selectLabel ?? label}
+          title={value}
+          value={value ?? ""}
+          disabled={disabled || pending}
+          onChange={(event) => onChange(event.target.value || undefined)}
+          className="min-w-0 max-w-full border rounded p-2"
+        >
+          <option value="">{empty}</option>
+          {value && !items.some((item) => item.id === value) && (
+            <option value={value}>{selected.data?.name ?? value}</option>
+          )}
+          {items.map((item) => (
+            <option key={item.id} value={item.id} title={item.id}>
+              {item.name}
+              {items.some((other) => other.id !== item.id && other.name === item.name)
+                ? ` · ${item.id}`
+                : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {(error || pages.error || selected.error) && (
+        <p role="alert">{error || pages.error?.message || selected.error?.message}</p>
+      )}
+      {pages.isPending && <p role="status">Loading {label.toLowerCase()} choices…</p>}
+      {pages.hasNextPage && (
+        <button
+          className={secondaryButton}
+          type="button"
+          disabled={pages.isFetchingNextPage}
+          onClick={() => void pages.fetchNextPage()}
+        >
+          Load more {kind === "batch" ? "batches" : "collections"}
+        </button>
+      )}
+      {pages.isError && (
+        <button className={secondaryButton} type="button" onClick={() => void pages.refetch()}>
+          Retry {label.toLowerCase()} list
+        </button>
+      )}
+      {compact ? (
+        <details className="min-w-0">
+          <summary className="cursor-pointer text-xs text-text-soft">Manage collection</summary>
+          <div className="mt-2 space-y-2">{management}</div>
+        </details>
+      ) : (
+        management
+      )}
     </div>
   );
 }

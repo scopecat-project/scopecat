@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CustomSeriesRenderItem, EChartsCoreOption } from "echarts";
 import type { MeasurementChartPlan } from "./measurement-visualization";
-import { analysisFigureOption, measurementChartOption } from "./chart-options";
+import {
+  analysisFigureOption,
+  measurementChartOption,
+  comparisonChartOption,
+} from "./chart-options";
 
 describe("run chart ECharts options", () => {
   it("builds value axes, inside zoom, and a scroll legend for measurement lines", () => {
@@ -323,3 +327,37 @@ function optionSeries(option: EChartsCoreOption): Array<Record<string, unknown>>
 function cellWidth(cell: number[] | undefined): number | undefined {
   return cell === undefined ? undefined : cell[1]! - cell[0]!;
 }
+
+it("fits narrow comparison coordinates and uses readable shared axes and collection legends", () => {
+  const curve = {
+    run_id: "left",
+    coordinate: "frequency",
+    coordinate_unit: "GHz",
+    observable: "response",
+    observable_unit: "V",
+    x: [4.6, 4.8, 5.0],
+    y: [0.1, 0.2, 0.1],
+  };
+  const option = comparisonChartOption(
+    { primary: curve, secondary: { ...curve, run_id: "right" } },
+    (id) => `Morning · #${id === "left" ? 1 : 2}`,
+  );
+  expect(option.xAxis).toMatchObject({
+    scale: true,
+    name: "frequency (GHz)",
+    axisLabel: { color: "#818b94" },
+  });
+  expect(option.yAxis).toMatchObject({ scale: true, name: "response (V)" });
+  expect(option.legend).toMatchObject({ type: "scroll", data: ["Morning · #1", "Morning · #2"] });
+  expect(option.series).toMatchObject([
+    {
+      name: "Morning · #1",
+      data: [
+        [4.6, 0.1],
+        [4.8, 0.2],
+        [5, 0.1],
+      ],
+    },
+    { name: "Morning · #2" },
+  ]);
+});

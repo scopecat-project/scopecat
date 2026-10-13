@@ -1254,7 +1254,7 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(screen.getByLabelText("Research project")).toHaveValue("");
   expect(screen.getByLabelText("Working point")).toHaveValue("");
   expect(screen.getByLabelText("Record collection filter")).toHaveValue("");
-  expect(screen.getByLabelText("Collection run number")).toHaveValue("");
+  expect(screen.queryByLabelText("Collection run number")).not.toBeInTheDocument();
   await screen.findByRole("option", { name: "space-b collection" });
   expect(screen.queryByRole("option", { name: "space-a collection" })).toBeNull();
   expect(screen.getByText("Research project management").parentElement).not.toHaveAttribute("open");

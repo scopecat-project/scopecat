@@ -373,3 +373,48 @@ function analysisShortNumber(value: number): string {
   if (magnitude >= 10_000 || magnitude < 0.001) return value.toExponential(2);
   return Number(value.toPrecision(4)).toString();
 }
+
+/** Retained comparisons use the same bounded axes and dark-surface styling as run plots. */
+export function comparisonChartOption(
+  inspection: { primary: ComparisonCurve; secondary: ComparisonCurve },
+  label: (id: string) => string,
+): EChartsCoreOption {
+  const curves = [inspection.primary, inspection.secondary];
+
+  return {
+    animation: false,
+    color: SERIES_COLORS,
+    grid: { bottom: 52, left: 66, right: 20, top: 42 },
+    legend: scrollLegend(curves.map((curve) => label(curve.run_id))),
+    tooltip: { trigger: "item", confine: true },
+    xAxis: valueAxis(
+      comparisonAxisLabel(inspection.primary.coordinate, inspection.primary.coordinate_unit),
+      analysisShortNumber,
+      36,
+    ),
+    yAxis: valueAxis(
+      comparisonAxisLabel(inspection.primary.observable, inspection.primary.observable_unit),
+      analysisShortNumber,
+      36,
+    ),
+    series: curves.map((curve) => ({
+      name: label(curve.run_id),
+      type: "scatter",
+      symbolSize: 8,
+      data: curve.x.map((x, i) => [x, curve.y[i]]),
+    })),
+  };
+}
+interface ComparisonCurve {
+  run_id: string;
+  coordinate: string;
+  observable: string;
+  coordinate_unit: string | null;
+  observable_unit: string | null;
+  x: number[];
+  y: number[];
+}
+
+function comparisonAxisLabel(name: string, unit: string | null) {
+  return unit ? `${name} (${unit})` : name;
+}
