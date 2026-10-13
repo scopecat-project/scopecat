@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
+import { navigateLink } from "../../lib/navigation";
 import type { PlanRef } from "./experiment-plans";
 
 export function PlanOrigin({ reference }: { reference?: PlanRef | null }) {
@@ -55,6 +56,7 @@ export function RunPlanOrigin({ runId, projectId }: { runId: string; projectId?:
           </p>
           <a
             className="text-accent underline"
+            onClick={navigateLink}
             href={`?run=${encodeURIComponent(source.run_id)}&run-analysis=${encodeURIComponent(source.analysis_id)}#runs`}
           >
             Open exact source conclusion

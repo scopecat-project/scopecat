@@ -263,8 +263,16 @@ test("compares retained signals, saves independent results and starts edited sug
     });
     expect(JSON.stringify(accepted.request)).toContain("4.87");
     await page.goto(`${endpoint.base_url}/?run=${nextRun}#runs`);
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
     await page.getByRole("link", { name: "Open exact source conclusion" }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`run=${nextRun}#runs`));
+    await expect(page.getByRole("region", { name: "Decision source" })).toBeVisible();
+    await page.goForward();
+    await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
     const followups = page.getByRole("region", {
       name: "Experiments started from this conclusion",
     });
@@ -288,10 +296,21 @@ with ScientificExchange(sys.argv[1]) as capture:
     source = target.request.decision_source
     assert source.analysis_id == sys.argv[3]
     assert any(a.entry.id == source.analysis_id and a.record.publication_hash == source.publication_hash for a in capture.evidence.analyses)
+    assert {sys.argv[4], sys.argv[5]} <= {r.snapshot.run_id for r in capture.evidence.runs}
+    for run_id in (sys.argv[4], sys.argv[5]):
+        recording = capture.recording(run_id)
+        assert recording.header.run_id == run_id
+        recording.verify()
+        assert len(tuple(recording.records())) == 5
+    assert capture.payloads
+    for payload in capture.payloads:
+        assert len(capture.read_payload(payload)) == payload.size
 `,
       capture,
       nextRun,
       candidate.analysis_id!,
+      primary,
+      secondary,
     ]);
     await page.goto(
       `${endpoint.base_url}/?compare=${encodeURIComponent(primary)}&comparison-analysis=${encodeURIComponent(first.analysis_id!)}#analyses`,
