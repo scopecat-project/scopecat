@@ -14,7 +14,18 @@ from typing import cast
 from fastapi.testclient import TestClient
 
 from benchmarks.record import BENCHMARK_RESULT_PREFIX, benchmark_record_header
+from scopecat.records.scientific_binding import (
+    ResolvedScientificBinding,
+    UnboundSubject,
+)
+from scopecat.runs.refs import SCIENTIFIC_BINDING_REF
 from scopecat_server.runtime import LocalDaemonRuntime  # noqa: TID251
+from scopecat_server.storage.sqlite.object_store import (  # noqa: TID251
+    ImmutableObjectStore,
+)
+from scopecat_server.storage.sqlite.resource_objects import (  # noqa: TID251
+    resource_directory,
+)
 
 _TIMESTAMP = "2026-08-18T00:00:00+00:00"
 _HASH = "0" * 64
@@ -146,6 +157,16 @@ def _seed_project(
     run_count: int,
     analysis_count: int,
 ) -> None:
+    objects = ImmutableObjectStore(database.parent / "objects")
+    binding = (
+        ResolvedScientificBinding(
+            subject=UnboundSubject(),
+            config_content_hash=f"sha256:{_HASH}",
+            setup_content_hash=f"sha256:{_HASH}",
+        )
+        .model_dump_json()
+        .encode()
+    )
     with sqlite3.connect(database) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         for start in range(1, run_count + 1, 1_000):
@@ -170,6 +191,15 @@ def _seed_project(
                 """,
                 ((run_id, _TIMESTAMP, f"sha256:{_HASH}") for _, run_id, _, _ in rows),
             )
+            for _, run_id, _, _ in rows:
+                stored = ImmutableObjectStore(
+                    resource_directory(objects, "run", run_id)
+                ).put(binding)
+                connection.execute(
+                    "INSERT INTO run_repository_refs(run_id, ref, digest) "
+                    "VALUES (?, ?, ?)",
+                    (run_id, SCIENTIFIC_BINDING_REF, stored.digest),
+                )
             connection.executemany(
                 """
                 INSERT INTO run_outcomes(
@@ -274,7 +304,7 @@ def _analysis_seed(ordinal: int) -> tuple[str, str, str, str, str, str]:
 
 
 def _run_id(ordinal: int) -> str:
-    return f"run-history-{ordinal:08d}"
+    return f"00000000-0000-7000-8000-{ordinal:012x}"
 
 
 def main() -> None:
