@@ -10,7 +10,7 @@ bounded execution, live visibility, and durable results as they grow.
 
 ## Documentation
 
-Start with [desktop preview first steps](docs/getting-started/index.md), the
+Start with [download and installation](docs/getting-started/install.md), the
 [documentation home](docs/index.md), or follow the
 [first experiment](docs/getting-started/quickstart.md) to create a
 hardware-free project and complete the first durable run.
@@ -29,10 +29,13 @@ choices rather than product requirements.
 
 ## Desktop preview
 
-Use the qualified Mac or Windows installer supplied by the maintainer. It includes
-Python and application dependencies; opening saved data requires no source checkout
-or laboratory SDK. See [first steps](docs/getting-started/index.md) and
-[preview artifacts](docs/development/public-preview.md#artifact-identity-and-consumer-selection).
+The first numbered experimental release has not been published. The
+[installation guide](docs/getting-started/install.md) identifies the historical
+Mac/Windows preview and how to obtain a qualified candidate for current features.
+It includes Python and application dependencies; opening saved data requires no
+source checkout or laboratory SDK. Continue with [first steps](docs/getting-started/index.md).
+
+## Source development
 
 For daily source development, run from the public checkout with Python 3.14+, uv,
 Node.js and pnpm:

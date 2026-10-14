@@ -67,6 +67,34 @@ before accepting an upgrade. All workflow references to the CLI must stay aligne
 Knope retains change files during prereleases so the eventual stable release can
 include the full set; it removes them when preparing the stable version.
 
+### First numbered delivery readiness
+
+The user entry is [Download and install](../getting-started/install.md). Before
+presenting a first numbered installer there, review the following with the candidate:
+
+- Choose the public version and native build number explicitly; `0.0.0` / build `0`
+  is still only bootstrap state. Existing release tooling is not evidence of an
+  actual numbered release or a successful prepare/publish workflow run.
+- State the candidate's tested OS versions and architectures using
+  [native acceptance](native-window-acceptance.md) evidence. The first experimental
+  delivery may limit its claim to those systems; it need not establish a full
+  minimum-version matrix. Packaging defaults alone do not establish support.
+- Qualify Windows WebView2 presence and the missing-Runtime path on a clean target.
+  The installer copies the application and shortcut; it neither bundles nor installs
+  the Evergreen Runtime. Agree on the runtime prerequisite with the delivery owner
+  before promising first-launch or offline installation on a new computer.
+- Verify the exact candidate's short journey: download, install, prepare a tutorial
+  and author folder, simulate once, quit, reopen and continue. Include failed
+  preparation/startup recovery and preserve source and receipts. Link target-OS
+  evidence; backend tests cannot replace native first-open or editor observations.
+- Record signing/notarization limitations, external editor/network requirements and
+  data compatibility in the release notes. Only replace the historical-download
+  notice after a real release exists and its assets and identity have been checked.
+
+Choose the version separately and describe the actual signing limitations; trusted
+signing is not an added prerequisite for this experimental delivery. This checklist
+does not run Prepare, Publish or native acceptance.
+
 ### Prepare, review, then publish
 
 Before preparation, reconcile unreleased change files against the difference
@@ -251,6 +279,15 @@ an idle backend, or `w` to wait until it becomes idle. Restart refuses active or
 unknown work; it never force-stops it. Changes to native host Python need a full
 safe quit and relaunch. Existing author `.venv` directories and retained execution
 environments are never silently updated to follow the checkout.
+
+This resource preparation still uses the locked delivery builder and a separate
+Python payload for author environments; source mode does not remove that cost.
+The cache identity includes package source and dependency/build inputs, so a
+changed identity can require fresh resource preparation on startup or restart.
+UI-only edits do not change that payload. It does not create a DMG or Windows
+installer, and developers need not package one for each source validation.
+Reserve the separate packaging path for installed-delivery acceptance; a working
+source desktop does not establish that a downloaded installer works.
 
 The default home is a stable hash of the canonical worktree path under the user's
 `Scopecat-Development` data directory, outside the checkout and separate from the

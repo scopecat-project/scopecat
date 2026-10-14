@@ -12,6 +12,7 @@ nav = [
   { "Home" = "index.md" },
   { "Getting started" = [
     "getting-started/index.md",
+    { "Download and install" = "getting-started/install.md" },
     { "Learning paths" = "getting-started/learning-path.md" },
     { "First experiment" = "getting-started/quickstart.md" },
   ] },

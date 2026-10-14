@@ -1,11 +1,12 @@
 # Getting started
 
-If you have a Scopecat desktop preview, open the application. Python and application
-dependencies are included; you do not need a source checkout.
+Scopecat is experimental. Start with [download and installation](install.md) to
+select a package and check your computer's prerequisites. Python and application
+dependencies are included; using the installed application needs no source checkout.
+The steps below describe current source behavior; the historical desktop download
+predates some of these features. Ask the maintainer for a matching qualified candidate.
 
-On macOS, copy Scopecat from the DMG to Applications before opening it.
-The free preview is ad-hoc signed, without Apple notarization. If macOS cannot
-verify the developer, follow the [first-open instructions](../how-to/mac-preview.md).
+## Choose your first task
 
 - To explore without writing code, use **Help → Start peak practice**.
   [Practice in the application](../tutorials/teaching-sandboxes.md) explains the scan,
