@@ -52,7 +52,9 @@ def verify(bundle: Path, destination: Path) -> None:
         raise RuntimeError(
             "Installed application checks must pass in this Help invocation"
         )
-    env["UV_CACHE_DIR"] = str(help_evidence / "empty-cache")
+    env["UV_CACHE_DIR"] = str(help_evidence / "recovery-empty-cache")
+    env["UV_OFFLINE"] = "0"
+    env["UV_PYTHON_DOWNLOADS"] = "automatic"
     phases = {"installed_help_and_group_recovery": perf_counter() - phase}
     phase = perf_counter()
     python = bootstrap / ("Scripts/python.exe" if os.name == "nt" else "bin/python")

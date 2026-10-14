@@ -33,7 +33,9 @@ def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
 
     assert args.workspace is not None
     if args.action == "prepare-author-environment":
-        python = prepare_execution_environment(runtime, args.workspace)
+        python = prepare_execution_environment(
+            runtime, args.workspace, python=args.python
+        )
         runtime.select_source_environment(args.workspace, python)
         print("后台依赖已准备；重新预览使用新环境，已有任务保留原环境。")
     else:
@@ -42,6 +44,7 @@ def _author_environment(runtime: ApplicationRuntime, args: Arguments) -> None:
                 runtime,
                 args.workspace,
                 rebuild=args.action == "rebuild-author-environment",
+                python=args.python,
             )
         )
 

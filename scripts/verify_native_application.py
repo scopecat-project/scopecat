@@ -56,8 +56,9 @@ try:
             "execution_python": execution} in api.status()["sources"]
     base = subprocess.check_output([str(client), "-I", "-c",
         "import sys, scopecat, ipykernel; print(sys.base_prefix)"], text=True).strip()
-    assert Path(base).resolve().is_relative_to(
-        (workspace / ".scopecat-python").resolve())
+    assert not Path(base).resolve().is_relative_to(
+        selected.python.parent.parent.resolve())
+    assert not (workspace / ".scopecat-python").exists()
     subprocess.run([str(client), "-I", "-c", '''
 from importlib.util import find_spec
 for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
@@ -400,7 +401,7 @@ def _verify(
             [str(console), "--help"], env=environment, check=True, timeout=30
         )
         status = subprocess.run(  # noqa: S603
-            [str(console), "app", "--home", str(home)],
+            [str(console), "app", "--home", str(state["state"])],
             env=environment,
             check=True,
             capture_output=True,
@@ -409,12 +410,12 @@ def _verify(
         )
         console_state = cast("dict[str, object]", json.loads(status.stdout))
         assert console_state["state"] == "stopped"
-        assert console_state["home"] == str(home)
+        assert console_state["home"] == state["state"]
         installation = cast("dict[str, str]", console_state["installation"])
         assert Path(installation["python"]).resolve() == python
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
         [str(python), "-I", "-B", "-c", RUNTIME_CHECK, str(home)],
-        env=environment,
+        env=dict(environment, UV_OFFLINE="0", UV_PYTHON_DOWNLOADS="automatic"),
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Runtime modified application files"
@@ -479,7 +480,7 @@ def _verify(
             str(home / "configuration-sharing"),
             str(payload),
         ],
-        env=environment,
+        env=dict(environment, UV_OFFLINE="0", UV_PYTHON_DOWNLOADS="automatic"),
         check=True,
     )
     assert inventory(relocated, (".",)) == before, "Sharing modified application"

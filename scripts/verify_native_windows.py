@@ -711,7 +711,12 @@ def probe(home: Path) -> None:
                         )
                         == run_id
                     )
-                    assert run_id in str(evaluate(second.window, "document.title"))
+                    # Run titles use the authored display name; exact identity
+                    # remains qualified by the URL and rendered run header.
+                    title = str(evaluate(second.window, "document.title"))
+                    assert title.endswith("Native window acceptance — Scopecat"), title
+                    assert second.window.title == title
+                    evidence["secondary_title"] = title
                     checks.append(
                         "real bridge creates exact-run WebView on the same service"
                     )
@@ -941,6 +946,13 @@ def verify(app: Path, home: Path) -> None:
                 if failure:
                     result["host_error"] = failure
                 output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+                if result["status"] == "failed":
+                    print(json.dumps(result, indent=2), flush=True)
+                    diagnostic = reports / "python.log"
+                    if diagnostic.is_file():
+                        print(
+                            diagnostic.read_text(encoding="utf-8")[-16384:], flush=True
+                        )
 
 
 if __name__ == "__main__":

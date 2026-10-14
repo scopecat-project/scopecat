@@ -9,7 +9,7 @@ The common selection covers SDK binary transport/cancellation/owned exit, a real
 instrument worker request over TCP, selected-interpreter ownership across reopen,
 shutdown of a blocked worker, and application FileLock exclusion between processes
 plus actual state-file replacement. macOS adds the real pywebview Cocoa delegate
-ABI. Windows adds real wheel builds, relocatable Python packaging, product
+ABI. Windows adds real wheel builds, minimal author resources, uv-managed Python, product
 `prepare_execution_environment`, real dependency installation/capture and a fresh
 interpreter importing pyarrow. The tiny delivery fixture supplies framework wheels
 and manifest metadata; it does not stub installation, capture or the interpreter.

@@ -1,8 +1,9 @@
-"""Qualify shipped Help cells in offline installed environments and one application.
+"""Qualify offline application installation and online author Help preparation.
 
 Usage: python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>
 Uses existing delivery/toolchain artifacts without changing their manifests.
 Includes explicit snapshot recovery with a separately backed-up author fixture.
+Pass --all-topics for the slower qualification of all seven shipped Help topics.
 Does not restore Help continuation or exercise a browser/native editor.
 """
 
@@ -21,14 +22,19 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
+
+if TYPE_CHECKING:
+    from nbformat import NotebookNode
+
+    from lab_tools.application_runtime import ApplicationRuntime
 
 
 def python_in(root: Path) -> Path:
     return root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
-def install_and_verify(payload: Path, work: Path) -> None:
+def install_and_verify(payload: Path, work: Path, *, all_topics: bool = False) -> None:
     started = perf_counter()
     # The shipped installer is stdlib-only; use its manifest checks before unpacking.
     installer = runpy.run_path(str(payload / "install.py"))
@@ -76,6 +82,7 @@ def install_and_verify(payload: Path, work: Path) -> None:
                 str(payload),
                 str(work),
                 "--installed",
+                *(["--all-topics"] if all_topics else []),
             ],
         ),
     ):
@@ -90,7 +97,7 @@ def install_and_verify(payload: Path, work: Path) -> None:
     receipt.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
-def verify_installed(payload: Path, work: Path) -> None:
+def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> None:
     import ctypes
     from copy import deepcopy
     from importlib import import_module
@@ -99,22 +106,27 @@ def verify_installed(payload: Path, work: Path) -> None:
     import httpx2
     from nbclient import NotebookClient
     from nbclient.exceptions import CellExecutionError
-    from nbformat import NotebookNode
 
     from lab_tools.application_runtime import ApplicationRuntime
     from lab_tools.author_environment import (
         create_client_environment,
         prepare_execution_environment,
     )
+    from lab_tools.author_resources import (
+        build as build_author_resources,
+    )
+    from lab_tools.author_resources import (
+        verify_resources,
+    )
     from lab_tools.bundle import file_hash, verify_bundle
     from lab_tools.notebook import kernel_command
     from lab_tools.notebook_io import notebook_io
     from lab_tools.notebook_journey import current, prepare
     from lab_tools.verify_groups import ADD_ANALYSIS, GROUP_CHECKS, GROUP_REOPEN_CELLS
+    from scopecat.application_instance import open_instance
     from scopecat.automation import ProcedureRun
     from scopecat.daemon.endpoint import DaemonEndpointRecord
     from scopecat.daemon.views import DaemonHealth, RunSummary, RunSummaryPage
-    from scopecat.project import open_project
     from scopecat.records.practice import PracticeScope
     from scopecat_server.author_registration import (  # noqa: TID251 - installed recovery integration
         register_author_workspace,
@@ -143,6 +155,10 @@ def verify_installed(payload: Path, work: Path) -> None:
     author_cache = work / "author-empty-cache"
     author_cache.mkdir()
     document = cast("dict[str, object]", cast("object", verify_bundle(payload)))
+    author_payload = build_author_resources(
+        payload, work / "author-resources", python=Path(sys.executable)
+    )
+    verify_resources(author_payload)
     nbformat = notebook_io()
     runtime = ApplicationRuntime(work / "application")
     material = files("lab_teaching.course_material").joinpath("lessons")
@@ -155,9 +171,13 @@ def verify_installed(payload: Path, work: Path) -> None:
         "result": "incomplete",
         "application_checks": application_checks,
         "bundle_sha256": file_hash(payload / "bundle.json"),
+        "author_resources_sha256": file_hash(author_payload / "bundle.json"),
+        "author_wheels": sorted(
+            path.name for path in (author_payload / "wheels").glob("*.whl")
+        ),
         "build_id": document["build_id"],
         "installed_origins": origins,
-        "offline": True,
+        "application_installation_offline": True,
         "cache_started_empty": True,
         "author_cache_started_empty": True,
         "native_editor": "not evaluated",
@@ -231,7 +251,9 @@ def verify_installed(payload: Path, work: Path) -> None:
         (registered_source / "owner-notes.txt").write_text(
             "保留实验记录\n", encoding="utf-8"
         )
-        selected = runtime.configure(static_dir=payload / "gui", delivery_root=payload)
+        selected = runtime.configure(
+            static_dir=payload / "gui", delivery_root=author_payload
+        )
         identity = runtime.register_source(registered_source)
         retained_source = source_files(registered_source)
         application_checks.update(
@@ -277,7 +299,11 @@ def verify_installed(payload: Path, work: Path) -> None:
         application_checks["phase"] = "runtime-requalification"
         runtime.stop()
         assert runtime.status().state == "stopped"
-        runtime.select(runtime.qualify(selected.python, selected.static_dir))
+        runtime.select(
+            runtime.qualify(
+                selected.python, selected.static_dir, delivery_root=author_payload
+            )
+        )
         assert runtime.source(registered_source) == identity
         assert source_files(registered_source) == retained_source
         assert not (runtime.home / "host/services.sqlite").exists()
@@ -285,6 +311,9 @@ def verify_installed(payload: Path, work: Path) -> None:
         # to give its daemon the independent cold author cache, not practice's.
         assert list(author_cache.iterdir()) == []
         os.environ["UV_CACHE_DIR"] = str(author_cache)
+        os.environ["UV_OFFLINE"] = "0"
+        os.environ["UV_PYTHON_DOWNLOADS"] = "automatic"
+        evidence["author_preparation"] = "online with independent uv Python"
         runtime = ApplicationRuntime(work / "application")
         first_endpoint = empty_workbench()
         assert first_endpoint != empty_endpoint
@@ -450,10 +479,9 @@ def verify_installed(payload: Path, work: Path) -> None:
         runtime.stop()
         assert runtime.status().state == "stopped"
         snapshot = work / "snapshot"
-        create_snapshot(open_project(runtime.root), snapshot)
+        create_snapshot(open_instance(runtime.root), snapshot)
         verify_snapshot(snapshot)
         recovered = ApplicationRuntime(work / "recovered-application")
-        recovered.home.mkdir()
         restore_snapshot(snapshot, recovered.root)
         assert not (recovered.root / "scopecat.runtime.toml").exists()
         assert not (recovered.root / ".scopecat/author-workspaces.json").exists()
@@ -467,6 +495,7 @@ def verify_installed(payload: Path, work: Path) -> None:
             obsolete.extend(
                 unavailable / source.name / name
                 for name in (".venv", ".scopecat-python")
+                if (source / name).exists()
             )
         for path in (
             runtime.home,
@@ -478,7 +507,7 @@ def verify_installed(payload: Path, work: Path) -> None:
             assert not path.exists()
         runtime = recovered
         phase = perf_counter()
-        runtime.configure(static_dir=payload / "gui", delivery_root=payload)
+        runtime.configure(static_dir=payload / "gui", delivery_root=author_payload)
         recovery_cache = work / "recovery-empty-cache"
         recovery_cache.mkdir()
         os.environ["UV_CACHE_DIR"] = str(recovery_cache)
@@ -511,6 +540,11 @@ def verify_installed(payload: Path, work: Path) -> None:
             "groups-restored",
         )
         assert {run.run_id for run in runs()} == {run.run_id for run in before}
+        evidence["installed_help_topics"] = (
+            verify_remaining_topics(runtime, work, execute)
+            if all_topics
+            else ["parameters", "groups"]
+        )
         evidence.update(
             snapshot_restore="passed",
             recovery_source_id=source_id,
@@ -581,6 +615,33 @@ def verify_installed(payload: Path, work: Path) -> None:
     )
 
 
+def verify_remaining_topics(
+    runtime: ApplicationRuntime,
+    work: Path,
+    execute: Callable[[Path, list[NotebookNode], str], None],
+) -> list[str]:
+    """Run remaining shipped Help cells with minimal installed resources."""
+    from lab_teaching.lessons import TOPICS, LessonTopic
+    from lab_tools.notebook_io import notebook_io
+    from lab_tools.notebook_journey import prepare
+
+    nbformat = notebook_io()
+    verified = ["parameters", "groups"]
+    for topic in TOPICS:
+        if topic in verified:
+            continue
+        journey = prepare(runtime, str(work), cast("LessonTopic", topic))
+        notebook = nbformat.read(journey.notebook, as_version=4)
+        cells = cast("list[NotebookNode]", notebook.cells)
+        execute(
+            journey.directory,
+            [c for c in cells if c["cell_type"] == "code"],
+            f"{topic}-installed",
+        )
+        verified.append(topic)
+    return verified
+
+
 PARAMETERS_SAVE = """\
 import json
 project = sc.open_project()
@@ -614,6 +675,7 @@ class Arguments(Protocol):
     payload: Path
     work: Path
     installed: bool
+    all_topics: bool
 
 
 if __name__ == "__main__":
@@ -621,6 +683,9 @@ if __name__ == "__main__":
     parser.add_argument("payload", type=Path)
     parser.add_argument("work", type=Path)
     parser.add_argument("--installed", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--all-topics", action="store_true", help="Execute all seven Help topics"
+    )
     args = cast("Arguments", cast("object", parser.parse_args()))
     action = verify_installed if args.installed else install_and_verify
-    action(args.payload.resolve(), args.work.resolve())
+    action(args.payload.resolve(), args.work.resolve(), all_topics=args.all_topics)

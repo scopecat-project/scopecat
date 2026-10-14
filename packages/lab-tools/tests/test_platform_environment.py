@@ -9,9 +9,12 @@ from pathlib import Path
 from uv import find_uv_bin
 
 from lab_tools.application_runtime import ApplicationRuntime, Installation
-from lab_tools.author_environment import prepare_execution_environment
+from lab_tools.author_environment import (
+    create_client_environment,
+    prepare_execution_environment,
+)
+from lab_tools.author_resources import build, verify_resources
 from lab_tools.bundle import MANIFEST, file_hash, inventory, target_identity
-from lab_tools.toolchain import build
 
 
 def test_prepared_execution_python_imports_pyarrow(tmp_path):
@@ -54,6 +57,9 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path):
         encoding="utf-8",
     )
     bundle = build(payload, tmp_path / "bundle")
+    verify_resources(bundle)
+    assert not (bundle / "toolchain/python.tar").exists()
+    assert len(list((bundle / "wheels").glob("*.whl"))) == 2
     runtime = ApplicationRuntime(tmp_path / "application-data")
     runtime.selection.parent.mkdir(parents=True)
     runtime.selection.write_text(
@@ -100,3 +106,12 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path):
     assert Path(prefix) == python.parent.parent
     assert arrow_version
     assert prepare_execution_environment(runtime, source) == python
+
+    client = create_client_environment(runtime, source)
+    subprocess.run(  # noqa: S603 - real independent client qualification
+        [str(client), "-I", "-c", "import scopecat, ipykernel, pyarrow, pip"],
+        check=True,
+    )
+    assert client != python
+    assert create_client_environment(runtime, source) == client
+    assert not (source / ".scopecat-python").exists()

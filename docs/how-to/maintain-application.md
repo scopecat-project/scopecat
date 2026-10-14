@@ -91,9 +91,21 @@ Select `.venv/bin/python` on macOS or `.venv/Scripts/python.exe` on Windows.
 This is your environment: installing
 plotting or analysis packages there does not modify the application. Do not use an
 interpreter inside the installed application as a Notebook kernel. The generated
-environment retains its own base Python in the folder's `.scopecat-python` directory;
-keep that directory with `.venv`. Replacing or removing the application does not
-remove this interpreter.
+environment uses an independent uv-managed Python. Keep that Python installed while
+its environments are in use. Replacing or removing the application does not remove it.
+
+First preparation needs network access for Python and third-party dependencies.
+The application itself still starts offline. The author resources carry only the
+required unpublished Scopecat wheels and the matching dependency recipe.
+A folder's `.python-version` overrides the recipe's fixed Python version;
+`requires-python` and declared dependencies are checked. An existing `uv.lock`
+is exported with `--locked`: a stale lock fails without being rewritten.
+The application does not choose `latest`, change PATH or install global packages.
+
+The application CLI preparation actions accept `--python /path/to/python` for
+an existing independent interpreter. `UV_PYTHON` is also checked when set.
+For an already prepared background environment, **Execution Python** validates
+the environment before selection. Failed preparation preserves the previous one.
 
 The generated environment contains the Scopecat Python API, a notebook kernel and
 their dependencies. Desktop, service and teaching packages are not copied into it.

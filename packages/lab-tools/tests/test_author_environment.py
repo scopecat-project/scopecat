@@ -28,7 +28,7 @@ def test_interrupted_client_preparation_preserves_retry(
         python.write_bytes(b"original interpreter")
     runtime = Mock()
     monkeypatch.setattr(environments, "_bundle", lambda _: tmp_path)
-    monkeypatch.setattr(environments, "_independent_python", lambda *_: Path("base"))
+    monkeypatch.setattr(environments, "resolve", lambda *_, **__: Path("base"))
     interrupted = failure("preparation interrupted")
 
     def install(*args, **kwargs):
@@ -38,9 +38,12 @@ def test_interrupted_client_preparation_preserves_retry(
             raise interrupted
 
     installer = Mock(side_effect=install)
-    monkeypatch.setattr(environments, "install_bundle", installer)
+    monkeypatch.setattr(environments, "_install_client", installer)
+    monkeypatch.setattr(environments, "check", lambda _r, _w, p: p)
     ensurepip = Mock(side_effect=interrupted if stage == "ensurepip" else None)
-    monkeypatch.setattr(environments, "_run", ensurepip)
+    monkeypatch.setattr(
+        environments, "_run", lambda c: ensurepip(c) if "ensurepip" in c else None
+    )
 
     with pytest.raises(failure, match="preparation interrupted") as raised:
         environments.create_client_environment(runtime, workspace, rebuild=rebuild)
@@ -90,7 +93,13 @@ def preparation(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(environments, "_bundle", lambda _: bundle)
     monkeypatch.setattr(environments, "find_uv_bin", lambda: "uv")
-    monkeypatch.setattr(environments, "_independent_python", lambda *_: Path("base"))
+    monkeypatch.setattr(environments, "resolve", lambda *_, **__: Path("base"))
+    (bundle / "wheels").mkdir()
+    for name in ("scopecat", "scopecat_server"):
+        (bundle / "wheels" / f"{name}-1-py3-none-any.whl").touch()
+    monkeypatch.setattr(
+        environments, "identity", lambda _: {"binary_sha256": "original"}
+    )
     calls = []
 
     def run(command):
@@ -221,9 +230,7 @@ def test_online_newer_dependency_cannot_override_delivery_lock(tmp_path, monkeyp
         python=Path(sys.executable), environment={"scopecat": "1", "server": "1"}
     )
     monkeypatch.setattr(environments, "_bundle", lambda _: bundle)
-    monkeypatch.setattr(
-        environments, "_independent_python", lambda *_: Path(sys.executable)
-    )
+    monkeypatch.setattr(environments, "resolve", lambda *_, **__: Path(sys.executable))
     monkeypatch.setattr("scopecat_server.author_environment.capture", Mock())
     monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "uv-cache"))
     monkeypatch.setenv("UV_NO_CONFIG", "true")
@@ -279,3 +286,62 @@ def test_online_newer_dependency_cannot_override_delivery_lock(tmp_path, monkeyp
         server.shutdown()
         server.server_close()
         thread.join(timeout=10)
+
+
+def test_workspace_lock_is_exported_without_refresh(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    from uv import find_uv_bin
+
+    source = tmp_path / "project"
+    source.mkdir()
+    declaration = source / "pyproject.toml"
+    declaration.write_text(
+        '[project]\nname="author"\nversion="1"\nrequires-python=">=3.14"\ndependencies=[]\n'
+    )
+    monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "cache"))
+    subprocess.run(  # noqa: S603 - test-owned local dependency-free project
+        [
+            find_uv_bin(),
+            "lock",
+            "--project",
+            str(source),
+            "--python",
+            sys.executable,
+            "--offline",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    lock = source / "uv.lock"
+    before = lock.read_bytes()
+    exported = environments._declaration(
+        find_uv_bin(), source, tmp_path, python=Path(sys.executable), offline=True
+    )
+    assert exported.is_file()
+    assert lock.read_bytes() == before
+    declaration.write_text(
+        declaration.read_text().replace(
+            "dependencies=[]", 'dependencies=["not-a-real-author-package==1"]'
+        )
+    )
+    with pytest.raises(ValueError, match="依赖准备未完成"):
+        environments._declaration(
+            find_uv_bin(), source, tmp_path, python=Path(sys.executable), offline=True
+        )
+    assert lock.read_bytes() == before
+
+
+def test_changed_interpreter_identity_does_not_reuse_candidate(
+    preparation, monkeypatch
+):
+    runtime, source, calls, _capture = preparation
+    before = environments.prepare_execution_environment(runtime, source)
+    monkeypatch.setattr(
+        environments, "identity", lambda _: {"binary_sha256": "replaced"}
+    )
+    after = environments.prepare_execution_environment(runtime, source)
+    assert after != before
+    assert sum("install" in command for command in calls) == 2
+    assert before.parent.parent.parent.is_dir()
