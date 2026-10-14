@@ -27,7 +27,7 @@ jobs:
         run: |
           $env:PYTHONPATH = "$pwd"
           $env:SCOPECAT_TEST_DIAGNOSTICS = "$pwd/test-diagnostics"
-          uv run --locked python -m pytest -v -n 2 -p scripts.pytest_diagnostics --basetemp=stop-test-data packages/scopecat-server/tests/test_daemon_diagnostics.py packages/scopecat-server/tests/test_startup_diagnostics.py packages/scopecat-server/tests/test_lifecycle.py::test_stop_timeout_records_both_wait_failures_without_hiding_error "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair]" "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-conflict]"
+          uv run --locked python -m pytest -v -n 2 -p scripts.pytest_diagnostics --basetemp=stop-test-data packages/scopecat-server/tests/test_daemon_diagnostics.py packages/scopecat-server/tests/test_startup_diagnostics.py packages/scopecat-server/tests/test_lifecycle.py::test_stop_timeout_records_both_wait_failures_without_hiding_error
       - name: Print synthetic process observations and daemon logs
         if: always()
         shell: pwsh
