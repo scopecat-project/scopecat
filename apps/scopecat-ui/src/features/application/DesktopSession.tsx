@@ -68,7 +68,7 @@ interface DesktopAPI {
     filename: string,
   ): Promise<string | null>;
   status(): Promise<ApplicationStatus>;
-  retry(): Promise<void>;
+  retry(afterReply?: boolean): Promise<void>;
   restart(): Promise<void>;
   backup_application(): Promise<void>;
   exit(background: boolean): Promise<void>;

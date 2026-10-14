@@ -20,7 +20,7 @@ async function operate(message, action) {
 }
 
 function retry() {
-  return operate("正在重新准备应用，请稍候…", () => pywebview.api.retry());
+  return operate("正在重新准备应用，请稍候…", () => pywebview.api.retry(true));
 }
 
 function resetData() {

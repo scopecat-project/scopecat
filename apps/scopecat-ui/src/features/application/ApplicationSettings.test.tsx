@@ -17,6 +17,7 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
   const choose = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce("/Users/test/Science");
   const create = vi.fn().mockResolvedValue("/Users/test/Science/first experiment");
   const register = vi.fn();
+  const status = vi.fn();
   const backup = vi.fn().mockRejectedValueOnce(new Error("后台仍有工作"));
   const restart = vi.fn();
   window.pywebview = {
@@ -32,7 +33,7 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
       save_capture: vi.fn(),
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),
-      status: vi.fn().mockResolvedValue({
+      status: status.mockResolvedValue({
         home: "/app",
         sources: [],
         installation: {
@@ -65,6 +66,12 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
   expect(await screen.findByRole("alert")).toHaveTextContent("后台仍有工作");
   expect(backup).toHaveBeenCalledTimes(1);
   expect(restart).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Back up application data…" }));
+  await waitFor(() => expect(backup).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Back up application data…" })).toBeEnabled(),
+  );
+  expect(status).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("button", { name: "New code folder" }));
   const submit = screen.getByRole("button", { name: "Create folder and prepare Python" });
   fireEvent.click(screen.getByRole("button", { name: "Choose save location…" }));

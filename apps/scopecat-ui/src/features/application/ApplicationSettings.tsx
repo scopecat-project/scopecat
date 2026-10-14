@@ -52,8 +52,9 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       else await native.restart();
       return undefined;
     },
-    onSuccess: () => {
-      void status.refetch();
+    onSuccess: (_result, action) => {
+      // Backup replaces this page after its bridge reply; do not start a new callback.
+      if (action !== "backup") void status.refetch();
     },
   });
   const picker = useMutation({

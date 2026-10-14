@@ -7,6 +7,7 @@ import logging
 import sys
 import threading
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -51,6 +52,7 @@ class DesktopAPI:
         self._new_window = new_window
         self._file_lock = threading.Lock()
         self._unsupported: UnsupportedDataSpace | None = None
+        self._page_thread: threading.Thread | None = None
 
     def new_window(self) -> None:
         with self._session.operation(allow_files=True):
@@ -279,9 +281,8 @@ class DesktopAPI:
 
         import webview
 
-        from scopecat_server.snapshots import create_snapshot, verify_snapshot
-
-        with self._session.operation():
+        with ExitStack() as operation:
+            operation.enter_context(self._session.operation())
             selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
             if not selected:
                 return
@@ -304,30 +305,35 @@ class DesktopAPI:
                 return
             if not self._runtime.stop_if_idle():
                 raise ValueError("后台仍有工作；请等待空闲后备份，运行与数据保留")
-            try:
-                self._window().load_html(_page("<h1>正在备份应用数据…</h1>"))
-                _ = create_snapshot(self._runtime.instance, destination)
-                _ = verify_snapshot(destination)
-                result = (
-                    "<h1>备份完成并已校验</h1>"
-                    f"<p>备份位置：{escape(str(destination))}</p>"
-                    "<p>请保留整个目录；另行保存外部源码、Python 环境和原安装包。"
-                    "恢复须满足数据格式与快照兼容要求；此操作不执行格式迁移。</p>"
-                )
-            except Exception as error:
-                result = (
-                    "<h1>备份未完成或未通过校验</h1>"
-                    f"<p>{escape(str(error))}</p>"
-                    f"<p>目标位置：{escape(str(destination))}</p>"
-                    "<p>不要将该目录作为已验证备份。原数据与环境未删除；"
-                    "重新打开后可再次备份。</p>"
-                )
-            self._window().load_html(
-                _page(
-                    result + '<button onclick="retry()">重新打开应用</button>'
-                    '<button onclick="quit()">退出</button>'
-                )
+            self._after_reply(lambda: self._capture_backup(destination), operation)
+
+    def _capture_backup(self, destination: Path) -> None:
+        from scopecat_server.snapshots import create_snapshot, verify_snapshot
+
+        try:
+            self._window().load_html(_page("<h1>正在备份应用数据…</h1>"))
+            _ = create_snapshot(self._runtime.instance, destination)
+            _ = verify_snapshot(destination)
+            result = (
+                "<h1>备份完成并已校验</h1>"
+                f"<p>备份位置：{escape(str(destination))}</p>"
+                "<p>请保留整个目录；另行保存外部源码、Python 环境和原安装包。"
+                "恢复须满足数据格式与快照兼容要求；此操作不执行格式迁移。</p>"
             )
+        except Exception as error:
+            result = (
+                "<h1>备份未完成或未通过校验</h1>"
+                f"<p>{escape(str(error))}</p>"
+                f"<p>目标位置：{escape(str(destination))}</p>"
+                "<p>不要将该目录作为已验证备份。原数据与环境未删除；"
+                "重新打开后可再次备份。</p>"
+            )
+        self._window().load_html(
+            _page(
+                result + '<button onclick="retry()">重新打开应用</button>'
+                '<button onclick="quit()">退出</button>'
+            )
+        )
 
     def prepare_author_environment(self, directory: str) -> str:
         from .author_environment import prepare_execution_environment
@@ -350,9 +356,42 @@ class DesktopAPI:
             self._runtime.source(path)
             return str(create_client_environment(self._runtime, path, rebuild=rebuild))
 
-    def retry(self) -> None:
-        with self._session.operation():
-            self._start()
+    def _after_reply(self, action: Callable[[], None], operation: ExitStack) -> None:
+        """Keep admission locked until the bridge has returned to its original page."""
+        bridge = threading.current_thread()
+        retained = operation.pop_all()
+
+        def complete() -> None:
+            with retained:
+                # pywebview sends its JS callback after the exposed method returns.
+                # Joining that caller fences page replacement without a timing delay.
+                bridge.join()
+                try:
+                    action()
+                except Exception as error:
+                    logging.getLogger(__name__).exception(
+                        "Desktop page operation failed"
+                    )
+                    self._window().load_html(
+                        _recovery(
+                            error, can_reset=self._session.prepare_reset is not None
+                        )
+                    )
+
+        self._page_thread = threading.Thread(target=complete)
+        try:
+            self._page_thread.start()
+        except BaseException:
+            retained.close()
+            raise
+
+    def retry(self, after_reply: bool = False) -> None:
+        with ExitStack() as operation:
+            operation.enter_context(self._session.operation())
+            if after_reply:
+                self._after_reply(self._start, operation)
+            else:
+                self._start()
 
     def _start(self, location: str = "") -> None:
         if self._session.closing.is_set():
