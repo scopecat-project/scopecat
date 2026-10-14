@@ -133,7 +133,7 @@ def test_build_replaces_console_before_signing_and_rename(tmp_path, monkeypatch)
     monkeypatch.setattr(
         native_package.author_resources,
         "build",
-        lambda src, dst: Path(shutil.copytree(src, dst)),
+        lambda src, dst, **_kw: Path(shutil.copytree(src, dst)),
     )
     monkeypatch.setattr(
         native_package.author_resources, "verify_resources", lambda _: None

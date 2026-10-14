@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import cast
 
@@ -73,9 +74,10 @@ def verify_resources(root: Path) -> Bundle:
     return document
 
 
-def build(source: Path, destination: Path) -> Path:
+def build(source: Path, destination: Path, *, python: Path | None = None) -> Path:
     """Project verified delivery inputs into an independently hashed artifact."""
     document = verify_bundle(source)
+    recipe = _recipe(python or Path(sys.executable), document["target"])
     destination.mkdir(parents=True, exist_ok=False)
     shutil.copytree(source / "gui", destination / "gui")
     wheels = destination / "wheels"
@@ -97,12 +99,6 @@ def build(source: Path, destination: Path) -> Path:
         path = source / "toolchain" / name
         if path.is_file():
             shutil.copy2(path, toolchain / name)
-    recipe = {
-        "python": platform.python_version()
-        + ("t" if document["target"]["free_threaded"] == "True" else ""),
-        "requires-python": ">=3.14",
-        "packages": list(PACKAGES),
-    }
     (destination / "author.json").write_text(
         json.dumps(recipe, indent=2) + "\n", encoding="utf-8"
     )
@@ -115,3 +111,32 @@ def build(source: Path, destination: Path) -> Path:
     )
     verify_resources(destination)
     return destination
+
+
+def _recipe(python: Path, target: dict[str, str]) -> dict[str, object]:
+    """Read the actual host/runtime being shipped, including its free-threaded ABI."""
+    raw = subprocess.check_output(  # noqa: S603 - explicit build/runtime interpreter
+        [
+            str(python),
+            "-I",
+            "-c",
+            (
+                "import json,sys,sysconfig,platform; "
+                "print(json.dumps(dict(version=platform.python_version(), target=dict("
+                "platform=sys.platform, machine=platform.machine().lower(), "
+                "python=f'{sys.version_info.major}.{sys.version_info.minor}', "
+                "implementation=sys.implementation.name, "
+                "free_threaded=str(bool(sysconfig.get_config_var('Py_GIL_DISABLED')))))))"
+            ),
+        ],
+        text=True,
+    )
+    info = cast("dict[str, object]", json.loads(raw))
+    if info["target"] != target:
+        raise ValueError("作者配方的实际 Python 与交付 target 不一致")
+    return {
+        "python": str(info["version"])
+        + ("t" if target["free_threaded"] == "True" else ""),
+        "requires-python": ">=3.14",
+        "packages": list(PACKAGES),
+    }

@@ -97,6 +97,9 @@ def preparation(tmp_path, monkeypatch):
     (bundle / "wheels").mkdir()
     for name in ("scopecat", "scopecat_server"):
         (bundle / "wheels" / f"{name}-1-py3-none-any.whl").touch()
+    monkeypatch.setattr(
+        environments, "identity", lambda _: {"binary_sha256": "original"}
+    )
     calls = []
 
     def run(command):
@@ -328,3 +331,17 @@ def test_workspace_lock_is_exported_without_refresh(tmp_path, monkeypatch):
             find_uv_bin(), source, tmp_path, python=Path(sys.executable), offline=True
         )
     assert lock.read_bytes() == before
+
+
+def test_changed_interpreter_identity_does_not_reuse_candidate(
+    preparation, monkeypatch
+):
+    runtime, source, calls, _capture = preparation
+    before = environments.prepare_execution_environment(runtime, source)
+    monkeypatch.setattr(
+        environments, "identity", lambda _: {"binary_sha256": "replaced"}
+    )
+    after = environments.prepare_execution_environment(runtime, source)
+    assert after != before
+    assert sum("install" in command for command in calls) == 2
+    assert before.parent.parent.parent.is_dir()

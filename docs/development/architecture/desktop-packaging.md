@@ -9,7 +9,14 @@ then ships a format-2 author resource manifest with only `scopecat` and
 It does not retain the Python archive or third-party wheelhouse. The generic
 format-1 offline delivery and its installer remain supported. Author preparation
 uses independent uv-managed or explicit Python and downloads third-party packages;
-application launch remains offline. The [host decision](desktop-product.md#technology-decision)
+application launch remains offline. The recipe is probed from the actual packaged
+interpreter and must match the delivery target. Selecting an author base checks
+version and ownership; resolution, installation and worker capture validate
+dependencies separately. This is not a blanket native ABI guarantee. Execution
+cache identity includes the base binary, shared library (when present), version
+and ABI, so replacing an interpreter at the same path creates a fresh candidate.
+The source host rebuilds missing/corrupt native wheel caches on startup and repairs
+its extracted dependency cache from the verified wheel. The [host decision](desktop-product.md#technology-decision)
 retains CPython, pywebview and the existing web UI.
 
 ## Maintained installation entries
@@ -80,8 +87,10 @@ has two additional boundaries:
   author and recovery preparation. These preparation phases now allow network
   access; application installation remains offline.
 - `verify_installed_help_kernels.py` installs the full toolchain at a fresh location,
-  prepares author environments online with independent Python and separate empty caches, and executes
-  shipped parameters/groups through Help in real kernels. Fresh kernels reject the application interpreter; after application restart they
+  prepares author environments from minimal format-2 resources online with independent
+  Python and separate empty caches, and executes all seven shipped Help topics in
+  real kernels. Parameters/groups retain the restart, repair and snapshot recovery
+  assertions. Fresh kernels reject the application interpreter; after application restart they
   read exact retained results without acquisition. Run
   `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
 

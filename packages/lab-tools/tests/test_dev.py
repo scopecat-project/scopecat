@@ -254,3 +254,63 @@ def test_source_reminder_reads_metadata_but_cache_still_hashes_bytes(
     stamp = dev_resources.source_stamp(tmp_path)
     source.rename(source.with_name("renamed.py"))
     assert dev_resources.source_stamp(tmp_path) != stamp
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_cached_payload_repairs_native_wheel_and_extraction(
+    tmp_path, monkeypatch, damage
+):
+    import hashlib
+    import io
+    import zipfile
+
+    source = tmp_path / "source"
+    cache = tmp_path / "cache"
+    content = io.BytesIO()
+    with zipfile.ZipFile(content, "w") as archive:
+        archive.writestr("webview/__init__.py", "reviewed native host")
+    wheel_bytes = content.getvalue()
+    builds = []
+    monkeypatch.setattr(dev_resources.sys, "platform", "darwin")
+    monkeypatch.setattr(dev_resources, "resource_identity", lambda _: "identity")
+    monkeypatch.setattr(dev_resources, "verify_resources", lambda _: None)
+
+    def verify(wheels):
+        if (wheels / "pywebview-1.whl").read_bytes() != wheel_bytes:
+            raise ValueError("corrupt wheel")
+
+    def build_delivery(destination, **_kwargs):
+        builds.append(destination)
+        (destination / "wheels").mkdir(parents=True)
+        (destination / "wheels/pywebview-1.whl").write_bytes(wheel_bytes)
+        return destination
+
+    def project(_delivery, destination):
+        destination.mkdir()
+        (destination / "identity").write_text("immutable author resources")
+        return destination
+
+    monkeypatch.setattr(dev_resources, "_verify_native_wheel", verify)
+    monkeypatch.setattr("lab_tools.delivery.build_delivery", build_delivery)
+    monkeypatch.setattr(dev_resources, "build_author_resources", project)
+    payload = dev_resources.prepare_resources(source, cache)
+    wheel = cache / "native-wheels/identity/pywebview-1.whl"
+    if damage == "missing":
+        wheel.unlink()
+    else:
+        wheel.write_bytes(b"corrupt")
+    assert dev_resources.prepare_resources(source, cache) == payload
+    assert len(builds) == 2
+    assert (payload / "identity").read_text() == "immutable author resources"
+    verify(wheel.parent)
+    monkeypatch.setattr(dev_resources.sys, "path", list(dev_resources.sys.path))
+    dev_resources.prepare_native_dependency(payload, cache)
+    extracted = (
+        cache
+        / "native"
+        / hashlib.sha256(wheel_bytes).hexdigest()
+        / "webview/__init__.py"
+    )
+    extracted.write_text("corrupt extraction")
+    dev_resources.prepare_native_dependency(payload, cache)
+    assert extracted.read_text() == "reviewed native host"

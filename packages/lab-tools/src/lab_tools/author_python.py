@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, cast
 from packaging.specifiers import SpecifierSet
 from uv import find_uv_bin
 
+from .bundle import file_hash
+
 if TYPE_CHECKING:
     from .application_runtime import ApplicationRuntime
 
@@ -33,6 +35,7 @@ def run(command: list[str]) -> str:
 
 
 def check(runtime: ApplicationRuntime, workspace: Path, python: Path) -> Path:
+    """Check version and ownership only; dependency/worker capture is separate."""
     info = cast(
         "dict[str, str]",
         json.loads(
@@ -140,3 +143,43 @@ def resolve(
         run([uv, "python", "install", request, "--no-bin", "--no-registry"])
         found = run(command)
     return check(runtime, workspace, Path(found))
+
+
+def identity(python: Path) -> dict[str, object]:
+    """Fingerprint the selected base binary and ABI, not just its mutable path."""
+    info = cast(
+        "dict[str, str]",
+        json.loads(
+            run(
+                [
+                    str(python),
+                    "-I",
+                    "-c",
+                    (
+                        "import json,sys,sysconfig; from pathlib import Path; "
+                        "suffix = 't' if sysconfig.get_config_var('Py_GIL_DISABLED')"
+                        " else ''; "
+                        "library = (Path(sys.base_prefix) / "
+                        "f'python{sys.version_info.major}"
+                        "{sys.version_info.minor}{suffix}.dll' "
+                        "if sys.platform == 'win32' else "
+                        "Path(sysconfig.get_config_var('LIBDIR') or sys.base_prefix) / "
+                        "(sysconfig.get_config_var('LDLIBRARY') or '')); "
+                        "print(json.dumps(dict(version=sys.version, "
+                        "implementation=sys.implementation.name, "
+                        "abi=sysconfig.get_config_var('SOABI'), "
+                        "base=sys.base_prefix, "
+                        "binary=getattr(sys,'_base_executable',sys.executable), "
+                        "library=str(library))))"
+                    ),
+                ]
+            )
+        ),
+    )
+    return {
+        **info,
+        "binary_sha256": file_hash(Path(info["binary"])),
+        "library_sha256": file_hash(Path(info["library"]))
+        if Path(info["library"]).is_file()
+        else None,
+    }

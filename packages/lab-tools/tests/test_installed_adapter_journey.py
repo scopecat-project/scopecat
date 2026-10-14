@@ -228,7 +228,8 @@ require_environment(manifest)
 _RECOVERY_CHECK = """
 import sys
 from pathlib import Path
-from scopecat.project import open_project, load_captured_project
+from scopecat.project import load_captured_project
+from scopecat.application_instance import open_instance
 from scopecat.project_sources import materialize_sources, require_environment
 from scopecat.records.author_revision import AuthorRevisionManifest
 from scopecat.daemon.client import DaemonClient
@@ -239,9 +240,9 @@ owner, source, snapshot, destination = map(Path, sys.argv[1:5])
 identity = AuthorRevisionManifest.model_validate_json(
     (source / "retained-identity.json").read_text()
 )
-create_snapshot(open_project(owner), snapshot)
+create_snapshot(open_instance(owner), snapshot)
 restore_snapshot(snapshot, destination)
-restored = open_project(destination)
+restored = open_instance(destination)
 start_project(restored, timeout=60)
 try:
     with DaemonClient(

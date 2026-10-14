@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -105,7 +106,7 @@ def prepare_resources(source: Path, cache: Path) -> Path:
     key = resource_identity(source)
     payload = cache / key
     with FileLock(cache / "resources.lock"):
-        if not payload.exists():
+        if not payload.exists() or not _native_ready(cache, key):
             print(
                 "Preparing locked author resources; "
                 "this first build may take a few minutes.",
@@ -128,18 +129,23 @@ def prepare_resources(source: Path, cache: Path) -> Path:
                 # Keep repaired desktop wheels in their own host-only cache.
                 native = cache / "native-wheels" / key
                 if sys.platform in {"darwin", "win32"}:
-                    native.mkdir(parents=True, exist_ok=True)
+                    staged_native = staging / "native-wheels"
+                    staged_native.mkdir()
                     (wheel,) = (delivery / "wheels").glob("pywebview-*.whl")
-                    import shutil
-
-                    shutil.copy2(wheel, native / wheel.name)
-                complete = build_author_resources(delivery, staging / "complete")
+                    shutil.copy2(wheel, staged_native / wheel.name)
+                    _verify_native_wheel(staged_native)
+                    native.parent.mkdir(parents=True, exist_ok=True)
+                    if native.exists():
+                        native.rename(staging / "previous-native")
+                    staged_native.rename(native)
                 if resource_identity(source) != key:
                     raise ValueError(
                         "Source changed while preparing resources; retry startup."
                     )
-                verify_resources(complete)
-                complete.rename(payload)
+                if not payload.exists():
+                    complete = build_author_resources(delivery, staging / "complete")
+                    verify_resources(complete)
+                    complete.rename(payload)
         verify_resources(payload)
     return payload
 
@@ -148,21 +154,33 @@ def prepare_native_dependency(payload: Path, cache: Path) -> None:
     """Use the same verified wheel repair as packaging, without editing the venv."""
     if sys.platform not in {"darwin", "win32"}:
         return
-    if sys.platform == "darwin":
-        from .cocoa_dependency import verify_wheel
-    else:
-        from .windows_dependency import verify_wheel
     wheels = cache / "native-wheels" / payload.name
-    verify_wheel(wheels)
+    try:
+        _verify_native_wheel(wheels)
+    except (OSError, ValueError) as error:
+        raise ValueError(
+            "Development native cache is unavailable; "
+            "restart the source host to rebuild it."
+        ) from error
     (wheel,) = wheels.glob("pywebview-*.whl")
     key = hashlib.sha256(wheel.read_bytes()).hexdigest()
     target = cache / "native" / key
     target.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(target.parent / "native.lock"), zipfile.ZipFile(wheel) as archive:
-        if not target.exists():
+        valid = target.is_dir() and all(
+            name.endswith("/")
+            or (
+                (target / name).is_file()
+                and (target / name).read_bytes() == archive.read(name)
+            )
+            for name in archive.namelist()
+        )
+        if not valid:
             with tempfile.TemporaryDirectory(dir=target.parent) as directory:
                 staging = Path(directory) / "wheel"
                 archive.extractall(staging)
+                if target.exists():
+                    target.rename(Path(directory) / "previous")
                 staging.rename(target)
         for name in archive.namelist():
             if not name.endswith("/") and (target / name).read_bytes() != archive.read(
@@ -204,6 +222,24 @@ def prepare_resources_logged(source: Path, cache: Path, log: Path) -> Path:
         raise ValueError("Source changed during preparation; retry startup.")
     verify_resources(payload)
     return payload
+
+
+def _verify_native_wheel(wheels: Path) -> None:
+    if sys.platform == "darwin":
+        from .cocoa_dependency import verify_wheel
+    else:
+        from .windows_dependency import verify_wheel
+    verify_wheel(wheels)
+
+
+def _native_ready(cache: Path, key: str) -> bool:
+    if sys.platform not in {"darwin", "win32"}:
+        return True
+    try:
+        _verify_native_wheel(cache / "native-wheels" / key)
+    except OSError, ValueError:
+        return False
+    return True
 
 
 if __name__ == "__main__":

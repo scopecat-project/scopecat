@@ -177,3 +177,43 @@ def test_workspace_pin_overrides_recipe_and_latest_is_rejected(selection, monkey
     with pytest.raises(ValueError, match="latest"):
         author_python.resolve(runtime, source, resource)
     assert len(calls) == 1
+
+
+def test_recipe_uses_probed_runtime_version_and_rejects_target_mismatch(
+    tmp_path, monkeypatch
+):
+    target = bundle.target_identity()
+    info = {"version": "3.14.99", "target": target}
+    monkeypatch.setattr(
+        author_resources.subprocess, "check_output", lambda *_a, **_kw: json.dumps(info)
+    )
+    recipe = author_resources._recipe(tmp_path / "packaged-python", target)
+    assert recipe["python"] == "3.14.99" + (
+        "t" if target["free_threaded"] == "True" else ""
+    )
+    info["target"] = {**target, "implementation": "different"}
+    with pytest.raises(ValueError, match="target"):
+        author_resources._recipe(tmp_path / "packaged-python", target)
+
+
+def test_python_identity_tracks_same_path_binary_library_and_abi(tmp_path, monkeypatch):
+    binary = tmp_path / "python"
+    library = tmp_path / "libpython"
+    binary.write_bytes(b"first")
+    library.write_bytes(b"library")
+    info = {
+        "binary": str(binary),
+        "library": str(library),
+        "version": "3.14.7",
+        "abi": "cpython-314",
+    }
+    monkeypatch.setattr(author_python, "run", lambda _c: json.dumps(info))
+    first = author_python.identity(binary)
+    binary.write_bytes(b"replacement")
+    second = author_python.identity(binary)
+    assert first != second
+    library.write_bytes(b"updated library")
+    third = author_python.identity(binary)
+    assert second != third
+    info["abi"] = "cpython-314t"
+    assert author_python.identity(binary) != third

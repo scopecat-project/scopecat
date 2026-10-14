@@ -16,7 +16,7 @@ from uv import find_uv_bin
 
 from scopecat.kernel.content_identity import sha256_json_hash
 
-from .author_python import check, resolve
+from .author_python import check, identity, resolve
 from .author_resources import verify_resources
 from .bundle import MANIFEST, file_hash
 
@@ -186,7 +186,7 @@ def prepare_execution_environment(
             "delivery": file_hash(bundle / MANIFEST),
             "constraints": file_hash(constraints),
             "requirements": requirements,
-            "python": str(base_python),
+            "python": {"path": str(base_python), **identity(base_python)},
         }
     ).split(":")[-1]
     directory = runtime.home / "environments" / key

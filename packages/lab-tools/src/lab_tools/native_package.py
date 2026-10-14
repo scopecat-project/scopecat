@@ -106,7 +106,7 @@ def build(source: Path, destination: Path) -> Path:
                 str(payload / "requirements.lock"),
             ]
         )
-        payload = author_resources.build(payload, resources / "payload")
+        payload = author_resources.build(payload, resources / "payload", python=python)
         if sys.platform == "darwin":
             _write_macos_console(python_home)
         _ = (resources / "bootstrap.py").write_text(
