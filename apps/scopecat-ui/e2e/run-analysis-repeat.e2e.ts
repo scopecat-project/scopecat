@@ -107,7 +107,10 @@ test("repeats a retained ordinary analysis with its original source after author
     const popup = await popupPromise;
     await expect(popup).toHaveURL(new RegExp(encodeURIComponent(seed.run)));
     await popup.close();
-    const row = data.locator("li").filter({ has: page.locator("code", { hasText: seed.run }) });
+    const row = data.locator("li").filter({
+      has: page.locator(`a[href="/?run=${encodeURIComponent(seed.run)}"]`),
+    });
+    await expect(row).toHaveCount(1);
     await row.getByRole("button").first().click();
     await expect(page).toHaveURL(new RegExp(`\\?run=${encodeURIComponent(seed.run)}$`));
     await page.goBack();

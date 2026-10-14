@@ -188,9 +188,15 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         `?procedure=${analyzed.procedure}&run-analysis=${analyzed.analysis}&run=${runId}#runs`,
       );
       await analysisLink.click();
+      const linkedAnalysis = page.getByRole("region", { name: "Linked analysis", exact: true });
       await expect(
-        page.getByRole("heading", { name: "Retained temperature summary", exact: true }),
+        linkedAnalysis.getByRole("heading", {
+          name: /^Retained temperature summary · revision [1-9]\d*$/,
+        }),
       ).toBeVisible();
+      await expect(linkedAnalysis.getByTestId("publication-id")).toHaveText(analyzed.analysis);
+      expect(new URL(page.url()).searchParams.get("run")).toBe(runId);
+      expect(new URL(page.url()).searchParams.get("run-analysis")).toBe(analyzed.analysis);
       expect(new URL(page.url()).searchParams.get("procedure")).toBe(analyzed.procedure);
     } catch (error) {
       // Capture the live failure before fixture teardown stops the daemon.

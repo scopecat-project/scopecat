@@ -179,8 +179,8 @@ def test_workflow_selects_exact_profile_jobs(profile):
         if enabled:
             selected.add(name.upper().replace("-", "_"))
     assert selected == SELECTED[profile]
-    assert "shard: [1, 2]" in jobs["browser-tests"]
-    assert "--project=journey-${{ matrix.shard }}" in jobs["browser-tests"]
+    assert '--project="journey-${BROWSER_SHARD}"' in jobs["browser-tests"]
+    assert "BROWSER_SHARD: ${{ matrix.shard }}" in jobs["browser-tests"]
 
 
 def test_browser_rechecks_downloaded_identity_before_extraction():
@@ -195,3 +195,29 @@ def test_browser_rechecks_downloaded_identity_before_extraction():
     )
     assert '--bundle ../../dist/framework --commit "$GITHUB_SHA"' in browser
     assert "github-token:" not in browser and "run-id:" not in browser
+
+
+@pytest.mark.parametrize("profile", SELECTED)
+@pytest.mark.parametrize("shard", ["", "both", "1", "2"])
+def test_browser_scope_preserves_default_and_integrated_profiles(profile, shard):
+    import ast
+    import re
+
+    workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
+    expression = re.search(r"shard: \$\{\{ fromJSON\((.*?)\) \}\}", workflow)[1]
+    inputs = {"inputs.profile": profile, "inputs.browser_shard": shard}
+    # Evaluate the workflow's restricted string comparisons and &&/|| chains.
+    # Unlike duplicating the selection logic, this checks its actual guards.
+    selected = None
+    for alternative in expression.split(" || "):
+        terms = alternative.split(" && ")
+        matches = True
+        for condition in terms[:-1]:
+            variable, expected = condition.split(" == ")
+            matches = matches and inputs[variable] == ast.literal_eval(expected)
+        if matches:
+            selected = json.loads(ast.literal_eval(terms[-1]))
+            break
+    expected = [int(shard)] if profile == "browser" and shard in {"1", "2"} else [1, 2]
+    assert selected == expected
+    assert "inputs.profile == 'browser' && inputs.browser_files || ''" in workflow
