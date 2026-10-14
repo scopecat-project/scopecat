@@ -235,8 +235,8 @@ legacy 布局仍为 `HOME/runtime/.scopecat/`。不会删除整个数据目录�
 The backup is a uniquely named directory in the chosen folder, containing raw
 store files and a SHA-256 manifest. It preserves the original format; it is **not**
 a current-version snapshot/restore promise and does not include source or Python
-environments. Supported-format daily backup uses the Settings entry above; explicit restore remains
-a separate maintainer command.
+environments. Supported-format daily backup uses the Settings entry above; explicit
+restore remains a separate maintainer command.
 All archive files are copied and verified before deletion. Interrupted deletion
 can be partial and cannot be rolled back automatically. Retry requires explicit
 confirmation; an existing verified archive is reused and its location displayed.

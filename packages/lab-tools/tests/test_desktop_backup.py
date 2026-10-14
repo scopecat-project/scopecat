@@ -1,6 +1,8 @@
 """Routine backups use the stopped snapshot contract through the native bridge."""
 
 import threading
+from pathlib import Path
+from typing import Literal, cast
 from unittest.mock import Mock
 
 import pytest
@@ -14,12 +16,16 @@ from scopecat_server.snapshots import restore_snapshot, verify_snapshot
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
+Backup = tuple[DesktopAPI, Mock, DesktopSession, Mock, Path]
+
 
 @pytest.fixture
-def backup(tmp_path, request):
+def backup(tmp_path: Path, request: pytest.FixtureRequest) -> Backup:
     home = tmp_path / "home"
     home.mkdir()
-    layout = getattr(request, "param", "application")
+    layout = cast(
+        'Literal["application", "legacy"]', getattr(request, "param", "application")
+    )
     root = home / "runtime" if layout == "legacy" else home
     root.mkdir(exist_ok=True)
     instance = ApplicationInstance(root, layout)
@@ -47,7 +53,7 @@ def backup(tmp_path, request):
 
 
 @pytest.mark.parametrize("cancel", ["folder", "confirmation"])
-def test_cancel_does_not_stop_or_capture(backup, cancel):
+def test_cancel_does_not_stop_or_capture(backup: Backup, cancel: str) -> None:
     api, runtime, _, window, parent = backup
     if cancel == "folder":
         window.create_file_dialog.return_value = None
@@ -58,7 +64,7 @@ def test_cancel_does_not_stop_or_capture(backup, cancel):
     assert list(parent.iterdir()) == []
 
 
-def test_busy_and_file_transfer_refuse_without_stopping_work(backup):
+def test_busy_and_file_transfer_refuse_without_stopping_work(backup: Backup) -> None:
     api, runtime, session, _, parent = backup
     runtime.stop_if_idle.return_value = False
     with pytest.raises(ValueError, match="后台仍有工作"):
@@ -70,7 +76,9 @@ def test_busy_and_file_transfer_refuse_without_stopping_work(backup):
 
 
 @pytest.mark.parametrize("backup", ["application", "legacy"], indirect=True)
-def test_native_backup_roundtrip_and_explicit_reopen(backup, tmp_path):
+def test_native_backup_roundtrip_and_explicit_reopen(
+    backup: Backup, tmp_path: Path
+) -> None:
     api, runtime, _, window, parent = backup
     # Cocoa and other hosts return different dialog shapes.
     window.create_file_dialog.return_value = str(parent)
@@ -90,7 +98,9 @@ def test_native_backup_roundtrip_and_explicit_reopen(backup, tmp_path):
     runtime.start.assert_called_once()
 
 
-def test_snapshot_lock_failure_preserves_original_and_allows_retry(backup):
+def test_snapshot_lock_failure_preserves_original_and_allows_retry(
+    backup: Backup,
+) -> None:
     api, runtime, _, window, parent = backup
     database = runtime.home / "data/control.sqlite3"
     original = database.read_bytes()
@@ -104,7 +114,7 @@ def test_snapshot_lock_failure_preserves_original_and_allows_retry(backup):
     assert len(list(parent.iterdir())) == 1
 
 
-def test_internal_destination_is_rejected_before_shutdown(backup):
+def test_internal_destination_is_rejected_before_shutdown(backup: Backup) -> None:
     api, runtime, _, window, _ = backup
     window.create_file_dialog.return_value = (str(runtime.home / "data"),)
     with pytest.raises(ValueError, match="之外"):
@@ -112,10 +122,12 @@ def test_internal_destination_is_rejected_before_shutdown(backup):
     runtime.stop_if_idle.assert_not_called()
 
 
-def test_verification_failure_is_not_reported_as_success(backup, monkeypatch):
+def test_verification_failure_is_not_reported_as_success(
+    backup: Backup, monkeypatch: pytest.MonkeyPatch
+) -> None:
     api, runtime, _, window, parent = backup
 
-    def reject(_path):
+    def reject(_path: Path) -> None:
         raise ValueError("checksum mismatch <details>")
 
     monkeypatch.setattr("scopecat_server.snapshots.verify_snapshot", reject)
