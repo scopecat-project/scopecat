@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version-file: .python-version
+          python-version: '3.14.8'
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
         with:
           version-file: uv.lock
@@ -25,10 +25,10 @@ jobs:
       - name: Reproduce repair shutdown with observations
         shell: pwsh
         run: |
-          $env:PYTHONPATH = "$pwd/scripts/stop_probe"
+          $env:PYTHONPATH = "$pwd;$pwd/scripts/stop_probe"
           $env:SCOPECAT_STOP_PROBE = "$pwd/stop-diagnostics"
           $env:SCOPECAT_TEST_DIAGNOSTICS = "$pwd/test-diagnostics"
-          uv run --locked pytest -v -n 2 -p scripts.pytest_diagnostics --basetemp=stop-test-data "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair]" "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-conflict]"
+          uv run --locked python -m pytest -v -n 2 -p scripts.pytest_diagnostics --basetemp=stop-test-data "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair]" "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-conflict]"
       - name: Print synthetic process observations and daemon logs
         if: always()
         shell: pwsh
