@@ -154,7 +154,15 @@ def prepare_execution_environment(
                 uv,
                 "pip",
                 "compile",
-                str(_declaration(uv, workspace, Path(temporary), offline=offline)),
+                str(
+                    _declaration(
+                        uv,
+                        workspace,
+                        Path(temporary),
+                        python=base_python,
+                        offline=offline,
+                    )
+                ),
                 str(execution),
                 "--project",
                 str(workspace),
@@ -263,7 +271,17 @@ def _install_client(
                 "compile",
                 str(requested),
                 *(
-                    [str(_declaration(uv, workspace, Path(temporary), offline=offline))]
+                    [
+                        str(
+                            _declaration(
+                                uv,
+                                workspace,
+                                Path(temporary),
+                                python=python,
+                                offline=offline,
+                            )
+                        )
+                    ]
                     if declaration.is_file()
                     else []
                 ),
@@ -302,7 +320,9 @@ def _install_client(
         )
 
 
-def _declaration(uv: str, workspace: Path, temporary: Path, *, offline: bool) -> Path:
+def _declaration(
+    uv: str, workspace: Path, temporary: Path, *, python: Path, offline: bool
+) -> Path:
     """Honor an existing uv lock; a stale lock must fail instead of being updated."""
     if not (workspace / "uv.lock").is_file():
         return workspace / "pyproject.toml"
@@ -311,6 +331,9 @@ def _declaration(uv: str, workspace: Path, temporary: Path, *, offline: bool) ->
         [
             uv,
             "export",
+            "--python",
+            str(python),
+            "--no-python-downloads",
             "--project",
             str(workspace),
             "--locked",

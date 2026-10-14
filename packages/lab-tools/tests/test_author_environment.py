@@ -313,7 +313,9 @@ def test_workspace_lock_is_exported_without_refresh(tmp_path, monkeypatch):
     )
     lock = source / "uv.lock"
     before = lock.read_bytes()
-    exported = environments._declaration(find_uv_bin(), source, tmp_path, offline=True)
+    exported = environments._declaration(
+        find_uv_bin(), source, tmp_path, python=Path(sys.executable), offline=True
+    )
     assert exported.is_file()
     assert lock.read_bytes() == before
     declaration.write_text(
@@ -322,5 +324,7 @@ def test_workspace_lock_is_exported_without_refresh(tmp_path, monkeypatch):
         )
     )
     with pytest.raises(ValueError, match="依赖准备未完成"):
-        environments._declaration(find_uv_bin(), source, tmp_path, offline=True)
+        environments._declaration(
+            find_uv_bin(), source, tmp_path, python=Path(sys.executable), offline=True
+        )
     assert lock.read_bytes() == before

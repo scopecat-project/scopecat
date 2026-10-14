@@ -1,7 +1,8 @@
 """Settings → edited experiment → retained comparison → restart and continue.
 
 Usage: uv run --locked python scripts/verify_ordinary_author.py WORK PAYLOAD [GUI]
-PAYLOAD is a development delivery with lab_tools.toolchain added. No provisioning,
+PAYLOAD is a verified author resource directory (full delivery is also accepted).
+First author preparation needs network access. No provisioning,
 registration, parameters or setup are preseeded. Only native window/file-picker
 plumbing and the external editor are substituted; cells use independent ipykernel.
 """
