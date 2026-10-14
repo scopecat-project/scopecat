@@ -6,6 +6,7 @@ import faulthandler
 import os
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Literal, TextIO
 
@@ -50,19 +51,22 @@ def stage(message: str) -> None:
 def observe_shutdown() -> None:
     """Sample a slow authorized shutdown before the caller's default deadline."""
     if _stream is not None:
-        stage("shutdown accepted")
-        faulthandler.dump_traceback_later(5, file=_stream)
+        with suppress(OSError, ValueError):
+            stage("shutdown accepted")
+            faulthandler.dump_traceback_later(5, file=_stream)
 
 
 def shutdown_stage(message: str) -> None:
     """Leave normal shutdown output unchanged unless diagnostics are enabled."""
     if _stream is not None:
-        stage(message)
+        with suppress(OSError, ValueError):
+            stage(message)
 
 
 def finish() -> None:
     global _stream
     if _stream is not None:
         faulthandler.cancel_dump_traceback_later()
-        _stream.close()
+        with suppress(OSError, ValueError):
+            _stream.close()
         _stream = None
