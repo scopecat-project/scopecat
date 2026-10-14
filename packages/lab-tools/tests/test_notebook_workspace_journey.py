@@ -185,7 +185,8 @@ session.close()
             cells=[
                 nbformat.v4.new_code_cell(
                     "import sys\nfrom pathlib import Path\nimport scopecat as sc\n"
-                    "assert Path(sys.prefix).resolve() != (Path.cwd() / '.venv').resolve()\n"
+                    "assert Path(sys.prefix).resolve() != "
+                    "(Path.cwd() / '.venv').resolve()\n"
                     "session = sc.notebook()\n"
                     "from my_experiment.teaching import teaching_rabi\n"
                     "assert teaching_rabi().values['seed'] == 401\n"
