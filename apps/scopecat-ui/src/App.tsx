@@ -136,6 +136,25 @@ export default function App() {
     queryFn: ({ signal }) => getHealth(signal),
     refetchInterval: 5_000,
   });
+  const healthWasUnavailable = useRef(false);
+  useEffect(() => {
+    if (healthQuery.isError) healthWasUnavailable.current = true;
+    if (!healthQuery.isSuccess || !healthWasUnavailable.current) return;
+    healthWasUnavailable.current = false;
+    let cancelled = false;
+    const projectQueries = {
+      predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== "health",
+    };
+    // Invalidation alone can reuse an unfinished first request (no cached data).
+    // Retire requests from the old backend before refreshing the mounted page.
+    void queryClient.cancelQueries(projectQueries).then(() => {
+      if (!cancelled) void queryClient.invalidateQueries(projectQueries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [healthQuery.isError, healthQuery.isSuccess, queryClient]);
+
   const eventsQuery = useQuery({
     queryKey: ["events"],
     queryFn: ({ signal }) => getEvents(signal),
