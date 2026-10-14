@@ -295,6 +295,10 @@ def backup_store(
         "Scopecat-data-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid4().hex
     )
     files, _ = _store_inventory(targets)
+    # WAL-index bytes are reconstructible coordination state, not database data.
+    # Windows mandatory locks prevent reading them while our writer fence holds.
+    # Keep DB/WAL and every object byte exact; exclude only this fixed sidecar.
+    files = [path for path in files if path != data / "control.sqlite3-shm"]
     before = {str(p.relative_to(data)): file_hash(p) for p in files}
     with tempfile.TemporaryDirectory(
         prefix=".scopecat-backup-", dir=destination
@@ -317,6 +321,7 @@ def backup_store(
                 "is not verified. No source/environments included."
             ),
             "files": before,
+            "omitted_rebuildable": ["control.sqlite3-shm"],
         }
         from .application_runtime import write_state
 
@@ -426,6 +431,8 @@ def reset_store(
                         cast("str", receipt["manifest_hash"]),
                     )
                     for path in files:
+                        if path == data / "control.sqlite3-shm":
+                            continue  # SQLite can reconstruct this index from DB/WAL.
                         if archived.get(str(path.relative_to(data))) != file_hash(path):
                             raise ValueError("待删除内容不在已校验备份中，拒绝继续")
                 if receipt["phase"] == "initializing" and any(
