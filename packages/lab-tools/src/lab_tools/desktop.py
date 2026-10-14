@@ -630,14 +630,19 @@ class DesktopWindows:
             view = DesktopView(window, api, loaded, request_quit)
 
             def close() -> bool:
-                with self._lock:
-                    if self._session.closing.is_set():
-                        return True
-                    if len(self._views) > 1:
-                        # Reserve the close before another window checks whether
-                        # it is the last view keeping the native host alive.
-                        self._views.remove(view)
-                        return True
+                if self._session.closing.is_set():
+                    return True
+                try:
+                    with self._session.operation(allow_files=True), self._lock:
+                        if len(self._views) > 1:
+                            # Reserve the close before another window checks whether
+                            # it is the last view keeping the native host alive.
+                            self._views.remove(view)
+                            return True
+                except ValueError:
+                    # Keep the bridge and its result page alive during maintenance.
+                    # Closing all views must not terminate an in-flight operation.
+                    pass
                 return hide()
 
             def closed() -> None:

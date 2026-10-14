@@ -139,3 +139,53 @@ def test_verification_failure_is_not_reported_as_success(
     assert len(list(parent.iterdir())) == 1
     assert (runtime.home / "data/control.sqlite3").is_file()
     runtime.start.assert_not_called()
+
+
+def test_backup_fences_other_bridges_through_capture_and_result(
+    backup: Backup, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server import snapshots
+
+    api, runtime, session, window, parent = backup
+    second = DesktopAPI(session, Mock())
+    # An earlier wait-for-idle quit must not interrupt the capture.
+    session.wait_for_idle(True)
+    stages = []
+
+    def check_fence(stage: str) -> None:
+        stages.append(stage)
+        for action in (
+            second.retry,
+            second.restart,
+            second.request_exit,
+            lambda: second.exit(False),
+        ):
+            with pytest.raises(ValueError, match="另一项操作"):
+                action()
+        session.poll_exit()
+        assert not session.closing.is_set()
+        runtime.start.assert_not_called()
+        runtime.stop.assert_not_called()
+        runtime.stop_if_idle.assert_called_once()
+
+    capture = snapshots.create_snapshot
+    verify = snapshots.verify_snapshot
+
+    def capture_fenced(instance: ApplicationInstance, destination: Path):
+        check_fence("capture")
+        return capture(instance, destination)
+
+    def verify_fenced(destination: Path):
+        check_fence("verify")
+        return verify(destination)
+
+    def load_page(page: str) -> None:
+        if "备份完成并已校验" in page:
+            check_fence("result")
+
+    monkeypatch.setattr(snapshots, "create_snapshot", capture_fenced)
+    monkeypatch.setattr(snapshots, "verify_snapshot", verify_fenced)
+    window.load_html.side_effect = load_page
+    api.backup_application()
+    assert stages == ["capture", "verify", "result"]
+    assert len(list(parent.iterdir())) == 1
