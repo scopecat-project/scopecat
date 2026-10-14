@@ -36,7 +36,21 @@ def test_startup_schedules_and_cancels_automatic_sample(
         assert not stream.closed
         [trace] = tmp_path.glob(f"{process}-startup-*.log")
         assert "python entry" in trace.read_text()
+        if process == "daemon":
+            _startup_diagnostics.observe_shutdown()
+            assert scheduled[-1] == (5, stream)
+            assert "shutdown accepted" in trace.read_text()
     finally:
         _startup_diagnostics.finish()
     assert cancelled == [True]
     assert stream.closed
+
+
+def test_shutdown_does_not_schedule_without_opt_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("shutdown sampling must remain opt-in")
+
+    monkeypatch.setattr(faulthandler, "dump_traceback_later", unexpected)
+    _startup_diagnostics.observe_shutdown()

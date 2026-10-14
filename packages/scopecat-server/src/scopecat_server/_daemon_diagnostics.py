@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import psutil
+from scopecat.daemon.endpoint import DaemonEndpointError, read_daemon_endpoint_record
 from scopecat.runtime_binding import load_runtime_binding
 
 
@@ -27,6 +28,38 @@ class _Observed:
 _observed: dict[Path, _Observed] = {}
 _lock = threading.Lock()
 _LOG_BYTES = 65536
+
+
+def _process_snapshot(pid: int) -> dict[str, object]:
+    try:
+        process = psutil.Process(pid)
+        return {
+            "pid": pid,
+            "create_time": process.create_time(),
+            "status": process.status(),
+            "threads": process.num_threads(),
+            "children": [
+                {"pid": child.pid, "create_time": child.create_time()}
+                for child in process.children(recursive=True)
+            ],
+        }
+    except psutil.Error as error:
+        return {"pid": pid, "observation_error": type(error).__name__}
+
+
+def _endpoint_snapshot(root: Path) -> dict[str, object] | None:
+    try:
+        record = read_daemon_endpoint_record(root)
+    except DaemonEndpointError:
+        return {"observation_error": "DaemonEndpointError"}
+    if record is None:
+        return None
+    return {
+        "pid": record.pid,
+        "create_time": record.process_create_time,
+        "shutdown_accepted": record.shutdown_accepted,
+        "process": _process_snapshot(record.pid),
+    }
 
 
 def observe_spawn(root: Path, process: subprocess.Popen[bytes]) -> None:
@@ -73,6 +106,8 @@ def capture(phase: str, *, root: Path | None = None) -> None:
                     "create_time": observed.created,
                     "returncode": code,
                     "log_tail": log_target.name,
+                    "launcher": _process_snapshot(observed.process.pid),
+                    "endpoint": _endpoint_snapshot(observed.root),
                 }
                 with observed.target.with_suffix(".jsonl").open(
                     "a", encoding="utf-8"

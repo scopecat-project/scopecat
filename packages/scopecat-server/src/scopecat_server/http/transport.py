@@ -446,6 +446,7 @@ from scopecat_server.worker_diagnostics import (
     worker_server_timing,
 )
 
+from .. import _startup_diagnostics
 from ..command_payloads import (
     CommandPayloadError,
     CommandPayloadTooLarge,
@@ -541,12 +542,18 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         try:
             yield
         finally:
+            _startup_diagnostics.shutdown_stage("shutdown: stopping analysis follows")
             follow_runner().stop()
+            _startup_diagnostics.shutdown_stage("shutdown: stopping calibration tasks")
             task_runner.stop()
             application.calibration_tasks.validate_call = None
+            _startup_diagnostics.shutdown_stage("shutdown: stopping project workers")
             project_workers.stop()
+            _startup_diagnostics.shutdown_stage("shutdown: closing author workspaces")
             application.author_workspaces.close()
+            _startup_diagnostics.shutdown_stage("shutdown: closing retained workers")
             retained_workers.close()
+            _startup_diagnostics.shutdown_stage("shutdown: HTTP lifespan closed")
 
     app = FastAPI(title="Scopecat daemon", version="1", lifespan=lifespan)
     app.add_middleware(

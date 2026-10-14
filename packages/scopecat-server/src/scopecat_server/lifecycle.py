@@ -221,6 +221,7 @@ def serve_project(
             assert record is not None
             record = record.model_copy(update={"shutdown_accepted": True})
             write_daemon_endpoint_record(record)
+            _startup_diagnostics.observe_shutdown()
             server.should_exit = True
             return True
 
@@ -234,6 +235,7 @@ def serve_project(
                 # Uvicorn drains HTTP before runtime.close(). Initial catalog
                 # requests may be waiting on preparation, so release them first.
                 preparations.request_stop()
+                _startup_diagnostics.shutdown_stage("shutdown: draining HTTP")
                 await super().shutdown(sockets=sockets)
 
         server = PreparationServer(
@@ -254,7 +256,9 @@ def serve_project(
         if record is not None:
             _remove_owned_record(record)
         if runtime is not None:
+            _startup_diagnostics.shutdown_stage("shutdown: closing runtime")
             runtime.close()
+            _startup_diagnostics.shutdown_stage("shutdown: runtime closed")
         listener.close()
 
 
@@ -435,15 +439,22 @@ def stop_project(
         status.record, only_if_idle=only_if_idle
     ):
         return status
+    _daemon_diagnostics.capture("shutdown_requested", root=project.root)
     try:
         process.wait(timeout=timeout)
     except psutil.TimeoutExpired:
+        _daemon_diagnostics.capture("shutdown_wait_timeout", root=project.root)
         if only_if_idle or status.record.shutdown_accepted:
             raise DaemonLifecycleError(
                 "Application is still quitting; retry shortly"
             ) from None
         process.kill()
-        process.wait(timeout=2)
+        _daemon_diagnostics.capture("shutdown_kill_sent", root=project.root)
+        try:
+            process.wait(timeout=2)
+        except psutil.TimeoutExpired:
+            _daemon_diagnostics.capture("shutdown_kill_timeout", root=project.root)
+            raise
     _daemon_diagnostics.capture("after_stop", root=project.root)
     _remove_owned_record(status.record)
     return status

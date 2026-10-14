@@ -47,6 +47,19 @@ def stage(message: str) -> None:
         _stream.flush()
 
 
+def observe_shutdown() -> None:
+    """Sample a slow authorized shutdown before the caller's default deadline."""
+    if _stream is not None:
+        stage("shutdown accepted")
+        faulthandler.dump_traceback_later(5, file=_stream)
+
+
+def shutdown_stage(message: str) -> None:
+    """Leave normal shutdown output unchanged unless diagnostics are enabled."""
+    if _stream is not None:
+        stage(message)
+
+
 def finish() -> None:
     global _stream
     if _stream is not None:
