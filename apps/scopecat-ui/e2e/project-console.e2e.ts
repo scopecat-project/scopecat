@@ -687,9 +687,9 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         .click();
       await b.getByLabel("Experiment", { exact: true }).selectOption("signal");
       await b.getByLabel("Experiment setup", { exact: true }).selectOption("starter-bench");
-      await expect(
-        b.getByRole("button", { name: "Start acquisition", exact: true }),
-      ).toBeDisabled();
+      // Start may prepare internally; merely editing or previewing must not acquire.
+      await expect(b.getByRole("button", { name: "Start acquisition", exact: true })).toBeEnabled();
+      expect(submissions).toEqual([]);
       const response = b.waitForResponse(
         (item) =>
           item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
