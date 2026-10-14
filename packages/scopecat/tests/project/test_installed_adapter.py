@@ -13,7 +13,11 @@ from scopecat.project import (
     load_project,
     open_project,
 )
-from scopecat.project_sources import capture_sources, require_environment
+from scopecat.project_sources import (
+    capture_sources,
+    require_environment,
+    require_import_environment,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -99,11 +103,14 @@ def test_capture_detects_same_version_adapter_replacement(
     bundle = capture_sources(project)
     assert "test-lab-adapter" in bundle.manifest.packages
     require_environment(bundle.manifest)
+    require_import_environment(bundle.manifest)
     (module / "adapter.toml").write_text(
         (module / "adapter.toml").read_text() + "\n# changed\n"
     )
     with pytest.raises(ValueError, match="installed author package content changed"):
         require_environment(bundle.manifest)
+    with pytest.raises(ValueError, match="installed author package content changed"):
+        require_import_environment(bundle.manifest)
 
 
 def test_local_shadow_is_rejected_before_import(

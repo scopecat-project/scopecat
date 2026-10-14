@@ -79,6 +79,13 @@ enter its **Execution Python**, then **Add code folder**. Select registered fold
 under **Your code folders**. Adding a folder keeps the application running. Multiple
 folders share one service, device registry and data authority.
 
+For a registered folder, `sc.notebook()` accepts a compatible user-selected kernel
+while an older `.venv` remains in place. It still checks the selected source's
+Scopecat API versions and installed author-package contents before importing it;
+registration does not waive those checks. The Notebook kernel and execution worker
+need not have the same executable path. Keep old environments for retained-source
+execution and recovery.
+
 If an existing folder has no local Python, choose **Create local Python environment**.
 Select `.venv/bin/python` on macOS or `.venv/Scripts/python.exe` on Windows.
 This is your environment: installing

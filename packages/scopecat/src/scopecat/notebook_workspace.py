@@ -13,6 +13,7 @@ from typing import Protocol, cast, override
 
 import scopecat.authoring.experiments as declarations
 from scopecat.application.author_project import AuthorProject
+from scopecat.author_workspaces import local_author_workspaces
 from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import Project, open_project
@@ -83,7 +84,18 @@ class NotebookSession(AuthorProject):
         shell = _shell()
         project = open_project(start)
         environment = project.root / ".venv"
-        if environment.is_dir() and Path(sys.prefix).resolve() != environment.resolve():
+        registered = any(
+            item.root == project.root for item in local_author_workspaces(project.root)
+        )
+        # Registered workspaces may retain .venv while selecting another kernel.
+        # _default_request_revision below still validates imports against the
+        # source captured by the selected execution environment; registration
+        # does not make an incompatible client eligible to import that source.
+        if (
+            not registered
+            and environment.is_dir()
+            and Path(sys.prefix).resolve() != environment.resolve()
+        ):
             raise RuntimeError(
                 f"Select Kernel: choose the project's environment {environment}"
             )
