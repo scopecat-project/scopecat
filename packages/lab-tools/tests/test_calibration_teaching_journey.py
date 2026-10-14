@@ -17,11 +17,13 @@ def test_procedure_capture_preserves_imports_and_checks_changed_source(
     create_project(root, topic="calibration")
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
+    environment["PYTHONIOENCODING"] = "utf-8"
     result = subprocess.run(  # noqa: S603 - Fixed script and generated test directory.
         [sys.executable, "-c", _SOURCE_LIFECYCLE, str(root)],
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
