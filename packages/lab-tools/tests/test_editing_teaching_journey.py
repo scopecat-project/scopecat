@@ -15,12 +15,11 @@ from lab_tools.verify_editing import (
     editing_notebook,
     reopen_cells,
 )
-from scopecat.project import open_project
 from scopecat_server.lifecycle import start_project, stop_project
 
 
 def test_editing_lessons_share_application_and_reopen_after_restart(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, author_kernel_python
 ) -> None:
     runtime = ApplicationRuntime(tmp_path / "application")
     gui = tmp_path / "gui"
@@ -32,13 +31,15 @@ def test_editing_lessons_share_application_and_reopen_after_restart(
         for topic in ("refresh", "compute")
     }
     for root in roots.values():
-        runtime.register_source(root)
-    application = open_project(runtime.root)
+        runtime.register_source(root, python=author_kernel_python)
+    application = runtime.instance
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     monkeypatch.setenv("IPYTHONDIR", str(tmp_path / "ipython"))
 
     def execute(root, name, document):
-        _, environment = kernel_command(root, source_path=False)
+        _, environment = kernel_command(
+            root, python=str(author_kernel_python), source_path=False
+        )
         monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
         try:
             NotebookClient(

@@ -956,7 +956,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:0ce89cedf1071d9b9494c6c9eaae2312cee55bf6f5b5def3b95c34a06024a2fc",
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "id": "scopecat.author:ui_signal.signal",
       "version": "1"
     },
@@ -1354,7 +1354,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:0ce89cedf1071d9b9494c6c9eaae2312cee55bf6f5b5def3b95c34a06024a2fc",
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "id": "scopecat.author:ui_signal.signal",
       "version": "1"
     },
@@ -1821,7 +1821,7 @@
         "code_revision": {
           "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "config_source_hash": "sha256:3e839c0382be26ff352895b1b000fcda11ddcc29ad71a3259ccea719b4af97a1",
+        "config_source_hash": "sha256:1983e7ad2f4e06cb41da2b99e48d2166239f69d7d6cbdde239da8312edd669a9",
         "request_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       "event_id": 1
@@ -1934,7 +1934,7 @@
       ]
     },
     "procedure_definition": {
-      "fingerprint": "sha256:caaa891d42f0395ba8657bd270c04da83c4640c2f67e34c011bf512acce4a5ab",
+      "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "id": "scopecat.author:reference_lab.temperature_diagnostic",
       "version": "1"
     },
@@ -1963,8 +1963,8 @@
           "revision_id": "acceptance-parameters"
         },
         "setup": {
-          "content_hash": "sha256:2c1d2b447eb1b945cb981394ae5dfc044f3581fd656fdbf79c251d4e09eb60dc",
-          "revision_id": "resolved:2c1d2b447eb1b945cb981394ae5dfc044f3581fd656fdbf79c251d4e09eb60dc"
+          "content_hash": "sha256:dbd0514898b8678845636f3667a63d2a1356c9b3ffc2146e8a7cbc47db9d5a4d",
+          "revision_id": "resolved:dbd0514898b8678845636f3667a63d2a1356c9b3ffc2146e8a7cbc47db9d5a4d"
         }
       }
     },
