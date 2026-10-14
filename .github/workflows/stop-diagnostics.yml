@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        attempt: [1, 2]
+        attempt: [1]
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -25,17 +25,16 @@ jobs:
       - name: Reproduce repair shutdown with observations
         shell: pwsh
         run: |
-          $env:PYTHONPATH = "$pwd;$pwd/scripts/stop_probe"
-          $env:SCOPECAT_STOP_PROBE = "$pwd/stop-diagnostics"
+          $env:PYTHONPATH = "$pwd"
           $env:SCOPECAT_TEST_DIAGNOSTICS = "$pwd/test-diagnostics"
-          uv run --locked python -m pytest -v -n 2 -p scripts.pytest_diagnostics --basetemp=stop-test-data "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair]" "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-conflict]"
+          uv run --locked python -m pytest -v -n 2 -p scripts.pytest_diagnostics --basetemp=stop-test-data packages/scopecat-server/tests/test_daemon_diagnostics.py packages/scopecat-server/tests/test_startup_diagnostics.py packages/scopecat-server/tests/test_lifecycle.py::test_stop_timeout_records_both_wait_failures_without_hiding_error "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair]" "packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-conflict]"
       - name: Print synthetic process observations and daemon logs
         if: always()
         shell: pwsh
         run: |
-          Get-ChildItem stop-diagnostics -Filter *.jsonl -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.Name; Get-Content $_.FullName -Tail 150 }
+          Get-ChildItem test-diagnostics -Filter *.jsonl -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.Name; Get-Content $_.FullName -Tail 150 }
           Get-ChildItem stop-test-data -Recurse -Filter daemon.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName; Get-Content $_.FullName -Tail 150 }
-          Get-ChildItem stop-diagnostics -Filter stacks-*.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.Name; Get-Content $_.FullName -Tail 100 }
+          Get-ChildItem test-diagnostics -Filter *startup*.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.Name; Get-Content $_.FullName -Tail 100 }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
