@@ -91,6 +91,9 @@ are tracked in [#616](https://github.com/scopecat-project/scopecat/issues/616).
 
 ```sh
 gh workflow run acceptance.yml --ref <branch> -f profile=browser
+# Optional narrow qualification; defaults still run both complete journeys.
+gh workflow run acceptance.yml --ref <branch> -f profile=browser \
+  -f browser_shard=2 -f 'browser_files=application-loop|parameter-working-inputs'
 gh run rerun <run-id> --failed
 gh run rerun --job <browser-job-id>
 ```

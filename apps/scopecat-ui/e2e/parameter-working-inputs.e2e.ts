@@ -1,3 +1,4 @@
+import { expectRunIdentity } from "./run-identity";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -164,7 +165,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     expect(JSON.parse(evidence).parameters).toEqual(previewB.reviewed.config_source.parameters);
     // Keep the original result selected while another window submits a newer run.
     await work.getByRole("link", { name: /^View saved data:/ }).click();
-    await expect(work.getByTitle(runB, { exact: true })).toBeVisible();
+    await expectRunIdentity(work, runB);
     await editor
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
@@ -198,7 +199,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       runC,
     ]);
     await editor.getByRole("link", { name: /^View saved data:/ }).click();
-    await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
+    await expectRunIdentity(editor, runC);
     await work.getByRole("button", { name: "Configuration", exact: true }).click();
     const continuedField = work.getByLabel("signals[1].center", { exact: true });
     // Explicitly reopen the latest shared draft before making a new edit.
@@ -208,9 +209,9 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await continuedField.fill("5.5");
     await expect(work.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await work.getByRole("button", { name: "Runs", exact: true }).click();
-    await expect(work.getByTitle(runB, { exact: true })).toBeVisible();
+    await expectRunIdentity(work, runB);
     expect(new URL(work.url()).searchParams.get("run")).toBe(runB);
-    await expect(editor.getByTitle(runC, { exact: true })).toBeVisible();
+    await expectRunIdentity(editor, runC);
     await work.getByRole("button", { name: "Experiments", exact: true }).click();
     expect(new URL(work.url()).searchParams.get("procedure")).toBe(procedureB);
     await expect(work.getByRole("link", { name: /^View saved data:/ })).toHaveAttribute(

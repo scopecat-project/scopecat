@@ -1,3 +1,4 @@
+import { expectRunIdentity } from "./run-identity";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -127,7 +128,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page.goBack();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await page.goForward();
-    await expect(page.getByTitle(run, { exact: true })).toBeVisible();
+    await expectRunIdentity(page, run);
     await page.getByRole("button", { name: "Experiments", exact: true }).click();
     await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
