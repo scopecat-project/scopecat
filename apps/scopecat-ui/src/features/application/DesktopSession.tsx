@@ -70,6 +70,7 @@ interface DesktopAPI {
   status(): Promise<ApplicationStatus>;
   retry(): Promise<void>;
   restart(): Promise<void>;
+  backup_application(): Promise<void>;
   exit(background: boolean): Promise<void>;
   request_exit(): Promise<ApplicationActivity | null>;
   wait_for_idle(wait: boolean): Promise<void>;

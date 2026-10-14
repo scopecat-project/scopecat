@@ -24,6 +24,28 @@ If you only want to inspect or share saved results, start with
 Reopening restores access to retained records; it never repeats a measurement.
 Closing a browser tab or a Python client does not stop the application.
 
+## Back up application data
+
+In the native app, choose **Settings → Software and data → Back up application data…**.
+Choose an existing folder outside the application home, save and stop editing practice
+files, then confirm. Cancelling either dialog changes nothing. Scopecat stops the
+service only when idle; active work or file transfers must finish first.
+
+The result page shows the uniquely named snapshot directory and whether verification
+succeeded. Keep the whole directory. The service stays stopped; choose **重新打开应用**
+to continue, or **退出** to leave it stopped. On failure, original data and environments
+remain in place; reopen and retry after correcting the reported cause. Do not treat a
+failed or unverified destination as a usable backup.
+
+This reuses the current-format snapshot: scientific records, immutable source bundles,
+practice files and author registrations are retained. External editable author folders,
+Python environments, SDKs and the application installer are **not** included; preserve
+those separately. A snapshot is not a cross-version migration or a complete environment
+archive. Restoring remains an explicit maintainer operation into a **new** application
+home, described in [backup/restore](backup-and-restore.md); there is no in-place restore
+button. The native installation does not require or install a global `scopecat` command
+for this backup workflow.
+
 ## Install a newer application
 
 Quit Scopecat, install the newer native package for your platform, then reopen it.
@@ -213,7 +235,8 @@ legacy 布局仍为 `HOME/runtime/.scopecat/`。不会删除整个数据目录�
 The backup is a uniquely named directory in the chosen folder, containing raw
 store files and a SHA-256 manifest. It preserves the original format; it is **not**
 a current-version snapshot/restore promise and does not include source or Python
-environments. Existing supported-format backup/restore remains a separate command.
+environments. Supported-format daily backup uses the Settings entry above; explicit restore remains
+a separate maintainer command.
 All archive files are copied and verified before deletion. Interrupted deletion
 can be partial and cannot be rolled back automatically. Retry requires explicit
 confirmation; an existing verified archive is reused and its location displayed.

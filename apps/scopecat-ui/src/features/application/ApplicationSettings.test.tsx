@@ -44,6 +44,7 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
       create_source: create,
       register_source: register,
       select_source_environment: vi.fn(),
+      backup_application: vi.fn().mockRejectedValueOnce(new Error("后台仍有工作")),
       restart: vi.fn(),
       retry: vi.fn(),
       exit: vi.fn(),
@@ -58,6 +59,10 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
       <ApplicationSettings />
     </QueryClientProvider>,
   );
+  fireEvent.click(screen.getByRole("button", { name: "Back up application data…" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("后台仍有工作");
+  expect(window.pywebview.api.backup_application).toHaveBeenCalledTimes(1);
+  expect(window.pywebview.api.restart).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "New code folder" }));
   const submit = screen.getByRole("button", { name: "Create folder and prepare Python" });
   fireEvent.click(screen.getByRole("button", { name: "Choose save location…" }));
@@ -126,6 +131,7 @@ it("keeps author dependencies independent and uses native application updates", 
       prepare_author_environment: dependencies,
       create_author_environment: client,
       restart,
+      backup_application: vi.fn(),
       retry: vi.fn(),
       exit: vi.fn(),
     },

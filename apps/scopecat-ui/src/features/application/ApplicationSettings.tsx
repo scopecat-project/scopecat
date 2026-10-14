@@ -34,6 +34,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
         | "environment"
         | "create"
         | "restart"
+        | "backup"
         | "dependencies"
         | "client"
         | "rebuild-client",
@@ -47,6 +48,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       else if (action === "client") return native.create_author_environment(source.trim());
       else if (action === "rebuild-client")
         return native.create_author_environment(source.trim(), true);
+      else if (action === "backup") await native.backup_application();
       else await native.restart();
       return undefined;
     },
@@ -101,6 +103,22 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
           uses the installed version directly. Updates keep scientific data and source folders.
           Reopening does not repeat measurements.
         </p>
+        {native && (
+          <>
+            <p>
+              Back up scientific records and retained source while idle. External code folders,
+              Python environments and the application installer need separate copies. The service
+              stays stopped until you reopen it from the backup result page.
+            </p>
+            <button
+              className={secondaryButton}
+              disabled={busy}
+              onClick={() => operation.mutate("backup")}
+            >
+              Back up application data…
+            </button>
+          </>
+        )}
         {!native && (
           <p>
             Open the Scopecat desktop application to manage local source folders and Python

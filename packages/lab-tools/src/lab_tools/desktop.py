@@ -273,6 +273,62 @@ class DesktopAPI:
 
         self._session.restart(start)
 
+    def backup_application(self) -> None:
+        """Capture this idle home with the existing stopped snapshot contract."""
+        from uuid import uuid4
+
+        import webview
+
+        from scopecat_server.snapshots import create_snapshot, verify_snapshot
+
+        with self._session.operation():
+            selected = self._window().create_file_dialog(webview.FileDialog.FOLDER)
+            if not selected:
+                return
+            parent = Path(
+                selected if isinstance(selected, str) else selected[0]
+            ).resolve()
+            if not parent.is_dir() or parent.is_relative_to(
+                self._runtime.home.resolve()
+            ):
+                raise ValueError("请选择应用目录之外的备份目录")
+            destination = parent / f"scopecat-snapshot-{uuid4().hex}"
+            if not self._window().create_confirmation_dialog(
+                "备份应用数据？",
+                f"空闲时停止后台并备份到：{destination}\n"
+                "包含科学记录、不可变源码和作者登记；"
+                "不包含外部代码目录、Python 环境或安装包。\n"
+                "请先保存并停止编辑练习文件。忙碌时不会停止工作。\n"
+                "完成后手动重新打开应用；原数据与环境保留。继续？",
+            ):
+                return
+            if not self._runtime.stop_if_idle():
+                raise ValueError("后台仍有工作；请等待空闲后备份，运行与数据保留")
+            try:
+                self._window().load_html(_page("<h1>正在备份应用数据…</h1>"))
+                _ = create_snapshot(self._runtime.instance, destination)
+                _ = verify_snapshot(destination)
+                result = (
+                    "<h1>备份完成并已校验</h1>"
+                    f"<p>备份位置：{escape(str(destination))}</p>"
+                    "<p>请保留整个目录；另行保存外部源码、Python 环境和原安装包。"
+                    "此快照仅支持匹配版本的维护恢复，不是跨版本迁移。</p>"
+                )
+            except Exception as error:
+                result = (
+                    "<h1>备份未完成或未通过校验</h1>"
+                    f"<p>{escape(str(error))}</p>"
+                    f"<p>目标位置：{escape(str(destination))}</p>"
+                    "<p>不要将该目录作为已验证备份。原数据与环境未删除；"
+                    "重新打开后可再次备份。</p>"
+                )
+            self._window().load_html(
+                _page(
+                    result + '<button onclick="retry()">重新打开应用</button>'
+                    '<button onclick="quit()">退出</button>'
+                )
+            )
+
     def prepare_author_environment(self, directory: str) -> str:
         from .author_environment import prepare_execution_environment
 
