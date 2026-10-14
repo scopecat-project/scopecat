@@ -3,6 +3,7 @@
 Usage: python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>
 Uses existing delivery/toolchain artifacts without changing their manifests.
 Includes explicit snapshot recovery with a separately backed-up author fixture.
+Pass --all-topics for the slower qualification of all seven shipped Help topics.
 Does not restore Help continuation or exercise a browser/native editor.
 """
 
@@ -33,7 +34,7 @@ def python_in(root: Path) -> Path:
     return root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
-def install_and_verify(payload: Path, work: Path) -> None:
+def install_and_verify(payload: Path, work: Path, *, all_topics: bool = False) -> None:
     started = perf_counter()
     # The shipped installer is stdlib-only; use its manifest checks before unpacking.
     installer = runpy.run_path(str(payload / "install.py"))
@@ -81,6 +82,7 @@ def install_and_verify(payload: Path, work: Path) -> None:
                 str(payload),
                 str(work),
                 "--installed",
+                *(["--all-topics"] if all_topics else []),
             ],
         ),
     ):
@@ -95,7 +97,7 @@ def install_and_verify(payload: Path, work: Path) -> None:
     receipt.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
-def verify_installed(payload: Path, work: Path) -> None:
+def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> None:
     import ctypes
     from copy import deepcopy
     from importlib import import_module
@@ -538,8 +540,10 @@ def verify_installed(payload: Path, work: Path) -> None:
             "groups-restored",
         )
         assert {run.run_id for run in runs()} == {run.run_id for run in before}
-        evidence["installed_help_topics"] = verify_remaining_topics(
-            runtime, work, execute
+        evidence["installed_help_topics"] = (
+            verify_remaining_topics(runtime, work, execute)
+            if all_topics
+            else ["parameters", "groups"]
         )
         evidence.update(
             snapshot_restore="passed",
@@ -671,6 +675,7 @@ class Arguments(Protocol):
     payload: Path
     work: Path
     installed: bool
+    all_topics: bool
 
 
 if __name__ == "__main__":
@@ -678,6 +683,9 @@ if __name__ == "__main__":
     parser.add_argument("payload", type=Path)
     parser.add_argument("work", type=Path)
     parser.add_argument("--installed", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--all-topics", action="store_true", help="Execute all seven Help topics"
+    )
     args = cast("Arguments", cast("object", parser.parse_args()))
     action = verify_installed if args.installed else install_and_verify
-    action(args.payload.resolve(), args.work.resolve())
+    action(args.payload.resolve(), args.work.resolve(), all_topics=args.all_topics)
