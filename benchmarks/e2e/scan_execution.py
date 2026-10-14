@@ -86,7 +86,6 @@ from scopecat.records.config import ConfigProfileSnapshot, SystemSpec
 from scopecat.records.parameter import ParameterSnapshot
 from scopecat.sdk.instruments import (
     DriverAcquisition,
-    DriverCatalog,
     DriverOperation,
     DriverOutcome,
     DriverPayload,
@@ -112,6 +111,12 @@ from scopecat_server.instruments.backend import (  # noqa: TID251
     LocalInstrumentBackendEndpoint,
 )
 from scopecat_server.lifecycle import start_project, stop_project  # noqa: TID251
+from scopecat_server.storage.sqlite.object_store import (  # noqa: TID251
+    ImmutableObjectStore,
+)
+from scopecat_server.storage.sqlite.resource_objects import (  # noqa: TID251
+    resource_directory,
+)
 from scopecat_testkit.instrument_host import compose_test_instruments
 from scopecat_testkit.server.in_process_lab import in_process_lab  # noqa: TID251
 
@@ -836,7 +841,7 @@ def run_scopecat(
     )
     backend = InstrumentBackend(
         provider=provider,
-        driver_catalog=DriverCatalog(provider_id=provider.provider_id),
+        driver_catalog=reference_provider.driver_catalog,
         payload_codecs=reference_lab_payload_codecs(),
     )
 
@@ -871,7 +876,9 @@ def run_scopecat(
         timeline.start()
         with PeakRssSampler() as memory:
             invocation = _scopecat_invocation(scenario)
-            run = lab.prepare(invocation, config=config).run()
+            run = lab.prepare(
+                invocation, config=config, setup=lab.setup.get("initial")
+            ).run()
             timeline.finish()
             memory.observe()
         if run.status != "completed":
@@ -934,7 +941,8 @@ def run_scopecat_deployed(
         telemetry_path = root / "benchmark-telemetry.jsonl"
         instrument_pid = _wait_for_instrument_worker(telemetry_path)
         with project.connect(daemon.base_url, operator="benchmark") as lab:
-            selected_config = lab.resolve_config()
+            selected_config = lab.resolve_config(config)
+            selected_setup = lab.setup.get("initial").ref
             started_ns = time.perf_counter_ns()
             with DeploymentRssSampler(
                 daemon_pid=daemon.pid,
@@ -943,6 +951,7 @@ def run_scopecat_deployed(
                 run = lab.execute_invocation(
                     _scopecat_invocation(scenario),
                     config=selected_config,
+                    setup=selected_setup,
                 )
                 finished_ns = time.perf_counter_ns()
             if run.status != "completed":
@@ -2382,10 +2391,10 @@ def _scopecat_measurement_bytes(state_root: Path) -> int:
         return 0
     with sqlite3.connect(database) as connection:
         rows = cast(
-            "list[tuple[str]]",
+            "list[tuple[str, str]]",
             connection.execute(
                 """
-                SELECT DISTINCT digest
+                SELECT DISTINCT run_id, digest
                 FROM run_repository_refs
                 WHERE ref = 'data/measurement_dataset/raw-measurements/header.json'
                    OR ref LIKE 'data/measurement_dataset/raw-measurements/chunks/%'
@@ -2393,10 +2402,12 @@ def _scopecat_measurement_bytes(state_root: Path) -> int:
             ).fetchall(),
         )
     total = 0
-    for row in rows:
-        digest = row[0]
+    objects = ImmutableObjectStore(object_root)
+    for run_id, digest in rows:
         hexdigest = digest.removeprefix("sha256:")
-        path = object_root / hexdigest[:2] / hexdigest[2:]
+        path = (
+            resource_directory(objects, "run", run_id) / hexdigest[:2] / hexdigest[2:]
+        )
         total += path.stat().st_size
     return total
 

@@ -53,4 +53,7 @@ def test_historical_project_benchmark_keeps_every_read_bounded() -> None:
     ):
         assert measurements[label]["returned_count"] == 25
         assert cast("int", measurements[label]["response_bytes"]) < 256 * 1024
-    assert measurements["exact_middle_run"]["run_id"] == "run-history-00000125"
+    assert (
+        measurements["exact_middle_run"]["run_id"]
+        == "00000000-0000-7000-8000-00000000007d"
+    )
