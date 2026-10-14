@@ -39,7 +39,7 @@ def test_managed_task_calibration_shipped_kernel(
     )
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
-    raw = json.loads(path.read_text())["cells"]
+    raw = json.loads(path.read_text(encoding="utf-8"))["cells"]
     for anchor in ("task-3", "task-4", "task-9"):
         _cell_index(raw, anchor)
     notebook = read(path, as_version=4)
@@ -74,7 +74,9 @@ def test_managed_task_calibration_shipped_kernel(
                 ).execute()
             finally:
                 write(document, root / f"notebooks/verified-{name}.ipynb")
-        evidence = json.loads((root / "notebooks/task-evidence.json").read_text())
+        evidence = json.loads(
+            (root / "notebooks/task-evidence.json").read_text(encoding="utf-8")
+        )
         assert evidence["disconnect_state"] == "leased"
         assert evidence["reconnect_mode"] == "running"
         assert len(evidence["run_ids"]) == 12
@@ -86,9 +88,12 @@ _EDIT_AFTER_PREPARE = """
 from pathlib import Path
 
 source = session.project_root / "src/my_experiment/task_calibration.py"
-original = source.read_text()
+original = source.read_text(encoding="utf-8")
 assert "estimate = value - error" in original
-source.write_text(original.replace("estimate = value - error", "estimate = 1.5"))
+source.write_text(
+    original.replace("estimate = value - error", "estimate = 1.5"),
+    encoding="utf-8",
+)
 frozen_commands = {case: item.command for case, item in prepared_tasks.items()}
 for prepared in prepared_tasks.values():
     detached = prepared.command
@@ -239,7 +244,7 @@ import json
 from pathlib import Path
 import scopecat as sc
 
-evidence = json.loads(Path("task-evidence.json").read_text())
+evidence = json.loads(Path("task-evidence.json").read_text(encoding="utf-8"))
 assert {item.specification.task_id for item in lesson_history} == {
     saved["task"]["task_id"] for saved in evidence["tasks"].values()
 }
