@@ -42,6 +42,7 @@ it("shows retry progress, suppresses duplicate clicks and restores controls on f
   expect(page.elements.progress.textContent).toContain("正在重新准备");
   expect(page.button.disabled).toBe(true);
   expect(retry).toHaveBeenCalledTimes(1);
+  expect(retry).toHaveBeenCalledWith(true);
   fail(new Error("Startup unavailable"));
   await operation;
   // The first request's rejection handler runs in the same microtask turn.

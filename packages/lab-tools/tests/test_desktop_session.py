@@ -137,6 +137,21 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     assert len(created) == 2
     runtime.start.assert_called_once()
 
+    # Maintenance keeps both bridges alive even if every window is closed.
+    # This exercises pywebview events with fake windows, not native GUI behavior.
+    with session.operation():
+        assert first.window.events.closing.set() is True
+        assert second.window.events.closing.set() is True
+        assert not session.closing.is_set()
+        first.window.destroy.assert_not_called()
+        second.window.destroy.assert_not_called()
+    shown.reset_mock()
+    windows.show()
+    assert [call.args[0] for call in shown.call_args_list] == [
+        first.window,
+        second.window,
+    ]
+
     # pywebview returns True from Event.set when a handler vetoes the close.
     assert first.window.events.closing.set() is False
     assert second.window.events.closing.set() is True
