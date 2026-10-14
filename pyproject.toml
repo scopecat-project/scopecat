@@ -474,6 +474,7 @@ integration_paths = [
   "packages/lab-tools/tests/test_teaching_delivery.py",
 ]
 journey_paths = [
+  "packages/lab-tools/tests/test_application_notebook_kernel.py",
   "packages/scopecat-server/tests/author_journeys",
   "packages/lab-tools/tests/test_editing_teaching_journey.py",
   "packages/lab-tools/tests/test_data_reset.py",

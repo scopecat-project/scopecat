@@ -13,11 +13,15 @@ from typing import Protocol, cast, override
 
 import scopecat.authoring.experiments as declarations
 from scopecat.application.author_project import AuthorProject
-from scopecat.author_workspaces import local_author_workspaces
+from scopecat.author_workspaces import local_author_workspaces, service_workspace_root
 from scopecat.authoring.experiments import Experiment
-from scopecat.daemon.endpoint import resolve_daemon_endpoint
+from scopecat.daemon.endpoint import (
+    read_daemon_endpoint_record,
+    resolve_daemon_endpoint,
+)
 from scopecat.project import Project, open_project
 from scopecat.records.author_revision import AuthorRevisionRef
+from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
 
 
 class ShellEvents(Protocol):
@@ -87,6 +91,23 @@ class NotebookSession(AuthorProject):
         registered = any(
             item.root == project.root for item in local_author_workspaces(project.root)
         )
+        if registered:
+            service_root = service_workspace_root(project.root)
+            if (service_root / APPLICATION_INSTANCE_NAME).is_file():
+                record = read_daemon_endpoint_record(project.root)
+                if record is not None and record.python is not None:
+                    # Resolve directory aliases, not the executable symlink:
+                    # independent venvs may share the same underlying binary.
+                    application_python = (
+                        record.python.parent.resolve() / record.python.name
+                    )
+                    kernel_python = Path(sys.executable)
+                    kernel_python = kernel_python.parent.resolve() / kernel_python.name
+                    if kernel_python == application_python:
+                        raise RuntimeError(
+                            "Select Kernel: choose an independent author environment, "
+                            "not the application's Python"
+                        )
         # Registered workspaces may retain .venv while selecting another kernel.
         # _default_request_revision below still validates imports against the
         # source captured by the selected execution environment; registration
