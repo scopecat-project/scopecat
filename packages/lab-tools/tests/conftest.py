@@ -1,7 +1,11 @@
 """Shared isolation for local teaching Notebook author imports."""
 
 import json
+import os
+import subprocess
 import sys
+import sysconfig
+import venv
 from pathlib import Path
 
 import pytest
@@ -67,3 +71,26 @@ def delivery(tmp_path: Path) -> Path:
         )
     )
     return root
+
+
+@pytest.fixture
+def author_kernel_python(tmp_path: Path) -> Path:
+    """A real author venv distinct from the application's test interpreter."""
+    root = tmp_path / "author-kernel"
+    venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(root)
+    python = root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    purelib = Path(
+        subprocess.check_output(  # noqa: S603 -- fixed test-owned interpreter
+            [
+                str(python),
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            text=True,
+        ).strip()
+    )
+    (purelib / "test-dependencies.pth").write_text(
+        f"import site; site.addsitedir({sysconfig.get_path('purelib')!r})\n",
+        encoding="utf-8",
+    )
+    return python

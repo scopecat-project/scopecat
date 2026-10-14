@@ -17,11 +17,13 @@ def test_procedure_capture_preserves_imports_and_checks_changed_source(
     create_project(root, topic="calibration")
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)
+    environment["PYTHONIOENCODING"] = "utf-8"
     result = subprocess.run(  # noqa: S603 - Fixed script and generated test directory.
         [sys.executable, "-c", _SOURCE_LIFECYCLE, str(root)],
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -57,7 +59,9 @@ try:
     with project.authoring() as session:
         session.refresh()
         namespace = {"sc": sc, "session": session}
-        cells = json.loads((root / "notebooks/calibration.ipynb").read_text())["cells"]
+        cells = json.loads(
+            (root / "notebooks/calibration.ipynb").read_text(encoding="utf-8")
+        )["cells"]
         exec("".join(cells[_cell_index(cells, "calibration-2")]["source"]), namespace)
         lab = project.connect()
         module = importlib.import_module("my_experiment.calibration")
@@ -100,12 +104,12 @@ try:
             )
             assert second.snapshot.source == first.source
             source = root / "src/my_experiment/calibration.py"
-            original = source.read_text()
+            original = source.read_text(encoding="utf-8")
             source.write_text(original.replace(
                 '    baseline = ctx.run(',
                 '    raise ValueError("changed implementation")\\n'
                 '    baseline = ctx.run(',
-            ))
+            ), encoding="utf-8")
             changed = lab.procedures.submit(
                 module.calibrate, intent, request_key="changed",
             )
@@ -371,7 +375,9 @@ assert report.items[2].selection.reason == "no_matching_evidence"
 
 
 @pytest.mark.parametrize("topic", ["calibration", "joint-calibration"])
-def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
+def test_managed_calibration_shipped_kernel(
+    tmp_path, monkeypatch, topic, author_kernel_python
+):
     import json
 
     from nbclient import NotebookClient
@@ -380,7 +386,6 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
     from lab_tools.application_runtime import ApplicationRuntime
     from lab_tools.notebook import kernel_command
     from lab_tools.verify_editing import _cell_index
-    from scopecat.project import open_project
     from scopecat_server.lifecycle import start_project, stop_project
 
     root = create_project(tmp_path / "作者代码", topic=topic).parent
@@ -399,9 +404,11 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
     gui.mkdir()
     (gui / "index.html").write_text("<html>workbench</html>")
     runtime.configure(static_dir=gui)
-    runtime.register_source(root)
-    application = open_project(runtime.root)
-    _, environment = kernel_command(root, source_path=False)
+    runtime.register_source(root, python=author_kernel_python)
+    application = runtime.instance
+    _, environment = kernel_command(
+        root, python=str(author_kernel_python), source_path=False
+    )
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     anchor_id = {"calibration": "calibration-5", "joint-calibration": "joint-5"}[topic]
@@ -443,7 +450,9 @@ def test_managed_calibration_shipped_kernel(tmp_path, monkeypatch, topic):
                 ).execute()
             finally:
                 write(document, root / f"notebooks/verified-{name}.ipynb")
-        evidence = json.loads((root / "notebooks/evidence.json").read_text())
+        evidence = json.loads(
+            (root / "notebooks/evidence.json").read_text(encoding="utf-8")
+        )
         assert evidence["disconnect_state"] == "leased"
         assert evidence["post_close_state"] in {"ready", "leased"}
         assert evidence["runs"] == (6 if topic == "calibration" else 12)
@@ -622,7 +631,7 @@ import json
 from pathlib import Path
 import scopecat as sc
 
-evidence = json.loads(Path("evidence.json").read_text())
+evidence = json.loads(Path("evidence.json").read_text(encoding="utf-8"))
 assert {evidence["request"], evidence["rejected"]} <= {
     item.procedure_run_id for item in lesson_history
 }

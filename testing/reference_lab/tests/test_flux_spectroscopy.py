@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 from typing import assert_type, cast
+from uuid import UUID
 
 import numpy as np
 import pytest
@@ -259,7 +260,13 @@ def test_flux_spectroscopy_runs_fits_saves_and_proposes(tmp_path: Path) -> None:
 
     analysis = run.analyze(flux_spectroscopy_analysis())
     candidate = lab.resolve_config(config=analysis.candidate_config())
-    assert analysis.id == "analysis-reference_lab-flux_spectroscopy-analysis-r1"
+    assert str(UUID(analysis.id)) == analysis.id
+    assert analysis.key == "reference_lab-flux_spectroscopy-analysis"
+    assert analysis.revision == 1
+    assert (
+        run.published_analysis(analysis.id).publication_hash
+        == analysis.publication_hash
+    )
     assert [output.kind for output in analysis.outputs] == [
         "dataset",
         "fact",
@@ -312,7 +319,10 @@ def test_flux_spectroscopy_runs_fits_saves_and_proposes(tmp_path: Path) -> None:
     assert float(active_frequency.to("GHz").value) == pytest.approx(5.0)
 
     review = run.analyze(flux_spectroscopy_fit_review())
-    assert review.id == "analysis-reference_lab-flux_spectroscopy-fit-review-r1"
+    assert str(UUID(review.id)) == review.id
+    assert review.key == "reference_lab-flux_spectroscopy-fit-review"
+    assert review.revision == 1
+    assert run.published_analysis(review.id).publication_hash == review.publication_hash
     quality = review.fact_as(
         "quality-review",
         FLUX_SPECTROSCOPY_FIT_REVIEW_SCHEMA,
@@ -365,7 +375,12 @@ def test_flux_spectroscopy_worker_retains_science_and_exact_inputs(
             assert trace.unit == "ratio"
 
         analysis = run.analyze(flux_spectroscopy_analysis())
-        assert analysis.id == "analysis-reference_lab-flux_spectroscopy-analysis-r1"
+        assert str(UUID(analysis.id)) == analysis.id
+        assert analysis.key == "reference_lab-flux_spectroscopy-analysis"
+        assert (
+            run.published_analysis(analysis.id).publication_hash
+            == analysis.publication_hash
+        )
         assert analysis.revision == 1
         selected = analysis.fact_as("selected-sweet-spot", RESONATOR_TRACE_FIT_SCHEMA)
         assert float(selected.dc_bias.to("V").value) == pytest.approx(0.0, abs=1e-12)
@@ -390,7 +405,13 @@ def test_flux_spectroscopy_worker_retains_science_and_exact_inputs(
         )
 
         review = run.analyze(flux_spectroscopy_fit_review())
-        assert review.id == "analysis-reference_lab-flux_spectroscopy-fit-review-r1"
+        assert str(UUID(review.id)) == review.id
+        assert review.key == "reference_lab-flux_spectroscopy-fit-review"
+        assert review.revision == 1
+        assert (
+            run.published_analysis(review.id).publication_hash
+            == review.publication_hash
+        )
         quality = review.fact_as("quality-review", FLUX_SPECTROSCOPY_FIT_REVIEW_SCHEMA)
         assert quality.accepted
         assert quality.worst_complex_rmse < 0.02

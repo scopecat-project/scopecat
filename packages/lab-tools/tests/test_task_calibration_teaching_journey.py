@@ -10,11 +10,12 @@ from lab_teaching.project import create_project
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.notebook import kernel_command
 from lab_tools.verify_editing import _cell_index
-from scopecat.project import open_project
 from scopecat_server.lifecycle import start_project, stop_project
 
 
-def test_managed_task_calibration_shipped_kernel(tmp_path, monkeypatch):
+def test_managed_task_calibration_shipped_kernel(
+    tmp_path, monkeypatch, author_kernel_python
+):
     root = create_project(tmp_path / "作者代码", topic="task-calibration").parent
     material = (
         Path(__file__).resolve().parents[2]
@@ -31,12 +32,14 @@ def test_managed_task_calibration_shipped_kernel(tmp_path, monkeypatch):
     gui.mkdir()
     (gui / "index.html").write_text("<html>workbench</html>")
     runtime.configure(static_dir=gui)
-    runtime.register_source(root)
-    application = open_project(runtime.root)
-    _, environment = kernel_command(root, source_path=False)
+    runtime.register_source(root, python=author_kernel_python)
+    application = runtime.instance
+    _, environment = kernel_command(
+        root, python=str(author_kernel_python), source_path=False
+    )
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
-    raw = json.loads(path.read_text())["cells"]
+    raw = json.loads(path.read_text(encoding="utf-8"))["cells"]
     for anchor in ("task-3", "task-4", "task-9"):
         _cell_index(raw, anchor)
     notebook = read(path, as_version=4)
@@ -71,7 +74,9 @@ def test_managed_task_calibration_shipped_kernel(tmp_path, monkeypatch):
                 ).execute()
             finally:
                 write(document, root / f"notebooks/verified-{name}.ipynb")
-        evidence = json.loads((root / "notebooks/task-evidence.json").read_text())
+        evidence = json.loads(
+            (root / "notebooks/task-evidence.json").read_text(encoding="utf-8")
+        )
         assert evidence["disconnect_state"] == "leased"
         assert evidence["reconnect_mode"] == "running"
         assert len(evidence["run_ids"]) == 12
@@ -83,9 +88,12 @@ _EDIT_AFTER_PREPARE = """
 from pathlib import Path
 
 source = session.project_root / "src/my_experiment/task_calibration.py"
-original = source.read_text()
+original = source.read_text(encoding="utf-8")
 assert "estimate = value - error" in original
-source.write_text(original.replace("estimate = value - error", "estimate = 1.5"))
+source.write_text(
+    original.replace("estimate = value - error", "estimate = 1.5"),
+    encoding="utf-8",
+)
 frozen_commands = {case: item.command for case, item in prepared_tasks.items()}
 for prepared in prepared_tasks.values():
     detached = prepared.command
@@ -236,7 +244,7 @@ import json
 from pathlib import Path
 import scopecat as sc
 
-evidence = json.loads(Path("task-evidence.json").read_text())
+evidence = json.loads(Path("task-evidence.json").read_text(encoding="utf-8"))
 assert {item.specification.task_id for item in lesson_history} == {
     saved["task"]["task_id"] for saved in evidence["tasks"].values()
 }
