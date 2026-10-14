@@ -83,6 +83,8 @@ def installation_selection(
         [
             str(python),
             "-I",
+            "-X",
+            "utf8",
             "-B",
             "-c",
             (
@@ -97,6 +99,7 @@ def installation_selection(
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return Path(cast("str", json.loads(result.stdout)))
 

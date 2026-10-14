@@ -100,7 +100,10 @@ def test_environment_timeout_keeps_real_child_stderr(
     assert "synthetic import reached" in str(caught.value)
     assert len(children) == 1
     assert caught.value.__cause__ is children[0]
-    assert isinstance(children[0].stderr, bytes)
+    stderr = children[0].stderr
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8")
+    assert stderr == "synthetic import reached\n"
 
 
 def environment(root: Path, version: int) -> Path:
