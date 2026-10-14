@@ -1,6 +1,6 @@
 # First experiment
 
-Open the installed Scopecat application. This example uses synthetic data and
+Follow [download and installation](install.md), then open Scopecat. This example uses synthetic data and
 needs no devices. To inspect a received file instead, use
 [Open and share recorded data](../how-to/open-and-share-data.md).
 

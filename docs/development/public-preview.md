@@ -67,6 +67,34 @@ before accepting an upgrade. All workflow references to the CLI must stay aligne
 Knope retains change files during prereleases so the eventual stable release can
 include the full set; it removes them when preparing the stable version.
 
+### First numbered delivery readiness
+
+The user entry is [Download and install](../getting-started/install.md). Before
+presenting a first numbered installer there, review the following with the candidate:
+
+- Choose the public version and native build number explicitly; `0.0.0` / build `0`
+  is still only bootstrap state. Existing release tooling is not evidence of an
+  actual numbered release or a successful prepare/publish workflow run.
+- Establish the minimum supported OS versions on the intended architectures.
+  `native_package.py` currently writes no `LSMinimumSystemVersion` or explicit
+  Inno Setup `MinVersion`; toolchain defaults do not establish product support.
+  Current native observations cover specific hosts in [native acceptance](native-window-acceptance.md),
+  not a minimum-version matrix.
+- Qualify Windows WebView2 presence and the missing-Runtime path on a clean target.
+  The installer copies the application and shortcut; it neither bundles nor installs
+  the Evergreen Runtime. Agree on the runtime prerequisite with the delivery owner
+  before promising first-launch or offline installation on a new computer.
+- Verify the exact candidate's short journey: download, install, prepare a tutorial
+  and author folder, simulate once, quit, reopen and continue. Include failed
+  preparation/startup recovery and preserve source and receipts. Link target-OS
+  evidence; backend tests cannot replace native first-open or editor observations.
+- Record signing/notarization limitations, external editor/network requirements and
+  data compatibility in the release notes. Only replace the historical-download
+  notice after a real release exists and its assets and identity have been checked.
+
+Version choice, minimum OS policy and trusted signing remain explicit delivery
+choices. This checklist does not run Prepare, Publish or native acceptance.
+
 ### Prepare, review, then publish
 
 Before preparation, reconcile unreleased change files against the difference
