@@ -280,6 +280,15 @@ unknown work; it never force-stops it. Changes to native host Python need a full
 safe quit and relaunch. Existing author `.venv` directories and retained execution
 environments are never silently updated to follow the checkout.
 
+This resource preparation still uses the locked delivery builder and a separate
+Python payload for author environments; source mode does not remove that cost.
+The cache identity includes package source and dependency/build inputs, so a
+changed identity can require fresh resource preparation on startup or restart.
+UI-only edits do not change that payload. It does not create a DMG or Windows
+installer, and developers need not package one for each source validation.
+Reserve the separate packaging path for installed-delivery acceptance; a working
+source desktop does not establish that a downloaded installer works.
+
 The default home is a stable hash of the canonical worktree path under the user's
 `Scopecat-Development` data directory, outside the checkout and separate from the
 installed application's data. Each worktree has its own owner and dynamic ports;
