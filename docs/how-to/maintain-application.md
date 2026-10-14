@@ -40,9 +40,11 @@ failed or unverified destination as a usable backup.
 This reuses the current-format snapshot: scientific records, immutable source bundles,
 practice files and author registrations are retained. External editable author folders,
 Python environments, SDKs and the application installer are **not** included; preserve
-those separately. A snapshot is not a cross-version migration or a complete environment
-archive. Restoring remains an explicit maintainer operation into a **new** application
-home, described in [backup/restore](backup-and-restore.md); there is no in-place restore
+those separately. Backup does not migrate data or archive the complete environment.
+Restore eligibility follows the supported snapshot and data-format compatibility
+contract, not the application version number alone. Restoring remains an explicit
+maintainer operation into a **new** application home, described in
+[backup/restore](backup-and-restore.md); there is no in-place restore
 button. The native installation does not require or install a global `scopecat` command
 for this backup workflow.
 

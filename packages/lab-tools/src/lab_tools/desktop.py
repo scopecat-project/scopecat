@@ -312,7 +312,7 @@ class DesktopAPI:
                     "<h1>备份完成并已校验</h1>"
                     f"<p>备份位置：{escape(str(destination))}</p>"
                     "<p>请保留整个目录；另行保存外部源码、Python 环境和原安装包。"
-                    "此快照仅支持匹配版本的维护恢复，不是跨版本迁移。</p>"
+                    "恢复须满足数据格式与快照兼容要求；此操作不执行格式迁移。</p>"
                 )
             except Exception as error:
                 result = (
