@@ -1,6 +1,7 @@
 """用户从逐 shot 改为平均 IQ 时的记录与重开回归。"""
 
 import importlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
@@ -171,7 +172,9 @@ def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, 
             .replace('id="teaching.rabi"', 'id="teaching.extra"')
             .replace("def teaching_rabi(", "def extra_rabi(")
         )
-        assert (root / "examples/extra.py").read_bytes() == extra.encode()
+        assert (root / "examples/extra.py").read_bytes() == extra.replace(
+            "\n", os.linesep
+        ).encode("utf-8")
     _, environment = kernel_command(root, source_path=False)
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     project = sc.open_project(root)

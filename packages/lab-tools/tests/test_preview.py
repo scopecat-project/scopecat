@@ -19,15 +19,29 @@ def test_download_rejects_unpinned_or_non_https_artifacts(tmp_path: Path) -> Non
 
 
 @pytest.mark.parametrize("member", ["../outside", "/absolute", "C:relative", "a\\b"])
-def test_preview_rejects_archive_escape(tmp_path: Path, member: str) -> None:
+def test_preview_rejects_archive_escape(
+    tmp_path: Path, member: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     archive = tmp_path / "scopecat-ui.zip"
     with zipfile.ZipFile(archive, "w") as stream:
         entry = zipfile.ZipInfo("placeholder")
         # Preserve the hostile spelling; ZipInfo normalizes backslashes on Windows.
         entry.filename = member
         stream.writestr(entry, "content")
+
+    class NormalizingZipInfo(zipfile.ZipInfo):
+        def __init__(
+            self,
+            filename: str = "NoName",
+            date_time: tuple[int, int, int, int, int, int] = (1980, 1, 1, 0, 0, 0),
+        ) -> None:
+            super().__init__(filename, date_time)
+            self.filename = self.filename.replace("\\", "/")
+
+    # Exercise Windows reader normalization on every platform.
+    monkeypatch.setattr(zipfile, "ZipInfo", NormalizingZipInfo)
     with zipfile.ZipFile(archive) as stream:
-        assert stream.namelist() == [member]
+        assert [entry.orig_filename for entry in stream.infolist()] == [member]
     (tmp_path / "preview.json").write_text(
         json.dumps(
             {

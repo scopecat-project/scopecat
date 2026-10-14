@@ -96,7 +96,9 @@ def unpack_gui(preview: Path, destination: Path) -> Preview:
     if file_hash(archive) != metadata["files"][archive.name]:
         raise ValueError("Workbench checksum mismatch")
     with zipfile.ZipFile(archive) as stream:
-        for name in stream.namelist():
+        for member in stream.infolist():
+            # ZipInfo.filename normalizes Windows separators during reading.
+            name = member.orig_filename
             if (
                 PurePosixPath(name).is_absolute()
                 or PureWindowsPath(name).drive
