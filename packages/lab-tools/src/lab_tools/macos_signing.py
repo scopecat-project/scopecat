@@ -6,7 +6,8 @@ import json
 import subprocess
 from pathlib import Path
 
-from .bundle import MANIFEST, file_hash, verify_bundle
+from .author_resources import verify_resources
+from .bundle import MANIFEST, file_hash
 
 
 def native_files(app: Path) -> list[Path]:
@@ -50,7 +51,7 @@ def verify(app: Path) -> None:
 def sign(app: Path) -> None:
     """Sign inner code first, update delivery checksums, then seal the outer app."""
     payload = app / "Contents/Resources/payload"
-    document = verify_bundle(payload)
+    document = verify_resources(payload)
     for path in native_files(app):
         _codesign("--force", "--sign", "-", "--timestamp=none", str(path))
         if path.is_relative_to(payload):
@@ -59,6 +60,6 @@ def sign(app: Path) -> None:
     (payload / MANIFEST).write_text(
         json.dumps(document, indent=2) + "\n", encoding="utf-8"
     )
-    _ = verify_bundle(payload)
+    _ = verify_resources(payload)
     _codesign("--force", "--sign", "-", "--timestamp=none", str(app))
     verify(app)

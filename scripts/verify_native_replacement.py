@@ -27,7 +27,7 @@ runtime = ApplicationRuntime(home / "data")
 source = home / "authors"
 write_author_scaffold(source)
 client = create_client_environment(runtime, source)
-execution = prepare_execution_environment(runtime, source, offline=True)
+execution = prepare_execution_environment(runtime, source)
 identity = runtime.register_source(source, python=execution)
 assert execution != client and execution != runtime.installation().python
 try:
@@ -166,7 +166,11 @@ def _verify(previous: Path, current: Path, home: Path) -> None:
 
     shutil.copytree(previous, installed)
     launch("before.json")
-    run([str(python), "-I", "-B", "-c", SEED, str(home)])
+    subprocess.run(  # noqa: S603 - explicit online author preparation
+        [str(python), "-I", "-B", "-c", SEED, str(home)],
+        env=dict(environment, UV_OFFLINE="0", UV_PYTHON_DOWNLOADS="automatic"),
+        check=True,
+    )
     source_files = inventory(home / "authors", ("src",))
     client_configuration = (home / "authors/.venv/pyvenv.cfg").read_bytes()
     installed.rename(home / "retired-package")

@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import subprocess
-import tarfile
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
@@ -17,7 +16,9 @@ from uv import find_uv_bin
 
 from scopecat.kernel.content_identity import sha256_json_hash
 
-from .bundle import MANIFEST, file_hash, install_bundle, verify_bundle
+from .author_python import check, resolve
+from .author_resources import verify_resources
+from .bundle import MANIFEST, file_hash
 
 if TYPE_CHECKING:
     from .application_runtime import ApplicationRuntime
@@ -51,35 +52,21 @@ def _bundle(runtime: ApplicationRuntime) -> Path:
         raise ValueError("作者环境资源不存在；请恢复原安装包，已有作者环境保留")
     if file_hash(root / MANIFEST) != selected.delivery_manifest_sha256:
         raise ValueError("作者环境资源与已登记交付清单不同；请重新打开当前应用后重试")
-    _ = verify_bundle(root)
+    _ = verify_resources(root)
     return root
 
 
-def _independent_python(bundle: Path, home: Path) -> Path:
-    """Retain a base interpreter owned by the environment, not the application."""
-    archive = bundle / "toolchain/python.tar"
-    if not archive.is_file():
-        raise ValueError("创建独立作者环境需要包含 Python 的平台交付包")
-    key = file_hash(archive).split(":")[-1]
-    base = home / key
-    home.mkdir(parents=True, exist_ok=True)
-    from filelock import FileLock
-
-    with FileLock(home / "python.lock"):
-        if not base.exists():
-            _ = verify_bundle(bundle)
-            with tempfile.TemporaryDirectory(prefix=".python-", dir=home) as temporary:
-                staged = Path(temporary) / "runtime"
-                with tarfile.open(archive) as stream:
-                    stream.extractall(staged, filter="data")
-                staged.rename(base)
-    return base / ("python.exe" if os.name == "nt" else "bin/python3")
-
-
 def create_client_environment(
-    runtime: ApplicationRuntime, workspace: Path, *, rebuild: bool = False
+    runtime: ApplicationRuntime,
+    workspace: Path,
+    *,
+    rebuild: bool = False,
+    python: Path | None = None,
+    offline: bool = False,
 ) -> Path:
     """Seed a normal user-owned venv once; application updates never sync it."""
+    workspace = workspace.resolve()
+    explicit_python = python
     environment = workspace / ".venv"
     if environment.is_symlink():
         raise ValueError("作者 .venv 必须是独立目录，不能链接到应用环境")
@@ -89,21 +76,28 @@ def create_client_environment(
             raise ValueError(
                 f"作者环境不完整，原目录保留，请重建自己的环境：{environment}"
             )
-        return python
+        return check(runtime, workspace, python)
     # Validate before moving the old environment; existing environments need no payload.
     bundle = _bundle(runtime)
+    base_python = resolve(
+        runtime, workspace, bundle, python=explicit_python, offline=offline
+    )
     previous: Path | None = None
     if rebuild and environment.exists():
         previous = environment.rename(workspace / f".venv-retained-{uuid4().hex}")
     try:
-        base_python = _independent_python(bundle, workspace / ".scopecat-python")
-        _ = install_bundle(
-            bundle,
-            environment,
-            copy_packages=True,
-            base_python=base_python,
-            packages=("scopecat", "ipykernel"),
+        uv = find_uv_bin()
+        _run(
+            [
+                uv,
+                "venv",
+                "--python",
+                str(base_python),
+                "--no-python-downloads",
+                str(environment),
+            ]
         )
+        _install_client(uv, bundle, workspace, environment, offline=offline)
         python = environment_python(environment)
         _run([str(python), "-m", "ensurepip"])
     except BaseException:
@@ -127,7 +121,11 @@ def create_client_environment(
 
 
 def prepare_execution_environment(
-    runtime: ApplicationRuntime, workspace: Path, *, offline: bool = False
+    runtime: ApplicationRuntime,
+    workspace: Path,
+    *,
+    offline: bool = False,
+    python: Path | None = None,
 ) -> Path:
     """Resolve source dependencies against the same delivery lock as the client.
 
@@ -141,15 +139,14 @@ def prepare_execution_environment(
     if not declaration.is_file():
         raise ValueError("请在作者目录的 pyproject.toml 声明后台实验所需依赖")
     bundle = _bundle(runtime)
+    base_python = resolve(runtime, workspace, bundle, python=python, offline=offline)
     constraints = bundle / "requirements.lock"
     uv = find_uv_bin()
-    framework = runtime.installation().environment
     with tempfile.TemporaryDirectory(prefix="scopecat-author-lock-") as temporary:
         lock = Path(temporary) / "requirements.lock"
         execution = Path(temporary) / "execution.in"
         execution.write_text(
-            f"scopecat=={framework['scopecat']}\n"
-            f"scopecat-server=={framework['server']}\n",
+            _framework_requirements(bundle, server=True),
             encoding="utf-8",
         )
         _run(
@@ -157,12 +154,12 @@ def prepare_execution_environment(
                 uv,
                 "pip",
                 "compile",
-                str(declaration),
+                str(_declaration(uv, workspace, Path(temporary), offline=offline)),
                 str(execution),
                 "--project",
                 str(workspace),
                 "--python",
-                str(runtime.installation().python),
+                str(base_python),
                 "--find-links",
                 (bundle / "wheels").as_uri(),
                 "--constraint",
@@ -181,6 +178,7 @@ def prepare_execution_environment(
             "delivery": file_hash(bundle / MANIFEST),
             "constraints": file_hash(constraints),
             "requirements": requirements,
+            "python": str(base_python),
         }
     ).split(":")[-1]
     directory = runtime.home / "environments" / key
@@ -198,10 +196,16 @@ def prepare_execution_environment(
             lock = attempt / "requirements.lock"
             lock.write_text(requirements, encoding="utf-8")
             environment = attempt / "runtime"
-            base_python = _independent_python(
-                bundle, runtime.home / "environments/python"
+            _run(
+                [
+                    uv,
+                    "venv",
+                    "--python",
+                    str(base_python),
+                    "--no-python-downloads",
+                    str(environment),
+                ]
             )
-            _run([uv, "venv", "--python", str(base_python), str(environment)])
             python = environment_python(environment)
             _run(
                 [
@@ -228,3 +232,96 @@ def prepare_execution_environment(
             temporary.replace(ready)
             _ = failed.pop_all()
             return python
+
+
+def _framework_requirements(bundle: Path, *, server: bool) -> str:
+    result: list[str] = []
+    for name in ("scopecat", "scopecat_server") if server else ("scopecat",):
+        wheels = list((bundle / "wheels").glob(f"{name}-*.whl"))
+        if len(wheels) != 1:
+            raise ValueError(f"缺少唯一的作者框架 wheel: {name}")
+        result.append(wheels[0].as_uri())
+    return "\n".join(result) + "\n"
+
+
+def _install_client(
+    uv: str, bundle: Path, workspace: Path, environment: Path, *, offline: bool
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="scopecat-client-") as temporary:
+        requested = Path(temporary) / "client.in"
+        requested.write_text(
+            _framework_requirements(bundle, server=False) + "ipykernel\n",
+            encoding="utf-8",
+        )
+        lock = Path(temporary) / "requirements.lock"
+        declaration = workspace / "pyproject.toml"
+        python = environment_python(environment)
+        _run(
+            [
+                uv,
+                "pip",
+                "compile",
+                str(requested),
+                *(
+                    [str(_declaration(uv, workspace, Path(temporary), offline=offline))]
+                    if declaration.is_file()
+                    else []
+                ),
+                "--project",
+                str(workspace),
+                "--python",
+                str(python),
+                "--find-links",
+                (bundle / "wheels").as_uri(),
+                "--constraint",
+                (bundle / "requirements.lock").as_uri(),
+                "--generate-hashes",
+                "--no-header",
+                "--no-annotate",
+                "--output-file",
+                str(lock),
+                *(["--offline"] if offline else []),
+            ]
+        )
+        _run(
+            [
+                uv,
+                "pip",
+                "install",
+                "--project",
+                str(workspace),
+                "--python",
+                str(python),
+                "--link-mode",
+                "copy",
+                "--require-hashes",
+                "-r",
+                str(lock),
+                *(["--offline"] if offline else []),
+            ]
+        )
+
+
+def _declaration(uv: str, workspace: Path, temporary: Path, *, offline: bool) -> Path:
+    """Honor an existing uv lock; a stale lock must fail instead of being updated."""
+    if not (workspace / "uv.lock").is_file():
+        return workspace / "pyproject.toml"
+    exported = temporary / "workspace-requirements.txt"
+    _run(
+        [
+            uv,
+            "export",
+            "--project",
+            str(workspace),
+            "--locked",
+            "--no-dev",
+            "--no-editable",
+            "--no-emit-project",
+            "--format",
+            "requirements-txt",
+            "--output-file",
+            str(exported),
+            *(["--offline"] if offline else []),
+        ]
+    )
+    return exported

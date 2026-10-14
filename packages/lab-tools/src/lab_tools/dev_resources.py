@@ -19,7 +19,9 @@ from platformdirs import user_data_path
 
 from scopecat_server.validation_process import terminate_validation_process_tree
 
-from .bundle import target_identity, verify_bundle
+from .author_resources import build as build_author_resources
+from .author_resources import verify_resources
+from .bundle import target_identity
 
 
 def development_home(source: Path) -> Path:
@@ -90,7 +92,7 @@ def resource_identity(source: Path) -> str:
         "libc": platform.libc_ver(),
         "uv_package": version("uv"),
         "tools": tools,
-        "format": 1,
+        "format": 2,
     }
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
@@ -98,7 +100,6 @@ def resource_identity(source: Path) -> str:
 def prepare_resources(source: Path, cache: Path) -> Path:
     """Publish only verified complete payloads. Old identities remain untouched."""
     from .delivery import build_delivery
-    from .toolchain import build
 
     cache.mkdir(parents=True, exist_ok=True)
     key = resource_identity(source)
@@ -124,14 +125,22 @@ def prepare_resources(source: Path, cache: Path) -> Path:
                     encoding="utf-8",
                 )
                 delivery = build_delivery(staging / "delivery", source=source, gui=gui)
-                complete = build(delivery, staging / "complete")
+                # Keep repaired desktop wheels in their own host-only cache.
+                native = cache / "native-wheels" / key
+                if sys.platform in {"darwin", "win32"}:
+                    native.mkdir(parents=True, exist_ok=True)
+                    (wheel,) = (delivery / "wheels").glob("pywebview-*.whl")
+                    import shutil
+
+                    shutil.copy2(wheel, native / wheel.name)
+                complete = build_author_resources(delivery, staging / "complete")
                 if resource_identity(source) != key:
                     raise ValueError(
                         "Source changed while preparing resources; retry startup."
                     )
-                verify_bundle(complete)
+                verify_resources(complete)
                 complete.rename(payload)
-        verify_bundle(payload)
+        verify_resources(payload)
     return payload
 
 
@@ -143,8 +152,9 @@ def prepare_native_dependency(payload: Path, cache: Path) -> None:
         from .cocoa_dependency import verify_wheel
     else:
         from .windows_dependency import verify_wheel
-    verify_wheel(payload / "wheels")
-    (wheel,) = (payload / "wheels").glob("pywebview-*.whl")
+    wheels = cache / "native-wheels" / payload.name
+    verify_wheel(wheels)
+    (wheel,) = wheels.glob("pywebview-*.whl")
     key = hashlib.sha256(wheel.read_bytes()).hexdigest()
     target = cache / "native" / key
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -192,7 +202,7 @@ def prepare_resources_logged(source: Path, cache: Path, log: Path) -> Path:
             raise
     if resource_identity(source) != key:
         raise ValueError("Source changed during preparation; retry startup.")
-    verify_bundle(payload)
+    verify_resources(payload)
     return payload
 
 

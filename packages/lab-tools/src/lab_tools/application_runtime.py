@@ -27,7 +27,8 @@ from scopecat.project import open_project
 from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
-from .bundle import MANIFEST, file_hash, installed_bundle, managed_path, read_bundle
+from .author_resources import read_resources
+from .bundle import MANIFEST, file_hash, installed_bundle, managed_path
 
 
 def _check_served_gui(record: DaemonEndpointRecord, static_dir: Path) -> None:
@@ -195,7 +196,7 @@ class ApplicationRuntime:
             delivery_root = receipt_root
         if delivery_root is not None:
             delivery_root = delivery_root.resolve()
-            _ = read_bundle(delivery_root)
+            _ = read_resources(delivery_root)
         return Installation(
             python=python.absolute(),
             static_dir=Path(cast("str", result["static_dir"])),

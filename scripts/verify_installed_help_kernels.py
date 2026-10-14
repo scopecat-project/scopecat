@@ -1,4 +1,4 @@
-"""Qualify shipped Help cells in offline installed environments and one application.
+"""Qualify offline application installation and online author Help preparation.
 
 Usage: python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>
 Uses existing delivery/toolchain artifacts without changing their manifests.
@@ -157,7 +157,7 @@ def verify_installed(payload: Path, work: Path) -> None:
         "bundle_sha256": file_hash(payload / "bundle.json"),
         "build_id": document["build_id"],
         "installed_origins": origins,
-        "offline": True,
+        "application_installation_offline": True,
         "cache_started_empty": True,
         "author_cache_started_empty": True,
         "native_editor": "not evaluated",
@@ -285,6 +285,9 @@ def verify_installed(payload: Path, work: Path) -> None:
         # to give its daemon the independent cold author cache, not practice's.
         assert list(author_cache.iterdir()) == []
         os.environ["UV_CACHE_DIR"] = str(author_cache)
+        os.environ["UV_OFFLINE"] = "0"
+        os.environ["UV_PYTHON_DOWNLOADS"] = "automatic"
+        evidence["author_preparation"] = "online with independent uv Python"
         runtime = ApplicationRuntime(work / "application")
         first_endpoint = empty_workbench()
         assert first_endpoint != empty_endpoint

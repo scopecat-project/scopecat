@@ -82,53 +82,6 @@ def add_toolchain(delivery, *, unsafe=False):
     path.write_text(json.dumps(document))
 
 
-def test_retained_python_and_uv_do_not_use_host_path(delivery, tmp_path, monkeypatch):
-    from lab_tools.author_environment import _independent_python
-
-    add_toolchain(delivery)
-    commands = []
-
-    def run(command):
-        commands.append(command)
-        if command[1] == "venv":
-            Path(command[-1]).mkdir()
-
-    monkeypatch.setenv("PATH", "")
-    monkeypatch.setattr(bundle, "_run_install", run)
-    python_home = tmp_path / "author-python"
-    python = _independent_python(delivery, python_home)
-    bundle.install_bundle(delivery, tmp_path / "environment", base_python=python)
-    assert Path(commands[0][0]).is_relative_to(delivery / "toolchain")
-    base = Path(commands[0][commands[0].index("--python") + 1])
-    assert base == python
-    assert base.read_bytes() == b"python"
-    # Bytecode in the extracted interpreter must not invalidate the payload.
-    (python.parent / "generated.pyc").write_bytes(b"cache")
-    assert _independent_python(delivery, python_home) == python
-    assert len(commands) == 2
-
-
-def test_python_archive_rejects_path_escape(delivery, tmp_path):
-    from lab_tools.author_environment import _independent_python
-
-    add_toolchain(delivery, unsafe=True)
-    with pytest.raises(tarfile.OutsideDestinationError):
-        _independent_python(delivery, tmp_path / "installed")
-    assert not list((tmp_path / "installed").rglob("escaped"))
-    assert not list((tmp_path / "installed").rglob(bundle.RECEIPT))
-
-
-def test_corrupt_python_blocks_install_before_writes(delivery, tmp_path):
-    from lab_tools.author_environment import _independent_python
-
-    add_toolchain(delivery)
-    (delivery / "toolchain/python.tar").write_bytes(b"corrupt")
-    with pytest.raises(ValueError, match="被修改"):
-        _independent_python(delivery, tmp_path / "installed")
-    assert not list((tmp_path / "installed").glob("*/bin/python3"))
-    assert not list((tmp_path / "installed").glob("*/python.exe"))
-
-
 def test_wheel_delivery_uses_installed_uv_without_host_path(
     delivery, tmp_path, monkeypatch
 ):
@@ -345,6 +298,7 @@ def test_delivery_resources_are_independent_of_gui_location(
 
 def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_it(
     tmp_path,
+    monkeypatch,
 ):
     import sys
 
@@ -367,6 +321,7 @@ def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_
     python = environment_python(workspace / ".venv")
     python.parent.mkdir(parents=True)
     python.write_bytes(b"existing interpreter")
+    monkeypatch.setattr("lab_tools.author_environment.check", lambda _r, _w, p: p)
     assert create_client_environment(runtime, workspace) == python
     with pytest.raises(ValueError, match="未登记作者环境资源"):
         create_client_environment(runtime, workspace, rebuild=True)

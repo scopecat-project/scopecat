@@ -134,8 +134,9 @@ New homes use these ownership boundaries:
 | `authors/` | Default Help-created editable user code, including local client environments; user-owned files |
 | `desktop/`, `learning/` and root lock/journal files | Native window coordination, recovery choices and Help continuation; stable host anchors, retained independently of scientific reset |
 
-User `.venv` directories remain with their author folder and its independent base
-Python under `.scopecat-python`. Keep both together. Developer delivery/build caches
+User `.venv` directories remain with their author folder. Their base Python is
+managed by uv or explicitly supplied by the user; retain it while environments
+reference it. Existing `.scopecat-python` bases remain untouched. Developer delivery/build caches
 continue to use their explicit cache locations; worktrees have independent homes.
 
 Recognized existing desktop homes retain `runtime/.scopecat`, their deployment

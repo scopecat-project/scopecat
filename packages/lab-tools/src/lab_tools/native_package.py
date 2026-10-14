@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Protocol, cast
 
-from . import toolchain
+from . import author_resources, toolchain
 from .bundle import MANIFEST, resolve_delivery, verify_bundle
 from .release_identity import ReleaseIdentity
 
@@ -68,7 +68,7 @@ def build(source: Path, destination: Path) -> Path:
             "Contents/Resources" if sys.platform == "darwin" else "resources"
         )
         resources.mkdir(parents=True)
-        payload = resources / "payload"
+        payload = Path(temporary) / "delivery"
         if (source / "toolchain/python.tar").is_file():
             _ = shutil.copytree(source, payload)
         else:
@@ -106,6 +106,7 @@ def build(source: Path, destination: Path) -> Path:
                 str(payload / "requirements.lock"),
             ]
         )
+        payload = author_resources.build(payload, resources / "payload")
         if sys.platform == "darwin":
             _write_macos_console(python_home)
         _ = (resources / "bootstrap.py").write_text(
@@ -195,7 +196,7 @@ def build(source: Path, destination: Path) -> Path:
                     "/SUBSYSTEM:WINDOWS",
                 ]
             )
-        _ = verify_bundle(payload)
+        _ = author_resources.verify_resources(payload)
         if sys.platform == "darwin":
             from .macos_signing import sign
 

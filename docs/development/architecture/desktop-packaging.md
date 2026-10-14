@@ -3,7 +3,13 @@
 The desktop package contains a relocatable CPython runtime with dependencies
 prepared at build time. Ordinary launch uses that fixed runtime without installing
 packages or writing application files. Editable author code and vendor environments
-remain independent. The [host decision](desktop-product.md#technology-decision)
+remain independent. Native assembly consumes a full delivery as an intermediate,
+then ships a format-2 author resource manifest with only `scopecat` and
+`scopecat-server` wheels, GUI, constraints, a pinned Python recipe and uv tools.
+It does not retain the Python archive or third-party wheelhouse. The generic
+format-1 offline delivery and its installer remain supported. Author preparation
+uses independent uv-managed or explicit Python and downloads third-party packages;
+application launch remains offline. The [host decision](desktop-product.md#technology-decision)
 retains CPython, pywebview and the existing web UI.
 
 ## Maintained installation entries
@@ -71,9 +77,10 @@ has two additional boundaries:
   Installed Help and grouped recovery pass before duplicate standalone grouped
   stages are omitted. Default-course, editing and snapshot checks retain their
   own consumers. Application-install cache reuse does not replace empty-cache
-  author and recovery preparation.
+  author and recovery preparation. These preparation phases now allow network
+  access; application installation remains offline.
 - `verify_installed_help_kernels.py` installs the full toolchain at a fresh location,
-  prepares author environments offline with separate empty caches, and executes
+  prepares author environments online with independent Python and separate empty caches, and executes
   shipped parameters/groups through Help in real kernels. Fresh kernels reject the application interpreter; after application restart they
   read exact retained results without acquisition. Run
   `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
