@@ -52,7 +52,17 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     }
     await preview();
     await page.getByLabel("Plan name").fill("Signal baseline");
+    // Plan persistence and debounced page-input persistence are separate writes.
+    // Reload only after the recovery copy contains this exact saved plan.
+    const savedInput = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/launch-drafts/save") &&
+        response.request().postDataJSON()?.input?.plan?.name === "Signal baseline",
+    );
     const first = await save("Save plan");
+    const retainedInput = await savedInput;
+    expect(retainedInput.status(), await retainedInput.text()).toBe(200);
+    expect((await retainedInput.json()).saved.input.plan.ref).toEqual(first.ref);
     expect(
       (await (await page.request.get(`${endpoint}/api/v1/runs?limit=100`)).json()).items,
     ).toHaveLength(0);
