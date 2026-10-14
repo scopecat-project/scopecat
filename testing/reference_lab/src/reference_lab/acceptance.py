@@ -59,12 +59,15 @@ def checked_launch_preview(
         catalog = authors.catalog()
         entry = next(item for item in catalog.entries if item.id == request.experiment)
         preview = authors.preview(request.model_copy(update={"version": entry.version}))
+    assert preview.procedure_definition is not None
+    assert preview.procedure_definition.fingerprint == entry.version
     assert preview.manual_state is not None
     assert preview.workspace_id == request.workspace_id
     assert preview.code_revision is not None
     assert preview.manual_state.binding.code_revision == preview.code_revision
     # UI shape/science fixtures are not executable permissions. Normalize only
-    # process/environment-dependent source identity, compute IDs and retained event ID;
+    # process/environment-dependent source identities (including the procedure
+    # fingerprint derived from that revision), compute IDs and retained event ID;
     # real admission journeys always use the original complete server response.
     revision = AuthorRevisionRef(content_hash="sha256:" + "0" * 64)
     inspection = preview.inspection
@@ -83,6 +86,9 @@ def checked_launch_preview(
             "inspection": inspection,
             "request_hash": "sha256:" + "0" * 64,
             "definition_hash": "sha256:" + "0" * 64,
+            "procedure_definition": preview.procedure_definition.model_copy(
+                update={"fingerprint": "sha256:" + "0" * 64}
+            ),
             "code_revision": revision,
             "manual_state": preview.manual_state.model_copy(
                 update={

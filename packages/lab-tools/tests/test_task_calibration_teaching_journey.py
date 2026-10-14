@@ -10,11 +10,12 @@ from lab_teaching.project import create_project
 from lab_tools.application_runtime import ApplicationRuntime
 from lab_tools.notebook import kernel_command
 from lab_tools.verify_editing import _cell_index
-from scopecat.project import open_project
 from scopecat_server.lifecycle import start_project, stop_project
 
 
-def test_managed_task_calibration_shipped_kernel(tmp_path, monkeypatch):
+def test_managed_task_calibration_shipped_kernel(
+    tmp_path, monkeypatch, author_kernel_python
+):
     root = create_project(tmp_path / "作者代码", topic="task-calibration").parent
     material = (
         Path(__file__).resolve().parents[2]
@@ -31,9 +32,11 @@ def test_managed_task_calibration_shipped_kernel(tmp_path, monkeypatch):
     gui.mkdir()
     (gui / "index.html").write_text("<html>workbench</html>")
     runtime.configure(static_dir=gui)
-    runtime.register_source(root)
-    application = open_project(runtime.root)
-    _, environment = kernel_command(root, source_path=False)
+    runtime.register_source(root, python=author_kernel_python)
+    application = runtime.instance
+    _, environment = kernel_command(
+        root, python=str(author_kernel_python), source_path=False
+    )
     monkeypatch.setenv("JUPYTER_PATH", environment["JUPYTER_PATH"])
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     raw = json.loads(path.read_text())["cells"]
