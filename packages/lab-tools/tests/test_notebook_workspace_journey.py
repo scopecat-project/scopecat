@@ -1,8 +1,15 @@
 """Actual IPython cells use one workspace while requests retain their source."""
 
+import importlib
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+import nbformat
+import pytest
 from IPython.core.interactiveshell import InteractiveShell
+from jupyter_client import KernelManager
+from nbclient import NotebookClient
 
 from lab_teaching.project import create_project
 from scopecat.project import open_project
@@ -10,8 +17,6 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 
 def test_notebook_workspace_cells(tmp_path: Path, notebook_imports) -> None:
-    import importlib
-
     notebook_module = importlib.import_module("scopecat.notebook_workspace")
     shell = InteractiveShell()
     notebook_imports.setattr(notebook_module, "_shell", lambda: shell)
@@ -19,6 +24,14 @@ def test_notebook_workspace_cells(tmp_path: Path, notebook_imports) -> None:
     create_project(root)
     project = open_project(root)
     start_project(project, timeout=120)
+    # A retained environment must not override the registered workspace's
+    # compatible client interpreter. Keep its contents throughout the journey.
+    retained = root / ".venv/retained.txt"
+    retained.parent.mkdir()
+    retained.write_text("old environment stays here")
+    from scopecat.author_workspaces import local_author_workspaces
+
+    assert any(item.root == root for item in local_author_workspaces(root))
     shell.user_ns["root"] = root
     other = tmp_path / "other"
     create_project(other)
@@ -42,6 +55,28 @@ def test_notebook_workspace_cells(tmp_path: Path, notebook_imports) -> None:
         assert result.error_in_exec is None
 
     try:
+        # Registration must not waive SDK compatibility checks before imports.
+        from scopecat import execution_environment
+
+        actual_distribution = execution_environment.distribution
+
+        def incompatible_sdk(name):
+            dist = actual_distribution(name)
+            return (
+                SimpleNamespace(version="0.1.99", requires=dist.requires)
+                if name == "scopecat"
+                else dist
+            )
+
+        with notebook_imports.context() as incompatible:
+            incompatible.setattr(
+                execution_environment,
+                "distribution",
+                incompatible_sdk,
+            )
+            result = shell.run_cell("import scopecat as sc; sc.notebook(root)")
+            assert isinstance(result.error_in_exec, ValueError)
+            assert "author imports require scopecat==" in str(result.error_in_exec)
         cell("""
 import scopecat as sc
 session = sc.notebook(root)
@@ -145,6 +180,38 @@ assert sc.notebook(root) is session
 session.close()
 """)
         assert notebook_module._workspace is None
+        # A real kernel must obey the same compatibility rules as IPython cells.
+        document = nbformat.v4.new_notebook(
+            cells=[
+                nbformat.v4.new_code_cell(
+                    "import sys\nfrom pathlib import Path\nimport scopecat as sc\n"
+                    "assert Path(sys.prefix).resolve() != (Path.cwd() / '.venv').resolve()\n"
+                    "session = sc.notebook()\n"
+                    "from my_experiment.teaching import teaching_rabi\n"
+                    "assert teaching_rabi().values['seed'] == 401\n"
+                    "session.close()"
+                )
+            ]
+        )
+        manager = KernelManager(kernel_name="python3")
+        assert manager.kernel_spec is not None
+        manager.kernel_spec.argv = [
+            sys.executable,
+            "-m",
+            "ipykernel_launcher",
+            "-f",
+            "{connection_file}",
+        ]
+        try:
+            NotebookClient(
+                document,
+                km=manager,
+                timeout=120,
+                resources={"metadata": {"path": str(root)}},
+            ).execute()
+        finally:
+            if manager.has_kernel:
+                manager.shutdown_kernel(now=True)
         notebook_imports.setattr(
             "scopecat.execution_environment.execution_packages", execution_packages
         )
@@ -169,3 +236,39 @@ session.close()
         if notebook_module._workspace is not None:
             notebook_module._workspace.close()
         stop_project(project)
+        assert retained.read_text() == "old environment stays here"
+
+
+@pytest.mark.parametrize("other_registered", [False, True])
+def test_unregistered_workspace_keeps_kernel_hint(
+    tmp_path: Path, monkeypatch, other_registered: bool
+) -> None:
+    from scopecat.author_workspaces import (
+        LocalAuthorWorkspace,
+        LocalAuthorWorkspaces,
+        author_bindings_path,
+    )
+
+    root = tmp_path / "unregistered"
+    create_project(root)
+    (root / ".venv").mkdir()
+    notebook_module = importlib.import_module("scopecat.notebook_workspace")
+    monkeypatch.setattr(notebook_module, "_shell", InteractiveShell)
+    if other_registered:
+        path = author_bindings_path(root)
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            LocalAuthorWorkspaces(
+                service_root=root,
+                items=(
+                    LocalAuthorWorkspace(
+                        id="other",
+                        name="Other",
+                        root=tmp_path / "other",
+                        python=Path(sys.executable),
+                    ),
+                ),
+            ).model_dump_json()
+        )
+    with pytest.raises(RuntimeError, match="Select Kernel"):
+        notebook_module.notebook(root)
