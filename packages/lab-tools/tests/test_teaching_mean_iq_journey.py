@@ -167,7 +167,7 @@ def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, 
     if "refresh" in topics:
         extra = (
             (material / "lessons/experiment.py.txt")
-            .read_text()
+            .read_text(encoding="utf-8")
             .replace('id="teaching.rabi"', 'id="teaching.extra"')
             .replace("def teaching_rabi(", "def extra_rabi(")
         )

@@ -9,7 +9,7 @@ import tempfile
 import urllib.request
 import zipfile
 from http.client import HTTPResponse
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NotRequired, TypedDict, cast
 from urllib.parse import urljoin, urlparse
 
@@ -98,7 +98,7 @@ def unpack_gui(preview: Path, destination: Path) -> Preview:
     with zipfile.ZipFile(archive) as stream:
         for name in stream.namelist():
             if (
-                Path(name).is_absolute()
+                PurePosixPath(name).is_absolute()
                 or PureWindowsPath(name).drive
                 or ".." in Path(name).parts
                 or "\\" in name

@@ -23,7 +23,7 @@ def test_history_reads_all_pages_and_excludes_other_lessons(
 ):
     root = create_project(tmp_path / topic, topic=topic).parent
     notebook = root / "notebooks" / f"{topic}.ipynb"
-    cells = json.loads(notebook.read_text())["cells"]
+    cells = json.loads(notebook.read_text(encoding="utf-8"))["cells"]
     source = "".join(next(cell for cell in cells if cell["id"] == cell_id)["source"])
     identity = ModuleType("my_experiment.lesson_identity")
     vars(identity)["IDENTITY"] = "this-directory"

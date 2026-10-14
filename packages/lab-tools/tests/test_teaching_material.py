@@ -23,7 +23,9 @@ def test_lesson_source_is_self_contained_and_never_starts_an_implicit_service(
     monkeypatch.setattr("IPython.get_ipython", lambda: shell)
     root = tmp_path / topic
     project.create_project(root, topic=topic)
-    notebook = json.loads((root / f"notebooks/{topic}.ipynb").read_text())
+    notebook = json.loads(
+        (root / f"notebooks/{topic}.ipynb").read_text(encoding="utf-8")
+    )
     first = next(cell for cell in notebook["cells"] if cell["cell_type"] == "code")
     monkeypatch.chdir(root / "notebooks")
     # The missing endpoint is the expected contract, not a Notebook failure log.
@@ -33,7 +35,9 @@ def test_lesson_source_is_self_contained_and_never_starts_an_implicit_service(
     assert "no daemon endpoint" in str(result.error_in_exec)
     assert not (root / ".scopecat/daemon.json").exists()
     if topic == "compute":
-        assert "def mean_iq(" in (root / "src/my_experiment/teaching.py").read_text()
+        assert "def mean_iq(" in (root / "src/my_experiment/teaching.py").read_text(
+            encoding="utf-8"
+        )
     if topic == "refresh":
         assert (root / "examples/extra.py").is_file()
         assert not (root / "src/my_experiment/extra.py").exists()
@@ -78,9 +82,12 @@ def test_generated_material_matches_reviewed_source_and_cannot_overlay_edits(
             assert (root / f"notebooks/{name}.ipynb").read_bytes() == (
                 material / f"{name}.ipynb"
             ).read_bytes()
-    assert all("lab_teaching" not in file.read_text() for file in source.glob("*.py"))
-    (source / "parameters.py").write_text("# my edited declaration\n")
-    (root / "notebooks/notes.md").write_text("My notes\n")
+    assert all(
+        "lab_teaching" not in file.read_text(encoding="utf-8")
+        for file in source.glob("*.py")
+    )
+    (source / "parameters.py").write_text("# my edited declaration\n", encoding="utf-8")
+    (root / "notebooks/notes.md").write_text("My notes\n", encoding="utf-8")
     before = {
         str(file.relative_to(root)): file.read_bytes()
         for file in root.rglob("*")
@@ -174,7 +181,9 @@ def test_calibration_anchors_follow_ids_and_reject_missing_or_duplicate(
     from lab_tools.verify_editing import _cell_index
 
     root = create_project(tmp_path / topic, topic=topic).parent
-    cells = json.loads((root / f"notebooks/{topic}.ipynb").read_text())["cells"]
+    cells = json.loads((root / f"notebooks/{topic}.ipynb").read_text(encoding="utf-8"))[
+        "cells"
+    ]
     target = cells[_cell_index(cells, cell_id)]
     cells.insert(0, {"id": "added-introduction", "source": ["A new introduction"]})
     assert cells[_cell_index(cells, cell_id)] is target

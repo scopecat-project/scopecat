@@ -66,7 +66,10 @@ def test_explicit_repair_retries_client_failure_without_replacing_edited_course(
     monkeypatch.setattr(journey, "prepare_execution_environment", execution)
     original = journey.prepare(runtime)
     source = original.directory / "src/my_experiment/teaching.py"
-    source.write_text(source.read_text() + "\n# retained learner edits\n")
+    source.write_text(
+        source.read_text(encoding="utf-8") + "\n# retained learner edits\n",
+        encoding="utf-8",
+    )
     original.notebook.write_bytes(original.notebook.read_bytes() + b"\n")
     edits = {path: path.read_bytes() for path in (source, original.notebook)}
     client.side_effect = ValueError("client repair interrupted")
@@ -106,7 +109,10 @@ def test_retry_and_continue_preserve_files_and_environment(
     assert "运行与历史保存在同一应用中" in readme
     assert not (pending.directory / ".vscode/tasks.json").exists()
     source = pending.directory / "src/my_experiment/parameters.py"
-    source.write_text(source.read_text() + "\n# retained learner edit\n")
+    source.write_text(
+        source.read_text(encoding="utf-8") + "\n# retained learner edit\n",
+        encoding="utf-8",
+    )
     original = pending.notebook.read_bytes()
     python = journey.environment_python(pending.directory / ".venv")
     python.parent.mkdir(parents=True)
@@ -119,7 +125,7 @@ def test_retry_and_continue_preserve_files_and_environment(
     client.reset_mock()
     runtime.register_source.reset_mock()
     assert journey.prepare(runtime, topic=topic) == ready
-    assert "# retained learner edit" in source.read_text()
+    assert "# retained learner edit" in source.read_text(encoding="utf-8")
     assert pending.notebook.read_bytes() == original
     execution.assert_not_called()
     client.assert_not_called()
@@ -135,10 +141,12 @@ def test_fresh_sources_have_independent_identity_and_no_manager_tasks(tmp_path):
     for source in (first, second):
         journey.create_lesson_source(source)
         assert not (source / ".vscode/tasks.json").exists()
-        assert "lab_teaching" not in (source / "scopecat.toml").read_text()
-        assert (
-            "teaching-bench" not in (source / "src/my_experiment/setup.py").read_text()
+        assert "lab_teaching" not in (source / "scopecat.toml").read_text(
+            encoding="utf-8"
         )
+        assert "teaching-bench" not in (
+            source / "src/my_experiment/setup.py"
+        ).read_text(encoding="utf-8")
     identity = Path("src/my_experiment/lesson_identity.py")
     assert (first / identity).read_bytes() != (second / identity).read_bytes()
     with pytest.raises(ValueError, match="未覆盖"):
@@ -216,11 +224,11 @@ def test_old_parameters_receipt_is_continued_without_replacement(tmp_path, monke
     receipt = tmp_path / "learning/parameters.json"
     receipt.parent.mkdir()
     original = json.dumps({"directory": str(source), "ready": True})
-    receipt.write_text(original)
+    receipt.write_text(original, encoding="utf-8")
     client = Mock()
     monkeypatch.setattr(journey, "create_client_environment", client)
     assert journey.prepare(runtime).directory == source
-    assert receipt.read_text() == original
+    assert receipt.read_text(encoding="utf-8") == original
     assert journey.current(runtime, "groups") is None
     client.assert_not_called()
 
@@ -236,14 +244,16 @@ def test_topics_keep_separate_receipts_and_reject_unknown_topics(tmp_path, monke
         assert journey.current(Mock(home=tmp_path), topic) == item
         assert item.notebook.name == f"{topic}.ipynb"
         identities.add(
-            (item.directory / "src/my_experiment/lesson_identity.py").read_text()
+            (item.directory / "src/my_experiment/lesson_identity.py").read_text(
+                encoding="utf-8"
+            )
         )
     assert len(identities) == len(TOPICS)
     parameters = saved["parameters"]
     with pytest.raises(ValueError, match="尚不支持"):
         journey.prepare(runtime, topic="../outside")
     receipt = tmp_path / "learning/groups.json"
-    receipt.write_text(parameters.model_dump_json())
+    receipt.write_text(parameters.model_dump_json(), encoding="utf-8")
     with pytest.raises(ValueError, match="不符"):
         journey.current(runtime, "groups")
 
@@ -256,7 +266,7 @@ def test_dead_preparation_process_becomes_retryable(tmp_path):
     receipt = tmp_path / "learning/parameters.json"
     receipt.parent.mkdir()
     pending = journey.NotebookJourney(directory=tmp_path / "course")
-    receipt.write_text(pending.model_dump_json())
+    receipt.write_text(pending.model_dump_json(), encoding="utf-8")
     process = subprocess.Popen(  # noqa: S603 - test-owned lock holder, no application
         [
             sys.executable,

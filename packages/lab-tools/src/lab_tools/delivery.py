@@ -13,7 +13,7 @@ import tomllib
 import zipfile
 from dataclasses import dataclass
 from email.parser import BytesParser
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Protocol, cast
 from uuid import uuid4
 
@@ -96,7 +96,7 @@ def load_recipe(path: Path, *, public_source: Path | None = None) -> DeliveryRec
         if (
             not isinstance(value, str)
             or not value.strip()
-            or Path(value).is_absolute()
+            or PurePosixPath(value).is_absolute()
             or PureWindowsPath(value).drive
             or "\\" in value
             or ".." in Path(value).parts

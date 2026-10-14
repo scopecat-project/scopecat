@@ -22,7 +22,12 @@ def test_download_rejects_unpinned_or_non_https_artifacts(tmp_path: Path) -> Non
 def test_preview_rejects_archive_escape(tmp_path: Path, member: str) -> None:
     archive = tmp_path / "scopecat-ui.zip"
     with zipfile.ZipFile(archive, "w") as stream:
-        stream.writestr(member, "content")
+        entry = zipfile.ZipInfo("placeholder")
+        # Preserve the hostile spelling; ZipInfo normalizes backslashes on Windows.
+        entry.filename = member
+        stream.writestr(entry, "content")
+    with zipfile.ZipFile(archive) as stream:
+        assert stream.namelist() == [member]
     (tmp_path / "preview.json").write_text(
         json.dumps(
             {

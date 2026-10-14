@@ -1,11 +1,12 @@
 """Browser-only qualification must execute, and must use matching immutable inputs."""
 
-# ruff: noqa: S603, S607 -- execute the maintained Ubuntu gate with fixture results
+# ruff: noqa: S603 -- execute the maintained Ubuntu gate with fixture results
 
 import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import zipfile
 from pathlib import Path
@@ -114,15 +115,28 @@ def gate(profile, results):
         "        run: |\n", 1
     )[1]
     script = "\n".join(line[10:] for line in script.splitlines())
+    bash = shutil.which("bash")
+    if os.name == "nt":
+        git = shutil.which("git")
+        assert git is not None, "Git for Windows is required to exercise the Bash gate"
+        bash = next(
+            (
+                str(root / "bin/bash.exe")
+                for root in Path(git).parents
+                if (root / "bin/bash.exe").is_file()
+            ),
+            None,
+        )
+    assert bash is not None, "Bash is required to exercise the real workflow gate"
     return subprocess.run(
-        ["bash", "-e", "-c", script],
+        [bash, "-e", "-c", script],
         env={
             **os.environ,
             "PROFILE": profile,
             **{f"{k}_RESULT": v for k, v in results.items()},
         },
         capture_output=True,
-    ).returncode
+    )
 
 
 @pytest.mark.parametrize("profile", SELECTED)
@@ -130,14 +144,15 @@ def test_gate_keeps_existing_profiles_and_requires_selected_jobs(profile):
     results = {
         job: "success" if job in SELECTED[profile] else "skipped" for job in JOBS
     }
-    assert gate(profile, results) == 0
+    success = gate(profile, results)
+    assert success.returncode == 0, success.stdout + success.stderr
     for job in JOBS:
         for invalid in (
             ["skipped", "failure", "cancelled"]
             if job in SELECTED[profile]
             else ["success", "failure"]
         ):
-            assert gate(profile, {**results, job: invalid}) != 0, (
+            assert gate(profile, {**results, job: invalid}).returncode != 0, (
                 profile,
                 job,
                 invalid,
@@ -145,8 +160,8 @@ def test_gate_keeps_existing_profiles_and_requires_selected_jobs(profile):
 
 
 def test_unknown_or_empty_selection_cannot_pass():
-    assert gate("unknown", dict.fromkeys(JOBS, "skipped")) != 0
-    assert gate("browser", dict.fromkeys(JOBS, "skipped")) != 0
+    assert gate("unknown", dict.fromkeys(JOBS, "skipped")).returncode != 0
+    assert gate("browser", dict.fromkeys(JOBS, "skipped")).returncode != 0
 
 
 @pytest.mark.parametrize("profile", SELECTED)
