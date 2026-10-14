@@ -1,93 +1,35 @@
 # Changelog
 
-User-visible changes are collected with Knope change files. Historical SHA
-previews retain their original identities.
+用户可见的变更通过 Knope changefile 汇总；历史 SHA 预览保留原有身份。
+
 ## 0.1.0 (2026-10-14)
 
 ### Features
 
-#### Try Scopecat's first experimental numbered release.
+#### 首个实验性编号版本
 
-Scopecat 0.1.0 (build 1) brings experiment preparation, execution, saved results,
-parameter editing and Python authoring into one desktop application. It remains
-experimental: this version does not establish a stable API or data compatibility
-baseline, and simulation checks do not qualify laboratory hardware.
+Scopecat 0.1.0（build 1）将实验准备、执行、结果分析、参数编辑和 Python 作者工作整合到桌面应用中。本版仍属实验性版本，尚未建立稳定 API 或持久数据兼容基线；模拟验收不代表真实实验室硬件已获验证。
 
-#### Prepare experiments and recover your work
+#### 用户能力
 
-Browse experiments, edit inputs and start a measurement with automatic preparation
-and checks; Preview is available when you want to inspect them first. Unfinished
-inputs and competing window edits remain recoverable after reopening. If a
-submission's response is lost, recovery checks the original request instead of
-starting another acquisition. Background procedures and calibration tasks retain
-their source and inputs when an author client disconnects; continuing, cancelling
-and adopting parameters remain explicit actions.
+- **准备实验并恢复工作**：浏览实验、编辑输入后即可启动，应用自动完成准备与检查，也可先查看 Preview。重开应用后可恢复未完成输入，并检查不同窗口的编辑冲突。提交响应丢失时，恢复操作查询原请求，不重复采集；后台流程和校准任务在作者客户端断开后仍保留选定的源码与输入，继续、取消和采用参数均需明确操作。
+- **查看结果并继续分析**：跟踪实时测量、浏览多维切片，或在独立窗口打开结果。切换页面保留选中的运行、分析和实验输入。Notebook 只读代码片段可按精确 ID 找回保存结果，无需重新采集或分析。可执行运行适用的作者分析，按原设置重复支持重分析的已保存分析，并追溯参数建议的来源；分析不会采集数据或自动采用参数。
+- **在样品图旁编辑参数**：对象表单和完整参数表共用可恢复草稿，未填完的值也能保留。明确选择目标、配置和工作参数用于下一次实验，或保存命名版本；已提交实验保留当时的输入。采用参数候选前可比较和审阅，并保留来源与采用记录。
+- **从教程进入作者工作**：Help 提供基础实验、参数扫描、分组分析、计算和进阶校准 Notebook。Continue 返回原文件夹与保存结果，不覆盖编辑或重复测量。可在 Settings 注册自己的作者文件夹，也可用 `scopecat init DIRECTORY --topic TOPIC` 创建教程源码。
+- **备份与恢复应用数据**：数据与作者源码分开保存。空闲时可在 Settings 备份，当前格式的备份与恢复保留记录及源码身份；后台工作未结束时，重启和退出会要求先处理。旧数据导致启动失败时可明确选择重置，默认先备份到外部位置，备份失败则保留原数据。
 
-#### Find results and continue analysis
+#### 安装与使用限制
 
-Follow live measurements, browse multidimensional slices and open a result in a
-separate window. Runs, collections and saved analyses retain exact identities;
-page navigation preserves the selected result and editable experiment inputs.
-Read-only Notebook snippets reopen saved records without acquiring or analyzing
-again. Run applicable author-declared analyses, repeat eligible saved analyses
-with their original settings, and trace parameter proposals back to their source
-results. Reanalysis does not acquire measurements or adopt parameters.
+安装器面向 Apple Silicon Mac（arm64）和 Windows x64。Mac 使用 ad-hoc 签名，没有 Developer ID 签名或 Apple 公证；Windows 安装器未签名。不要为启动应用关闭系统安全保护。Windows 需预装 **WebView2 Runtime**，安装器不会安装它。
 
-#### Edit parameters beside the sample map
+应用自带运行环境，无需系统 Python 即可离线启动。作者及后台执行环境使用独立的兼容 Python，由 uv 管理或由用户明确提供，并尊重工作区的 Python 与依赖声明。准备时通常需要联网下载 Python 和第三方依赖；安装器不是完整的离线作者工具包。准备失败或取消会保留原可用环境及诊断信息，不修改系统 PATH 或全局包。
 
-Edit an object's referenced parameters or the full working table in the same
-recoverable draft, including unfinished values. Explicitly use the resolved target,
-setup and working inputs for the next experiment, or save a named checkpoint.
-Submitted experiments keep their captured inputs. Compare and review parameter
-candidates before adopting them, with retained source and adoption evidence.
+Notebook 编辑器需另行安装，例如 VS Code 及 Python、Jupyter 扩展，并选择 Scopecat 显示的作者解释器。实验室 SDK 也需另行准备。
 
-#### Learn and author in the same application
+已有原生检查只覆盖特定 Mac/Windows CI 环境，不能据此承诺最低系统版本或任意干净机器均可使用。Intel Mac、Windows ARM 和 Linux 安装器尚未验证。Windows 历史上的[启动健康检查超时（#465）](https://github.com/scopecat-project/scopecat/issues/465)和[启动后服务端点丢失（#553）](https://github.com/scopecat-project/scopecat/issues/553)仍是未归因风险；后续运行成功不代表已经修复，出现故障时请保留诊断信息。安装前请阅读[安装指南](https://scopecat-project.github.io/scopecat/getting-started/install/)。
 
-Help offers editable Notebook courses for basic experiments, parameters and scans,
-grouped analysis, computation and advanced calibration. Continue reopens the same
-folder and saved results without overwriting edits or repeating measurements.
-Register your own author folder in Settings, or create lesson source with
-`scopecat init DIRECTORY --topic TOPIC`.
+#### 升级与旧数据
 
-The installed application includes its own runtime and can start offline without
-system Python. Author and worker environments use separate compatible Python,
-managed by uv or explicitly supplied by the user, and respect workspace Python
-and dependency declarations. Their preparation normally downloads Python and
-third-party dependencies: the installer is not a complete offline author kit.
-Failed or cancelled preparation preserves the previous usable environment and
-retains diagnostics. Scopecat does not change system PATH or global packages.
-Notebook editing requires a separate editor, such as VS Code with Python and
-Jupyter extensions, using the author interpreter shown by Scopecat.
+本版使用开发数据格式 schema 115，不读取或自动迁移更早的兼容基线前数据格式及旧运行标识。请分别保留旧数据、源码、环境和对应应用版本，为本版使用新的数据空间。
 
-#### Keep data and recovery under your control
-
-Application data is separate from editable author code. Settings can back up an
-idle application; current-format backup and restore preserve retained records and
-source identities. Restart and quit require a decision when background work is
-active. Incompatible data can be reset explicitly from the startup window, with
-an external backup by default; a failed backup leaves the original data in place.
-
-This release uses development data schema 115. Earlier prebaseline data formats
-and old run identifiers are not read or automatically migrated. Keep older data,
-source, environments and their matching application version separately, and use
-a new data space for this version. Backups are not a cross-version migration
-service, and old-format backups are not promised to restore here. Existing
-scientific records are not retrospectively corrected or rewritten.
-
-#### Experimental installation limits
-
-Installer targets are Apple Silicon Mac (arm64) and Windows x64. Mac bundles use
-ad-hoc signing without Developer ID or Apple notarization; Windows installers are
-unsigned. Do not disable OS security protections to open them. Windows requires
-Microsoft WebView2 Runtime, which the installer does not install. Author downloads,
-editor extensions and laboratory SDKs have separate prerequisites.
-
-Earlier native checks cover specific macOS and Windows CI environments, not a
-minimum OS version or every clean computer. Intel Mac, Windows ARM and Linux
-installers remain unqualified. Windows startup health-check timeouts
-([#465](https://github.com/scopecat-project/scopecat/issues/465)) and loss of the
-service endpoint after startup
-([#553](https://github.com/scopecat-project/scopecat/issues/553)) remain unresolved
-risks; successful later runs do not establish a fix. Preserve failure diagnostics.
-See the [installation guide](https://scopecat-project.github.io/scopecat/getting-started/install/)
-for prerequisites and recovery guidance.
+备份不是跨版本迁移工具，旧格式备份不保证能在本版恢复。已有科学记录不会被追溯修正或重写；需要查看历史数据时，请保留匹配的旧版本。

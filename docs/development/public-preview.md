@@ -15,33 +15,30 @@ will be chosen separately after the tooling is merged. Preparing a release uses
 Knope's suggested change-file bump by default; an explicit version override is
 available when the intended release needs one.
 
-Add a small user-facing Markdown change file under `.changeset/` for a feature,
-fix or breaking change. Run `knope document-change`, or write:
+在 `.changeset/` 中记录用户可见的功能、修复或不兼容变化，默认使用中文；SDK、Notebook、命令和配置名保留自然写法。可运行 `knope document-change`，也可直接编写文件。简单变化用一句完整的话即可，生成后为列表项：
 
 ```markdown
 ---
 default: patch
 ---
 
-Explain what the user can now do or what was corrected.
+重新打开应用后保留选中的运行结果。
 ```
 
-Knope 0.23 treats the first nonempty physical line after the front matter as the
-summary and the remaining lines as details. Keep that summary short, complete and
-on one line; hard-wrapping a sentence can leave an incomplete changelog heading.
-A short change can be one single-line sentence, which becomes a list item. For a
-detailed change, use a short summary, a blank line and the user-facing explanation:
+复杂条目以一个完整的 `# 短标题` 开头，空一行后说明用户影响和必要操作；不要默认写成长篇、多标题文章：
 
 ```markdown
 ---
-default: patch
+default: minor
 ---
 
-Short, complete summary
+# 重开 Notebook 后继续查看保存的结果
 
-Explain the final user-visible behavior and any action the user must take.
-Details may wrap across lines and contain examples.
+重新连接同一数据空间后，可用保存的运行 ID 查看原结果，无需重新采集。
+请保留原始 ID，并选择 Scopecat 显示的作者解释器。
 ```
+
+仓库固定的 Knope 0.23.0 会将标题和正文整理为发布说明，默认沿用其生成层级，不手工重复添加版本或分类标题。标题应短而完整，保持在一个物理行；普通段落的硬换行可能使首行成为不完整标题。上述样例经该版本及当前 oxfmt 实测：`#` 标题保持单行，详细条目生成标题与正文，简单句子生成列表项。写法也可参考 [Knope 的 change 示例](https://knope.tech/reference/concepts/change/)。
 
 Use `minor` for a feature and `major` for a breaking change. Internal-only work
 need not add a change file. Commit messages have no required convention:
@@ -97,13 +94,7 @@ does not run Prepare, Publish or native acceptance.
 
 ### Prepare, review, then publish
 
-Before preparation, reconcile unreleased change files against the difference
-between the last actually distributed release and the final candidate. Merge
-entries about the same user-facing change, remove reverted changes and obsolete
-intermediate behavior, and reassess the breaking-change category and migration
-instructions. Change files are editable release inputs, not an immutable log of
-every PR. For the first release, describe the final supported behavior without
-asking users to migrate through unpublished intermediate states.
+发布前，以最后实际分发版本与最终候选的差异为准，合并重复条目，移除已撤回或被后续实现取代的描述，并复核不兼容变化和必要操作。changefile 是可编辑的发布输入，不是逐条保存历史 PR 的日志。首版只描述最终用户能力、限制和升级注意事项，不要求用户经过未发布的中间迁移。
 
 Use the workflow-pinned Knope version to inspect the real generated notes with
 `knope --dry-run prepare-release`; it reports proposed changes without writing
