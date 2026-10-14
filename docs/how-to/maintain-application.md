@@ -245,6 +245,11 @@ only this folder. Each recovery starts with backup enabled; **本次跳过备份
 it only for this confirmation. Cancelling either dialog deletes nothing. A failed
 backup never falls back to deletion.
 
+原件备份逐字节保留数据库、WAL 和对象文件，不读取或归档可重建的
+`control.sqlite3-shm` 索引；清单会注明这一项。该索引不含数据库内容，
+SQLite 可从数据库和 WAL 重建它。备份期间仍持有写入保护，不执行 checkpoint。
+参见 [SQLite WAL 文件说明](https://www.sqlite.org/walformat.html#the_wal_index_or_shm_file)。
+
 操作只删除确认的数据目录中的 `control.sqlite3`、其 SQLite sidecar 文件和 `objects/`，
 再在原路径初始化当前格式的空存储。新布局的数据目录为 `HOME/data/`；已识别的
 legacy 布局仍为 `HOME/runtime/.scopecat/`。不会删除整个数据目录或应用 home。

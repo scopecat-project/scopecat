@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sqlite3
 import threading
 from types import SimpleNamespace
@@ -420,3 +421,41 @@ def test_new_layout_reset_keeps_registrations_and_environments(legacy):
     assert record.deployment_root == runtime.home / "state"
     assert_empty(runtime)
     assert list(backup.iterdir())
+
+
+def test_reset_backup_preserves_recoverable_wal_without_reading_locked_index(
+    legacy, monkeypatch, tmp_path
+):
+    runtime, failure, prepare, backup = legacy
+    data = runtime.instance.runtime_binding.data_root
+    original_db = (data / "control.sqlite3").read_bytes()
+    original_wal = (data / "control.sqlite3-wal").read_bytes()
+    object_path = next(path for path in (data / "objects").rglob("*") if path.is_file())
+    object_name = str(object_path.relative_to(data))
+    original_object = object_path.read_bytes()
+    actual_hash = data_reset.file_hash
+
+    def hash_without_index(path):
+        if path == data / "control.sqlite3-shm":
+            raise PermissionError("Windows WAL-index byte-range lock")
+        return actual_hash(path)
+
+    monkeypatch.setattr(data_reset, "file_hash", hash_without_index)
+    reset_store(runtime, failure, prepare, backup)
+    runtime.stop()
+    (archive,) = backup.iterdir()
+    manifest = json.loads((archive / "manifest.json").read_bytes())
+    assert manifest["omitted_rebuildable"] == ["control.sqlite3-shm"]
+    assert "control.sqlite3-shm" not in manifest["files"]
+    assert object_name in manifest["files"]
+    assert (archive / "store" / object_name).read_bytes() == original_object
+    assert (archive / "store/control.sqlite3").read_bytes() == original_db
+    assert (archive / "store/control.sqlite3-wal").read_bytes() == original_wal
+    restored = tmp_path / "historical-reader"
+    shutil.copytree(archive / "store", restored)
+    assert not (restored / "control.sqlite3-shm").exists()
+    with sqlite3.connect(restored / "control.sqlite3") as connection:
+        assert connection.execute("SELECT value FROM old_science").fetchall() == [
+            ("old result",)
+        ]
+    connection.close()

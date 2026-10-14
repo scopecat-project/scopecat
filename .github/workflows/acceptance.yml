@@ -182,6 +182,7 @@ jobs:
         run: >-
           uv run --locked pytest -q -n 0
           packages/lab-tools/tests/test_application_runtime.py
+          packages/lab-tools/tests/test_data_reset.py
           packages/lab-tools/tests/test_desktop_session.py
           packages/lab-tools/tests/test_desktop_install.py
           packages/lab-tools/tests/test_teaching_delivery.py

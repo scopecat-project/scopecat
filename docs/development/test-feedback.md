@@ -76,7 +76,7 @@ is manual. Its profile gate checks every selected job and expected skip:
 | `full` | Integrated qualification: Linux/Windows Python, both browser shards, benchmark, isolated installed wheels, offline delivery and shipped teaching Notebooks, plus static/UI/docs checks |
 | `local-application` | Bounded installation trial: UI build, both browser shards and Linux/Windows installed/offline teaching checks; pair with successful PR CI |
 | `browser` | UI artifact producer and both real-daemon browser shards |
-| `service-lifecycle` | Windows/Linux service lifecycle qualification |
+| `service-lifecycle` | Windows/Linux service lifecycle and reset-backup qualification |
 | `native-distribution` | Mac/Windows native packaging and installer qualification; see [desktop packaging](architecture/desktop-packaging.md) |
 | `public-preview` | Publishes immutable framework preview artifacts after successful CI for that commit; see [public previews](public-preview.md) |
 
