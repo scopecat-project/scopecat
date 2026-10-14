@@ -57,7 +57,11 @@ def test_failure_snapshot_keeps_identity_exit_code_and_bounded_log(
         assert (
             failed["endpoint"]["process"]["create_time"] == endpoint.process_create_time
         )
-        assert failed["launcher"]["children"] == []
+        assert failed["launcher"]["pid"] == child.pid
+        # Windows venv launchers may own another Python process or conhost.
+        for descendant in failed["launcher"]["children"]:
+            assert descendant["pid"] != child.pid
+            assert descendant["create_time"] > 0
         assert endpoint.shutdown_token not in record.read_text()
         assert endpoint.base_url not in record.read_text()
         failed_log = directory / failed["log_tail"]
