@@ -480,7 +480,6 @@ def verify_installed(payload: Path, work: Path) -> None:
         create_snapshot(open_instance(runtime.root), snapshot)
         verify_snapshot(snapshot)
         recovered = ApplicationRuntime(work / "recovered-application")
-        recovered.home.mkdir()
         restore_snapshot(snapshot, recovered.root)
         assert not (recovered.root / "scopecat.runtime.toml").exists()
         assert not (recovered.root / ".scopecat/author-workspaces.json").exists()
@@ -627,9 +626,7 @@ def verify_remaining_topics(
     for topic in TOPICS:
         if topic in verified:
             continue
-        journey = prepare(
-            runtime, str(work / "remaining-topics"), cast("LessonTopic", topic)
-        )
+        journey = prepare(runtime, str(work), cast("LessonTopic", topic))
         notebook = nbformat.read(journey.notebook, as_version=4)
         cells = cast("list[NotebookNode]", notebook.cells)
         execute(

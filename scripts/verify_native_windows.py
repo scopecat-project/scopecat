@@ -941,6 +941,13 @@ def verify(app: Path, home: Path) -> None:
                 if failure:
                     result["host_error"] = failure
                 output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+                if result["status"] == "failed":
+                    print(json.dumps(result, indent=2), flush=True)
+                    diagnostic = reports / "python.log"
+                    if diagnostic.is_file():
+                        print(
+                            diagnostic.read_text(encoding="utf-8")[-16384:], flush=True
+                        )
 
 
 if __name__ == "__main__":

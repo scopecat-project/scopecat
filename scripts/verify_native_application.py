@@ -401,7 +401,7 @@ def _verify(
             [str(console), "--help"], env=environment, check=True, timeout=30
         )
         status = subprocess.run(  # noqa: S603
-            [str(console), "app", "--home", str(home)],
+            [str(console), "app", "--home", str(state["state"])],
             env=environment,
             check=True,
             capture_output=True,
@@ -410,7 +410,7 @@ def _verify(
         )
         console_state = cast("dict[str, object]", json.loads(status.stdout))
         assert console_state["state"] == "stopped"
-        assert console_state["home"] == str(home)
+        assert console_state["home"] == state["state"]
         installation = cast("dict[str, str]", console_state["installation"])
         assert Path(installation["python"]).resolve() == python
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
