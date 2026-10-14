@@ -1,3 +1,4 @@
+import { expectRunIdentity } from "./run-identity";
 import { spawn, spawnSync, type ChildProcess, type SpawnSyncReturns } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -407,7 +408,7 @@ test("reviews notebook candidate evidence without changing parameter branches", 
   const candidate = await createCandidateAnalysis(daemon.projectRoot);
 
   await page.goto(`${daemon.baseUrl}/?run=${encodeURIComponent(candidate.runId)}`);
-  const analyses = page.getByTestId("resource-card").filter({ hasText: "Analyses" });
+  const analyses = page.getByRole("region", { name: "Analyses", exact: true });
   await analyses.getByText("notebook repetition fit", { exact: true }).click();
   await expect(analyses.getByRole("table", { name: "Candidate fit" })).toBeVisible();
   await expect(
@@ -470,8 +471,9 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
     const runId = await waitForMarker(experiment.acceptedReady, experiment);
     const runItem = page.getByTestId("run-list-item").filter({ hasText: LIVE_DISPLAY_NAME });
     await expect(runItem).toContainText("Accepted");
-    await expect(runItem).toContainText(LIVE_EXPERIMENT_ID);
+    await expect(runItem).toHaveAttribute("title", `Inspect run ${runId}`);
     await runItem.click();
+    await expectRunIdentity(page, runId);
 
     const detail = page.getByRole("region", { name: "Selected run details" });
     const state = detail.getByTestId("run-status");
@@ -551,7 +553,14 @@ test("exact run opens independently in two browser pages while acquisition conti
     await expect(result.getByTestId("run-detail-header")).toContainText(runId);
     expect(new URL(result.url()).searchParams.get("run")).toBe(runId);
     expect(await result.evaluate("window.opener === null")).toBe(true);
-    await expect(result).toHaveTitle(`${LIVE_DISPLAY_NAME} · ${runId} — Scopecat`);
+    await expectRunIdentity(result, runId);
+    const response = await result.request.get(`${daemon.baseUrl}/api/v1/runs/${runId}`);
+    expect(response.ok()).toBe(true);
+    const retained = (await response.json()) as { address: { number: number } };
+    expect(retained.address.number).toBeGreaterThan(0);
+    await expect(result).toHaveTitle(
+      `Default records #${retained.address.number} · ${LIVE_DISPLAY_NAME} — Scopecat`,
+    );
     const originalUrl = page.url();
     await page.getByTestId("run-list-item").filter({ hasText: "first_run" }).first().click();
     await expect(page.getByTestId("run-detail-header")).not.toContainText(runId);
