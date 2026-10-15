@@ -212,21 +212,22 @@ it.each([
   },
 );
 
-it("still cancels when a setup resolution changes the selected revision", async () => {
+it.each([
+  { id: "bench", content_hash: "sha256:next" },
+  { id: "bench-next", content_hash: "sha256:bench" },
+])("still cancels when setup resolution changes to $id / $content_hash", async (selected) => {
   const test = mount();
   await ready();
   test.hold();
   fireEvent.click(screen.getByRole("button", { name: "Recheck device connections" }));
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await act(async () => test.preflightStarted);
-  await act(async () =>
-    test.resolution.resolve(Response.json({ id: "bench-next", content_hash: "sha256:next" })),
-  );
+  await act(async () => test.resolution.resolve(Response.json(selected)));
   await act(async () => test.preflight.resolve(Response.json(source)));
   expect(test.previews).toHaveLength(0);
   expect(context.draft!.pending).toBe(false);
   expect(context.draft!.selection.configuration).toMatchObject({
-    setup: { revision_id: "bench-next" },
+    setup: { revision_id: selected.id, content_hash: selected.content_hash },
   });
   expect(context.draft!.notice).toBe(
     "Inputs changed. Start will check the new inputs before acquisition.",
@@ -242,4 +243,36 @@ it("still blocks preview when the preflight read reports newer working input", a
   expect(test.previews).toHaveLength(0);
   expect(context.draft!.error).toMatch(/Working inputs changed/);
   expect(context.draft!.pending).toBe(false);
+});
+
+it("preserves a new parameter selection and target when an earlier setup resolution finishes unchanged", async () => {
+  const test = mount();
+  await ready();
+  fireEvent.click(screen.getByRole("button", { name: "Recheck device connections" }));
+  await waitFor(() =>
+    expect(test.fetcher.mock.calls.some(([r]) => r.url.includes("/setup/resolutions/"))).toBe(true),
+  );
+  const nextConfiguration = {
+    ...configuration,
+    ref: { revision_id: "baseline-b", content_hash: "sha256:base-b" },
+  };
+  const subject = { kind: "sample" as const, sample_id: "sample-b" };
+  act(() =>
+    context.selectConfiguration(nextConfiguration, { draft_id: "table-a", revision: 3 }, subject),
+  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
+  const revision = context.draft!.revision;
+  test.hold();
+  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await act(async () => test.preflightStarted);
+  await act(async () =>
+    test.resolution.resolve(Response.json({ id: "bench", content_hash: "sha256:bench" })),
+  );
+  await act(async () => test.preflight.resolve(Response.json(source)));
+  await waitFor(() => expect(test.previews).toHaveLength(1));
+  expect(test.previews[0]).toMatchObject({
+    selection: { configuration: nextConfiguration, subject },
+  });
+  expect(context.draft!.selection).toMatchObject({ configuration: nextConfiguration, subject });
+  expect(context.draft!.revision).toBe(revision);
 });
