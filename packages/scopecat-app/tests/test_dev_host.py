@@ -3,6 +3,8 @@
 import json
 import os
 import plistlib
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -175,11 +177,14 @@ def test_exec_preserves_process_terminal_and_passes_one_home(inputs, monkeypatch
     monkeypatch.setattr(dev_host, "build_host", lambda _source: executable)
     execute = Mock()
     monkeypatch.setattr(dev_host.os, "execve", execute)
+    change_directory = Mock()
+    monkeypatch.setattr(dev_host.os, "chdir", change_directory)
     home = source / "retained blank home"
     dev_host.enter_host(source, home)
     path, arguments, environment = execute.call_args.args
     assert path == executable
     assert arguments == [str(executable), "-m", "scripts.dev", "--home", str(home)]
+    change_directory.assert_called_once_with(source)
     assert "PYTHONHOME" not in environment
     marker = json.loads(environment[dev_host.MARKER])
     assert marker["pid"] == os.getpid()
@@ -228,3 +233,53 @@ def test_entry_selects_host_before_application_owner(
     monkeypatch.setattr(dev, "run", lambda *_a, **_k: events.append("owner"))
     dev.main()
     assert events == [*(["host"] if host_calls else []), "owner"]
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS compiled source host")
+def test_compiled_mac_host_loads_relocated_entries(tmp_path, monkeypatch):
+    source = Path(__file__).resolve().parents[3]
+    monkeypatch.setattr(dev_host, "development_home", lambda _: tmp_path / "cache")
+    executable = dev_host.build_host(source)
+    home = tmp_path / "unused-home"
+    for module, options, expected in (
+        ("scripts.dev", ["--home", str(home)], "--temporary"),
+        ("scopecat_app.native_bootstrap", [], "--payload"),
+    ):
+        result = subprocess.run(  # noqa: S603 - freshly compiled repository host
+            [str(executable), "-m", module, *options, "--help"],
+            cwd=source,
+            env=dev_host.clean_environment(),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert expected in result.stdout
+    assert not home.exists()
+
+
+def test_windows_reentry_selects_source_cwd_before_loading_repository_module(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "checkout"
+    home = tmp_path / "retained-home"
+    executable = tmp_path / "host.exe"
+    monkeypatch.delenv(dev_host_windows.MARKER, raising=False)
+    monkeypatch.setattr(dev_host_windows, "build_host", lambda _: executable)
+    launch = Mock()
+    launch.return_value.__enter__ = Mock(return_value=Mock(wait=lambda: 23))
+    launch.return_value.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(dev_host_windows.subprocess, "Popen", launch)
+    with pytest.raises(SystemExit) as outcome:
+        dev_host_windows.enter_host(source, home)
+    assert outcome.value.code == 23
+    assert launch.call_args.args[0] == [
+        str(executable),
+        "-E",
+        "-m",
+        "scripts.dev",
+        "--home",
+        str(home),
+    ]
+    assert launch.call_args.kwargs["cwd"] == source

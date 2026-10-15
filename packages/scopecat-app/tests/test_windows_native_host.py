@@ -129,6 +129,24 @@ def test_development_host_preserves_venv_and_editable_source(tmp_path, monkeypat
         assert observed[1] == "org.scopecat.development.cache"
         assert observed[2:6] == [sys.executable, sys.prefix, sys.prefix, value]
         assert observed[6] == ['中文 "quote"', "trailing\\"]
+    repository = Path(__file__).resolve().parents[3]
+    home = tmp_path / "unused-home"
+    for module, options, expected in (
+        ("scripts.dev", ["--home", str(home)], "--temporary"),
+        ("scopecat_app.native_bootstrap", [], "--payload"),
+    ):
+        result = subprocess.run(  # noqa: S603 - freshly compiled repository host
+            [str(executable), "-E", "-m", module, *options, "--help"],
+            cwd=repository,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=dev_host_windows.clean_environment(),
+        )
+        assert result.returncode == 0, result.stderr
+        assert expected in result.stdout
+    assert not home.exists()
     executable.write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="cache changed"):
         dev_host_windows.build_host(source)

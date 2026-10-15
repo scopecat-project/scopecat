@@ -288,6 +288,7 @@ def enter_host(source: Path, home: Path) -> None:
     )
     # In-process Py_BytesMain keeps this PID, stdin, signals and exit status. Passing
     # an explicit home also avoids allocating a second --temporary home on entry.
+    os.chdir(source)
     os.execve(  # noqa: S606 - verified locally built host, preserve terminal/PID
         executable,
         [str(executable), "-m", "scripts.dev", "--home", str(home.resolve())],

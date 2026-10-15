@@ -209,6 +209,7 @@ def enter_host(source: Path, home: Path) -> None:
     with subprocess.Popen(  # noqa: S603 - verified locally built host
         [str(executable), "-E", "-m", "scripts.dev", "--home", str(home.resolve())],
         env=environment,
+        cwd=source,
     ) as child:
         while True:
             try:

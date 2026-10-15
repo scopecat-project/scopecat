@@ -107,6 +107,7 @@ jobs:
         run: >-
           uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
           packages/scopecat-app/tests/test_native_console.py
+          packages/scopecat-app/tests/test_dev_host.py::test_compiled_mac_host_loads_relocated_entries
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         if: runner.os == 'Windows'
       - name: Check Windows native host
