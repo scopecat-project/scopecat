@@ -13,7 +13,7 @@ task:
 - [Use measurement data](use-measurement-data.md)
 - [Record a human or AI experiment decision](record-experiment-decisions.md)
 - [Share saved configuration from the desktop](share-configuration.md)
-- [Review and publish project configuration](manage-configuration.md)
+- [Edit parameters for an experiment](manage-configuration.md)
 - [Automate parameter calibration](automate-parameter-calibration.md)
 
 For a guided first experience, use the [tutorials](../tutorials/index.md).

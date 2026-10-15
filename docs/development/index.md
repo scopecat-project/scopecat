@@ -45,7 +45,8 @@ uv run --locked --package reference-lab --group test pytest testing/reference_la
 - [Platform status](platform-status.md): 当前能力与证据边界。
 - [Architecture](architecture/index.md): product contracts and design decisions.
 - [Repository map](repository-map.md): package ownership and generated code.
-- [Source development and previews](public-preview.md): run and distribute a checkout.
+- [Daily source development](public-preview.md#daily-source-desktop): run a checkout with native UI and HMR.
+- [Release preparation and previews](public-preview.md#numbered-releases): distribute reviewed artifacts.
 - [Test feedback](test-feedback.md): focused checks, CI and acceptance profiles.
 - [Reference fixtures](reference-fixtures.md): shared evidence and fixture ownership.
 - [Workflow evaluations](workflow-evaluations.md): user goals, representative evidence and gaps.

@@ -64,7 +64,9 @@ Updating client packages is a separate operation; close kernels before rebuildin
 
 ## Author folders
 
-For your first experiment, open **Settings → Author code → New code folder**.
+For your first Notebook experiment, follow [the Help lesson](../getting-started/quickstart.md).
+Its folder is already registered and can become your own working source.
+To create a separate author directory, open **Settings → Author code → New code folder**.
 Choose a save location and folder name, then **Create folder and prepare Python**.
 Scopecat creates a device-free example and an independent Python environment.
 It does not connect devices or start a measurement. Existing folders are never overwritten.

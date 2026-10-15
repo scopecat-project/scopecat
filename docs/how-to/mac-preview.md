@@ -27,9 +27,9 @@ Older preview builds lacked complete application signing. Download a build whose
 acceptance results include the Mac signature/download checks; rebuilding your
 Python environment will not repair an application signature.
 
-Once the app opens, use **Settings → New code folder** to create a device-free
-example and its own Python environment for VS Code. See
-[getting started](../getting-started/index.md).
+Once the app opens, follow [the first Notebook experiment](../getting-started/quickstart.md)
+through **Help → Learn with Notebooks → Parameters and scans**. Help prepares
+its editable source and Python environment for VS Code.
 
 The red window button hides Scopecat; experiments continue. Open it again from
 the Dock or the Scopecat menu-bar icon. To stop the application, choose **Quit

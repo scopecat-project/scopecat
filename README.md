@@ -12,8 +12,8 @@ bounded execution, live visibility, and durable results as they grow.
 
 Start with [download and installation](docs/getting-started/install.md), the
 [documentation home](docs/index.md), or follow the
-[first experiment](docs/getting-started/quickstart.md) to create a
-hardware-free project and complete the first durable run.
+[first experiment](docs/getting-started/quickstart.md) through Help's
+Parameters and scans Notebook to retain a first synthetic run.
 
 - [Practice in the application](docs/tutorials/teaching-sandboxes.md)
 - [Instrument control](docs/how-to/control-instruments.md)

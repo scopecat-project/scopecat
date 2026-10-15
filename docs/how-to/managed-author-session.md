@@ -1,9 +1,9 @@
 # Run an experiment from a notebook
 
 For a first device-free experiment, start with the installed application and
-[First experiment](../getting-started/quickstart.md). Create or select your code
-folder in **Settings → Author code**, then choose that folder's Python in your
-editor. Keep Scopecat open; registered folders connect to its application service
+[First experiment](../getting-started/quickstart.md) in Help. For your own laboratory
+code, create or select a folder in **Settings → Author code**, then choose its Python
+in your editor. Keep Scopecat open; registered folders connect to its application service
 and share application-owned data. No per-folder daemon startup is needed.
 
 This API guide is for an already prepared laboratory author folder. Its maintainer

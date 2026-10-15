@@ -19,9 +19,9 @@ design contract under evaluation.
 ## Start here
 
 Start with the [desktop first steps](getting-started/index.md). Open received data
-directly, or follow the [first experiment](getting-started/quickstart.md) to create
-ordinary code and retain a synthetic result. No per-project service installation
-is required.
+directly, or follow the [first experiment](getting-started/quickstart.md) through
+Help's Parameters and scans Notebook to retain a synthetic result. No per-project
+service installation is required.
 
 Use the [learning paths](getting-started/learning-path.md) to choose an author,
 maintainer or extension route. Continue according to what you want to accomplish:
@@ -50,7 +50,7 @@ maintainer or extension route. Continue according to what you want to accomplish
 ## Reference
 
 - [Command-line interface](reference/cli.md)
-- [Project layout and manifest](reference/project-layout.md)
+- [Author folders and project layout](reference/project-layout.md)
 - [Python API](reference/python/index.md)
 
 ## Extend or develop Scopecat

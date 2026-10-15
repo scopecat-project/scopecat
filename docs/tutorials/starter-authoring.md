@@ -1,12 +1,16 @@
 # Edit and analyze a starter experiment
 
-In a desktop preview, choose **Settings → Author code → New code folder**, select
+For your first Notebook, start with [Parameters and scans in Help](../getting-started/quickstart.md).
+You can keep using that course folder. This guide is for a **separate author folder**
+with the Settings starter, which uses different source and Notebook files.
+
+In the application, choose **Settings → Author code → New code folder**, select
 a save location and create it. Open the new folder in VS Code and select its `.venv`
 interpreter. Keep Scopecat open and run `notebooks/02_edit_scan.py` cell by cell.
 The example uses synthetic data and needs no devices.
 
-Framework contributors can use the [source development launcher](../development/public-preview.md#run-without-installation)
-with its generated example source or an explicitly registered author folder.
+Framework contributors can use the [source development launcher](../development/public-preview.md#daily-source-desktop).
+It starts blank; create or register an author folder in Settings before following this guide.
 The separate `scopecat init` starter remains available through the
 [CLI reference](../reference/cli.md#project-lifecycle); it is not required for the
 desktop lesson above. Use the endpoint recorded for the selected application,
@@ -82,6 +86,6 @@ calling `prepared.run()` again creates a new acquisition.
 ## Where to go next
 
 Use [managed author sessions](../how-to/managed-author-session.md) for parameter
-workspaces and saved plans, or choose another [tutorial sandbox](teaching-sandboxes.md).
+workspaces and saved plans, or choose another [Notebook lesson](teaching-sandboxes.md).
 Device and quantum extension authors can follow the
 [extension guides](../extensions/index.md).
