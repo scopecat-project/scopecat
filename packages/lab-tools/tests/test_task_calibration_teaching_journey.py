@@ -156,7 +156,7 @@ from scopecat.automation import (
     ParameterBranchPublishOutputRef,
 )
 
-assert all(v.task.mode == "finished" and v.progress.successful for v in views.values())
+assert all(v.task.mode == "finished" and v.progress.successful for v in views.values()), {case: view.model_dump(mode="json") for case, view in views.items()}
 assert session.config.registry().entries == ()
 assert (
     session.current_author_source() != frozen_commands["accepted"].source.code_revision

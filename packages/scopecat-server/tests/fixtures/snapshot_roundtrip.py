@@ -193,15 +193,19 @@ def _capture_process(
     # reference-lab session fixture or a shell with an endpoint override.
     environment = dict(os.environ)
     environment.pop(DAEMON_URL_ENV, None)
+    print(f"DIAG capture start seed={seed}", flush=True)
     subprocess.run(  # noqa: S603 - fixed interpreter and local script
         command, check=True, env=environment
     )
+    print(f"DIAG capture done seed={seed}", flush=True)
     return cast("dict[str, JsonValue]", json.loads(output.read_text(encoding="utf-8")))
 
 
 def _start_fixture_project(project: Project) -> None:
     try:
+        print("DIAG daemon start", flush=True)
         start_project(project)
+        print("DIAG daemon ready", flush=True)
     except DaemonLifecycleError as error:
         log = project.root / ".scopecat" / "daemon.log"
         if log.exists():
@@ -211,7 +215,9 @@ def _start_fixture_project(project: Project) -> None:
             )
         # Do not mask the startup failure if its cleanup also fails.
         try:
+            print("DIAG daemon stop", flush=True)
             stop_project(project)
+            print("DIAG daemon stopped", flush=True)
         except DaemonLifecycleError as cleanup_error:
             error.add_note(f"Startup cleanup: {cleanup_error}")
         raise
@@ -230,7 +236,9 @@ def check_roundtrip(template: Path) -> None:
         try:
             before = _capture_process(source, root / "before.json", seed=True)
         finally:
+            print("DIAG daemon stop", flush=True)
             stop_project(project)
+            print("DIAG daemon stopped", flush=True)
 
         # Preserve a real durable ready procedure but deliberately include the
         # old GUI's dispatch intent in source state before capture.
@@ -259,7 +267,9 @@ def check_roundtrip(template: Path) -> None:
             after = _capture_process(restored, root / "after.json")
             assert after == before, "restored values or provenance changed"
         finally:
+            print("DIAG restored daemon stop", flush=True)
             stop_project(restored_project)
+            print("DIAG restored daemon stopped", flush=True)
 
         database = SQLiteDatabase(restored / ".scopecat/control.sqlite3")
         try:
