@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test as base } from "@playwright/test";
+import { expect, test as base, type Request, type Response } from "@playwright/test";
 
 interface DaemonEndpointRecord {
   base_url: string;
@@ -622,6 +622,24 @@ test("running A and historical C stay bound while working B is edited and adopte
       submissions.push(request.url());
   });
   const experiment = await startControlledExperiment(daemon.projectRoot);
+  const traffic: string[] = [];
+  let phase = "observe running A";
+  const record = (kind: string, url: string) => {
+    try {
+      const path = new URL(url).pathname;
+      if (!/parameter|experiment-launcher/.test(path)) return;
+      traffic.push(`${kind} ${path}`.slice(0, 300));
+      if (traffic.length > 120) traffic.shift();
+    } catch {
+      // Observers must not interrupt requests or replace the test failure.
+    }
+  };
+  const onRequest = (request: Request) => record(request.method(), request.url());
+  const onResponse = (response: Response) => record(String(response.status()), response.url());
+  const onFailed = (request: Request) => record("request failed", request.url());
+  context.on("request", onRequest);
+  context.on("response", onResponse);
+  context.on("requestfailed", onFailed);
   try {
     const runA = await waitForMarker(experiment.acceptedReady, experiment);
     expect(runA).not.toBe(runC);
@@ -674,12 +692,14 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       };
     const before = retained();
     await assertObservers();
+    phase = "open working table";
     await b.goto(`${daemon.baseUrl}/#configuration`);
     await b.getByLabel("Working parameter branch", { exact: true }).fill("starter");
     await b.getByRole("button", { name: "Open working table", exact: true }).click();
     await expect(scale).toBeVisible();
     const previewHashes: string[] = [];
     for (const value of ["7.25", "8.5"]) {
+      phase = `edit working input ${value}`;
       await b.getByRole("button", { name: "Configuration", exact: true }).click();
       await scale.fill(value);
       await b
@@ -690,6 +710,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       // Start may prepare internally; merely editing or previewing must not acquire.
       await expect(b.getByRole("button", { name: "Start acquisition", exact: true })).toBeEnabled();
       expect(submissions).toEqual([]);
+      phase = `preview working input ${value}`;
       const response = b.waitForResponse(
         (item) =>
           item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
@@ -727,7 +748,23 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(c).toHaveURL(cUrl);
     await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
     expect(submissions).toEqual([]);
+  } catch (error) {
+    try {
+      const body = await b
+        .locator("body")
+        .innerText({ timeout: 500 })
+        .catch(() => "unavailable");
+      const evidence = JSON.stringify({ phase, traffic, body: body.slice(-8000) });
+      console.log("A/B/C failure diagnostics", evidence);
+      await info.attach("a-b-c-failure", { body: evidence, contentType: "application/json" });
+    } catch {
+      // Attachment/page access can fail during timeout or browser teardown.
+    }
+    throw error;
   } finally {
+    context.off("request", onRequest);
+    context.off("response", onResponse);
+    context.off("requestfailed", onFailed);
     await finishControlledExperiment(experiment);
     await b.close();
     await c.close();

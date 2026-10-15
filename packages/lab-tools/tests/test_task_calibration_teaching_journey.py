@@ -156,7 +156,17 @@ from scopecat.automation import (
     ParameterBranchPublishOutputRef,
 )
 
-assert all(v.task.mode == "finished" and v.progress.successful for v in views.values())
+try:
+    assert all(
+        v.task.mode == "finished" and v.progress.successful for v in views.values()
+    )
+except AssertionError:
+    try:
+        states = {case: view.model_dump(mode="json") for case, view in views.items()}
+        print("Task completion diagnostics: " + json.dumps(states)[:16000], flush=True)
+    except Exception:
+        pass  # Diagnostics must preserve the original assertion failure.
+    raise
 assert session.config.registry().entries == ()
 assert (
     session.current_author_source() != frozen_commands["accepted"].source.code_revision
