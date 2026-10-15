@@ -1,0 +1,38 @@
+name: Release platform variable probe
+on:
+  push:
+    branches: [qualify/release-platform-case]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      - name: Reproduce legacy naming after MSVC setup
+        shell: bash
+        env:
+          PLATFORM: windows
+        run: |
+          printf 'Platform=%s; PLATFORM=%s\n' "${Platform-unset}" "${PLATFORM-unset}"
+          test "${Platform-unset}" = windows
+          test "${PLATFORM-unset}" = unset
+          mkdir -p "$RUNNER_TEMP/legacy"
+          printf '{}\n' > "$RUNNER_TEMP/source.json"
+          cp "$RUNNER_TEMP/source.json" "$RUNNER_TEMP/legacy/$PLATFORM-native-release.json"
+          test -f "$RUNNER_TEMP/legacy/-native-release.json"
+          test ! -f "$RUNNER_TEMP/legacy/windows-native-release.json"
+      - name: Verify scoped variable preserves platform prefix
+        shell: bash
+        env:
+          SCOPECAT_RELEASE_PLATFORM: windows
+        run: |
+          printf 'Platform=%s; SCOPECAT_RELEASE_PLATFORM=%s\n' "${Platform-unset}" "$SCOPECAT_RELEASE_PLATFORM"
+          test "$SCOPECAT_RELEASE_PLATFORM" = windows
+          mkdir -p "$RUNNER_TEMP/fixed"
+          cp "$RUNNER_TEMP/source.json" "$RUNNER_TEMP/fixed/$SCOPECAT_RELEASE_PLATFORM-native-release.json"
+          cp "$RUNNER_TEMP/source.json" "$RUNNER_TEMP/fixed/$SCOPECAT_RELEASE_PLATFORM-bundle.json"
+          test -s "$RUNNER_TEMP/fixed/windows-native-release.json"
+          test -s "$RUNNER_TEMP/fixed/windows-bundle.json"
+          ls "$RUNNER_TEMP/legacy" "$RUNNER_TEMP/fixed"
