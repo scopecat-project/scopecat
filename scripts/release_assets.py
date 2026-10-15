@@ -20,6 +20,7 @@ from scopecat_app.author_resources import PACKAGES as AUTHOR_PACKAGES
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.app_build.package_versions import validate_dependencies
 from scripts.app_build.release_identity import installer_filename, read_release
 
 PACKAGES = frozenset(
@@ -175,9 +176,9 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
         version = str(message["Version"])
         if package not in packages or package in found or version != packages[package]:
             raise ValueError(f"Wheel package/version mismatch: {name}")
-        suffix = f"+scopecat.{identity.pep440}.g{commit[:12]}"
-        if not version.endswith(suffix) or ".dev" not in version:
-            raise ValueError(f"Wheel release provenance mismatch: {name}")
+        if version != identity.pep440:
+            raise ValueError(f"Wheel release version mismatch: {name}")
+        validate_dependencies(message.get_all("Requires-Dist", []), version)
         found.add(package)
         package_wheels[package] = name
     if found != set(PACKAGES):

@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -15,12 +15,12 @@ exclude-newer-span = "P3D"
 members = [
     "reference-lab",
     "scopecat",
-    "scopecat-instruments",
-    "scopecat-tutorials",
     "scopecat-app",
+    "scopecat-instruments",
     "scopecat-quantum",
     "scopecat-server",
     "scopecat-testkit",
+    "scopecat-tutorials",
     "scopecat-workspace",
 ]
 
@@ -2796,58 +2796,8 @@ test = [
 ]
 
 [[package]]
-name = "scopecat-instruments"
-version = "0.1.0"
-source = { editable = "packages/scopecat-instruments" }
-dependencies = [
-    { name = "numpy" },
-    { name = "psutil" },
-    { name = "pydantic" },
-    { name = "pyserial" },
-    { name = "scopecat" },
-]
-
-[package.dev-dependencies]
-test = [
-    { name = "pytest" },
-    { name = "scopecat-testkit" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=2" },
-    { name = "psutil", specifier = ">=7.2" },
-    { name = "pydantic", specifier = ">=2" },
-    { name = "pyserial", specifier = ">=3.5" },
-    { name = "scopecat", editable = "packages/scopecat" },
-]
-
-[package.metadata.requires-dev]
-test = [
-    { name = "pytest", specifier = ">=9" },
-    { name = "scopecat-testkit", editable = "testing/scopecat-testkit" },
-]
-
-[[package]]
-name = "scopecat-tutorials"
-version = "0.2.0"
-source = { directory = "packages/scopecat-tutorials" }
-dependencies = [
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "scopecat" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "matplotlib", specifier = ">=3.10" },
-    { name = "numpy", specifier = ">=2" },
-    { name = "scopecat", editable = "packages/scopecat" },
-]
-
-[[package]]
 name = "scopecat-app"
-version = "0.2.0"
+version = "0.1.0"
 source = { editable = "packages/scopecat-app" }
 dependencies = [
     { name = "fastapi" },
@@ -2859,8 +2809,8 @@ dependencies = [
     { name = "rich" },
     { name = "scopecat" },
     { name = "scopecat-instruments" },
-    { name = "scopecat-tutorials" },
     { name = "scopecat-server" },
+    { name = "scopecat-tutorials" },
     { name = "typer" },
     { name = "uv" },
     { name = "uvicorn" },
@@ -2901,15 +2851,48 @@ requires-dist = [
     { name = "pywebview", marker = "extra == 'desktop'", specifier = "==6.2.1" },
     { name = "rich", specifier = ">=15" },
     { name = "scopecat", editable = "packages/scopecat" },
-    { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
-    { name = "scopecat-tutorials", directory = "packages/scopecat-tutorials" },
     { name = "scopecat-app", extras = ["kernel"], marker = "extra == 'notebook'", editable = "packages/scopecat-app" },
+    { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
     { name = "scopecat-server", editable = "packages/scopecat-server" },
+    { name = "scopecat-tutorials", directory = "packages/scopecat-tutorials" },
     { name = "typer", specifier = ">=0.20" },
     { name = "uv", specifier = ">=0.13,<0.14" },
     { name = "uvicorn", specifier = ">=0.35" },
 ]
 provides-extras = ["desktop", "kernel", "notebook"]
+
+[[package]]
+name = "scopecat-instruments"
+version = "0.1.0"
+source = { editable = "packages/scopecat-instruments" }
+dependencies = [
+    { name = "numpy" },
+    { name = "psutil" },
+    { name = "pydantic" },
+    { name = "pyserial" },
+    { name = "scopecat" },
+]
+
+[package.dev-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "scopecat-testkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2" },
+    { name = "psutil", specifier = ">=7.2" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pyserial", specifier = ">=3.5" },
+    { name = "scopecat", editable = "packages/scopecat" },
+]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "pytest", specifier = ">=9" },
+    { name = "scopecat-testkit", editable = "testing/scopecat-testkit" },
+]
 
 [[package]]
 name = "scopecat-quantum"
@@ -3006,14 +2989,31 @@ requires-dist = [
 provides-extras = ["server"]
 
 [[package]]
+name = "scopecat-tutorials"
+version = "0.1.0"
+source = { directory = "packages/scopecat-tutorials" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "scopecat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "matplotlib", specifier = ">=3.10" },
+    { name = "numpy", specifier = ">=2" },
+    { name = "scopecat", editable = "packages/scopecat" },
+]
+
+[[package]]
 name = "scopecat-workspace"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "reference-lab" },
     { name = "scopecat" },
-    { name = "scopecat-instruments" },
     { name = "scopecat-app" },
+    { name = "scopecat-instruments" },
     { name = "scopecat-quantum" },
     { name = "scopecat-server" },
     { name = "scopecat-testkit", extra = ["server"] },
@@ -3062,8 +3062,8 @@ platform-smoke = [
 requires-dist = [
     { name = "reference-lab", editable = "testing/reference_lab" },
     { name = "scopecat", editable = "packages/scopecat" },
-    { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
     { name = "scopecat-app", editable = "packages/scopecat-app" },
+    { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
     { name = "scopecat-quantum", editable = "packages/scopecat-quantum" },
     { name = "scopecat-server", editable = "packages/scopecat-server" },
     { name = "scopecat-testkit", extras = ["server"], editable = "testing/scopecat-testkit" },

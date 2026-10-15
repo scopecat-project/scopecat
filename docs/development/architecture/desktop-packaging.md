@@ -88,17 +88,22 @@ applications only retain the two core/server author wheels, but that projection
 is not the complete downstream build/test contract. Removing the other assets
 requires a consumer migration first.
 
-This PR retains the existing wheel version generation: package base versions,
-a development timestamp and release provenance. The current first-party packages
-released together will follow the application release version; implementation is
-tracked in [#1030](https://github.com/scopecat-project/scopecat/issues/1030), including
-the accepted version-ordering rollback from historical 0.2 package bases.
-Independent versions can be introduced later if separate releases are needed.
-Do not merely rename wheel files: rebuild the wheels with matching metadata and
-validate resolver ordering, exact installation constraints and worker dependency
-capture before adopting the new rule.
-This asset-layout change does not change those versions, publish to PyPI, or modify
-historical releases (including the 16 assets and tag of v0.1.0).
+All seven first-party wheels released together use `release.toml` as their
+version authority ([#1030](https://github.com/scopecat-project/scopecat/issues/1030)).
+Formal versions are clean PEP 440: `0.1.0`, `0.1.0a2`, `0.1.0b1` or `0.1.0rc4`.
+Development builds use `<release>.dev<commit timestamp>+g<full commit>`; rebuilding
+the same commit keeps its version. Build numbers and full commit/content hashes
+remain in manifests rather than the formal wheel version. UI versions are unchanged.
+The builder stamps source metadata before building; first-party runtime dependencies
+and extras select the exact same batch. Third-party constraints and downstream
+adapter versions retain their own policies.
+
+The rollback from historical 0.2 package bases to the application's 0.1 series is
+intentional. Install into a fresh environment or explicitly select the new exact
+versions/hashed recipe; an unqualified upgrade cannot express a downgrade. Author
+environments remain content-addressed and recipe installs retain exact wheel hashes.
+Separate releases may introduce independent versions later. This does not publish
+to PyPI or modify historical releases (including v0.1.0 assets and tag).
 
 ## Teaching intent and acceptance limits
 

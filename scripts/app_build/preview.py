@@ -27,6 +27,7 @@ class Preview(TypedDict):
     build_number: NotRequired[int]
     channel: NotRequired[str]
     ui_version: NotRequired[str]
+    wheel_version: NotRequired[str]
 
 
 def download(url: str, digest: str, destination: Path) -> None:
@@ -53,6 +54,19 @@ def read_preview(path: Path) -> Preview:
         )
         if document["channel"] == "release":
             identity.require_release()
+    if "wheel_version" in document:
+        selected = document["wheel_version"]
+        if any(version != selected for version in document["packages"].values()):
+            raise ValueError("Mixed first-party wheel versions")
+        if (
+            document.get("channel") == "release"
+            and selected
+            != ReleaseIdentity(
+                document.get("release_version", "0.0.0"),
+                document.get("build_number", 0),
+            ).pep440
+        ):
+            raise ValueError("Release wheels must use the clean application version")
     for name, digest in document["files"].items():
         if (
             Path(name).name != name

@@ -32,7 +32,7 @@ def test_recipe_can_consume_public_artifacts_without_a_checkout(
                 "format": 1,
                 "commit": "a" * 40,
                 "packages": {
-                    delivery.wheel_metadata(path)[0]: "1.0"
+                    delivery.wheel_metadata(path)[0]: delivery.wheel_metadata(path)[1]
                     for path in wheels.glob("*.whl")
                 },
                 "files": {
@@ -120,16 +120,17 @@ def build_tools(monkeypatch):
             package = Path(command[-1])
             metadata = tomllib.loads((package / "pyproject.toml").read_text())
             name = metadata["project"]["name"]
+            version = metadata["project"]["version"]
             module = next(
                 (module for module, dist in delivery.MODULES.items() if dist == name),
                 name.replace("-", "_"),
             )
             output = Path(command[command.index("--out-dir") + 1])
             with zipfile.ZipFile(
-                output / f"{name.replace('-', '_')}-1.0-py3-none-any.whl", "w"
+                output / f"{name.replace('-', '_')}-{version}-py3-none-any.whl", "w"
             ) as wheel:
                 wheel.writestr(
-                    f"{name}.dist-info/METADATA", f"Name: {name}\nVersion: 1.0\n"
+                    f"{name}.dist-info/METADATA", f"Name: {name}\nVersion: {version}\n"
                 )
                 wheel.writestr(f"{module}/__init__.py", "# installed bytes\n")
 
@@ -138,7 +139,13 @@ def build_tools(monkeypatch):
     monkeypatch.setattr(
         delivery.subprocess,
         "check_output",
-        lambda command, **_: "" if command[1] == "status" else "fixture-identity\n",
+        lambda command, **_: (
+            ""
+            if command[1] == "status"
+            else "123"
+            if command[1] == "show"
+            else "a" * 40
+        ),
     )
     return calls
 
@@ -203,7 +210,7 @@ def test_default_build_includes_instrument_dependency(recipe, tmp_path, build_to
         tmp_path / "output", source=tmp_path / "public", gui=gui
     )
     lock = (result / "requirements.lock").read_text()
-    assert "scopecat-instruments==1.0 --hash=sha256:" in lock
+    assert f"scopecat-instruments==0.3.0rc1.dev123+g{'a' * 40} --hash=sha256:" in lock
     assert set(json.loads((result / MANIFEST).read_text())["sources"]) == {"public"}
 
 
@@ -241,8 +248,8 @@ def test_managed_recipe_build_uses_explicit_separate_public_checkout(
     assert plan.packages[0] == local
     assert all(item.is_relative_to(external) for item in plan.packages[1:])
     assert {
-        Path(command[-1]) for command, _ in build_tools if command[1] == "build"
-    } == set(plan.packages)
+        Path(command[-1]).name for command, _ in build_tools if command[1] == "build"
+    } == {path.name for path in plan.packages}
     verify_bundle(result)
     assert set(json.loads((result / MANIFEST).read_text())["sources"]) == {
         "public",
@@ -414,7 +421,8 @@ def test_public_release_artifacts_feed_native_delivery(
         "build_number": 7,
         "channel": "release",
         "packages": {
-            delivery.wheel_metadata(path)[0]: "1.0" for path in artifacts.glob("*.whl")
+            delivery.wheel_metadata(path)[0]: delivery.wheel_metadata(path)[1]
+            for path in artifacts.glob("*.whl")
         },
         "files": {path.name: delivery.file_hash(path) for path in artifacts.iterdir()},
     }

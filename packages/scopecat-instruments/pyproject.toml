@@ -9,13 +9,13 @@ dependencies = [
   "psutil>=7.2",
   "pydantic>=2",
   "pyserial>=3.5",
-  "scopecat",
+  "scopecat==0.1.0",
 ]
 
 [dependency-groups]
 test = [
   "pytest>=9",
-  "scopecat-testkit",
+  "scopecat-testkit==0.1.0",
 ]
 
 [build-system]

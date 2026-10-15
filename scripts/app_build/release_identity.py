@@ -1,4 +1,4 @@
-"""Public release identity, independent of internal package base versions."""
+"""Coordinated application and first-party package release identity."""
 
 from __future__ import annotations
 
@@ -54,8 +54,17 @@ class ReleaseIdentity:
     def windows_version(self) -> str:
         return f"{self.short_version}.{self.build_number}"
 
-    def python_package_version(self, base: str, commit: str, timestamp: str) -> str:
-        return f"{base}.dev{timestamp}+scopecat.{self.pep440}.g{commit[:12]}"
+    def python_package_version(
+        self, commit: str, timestamp: str, *, release: bool = False
+    ) -> str:
+        if release:
+            self.require_release()
+            return self.pep440
+        if not re.fullmatch(r"[0-9a-f]{40}", commit) or not timestamp.isdecimal():
+            raise ValueError(
+                "Development identity requires full commit and commit timestamp"
+            )
+        return f"{self.pep440}.dev{timestamp}+g{commit}"
 
     def javascript_package_version(self, base: str, commit: str) -> str:
         return f"{base}-scopecat.{self.version.replace('-', '.')}.g{commit[:12]}"
