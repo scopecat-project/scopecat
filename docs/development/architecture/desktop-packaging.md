@@ -88,11 +88,15 @@ applications only retain the two core/server author wheels, but that projection
 is not the complete downstream build/test contract. Removing the other assets
 requires a consumer migration first.
 
-Wheel version identity is a separate pending change: current release builds still
-encode package base versions, a development timestamp and release provenance.
-Do not rename wheel files or equate independent package versions to the application
-version. A replacement must rebuild wheel metadata and validate resolver ordering,
-exact installation constraints and worker dependency capture before adoption.
+This PR retains the existing wheel version generation: package base versions,
+a development timestamp and release provenance. The current first-party packages
+released together will follow the application release version; implementation is
+tracked in [#1030](https://github.com/scopecat-project/scopecat/issues/1030), including
+the accepted version-ordering rollback from historical 0.2 package bases.
+Independent versions can be introduced later if separate releases are needed.
+Do not merely rename wheel files: rebuild the wheels with matching metadata and
+validate resolver ordering, exact installation constraints and worker dependency
+capture before adopting the new rule.
 This asset-layout change does not change those versions, publish to PyPI, or modify
 historical releases (including the 16 assets and tag of v0.1.0).
 
