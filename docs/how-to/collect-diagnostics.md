@@ -34,6 +34,13 @@ Nothing is uploaded. Review commands, paths and log output before sharing them.
 The child receives `SCOPECAT_DIAGNOSTIC_DIRECTORY`,
 `SCOPECAT_TIMING_DIRECTORY` and `SCOPECAT_STARTUP_DIAGNOSTICS`. Scopecat components
 use the latter two to write their existing timing and startup evidence.
+When daemon shutdown is accepted, startup diagnostics also record shutdown
+phases and capture one thread-stack sample after five seconds if the process
+has not exited. Parent lifetime records include the launcher and endpoint
+process identities, observed children, shutdown acceptance, and wait/kill
+timeout phases. These observations do not change shutdown deadlines or cleanup
+policy. Endpoint URLs and shutdown tokens are not included in these snapshots.
+
 A workload can append JSON objects to `events.jsonl` in the diagnostic directory:
 
 ```python

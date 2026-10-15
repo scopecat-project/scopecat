@@ -790,6 +790,45 @@ def test_old_endpoint_record_does_not_imply_shutdown_acceptance(tmp_path: Path) 
     assert not DaemonEndpointRecord.model_validate(old).shutdown_accepted
 
 
+def test_stop_timeout_records_both_wait_failures_without_hiding_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock, call
+
+    project = initialize_project(tmp_path)
+    record = _record(tmp_path, pid=4321, process_create_time=10)
+    process = Mock()
+    process.wait.side_effect = psutil.TimeoutExpired(2)
+    capture = Mock()
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle.inspect_daemon",
+        Mock(return_value=DaemonStatus(state="running", record=record)),
+    )
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle._matching_process", Mock(return_value=process)
+    )
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle._request_graceful_shutdown", Mock(return_value=True)
+    )
+    monkeypatch.setattr(
+        "scopecat_server.lifecycle._daemon_diagnostics.capture", capture
+    )
+    with pytest.raises(psutil.TimeoutExpired):
+        stop_project(project)
+    assert process.wait.call_args_list == [call(timeout=10.0), call(timeout=2)]
+    process.kill.assert_called_once_with()
+    assert capture.call_args_list == [
+        call(phase, root=project.root)
+        for phase in (
+            "before_stop",
+            "shutdown_requested",
+            "shutdown_wait_timeout",
+            "shutdown_kill_sent",
+            "shutdown_kill_timeout",
+        )
+    ]
+
+
 def test_application_endpoint_cleanup_uses_recorded_location(tmp_path: Path) -> None:
     from scopecat.application_instance import ApplicationInstance
     from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME

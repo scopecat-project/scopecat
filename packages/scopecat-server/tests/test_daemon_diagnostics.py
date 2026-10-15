@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import secrets
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
+import psutil
 import pytest
+from scopecat.daemon.endpoint import DaemonEndpointRecord
 
 from scopecat_server._daemon_diagnostics import capture, observe_spawn
 
@@ -27,6 +31,18 @@ def test_failure_snapshot_keeps_identity_exit_code_and_bounded_log(
         stdin=subprocess.PIPE,
     )
     try:
+        endpoint = DaemonEndpointRecord(
+            project_root=root,
+            data_root=state,
+            deployment_root=root,
+            pid=child.pid,
+            process_create_time=psutil.Process(child.pid).create_time(),
+            base_url="http://127.0.0.1:12345",
+            shutdown_token=secrets.token_urlsafe(32),
+            started_at=datetime.now(UTC),
+            shutdown_accepted=True,
+        )
+        (state / "daemon.json").write_text(endpoint.model_dump_json(), encoding="utf-8")
         observe_spawn(root, child)
         capture("failed call test_endpoint", root=root)
         [record] = directory.glob("*.jsonl")
@@ -36,6 +52,18 @@ def test_failure_snapshot_keeps_identity_exit_code_and_bounded_log(
         assert failed["pid"] == child.pid
         assert failed["create_time"] is not None
         assert failed["returncode"] is None
+        assert failed["endpoint"]["pid"] == child.pid
+        assert failed["endpoint"]["shutdown_accepted"] is True
+        assert (
+            failed["endpoint"]["process"]["create_time"] == endpoint.process_create_time
+        )
+        assert failed["launcher"]["pid"] == child.pid
+        # Windows venv launchers may own another Python process or conhost.
+        for descendant in failed["launcher"]["children"]:
+            assert descendant["pid"] != child.pid
+            assert descendant["create_time"] > 0
+        assert endpoint.shutdown_token not in record.read_text()
+        assert endpoint.base_url not in record.read_text()
         failed_log = directory / failed["log_tail"]
         assert failed_log.stat().st_size == 65536
         assert failed_log.read_bytes().endswith(b"before failure\n")
