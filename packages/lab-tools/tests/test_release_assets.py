@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
+import subprocess
+import textwrap
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -26,6 +29,65 @@ assert native_spec is not None and native_spec.loader is not None
 native_producer = importlib.util.module_from_spec(native_spec)
 native_spec.loader.exec_module(native_producer)
 SHA = "a" * 40
+
+
+@pytest.mark.parametrize("platform", ["windows", "macos"])
+@pytest.mark.parametrize("problem", [None, "missing", "empty", "unset-platform"])
+def test_workflow_stages_native_manifests(
+    tmp_path: Path, platform: str, problem: str | None
+) -> None:
+    """Execute the upload prerequisite with MSVC's mixed-case environment key."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Workflow staging requires Bash")
+    workflow = (SCRIPT.parents[1] / ".github/workflows/release-publish.yml").read_text()
+    step = workflow.split("      - name: Stage native release manifests\n", 1)[1]
+    step = step.split("      - uses:", 1)[0]
+    variable = next(
+        line.strip().split(":", 1)[0]
+        for line in step.splitlines()
+        if line.endswith(": ${{ matrix.platform }}")
+    )
+    command = textwrap.dedent(step.split("        run: |\n", 1)[1])
+    source = tmp_path / "native-acceptance"
+    destination = tmp_path / "release-native"
+    source.mkdir()
+    destination.mkdir()
+    (source / "native-release.json").write_text('{"installer":"fixture"}\n')
+    if problem != "missing":
+        (source / "bundle.json").write_text("" if problem == "empty" else "{}\n")
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() not in {"PLATFORM", "SCOPECAT_RELEASE_PLATFORM"}
+    }
+    environment.update(Platform="x64", RUNNER_TEMP=tmp_path.as_posix())
+    if problem != "unset-platform":
+        # Windows updates an existing key without changing its original casing.
+        key = next(
+            (key for key in environment if key.casefold() == variable.casefold()),
+            variable,
+        )
+        environment[key] = platform
+    result = subprocess.run(  # noqa: S603 -- repository-owned workflow, isolated fixtures
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", command],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if problem is not None:
+        assert result.returncode != 0
+        return
+    assert result.returncode == 0, result.stderr
+    assert {path.name for path in destination.iterdir()} == {
+        f"{platform}-native-release.json",
+        f"{platform}-bundle.json",
+    }
+    for name in ("native-release.json", "bundle.json"):
+        assert (destination / f"{platform}-{name}").read_bytes() == (
+            source / name
+        ).read_bytes()
 
 
 def write_json(path: Path, value: dict[str, Any]) -> None:
