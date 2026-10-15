@@ -66,6 +66,40 @@ Native data export/import does not qualify the complete installed configuration
 exchange and source-registration journey. Track that distinction in
 [#502](https://github.com/scopecat-project/scopecat/issues/502).
 
+## Release asset boundary
+
+Future release installers use `Scopecat-VERSION-PLATFORM-ARCH.dmg` / `.exe`,
+with `macos` / `windows` and normalized `arm64` / `x86_64` from the qualified
+target. Assembly rejects names that disagree with that target. This naming does
+not add a new supported platform or architecture.
+
+`release_assets.py assemble` checks the complete build inputs. `export --output`
+creates a fresh publication directory containing two installers, seven wheels,
+`preview.json`, `scopecat-ui.zip` and `release.json` (12 assets). The four native
+qualification documents are embedded verbatim in `release.json`; verification
+rechecks their source, target, resource inventory and checksums after export.
+Separate qualification files remain in Actions evidence. `release.json` retains
+the format-1 `preview` and `files` contract; `files` lists only downloadable assets.
+The added `installers` index exposes target and checksum without opening evidence.
+
+The preview manifest, UI archive and seven-wheel contract remain required by
+existing pinned artifact consumers and installed-framework qualification. Native
+applications only retain the two core/server author wheels, but that projection
+is not the complete downstream build/test contract. Removing the other assets
+requires a consumer migration first.
+
+This PR retains the existing wheel version generation: package base versions,
+a development timestamp and release provenance. The current first-party packages
+released together will follow the application release version; implementation is
+tracked in [#1030](https://github.com/scopecat-project/scopecat/issues/1030), including
+the accepted version-ordering rollback from historical 0.2 package bases.
+Independent versions can be introduced later if separate releases are needed.
+Do not merely rename wheel files: rebuild the wheels with matching metadata and
+validate resolver ordering, exact installation constraints and worker dependency
+capture before adopting the new rule.
+This asset-layout change does not change those versions, publish to PyPI, or modify
+historical releases (including the 16 assets and tag of v0.1.0).
+
 ## Teaching intent and acceptance limits
 
 Help supports Notebook/application collaboration through shared preparation and

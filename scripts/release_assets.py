@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import sys
 import zipfile
 from email.parser import BytesParser
@@ -14,7 +15,7 @@ from typing import Protocol, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages/lab-tools/src"))
 from lab_tools.author_resources import PACKAGES as AUTHOR_PACKAGES
-from lab_tools.release_identity import read_release
+from lab_tools.release_identity import installer_filename, read_release
 
 PACKAGES = frozenset(
     {
@@ -177,14 +178,46 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
     if found != set(PACKAGES):
         raise ValueError("Incomplete wheel inventory")
     hashes["preview.json"] = _hash(preview_path)
+    evidence_names = {
+        f"{platform}-{kind}.json"
+        for platform in NATIVE
+        for kind in ("bundle", "native-release")
+    }
+    present = evidence_names & {path.name for path in directory.iterdir()}
+    if present and present != evidence_names:
+        raise ValueError("Incomplete native qualification evidence")
+    if present:
+        qualification = {
+            name: _asset(directory, name).read_bytes().decode("utf-8")
+            for name in sorted(evidence_names)
+        }
+    else:
+        embedded = _object(
+            _read(_asset(directory, "release.json")).get("qualification")
+        )
+        if set(embedded) != evidence_names or any(
+            not isinstance(value, str) for value in embedded.values()
+        ):
+            raise ValueError("Invalid embedded native qualification evidence")
+        qualification = cast("dict[str, str]", embedded)
+    installers: dict[str, object] = {}
     for platform, (target_platform, suffix) in NATIVE.items():
         manifest_name, bundle_name = (
             f"{platform}-native-release.json",
             f"{platform}-bundle.json",
         )
-        native = _read(_asset(directory, manifest_name))
-        bundle_path = _asset(directory, bundle_name)
-        bundle = _read(bundle_path)
+        native = _object(
+            cast(
+                "object",
+                json.loads(qualification[manifest_name], object_pairs_hook=_unique),
+            )
+        )
+        bundle = _object(
+            cast(
+                "object",
+                json.loads(qualification[bundle_name], object_pairs_hook=_unique),
+            )
+        )
         if (
             native.get("format") != 1
             or bundle.get("format") != 2
@@ -206,15 +239,25 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
             or installer in hashes
         ):
             raise ValueError(f"Invalid or duplicate installer: {platform}")
+        target = cast("dict[str, str]", _object(bundle.get("target")))
+        if installer != installer_filename(identity, target):
+            raise ValueError(
+                f"Installer filename does not match release target: {platform}"
+            )
         hashes[installer] = _check_hash(directory, installer, native.get("sha256"))
-        hashes[bundle_name] = _check_hash(
-            directory, bundle_name, native.get("bundle_sha256")
-        )
-        hashes[manifest_name] = _hash(directory / manifest_name)
+        if hashlib.sha256(
+            qualification[bundle_name].encode("utf-8")
+        ).hexdigest() != native.get("bundle_sha256"):
+            raise ValueError(f"Native bundle checksum mismatch: {platform}")
+        installers[platform] = {
+            "file": installer,
+            "target": target,
+            "sha256": hashes[installer],
+        }
     actual_files = {
         path.name for path in directory.iterdir() if path.name != "release.json"
     }
-    if actual_files != set(hashes):
+    if actual_files != set(hashes) | present:
         raise ValueError("Release directory has unexpected or missing assets")
     return {
         "format": 1,
@@ -223,6 +266,8 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
         "commit": commit,
         "preview": {"file": "preview.json", "sha256": hashes["preview.json"]},
         "files": dict(sorted(hashes.items())),
+        "installers": installers,
+        "qualification": qualification,
     }
 
 
@@ -243,18 +288,44 @@ def verify(directory: Path, commit: str, release_file: Path) -> Path:
     return manifest
 
 
+def export(directory: Path, destination: Path, commit: str, release_file: Path) -> Path:
+    """Keep build evidence internally; publish only the verified inventory."""
+    manifest = verify(directory, commit, release_file)
+    document = _read(manifest)
+    destination.mkdir(parents=True, exist_ok=False)
+    for name in (*_object(document["files"]), "release.json"):
+        shutil.copyfile(_asset(directory, name), destination / name)
+    return verify(destination, commit, release_file)
+
+
 class Arguments(Protocol):
     command: str
+    output: Path | None
     directory: Path
     commit: str
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("assemble", "verify"))
+    parser.add_argument("command", choices=("assemble", "verify", "export"))
     parser.add_argument("directory", type=Path)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--output", type=Path)
     args = cast("Arguments", cast("object", parser.parse_args()))
+    if args.command == "export":
+        if args.output is None:
+            parser.error("export requires --output")
+        print(
+            export(
+                args.directory,
+                args.output,
+                args.commit,
+                Path(__file__).resolve().parents[1] / "release.toml",
+            )
+        )
+        return
+    if args.output is not None:
+        parser.error("--output requires export")
     operation = assemble if args.command == "assemble" else verify
     print(
         operation(

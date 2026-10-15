@@ -137,3 +137,32 @@ def test_preview_build_archives_historical_commit_without_release_file(
         }
     with pytest.raises(FileNotFoundError):
         module.build(repository, tmp_path / "release", release=True)
+
+
+@pytest.mark.parametrize(
+    "platform,machine,expected",
+    [
+        ("darwin", "arm64", "macos-arm64.dmg"),
+        ("darwin", "x86_64", "macos-x86_64.dmg"),
+        ("win32", "AMD64", "windows-x86_64.exe"),
+        ("win32", "aarch64", "windows-arm64.exe"),
+    ],
+)
+def test_installer_names_use_qualified_target(platform, machine, expected):
+    from lab_tools.release_identity import installer_filename
+
+    assert (
+        installer_filename(
+            ReleaseIdentity("0.3.0-rc.1", 9), {"platform": platform, "machine": machine}
+        )
+        == f"Scopecat-0.3.0-rc.1-{expected}"
+    )
+
+
+def test_installer_names_reject_unknown_target():
+    from lab_tools.release_identity import installer_filename
+
+    with pytest.raises(ValueError, match="Unsupported"):
+        installer_filename(
+            ReleaseIdentity("0.3.0", 9), {"platform": "win32", "machine": "unknown"}
+        )
