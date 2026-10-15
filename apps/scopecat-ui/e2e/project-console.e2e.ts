@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test as base, type Locator } from "@playwright/test";
+import { expect, test as base, type Locator, type Request, type Response } from "@playwright/test";
 
 interface DaemonEndpointRecord {
   base_url: string;
@@ -622,6 +622,74 @@ test("running A and historical C stay bound while working B is edited and adopte
       submissions.push(request.url());
   });
   const experiment = await startControlledExperiment(daemon.projectRoot);
+  const traffic: string[] = [];
+  const pending = new Map<Request, { id: number; start: number; label: string }>();
+  const started = performance.now();
+  let sequence = 0;
+  let phase = "observe running A";
+  const record = (request: Request, event: string) => {
+    try {
+      const now = performance.now();
+      if (event === "request") {
+        const path = new URL(request.url()).pathname;
+        const method = request.method();
+        const stage =
+          method === "GET" && /^\/api\/v1\/parameters\/branches\/[^/]+$/.test(path)
+            ? "working-table:branch"
+            : method === "POST" && path === "/api/v1/parameter-drafts/start"
+              ? "working-table:start"
+              : method === "GET" && /^\/api\/v1\/parameters\/revisions\/[^/]+$/.test(path)
+                ? "working-table:base"
+                : method === "GET" && /^\/api\/v1\/parameter-drafts\/[^/]+$/.test(path)
+                  ? "working-input:read"
+                  : method === "POST" && path === "/api/v1/experiment-launcher/preview"
+                    ? "preview:post"
+                    : undefined;
+        if (!stage) return;
+        pending.set(request, {
+          id: ++sequence,
+          start: now,
+          label: `B ${stage} phase=${phase} ${method} ${path}`.slice(0, 220),
+        });
+        if (pending.size > 120) pending.delete(pending.keys().next().value!);
+      }
+      const observed = pending.get(request);
+      if (!observed) return;
+      traffic.push(
+        `+${Math.round(now - started)}ms #${observed.id} ${observed.label} ${event} elapsed=${Math.round(now - observed.start)}ms`.slice(
+          0,
+          300,
+        ),
+      );
+      if (traffic.length > 120) traffic.shift();
+      if (event === "finished" || event.startsWith("failed")) pending.delete(request);
+    } catch {
+      // Observers must not interrupt requests or replace the test failure.
+    }
+  };
+  const onRequest = (request: Request) => record(request, "request");
+  const onResponse = (response: Response) => {
+    try {
+      record(response.request(), `response ${response.status()}`);
+    } catch {
+      // Responses may disappear during browser teardown.
+    }
+  };
+  const onFinished = (request: Request) => record(request, "finished");
+  const onFailed = (request: Request) => {
+    try {
+      const failure = request.failure()?.errorText ?? "";
+      // Keep only Chromium's error code, never an exception URL or other text.
+      const code = /^net::ERR_[A-Z_]+$/.test(failure) ? ` ${failure}` : "";
+      record(request, `failed${code}`);
+    } catch {
+      record(request, "failed");
+    }
+  };
+  b.on("request", onRequest);
+  b.on("response", onResponse);
+  b.on("requestfinished", onFinished);
+  b.on("requestfailed", onFailed);
   try {
     const runA = await waitForMarker(experiment.acceptedReady, experiment);
     expect(runA).not.toBe(runC);
@@ -674,12 +742,14 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       };
     const before = retained();
     await assertObservers();
+    phase = "open working table";
     await b.goto(`${daemon.baseUrl}/#configuration`);
     await b.getByLabel("Working parameter branch", { exact: true }).fill("starter");
     await b.getByRole("button", { name: "Open working table", exact: true }).click();
     await expect(scale).toBeVisible();
     const previewHashes: string[] = [];
     for (const value of ["7.25", "8.5"]) {
+      phase = `edit working input ${value}`;
       await b.getByRole("button", { name: "Configuration", exact: true }).click();
       await scale.fill(value);
       await b
@@ -690,6 +760,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       // Start may prepare internally; merely editing or previewing must not acquire.
       await expect(b.getByRole("button", { name: "Start acquisition", exact: true })).toBeEnabled();
       expect(submissions).toEqual([]);
+      phase = `preview working input ${value}`;
       const response = b.waitForResponse(
         (item) =>
           item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
@@ -727,7 +798,30 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(c).toHaveURL(cUrl);
     await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
     expect(submissions).toEqual([]);
+  } catch (error) {
+    try {
+      const body = await b
+        .locator("body")
+        .innerText({ timeout: 500 })
+        .catch(() => "unavailable");
+      const inFlight = [...pending.values()].slice(-20).map((item) => ({
+        id: item.id,
+        request: item.label,
+        elapsedMs: Math.round(performance.now() - item.start),
+      }));
+      const evidence = JSON.stringify({ phase, traffic, inFlight, body: body.slice(-8000) });
+      console.log("A/B/C failure diagnostics", evidence);
+      await info.attach("a-b-c-failure", { body: evidence, contentType: "application/json" });
+    } catch {
+      // Attachment/page access can fail during timeout or browser teardown.
+    }
+    throw error;
   } finally {
+    b.off("request", onRequest);
+    b.off("response", onResponse);
+    b.off("requestfinished", onFinished);
+    b.off("requestfailed", onFailed);
+    pending.clear();
     await finishControlledExperiment(experiment);
     await b.close();
     await c.close();
