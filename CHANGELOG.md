@@ -16,17 +16,17 @@ Scopecat 0.1.0（build 1）将实验准备、执行、结果分析、参数编�
 - **查看结果并继续分析**：跟踪实时测量、浏览多维切片，或在独立窗口打开结果。切换页面保留选中的运行、分析和实验输入。Notebook 只读代码片段可按精确 ID 找回保存结果，无需重新采集或分析。可执行运行适用的作者分析，按原设置重复支持重分析的已保存分析，并追溯参数建议的来源；分析不会采集数据或自动采用参数。
 - **在样品图旁编辑参数**：对象表单和完整参数表共用可恢复草稿，未填完的值也能保留。明确选择目标、配置和工作参数用于下一次实验，或保存命名版本；已提交实验保留当时的输入。采用参数候选前可比较和审阅，并保留来源与采用记录。
 - **从教程进入作者工作**：Help 提供基础实验、参数扫描、分组分析、计算和进阶校准 Notebook。Continue 返回原文件夹与保存结果，不覆盖编辑或重复测量。可在 Settings 注册自己的作者文件夹，也可用 `scopecat init DIRECTORY --topic TOPIC` 创建教程源码。
-- **备份与恢复应用数据**：数据与作者源码分开保存。空闲时可在 Settings 备份，当前格式的备份与恢复保留记录及源码身份；后台工作未结束时，重启和退出会要求先处理。旧数据导致启动失败时可明确选择重置，默认先备份到外部位置，备份失败则保留原数据。
+- **备份与恢复应用数据**：数据与作者源码分开保存。空闲时可在 Settings 备份，当前格式的备份与恢复保留记录及源码身份；后台工作未结束时，重启和退出会要求先处理。旧数据导致启动失败时可明确选择重置，默认先备份到外部位置，备份失败则保留原数据。Windows 重置不再因可重建索引文件被占用而阻断备份。
 
 #### 安装与使用限制
 
 安装器面向 Apple Silicon Mac（arm64）和 Windows x64。Mac 使用 ad-hoc 签名，没有 Developer ID 签名或 Apple 公证；Windows 安装器未签名。不要为启动应用关闭系统安全保护。Windows 需预装 **WebView2 Runtime**，安装器不会安装它。
 
-应用自带运行环境，无需系统 Python 即可离线启动。作者及后台执行环境使用独立的兼容 Python，由 uv 管理或由用户明确提供，并尊重工作区的 Python 与依赖声明。准备时通常需要联网下载 Python 和第三方依赖；安装器不是完整的离线作者工具包。准备失败或取消会保留原可用环境及诊断信息，不修改系统 PATH 或全局包。
+应用自带运行环境，无需系统 Python 即可离线启动。作者及后台执行环境使用独立的兼容 Python，由 uv 管理或由用户明确提供，并尊重工作区的 Python 与依赖声明。准备时通常需要联网下载 Python 和第三方依赖；安装器不是完整的离线作者工具包。准备失败或取消会保留原可用环境及诊断信息，不修改系统 PATH 或全局包。包含越界路径的准备资源会被拒绝。
 
-Notebook 编辑器需另行安装，例如 VS Code 及 Python、Jupyter 扩展，并选择 Scopecat 显示的作者解释器。实验室 SDK 也需另行准备。
+Notebook 编辑器需另行安装，例如 VS Code 及 Python、Jupyter 扩展，并选择 Scopecat 显示的作者解释器。误选应用内部 Python 时，会在加载作者代码前提示切换 Kernel。实验室 SDK 也需另行准备。
 
-已有原生检查只覆盖特定 Mac/Windows CI 环境，不能据此承诺最低系统版本或任意干净机器均可使用。Intel Mac、Windows ARM 和 Linux 安装器尚未验证。Windows 历史上的[启动健康检查超时（#465）](https://github.com/scopecat-project/scopecat/issues/465)和[启动后服务端点丢失（#553）](https://github.com/scopecat-project/scopecat/issues/553)仍是未归因风险；后续运行成功不代表已经修复，出现故障时请保留诊断信息。安装前请阅读[安装指南](https://scopecat-project.github.io/scopecat/getting-started/install/)。
+已有原生检查只覆盖特定 Mac/Windows CI 环境，不能据此承诺最低系统版本或任意干净机器均可使用。Intel Mac、Windows ARM 和 Linux 安装器尚未验证。Windows 历史上的[启动健康检查超时（#465）](https://github.com/scopecat-project/scopecat/issues/465)和[启动后服务端点丢失（#553）](https://github.com/scopecat-project/scopecat/issues/553)仍是未归因风险；后续运行成功不代表已经修复，出现故障时请保留诊断信息。另有一次 Windows 退出超时尚未归因；启用诊断时可保留退出阶段、进程身份和慢退出线程栈，诊断增强及后续验收通过不代表该风险已经修复。安装前请阅读[安装指南](https://scopecat-project.github.io/scopecat/getting-started/install/)。
 
 #### 升级与旧数据
 

@@ -9,10 +9,11 @@ import re
 import sys
 import zipfile
 from email.parser import BytesParser
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Protocol, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages/lab-tools/src"))
+from lab_tools.author_resources import PACKAGES as AUTHOR_PACKAGES
 from lab_tools.release_identity import read_release
 
 PACKAGES = frozenset(
@@ -79,6 +80,50 @@ def _check_hash(directory: Path, name: str, expected: object) -> str:
     return actual
 
 
+def _author_files(
+    bundle: dict[str, object],
+    platform: str,
+    wheels: dict[str, str],
+    hashes: dict[str, str],
+) -> None:
+    """Match the shipped projection, not the full build-time wheelhouse."""
+    files = _object(bundle.get("files"))
+    selected = {
+        f"wheels/{wheels[package.replace('_', '-')]}": hashes[
+            wheels[package.replace("_", "-")]
+        ]
+        for package in AUTHOR_PACKAGES
+    }
+    if {
+        name: digest for name, digest in files.items() if name.startswith("wheels/")
+    } != selected:
+        raise ValueError(f"Native author wheel inventory mismatch: {platform}")
+    if not {"author.json", "requirements.lock", "gui/index.html"} <= files.keys():
+        raise ValueError(f"Incomplete native author resources: {platform}")
+    uv = "uv.exe" if platform == "windows" else "uv"
+    allowed = {
+        "author.json",
+        "requirements.lock",
+        f"toolchain/{uv}",
+        "toolchain/LICENSE-APACHE",
+        "toolchain/LICENSE-MIT",
+        *selected,
+    }
+    for name, digest in files.items():
+        path = PurePosixPath(name)
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or "\\" in name
+            or PureWindowsPath(name).drive
+            or path.as_posix() != name
+            or not (name in allowed or name.startswith("gui/"))
+            or not isinstance(digest, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", digest)
+        ):
+            raise ValueError(f"Invalid native author resource: {name}")
+
+
 def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, object]:
     """Validate constituent manifests before constructing their release identity."""
     if not re.fullmatch(r"[a-f0-9]{40}", commit):
@@ -109,6 +154,7 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
         name: _check_hash(directory, name, digest) for name, digest in files.items()
     }
     found: set[str] = set()
+    package_wheels: dict[str, str] = {}
     for name in wheels:
         with zipfile.ZipFile(_asset(directory, name)) as archive:
             metadata = [
@@ -127,6 +173,7 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
         if not version.endswith(suffix) or ".dev" not in version:
             raise ValueError(f"Wheel release provenance mismatch: {name}")
         found.add(package)
+        package_wheels[package] = name
     if found != set(PACKAGES):
         raise ValueError("Incomplete wheel inventory")
     hashes["preview.json"] = _hash(preview_path)
@@ -140,7 +187,7 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
         bundle = _read(bundle_path)
         if (
             native.get("format") != 1
-            or bundle.get("format") != 1
+            or bundle.get("format") != 2
             or _object(native.get("sources")).get("public") != commit
             or native.get("sources") != bundle.get("sources")
             or native.get("target") != bundle.get("target")
@@ -151,9 +198,7 @@ def inventory(directory: Path, commit: str, release_file: Path) -> dict[str, obj
             or bundle.get("build_number") != identity.build_number
         ):
             raise ValueError(f"Native release identity mismatch: {platform}")
-        bundle_files = _object(bundle.get("files"))
-        if any(bundle_files.get(f"wheels/{name}") != hashes[name] for name in wheels):
-            raise ValueError(f"Native public wheel inventory mismatch: {platform}")
+        _author_files(bundle, platform, package_wheels, hashes)
         installer = native.get("installer")
         if (
             not isinstance(installer, str)
