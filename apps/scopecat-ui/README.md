@@ -11,7 +11,7 @@ pnpm install
 For source development, run from the public repository root:
 
 ```sh
-uv run --locked python -m lab_tools.dev
+uv run --locked python -m scripts.dev
 ```
 
 This opens the native desktop with Vite HMR and a real backend, in a retained

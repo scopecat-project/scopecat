@@ -77,7 +77,7 @@ def worker(root: Path, gui: Path) -> None:
 
 
 def measure(app: Path, destination: Path, repeats: int) -> None:
-    from lab_tools.bundle import inventory
+    from scopecat_app.bundle import inventory
 
     app = app.resolve()
     destination = destination.resolve()

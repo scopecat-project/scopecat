@@ -98,19 +98,19 @@ jobs:
         shell: bash
         run: |
           uv run --locked --group delivery pytest -v -n 0 \
-            packages/lab-tools/tests/test_acceptance_workspaces.py \
-            packages/lab-tools/tests/test_native_windows_probe.py \
-            packages/lab-tools/tests/test_cocoa_dependency.py \
-            packages/lab-tools/tests/test_windows_dependency.py \
-            packages/lab-tools/tests/test_author_environment.py \
-            packages/lab-tools/tests/test_desktop_platform.py \
-            packages/lab-tools/tests/test_desktop_session.py \
-            packages/lab-tools/tests/test_desktop_files.py \
-            packages/lab-tools/tests/test_installed_adapter_journey.py \
+            packages/scopecat-app/tests/test_acceptance_workspaces.py \
+            packages/scopecat-app/tests/test_native_windows_probe.py \
+            packages/scopecat-app/tests/test_cocoa_dependency.py \
+            packages/scopecat-app/tests/test_windows_dependency.py \
+            packages/scopecat-app/tests/test_author_environment.py \
+            packages/scopecat-app/tests/test_desktop_platform.py \
+            packages/scopecat-app/tests/test_desktop_session.py \
+            packages/scopecat-app/tests/test_desktop_files.py \
+            packages/scopecat-app/tests/test_installed_adapter_journey.py \
             packages/scopecat-instruments/tests/test_sdk_process.py \
             packages/scopecat-server/tests/test_instrument_worker.py \
             packages/scopecat-server/tests/storage/sqlite/test_run_repository.py::test_capture_import_is_idempotent_and_keeps_execution_tables_empty
-          uv run --locked python -m lab_tools.delivery "$RUNNER_TEMP/delivery"
+          uv run --locked python -m scripts.app_build.delivery "$RUNNER_TEMP/delivery"
           if [ "$RUNNER_OS" = "Windows" ]; then
             native_app="$RUNNER_TEMP/Scopecat"
             installer="$RUNNER_TEMP/Scopecat-Setup.exe"
@@ -118,7 +118,7 @@ jobs:
             native_app="$RUNNER_TEMP/Scopecat.app"
             installer="$RUNNER_TEMP/Scopecat.dmg"
           fi
-          uv run --locked python -m lab_tools.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
+          uv run --locked python -m scripts.app_build.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
           if [ "$RUNNER_OS" = "macOS" ]; then
             uv run --locked python scripts/verify_macos_desktop_exit.py "$native_app"
           fi
@@ -181,11 +181,11 @@ jobs:
       - name: Verify service recovery and process ownership
         run: >-
           uv run --locked pytest -q -n 0
-          packages/lab-tools/tests/test_application_runtime.py
-          packages/lab-tools/tests/test_data_reset.py
-          packages/lab-tools/tests/test_desktop_session.py
-          packages/lab-tools/tests/test_desktop_install.py
-          packages/lab-tools/tests/test_teaching_delivery.py
+          packages/scopecat-app/tests/test_application_runtime.py
+          packages/scopecat-app/tests/test_data_reset.py
+          packages/scopecat-app/tests/test_desktop_session.py
+          packages/scopecat-app/tests/test_desktop_install.py
+          packages/scopecat-app/tests/test_teaching_delivery.py
           packages/scopecat-server/tests/test_practice_workers.py
           packages/scopecat-server/tests/test_practice_lifecycle.py
 
@@ -501,12 +501,12 @@ jobs:
 
       - name: Build target-platform offline tutorial delivery
         run: >-
-          uv run --locked --group delivery python -m lab_tools.delivery
+          uv run --locked --group delivery python -m scripts.app_build.delivery
           dist/tutorial --public-artifacts dist/framework
 
       - name: Add the target-platform author toolchain
         run: >-
-          uv run --locked --group delivery python -m lab_tools.toolchain
+          uv run --locked --group delivery python -m scripts.app_build.toolchain
           dist/tutorial dist/tutorial-complete
 
       - name: Archive the complete offline delivery

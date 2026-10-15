@@ -146,7 +146,7 @@ starting the task. Supply the exact sample selectors needed by the final procedu
 Do not look up a newer branch head or setup to repair a conflict during replay.
 
 The **后台标定与最终发布** (`task-calibration`) independent course example under
-`packages/lab-teaching/src/lab_teaching/course_material` contains the
+`packages/scopecat-tutorials/src/scopecat_tutorials/course_material` contains the
 fit stages, task creation and final verification/publication procedure. The three
 requests show acceptance, scientific rejection and a concurrent branch conflict.
 

@@ -6,12 +6,15 @@ import argparse
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Protocol, cast
 
-from lab_tools.macos_signing import verify as verify_signature
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.app_build.macos_signing import verify as verify_signature
 
 
 def verify(installer: Path, home: Path, *, keep_work: bool = False) -> None:

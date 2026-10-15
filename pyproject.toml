@@ -8,14 +8,14 @@ dependencies = [
   "reference-lab",
   "scopecat",
   "scopecat-instruments",
-  "scopecat-lab-tools",
+  "scopecat-app",
   "scopecat-quantum",
   "scopecat-server",
   "scopecat-testkit[server]",
 ]
 
 [dependency-groups]
-platform-smoke = ["pytest>=9", "pytest-xdist>=3.8", "scopecat-lab-tools[desktop]"]
+platform-smoke = ["pytest>=9", "pytest-xdist>=3.8", "scopecat-app[desktop]"]
 dev = [
   "basedpyright>=1.39.6",
   "hypothesis>=6.155.7",
@@ -27,9 +27,9 @@ dev = [
   "ruff>=0.16.0",
   { include-group = "delivery" },
 ]
-delivery = ["scopecat-lab-tools[kernel,desktop]", "uv_build>=0.13,<0.14"]
+delivery = ["scopecat-app[kernel,desktop]", "uv_build>=0.13,<0.14"]
 delivery-build = ["pip>=25", "setuptools>=80", "wheel>=0.45"]
-delivery-notebook = ["scopecat-lab-tools[notebook]", { include-group = "delivery" }]
+delivery-notebook = ["scopecat-app[notebook]", { include-group = "delivery" }]
 docs = [
   "mkdocstrings-python>=2",
   "zensical>=0.0.43,<0.1",
@@ -42,8 +42,8 @@ notebook = [
 include = [
   "packages/scopecat/src",
   "packages/scopecat/tests",
-  "packages/lab-teaching/src",
-  "packages/lab-tools/src",
+  "packages/scopecat-tutorials/src",
+  "packages/scopecat-app/src",
   "packages/scopecat-server/src",
   "packages/scopecat-server/tests",
   "packages/scopecat-instruments/src",
@@ -58,7 +58,7 @@ include = [
   "testing/scopecat-testkit/src",
 ]
 exclude = [
-  "packages/lab-teaching/src/lab_teaching/course_material",
+  "packages/scopecat-tutorials/src/scopecat_tutorials/course_material",
   "**/__pycache__",
   ".pytest_cache",
   ".ruff_cache",
@@ -71,8 +71,8 @@ extraPaths = [
   "testing/fixtures/retained-signal/src",
   "packages/scopecat",
   "packages/scopecat/src",
-  "packages/lab-teaching/src",
-  "packages/lab-tools/src",
+  "packages/scopecat-tutorials/src",
+  "packages/scopecat-app/src",
   "packages/scopecat-server/src",
   "packages/scopecat-instruments",
   "packages/scopecat-instruments/src",
@@ -134,7 +134,10 @@ reportPrivateUsage = "none"
 
 [tool.importlinter]
 root_packages = [
-  "lab_tools",
+  "scripts",
+  "testing.app_support",
+  "scopecat_app",
+  "scopecat_tutorials",
   "scopecat",
   "scopecat_instruments",
   "scopecat_quantum",
@@ -144,6 +147,12 @@ root_packages = [
 exclude_type_checking_imports = true
 
 [[tool.importlinter.contracts]]
+name = "Installed packages do not depend on repository tooling"
+type = "forbidden"
+source_modules = ["scopecat_app", "scopecat_tutorials", "scopecat", "scopecat_server", "scopecat_instruments", "scopecat_quantum"]
+forbidden_modules = ["scripts", "testing.app_support"]
+
+[[tool.importlinter.contracts]]
 name = "Scopecat core remains domain neutral"
 type = "forbidden"
 source_modules = ["scopecat"]
@@ -151,7 +160,7 @@ forbidden_modules = [
   "scopecat_instruments",
   "scopecat_quantum",
   "scopecat_server",
-  "lab_tools",
+  "scopecat_app",
 ]
 allow_indirect_imports = true
 
@@ -159,7 +168,7 @@ allow_indirect_imports = true
 name = "Server does not depend on application and delivery tools"
 type = "forbidden"
 source_modules = ["scopecat_server"]
-forbidden_modules = ["lab_tools"]
+forbidden_modules = ["scopecat_app"]
 
 [[tool.importlinter.contracts]]
 name = "Inward layers do not depend on application or storage"
@@ -301,6 +310,7 @@ forbidden_modules = [
 allow_indirect_imports = true
 
 [tool.pytest]
+pythonpath = ["."]
 addopts = [
   "-n",
   "auto",
@@ -313,7 +323,7 @@ strict_config = true
 strict_markers = true
 testpaths = [
   "testing/reference_lab/tests",
-  "packages/lab-tools/tests",
+  "packages/scopecat-app/tests",
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/tests",
   "packages/scopecat-server/tests",
@@ -325,8 +335,8 @@ target-version = "py314"
 line-length = 88
 src = [
   "packages/scopecat/src",
-  "packages/lab-teaching/src",
-  "packages/lab-tools/src",
+  "packages/scopecat-tutorials/src",
+  "packages/scopecat-app/src",
   "packages/scopecat-server/src",
   "packages/scopecat-server/tests",
   "packages/scopecat-instruments/src",
@@ -388,11 +398,15 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/app_build/**/*.py" = ["RUF001", "RUF002", "RUF003", "TID251"]
+"scripts/dev.py" = ["RUF001", "RUF002", "RUF003", "TID251"]
+"testing/app_support/**/*.py" = ["RUF001", "RUF002", "RUF003"]
+"testing/app_support/**/*.ipynb" = ["RUF001", "RUF002", "RUF003", "E402"]
 "apps/scopecat-ui/scripts/export-openapi.py" = ["TID251"]
 "scripts/generate_reference_lab_acceptance.py" = ["TID251"]
 "testing/reference_lab/tests/**/*.py" = ["TID251"]
 "packages/scopecat-server/**/*.py" = ["TID251"]
-"packages/lab-tools/**/*.py" = ["TID251"]
+"packages/scopecat-app/**/*.py" = ["TID251"]
 "packages/scopecat/src/scopecat/program/point_domain.py" = [
   # PEP 695 has no explicit variance syntax; PointAxis[Never] needs covariance.
   "UP046",
@@ -426,69 +440,69 @@ max-complexity = 20
 extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantity"]
 
 [tool.scopecat-tests]
-roots = ["packages/lab-tools/tests", "testing/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
+roots = ["packages/scopecat-app/tests", "testing/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
 fast_paths = [
   "testing/reference_lab/tests/unit",
   "packages/scopecat/tests",
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/tests",
-  "packages/lab-tools/tests/test_test_tiers.py",
-  "packages/lab-tools/tests/test_dev.py",
-  "packages/lab-tools/tests/test_dev_host.py",
-  "packages/lab-tools/tests/test_preview.py",
-  "packages/lab-tools/tests/test_release_prepare.py",
-  "packages/lab-tools/tests/test_release_identity.py",
-  "packages/lab-tools/tests/test_release_assets.py",
-  "packages/lab-tools/tests/test_acceptance_workspaces.py",
-  "packages/lab-tools/tests/test_acceptance_artifacts.py",
-  "packages/lab-tools/tests/test_author_environment.py",
-  "packages/lab-tools/tests/test_author_resources.py",
-  "packages/lab-tools/tests/test_notebook_journey.py",
-  "packages/lab-tools/tests/test_calibration_history_material.py",
+  "packages/scopecat-app/tests/test_test_tiers.py",
+  "packages/scopecat-app/tests/test_dev.py",
+  "packages/scopecat-app/tests/test_dev_host.py",
+  "packages/scopecat-app/tests/test_preview.py",
+  "packages/scopecat-app/tests/test_release_prepare.py",
+  "packages/scopecat-app/tests/test_release_identity.py",
+  "packages/scopecat-app/tests/test_release_assets.py",
+  "packages/scopecat-app/tests/test_acceptance_workspaces.py",
+  "packages/scopecat-app/tests/test_acceptance_artifacts.py",
+  "packages/scopecat-app/tests/test_author_environment.py",
+  "packages/scopecat-app/tests/test_author_resources.py",
+  "packages/scopecat-app/tests/test_notebook_journey.py",
+  "packages/scopecat-app/tests/test_calibration_history_material.py",
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [
-  "packages/lab-tools/tests/test_native_console.py",
-  "packages/lab-tools/tests/test_windows_native_host.py",
-  "packages/lab-tools/tests/test_native_windows_probe.py",
-  "packages/lab-tools/tests/test_native_replacement.py",
-  "packages/lab-tools/tests/test_cocoa_dependency.py",
-  "packages/lab-tools/tests/test_windows_dependency.py",
-  "packages/lab-tools/tests/test_platform_files.py",
+  "packages/scopecat-app/tests/test_native_console.py",
+  "packages/scopecat-app/tests/test_windows_native_host.py",
+  "packages/scopecat-app/tests/test_native_windows_probe.py",
+  "packages/scopecat-app/tests/test_native_replacement.py",
+  "packages/scopecat-app/tests/test_cocoa_dependency.py",
+  "packages/scopecat-app/tests/test_windows_dependency.py",
+  "packages/scopecat-app/tests/test_platform_files.py",
   "packages/scopecat-server/tests",
-  "packages/lab-tools/tests/test_application_entry.py",
-  "packages/lab-tools/tests/test_desktop_install.py",
-  "packages/lab-tools/tests/test_desktop_files.py",
-  "packages/lab-tools/tests/test_author_notebook.py",
-  "packages/lab-tools/tests/test_notebook_managed_procedure.py",
-  "packages/lab-tools/tests/test_calibration_smoke.py",
-  "packages/lab-tools/tests/test_delivery_recipe.py",
-  "packages/lab-tools/tests/test_entry.py",
-  "packages/lab-tools/tests/test_first_run_journey.py",
-  "packages/lab-tools/tests/test_desktop_session.py",
-  "packages/lab-tools/tests/test_desktop_backup.py",
-  "packages/lab-tools/tests/test_desktop_platform.py",
-  "packages/lab-tools/tests/test_installed_tools.py",
-  "packages/lab-tools/tests/test_teaching_material.py",
-  "packages/lab-tools/tests/test_settings_journey.py",
-  "packages/lab-tools/tests/test_teaching_delivery.py",
+  "packages/scopecat-app/tests/test_application_entry.py",
+  "packages/scopecat-app/tests/test_desktop_install.py",
+  "packages/scopecat-app/tests/test_desktop_files.py",
+  "packages/scopecat-app/tests/test_author_notebook.py",
+  "packages/scopecat-app/tests/test_notebook_managed_procedure.py",
+  "packages/scopecat-app/tests/test_calibration_smoke.py",
+  "packages/scopecat-app/tests/test_delivery_recipe.py",
+  "packages/scopecat-app/tests/test_entry.py",
+  "packages/scopecat-app/tests/test_first_run_journey.py",
+  "packages/scopecat-app/tests/test_desktop_session.py",
+  "packages/scopecat-app/tests/test_desktop_backup.py",
+  "packages/scopecat-app/tests/test_desktop_platform.py",
+  "packages/scopecat-app/tests/test_installed_tools.py",
+  "packages/scopecat-app/tests/test_teaching_material.py",
+  "packages/scopecat-app/tests/test_settings_journey.py",
+  "packages/scopecat-app/tests/test_teaching_delivery.py",
 ]
 journey_paths = [
-  "packages/lab-tools/tests/test_application_notebook_kernel.py",
+  "packages/scopecat-app/tests/test_application_notebook_kernel.py",
   "packages/scopecat-server/tests/author_journeys",
-  "packages/lab-tools/tests/test_editing_teaching_journey.py",
-  "packages/lab-tools/tests/test_data_reset.py",
-  "packages/lab-tools/tests/test_platform_environment.py",
-  "packages/lab-tools/tests/test_array_maintenance.py",
-  "packages/lab-tools/tests/test_installed_adapter_journey.py",
-  "packages/lab-tools/tests/test_calibration_teaching_journey.py",
-  "packages/lab-tools/tests/test_task_calibration_teaching_journey.py",
-  "packages/lab-tools/tests/test_application_runtime.py",
-  "packages/lab-tools/tests/test_notebook_workspace_journey.py",
-  "packages/lab-tools/tests/test_unknown_parameter_authoring.py",
-  "packages/lab-tools/tests/test_minimal_teaching_journey.py",
-  "packages/lab-tools/tests/test_teaching_mean_iq_journey.py",
-  "packages/lab-tools/tests/test_grouped_teaching_journey.py",
+  "packages/scopecat-app/tests/test_editing_teaching_journey.py",
+  "packages/scopecat-app/tests/test_data_reset.py",
+  "packages/scopecat-app/tests/test_platform_environment.py",
+  "packages/scopecat-app/tests/test_array_maintenance.py",
+  "packages/scopecat-app/tests/test_installed_adapter_journey.py",
+  "packages/scopecat-app/tests/test_calibration_teaching_journey.py",
+  "packages/scopecat-app/tests/test_task_calibration_teaching_journey.py",
+  "packages/scopecat-app/tests/test_application_runtime.py",
+  "packages/scopecat-app/tests/test_notebook_workspace_journey.py",
+  "packages/scopecat-app/tests/test_unknown_parameter_authoring.py",
+  "packages/scopecat-app/tests/test_minimal_teaching_journey.py",
+  "packages/scopecat-app/tests/test_teaching_mean_iq_journey.py",
+  "packages/scopecat-app/tests/test_grouped_teaching_journey.py",
   "packages/scopecat-server/tests/test_runtime_binding.py",
   "testing/reference_lab/tests",
   "packages/scopecat-server/tests/test_snapshot_integration.py",
@@ -498,8 +512,8 @@ journey_paths = [
 # Windows run 34757173348: summed setup/call/teardown seconds per file.
 [tool.scopecat-tests.weights]
 # Ubuntu run 35891413427: newly classified qualification journeys.
-"packages/lab-tools/tests/test_array_maintenance.py" = 231.2
-"packages/lab-tools/tests/test_installed_adapter_journey.py" = 45.2
+"packages/scopecat-app/tests/test_array_maintenance.py" = 231.2
+"packages/scopecat-app/tests/test_installed_adapter_journey.py" = 45.2
 "testing/reference_lab/tests/test_acceptance.py" = 37.3
 "testing/reference_lab/tests/test_analysis_recovery.py" = 6.1
 "packages/scopecat-server/tests/author_journeys/test_author_launch.py" = 232.3
@@ -533,11 +547,11 @@ journey_paths = [
 "packages/scopecat-server/tests/test_snapshot_integration.py" = 44.7
 
 # Ubuntu core run 37631300685: files costing >=5s, summed setup/call/teardown.
-"packages/lab-tools/tests/test_calibration_smoke.py" = 24.8
-"packages/lab-tools/tests/test_first_run_journey.py" = 12.7
-"packages/lab-tools/tests/test_native_windows_probe.py" = 17.2
-"packages/lab-tools/tests/test_notebook_managed_procedure.py" = 9.0
-"packages/lab-tools/tests/test_settings_journey.py" = 6.1
+"packages/scopecat-app/tests/test_calibration_smoke.py" = 24.8
+"packages/scopecat-app/tests/test_first_run_journey.py" = 12.7
+"packages/scopecat-app/tests/test_native_windows_probe.py" = 17.2
+"packages/scopecat-app/tests/test_notebook_managed_procedure.py" = 9.0
+"packages/scopecat-app/tests/test_settings_journey.py" = 6.1
 "packages/scopecat-instruments/tests/test_generated_clients.py" = 11.3
 "packages/scopecat-instruments/tests/test_sdk_process.py" = 10.4
 "packages/scopecat-server/tests/test_author_environments.py" = 22.5
@@ -565,8 +579,8 @@ default-groups = ["dev"]
 package = false
 
 [tool.uv.sources]
-scopecat-lab-tools = { workspace = true }
-scopecat-lab-teaching = { workspace = true, editable = false }
+scopecat-app = { workspace = true }
+scopecat-tutorials = { workspace = true, editable = false }
 reference-lab = { workspace = true }
 scopecat = { workspace = true }
 scopecat-instruments = { workspace = true }
@@ -575,7 +589,7 @@ scopecat-server = { workspace = true }
 scopecat-testkit = { workspace = true }
 
 [tool.uv.workspace]
-exclude = ["testing/fixtures"]
+exclude = ["testing/fixtures", "testing/app_support"]
 members = [
   "packages/*",
   "testing/*",

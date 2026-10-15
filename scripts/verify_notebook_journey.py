@@ -26,15 +26,19 @@ from nbclient import NotebookClient
 from nbformat import NotebookNode
 from playwright.sync_api import Page, expect, sync_playwright
 
-from lab_teaching.lessons import LessonTopic
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.desktop import DesktopAPI
-from lab_tools.desktop_session import DesktopSession
-from lab_tools.notebook import kernel_command
-from lab_tools.notebook_io import notebook_io
-from lab_tools.notebook_journey import NotebookJourney, current
-from lab_tools.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.desktop import DesktopAPI
+from scopecat_app.desktop_session import DesktopSession
+from scopecat_app.notebook import kernel_command
+from scopecat_tutorials.lessons import LessonTopic
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from testing.app_support.notebook_io import notebook_io
+from testing.app_support.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
+
 from scopecat.daemon.views import RunSummary, RunSummaryPage
+from scopecat_app.notebook_journey import NotebookJourney, current
 
 if TYPE_CHECKING:
     import webview
@@ -76,7 +80,7 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
                     assert journey.notebook.is_file()
                     editor_files.append(str(journey.notebook))
 
-                with patch("lab_tools.notebook_journey.open_editor", record):
+                with patch("scopecat_app.notebook_journey.open_editor", record):
                     api.open_lesson_notebook(cast("LessonTopic", topic))
 
             expose("journeyOpen", editor)
@@ -121,7 +125,8 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             notebook_bytes = journey.notebook.read_bytes()
             material = (
                 Path(__file__).resolve().parents[1]
-                / "packages/lab-teaching/src/lab_teaching/course_material/lessons"
+                / "packages/scopecat-tutorials/src/scopecat_tutorials"
+                / "course_material/lessons"
             )
             for packaged, generated in (
                 ("parameters.ipynb", "notebooks/parameters.ipynb"),
@@ -135,7 +140,7 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
                     material / packaged
                 ).read_bytes(), (
                     "Installed teaching material differs from this checkout; run "
-                    "uv sync --locked --reinstall-package scopecat-lab-teaching"
+                    "uv sync --locked --reinstall-package scopecat-tutorials"
                 )
             notebook_sha256 = hashlib.sha256(notebook_bytes).hexdigest()
             shipped = nbformat.read(journey.notebook, as_version=4)
@@ -327,7 +332,7 @@ def verify_groups(
     ).read_bytes()
     material = (
         Path(__file__).resolve().parents[1]
-        / "packages/lab-teaching/src/lab_teaching/course_material"
+        / "packages/scopecat-tutorials/src/scopecat_tutorials/course_material"
     )
     for generated, packaged in (
         ("notebooks/groups.ipynb", "lessons/groups.ipynb"),

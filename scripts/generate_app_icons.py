@@ -17,7 +17,7 @@ from PIL import Image
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     source = root / "assets/branding/app-icon.svg"
-    output = root / "packages/lab-tools/src/lab_tools/icons"
+    output = root / "packages/scopecat-app/src/scopecat_app/icons"
     output.mkdir(exist_ok=True)
     renderer = shutil.which("magick")
     if renderer is None:

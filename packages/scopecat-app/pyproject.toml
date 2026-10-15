@@ -1,0 +1,35 @@
+[project]
+name = "scopecat-app"
+version = "0.2.0"
+description = "Scopecat desktop application and author environment lifecycle."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = ["fastapi>=0.116", "filelock>=3.18", "httpx2", "platformdirs>=4", "psutil>=7", "pydantic>=2", "rich>=15", "scopecat", "scopecat-instruments", "scopecat-tutorials", "scopecat-server", "typer>=0.20", "uv>=0.13,<0.14", "uvicorn>=0.35"]
+
+[project.scripts]
+scopecat = "scopecat_app.public_cli:main"
+
+[project.optional-dependencies]
+desktop = ["pywebview==6.2.1", "pystray>=0.19.5", "pillow>=11"]
+kernel = ["ipykernel>=6.30", "nbclient>=0.10", "nbformat>=5.10"]
+notebook = ["scopecat-app[kernel]", "jupyterlab>=4.4"]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint]
+# Chinese course resources are shipped alongside the English entry guide.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.uv.build-backend]
+module-name = "scopecat_app"
+
+[tool.uv.sources]
+scopecat = { workspace = true }
+scopecat-instruments = { workspace = true }
+scopecat-server = { workspace = true }
+scopecat-tutorials = { workspace = true }

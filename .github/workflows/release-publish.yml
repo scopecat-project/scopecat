@@ -143,18 +143,18 @@ jobs:
           path: ${{ runner.temp }}/preview
       # Keep each phase visible in the jobs API even if runner logs are lost.
       - name: Build delivery from the same public assets
-        run: uv run --locked --group delivery python -m lab_tools.delivery "$RUNNER_TEMP/delivery" --public-artifacts "$RUNNER_TEMP/preview" --release
+        run: uv run --locked --group delivery python -m scripts.app_build.delivery "$RUNNER_TEMP/delivery" --public-artifacts "$RUNNER_TEMP/preview" --release
       - name: Build native application and installer
         run: |
           mkdir "$RUNNER_TEMP/release-native"
-          installer_name=$(uv run --locked python -c 'from pathlib import Path; from lab_tools.bundle import target_identity; from lab_tools.release_identity import installer_filename, read_release; print(installer_filename(read_release(Path("release.toml")), target_identity()))')
+          installer_name=$(uv run --locked python -c 'from pathlib import Path; from scopecat_app.bundle import target_identity; from scripts.app_build.release_identity import installer_filename, read_release; print(installer_filename(read_release(Path("release.toml")), target_identity()))')
           installer="$RUNNER_TEMP/release-native/$installer_name"
           if [ "$RUNNER_OS" = Windows ]; then
             native_app="$RUNNER_TEMP/Scopecat"
           else
             native_app="$RUNNER_TEMP/Scopecat.app"
           fi
-          uv run --locked --group delivery python -m lab_tools.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
+          uv run --locked --group delivery python -m scripts.app_build.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
           echo "SCOPECAT_NATIVE_APP=$native_app" >> "$GITHUB_ENV"
           echo "SCOPECAT_NATIVE_INSTALLER=$installer" >> "$GITHUB_ENV"
       - name: Verify Mac desktop exit

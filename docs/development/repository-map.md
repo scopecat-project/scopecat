@@ -7,9 +7,9 @@ selected Python/WebView host. This map describes their existing implementation.
 | Path | Responsibility and dependencies |
 | --- | --- |
 | `packages/scopecat` | Domain-neutral authoring, SDK/client APIs, planning, execution and records. Does not import the server or application host. |
-| `packages/scopecat-server` | Project command composition, local HTTP/SSE transport, durable services/storage, execution and instrument worker ownership. Depends on core, not `lab_tools` or optional domain packages. |
-| `packages/lab-tools` | Installed application entry, native windows and long-lived application composition; also build/delivery and acceptance tools. Depends on core/server/instruments/teaching. These roles share a package but are not all build-time code. |
-| `packages/lab-teaching` | Maintained practice definitions and teaching resources consumed by ordinary author folders and scientific regression fixtures. |
+| `packages/scopecat-server` | Project command composition, local HTTP/SSE transport, durable services/storage, execution and instrument worker ownership. Depends on core, not `scopecat_app` or optional domain packages. |
+| `packages/scopecat-app` | Installed desktop/native bootstrap, lifecycle, author environment preparation and tutorial integration. Depends on core/server/instruments/tutorials; never on repository build or acceptance code. |
+| `packages/scopecat-tutorials` | Editable tutorial resources and generation code. Test project scaffolding belongs to `testing/app_support`. |
 | `packages/scopecat-instruments` | Typed instrument capabilities, drivers, transports and virtual devices. Vendor SDKs belong to their explicitly prepared environments. |
 | `packages/scopecat-quantum` | Hardware-independent quantum building blocks and target contracts. |
 | `apps/scopecat-ui` | React/Vite workbench loaded by the native host; owns its Node graph and component/browser checks. |
@@ -23,21 +23,21 @@ selected Python/WebView host. This map describes their existing implementation.
 
 | Role | Implementation / consumer |
 | --- | --- |
-| Wheel-installed command line | Within the installing Python environment, `scopecat` is owned by `scopecat-lab-tools` (`lab_tools.public_cli`). It composes server project commands with `app`, `notebook`, `teach` and tutorial `init --topic`, loading application implementations only on dispatch. |
+| Wheel-installed command line | Within the installing Python environment, `scopecat` is owned by `scopecat-app` (`scopecat_app.public_cli`). It exposes `app`, `notebook`, `teach` and `init` / `init --topic`, loading application implementations only on dispatch. Server maintenance is a separate module entry. |
 | Server-only development | `python -m scopecat_server.cli` retains project init/config, lifecycle, workspace registration, automation, diagnosis and snapshot commands. Installing only the server does not install the application console script. The retained pilot bundle uses this module entry for isolated-installation acceptance; its CI use does not establish a separate product commitment. |
-| Native entry and windows | `lab_tools.native_bootstrap` → `desktop` → `ApplicationRuntime`; window closure does not end retained execution. See [application host](architecture/application-host.md). |
+| Native entry and windows | `scopecat_app.native_bootstrap` → `desktop` → `ApplicationRuntime`; window closure does not end retained execution. See [application host](architecture/application-host.md). |
 | Long-lived ownership | `ApplicationRuntime` composes one application home; server lifecycle/runtime owns the durable writer and worker processes. Author folders do not imply per-source daemons. |
 | Author/SDK execution | `author_environment`, execution environment preparation and server worker admission keep user Python/vendor SDKs separate from application Python. Core APIs stay usable without importing the host/server. |
-| Build and delivery | `preview`, `delivery`, `native_package` assemble wheels, GUI and native payloads. `bundle.py` owns manifest/hash verification and offline installation and is copied as standalone `install.py`; it also supplies runtime helpers. It must remain usable without importing the application package. |
-| Acceptance | `lab_tools.verify_*`, native/desktop journey tests and acceptance workflows exercise isolated installations, homes and environments. Software results do not substitute for #616 human/editor/device observations. |
+| Build and delivery | `scripts/app_build` owns preview, delivery, native packaging, platform patches and offline installation. It assembles standalone `install.py` from the installed runtime integrity module and repository installer, with no duplicate implementation. `scopecat_app.author_resources` only reads/verifies resources; the build projection lives in scripts. |
+| Acceptance | `testing/app_support` and `scripts/verify_*`, native/desktop journey tests and acceptance workflows exercise isolated installations, homes and environments. Software results do not substitute for #616 human/editor/device observations. |
 | Teaching CLI | `scopecat init --topic` uses Help’s ordinary editable source generator. Settings or existing `app` author commands prepare/register the folder; no teaching service tasks are generated. |
 
 ### Teaching source convergence
 
-Help's supplied Notebook topics route (`notebook_journey.py` → `lab_teaching.lessons.install_lesson`)
+Help's supplied Notebook topics route (`notebook_journey.py` → `scopecat_tutorials.lessons.install_lesson`)
 generates editable Notebooks, experiment or procedure modules, `parameters.py`,
 `response.py`, `setup.py` and `workspace_app.py`; scan definitions also remain editable. Its
-experiment code does not import `lab_teaching` scientific definitions.
+experiment code does not import `scopecat_tutorials` scientific definitions.
 
 Help uses one `NotebookJourney` receipt shape and preparation/Continue path,
 keyed by the admitted topic. The original `learning/parameters.json` receipt
@@ -66,8 +66,8 @@ native editor bridge, installed-distribution and unfamiliar-user acceptance.
 The installed teaching package supplies generation resources, not hidden user
 experiment implementations for that lesson.
 
-The default `lab_teaching.project.create_project` and topic generation now share
-`lab_teaching.lessons.install_lesson`. New default folders contain the same editable
+The default `testing.app_support.project.create_project` and topic generation now share
+`scopecat_tutorials.lessons.install_lesson`. New default folders contain the same editable
 parameter declarations, initialization, response and experiment as the topic
 resources, plus local analysis/report helpers. `start.ipynb` and `reopen.ipynb`
 retain their scan, analysis and history exercises; analysis uses the run's retained
@@ -84,7 +84,7 @@ editable source and notebooks and use the application's data owner.
 The former `scopecat-lab` console, generated service tasks and standalone
 preparation/verification wrappers are removed. Existing standalone folders must
 keep their original software environment and data or explicitly transfer edits;
-there is no automatic migration. `lab_teaching.project` remains a small regression
+there is no automatic migration. `testing.app_support.project` remains a small regression
 fixture for scientific and kernel tests, without generated lifecycle tasks.
 
 `scripts/verify_teaching_delivery.py` runs installed Help acceptance, then checks
@@ -132,3 +132,37 @@ another package split or a different native host.
 Omit `--check` to regenerate the Python-produced fixtures. Review changes against
 the producer; resolve generated-file conflicts by regenerating from the resolved
 source. The [fixture map](reference-fixtures.md) describes their coverage.
+
+
+## Package and entry transition (#1067 / #1068)
+
+| Consumer | Current owner / migration |
+| --- | --- |
+| Desktop user | Installed Scopecat → Help. No global PATH setup or root teach menu. |
+| Wheel-installed author or application maintainer | `scopecat_app.public_cli`; `scopecat` remains the environment-local console. |
+| Server integrations and project maintenance | `python -m scopecat_server.cli`, including lifecycle, configuration, snapshots and diagnosis. |
+| Repository developer | `uv run --locked python -m scripts.dev`; native development hosts and resource producers live in `scripts/app_build`. |
+| CI / packaging / release consumers | `scripts.app_build.delivery`, `native_package`, `toolchain`, `preview` and the existing `scripts/release*.py` orchestration. |
+| Installed acceptance | `scripts/verify_*.py` consumes installed wheels and repository-only `testing/app_support`; helpers are not copied into application wheels. |
+| Internal processes | `scopecat_app.native_bootstrap`, application lifecycle and `service_runtime.py` remain installed; server and instrument workers retain their existing owners. |
+
+Distribution names are `scopecat-app` and `scopecat-tutorials`; imports are
+`scopecat_app` and `scopecat_tutorials`. Downstream source-development scripts,
+application integration tests, and dependency recipes using the previous names
+must explicitly select the new source/package set. Existing pinned release
+consumers continue using their selected artifacts; this change does not edit
+consumer pins or make old assets match the new names. Read-only downstream
+inspection found these migration points; downstream edits are separate work.
+
+Runtime `bundle.py` and `author_resources.py` retain resource verification and
+installation receipts needed after installation. Offline installer assembly and
+author-resource production belong to `scripts/app_build`. Developer resource
+identities include their build scripts and platform patches, so producer changes
+invalidate cached resources. Test scaffolding and Notebook verification live in
+`testing/app_support`; tutorials ship generation code and editable resources.
+
+The existing preview/UI and wheel asset collection remains available for consumer
+migration; renaming packages does not authorize publication or remove historical
+assets. Same-batch first-party release versions will follow the application under
+#1030, accepting the old 0.2 baseline rollback; implementing that version rule is
+a separate follow-up. Released v0.1.0 tags/assets remain untouched.

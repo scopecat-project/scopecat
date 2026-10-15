@@ -3,7 +3,7 @@ import { runInNewContext } from "node:vm";
 import { expect, it, vi } from "vitest";
 
 const script = readFileSync(
-  new URL("../../../../../packages/lab-tools/src/lab_tools/desktop_page.js", import.meta.url),
+  new URL("../../../../../packages/scopecat-app/src/scopecat_app/desktop_page.js", import.meta.url),
   "utf8",
 );
 

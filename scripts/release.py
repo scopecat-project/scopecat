@@ -7,13 +7,16 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import Protocol, cast
 
 from packaging.version import Version
 
-from lab_tools.release_identity import ReleaseIdentity, read_release
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.app_build.release_identity import ReleaseIdentity, read_release
 
 
 def version_key(version: str) -> Version:

@@ -13,18 +13,21 @@ import traceback
 from pathlib import Path
 from typing import Protocol, cast
 
-from lab_tools.bundle import file_hash, inventory
-from lab_tools.macos_signing import verify as verify_signature
+from scopecat_app.bundle import file_hash, inventory
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.app_build.macos_signing import verify as verify_signature
 
 RUNTIME_CHECK = r"""
 import json, os, subprocess, sys, threading
 from pathlib import Path
 from types import SimpleNamespace
 import httpx2
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.author_environment import create_client_environment
-from lab_tools.desktop import DesktopAPI
-from lab_tools.desktop_session import DesktopSession
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.author_environment import create_client_environment
+from scopecat_app.desktop import DesktopAPI
+from scopecat_app.desktop_session import DesktopSession
 from scopecat_server.scaffold import write_author_scaffold
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
@@ -61,7 +64,8 @@ try:
     assert not (workspace / ".scopecat-python").exists()
     subprocess.run([str(client), "-I", "-c", '''
 from importlib.util import find_spec
-for name in ("scopecat_server", "lab_tools", "lab_teaching", "webview", "jupyterlab"):
+for name in ("scopecat_server", "scopecat_app", "scopecat_tutorials",
+             "webview", "jupyterlab"):
     assert find_spec(name) is None, name
 import pip
 '''], check=True)
@@ -90,7 +94,7 @@ import sys
 import scopecat as sc
 from scopecat.measurements.dataset import Dataset
 
-for name in ("scopecat_server", "lab_tools", "lab_teaching", "scopecat_lab"):
+for name in ("scopecat_server", "scopecat_app", "scopecat_tutorials", "scopecat_lab"):
     assert find_spec(name) is None, name
 
 @dataclass(frozen=True)
@@ -117,9 +121,9 @@ DATA_CHECK = r"""
 import json, subprocess, sys
 from pathlib import Path
 import httpx2
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.bundle import file_hash
-from lab_tools.desktop_files import export_run, import_capture, save_capture
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.bundle import file_hash
+from scopecat_app.desktop_files import export_run, import_capture, save_capture
 
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")

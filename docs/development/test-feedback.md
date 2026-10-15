@@ -168,8 +168,8 @@ client/execution Python, checks existing-folder and invalid-interpreter retries,
 and executes the starter in its own kernel.
 
 ```sh
-uv run --locked python -m lab_tools.delivery /tmp/ordinary-delivery
-uv run --locked python -m lab_tools.toolchain /tmp/ordinary-delivery /tmp/ordinary-payload
+uv run --locked python -m scripts.app_build.delivery /tmp/ordinary-delivery
+uv run --locked python -m scripts.app_build.toolchain /tmp/ordinary-delivery /tmp/ordinary-payload
 uv run --locked python scripts/verify_ordinary_author.py /tmp/ordinary-evidence /tmp/ordinary-payload
 ```
 

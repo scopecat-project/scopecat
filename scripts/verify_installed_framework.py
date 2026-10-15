@@ -60,7 +60,7 @@ def main() -> None:
     uv = shutil.which("uv")
     if uv is None:
         raise RuntimeError("uv is required to create the isolated installation")
-    from lab_tools.preview import read_preview, unpack_gui
+    from scripts.app_build.preview import read_preview, unpack_gui
 
     _ = read_preview(bundle / "preview.json")
     manifest = cast("_Manifest", json.loads((bundle / "preview.json").read_text()))
@@ -186,8 +186,8 @@ def _installed_journey(bundle: Path, gui: Path) -> None:
     assert Path(scopecat.__file__).is_relative_to(Path(sys.prefix))
     assert importlib.util.find_spec("reference_lab") is None
     assert importlib.util.find_spec("scopecat_testkit") is None
-    assert importlib.util.find_spec("lab_tools") is None
-    assert importlib.util.find_spec("lab_teaching") is None
+    assert importlib.util.find_spec("scopecat_app") is None
+    assert importlib.util.find_spec("scopecat_tutorials") is None
     assert shutil.which("scopecat") is None
     assert shutil.which("node") is None
     manifest = cast("_Manifest", json.loads((bundle / "preview.json").read_text()))

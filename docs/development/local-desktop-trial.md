@@ -19,8 +19,8 @@ Jupyter extensions. Users of an already built app do not need these build tools.
 ```sh
 uv sync --locked
 SCOPECAT_TRIAL="$(mktemp -d "$HOME/scopecat-local.XXXXXX")"
-uv run --locked python -m lab_tools.delivery "$SCOPECAT_TRIAL/delivery"
-uv run --locked python -m lab_tools.native_package "$SCOPECAT_TRIAL/delivery" "$SCOPECAT_TRIAL/Scopecat.app"
+uv run --locked python -m scripts.app_build.delivery "$SCOPECAT_TRIAL/delivery"
+uv run --locked python -m scripts.app_build.native_package "$SCOPECAT_TRIAL/delivery" "$SCOPECAT_TRIAL/Scopecat.app"
 open -n "$SCOPECAT_TRIAL/Scopecat.app" --args --home "$SCOPECAT_TRIAL/home"
 ```
 
@@ -45,7 +45,7 @@ issue or PR, not in this reusable startup guide.
 | Goal | Entry and boundary |
 | --- | --- |
 | Native desktop with ordinary Settings preparation | The packaged `.app` above; package-owned Python and author-environment resources |
-| Daily native desktop with HMR | `uv run --locked python -m lab_tools.dev`; retained worktree home, real backend and Settings resources; [daily usage](public-preview.md#daily-source-desktop) |
+| Daily native desktop with HMR | `uv run --locked python -m scripts.dev`; retained worktree home, real backend and Settings resources; [daily usage](public-preview.md#daily-source-desktop) |
 | Inspect or maintain an existing backend | `scopecat app --home APPLICATION_STATE --action status`; acts on that explicit application owner, without a separate daemon per author folder |
 
 The [Vite guide](public-preview.md#daily-source-desktop) describes frontend

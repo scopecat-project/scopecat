@@ -1,7 +1,7 @@
 # 同一个实验，隔次打开继续做
 
 面向熟悉 Python 的作者，使用 [首次实验](../getting-started/quickstart.md) 创建的合成信号目录；
-不连接真实设备。开发者从公库运行 `uv run --locked python -m lab_tools.dev`，
+不连接真实设备。开发者从公库运行 `uv run --locked python -m scripts.dev`，
 需要隔离试用时使用该入口的 `--home /absolute/path/to/dev-trial`，下次沿用同一路径。
 
 这是熟悉 Python 作者可执行的一条路径：下面仍需手工填写两个 run ID，并编写

@@ -45,7 +45,7 @@ import json, os, sys
 from pathlib import Path
 from nbclient import NotebookClient
 from nbformat import v4, write
-from lab_tools.notebook import kernel_command
+from scopecat_app.notebook import kernel_command
 root = Path(sys.argv[1])
 snippets = json.loads((root / "copied.json").read_text())
 _, environment = kernel_command(root, source_path=False)

@@ -16,8 +16,8 @@ from typing import cast, override
 
 import psutil
 
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.bundle import file_hash
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.bundle import file_hash
 from scopecat_server.validation_process import (  # noqa: TID251 - owned acceptance hosts
     terminate_validation_process_tree,
 )
@@ -42,7 +42,7 @@ import AppKit, Foundation, WebKit
 from PyObjCTools import AppHelper
 import webview
 from webview.platforms import cocoa
-from lab_tools.cocoa_dependency import RESULT_SHA256, VERSION
+from scripts.app_build.cocoa_dependency import RESULT_SHA256, VERSION
 
 stage, output, origin, base_url = sys.argv[1:]
 output = Path(output)

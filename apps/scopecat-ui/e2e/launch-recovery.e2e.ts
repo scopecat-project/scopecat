@@ -34,7 +34,7 @@ test("raw experiment input, conflicts and exact original submission survive rest
     python(
       `from pathlib import Path
 import sys
-from lab_tools.application_runtime import ApplicationRuntime
+from scopecat_app.application_runtime import ApplicationRuntime
 runtime = ApplicationRuntime(Path(sys.argv[1]))
 runtime.stop()
 print(runtime.start().base_url)`,
@@ -47,7 +47,7 @@ print(runtime.start().base_url)`,
 import json, sys
 from pathlib import Path
 import scopecat as sc
-from lab_tools.application_runtime import ApplicationRuntime
+from scopecat_app.application_runtime import ApplicationRuntime
 from scopecat_server.scaffold import write_author_scaffold
 runtime = ApplicationRuntime(Path(sys.argv[1]))
 source = Path(sys.argv[2])
@@ -185,7 +185,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     python(
       `from pathlib import Path
 import sys
-from lab_tools.application_runtime import ApplicationRuntime
+from scopecat_app.application_runtime import ApplicationRuntime
 ApplicationRuntime(Path(sys.argv[1])).stop()`,
       home,
     );

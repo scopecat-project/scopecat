@@ -15,10 +15,10 @@ Stop the daemon and any separately launched procedure or automation workers, and
 finish editing the project source before capture:
 
 ```sh
-scopecat stop my-lab
-scopecat snapshot create my-lab backups/my-lab-2026-09-08
-scopecat snapshot verify backups/my-lab-2026-09-08
-scopecat snapshot restore backups/my-lab-2026-09-08 recovered-lab
+python -m scopecat_server.cli stop my-lab
+python -m scopecat_server.cli snapshot create my-lab backups/my-lab-2026-09-08
+python -m scopecat_server.cli snapshot verify backups/my-lab-2026-09-08
+python -m scopecat_server.cli snapshot restore backups/my-lab-2026-09-08 recovered-lab
 ```
 
 The snapshot's parent directory must exist. Creation requires a new destination

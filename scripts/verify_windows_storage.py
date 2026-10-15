@@ -16,8 +16,8 @@ from typing import cast, override
 
 import psutil
 
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.bundle import file_hash
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.bundle import file_hash
 from scopecat_server.validation_process import (  # noqa: TID251 - owned acceptance hosts
     terminate_validation_process_tree,
 )
@@ -35,7 +35,9 @@ from pathlib import Path
 from urllib.parse import urlencode
 from verify_native_windows import require_hosted_runner, read_decision_draft
 from verify_windows_storage import require_observation
-from lab_tools.windows_dependency import VERSION, RESULT_SHA256, WINFORMS_SHA256
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.app_build.windows_dependency import VERSION, RESULT_SHA256, WINFORMS_SHA256
 
 require_hosted_runner(Path(sys.argv[2]).parent)
 assert sys.platform == "win32"

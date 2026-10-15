@@ -367,7 +367,7 @@ with sc.open_capture(sys.argv[1]) as capture:
     report = capture.published_analysis("fit").artifact("report").text()
     assert report == "four observations"
 for name in sys.modules:
-    assert not name.startswith(("scopecat_server", "lab_tools", "lab_adapter"))
+    assert not name.startswith(("scopecat_server", "scopecat_app", "lab_adapter"))
 """,
             str(output),
         ],
@@ -730,7 +730,7 @@ from pathlib import Path
 class ForbidServer:
     def find_spec(self, fullname, path=None, target=None):
         if fullname.split('.')[0] in {
-            'scopecat_server', 'lab_tools', 'reference_lab', 'scopecat_lab_adapter'
+            'scopecat_server', 'scopecat_app', 'reference_lab', 'scopecat_lab_adapter'
         }:
             raise AssertionError('reading data must not import the execution server')
 sys.meta_path.insert(0, ForbidServer())

@@ -8,7 +8,7 @@ export default defineConfig(({ mode, command }) => {
   let daemonOrigin: string | undefined;
   if (command === "serve" && mode !== "test") {
     if (!env.SCOPECAT_DEV_ENDPOINT_FILE) {
-      throw new Error("Start source development with uv run --locked python -m lab_tools.dev.");
+      throw new Error("Start source development with uv run --locked python -m scripts.dev.");
     }
     daemonOrigin = "http://127.0.0.1:1";
   }

@@ -1,6 +1,6 @@
 # Scopecat Server
 
-The installed application console `scopecat` belongs to `scopecat-lab-tools`.
+The installed application console `scopecat` belongs to `scopecat-app`.
 Server-only development uses `python -m scopecat_server.cli` for project commands;
 the server never imports the application host or delivery tools.
 
@@ -126,7 +126,7 @@ dependency check is not a separate desktop product.
 
 Commands use the environment's `python -m scopecat_server.cli`; `scopecat app`,
 `notebook`, `teach` and tutorial `init --topic` belong to an installation containing
-`scopecat-lab-tools`. Previous server-only callers of `scopecat COMMAND` must change
+`scopecat-app`. Previous server-only callers of `scopecat COMMAND` must change
 to the module entry. Complete application installations keep `scopecat COMMAND`.
 
 Build and verify artifacts from the current committed source:

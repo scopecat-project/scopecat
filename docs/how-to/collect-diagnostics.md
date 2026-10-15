@@ -1,11 +1,11 @@
 # Collect local command diagnostics
 
-Use `scopecat diagnose` to retain evidence from an explicitly selected command.
+Use `python -m scopecat_server.cli diagnose` to retain evidence from an explicitly selected command.
 It requires no laboratory project, private adapter, or reference lab. For a
 small public-only check, run:
 
 ```sh
-scopecat diagnose --output diagnostics-first -- python -c "print('diagnostic ready')"
+python -m scopecat_server.cli diagnose --output diagnostics-first -- python -c "print('diagnostic ready')"
 ```
 
 Use the Python executable from the environment you want to inspect. The output

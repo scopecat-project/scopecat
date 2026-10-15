@@ -37,7 +37,7 @@ test("ordinary author loop recovers a lost submission without collecting again",
 import json, sys
 from pathlib import Path
 import scopecat as sc
-from lab_tools.application_runtime import ApplicationRuntime
+from scopecat_app.application_runtime import ApplicationRuntime
 from scopecat_server.scaffold import write_author_scaffold
 runtime = ApplicationRuntime(Path(sys.argv[1]))
 source = Path(sys.argv[2])
@@ -166,7 +166,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     python(
       `from pathlib import Path
 import sys
-from lab_tools.application_runtime import ApplicationRuntime
+from scopecat_app.application_runtime import ApplicationRuntime
 ApplicationRuntime(Path(sys.argv[1])).stop()`,
       home,
     );

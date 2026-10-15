@@ -16,8 +16,9 @@ import tomllib
 from pathlib import Path
 from typing import Protocol, cast
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages/lab-tools/src"))
-from lab_tools.release_identity import read_source_identity
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.app_build.release_identity import read_source_identity
 
 
 class Arguments(Protocol):
@@ -31,8 +32,8 @@ PACKAGES = (
     "packages/scopecat-server",
     "packages/scopecat-instruments",
     "packages/scopecat-quantum",
-    "packages/lab-tools",
-    "packages/lab-teaching",
+    "packages/scopecat-app",
+    "packages/scopecat-tutorials",
     "testing/scopecat-testkit",
 )
 

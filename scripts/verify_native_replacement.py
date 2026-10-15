@@ -12,13 +12,13 @@ import tempfile
 from pathlib import Path
 from typing import Protocol, cast
 
-from lab_tools.bundle import file_hash, inventory
+from scopecat_app.bundle import file_hash, inventory
 
 SEED = r'''
 import json, subprocess, sys
 from pathlib import Path
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.author_environment import (
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.author_environment import (
     create_client_environment, prepare_execution_environment,
 )
 from scopecat_server.scaffold import write_author_scaffold
@@ -61,7 +61,7 @@ print("PASS: original user Python reads the original measurement without reacqui
 CHECK = r"""
 import subprocess, sys
 from pathlib import Path
-from lab_tools.application_runtime import ApplicationRuntime
+from scopecat_app.application_runtime import ApplicationRuntime
 home = Path(sys.argv[1])
 runtime = ApplicationRuntime(home / "data")
 assert runtime.source(home / "authors") == (home / "source-id.txt").read_text()
@@ -89,7 +89,7 @@ def installation_selection(
             "-c",
             (
                 "from pathlib import Path; import json, sys; "
-                "from lab_tools.application_runtime import ApplicationRuntime; "
+                "from scopecat_app.application_runtime import ApplicationRuntime; "
                 "runtime = ApplicationRuntime(Path(sys.argv[1]) / 'data'); "
                 "print(json.dumps(str(runtime.selection)))"
             ),

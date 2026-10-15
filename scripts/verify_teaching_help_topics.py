@@ -22,11 +22,11 @@ from unittest.mock import patch
 import httpx2
 from playwright.sync_api import expect, sync_playwright
 
-from lab_teaching.lessons import LessonTopic
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.desktop import DesktopAPI
-from lab_tools.desktop_session import DesktopSession
-from lab_tools.notebook_journey import NotebookJourney, current
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.desktop import DesktopAPI
+from scopecat_app.desktop_session import DesktopSession
+from scopecat_app.notebook_journey import NotebookJourney, current
+from scopecat_tutorials.lessons import LessonTopic
 
 if TYPE_CHECKING:
     import webview
@@ -73,12 +73,12 @@ def verify(work: Path, static: Path) -> None:
         session.connected(endpoint)
         before = runs(endpoint)
         with (
-            patch("lab_tools.notebook_journey.create_client_environment", provision),
+            patch("scopecat_app.notebook_journey.create_client_environment", provision),
             patch(
-                "lab_tools.notebook_journey.prepare_execution_environment",
+                "scopecat_app.notebook_journey.prepare_execution_environment",
                 return_value=Path(sys.executable),
             ) as execution,
-            patch("lab_tools.notebook_journey.open_editor", record),
+            patch("scopecat_app.notebook_journey.open_editor", record),
             sync_playwright() as driver,
         ):
             browser = driver.chromium.launch(

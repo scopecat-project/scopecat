@@ -12,7 +12,7 @@ from typing import cast
 
 
 def verify(bundle: Path, destination: Path) -> None:
-    from lab_tools.bundle import configure_console
+    from scopecat_app.bundle import configure_console
 
     configure_console()
     bundle, destination = bundle.resolve(), destination.resolve()
@@ -84,7 +84,7 @@ def verify(bundle: Path, destination: Path) -> None:
     )
     material = (
         Path(__file__).resolve().parents[1]
-        / "packages/lab-teaching/src/lab_teaching/course_material"
+        / "packages/scopecat-tutorials/src/scopecat_tutorials/course_material"
     )
     for target, resource in (
         ("notebooks/compute.ipynb", "lessons/compute.ipynb"),

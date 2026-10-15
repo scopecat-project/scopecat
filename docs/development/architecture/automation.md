@@ -176,7 +176,7 @@ schedule is idempotent; changing its exact content under the same schedule ID is
 a conflict. Due-time processing never rebuilds intent from the active
 configuration or the worker's current Python environment.
 
-`scopecat automation work PROJECT` runs the project-owned Python worker. The old
+`python -m scopecat_server.cli automation work PROJECT` runs the project-owned Python worker. The old
 `--working-point` option and application-level cohort/publication registries are
 retired. Scientific targets and publication destinations belong to each explicit
 procedure request. Workers remain processes separate from the daemon. Each

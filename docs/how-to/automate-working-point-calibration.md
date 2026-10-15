@@ -1,6 +1,6 @@
 # Working-point cohort automation is retired
 
-The former `scopecat automation work --working-point ...` workflow and application
+The former `python -m scopecat_server.cli automation work --working-point ...` workflow and application
 cohort/publication registries are retired development interfaces. They coupled
 scientific scope, parameter history and automatic freshness to a saved full
 configuration. New workers do not enroll or drain these cohorts automatically.
