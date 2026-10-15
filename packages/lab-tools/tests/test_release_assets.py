@@ -94,6 +94,15 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def installer_name(platform: str) -> str:
+    from lab_tools.release_identity import ReleaseIdentity, installer_filename
+
+    return installer_filename(
+        ReleaseIdentity("0.3.0-rc.1", 9),
+        {**target_identity(), "platform": assets.NATIVE[platform][0]},
+    )
+
+
 @pytest.fixture
 def release(tmp_path: Path) -> tuple[Path, Path]:
     root = tmp_path / "assets"
@@ -124,8 +133,8 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
             "files": files,
         },
     )
-    for platform, (target, suffix) in assets.NATIVE.items():
-        installer = root / f"Scopecat-{platform}{suffix}"
+    for platform, (target, _suffix) in assets.NATIVE.items():
+        installer = root / installer_name(platform)
         installer.write_bytes(platform.encode())
         bundle = {
             "format": 1,
@@ -192,18 +201,20 @@ def test_offline_assemble_verify_and_no_overwrite(release: tuple[Path, Path]) ->
     assert assets.verify(root, SHA, config) == result
     document = json.loads(result.read_text())
     assert document["version"] == "0.3.0-rc.1"
-    assert len(document["files"]) == 15
+    assert len(document["files"]) == 11
     with pytest.raises(FileExistsError, match="never overwrite"):
         assets.assemble(root, SHA, config)
 
 
 @pytest.mark.parametrize(
-    "name", ["scopecat-ui.zip", "Scopecat-macos.dmg", "windows-bundle.json"]
+    "name", ["scopecat-ui.zip", installer_name("macos"), "windows-bundle.json"]
 )
 def test_missing_assets_fail(release: tuple[Path, Path], name: str) -> None:
     root, config = release
     (root / name).unlink()
-    with pytest.raises(ValueError, match="Missing asset"):
+    with pytest.raises(
+        ValueError, match=r"Missing asset|Incomplete native qualification"
+    ):
         assets.assemble(root, SHA, config)
     assert not (root / "release.json").exists()
 
@@ -212,7 +223,7 @@ def test_wrong_commit_and_corrupt_hash_fail(release: tuple[Path, Path]) -> None:
     root, config = release
     with pytest.raises(ValueError, match="identity mismatch"):
         assets.assemble(root, "b" * 40, config)
-    (root / "Scopecat-windows.exe").write_bytes(b"corrupt")
+    (root / installer_name("windows")).write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="checksum mismatch"):
         assets.assemble(root, SHA, config)
 
@@ -276,7 +287,7 @@ def test_release_manifest_tampering_fails(release: tuple[Path, Path]) -> None:
     root, config = release
     path = assets.assemble(root, SHA, config)
     document = json.loads(path.read_text())
-    document["files"].pop("Scopecat-windows.exe")
+    document["files"].pop(installer_name("windows"))
     write_json(path, document)
     with pytest.raises(ValueError, match="manifest differs"):
         assets.verify(root, SHA, config)
@@ -430,3 +441,75 @@ def test_native_recipe_requires_a_sha256_digest(release):
     write_json(path, document)
     with pytest.raises(ValueError, match="Invalid native author resource"):
         assets.assemble(root, SHA, config)
+
+
+def test_export_uses_real_projection_and_keeps_preview_consumers(release, tmp_path):
+    from lab_tools.preview import read_preview
+
+    root, config = release
+    assets.assemble(root, SHA, config)
+    destination = tmp_path / "published"
+    manifest = assets.export(root, destination, SHA, config)
+    assert assets.verify(destination, SHA, config) == manifest
+    document = json.loads(manifest.read_bytes())
+    assert len(list(destination.iterdir())) == 12
+    assert set(document["files"]) == {p.name for p in destination.iterdir()} - {
+        "release.json"
+    }
+    assert len(document["qualification"]) == 4
+    assert not list(destination.glob("*-bundle.json"))
+    assert not list(destination.glob("*-native-release.json"))
+    preview = read_preview(destination / document["preview"]["file"])
+    assert assets._hash(destination / "preview.json") == document["preview"]["sha256"]
+    assert set(preview["packages"]) == assets.PACKAGES
+    for name, digest in preview["files"].items():
+        assert assets._hash(destination / name) == digest == document["files"][name]
+    for installer in document["installers"].values():
+        assert assets._hash(destination / installer["file"]) == installer["sha256"]
+    with pytest.raises(FileExistsError):
+        assets.export(root, destination, SHA, config)
+
+
+@pytest.mark.parametrize(
+    "change", ["evidence", "installer", "extra", "missing", "inventory"]
+)
+def test_export_rejects_tampering(release, tmp_path, change):
+    root, config = release
+    assets.assemble(root, SHA, config)
+    destination = tmp_path / "published"
+    manifest = assets.export(root, destination, SHA, config)
+    document = json.loads(manifest.read_bytes())
+    if change == "evidence":
+        document["qualification"]["macos-bundle.json"] += " "
+    elif change == "installer":
+        name = document["installers"]["macos"]["file"]
+        (destination / name).write_bytes(b"corrupt")
+    elif change == "extra":
+        (destination / "macos-bundle.json").write_text("{}")
+    elif change == "missing":
+        del document["qualification"]["macos-bundle.json"]
+    else:
+        document["installers"]["macos"]["file"] = "other.dmg"
+    write_json(manifest, document)
+    with pytest.raises(
+        ValueError, match=r"checksum mismatch|qualification evidence|manifest differs"
+    ):
+        assets.verify(destination, SHA, config)
+
+
+def test_export_preserves_windows_evidence_bytes(release, tmp_path):
+    root, config = release
+    bundle = root / "windows-bundle.json"
+    bundle.write_bytes(
+        json.dumps(json.loads(bundle.read_bytes()), indent=2)
+        .replace("\n", "\r\n")
+        .encode()
+    )
+    native = root / "windows-native-release.json"
+    document = json.loads(native.read_bytes())
+    document["bundle_sha256"] = assets._hash(bundle)
+    write_json(native, document)
+    assets.assemble(root, SHA, config)
+    destination = tmp_path / "published"
+    assets.export(root, destination, SHA, config)
+    assets.verify(destination, SHA, config)

@@ -79,3 +79,21 @@ def read_source_identity(path: Path, *, release: bool = False) -> ReleaseIdentit
     if not release and not path.exists():
         return ReleaseIdentity("0.0.0", 0)
     return read_release(path, require_release=release)
+
+
+def installer_filename(identity: ReleaseIdentity, target: dict[str, str]) -> str:
+    """Name an installer from its qualified target, never the assembly host."""
+    identity.require_release()
+    platforms = {"darwin": ("macos", ".dmg"), "win32": ("windows", ".exe")}
+    architectures = {
+        "amd64": "x86_64",
+        "x86_64": "x86_64",
+        "aarch64": "arm64",
+        "arm64": "arm64",
+    }
+    try:
+        platform, suffix = platforms[target["platform"]]
+        architecture = architectures[target["machine"].lower()]
+    except KeyError as error:
+        raise ValueError("Unsupported native installer target") from error
+    return f"Scopecat-{identity.version}-{platform}-{architecture}{suffix}"

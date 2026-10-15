@@ -114,6 +114,11 @@ jobs:
         run: >-
           uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
           packages/lab-tools/tests/test_windows_native_host.py
+      - name: Verify release projection and target names
+        run: >-
+          uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
+          packages/lab-tools/tests/test_release_assets.py
+          packages/lab-tools/tests/test_release_identity.py
       - name: Run exact platform selection (no skips)
         env:
           SMOKE_EXPECTED_SHA: ${{ inputs.ref || github.sha }}

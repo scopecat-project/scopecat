@@ -66,6 +66,36 @@ Native data export/import does not qualify the complete installed configuration
 exchange and source-registration journey. Track that distinction in
 [#502](https://github.com/scopecat-project/scopecat/issues/502).
 
+## Release asset boundary
+
+Future release installers use `Scopecat-VERSION-PLATFORM-ARCH.dmg` / `.exe`,
+with `macos` / `windows` and normalized `arm64` / `x86_64` from the qualified
+target. Assembly rejects names that disagree with that target. This naming does
+not add a new supported platform or architecture.
+
+`release_assets.py assemble` checks the complete build inputs. `export --output`
+creates a fresh publication directory containing two installers, seven wheels,
+`preview.json`, `scopecat-ui.zip` and `release.json` (12 assets). The four native
+qualification documents are embedded verbatim in `release.json`; verification
+rechecks their source, target, resource inventory and checksums after export.
+Separate qualification files remain in Actions evidence. `release.json` retains
+the format-1 `preview` and `files` contract; `files` lists only downloadable assets.
+The added `installers` index exposes target and checksum without opening evidence.
+
+The preview manifest, UI archive and seven-wheel contract remain required by
+existing pinned artifact consumers and installed-framework qualification. Native
+applications only retain the two core/server author wheels, but that projection
+is not the complete downstream build/test contract. Removing the other assets
+requires a consumer migration first.
+
+Wheel version identity is a separate pending change: current release builds still
+encode package base versions, a development timestamp and release provenance.
+Do not rename wheel files or equate independent package versions to the application
+version. A replacement must rebuild wheel metadata and validate resolver ordering,
+exact installation constraints and worker dependency capture before adoption.
+This asset-layout change does not change those versions, publish to PyPI, or modify
+historical releases (including the 16 assets and tag of v0.1.0).
+
 ## Teaching intent and acceptance limits
 
 Help supports Notebook/application collaboration through shared preparation and
