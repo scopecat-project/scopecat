@@ -156,7 +156,13 @@ def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, 
         "src/my_experiment/group_analysis.py": "group_analysis.py",
     }
     for generated, source in expected.items():
-        assert (root / generated).read_bytes() == (material / source).read_bytes(), (
+        template = (
+            Path(__file__).resolve().parents[3]
+            / "testing/app_support/course_material/setup.py.txt"
+            if source == "lessons/setup.py.txt"
+            else material / source
+        )
+        assert (root / generated).read_bytes() == template.read_bytes(), (
             f"Reinstall scopecat-tutorials: stale {generated}"
         )
     topics = ("refresh", "compute") if topic is None else (topic,)

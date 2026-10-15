@@ -43,7 +43,13 @@ def test_grouped_teaching_restart(tmp_path: Path, monkeypatch, notebook_imports,
         "src/my_experiment/result_types.py": "result_types.py",
     }
     for generated, source in expected.items():
-        assert (root / generated).read_bytes() == (material / source).read_bytes(), (
+        template = (
+            Path(__file__).resolve().parents[3]
+            / "testing/app_support/course_material/setup.py.txt"
+            if source == "lessons/setup.py.txt"
+            else material / source
+        )
+        assert (root / generated).read_bytes() == template.read_bytes(), (
             f"Reinstall scopecat-tutorials: stale {generated}"
         )
     _, environment = kernel_command(root, source_path=False)
