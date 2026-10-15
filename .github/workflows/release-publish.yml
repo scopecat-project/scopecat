@@ -142,8 +142,6 @@ jobs:
           name: release-public
           path: ${{ runner.temp }}/preview
       - name: Build and qualify installer from the same public assets
-        env:
-          PLATFORM: ${{ matrix.platform }}
         run: |
           uv run --locked --group delivery python -m lab_tools.delivery "$RUNNER_TEMP/delivery" --public-artifacts "$RUNNER_TEMP/preview" --release
           mkdir "$RUNNER_TEMP/release-native"
@@ -163,8 +161,16 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then
             uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
           fi
-          cp "$RUNNER_TEMP/native-acceptance/native-release.json" "$RUNNER_TEMP/release-native/$PLATFORM-native-release.json"
-          cp "$RUNNER_TEMP/native-acceptance/bundle.json" "$RUNNER_TEMP/release-native/$PLATFORM-bundle.json"
+      - name: Stage native release manifests
+        env:
+          # MSVC exports Platform; Windows environment keys are case-insensitive.
+          SCOPECAT_RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: |
+          : "${SCOPECAT_RELEASE_PLATFORM:?Release platform is required}"
+          cp "$RUNNER_TEMP/native-acceptance/native-release.json" "$RUNNER_TEMP/release-native/$SCOPECAT_RELEASE_PLATFORM-native-release.json"
+          cp "$RUNNER_TEMP/native-acceptance/bundle.json" "$RUNNER_TEMP/release-native/$SCOPECAT_RELEASE_PLATFORM-bundle.json"
+          test -s "$RUNNER_TEMP/release-native/$SCOPECAT_RELEASE_PLATFORM-native-release.json"
+          test -s "$RUNNER_TEMP/release-native/$SCOPECAT_RELEASE_PLATFORM-bundle.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-native-${{ matrix.platform }}
