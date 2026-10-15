@@ -58,7 +58,6 @@ uv run --locked --package reference-lab --group test pytest testing/reference_la
 - [Daily source development](public-preview.md#daily-source-desktop): run a checkout with native UI and HMR.
 - [Release preparation and previews](public-preview.md#numbered-releases): distribute reviewed artifacts.
 - [Test feedback](test-feedback.md): focused checks, CI and acceptance profiles.
-- [Static checks](static-checks.md): actual coverage, justified exceptions and audit follow-ups.
 - [Reference fixtures](reference-fixtures.md): shared evidence and fixture ownership.
 - [Workflow evaluations](workflow-evaluations.md): user goals, representative evidence and gaps.
 - [Reference retirement](reference-gallery-retirement.md): retained scientific semantics and current owners.

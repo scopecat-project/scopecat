@@ -53,6 +53,26 @@ not prove deadlock. Reproduce suspect tests serially and in parallel as needed.
 SCOPECAT_TEST_DIAGNOSTICS=test-diagnostics uv run --locked python -m scopecat_testkit.check core -- -p scripts.pytest_diagnostics --maxprocesses=2
 ```
 
+## Static checks
+
+Use the commands in `.github/workflows/ci.yml` as the CI entry points. Python
+rules, type-check roots and import contracts live in root/member `pyproject.toml`;
+UI scripts and rules live in `apps/scopecat-ui/package.json`, `.oxlintrc.json`,
+`.oxfmtrc.json` and `tsconfig*.json`. Lockfiles and interpreter/package-manager
+version files are authoritative; use locked dependency installation.
+
+When changing coverage, inspect effective nested configuration: Ruff `src`
+classifies imports rather than selecting files, and member overrides can replace
+root fields. Basedpyright execution environments use first-match order; excluded
+files may still be followed through imports. Generated declarations, notebooks
+and workspace templates need their generation/journey checks as well as applicable
+static checks.
+
+Keep brief reasons beside necessary dynamic-framework, private-test or generated-
+workspace exceptions. Probe candidate rules before changing policy; fix real
+boundaries rather than adding casts or relocating ignores. Record one-time audit
+counts, timings, validation and unresolved findings in the issue/PR, not here.
+
 ## Required CI and manual acceptance
 
 [CI](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/ci.yml)
