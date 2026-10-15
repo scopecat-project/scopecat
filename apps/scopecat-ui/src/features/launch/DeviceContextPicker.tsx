@@ -22,11 +22,19 @@ export function DeviceContextPicker({
   });
   const resolution = useMutation({
     mutationFn: resolveSetupDefinition,
-    onSuccess: (selected) =>
+    onSuccess: (selected) => {
+      // Resolving the same retained setup does not change the launch input.
+      // In particular, it must not cancel a preview waiting on its working table.
+      if (
+        value.setup?.revision_id === selected.id &&
+        value.setup.content_hash === selected.content_hash
+      )
+        return;
       onChange({
         ...value,
         setup: { revision_id: selected.id, content_hash: selected.content_hash },
-      }),
+      });
+    },
   });
   const retained = useQuery({
     queryKey: ["setup-revision", value.setup?.revision_id],
