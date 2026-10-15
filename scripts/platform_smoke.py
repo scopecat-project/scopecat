@@ -16,14 +16,14 @@ COMMON = [
     "packages/scopecat-server/tests/test_instrument_worker.py::test_spawned_worker_executes_closed_driver_requests",
     "packages/scopecat-server/tests/test_instrument_worker.py::test_driver_uses_selected_python_and_retains_it_after_reopen",
     "packages/scopecat-server/tests/test_instrument_worker.py::test_shutdown_interrupts_a_blocked_driver_call",
-    "packages/lab-tools/tests/test_platform_files.py::test_application_lock_excludes_process_and_state_replaces",
+    "packages/scopecat-app/tests/test_platform_files.py::test_application_lock_excludes_process_and_state_replaces",
 ]
 PLATFORM = {
     "darwin": [
-        "packages/lab-tools/tests/test_desktop_platform.py::test_quit_hook_matches_real_pywebview_delegate_signature"
+        "packages/scopecat-app/tests/test_desktop_platform.py::test_quit_hook_matches_real_pywebview_delegate_signature"
     ],
     "win32": [
-        "packages/lab-tools/tests/test_platform_environment.py::test_prepared_execution_python_imports_pyarrow"
+        "packages/scopecat-app/tests/test_platform_environment.py::test_prepared_execution_python_imports_pyarrow"
     ],
 }
 

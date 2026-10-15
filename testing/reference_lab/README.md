@@ -44,9 +44,9 @@ cd apps/scopecat-ui
 pnpm install --frozen-lockfile
 pnpm run build
 cd ../..
-uv run scopecat config check testing/reference_lab
-uv run scopecat start testing/reference_lab --static-dir apps/scopecat-ui/dist
-uv run scopecat open testing/reference_lab
+uv run python -m scopecat_server.cli config check testing/reference_lab
+uv run python -m scopecat_server.cli start testing/reference_lab --static-dir apps/scopecat-ui/dist
+uv run python -m scopecat_server.cli open testing/reference_lab
 ```
 
 The daemon chooses a loopback port and records it inside the project.

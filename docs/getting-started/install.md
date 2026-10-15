@@ -1,7 +1,8 @@
 # Download and install
 
-Scopecat is experimental. The first numbered release has not been published;
-for current features, use a qualified candidate supplied with matching release notes.
+Scopecat is experimental. [v0.1.0](https://github.com/scopecat-project/scopecat/releases/tag/v0.1.0)
+is the first numbered release. Use its assets and matching release notes; source
+changes after that release do not update its installers.
 
 ## Choose your installer
 
@@ -18,7 +19,8 @@ installers remain unqualified; use the candidate's release notes for its tested 
 
 The available [historical desktop download](https://github.com/scopecat-project/scopecat/releases/tag/desktop-e11acefb96ae7bf2163646bd15f50c77e2a1d8d3)
 predates current tutorial and recovery features and is not the first numbered
-release. A current candidate is still needed for the journey below. Framework
+release. Choose the numbered release above or an explicitly qualified newer
+candidate for the journey below. Framework
 wheels and GitHub source archives are not installers; maintainers can consult
 [artifact identity](../development/public-preview.md#artifact-identity-and-consumer-selection).
 

@@ -9,8 +9,8 @@ import tempfile
 import traceback
 from pathlib import Path
 
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.bundle import file_hash
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.bundle import file_hash
 from verify_native_windows import (  # pyright: ignore[reportImplicitRelativeImport]
     host_bootstrap,
     require_hosted_runner,
@@ -23,9 +23,10 @@ HOST = r"""
 import json, sqlite3, sys, threading, time, traceback
 from pathlib import Path
 from types import SimpleNamespace
-from lab_tools import desktop, native_bootstrap
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.installation_paths import InstallationPaths
+from scopecat_app import desktop
+from scopecat_app import native_bootstrap
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.installation_paths import InstallationPaths
 from scopecat_server.storage.sqlite.schema import PROJECT_SCHEMA_VERSION
 import webview
 
@@ -268,7 +269,7 @@ def verify(app: Path, home: Path) -> None:
             # The backend may be detached even when a GUI probe times out.
             cleanup = (
                 "import json,sys\nfrom pathlib import Path\n"
-                "from lab_tools.application_runtime import ApplicationRuntime\n"
+                "from scopecat_app.application_runtime import ApplicationRuntime\n"
                 "root=Path(sys.argv[1])\nruntime=ApplicationRuntime(root)\n"
                 "runtime.stop()\n"
             )

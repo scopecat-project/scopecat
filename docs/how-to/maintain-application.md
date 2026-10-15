@@ -186,7 +186,7 @@ Use an isolated foreground development application and edit ordinary source in
 VS Code:
 
 ```sh
-uv run --locked python -m lab_tools.dev --home /path/to/development
+uv run --locked python -m scripts.dev --home /path/to/development
 ```
 
 Run this from a public checkout with Python 3.14+, uv, Node.js and pnpm. It opens

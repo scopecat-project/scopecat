@@ -123,7 +123,7 @@ or widen/narrow their target scope. The generic cohort backend is also retired a
 
 Standard application composition and the installed worker no longer expose the
 legacy enrollment path: `LabApplication`, `[lab.capabilities]` and
-`scopecat automation work` register/dispatch procedures and schedules, not cohort
+`python -m scopecat_server.cli automation work` register/dispatch procedures and schedules, not cohort
 evaluators or publication registries. Removed declaration keys and the old
 `--working-point` option fail visibly. Low-level cohort services and their storage
 schema are now retired too; existing files are not rewritten or migrated.

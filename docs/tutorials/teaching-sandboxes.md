@@ -196,7 +196,7 @@ the application service. See the [learning path](../getting-started/learning-pat
 for authoring and analysis.
 
 The optional command-line entry uses the same installed application:
-`python -m lab_tools.practice --home DATA_HOME` starts a practice; add `--list`
+`python -m scopecat_app.practice --home DATA_HOME` starts a practice; add `--list`
 to list practices or `--clear ID` to clear one while preserving its files.
 It prints locations without opening a browser. Per-topic environments and
 `--reset` / `--stop` sandbox commands are retired.

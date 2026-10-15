@@ -29,11 +29,12 @@ choices rather than product requirements.
 
 ## Desktop preview
 
-The first numbered experimental release has not been published. The
-[installation guide](docs/getting-started/install.md) identifies the historical
-Mac/Windows preview and how to obtain a qualified candidate for current features.
+[v0.1.0](https://github.com/scopecat-project/scopecat/releases/tag/v0.1.0) is the
+first experimental numbered release. See the
+[installation guide](docs/getting-started/install.md) for platform installation.
 It includes Python and application dependencies; opening saved data requires no
-source checkout or laboratory SDK. Continue with [first steps](docs/getting-started/index.md).
+source checkout or laboratory SDK. Open tutorials from the application’s Help menu.
+Continue with [first steps](docs/getting-started/index.md).
 
 ## Source development
 
@@ -41,7 +42,7 @@ For daily source development, run from the public checkout with Python 3.14+, uv
 Node.js and pnpm:
 
 ```sh
-uv run --locked python -m lab_tools.dev
+uv run --locked python -m scripts.dev
 ```
 
 This opens the native desktop with Vite HMR and the real backend, using a retained
@@ -59,7 +60,10 @@ with the installed application.
 
 - `packages/scopecat`: domain-neutral authoring, planning, execution, data, and
   notebook APIs.
-- `packages/scopecat-server`: project CLI, daemon, services, and storage.
+- `packages/scopecat-server`: maintenance CLI, daemon, services, and storage.
+- `packages/scopecat-app`: desktop host and author environment lifecycle.
+- `packages/scopecat-tutorials`: editable Help tutorial resources.
+- `scripts/app_build`, `testing/app_support`: build and acceptance support.
 - `packages/scopecat-instruments`: typed capabilities, real SCPI drivers, and
   coupled virtual devices.
 - `packages/scopecat-quantum`: hardware-independent quantum building blocks.

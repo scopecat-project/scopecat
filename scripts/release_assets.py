@@ -13,9 +13,14 @@ from email.parser import BytesParser
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Protocol, cast
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages/lab-tools/src"))
-from lab_tools.author_resources import PACKAGES as AUTHOR_PACKAGES
-from lab_tools.release_identity import installer_filename, read_release
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "packages/scopecat-app/src")
+)
+from scopecat_app.author_resources import PACKAGES as AUTHOR_PACKAGES
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.app_build.release_identity import installer_filename, read_release
 
 PACKAGES = frozenset(
     {
@@ -23,8 +28,8 @@ PACKAGES = frozenset(
         "scopecat-server",
         "scopecat-instruments",
         "scopecat-quantum",
-        "scopecat-lab-tools",
-        "scopecat-lab-teaching",
+        "scopecat-app",
+        "scopecat-tutorials",
         "scopecat-testkit",
     }
 )

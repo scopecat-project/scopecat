@@ -24,10 +24,12 @@ from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Protocol, cast
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 if TYPE_CHECKING:
     from nbformat import NotebookNode
 
-    from lab_tools.application_runtime import ApplicationRuntime
+    from scopecat_app.application_runtime import ApplicationRuntime
 
 
 def python_in(root: Path) -> Path:
@@ -106,28 +108,32 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     import httpx2
     from nbclient import NotebookClient
     from nbclient.exceptions import CellExecutionError
-
-    from lab_tools.application_runtime import ApplicationRuntime
-    from lab_tools.author_environment import (
-        create_client_environment,
-        prepare_execution_environment,
-    )
-    from lab_tools.author_resources import (
+    from scripts.app_build.author_resources import (
         build as build_author_resources,
     )
-    from lab_tools.author_resources import (
-        verify_resources,
+    from testing.app_support.notebook_io import notebook_io
+    from testing.app_support.verify_groups import (
+        ADD_ANALYSIS,
+        GROUP_CHECKS,
+        GROUP_REOPEN_CELLS,
     )
-    from lab_tools.bundle import file_hash, verify_bundle
-    from lab_tools.notebook import kernel_command
-    from lab_tools.notebook_io import notebook_io
-    from lab_tools.notebook_journey import current, prepare
-    from lab_tools.verify_groups import ADD_ANALYSIS, GROUP_CHECKS, GROUP_REOPEN_CELLS
+
     from scopecat.application_instance import open_instance
     from scopecat.automation import ProcedureRun
     from scopecat.daemon.endpoint import DaemonEndpointRecord
     from scopecat.daemon.views import DaemonHealth, RunSummary, RunSummaryPage
     from scopecat.records.practice import PracticeScope
+    from scopecat_app.application_runtime import ApplicationRuntime
+    from scopecat_app.author_environment import (
+        create_client_environment,
+        prepare_execution_environment,
+    )
+    from scopecat_app.author_resources import (
+        verify_resources,
+    )
+    from scopecat_app.bundle import file_hash, verify_bundle
+    from scopecat_app.notebook import kernel_command
+    from scopecat_app.notebook_journey import current, prepare
     from scopecat_server.author_registration import (  # noqa: TID251 - installed recovery integration
         register_author_workspace,
     )
@@ -147,7 +153,7 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     assert os.environ["UV_OFFLINE"] == "1"
     assert Path(os.environ["UV_CACHE_DIR"]) == work / "empty-cache"
     origins = {}
-    for name in ("scopecat", "scopecat_server", "lab_tools", "lab_teaching"):
+    for name in ("scopecat", "scopecat_server", "scopecat_app", "scopecat_tutorials"):
         origin = Path(str(import_module(name).__file__)).resolve()
         assert origin.is_relative_to(Path(sys.prefix)), (name, origin)
         origins[name] = str(origin)
@@ -161,7 +167,7 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     verify_resources(author_payload)
     nbformat = notebook_io()
     runtime = ApplicationRuntime(work / "application")
-    material = files("lab_teaching.course_material").joinpath("lessons")
+    material = files("scopecat_tutorials.course_material").joinpath("lessons")
     timings: dict[str, float] = {}
     application_checks: dict[str, object] = {
         "result": "incomplete",
@@ -621,9 +627,10 @@ def verify_remaining_topics(
     execute: Callable[[Path, list[NotebookNode], str], None],
 ) -> list[str]:
     """Run remaining shipped Help cells with minimal installed resources."""
-    from lab_teaching.lessons import TOPICS, LessonTopic
-    from lab_tools.notebook_io import notebook_io
-    from lab_tools.notebook_journey import prepare
+    from testing.app_support.notebook_io import notebook_io
+
+    from scopecat_app.notebook_journey import prepare
+    from scopecat_tutorials.lessons import TOPICS, LessonTopic
 
     nbformat = notebook_io()
     verified = ["parameters", "groups"]

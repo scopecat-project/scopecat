@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 
 const script = readFileSync(
-  resolve(process.cwd(), "../../packages/lab-tools/src/lab_tools/desktop_page.js"),
+  resolve(process.cwd(), "../../packages/scopecat-app/src/scopecat_app/desktop_page.js"),
   "utf8",
 );
 

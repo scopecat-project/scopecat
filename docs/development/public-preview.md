@@ -200,7 +200,7 @@ A consumer can continue selecting `tools/select_public.py FULL_SHA` in private.
 The numbered release workflow is an additional recommended path when delivering
 the complete application and framework together. Private `select_public.py
 --release VERSION` resolves that path; both modes preserve the same pin schema,
-exact wheel URLs and lock hashes. Private `dev.py`, public `lab_tools.preview`,
+exact wheel URLs and lock hashes. Private `dev.py`, public `scripts.app_build.preview`,
 and delivery `--preview` read the selected URL/hash without assuming a tag format.
 `build_preview.py` and delivery `--public-artifacts` share build/validation code;
 there is no second package versioning platform.
@@ -235,7 +235,7 @@ and rejection of unsupported formats remain distinct from future compatibility.
 Install Python 3.14+, uv, Node.js and pnpm, then run from the public checkout:
 
 ```sh
-uv run --locked python -m lab_tools.dev
+uv run --locked python -m scripts.dev
 ```
 
 This opens the existing native pywebview desktop with Vite HMR and the real
@@ -289,9 +289,9 @@ Use Settings to create or register ordinary author source.
 
 ```sh
 # A separate retained blank trial (the path must be new or owned by this checkout):
-uv run --locked python -m lab_tools.dev --home /absolute/path/to/dev-trial
+uv run --locked python -m scripts.dev --home /absolute/path/to/dev-trial
 # Allocate a new blank home in the OS temporary directory; do not auto-delete it:
-uv run --locked python -m lab_tools.dev --temporary
+uv run --locked python -m scripts.dev --temporary
 ```
 
 Startup reports source, home, UI/backend URLs and log locations. `q` followed by

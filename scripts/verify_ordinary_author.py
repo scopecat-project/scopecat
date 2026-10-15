@@ -26,12 +26,15 @@ from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from playwright.sync_api import expect, sync_playwright
 
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.bundle import MANIFEST, file_hash
-from lab_tools.desktop import DesktopAPI
-from lab_tools.desktop_session import DesktopSession
-from lab_tools.notebook import kernel_command
-from lab_tools.notebook_io import notebook_io
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.bundle import MANIFEST, file_hash
+from scopecat_app.desktop import DesktopAPI
+from scopecat_app.desktop_session import DesktopSession
+from scopecat_app.notebook import kernel_command
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from testing.app_support.notebook_io import notebook_io
 
 if TYPE_CHECKING:
     import webview

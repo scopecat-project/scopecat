@@ -19,11 +19,6 @@ from zipfile import ZipFile
 import httpx2
 from pydantic import BaseModel, TypeAdapter
 
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.author_environment import prepare_execution_environment
-from lab_tools.desktop import DesktopAPI
-from lab_tools.desktop_files import save_configuration, save_configuration_source
-from lab_tools.desktop_session import DesktopSession
 from scopecat.application.launch import LaunchCatalog, LaunchPreview, LaunchSubmission
 from scopecat.automation import ProcedureRun
 from scopecat.daemon.views import RunSummaryPage
@@ -40,6 +35,11 @@ from scopecat.records.scientific_selection import (
     ParameterConfiguration,
     ScientificSelection,
 )
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.author_environment import prepare_execution_environment
+from scopecat_app.desktop import DesktopAPI
+from scopecat_app.desktop_files import save_configuration, save_configuration_source
+from scopecat_app.desktop_session import DesktopSession
 from scopecat_server.scaffold import write_author_scaffold  # noqa: TID251
 
 if TYPE_CHECKING:

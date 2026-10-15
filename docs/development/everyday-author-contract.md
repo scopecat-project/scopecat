@@ -127,7 +127,7 @@ uv run pytest -n 0 packages/scopecat-server/tests/author_journeys
 ```
 
 Missing inputs and unknown cells are owned by
-`packages/lab-tools/tests/test_unknown_parameter_authoring.py`; it covers complete
+`packages/scopecat-app/tests/test_unknown_parameter_authoring.py`; it covers complete
 tables, visible `None`, unrelated/required consumers, frozen edits and old-run
 readback after schema changes. These checks replace the old everyday/exploratory
 wrappers. Synthetic resonance is a contract fixture, not physical calibration or

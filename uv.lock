@@ -16,8 +16,8 @@ members = [
     "reference-lab",
     "scopecat",
     "scopecat-instruments",
-    "scopecat-lab-teaching",
-    "scopecat-lab-tools",
+    "scopecat-tutorials",
+    "scopecat-app",
     "scopecat-quantum",
     "scopecat-server",
     "scopecat-testkit",
@@ -2829,9 +2829,9 @@ test = [
 ]
 
 [[package]]
-name = "scopecat-lab-teaching"
+name = "scopecat-tutorials"
 version = "0.2.0"
-source = { directory = "packages/lab-teaching" }
+source = { directory = "packages/scopecat-tutorials" }
 dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
@@ -2846,9 +2846,9 @@ requires-dist = [
 ]
 
 [[package]]
-name = "scopecat-lab-tools"
+name = "scopecat-app"
 version = "0.2.0"
-source = { editable = "packages/lab-tools" }
+source = { editable = "packages/scopecat-app" }
 dependencies = [
     { name = "fastapi" },
     { name = "filelock" },
@@ -2859,7 +2859,7 @@ dependencies = [
     { name = "rich" },
     { name = "scopecat" },
     { name = "scopecat-instruments" },
-    { name = "scopecat-lab-teaching" },
+    { name = "scopecat-tutorials" },
     { name = "scopecat-server" },
     { name = "typer" },
     { name = "uv" },
@@ -2902,8 +2902,8 @@ requires-dist = [
     { name = "rich", specifier = ">=15" },
     { name = "scopecat", editable = "packages/scopecat" },
     { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
-    { name = "scopecat-lab-teaching", directory = "packages/lab-teaching" },
-    { name = "scopecat-lab-tools", extras = ["kernel"], marker = "extra == 'notebook'", editable = "packages/lab-tools" },
+    { name = "scopecat-tutorials", directory = "packages/scopecat-tutorials" },
+    { name = "scopecat-app", extras = ["kernel"], marker = "extra == 'notebook'", editable = "packages/scopecat-app" },
     { name = "scopecat-server", editable = "packages/scopecat-server" },
     { name = "typer", specifier = ">=0.20" },
     { name = "uv", specifier = ">=0.13,<0.14" },
@@ -3013,7 +3013,7 @@ dependencies = [
     { name = "reference-lab" },
     { name = "scopecat" },
     { name = "scopecat-instruments" },
-    { name = "scopecat-lab-tools" },
+    { name = "scopecat-app" },
     { name = "scopecat-quantum" },
     { name = "scopecat-server" },
     { name = "scopecat-testkit", extra = ["server"] },
@@ -3021,7 +3021,7 @@ dependencies = [
 
 [package.dev-dependencies]
 delivery = [
-    { name = "scopecat-lab-tools", extra = ["desktop", "kernel"] },
+    { name = "scopecat-app", extra = ["desktop", "kernel"] },
     { name = "uv-build" },
 ]
 delivery-build = [
@@ -3030,7 +3030,7 @@ delivery-build = [
     { name = "wheel" },
 ]
 delivery-notebook = [
-    { name = "scopecat-lab-tools", extra = ["desktop", "kernel", "notebook"] },
+    { name = "scopecat-app", extra = ["desktop", "kernel", "notebook"] },
     { name = "uv-build" },
 ]
 dev = [
@@ -3042,7 +3042,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "scopecat-lab-tools", extra = ["desktop", "kernel"] },
+    { name = "scopecat-app", extra = ["desktop", "kernel"] },
     { name = "uv-build" },
 ]
 docs = [
@@ -3055,7 +3055,7 @@ notebook = [
 platform-smoke = [
     { name = "pytest" },
     { name = "pytest-xdist" },
-    { name = "scopecat-lab-tools", extra = ["desktop"] },
+    { name = "scopecat-app", extra = ["desktop"] },
 ]
 
 [package.metadata]
@@ -3063,7 +3063,7 @@ requires-dist = [
     { name = "reference-lab", editable = "testing/reference_lab" },
     { name = "scopecat", editable = "packages/scopecat" },
     { name = "scopecat-instruments", editable = "packages/scopecat-instruments" },
-    { name = "scopecat-lab-tools", editable = "packages/lab-tools" },
+    { name = "scopecat-app", editable = "packages/scopecat-app" },
     { name = "scopecat-quantum", editable = "packages/scopecat-quantum" },
     { name = "scopecat-server", editable = "packages/scopecat-server" },
     { name = "scopecat-testkit", extras = ["server"], editable = "testing/scopecat-testkit" },
@@ -3071,7 +3071,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 delivery = [
-    { name = "scopecat-lab-tools", extras = ["kernel", "desktop"], editable = "packages/lab-tools" },
+    { name = "scopecat-app", extras = ["kernel", "desktop"], editable = "packages/scopecat-app" },
     { name = "uv-build", specifier = ">=0.13,<0.14" },
 ]
 delivery-build = [
@@ -3080,8 +3080,8 @@ delivery-build = [
     { name = "wheel", specifier = ">=0.45" },
 ]
 delivery-notebook = [
-    { name = "scopecat-lab-tools", extras = ["kernel", "desktop"], editable = "packages/lab-tools" },
-    { name = "scopecat-lab-tools", extras = ["notebook"], editable = "packages/lab-tools" },
+    { name = "scopecat-app", extras = ["kernel", "desktop"], editable = "packages/scopecat-app" },
+    { name = "scopecat-app", extras = ["notebook"], editable = "packages/scopecat-app" },
     { name = "uv-build", specifier = ">=0.13,<0.14" },
 ]
 dev = [
@@ -3093,7 +3093,7 @@ dev = [
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-xdist", specifier = ">=3.8" },
     { name = "ruff", specifier = ">=0.16.0" },
-    { name = "scopecat-lab-tools", extras = ["kernel", "desktop"], editable = "packages/lab-tools" },
+    { name = "scopecat-app", extras = ["kernel", "desktop"], editable = "packages/scopecat-app" },
     { name = "uv-build", specifier = ">=0.13,<0.14" },
 ]
 docs = [
@@ -3104,7 +3104,7 @@ notebook = [{ name = "ipykernel", specifier = ">=6.29" }]
 platform-smoke = [
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-xdist", specifier = ">=3.8" },
-    { name = "scopecat-lab-tools", extras = ["desktop"], editable = "packages/lab-tools" },
+    { name = "scopecat-app", extras = ["desktop"], editable = "packages/scopecat-app" },
 ]
 
 [[package]]

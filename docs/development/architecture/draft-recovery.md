@@ -70,7 +70,7 @@ its store, then clears the default website store for every private window.
 The [pinned backend](https://github.com/r0x0r/pywebview/blob/2fc63cd6a92b8630c14f6d4dd73f9691591f8eea/webview/platforms/cocoa.py)
 and upstream commit `e0c008ced7313f5d4b18ffc2bdd63e010755f63d` have this behavior.
 The Darwin delivery now transforms that exact wheel into
-`6.2.1+scopecat.1` using `lab_tools.cocoa_dependency` and the included
+`6.2.1+scopecat.1` using `scripts.app_build.cocoa_dependency` and the included
 `patches/pywebview-6.2.1-cocoa.patch`. Source wheel, source module, patch, resulting
 module and resulting wheel each have fixed SHA-256 checks. The transformed wheel
 retains the upstream license, rewrites METADATA/RECORD, and carries its provenance

@@ -1,7 +1,7 @@
 # Automate a complete parameter calibration
 
 The **参数校准与恢复** (`calibration`) course source is an independent authoring
-example under `packages/lab-teaching/src/lab_teaching/course_material`.
+example under `packages/scopecat-tutorials/src/scopecat_tutorials/course_material`.
 For a first interactive practice, use [Help](../tutorials/teaching-sandboxes.md).
 The calibration example's local author module
 contains the synthetic model, fitting, acceptance policy and durable procedure.
@@ -141,8 +141,8 @@ request.steps()
 With a configured author workspace, the installed CLI starts the same worker:
 
 ```console
-scopecat automation work /path/to/lab
-scopecat automation work /path/to/lab --once
+python -m scopecat_server.cli automation work /path/to/lab
+python -m scopecat_server.cli automation work /path/to/lab --once
 ```
 
 The CLI dispatches registered procedures, due schedules and registered interval

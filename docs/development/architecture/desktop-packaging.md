@@ -23,7 +23,7 @@ retains CPython, pywebview and the existing web UI.
 
 | Installation / acceptance owner | Included entry and boundary |
 | --- | --- |
-| Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-lab-tools` owns the environment's `scopecat` console. Application launch uses the packaged runtime. |
+| Native application (`native-distribution`) | `native_bootstrap` starts the packaged host; `scopecat-app` owns the environment's `scopecat` console. Application launch uses the packaged runtime. |
 | Minimal installed framework (`installed-artifacts`) | `verify_installed_framework.py` installs only core/server/instruments/quantum from standard `build_preview.py` artifacts. It uses the matching independent GUI through `--static-dir`, without application tools, testkit or checkout imports. This is a dependency/packaging test, not a separate desktop product. |
 | Teaching/offline verification | Help and CLI-created ordinary author source share application preparation; standalone `install.py` and `bundle.py` retain manifest/hash checks and offline environment installation. |
 
@@ -40,7 +40,7 @@ not additional desktop products.
 | Boundary | Current coverage and artifact | Unique failure surface |
 | --- | --- | --- |
 | Source and browser | Regular CI; Linux browser shards in `full` / `local-application` / `browser` | API, UI interactions and source regressions; not installed-package evidence |
-| Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or lab-tools; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
+| Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or scopecat-app; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
 | Offline installer and teaching consumers | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained notebook and generated editor-task callers, application reopen |
 | Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
 | Public artifact consumer | Immutable `preview.json`, wheels and GUI; downstream consumer pins | Source commit and package/hash identity; a downstream pin is not evidence for a newer framework candidate |

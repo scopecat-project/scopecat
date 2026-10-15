@@ -7,7 +7,7 @@ files inside one explicit directory. Native browser-store isolation additionally
 depends on the packaged backend; an isolated home alone does not prove it. See
 [native acceptance safety](native-window-acceptance.md#safety-and-failure-handling)
 and the [home/host boundary](architecture/draft-recovery.md#home-host-and-privacy-boundaries).
-Foreground source development continues to use `lab_tools.dev` and does not create an installed application.
+Foreground source development continues to use `scripts.dev` and does not create an installed application.
 
 ## Development artifacts and retention
 
@@ -27,7 +27,7 @@ per build. Cache pruning is separate maintenance, not a broad directory deletion
 Old `results/` directories are not a supported output location. New development
 must not depend on untracked inputs. Retained scientific data, site settings and
 vendor SDK installations belong outside the checkout, at explicit locations.
-The daily `uv run --locked python -m lab_tools.dev` entry retains data outside
+The daily `uv run --locked python -m scripts.dev` entry retains data outside
 the checkout in a worktree-specific development home, separate from installed
 application data. Use `--home /absolute/path/outside/checkout` for another trial.
 Keep authored source in its own tracked directory. Classify existing files
@@ -43,7 +43,7 @@ guarantee reuse of every OS or Computer Use permission after rebuilding.
 For example, build a delivery into `build/delivery`, then run on macOS:
 
 ```sh
-python -m lab_tools.native_package build/delivery dist/native/Scopecat.app \
+python -m scripts.app_build.native_package build/delivery dist/native/Scopecat.app \
   --installer dist/native/Scopecat.dmg
 ```
 
@@ -79,7 +79,7 @@ For an already registered source folder, maintainers can select an existing
 execution interpreter without installing packages or restarting the application:
 
 ```sh
-python -m lab_tools.application --home /path/to/application-home \
+python -m scopecat_app.application --home /path/to/application-home \
   --action select-source-environment --workspace /path/to/source \
   --python /path/to/execution-environment/bin/python
 ```
@@ -161,7 +161,7 @@ Keep four identities separate when describing installation:
 | Data space | Persistent store identity and scientific history under the selected data home | The package location, author folder or current process ID |
 
 The current native installers provide the desktop application entry, **not a
-global PATH `scopecat` console**. Installing the `scopecat-lab-tools` wheel in a
+global PATH `scopecat` console**. Installing the `scopecat-app` wheel in a
 Python environment creates that environment's `scopecat` console script. This packaging fact is not an implemented application-owned CLI
 contract and does not require installing the whole application in every author
 venv. The generated author client environment starts with `scopecat` and
@@ -217,7 +217,7 @@ resources before preparing new environments. No scientific data migration is add
 
 ## Distribution boundary
 
-`python -m lab_tools.toolchain DELIVERY OUTPUT` builds a new platform delivery
+`python -m scripts.app_build.toolchain DELIVERY OUTPUT` builds a new platform delivery
 containing Python and uv. Run it on the target OS/architecture after the ordinary
 locked delivery build. It downloads the builder's exact Python patch version into
 a temporary managed directory, checks relocation, and records the Python archive,
@@ -231,7 +231,7 @@ it does not reference a removable application interpreter. The low-level standal
 only. It does not install a desktop app or generate launchers. Toolchain construction
 needs network access; installing locked wheels is offline.
 
-`python -m lab_tools.native_package DELIVERY APP --installer INSTALLER` packages
+`python -m scripts.app_build.native_package DELIVERY APP --installer INSTALLER` packages
 the delivery into a relocatable native application, adding the toolchain if needed.
 Build on the target platform: macOS requires the command-line developer tools and
 produces an `.app` and `.dmg`; Windows requires the MSVC developer command prompt

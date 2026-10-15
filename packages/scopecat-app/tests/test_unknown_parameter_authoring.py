@@ -1,0 +1,107 @@
+"""Unknown parameter admission and history need no device/quantum integration."""
+
+import importlib
+from pathlib import Path
+
+import pytest
+from testing.app_support.project import create_project
+
+import scopecat as sc
+from scopecat.kernel.errors import CheckFailed
+from scopecat.records.run import ParameterRunConfigSource
+from scopecat_server.lifecycle import start_project, stop_project
+
+
+class DurationParameters(sc.ParameterModel, table="probes"):
+    id: sc.Param[str] = sc.param(key=True)
+    duration: sc.Magnitude[float] = sc.quantity(unit="ns")
+
+
+class ProbeParameters(sc.ParameterModel, table="probes"):
+    id: sc.Param[str] = sc.param(key=True)
+    duration: sc.Magnitude[float] = sc.quantity(unit="ns")
+    pi_amplitude: sc.Param[float | None] = sc.param(default=None)
+
+
+@sc.experiment(id="tutorial.duration_probe")
+def duration_probe(experiment: sc.ExperimentContext) -> sc.ValueRef[sc.Quantity]:
+    del experiment
+    return sc.parameter_ref(ProbeParameters.duration, "q0")
+
+
+@sc.experiment(id="tutorial.pi_probe")
+def pi_probe(experiment: sc.ExperimentContext) -> sc.ValueRef[float]:
+    del experiment
+    return sc.parameter_ref(ProbeParameters.pi_amplitude, "q0")
+
+
+def test_new_table_unknowns_freeze_and_structural_history(
+    tmp_path: Path, notebook_imports
+) -> None:
+    root = create_project(tmp_path / "unknown-parameters").parent
+    project = sc.open_project(root)
+    start_project(project)
+    try:
+        with project.connect() as lab:
+            assert lab.config.registry().entries == ()
+            notebook_imports.syspath_prepend(str(root / "src"))
+            initial_setup = importlib.import_module("workspace_app").initial_setup
+            setup = lab.setup.import_recipe(initial_setup(), name="probe-bench")
+            empty = lab.parameters.save(
+                name="author-empty",
+                catalog=sc.parameter_catalog("author"),
+                parameters=sc.parameter_snapshot("author-values", tables={}),
+            )
+            lab.parameters.create_branch("author-unknown", revision=empty)
+            params = lab.parameters.workspace("author-unknown")
+            probes = params.declare_table(DurationParameters)
+            probes.add(DurationParameters(id="q0", duration=40))
+            probes.add(DurationParameters(id="q1", duration=60))
+            initial = params.save("author-unknown-probes")
+            assert params[DurationParameters]["q0"].duration == 40
+            assert (
+                lab.parameters.workspace("author-unknown-probes")[DurationParameters][
+                    "q0"
+                ].duration
+                == 40
+            )
+            run = lab.run(duration_probe.build(), config=params.freeze(setup=setup))
+            assert run.status == "completed"
+            original = run.snapshot
+            assert isinstance(original.config_source, ParameterRunConfigSource)
+            assert original.config_source.parameters == initial.ref
+            # Extend an existing table without inventing measured values.
+            params.add_column("probes", "pi_amplitude", float | None)
+            params.save()
+            assert params["probes"]["q0"]["pi_amplitude"] is None
+            assert params["probes"]["q1"]["pi_amplitude"] is None
+            assert (
+                lab.run(
+                    duration_probe.build(), config=params.freeze(setup=setup)
+                ).status
+                == "completed"
+            )
+            amplitudes = params[ProbeParameters]
+            with pytest.raises(CheckFailed, match=r"probes.*q0.*pi_amplitude.*unknown"):
+                lab.preview(pi_probe.build(), config=params.freeze(setup=setup))
+            amplitudes["q0"].pi_amplitude = 0.2
+            frozen = params.freeze(setup=setup)
+            prepared = lab.prepare(pi_probe.build(), config=frozen)
+            assert prepared.preview().point_count == 1
+            amplitudes["q0"].pi_amplitude = None
+            filled = prepared.run()
+            assert filled.status == "completed"
+            assert filled.config == frozen.config
+            assert lab.get_run(run.id).snapshot == original
+            # Structure changes fork a branch; old evidence stays immutable.
+            params.discard()
+            params.convert_unit("probes", "duration", "us")
+            params.rename_column("probes", "duration", "pulse_length")
+            params.save("author-unknown-renamed")
+            assert params["probes"]["q0"]["pulse_length"] == sc.Quantity(0.04, "us")
+            old = lab.parameters.workspace("author-unknown-probes")
+            assert old["probes"]["q0"]["duration"] == sc.Quantity(40, "ns")
+            assert lab.get_run(run.id).snapshot == original
+            assert lab.config.registry().entries == ()
+    finally:
+        stop_project(project)

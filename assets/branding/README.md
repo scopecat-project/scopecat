@@ -6,7 +6,7 @@ The native application and Windows tray use generated resources from this drawin
 
 After editing the SVG, run `uv run --group delivery python scripts/generate_app_icons.py`
 with ImageMagick available. Commit the generated files under
-`packages/lab-tools/src/lab_tools/icons/` together with the source change.
+`packages/scopecat-app/src/scopecat_app/icons/` together with the source change.
 Ordinary builds and installed applications do not need an SVG renderer.
 
 The macOS bundle uses `Scopecat.icns`; the Windows executable embeds

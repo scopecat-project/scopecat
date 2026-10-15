@@ -31,8 +31,6 @@ import httpx2
 import psutil
 from pydantic import BaseModel, ConfigDict
 
-from lab_tools.application_runtime import ApplicationRuntime
-from lab_tools.bundle import file_hash
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.automation import (
     InterpretationRequest,
@@ -42,6 +40,8 @@ from scopecat.automation import (
 from scopecat.automation.worker import ProcedureContext, ProcedureWorker
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import RunDetail, RunSummaryPage
+from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_app.bundle import file_hash
 from scopecat_server.validation_process import (  # noqa: TID251 - acceptance owns its processes
     terminate_validation_process_tree,
 )
@@ -435,8 +435,8 @@ def probe(home: Path) -> None:
     require_hosted_runner(home)
     import webview
 
-    from lab_tools.desktop import DesktopWindows
-    from lab_tools.desktop_session import DesktopSession
+    from scopecat_app.desktop import DesktopWindows
+    from scopecat_app.desktop_session import DesktopSession
 
     reports = home / "native-windows"
     runtime = ApplicationRuntime(home / "data")
@@ -462,7 +462,7 @@ def probe(home: Path) -> None:
     child_owner: psutil.Process | None = None
     try:
         if sys.platform == "darwin":
-            from lab_tools.desktop_platform import macos_bundle_identifier
+            from scopecat_app.desktop_platform import macos_bundle_identifier
 
             assert macos_bundle_identifier() == "org.scopecat.desktop"
         record = runtime.start()

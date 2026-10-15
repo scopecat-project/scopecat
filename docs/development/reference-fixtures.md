@@ -14,7 +14,7 @@ source temporarily supports integration tests. See the
 | `reference_lab/workflows/drag_beta_*` | Calibration, publication and recovery contracts | Preserve integrated evidence; do not teach these as the first acquisition |
 | `reference_lab/tests/unit` | Local scientific/compiler behavior | Prefer small fixtures without a daemon |
 | Managed author/restart tests | Real process and retained-source contracts | Move generic cases to starter fixtures when they do not require routing/compiler capabilities |
-| `packages/lab-teaching`, `packages/lab-tools` | Runnable generic tutorials and installation/sandbox lifecycle | Installed checks execute the starter/reopen Notebooks plus separate test scenarios; full desktop teaching remains #565 |
+| `packages/scopecat-tutorials`, `packages/scopecat-app` | Runnable generic tutorials and installation/sandbox lifecycle | Installed checks execute the starter/reopen Notebooks plus separate test scenarios; full desktop teaching remains #565 |
 | Private laboratory courses | Lab-specific methods and scientific workflows | Keep real methods and deployment policy; remove duplicated generic tooling |
 
 This is an ownership classification, not a claim that extraction is complete.
@@ -170,7 +170,7 @@ backend constraint aligned manually when updating the workspace build backend.
 ## Teaching capability is not fixture retirement
 
 The reference lab's retired teaching role is distinct from generic teaching in
-`lab-teaching`. Seven topic Notebooks and their editable source remain. Their
+`scopecat-tutorials`. Seven topic Notebooks and their editable source remain. Their
 current use as maintained fixtures does not cancel the Notebook/application
 learning journey. Help's single manual-peak practice is only a bounded part of
 that goal. The manager topology is retired; the full learning experience has not
@@ -182,7 +182,7 @@ been absorbed into the desktop. Track that gap in
 
 The generic private teaching packages, sandbox manager, offline builder and
 verification now live in public. The author refresh, complex mean and grouped
-restart journeys move with their owner into `packages/lab-tools/tests`.
+restart journeys move with their owner into `packages/scopecat-app/tests`.
 Private code is not imported by public tests or deliveries.
 
 The reference lab's teaching/workspace-template role is retired. Preserve valid
@@ -193,7 +193,7 @@ identify replacement coverage or explain why the old assertion is obsolete;
 compute-only tutorials alone do not replace physical device evidence.
 
 The unknown-parameter declaration/freeze/structural-history journey now uses a
-compute-only tutorial daemon (`packages/lab-tools/tests/test_unknown_parameter_authoring.py`).
+compute-only tutorial daemon (`packages/scopecat-app/tests/test_unknown_parameter_authoring.py`).
 Its former reference-lab test and probe module are removed. The same assertions
 cover unknown consumption, frozen requests and retained scientific snapshots without
 the four-qubit device/quantum setup. The remaining legacy structure-context test is
