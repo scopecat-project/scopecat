@@ -623,23 +623,73 @@ test("running A and historical C stay bound while working B is edited and adopte
   });
   const experiment = await startControlledExperiment(daemon.projectRoot);
   const traffic: string[] = [];
+  const pending = new Map<Request, { id: number; start: number; label: string }>();
+  const started = performance.now();
+  let sequence = 0;
   let phase = "observe running A";
-  const record = (kind: string, url: string) => {
+  const record = (request: Request, event: string) => {
     try {
-      const path = new URL(url).pathname;
-      if (!/parameter|experiment-launcher/.test(path)) return;
-      traffic.push(`${kind} ${path}`.slice(0, 300));
+      const now = performance.now();
+      if (event === "request") {
+        const path = new URL(request.url()).pathname;
+        const method = request.method();
+        const stage =
+          method === "GET" && /^\/api\/v1\/parameters\/branches\/[^/]+$/.test(path)
+            ? "working-table:branch"
+            : method === "POST" && path === "/api/v1/parameter-drafts/start"
+              ? "working-table:start"
+              : method === "GET" && /^\/api\/v1\/parameters\/revisions\/[^/]+$/.test(path)
+                ? "working-table:base"
+                : method === "GET" && /^\/api\/v1\/parameter-drafts\/[^/]+$/.test(path)
+                  ? "working-input:read"
+                  : method === "POST" && path === "/api/v1/experiment-launcher/preview"
+                    ? "preview:post"
+                    : undefined;
+        if (!stage) return;
+        pending.set(request, {
+          id: ++sequence,
+          start: now,
+          label: `B ${stage} phase=${phase} ${method} ${path}`.slice(0, 220),
+        });
+        if (pending.size > 120) pending.delete(pending.keys().next().value!);
+      }
+      const observed = pending.get(request);
+      if (!observed) return;
+      traffic.push(
+        `+${Math.round(now - started)}ms #${observed.id} ${observed.label} ${event} elapsed=${Math.round(now - observed.start)}ms`.slice(
+          0,
+          300,
+        ),
+      );
       if (traffic.length > 120) traffic.shift();
+      if (event === "finished" || event.startsWith("failed")) pending.delete(request);
     } catch {
       // Observers must not interrupt requests or replace the test failure.
     }
   };
-  const onRequest = (request: Request) => record(request.method(), request.url());
-  const onResponse = (response: Response) => record(String(response.status()), response.url());
-  const onFailed = (request: Request) => record("request failed", request.url());
-  context.on("request", onRequest);
-  context.on("response", onResponse);
-  context.on("requestfailed", onFailed);
+  const onRequest = (request: Request) => record(request, "request");
+  const onResponse = (response: Response) => {
+    try {
+      record(response.request(), `response ${response.status()}`);
+    } catch {
+      // Responses may disappear during browser teardown.
+    }
+  };
+  const onFinished = (request: Request) => record(request, "finished");
+  const onFailed = (request: Request) => {
+    try {
+      const failure = request.failure()?.errorText ?? "";
+      // Keep only Chromium's error code, never an exception URL or other text.
+      const code = /^net::ERR_[A-Z_]+$/.test(failure) ? ` ${failure}` : "";
+      record(request, `failed${code}`);
+    } catch {
+      record(request, "failed");
+    }
+  };
+  b.on("request", onRequest);
+  b.on("response", onResponse);
+  b.on("requestfinished", onFinished);
+  b.on("requestfailed", onFailed);
   try {
     const runA = await waitForMarker(experiment.acceptedReady, experiment);
     expect(runA).not.toBe(runC);
@@ -754,7 +804,12 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         .locator("body")
         .innerText({ timeout: 500 })
         .catch(() => "unavailable");
-      const evidence = JSON.stringify({ phase, traffic, body: body.slice(-8000) });
+      const inFlight = [...pending.values()].slice(-20).map((item) => ({
+        id: item.id,
+        request: item.label,
+        elapsedMs: Math.round(performance.now() - item.start),
+      }));
+      const evidence = JSON.stringify({ phase, traffic, inFlight, body: body.slice(-8000) });
       console.log("A/B/C failure diagnostics", evidence);
       await info.attach("a-b-c-failure", { body: evidence, contentType: "application/json" });
     } catch {
@@ -762,9 +817,11 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     }
     throw error;
   } finally {
-    context.off("request", onRequest);
-    context.off("response", onResponse);
-    context.off("requestfailed", onFailed);
+    b.off("request", onRequest);
+    b.off("response", onResponse);
+    b.off("requestfinished", onFinished);
+    b.off("requestfailed", onFailed);
+    pending.clear();
     await finishControlledExperiment(experiment);
     await b.close();
     await c.close();
