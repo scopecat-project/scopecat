@@ -11,7 +11,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -20,23 +20,18 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
         with:
           version-file: uv.lock
-      - name: Reproduce only failed Python journeys with original time limits
+      - name: Diagnose original journey-2 scheduling and load
         env:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
         run: >-
-          uv run --locked python -m pytest -v --maxprocesses=2
-          -p scripts.pytest_diagnostics -p scripts.release_failure_diagnostics
-          packages/lab-tools/tests/test_task_calibration_teaching_journey.py
-          packages/scopecat-server/tests/test_snapshot_integration.py::test_reference_lab_snapshot_roundtrip_in_fresh_processes
-          packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-drift]
-          packages/lab-tools/tests/test_array_maintenance.py::test_array_maintenance[repair-noop]
+          uv run --locked python -m scopecat_testkit.check journey --shard 2/2 --
+          --maxprocesses=2 -p scripts.pytest_diagnostics -p scripts.release_failure_diagnostics
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
           name: targeted-python-${{ runner.os }}
           path: test-diagnostics
   browser:
-    if: github.sha == 'f8f5e6a227c055006dea6872e3b1d1256fa66155'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -60,8 +55,8 @@ jobs:
         working-directory: apps/scopecat-ui
       - run: pnpm exec playwright install --with-deps chromium
         working-directory: apps/scopecat-ui
-      - name: Reproduce project console including earlier shared fixture operations
-        run: pnpm exec playwright test --project=journey-2 project-console.e2e.ts --reporter=line,json
+      - name: Diagnose original browser-2 worker lifetime and load
+        run: pnpm exec playwright test --project=journey-2 --reporter=line,json
         working-directory: apps/scopecat-ui
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/timings.json

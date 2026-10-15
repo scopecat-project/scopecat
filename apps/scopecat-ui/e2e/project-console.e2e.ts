@@ -611,6 +611,13 @@ test("running A and historical C stay bound while working B is edited and adopte
   const cUrl = c.url();
   const b = await context.newPage();
   const scale = b.getByRole("textbox", { name: "response[1].scale", exact: true });
+  const diagnosticTraffic: string[] = [];
+  context.on("requestfailed", (request) => diagnosticTraffic.push(`failed ${new URL(request.url()).pathname} ${request.failure()?.errorText}`));
+  context.on("response", (response) => {
+    const path = new URL(response.url()).pathname;
+    if (path.includes("parameter") || path.includes("experiment-launcher")) diagnosticTraffic.push(`${response.status()} ${path}`);
+  });
+
   const submissions: string[] = [];
   context.on("request", (request) => {
     if (
@@ -728,6 +735,8 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
     expect(submissions).toEqual([]);
   } finally {
+    console.log("DIAG A/B/C traffic", JSON.stringify(diagnosticTraffic.slice(-120)));
+    console.log("DIAG working page", (await b.locator("body").innerText().catch(() => "unavailable")).slice(-14000));
     await finishControlledExperiment(experiment);
     await b.close();
     await c.close();

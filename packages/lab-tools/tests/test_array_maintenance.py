@@ -148,6 +148,14 @@ try:
             if result.task.mode == "finished":
                 break
             time.sleep(0.1)
+        if result.task.mode != "finished":
+            for stage in result.progress.stages:
+                if stage.procedure_run_id and stage.state == "running":
+                    print("DIAG stalled procedure", lab.procedures.get(stage.procedure_run_id).progress(), flush=True)
+            if result.finalization is not None:
+                print("DIAG finalization", lab.procedures.get(result.finalization.procedure_run_id).progress(), flush=True)
+            for log in root.rglob("worker.log"):
+                print("DIAG worker log", log.name, log.read_text(encoding="utf-8", errors="replace")[-4000:], flush=True)
         assert result.task.mode == "finished", result
         assert result.task.attempts["q0"][0] == prefix.task.attempts["q0"][0]
         states = {s.id: s.state for s in result.progress.stages}
