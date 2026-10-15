@@ -20,12 +20,17 @@
     ":semanticCommitTypeAll(chore)",
     ":automergePatch",
     ":automergeStableNonMajor",
-    ":enablePreCommit",
     ":prHourlyLimitNone",
     "helpers:pinGitHubActionDigestsToSemver",
     "customManagers:githubActionsVersions"
   ],
   "packageRules": [
+    {
+      "description": "Update locked Python quality tools within their declared ranges",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["ruff", "basedpyright"],
+      "rangeStrategy": "update-lockfile"
+    },
     {
       "description": "将 Python uv CLI 与规范化的 uv-build 包更新放在同一组审查",
       "matchManagers": ["pep621"],
