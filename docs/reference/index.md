@@ -3,7 +3,7 @@
 Reference pages describe interfaces and file formats for lookup:
 
 - [Command-line interface](cli.md)
-- [Project layout and manifest](project-layout.md)
+- [Author folders and project layout](project-layout.md)
 - [Python API](python/index.md)
 
 Use the [getting started guide](../getting-started/index.md) or

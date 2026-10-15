@@ -41,8 +41,9 @@ wheels and GitHub source archives are not installers; maintainers can consult
 2. Follow [first steps](index.md): start the device-free peak practice in Help,
    or prepare an editable tutorial and its Python. **Continue** returns to the
    same tutorial folder and saved edits.
-3. Follow [first experiment](quickstart.md) to prepare and run one synthetic
-   measurement, inspect it, quit and reopen the same saved result. Displaying the
+3. Follow [first experiment](quickstart.md) in Help's Parameters and scans Notebook
+   to prepare and run one synthetic measurement, inspect it, quit and reopen the
+   same saved result. Displaying the
    prepared preview is optional. Reopening does not submit another measurement.
 
 For laboratory code, follow your lab's setup instructions and register its

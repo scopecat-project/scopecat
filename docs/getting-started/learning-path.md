@@ -14,7 +14,7 @@ internals are separate roles, not prerequisites for writing an experiment.
 | Task | Start here | Check your understanding |
 | --- | --- | --- |
 | Retain a first result | [First experiment](quickstart.md) | Restart and find the same run without acquiring again. |
-| Change an existing experiment | [Starter authoring](../tutorials/starter-authoring.md) | Change a parameter and scan range; explain which operation starts acquisition. |
+| Change an existing experiment | [Edit the Help lesson](../tutorials/teaching-sandboxes.md#learn-with-notebooks); [starter authoring](../tutorials/starter-authoring.md) for a separate Settings folder | Change a parameter and scan range; explain which operation starts acquisition. |
 | Calculate and return data | [Compute and typed reads](../how-to/compute-and-read.md), [write an experiment](../how-to/write-an-experiment.md) | Change one returned value and read it; distinguish local array axes from scan axes. |
 | Read and select data | [Measurement data](../how-to/use-measurement-data.md) | Plot selected points and reopen their retained values in a new session. |
 | Analyze retained measurements | [Ordinary analysis](../guides/ordinary-analysis.md) | Change an analysis while retaining the original measurement and its previous analysis. |

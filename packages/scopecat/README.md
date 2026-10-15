@@ -1,85 +1,26 @@
 # Scopecat
 
-Domain-neutral experiment authoring, planning, execution, measurement, and
-notebook APIs for a local Scopecat project.
+Domain-neutral Python APIs for experiment authoring, execution, measurement and
+retained analysis in the Scopecat application.
 
-```python
-import scopecat as sc
+For a first experiment, follow the [Parameters and scans Notebook](../../docs/getting-started/quickstart.md)
+in application Help. Its editable source and Notebook use the installed application's
+data service. Continue in that folder for your own work, or create a separate
+[author folder](../../docs/how-to/maintain-application.md#author-folders) in Settings.
 
-project = sc.open_project("./my-lab")
-with project.connect() as lab:
-    health = lab.health()
-    runs = lab.runs()
-```
+- [Notebook author sessions](../../docs/how-to/managed-author-session.md) describe
+  working with an already prepared laboratory source folder.
+- [Parameter branches](../../docs/how-to/parameter-branches.md) cover saved parameter
+  edits; [candidate verification](../../docs/how-to/verify-parameter-candidates.md)
+  covers checking a proposed correction before publication.
+- [Measurement data](../../docs/how-to/use-measurement-data.md) covers NumPy,
+  Xarray, Arrow and finite projected reads. Install `scopecat[pandas]` or
+  `scopecat[polars]` only for the corresponding conversion.
+- [Authoring dataflow](../../docs/concepts/experiment-dataflow.md) explains scalar
+  and array shapes, compute placement, results and recording.
+- [Python API reference](../../docs/reference/python/scopecat.md) provides interface
+  details.
 
-Project discovery loads the version-controlled `LabApplication` for notebooks
-and the project worker. The daemon instead loads the manifest's lightweight
-`LabBootstrap`, so user execution callbacks stay out of the server process. The
-application's optional system builder receives the accepted configuration
-snapshot selected for each run.
-
-Routine analysis and configuration changes use typed intent APIs:
-
-```python
-with project.connect() as lab:
-    run = lab.runs().items[0]
-    context = run.analysis("fit")
-    score = fit_score(context.measurements())
-    analysis = (
-        context.result()
-        .fact("fit-score", score)
-        .propose("fit-update", update, evidence=("fit-score",))
-        .save()
-    )
-    accepted = lab.config.accept(analysis, note="fit passed")
-
-    draft = lab.config.edit().replace_scalar(
-        "repetitions",
-        sc.Quantity(256, "count"),
-    )
-    changed = lab.config.set_default(draft, note="increase averaging")
-    restored = lab.config.undo(note="restore the previous default")
-```
-
-`undo()` reads activation history, resolves the previous distinct immutable
-entry, and submits that exact entry through the idempotent activation-operation
-ledger. Pass an explicit `operation_id` when the caller needs to reopen the
-same receipt with `lab.config.activation_operation(operation_id)` after a
-process-level failure.
-
-Interactive closures may execute in the notebook process:
-
-```python
-@sc.experiment
-def local_value(experiment: sc.ExperimentContext) -> sc.ValueRef:
-    return experiment.compute(
-        "value",
-        fn=lambda: 1.0,
-        output_type=sc.ScalarType(sc.FloatType()),
-    )
-
-
-with project.connect() as lab:
-    run = lab.run(local_value())
-```
-
-Admission, resource ownership, measurements, analysis, and configuration
-history still cross the daemon boundary. Operator controls such as event replay,
-safe run cancellation, and attention resolution are available through
-`lab.control`.
-
-`run.measurements()` captures an immutable analysis snapshot with NumPy, Xarray,
-and Arrow support for data that fits in notebook memory. Large runs can use a
-projected
-`run.measurements().project(...).to_record_batch_reader(...)` finite Arrow
-reader. See the
-[measurement workflow](../../docs/how-to/use-measurement-data.md) for details; install
-`scopecat[pandas]` or `scopecat[polars]` only for the corresponding conversion.
-
-See the [authoring dataflow](../../docs/concepts/experiment-dataflow.md) for how scalar
-and array shape, compute placement, returned results, and explicit recording fit
-together.
-
-See the [repository README](../../README.md) for setup and development commands,
-and the [daemon model](../../docs/development/architecture/daemon.md) for durable ownership and
-fencing semantics.
+Maintainers composing an independent local service can use the
+[project layout and CLI](../../docs/reference/project-layout.md#independent-service-projects).
+Framework contributors use the [development guide](../../docs/development/index.md).

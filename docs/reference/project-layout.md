@@ -1,12 +1,55 @@
-# Project layout and manifest
+# Author folders and project layout
 
-Author code can live in a separate folder whose `scopecat.toml` contains only
-`[authors]`. Register it with the running application and select its execution
-Python. Registration shares data and device ownership, not laboratory code.
-Declare needed scientific capabilities in that folder's `[lab.capabilities]`.
-See [author folders in the application](../how-to/maintain-application.md#author-folders).
-The combined layout below remains the form for laboratory-owned local composition.
+## Author folders
 
+For a first Notebook, use [Parameters and scans in Help](../getting-started/quickstart.md).
+Help creates and registers an editable folder with `notebooks/parameters.ipynb`
+and source under `src/my_experiment`. Continue using that folder for your own work;
+**Manage this code folder in Settings** opens its registration and Python settings.
+
+For a separate directory, **Settings → Author code → New code folder** creates
+this device-free starter and prepares its independent `.venv`:
+
+```text
+my-experiment/
+├── README.md
+├── scopecat.toml
+├── notebooks/
+│   └── 02_edit_scan.py
+└── src/scopecat_lab/
+    ├── __init__.py
+    ├── configuration.py
+    └── authored/
+        ├── __init__.py
+        ├── parameters.py
+        └── signal.py
+```
+
+The Settings starter's manifest declares its editable author modules:
+
+```toml
+[authors]
+modules = ["scopecat_lab.authored"]
+dependencies = []
+source_roots = ["src"]
+```
+
+Help lessons use their own source names and may declare execution capabilities in
+`[lab.capabilities]`. Follow the Notebook supplied with your folder; the Help and
+Settings starters are separate examples. Both share the running application's data
+and device ownership. Neither requires starting a service for that folder, and
+scientific records are retained independently of these code directories.
+
+Select the folder's independent Python in your editor. Save and refresh source as
+shown in its Notebook. To register existing laboratory code or repair an environment,
+see [author folders in the application](../how-to/maintain-application.md#author-folders).
+
+## Independent service projects
+
+The remaining layout and deployment commands are for maintainers composing a
+laboratory-owned service or working with an existing standalone project. They are
+not the folders created by Help or Settings. See [CLI entry ownership](cli.md#entry-ownership-and-migration)
+for the required Python environment and server-only command spelling.
 
 `scopecat init my-lab` creates this minimal project:
 
@@ -42,7 +85,7 @@ version record together. This supports only the current format. Owners may retai
 old environments separately for archival reading; new builds do not promise to
 read or migrate earlier development stores.
 
-## Manifest
+### Manifest
 
 `scopecat.toml` identifies daemon bootstrap, declared execution capabilities,
 and the instrument backend:
@@ -52,19 +95,19 @@ and the instrument backend:
 bootstrap = "scopecat_lab.application:create_bootstrap"
 instrument_backend = "scopecat_lab.backend:create_backend"
 
-[lab.capabilities]
-author_modules = ["scopecat_lab.authored"]
-
 [authors]
+modules = ["scopecat_lab.authored"]
+dependencies = ["scopecat-instruments"]
 source_roots = ["src"]
 ```
 
-Bootstrap and backend factories use `MODULE:CALLABLE` syntax. Capability symbols
-use `MODULE:SYMBOL`; `author_modules` lists discoverable Python modules.
+Bootstrap and backend factories use `MODULE:CALLABLE` syntax. Optional capability
+symbols in `[lab.capabilities]` use `MODULE:SYMBOL`; `[authors].modules` lists
+the starter's discoverable author modules.
 Project discovery searches at or above
 the supplied path and makes the project's `src` directory importable.
 
-## Source ownership
+### Source ownership
 
 Author source and refresh roots are relative subdirectories; equivalent `./src/`
 spellings are normalized. The whole project directory (`.` and its aliases) is
@@ -96,7 +139,7 @@ load user execution callbacks. A custom `lab.application` factory remains an
 alternative for special composition; it cannot be combined with the capabilities
 table.
 
-## Bind a workspace to persistent local data
+### Bind a workspace to persistent local data
 
 A local deployment binding is optional and separate from captured scientific
 source. Without it, data and runtime state remain in `<workspace>/.scopecat/`.
@@ -134,7 +177,7 @@ format only. Earlier formats are rejected without mutation; use fresh state for
 new development and keep original files separately. See the
 [data compatibility policy](../development/data-compatibility.md).
 
-## Register another author workspace
+### Register another author workspace
 
 Use this when two codebases should publish and execute against the same local
 service and scientific records. Each registered author source has a qualified
@@ -184,6 +227,8 @@ source uses an explicit registered identity. Retained execution requires its cap
 when the application and author environments are separate.
 
 ## Submit an ordinary procedure from an author session
+
+This author-session API can also be used from a registered application author folder.
 
 Register the procedure in the source manifest's `[lab.capabilities].procedures`,
 using its `module:attribute` name. In a script, explicitly select source before

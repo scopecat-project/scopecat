@@ -11,8 +11,8 @@ folder and its Python environment without source-registration forms.
   and leave multi-step calibration until you need it. You do not need all seven.
 - [Practice in Scopecat](teaching-sandboxes.md) starts with a synthetic scan and
   manual decision entirely in the application, without a Notebook kernel.
-- [Edit and analyze a starter experiment](starter-authoring.md) continues the
-  installed quickstart in your own author folder with parameters, scans, analysis
+- [Edit and analyze a starter experiment](starter-authoring.md) uses a separate
+  Settings-created author folder with parameters, scans, analysis
   and retained results.
 
 The old reference gallery is retired as teaching material; its remaining scripts

@@ -18,7 +18,7 @@ nav = [
   ] },
   { "Tutorials" = [
     "tutorials/index.md",
-    { "Runnable tutorial sandboxes" = "tutorials/teaching-sandboxes.md" },
+    { "Practice and Notebook lessons" = "tutorials/teaching-sandboxes.md" },
     { "Edit a starter experiment" = "tutorials/starter-authoring.md" },
   ] },
   { "How-to guides" = [
@@ -38,7 +38,7 @@ nav = [
     { "Use measurement data" = "how-to/use-measurement-data.md" },
     { "Open and share data files" = "how-to/open-and-share-data.md" },
     { "Compare retained runs" = "how-to/retained-run-comparison.md" },
-    { "Legacy combined configuration" = "how-to/manage-configuration.md" },
+    { "Edit experiment parameters" = "how-to/manage-configuration.md" },
     { "Automate parameter calibration" = "how-to/automate-parameter-calibration.md" },
     { "Maintain local application" = "how-to/maintain-application.md" },
     { "Maintain executable setup" = "how-to/maintain-executable-setup.md" },
@@ -62,7 +62,7 @@ nav = [
   { "Reference" = [
     "reference/index.md",
     { "Command-line interface" = "reference/cli.md" },
-    { "Project layout" = "reference/project-layout.md" },
+    { "Author folders and project layout" = "reference/project-layout.md" },
     { "Python API" = [
       "reference/python/index.md",
       { "scopecat" = "reference/python/scopecat.md" },
