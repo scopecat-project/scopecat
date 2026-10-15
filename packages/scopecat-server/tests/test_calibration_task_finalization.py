@@ -42,10 +42,19 @@ from .test_calibration_check_admission import _check_case, _command
 from .test_project_analysis_runtime import _complete_signal_run
 
 
-@pytest.mark.parametrize("passed", [True, False])
-@pytest.mark.parametrize("retained", [True, False])
+@pytest.mark.parametrize(
+    ("passed", "retained", "completion_boundary"),
+    [
+        (True, True, None),
+        (True, False, None),
+        (False, True, None),
+        (False, False, None),
+        (True, True, "finalization"),
+        (True, True, "stage"),
+    ],
+)
 def test_finalization_handoff_recovery_and_rejection(
-    tmp_path: Path, passed: bool, retained: bool
+    tmp_path: Path, passed: bool, retained: bool, completion_boundary: str | None
 ) -> None:
     root = tmp_path / "source"
     root.mkdir()
@@ -54,7 +63,14 @@ def test_finalization_handoff_recovery_and_rejection(
         app = runtime.application
         tasks = app.calibration_tasks
         validated: list[ProcedureSubmitCommand] = []
-        tasks.validate_call = validated.append
+
+        def validate(command: ProcedureSubmitCommand) -> None:
+            # Author validation must not hold the preparation read or admission write.
+            with tasks._sqlite.write_transaction() as connection:
+                connection.execute("SELECT 1")
+            validated.append(command)
+
+        tasks.validate_call = validate
         source = (
             ProcedureSource(
                 workspace_id="workspace",
@@ -83,6 +99,20 @@ def test_finalization_handoff_recovery_and_rejection(
                 samples=command.samples,
             ),
         )
+        if completion_boundary == "stage":
+            spec = spec.model_copy(
+                update={
+                    "plan": CalibrationTaskPlan(
+                        stages=(
+                            *spec.plan.stages,
+                            CalibrationTaskStage(
+                                id="next", check=check, depends_on=("fit",)
+                            ),
+                        )
+                    ),
+                    "calls": {**spec.calls, "next": spec.calls["fit"]},
+                }
+            )
         created = tasks.create(spec)
         tasks.control(
             CalibrationTaskControl(
@@ -162,6 +192,9 @@ def test_finalization_handoff_recovery_and_rejection(
                 )
             )
             current = done.run
+        # The procedure can complete without changing the task record between
+        # the read-side preparation and write-side admission.
+        prepared = tasks._prepare("round") if completion_boundary else None
         app.automation.close(
             ProcedureCloseCommand(
                 procedure_run_id=parent.procedure_run_id,
@@ -170,6 +203,31 @@ def test_finalization_handoff_recovery_and_rejection(
                 status="succeeded",
             )
         )
+        if prepared is not None:
+            assert prepared.commands == {}
+            current_view = tasks.get("round")
+            assert current_view.task == prepared.task
+            validation_count = len(validated)
+            with patch.object(tasks, "_prepare", return_value=prepared) as prepare:
+                deferred = tasks.advance("round")
+            prepare.assert_called_once_with("round")
+            assert deferred == current_view
+            assert tasks.get("round") == current_view
+            assert len(validated) == validation_count
+            assert len(app.automation.list(ProcedureRunListQuery()).items) == 1
+            if completion_boundary == "stage":
+                admitted_next = tasks.advance("round")
+                assert not admitted_next.task.dispatch_errors
+                assert admitted_next.task.finalization_error is None
+                assert set(admitted_next.task.executions) == {"fit", "next"}
+                next_run = app.automation.get(admitted_next.task.executions["next"])
+                assert next_run.source == source
+                assert len(validated) == validation_count + 1
+                assert validated[-1].intent == next_run.intent
+                assert tasks.advance("round") == admitted_next
+                assert len(app.automation.list(ProcedureRunListQuery()).items) == 2
+                return
+
         if not passed:
             ended = tasks.advance("round")
             assert ended.task.mode == "finished" and ended.finalization is None
