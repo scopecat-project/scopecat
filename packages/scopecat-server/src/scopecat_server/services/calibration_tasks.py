@@ -47,6 +47,10 @@ from scopecat_server.storage.sqlite.calibration_tasks import CalibrationTaskStor
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
 
+class _StaleTaskPreparation(BackendConflict):
+    """Evidence changed after preparation; no admission error should be retained."""
+
+
 @dataclass(frozen=True)
 class PreparedTaskAdmissions:
     task: CalibrationTaskRecord
@@ -172,6 +176,15 @@ class CalibrationTaskService:
 
     def advance(self, task_id: str) -> CalibrationTaskView:
         """Admit at most one stage; retain admission failures until explicit start."""
+        try:
+            return self._advance(task_id)
+        except _StaleTaskPreparation:
+            # The write transaction has rolled back and released its lock. Let
+            # the next runner tick prepare and validate again; never spin or
+            # invoke authored validation while holding the admission write.
+            return self.get(task_id)
+
+    def _advance(self, task_id: str) -> CalibrationTaskView:
         prepared = self._prepare(task_id)
         with self._sqlite.write_transaction() as connection:
             task = self._read(connection, task_id)
@@ -201,6 +214,8 @@ class CalibrationTaskService:
                         connection.execute("SAVEPOINT task_finalization")
                         try:
                             task = self._admit_finalization(connection, view, prepared)
+                        except _StaleTaskPreparation:
+                            raise
                         except (BackendConflict, BackendNotFound) as error:
                             connection.execute("ROLLBACK TO task_finalization")
                             task = task.model_copy(
@@ -223,6 +238,8 @@ class CalibrationTaskService:
                 connection.execute("SAVEPOINT task_stage")
                 try:
                     updated = self._admit(connection, task, stage_id, prepared)
+                except _StaleTaskPreparation:
+                    raise
                 except (BackendConflict, BackendNotFound) as error:
                     connection.execute("ROLLBACK TO task_stage")
                     task = task.model_copy(
@@ -525,7 +542,7 @@ class CalibrationTaskService:
             if isinstance(validated, BackendConflict):
                 raise validated
             if validated != command:
-                raise BackendConflict(
+                raise _StaleTaskPreparation(
                     "task or evidence changed during retained validation"
                 )
         try:
