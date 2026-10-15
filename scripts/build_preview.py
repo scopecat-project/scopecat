@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +17,7 @@ from typing import Protocol, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.app_build.package_versions import stamp
 from scripts.app_build.release_identity import read_source_identity
 
 
@@ -66,19 +66,10 @@ def build(
             metadata = cast("dict[str, dict[str, str]]", tomllib.loads(content))[
                 "project"
             ]
-            version = (
-                identity.python_package_version(metadata["version"], commit, timestamp)
-                if release
-                else f"{metadata['version']}.dev{timestamp}+g{commit[:12]}"
+            version = identity.python_package_version(
+                commit, timestamp, release=release
             )
-            content = re.sub(
-                r'^version = "[^"]+"$',
-                f'version = "{version}"',
-                content,
-                count=1,
-                flags=re.MULTILINE,
-            )
-            project.write_text(content)
+            stamp(project, version)
             subprocess.run(
                 [
                     "uv",
@@ -126,6 +117,9 @@ def build(
                 "channel": "release" if release else "preview",
                 "ui_version": ui_version,
                 "packages": packages,
+                "wheel_version": identity.python_package_version(
+                    commit, timestamp, release=release
+                ),
                 "files": files,
             },
             indent=2,

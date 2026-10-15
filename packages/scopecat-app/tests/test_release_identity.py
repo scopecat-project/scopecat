@@ -1,4 +1,4 @@
-"""Public versions preserve internal package bases and platform constraints."""
+"""Coordinated wheel identities preserve platform constraints."""
 
 import pytest
 from packaging.version import Version
@@ -24,9 +24,10 @@ def test_public_version_conversions(public, python):
     assert identity.pep440 == python
     assert identity.short_version == "0.3.0"
     assert identity.windows_version == "0.3.0.9"
-    wheel = identity.python_package_version("0.1.0", "a" * 40, "123")
+    wheel = identity.python_package_version("a" * 40, "123")
+    assert identity.python_package_version("a" * 40, "123", release=True) == python
     assert Version(wheel).is_devrelease
-    assert wheel == f"0.1.0.dev123+scopecat.{python}.g{'a' * 12}"
+    assert wheel == f"{python}.dev123+g{'a' * 40}"
     assert identity.javascript_package_version("0.1.0", "a" * 40).startswith(
         "0.1.0-scopecat.0.3.0"
     )

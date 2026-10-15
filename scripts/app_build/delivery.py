@@ -20,6 +20,8 @@ from uuid import uuid4
 from filelock import FileLock, Timeout
 from packaging.utils import canonicalize_name
 from scripts.app_build import cocoa_dependency, windows_dependency
+from scripts.app_build.package_versions import PACKAGES as FIRST_PARTY
+from scripts.app_build.package_versions import staged_project
 from scripts.app_build.preview import Preview, read_preview, unpack_gui
 from scripts.app_build.release_identity import (
     ReleaseIdentity,
@@ -269,7 +271,9 @@ def _public_identity(
         )
         return identity, preview_metadata.get("channel", "preview")
     assert public is not None
-    return read_source_identity(public / "release.toml", release=release), "source"
+    return read_source_identity(public / "release.toml", release=release), (
+        "release" if release else "source"
+    )
 
 
 def _copy_public_wheels(
@@ -307,6 +311,25 @@ def _check_public_artifacts(
         or metadata.get("build_number") != identity.build_number
     ):
         raise ValueError("Public artifacts do not match source release identity")
+
+
+def _package_version(
+    public: Path | None, artifacts: Path | None, *, release: bool
+) -> str | None:
+    if public is None or artifacts is not None:
+        return None
+    identity = read_source_identity(public / "release.toml", release=release)
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],  # noqa: S607 - standard maintainer tool
+        cwd=public,
+        text=True,
+    ).strip()
+    timestamp = subprocess.check_output(
+        ["git", "show", "-s", "--format=%ct", "HEAD"],  # noqa: S607
+        cwd=public,
+        text=True,
+    ).strip()
+    return identity.python_package_version(commit, timestamp, release=release)
 
 
 def build_delivery(
@@ -385,20 +408,26 @@ def build_delivery(
         ],
         cwd=repository,
     )
+    package_version = _package_version(public, public_artifacts, release=release)
     for package in () if public_artifacts is not None else plan.packages:
-        run(
-            [
-                "uv",
-                "build",
-                "--wheel",
-                "--build-constraints",
-                dependency_lock.as_uri(),
-                "--out-dir",
-                str(wheels),
-                str(package),
-            ],
-            cwd=repository,
-        )
+        first_party = bool(_package_names((package,)) & FIRST_PARTY)
+        with staged_project(
+            package, package_version if first_party else None
+        ) as staged:
+            run(
+                [
+                    "uv",
+                    "build",
+                    "--wheel",
+                    "--no-sources",
+                    "--build-constraints",
+                    dependency_lock.as_uri(),
+                    "--out-dir",
+                    str(wheels),
+                    str(staged),
+                ],
+                cwd=repository,
+            )
     run(
         [
             "uv",

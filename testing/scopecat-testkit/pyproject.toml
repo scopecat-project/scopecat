@@ -5,12 +5,12 @@ description = "Shared test support and adapter qualification fixtures for Scopec
 requires-python = ">=3.14"
 dependencies = [
   "pydantic>=2",
-  "scopecat",
+  "scopecat==0.1.0",
 ]
 
 [project.optional-dependencies]
 server = [
-  "scopecat-server",
+  "scopecat-server==0.1.0",
 ]
 
 [build-system]

@@ -11,7 +11,7 @@ dependencies = [
   "jsonschema>=4.26",
   "psutil>=7",
   "rich>=15",
-  "scopecat",
+  "scopecat==0.1.0",
   "typer>=0.20",
   "uvicorn>=0.35",
 ]
@@ -19,8 +19,8 @@ dependencies = [
 [dependency-groups]
 test = [
   "pytest>=9",
-  "scopecat-quantum",
-  "scopecat-testkit[server]",
+  "scopecat-quantum==0.1.0",
+  "scopecat-testkit[server]==0.1.0",
 ]
 
 [build-system]

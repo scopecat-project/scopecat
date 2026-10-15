@@ -1,10 +1,10 @@
 [project]
 name = "scopecat-app"
-version = "0.2.0"
+version = "0.1.0"
 description = "Scopecat desktop application and author environment lifecycle."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["fastapi>=0.116", "filelock>=3.18", "httpx2", "platformdirs>=4", "psutil>=7", "pydantic>=2", "rich>=15", "scopecat", "scopecat-instruments", "scopecat-tutorials", "scopecat-server", "typer>=0.20", "uv>=0.13,<0.14", "uvicorn>=0.35"]
+dependencies = ["fastapi>=0.116", "filelock>=3.18", "httpx2", "platformdirs>=4", "psutil>=7", "pydantic>=2", "rich>=15", "scopecat==0.1.0", "scopecat-instruments==0.1.0", "scopecat-tutorials==0.1.0", "scopecat-server==0.1.0", "typer>=0.20", "uv>=0.13,<0.14", "uvicorn>=0.35"]
 
 [project.scripts]
 scopecat = "scopecat_app.public_cli:main"
@@ -12,7 +12,7 @@ scopecat = "scopecat_app.public_cli:main"
 [project.optional-dependencies]
 desktop = ["pywebview==6.2.1", "pystray>=0.19.5", "pillow>=11"]
 kernel = ["ipykernel>=6.30", "nbclient>=0.10", "nbformat>=5.10"]
-notebook = ["scopecat-app[kernel]", "jupyterlab>=4.4"]
+notebook = ["scopecat-app[kernel]==0.1.0", "jupyterlab>=4.4"]
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]

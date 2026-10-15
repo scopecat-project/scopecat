@@ -109,7 +109,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
     root.mkdir()
     config = tmp_path / "release.toml"
     config.write_text('version = "0.3.0-rc.1"\nbuild_number = 9\n')
-    version = f"0.1.0.dev1770000000+scopecat.0.3.0rc1.g{SHA[:12]}"
+    version = "0.3.0rc1"
     files = {}
     for name in assets.PACKAGES:
         wheel = root / f"{name.replace('-', '_')}-{version}-py3-none-any.whl"
@@ -352,8 +352,8 @@ def test_fixture_contract_matches_repository_producers() -> None:
     }
     assert names == set(assets.PACKAGES)
     identity = ReleaseIdentity("0.3.0-rc.1", 9)
-    assert identity.python_package_version("0.1.0", SHA, "1770000000") == (
-        f"0.1.0.dev1770000000+scopecat.0.3.0rc1.g{SHA[:12]}"
+    assert identity.python_package_version(SHA, "1770000000", release=True) == (
+        "0.3.0rc1"
     )
     assert identity.javascript_package_version("0.1.0", SHA) == (
         f"0.1.0-scopecat.0.3.0.rc.1.g{SHA[:12]}"
@@ -513,3 +513,20 @@ def test_export_preserves_windows_evidence_bytes(release, tmp_path):
     destination = tmp_path / "published"
     assets.export(root, destination, SHA, config)
     assets.verify(destination, SHA, config)
+
+
+@pytest.mark.parametrize("dependency", ["scopecat>=0.1", "scopecat==0.2.0"])
+def test_release_rejects_mixed_batch_dependencies(release, dependency):
+    root, config = release
+    wheel = next(root.glob("scopecat_server-*.whl"))
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            "scopecat_server-0.3.0rc1.dist-info/METADATA",
+            f"Name: scopecat-server\nVersion: 0.3.0rc1\nRequires-Dist: {dependency}\n",
+        )
+    path = root / "preview.json"
+    document = json.loads(path.read_text())
+    document["files"][wheel.name] = assets._hash(wheel)
+    write_json(path, document)
+    with pytest.raises(ValueError, match="First-party dependency must select"):
+        assets.assemble(root, SHA, config)
