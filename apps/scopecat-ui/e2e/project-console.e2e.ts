@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test as base, type Request, type Response } from "@playwright/test";
+import { expect, test as base, type Locator, type Request, type Response } from "@playwright/test";
 
 interface DaemonEndpointRecord {
   base_url: string;
@@ -856,7 +856,7 @@ test("queues a free off-grid scan domain into a running adaptive compiler", asyn
 
     await writeFile(experiment.releaseOptimizer, "", "utf8");
     await waitForMarker(experiment.queueAcceptedReady, experiment);
-    await expect(inspection.getByText(/accepted.*point #4/i)).toBeVisible();
+    await expect(acceptedQueuePoint(inspection, 4)).toBeVisible();
 
     await writeFile(experiment.releaseFinish, "", "utf8");
     const completion = await experiment.completion;
@@ -865,6 +865,43 @@ test("queues a free off-grid scan domain into a running adaptive compiler", asyn
   } finally {
     await finishAdaptiveExperiment(experiment);
   }
+});
+
+function acceptedQueuePoint(inspection: Locator, point: number): Locator {
+  return inspection.getByText(`accepted · point #${point}`, { exact: true });
+}
+
+test("queue acceptance locator excludes decision history and other point numbers", async ({
+  page,
+}) => {
+  // The queue and decision history refresh independently. When history arrives,
+  // its ancestor combines Accepted from one decision with Run point #4 in detail.
+  // Keep sibling text adjacent, as in React's rendered DOM.
+  await page.setContent(
+    `
+    <article data-testid="run-domain-decision-card">
+      <div><span data-testid="queued-four">accepted · point #4</span></div>
+      <div class="decision-history">
+        <div>
+          <button>Decision #1 Complete x [0.5]</button>
+          <button>Decision #2 Accepted x [0.375]</button>
+        </div>
+        <div><strong>Run point #4</strong><div>x [0.375]</div></div>
+      </div>
+    </article>
+  `.replace(/>\s+</g, "><"),
+  );
+  const inspection = page.getByTestId("run-domain-decision-card");
+  await expect(inspection.getByText(/accepted.*point #4/i)).toHaveCount(2);
+  const status = acceptedQueuePoint(inspection, 4);
+  await expect(status).toHaveCount(1);
+  await expect(status).toHaveAttribute("data-testid", "queued-four");
+  await expect(status).toBeVisible();
+  await page.getByTestId("queued-four").evaluate((element) => {
+    element.textContent = "accepted · point #40";
+  });
+  await expect(status).toHaveCount(0);
+  await expect(acceptedQueuePoint(inspection, 40)).toBeVisible();
 });
 
 async function createCandidateAnalysis(projectRoot: string): Promise<CandidateAnalysis> {
