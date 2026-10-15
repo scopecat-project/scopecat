@@ -252,32 +252,37 @@ def verify(
         resources = app / (
             "Contents/Resources" if sys.platform == "darwin" else "resources"
         )
-        manifest = resources / "payload/bundle.json"
-        bundle = cast("dict[str, object]", json.loads(manifest.read_bytes()))
-        shutil.copyfile(manifest, home / "bundle.json")
-        (home / "native-release.json").write_text(
-            json.dumps(
-                {
-                    "format": 1,
-                    "installer": installer.name,
-                    "sha256": file_hash(installer),
-                    "bundle_sha256": file_hash(manifest),
-                    "sources": bundle["sources"],
-                    "target": bundle["target"],
-                    "runtime": bundle["runtime"],
-                    "build_id": bundle["build_id"],
-                    "distribution": "prerelease; no trusted signing/notarization",
-                    "external": [
-                        "author source and dependencies",
-                        "vendor SDK/firmware",
-                    ],
-                    "native_interaction": "not-evaluated",
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        write_release_manifest(resources, home, installer)
+
+
+def write_release_manifest(resources: Path, home: Path, installer: Path) -> None:
+    """Record the verified installer and the actual shipped author manifest."""
+    manifest = resources / "payload/bundle.json"
+    bundle = cast("dict[str, object]", json.loads(manifest.read_bytes()))
+    shutil.copyfile(manifest, home / "bundle.json")
+    (home / "native-release.json").write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "installer": installer.name,
+                "sha256": file_hash(installer),
+                "bundle_sha256": file_hash(manifest),
+                "sources": bundle["sources"],
+                "target": bundle["target"],
+                "runtime": bundle["runtime"],
+                "build_id": bundle["build_id"],
+                "distribution": "prerelease; no trusted signing/notarization",
+                "external": [
+                    "author source and dependencies",
+                    "vendor SDK/firmware",
+                ],
+                "native_interaction": "not-evaluated",
+            },
+            indent=2,
         )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def verify_recovery_probes(app: Path, home: Path) -> None:

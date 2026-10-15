@@ -4,19 +4,27 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import zipfile
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from lab_tools.bundle import target_identity
+from lab_tools import author_resources
+from lab_tools.bundle import file_hash, inventory, target_identity
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts/release_assets.py"
 spec = importlib.util.spec_from_file_location("release_assets", SCRIPT)
 assert spec is not None and spec.loader is not None
 assets = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assets)
+native_spec = importlib.util.spec_from_file_location(
+    "verify_native_application", SCRIPT.with_name("verify_native_application.py")
+)
+assert native_spec is not None and native_spec.loader is not None
+native_producer = importlib.util.module_from_spec(native_spec)
+native_spec.loader.exec_module(native_producer)
 SHA = "a" * 40
 
 
@@ -61,7 +69,7 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
             "format": 1,
             "release_version": "0.3.0-rc.1",
             "build_number": 9,
-            "target": {**target_identity(), "platform": target},
+            "target": target_identity(),
             "sources": {"public": SHA},
             "runtime": {
                 module: {
@@ -82,20 +90,37 @@ def release(tmp_path: Path) -> tuple[Path, Path]:
                 if name.endswith(".whl")
             },
         }
-        write_json(root / f"{platform}-bundle.json", bundle)
-        write_json(
-            root / f"{platform}-native-release.json",
-            {
-                "format": 1,
-                "installer": installer.name,
-                "sha256": assets._hash(installer),
-                "bundle_sha256": assets._hash(root / f"{platform}-bundle.json"),
-                "sources": bundle["sources"],
-                "target": bundle["target"],
-                "runtime": bundle["runtime"],
-                "build_id": bundle["build_id"],
-            },
-        )
+        # Feed a verified full delivery to the real native payload producer.
+        source = tmp_path / platform / "delivery"
+        for folder in ("gui", "wheels", "toolchain"):
+            (source / folder).mkdir(parents=True)
+        (source / "gui/index.html").write_text("public UI", encoding="utf-8")
+        for wheel in root.glob("*.whl"):
+            shutil.copy2(wheel, source / "wheels" / wheel.name)
+        (source / "wheels/numpy-1-py3-none-any.whl").write_bytes(b"third party")
+        (source / "toolchain/python.tar").write_bytes(b"build-time interpreter")
+        bundle["files"] = inventory(source, ("gui", "wheels", "toolchain"))
+        for name in (
+            "requirements.lock",
+            "dependencies.lock",
+            "build.lock",
+            "install.py",
+        ):
+            (source / name).write_text("", encoding="utf-8")
+            bundle["files"][name] = file_hash(source / name)
+        write_json(source / "bundle.json", bundle)
+        resources = tmp_path / platform / "resources"
+        resources.mkdir()
+        payload = author_resources.build(source, resources / "payload")
+        projected = json.loads((payload / "bundle.json").read_bytes())
+        # Platform declarations are simulated; projection and report writing are real.
+        projected["target"]["platform"] = target
+        write_json(payload / "bundle.json", projected)
+        reports = tmp_path / platform / "reports"
+        reports.mkdir()
+        native_producer.write_release_manifest(resources, reports, installer)
+        for name in ("bundle", "native-release"):
+            shutil.copy2(reports / f"{name}.json", root / f"{platform}-{name}.json")
     return root, config
 
 
@@ -272,7 +297,7 @@ def test_native_public_wheels_must_match_preview(
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_text())
-    wheel = next(iter(document["files"]))
+    wheel = next(name for name in document["files"] if name.startswith("wheels/"))
     if missing:
         del document["files"][wheel]
     else:
@@ -283,5 +308,63 @@ def test_native_public_wheels_must_match_preview(
     native = json.loads(native_path.read_text())
     native["bundle_sha256"] = assets._hash(path)
     write_json(native_path, native)
-    with pytest.raises(ValueError, match="Native public wheel inventory mismatch"):
+    with pytest.raises(ValueError, match="Native author wheel inventory mismatch"):
+        assets.assemble(root, SHA, config)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "wheels/scopecat_quantum-1-py3-none-any.whl",
+        "wheels/numpy-1-py3-none-any.whl",
+        "toolchain/python.tar",
+        "toolchain/uv.exe",
+        "gui/../escape",
+        "gui/../../outside",
+    ],
+)
+def test_native_resources_reject_unselected_files(release, extra):
+    root, config = release
+    path = root / "macos-bundle.json"
+    document = json.loads(path.read_bytes())
+    document["files"][extra] = "0" * 64
+    write_json(path, document)
+    native_path = root / "macos-native-release.json"
+    native = json.loads(native_path.read_bytes())
+    native["bundle_sha256"] = assets._hash(path)
+    write_json(native_path, native)
+    with pytest.raises(ValueError, match=r"Native author wheel|Invalid native author"):
+        assets.assemble(root, SHA, config)
+
+
+@pytest.mark.parametrize(
+    "missing", ["author.json", "requirements.lock", "gui/index.html"]
+)
+def test_native_resources_require_recipe_and_gui(release, missing):
+    root, config = release
+    path = root / "macos-bundle.json"
+    document = json.loads(path.read_bytes())
+    del document["files"][missing]
+    write_json(path, document)
+    with pytest.raises(ValueError, match="Incomplete native author resources"):
+        assets.assemble(root, SHA, config)
+
+
+def test_legacy_full_delivery_is_not_a_native_author_payload(release):
+    root, config = release
+    path = root / "macos-bundle.json"
+    document = json.loads(path.read_bytes())
+    document["format"] = 1
+    write_json(path, document)
+    with pytest.raises(ValueError, match="Native release identity mismatch"):
+        assets.assemble(root, SHA, config)
+
+
+def test_native_recipe_requires_a_sha256_digest(release):
+    root, config = release
+    path = root / "macos-bundle.json"
+    document = json.loads(path.read_bytes())
+    document["files"]["author.json"] = "g" * 64
+    write_json(path, document)
+    with pytest.raises(ValueError, match="Invalid native author resource"):
         assets.assemble(root, SHA, config)
