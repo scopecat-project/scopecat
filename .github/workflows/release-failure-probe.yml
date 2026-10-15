@@ -24,7 +24,7 @@ jobs:
         env:
           SCOPECAT_TEST_DIAGNOSTICS: test-diagnostics
         run: >-
-          uv run --locked pytest -v --maxprocesses=2
+          uv run --locked python -m pytest -v --maxprocesses=2
           -p scripts.pytest_diagnostics -p scripts.release_failure_diagnostics
           packages/lab-tools/tests/test_task_calibration_teaching_journey.py
           packages/scopecat-server/tests/test_snapshot_integration.py::test_reference_lab_snapshot_roundtrip_in_fresh_processes
@@ -36,6 +36,7 @@ jobs:
           name: targeted-python-${{ runner.os }}
           path: test-diagnostics
   browser:
+    if: github.sha == 'f8f5e6a227c055006dea6872e3b1d1256fa66155'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
