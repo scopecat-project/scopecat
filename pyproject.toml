@@ -56,8 +56,13 @@ include = [
   "scripts",
   "benchmarks",
   "testing/scopecat-testkit/src",
+  "testing/app_support",
+  "conftest.py",
 ]
+# Course resources execute inside generated author workspaces; validate those
+# through tutorial/journey tests rather than resolving their imports here.
 exclude = [
+  "testing/app_support/course_material",
   "packages/scopecat-tutorials/src/scopecat_tutorials/course_material",
   "**/__pycache__",
   ".pytest_cache",
@@ -112,14 +117,14 @@ reportUnknownVariableType = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "testing/scopecat-testkit/src"
+# argparse/pytest options and JSON event logs cross dynamically typed boundaries.
 reportAny = "none"
-reportExplicitAny = "none"
+# White-box fixtures construct bound programs and inspect project-loader state.
 reportPrivateUsage = "none"
-reportUnknownMemberType = "none"
-reportUnknownVariableType = "none"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "packages/scopecat-server/src"
+# Worker entry functions are referenced from other modules, not their owner file.
 reportUnusedFunction = "none"
 
 [[tool.basedpyright.executionEnvironments]]

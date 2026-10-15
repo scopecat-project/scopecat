@@ -22,7 +22,7 @@ build-backend = "uv_build"
 extend = "../../pyproject.toml"
 
 [tool.ruff.lint]
-# Chinese course resources are shipped alongside the English entry guide.
+# Application messages and native UI strings include Chinese punctuation.
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.uv.build-backend]

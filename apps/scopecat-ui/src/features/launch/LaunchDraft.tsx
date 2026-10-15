@@ -83,7 +83,7 @@ interface DraftContext {
   projectId: string | undefined;
   workspaceId: string;
   selectWorkspace: (workspaceId: string) => void;
-  useCurrentSource: (workspaceId?: string) => void;
+  selectCurrentSource: (workspaceId?: string) => void;
   authorRefreshed: (workspaceId: string) => void;
   selectConfiguration: (
     choice: components["schemas"]["ConfigurationChoice-Input"],
@@ -540,7 +540,7 @@ function ProjectDraft({
         selectWorkspace: (owner) => {
           if (owner !== currentWorkspace.current) resetSource(owner);
         },
-        useCurrentSource: (owner) => resetSource(owner ?? currentWorkspace.current),
+        selectCurrentSource: (owner) => resetSource(owner ?? currentWorkspace.current),
         authorRefreshed: (owner) =>
           setDraft((current) =>
             currentWorkspace.current === owner &&

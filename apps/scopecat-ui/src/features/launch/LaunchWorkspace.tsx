@@ -25,7 +25,7 @@ export function LaunchWorkspace({
     projectId,
     workspaceId: selectedWorkspaceId,
     selectWorkspace,
-    useCurrentSource,
+    selectCurrentSource,
     authorRefreshed,
     draft,
     select,
@@ -177,7 +177,7 @@ export function LaunchWorkspace({
               disabled={!sourceAvailable}
               onClick={() => {
                 onHandoffImported?.();
-                useCurrentSource(workspaceId);
+                selectCurrentSource(workspaceId);
               }}
             >
               Use current source
