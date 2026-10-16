@@ -12,6 +12,8 @@ from scopecat.records.instrument import CommandChannelBinding, InstrumentReadbac
 from scopecat.records.measurement import (
     MeasurementAcquisitionValue,
     MeasurementArray,
+    MeasurementArrayAvailability,
+    MeasurementPartitionedArray,
     MeasurementScalar,
     MeasurementUnavailable,
 )
@@ -705,3 +707,25 @@ def test_collect_wire_rejects_invalid_string_offsets_and_utf8() -> None:
             _encode_header(utf8_document),
             (invalid_utf8,),
         )
+
+
+@pytest.mark.parametrize("partitioned", [False, True])
+@pytest.mark.parametrize("valid", [[True, False], [False, False]])
+def test_worker_collect_wire_rejects_availability(
+    partitioned: bool, valid: list[bool]
+) -> None:
+    array = MeasurementArray.create(
+        values=[1.0, 0.0],
+        availability=MeasurementArrayAvailability.create(valid=valid),
+    )
+    value = (
+        MeasurementPartitionedArray.create(partitions=(array,), axis=0)
+        if partitioned
+        else array
+    )
+    receipt = CollectReceipt(readback=InstrumentReadback(values={"trace": value}))
+    with pytest.raises(
+        WorkerWireError, match="does not support measurement array availability"
+    ):
+        frames = split_collect_receipt(receipt)
+        join_collect_receipt(frames.header, frames.attachments)

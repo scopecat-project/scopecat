@@ -12,6 +12,8 @@ from scopecat.kernel.value_types import Scalar
 from scopecat.records.measurement import (
     MeasurementAcquisitionValue,
     MeasurementArray,
+    MeasurementArrayAvailability,
+    MeasurementPartitionedArray,
     MeasurementScalar,
     MeasurementUnavailable,
 )
@@ -158,10 +160,37 @@ class _Driver:
     ) -> DriverOutcome[DriverReadback]:
         gain = self._state[("tests.control/v1", "gain")]
         assert isinstance(gain, float)
+        mode = self._project_root / "array-availability-mode"
+        if mode.exists():
+            gain = max(gain, 2.0)
         values: dict[AcquisitionResultRef, MeasurementAcquisitionValue] = {
             result: _measurement_value(result.result_id, gain=gain)
             for result in request.results
         }
+        if mode.exists():
+            _append_marker(self._project_root, "collect-with-availability")
+            for result, value in values.items():
+                if isinstance(value, MeasurementArray) and value.values.size:
+                    samples = value.values.copy()
+                    samples.reshape(-1)[-1] = 0
+                    valid = np.ones(value.shape, dtype=np.bool_)
+                    valid.reshape(-1)[-1] = False
+                    array = MeasurementArray.create(
+                        values=samples,
+                        dtype=value.dtype,
+                        unit=value.unit,
+                        availability=MeasurementArrayAvailability.create(valid=valid),
+                    )
+                    values[result] = (
+                        MeasurementPartitionedArray.create(
+                            partitions=(array,),
+                            axis=0,
+                            dtype=array.dtype,
+                            unit=array.unit,
+                        )
+                        if mode.read_text() == "partitioned"
+                        else array
+                    )
         return DriverSuccess(
             DriverReadback(
                 values=values,

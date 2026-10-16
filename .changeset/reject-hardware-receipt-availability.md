@@ -1,5 +1,5 @@
 ---
-type: fix
+default: patch
 ---
 
 # 缺失采样不再静默变成有效零值

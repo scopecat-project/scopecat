@@ -33,9 +33,11 @@ from scopecat.authoring import (
     experiment,
     module,
 )
-from scopecat.daemon.client import DaemonClient
+from scopecat.daemon.client import DaemonClient, DaemonConflictError
+from scopecat.daemon.hardware_receipt_wire import decode_run_hardware_receipt
 from scopecat.daemon.views import DaemonHealth
 from scopecat.daemon.wire import InstrumentSessionOpenCommand
+from scopecat.kernel.errors import RunFinalizationFailed
 from scopecat.kernel.state import PayloadRef, StateValue
 from scopecat.program.products import product_axis
 from scopecat.project import load_project
@@ -60,7 +62,7 @@ from scopecat.sdk.instruments.backend import (
     BackendReadRequest,
     BackendStateMemberWrite,
 )
-from scopecat.sdk.instruments.commands import InvokeCommand
+from scopecat.sdk.instruments.commands import InteractiveCollectIntent, InvokeCommand
 from scopecat.sdk.payloads import EncodedPayloadContent
 from scopecat_testkit.instrument_drivers import load_config
 
@@ -795,7 +797,9 @@ def test_worker_rejects_invalid_collect_array_without_poisoning_protocol(
         values=(complex(1.0, -0.5),),
     )
 
-    with pytest.raises(InstrumentBackendError, match="request failed"):
+    with pytest.raises(
+        InstrumentBackendError, match="complex128 measurement array is invalid"
+    ):
         endpoint.collect(
             connection.handle,
             BackendCollectRequest(
@@ -1191,7 +1195,10 @@ def _ragged_point_cloud_config() -> ConfigProfileSnapshot:
     )
 
 
-def _http_daemon_client(transport: TestClient) -> DaemonClient:
+def _http_daemon_client(
+    transport: TestClient,
+    exchanges: list[tuple[httpx2.Request, httpx2.Response]] | None = None,
+) -> DaemonClient:
     def send(request: httpx2.Request) -> httpx2.Response:
         response = transport.request(
             request.method,
@@ -1199,11 +1206,14 @@ def _http_daemon_client(transport: TestClient) -> DaemonClient:
             content=request.content,
             headers=dict(request.headers),
         )
-        return httpx2.Response(
+        received = httpx2.Response(
             response.status_code,
             content=response.content,
             headers=dict(response.headers),
         )
+        if exchanges is not None:
+            exchanges.append((request, received))
+        return received
 
     return DaemonClient(
         "http://testserver",
@@ -1260,3 +1270,92 @@ def test_instrument_startup_timeout_retains_child_phase_and_reaps_process(
     assert "backend factory loaded; constructing backend" in text
     assert "Timeout (0:00:05)" in text
     assert "readiness sent" not in text
+
+
+@pytest.mark.parametrize("mode", ["array", "partitioned"])
+def test_worker_availability_failure_reaches_collect_consumer_without_reexecution(
+    tmp_path: Path,
+    mode: str,
+) -> None:
+    project = _copy_project(tmp_path)
+    (project / "array-availability-mode").write_text(mode)
+    with (
+        LocalDaemonRuntime(
+            project, bootstrap_config=load_config(), instrument_backend_spec=_BACKEND
+        ) as runtime,
+        TestClient(runtime.app()) as transport,
+        _http_daemon_client(transport) as daemon,
+    ):
+        session = runtime.application.instruments.open_session(
+            InstrumentSessionOpenCommand(
+                operation_id="availability-session",
+                actor="test",
+                instrument_ids=("source-0",),
+                setup=runtime.application.setup.resolve("initial").ref,
+            )
+        )
+        intent = InteractiveCollectIntent(
+            command_id="availability-collect",
+            instrument_id="source-0",
+            interface_id="tests.control/v1",
+            acquisition_id="sample",
+            result_ids=["ragged_trace"],
+        )
+        with pytest.raises(DaemonConflictError, match="unknown state"):
+            daemon.collect_instrument(session.session_id, "source-0", intent)
+        assert (project / "driver-events.log").read_text().count(
+            "collect-with-availability"
+        ) == 1
+        # Even an explicit replay cannot execute again after the session is fenced.
+        with pytest.raises(DaemonConflictError):
+            daemon.collect_instrument(session.session_id, "source-0", intent)
+        assert (project / "driver-events.log").read_text().count(
+            "collect-with-availability"
+        ) == 1
+
+
+@pytest.mark.parametrize("mode", ["array", "partitioned"])
+def test_worker_availability_failure_stops_real_run_without_reexecution(
+    tmp_path: Path,
+    mode: str,
+) -> None:
+    project = _copy_project(tmp_path)
+    (project / "array-availability-mode").write_text(mode)
+    config = _ragged_point_cloud_config()
+    exchanges: list[tuple[httpx2.Request, httpx2.Response]] = []
+    with (
+        LocalDaemonRuntime(
+            project, bootstrap_config=config, instrument_backend_spec=_BACKEND
+        ) as runtime,
+        TestClient(runtime.app()) as transport,
+        _http_daemon_client(transport, exchanges) as daemon,
+        LabClient(
+            daemon, config=config, setup=daemon.resolve_setup("initial").ref
+        ) as lab,
+    ):
+        with pytest.raises(RunFinalizationFailed, match="availability") as caught:
+            lab.run(_ragged_point_cloud)
+        assert caught.value.execution_outcome.certainty == "indeterminate"
+        hardware = [
+            (request, response)
+            for request, response in exchanges
+            if request.url.path.endswith("/hardware/execute")
+        ]
+        # The real consumer sees an indeterminate receipt, not padded values.
+        [(request, response)] = hardware
+        assert response.status_code == 200
+        receipt = decode_run_hardware_receipt(response.content)
+        assert receipt.indeterminate
+        assert receipt.values == ()
+        assert any("availability" in problem.message for problem in receipt.problems)
+        assert (project / "driver-events.log").read_text().count(
+            "collect-with-availability"
+        ) == 1
+        # A replay is fenced; no second call reaches the subprocess driver.
+        replay = transport.post(
+            request.url.path, content=request.content, headers=dict(request.headers)
+        )
+        assert replay.status_code == 409
+        assert (project / "driver-events.log").read_text().count(
+            "collect-with-availability"
+        ) == 1
