@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Atom, ChevronDown, CircleOff, LoaderCircle } from "lucide-react";
 import { errorMessage, formatDateTime, formatRelative } from "../../lib/presentation";
-import type { NavigationOptions } from "../../lib/navigation";
+import { navigate, useLocationUrl, type NavigationOptions } from "../../lib/navigation";
 import type { ProjectAnalysis, ProjectAnalysisSummary } from "../../types";
 import { classes, countBadge, secondaryButton } from "../../ui/styles";
 import { AnalysisPublicationView } from "./AnalysisPublicationView";
@@ -24,35 +24,74 @@ export function AnalysesWorkspace(props: {
   selectedAnalysisId?: string;
   onHandoff: (handoff: ComparisonHandoff) => void;
 }) {
-  const [comparison, setComparison] = useState(() =>
-    new URLSearchParams(location.search).has("compare"),
-  );
+  const url = useLocationUrl();
+  // An exact project publication also disambiguates older links carrying both parameters.
+  const comparison = url.searchParams.has("compare") && !url.searchParams.has("analysis");
+  const entry = `${props.projectId}:${window.history.state?.scopecatPosition ?? 0}`;
+  function selectWorkflow(compare: boolean) {
+    if (compare === comparison) return;
+    const target = new URL(url);
+    const saved = window.history.state?.scopecatAnalysisSelection;
+    const analysisId =
+      props.selectedAnalysisId ?? (saved?.projectId === props.projectId ? saved.id : undefined);
+    const draft = window.history.state?.scopecatComparison;
+    target.hash = "analyses";
+    target.searchParams.delete("analysis");
+    target.searchParams.delete("compare");
+    target.searchParams.delete("comparison-analysis");
+    target.searchParams.delete("workspace");
+    if (compare) {
+      target.searchParams.set(
+        "compare",
+        draft?.projectId === props.projectId ? (draft.draft?.primary ?? "") : "",
+      );
+      if (draft?.projectId === props.projectId && draft.draft?.selected)
+        target.searchParams.set("comparison-analysis", draft.draft.selected);
+    } else if (analysisId) target.searchParams.set("analysis", analysisId);
+    // Switching workflows carries only this window's draft and last project selection.
+    // Each history entry still owns its own snapshot and return position.
+    navigate(target, {
+      state: {
+        scopecatComparison: draft,
+        scopecatAnalysisSelection: { projectId: props.projectId, id: analysisId },
+      },
+    });
+  }
   return (
     <div className="space-y-4">
       <nav className="flex gap-4" aria-label="Analysis workflows">
-        <button onClick={() => setComparison(true)}>Compare retained runs</button>
-        <button onClick={() => setComparison(false)}>Project analysis history</button>
+        <button aria-current={comparison ? "page" : undefined} onClick={() => selectWorkflow(true)}>
+          Compare retained runs
+        </button>
+        <button
+          aria-current={!comparison ? "page" : undefined}
+          onClick={() => selectWorkflow(false)}
+        >
+          Project analysis history
+        </button>
       </nav>
       {comparison && !props.daemonUnavailable ? (
         <RunComparison
-          key={props.projectId}
+          key={entry}
           projectId={props.projectId}
           onOpenRun={props.onOpenRun}
           onHandoff={props.onHandoff}
         />
       ) : (
-        <ProjectAnalyses {...props} />
+        <ProjectAnalyses key={entry} {...props} />
       )}
     </div>
   );
 }
 
 function ProjectAnalyses({
+  projectId,
   daemonUnavailable,
   onOpenRun,
   onSelectAnalysis,
   selectedAnalysisId,
 }: {
+  projectId: string | undefined;
   daemonUnavailable: boolean;
   onOpenRun: (runId: string) => void;
   onSelectAnalysis: (analysisId: string, options?: NavigationOptions) => void;
@@ -81,6 +120,11 @@ function ProjectAnalyses({
     queryFn: ({ signal }) => getProjectAnalysis(selectedId!, signal),
     enabled: !daemonUnavailable && selectedId !== undefined,
   });
+  const page = useAnalysisReturnPosition(
+    projectId,
+    selectedId,
+    !daemonUnavailable && !analyses.isPending && selectedAnalysis.isSuccess,
+  );
 
   useEffect(() => {
     if (selectedId && selectedAnalysisId === undefined) {
@@ -127,6 +171,7 @@ function ProjectAnalyses({
 
   return (
     <section
+      ref={page}
       className="grid min-h-[680px] grid-cols-[285px_minmax(0,1fr)] overflow-hidden rounded-lg border border-line bg-panel max-[900px]:grid-cols-1"
       aria-labelledby="analyses-heading"
     >
@@ -215,6 +260,66 @@ function ProjectAnalyses({
       </div>
     </section>
   );
+}
+
+function useAnalysisReturnPosition(
+  projectId: string | undefined,
+  analysisId: string | undefined,
+  ready: boolean,
+) {
+  const page = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = page.current;
+    if (!ready || !element) return;
+    const position = window.history.state?.scopecatPosition ?? 0;
+    const saved = window.history.state?.scopecatAnalysisPosition;
+    let scrollTimer: number | undefined;
+    const save = () => {
+      // A navigation may finish before the outgoing component is unmounted.
+      if ((window.history.state?.scopecatPosition ?? 0) !== position) return;
+      window.history.replaceState(
+        {
+          ...window.history.state,
+          scopecatAnalysisPosition: {
+            projectId,
+            analysisId,
+            scroll: window.scrollY,
+            expanded: [...element.querySelectorAll("details")].flatMap((detail, index) =>
+              detail.open ? [index] : [],
+            ),
+          },
+        },
+        "",
+        window.location.href,
+      );
+    };
+    const rememberScroll = () => {
+      window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(save, 200);
+    };
+    const frame = requestAnimationFrame(() => {
+      if (saved?.projectId === projectId && saved.analysisId === analysisId) {
+        element.querySelectorAll("details").forEach((detail, index) => {
+          detail.open = Array.isArray(saved.expanded) && saved.expanded.includes(index);
+        });
+        if (typeof saved.scroll === "number") window.scrollTo(0, saved.scroll);
+      }
+      window.addEventListener("scroll", rememberScroll);
+      // Save before a link/button changes the history entry, including the top navigation.
+      window.addEventListener("click", save, true);
+      window.addEventListener("pagehide", save);
+      element.addEventListener("toggle", save, true);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(scrollTimer);
+      window.removeEventListener("scroll", rememberScroll);
+      window.removeEventListener("click", save, true);
+      window.removeEventListener("pagehide", save);
+      element.removeEventListener("toggle", save, true);
+    };
+  }, [projectId, analysisId, ready]);
+  return page;
 }
 
 function AnalysisDetail({

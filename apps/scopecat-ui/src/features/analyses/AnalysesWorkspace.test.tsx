@@ -2,9 +2,10 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectAnalysis, ProjectAnalysisSummary } from "../../types";
+import { navigate, useLocationUrl } from "../../lib/navigation";
 import { AnalysesWorkspace } from "./AnalysesWorkspace";
 import {
   getOlderProjectAnalysisSummaries,
@@ -19,7 +20,10 @@ vi.mock("./analysis-api", () => ({
   getProjectAnalysisArtifactDownload: vi.fn(),
 }));
 
+vi.mock("./RunComparison", () => ({ RunComparison: () => <div>Comparison workspace</div> }));
+
 beforeEach(() => {
+  window.history.replaceState(null, "", "/#analyses");
   vi.mocked(getProjectAnalysisSummaries).mockResolvedValue({
     items: [projectAnalysisSummary()],
   });
@@ -32,6 +36,60 @@ afterEach(() => {
 });
 
 describe("AnalysesWorkspace", () => {
+  it("restores workflow, exact publication and draft across history entries", async () => {
+    const draft = {
+      projectId: "test",
+      version: 1,
+      id: "draft-1",
+      draft: { primary: "run-a", secondary: "run-b", selected: "fit-r1" },
+    };
+    window.history.replaceState(
+      { scopecatComparison: draft },
+      "",
+      "/?compare=run-a&comparison-analysis=fit-r1#analyses",
+    );
+    renderNavigationWorkspace();
+    expect(screen.getByText("Comparison workspace")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Project analysis history" }));
+    await waitFor(() =>
+      expect(new URLSearchParams(location.search).get("analysis")).toBe(
+        "analysis-candidate-verification-r2",
+      ),
+    );
+    expect(location.search).not.toContain("compare=");
+    expect(window.history.state.scopecatComparison).toEqual(draft);
+    act(() => window.history.back());
+    await screen.findByText("Comparison workspace");
+    expect(new URLSearchParams(location.search).get("comparison-analysis")).toBe("fit-r1");
+    act(() => window.history.forward());
+    expect(await screen.findByRole("heading", { name: "Candidate verification" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Compare retained runs" }));
+    expect(new URLSearchParams(location.search).has("analysis")).toBe(false);
+    expect(new URLSearchParams(location.search).get("compare")).toBe("run-a");
+    expect(window.history.state.scopecatComparison).toEqual(draft);
+    fireEvent.click(screen.getByRole("button", { name: "Project analysis history" }));
+    await waitFor(() =>
+      expect(new URLSearchParams(location.search).get("analysis")).toBe(
+        "analysis-candidate-verification-r2",
+      ),
+    );
+  });
+
+  it("honors an exact project publication in a legacy mixed URL", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?compare=run-a&analysis=analysis-candidate-verification-r2#analyses",
+    );
+    renderNavigationWorkspace();
+    expect(await screen.findByRole("heading", { name: "Candidate verification" })).toBeVisible();
+    expect(screen.queryByText("Comparison workspace")).toBeNull();
+    expect(screen.getByRole("button", { name: "Project analysis history" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("shows cross-run provenance and opens an exact input run", async () => {
     const openRun = vi.fn();
     renderWorkspace(openRun);
@@ -177,4 +235,32 @@ function projectAnalysis(): ProjectAnalysis {
       },
     ],
   };
+}
+
+function NavigationWorkspace() {
+  const url = useLocationUrl();
+  return (
+    <AnalysesWorkspace
+      projectId="test"
+      daemonUnavailable={false}
+      onOpenRun={vi.fn()}
+      onHandoff={vi.fn()}
+      selectedAnalysisId={url.searchParams.get("analysis") ?? undefined}
+      onSelectAnalysis={(id, options) => {
+        const target = new URL(location.href);
+        target.searchParams.set("analysis", id);
+        navigate(target, options);
+      }}
+    />
+  );
+}
+
+function renderNavigationWorkspace() {
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <NavigationWorkspace />
+    </QueryClientProvider>,
+  );
 }

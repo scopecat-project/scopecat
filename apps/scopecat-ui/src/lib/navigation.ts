@@ -1,6 +1,7 @@
 import type { MouseEvent } from "react";
 export interface NavigationOptions {
   replace?: boolean;
+  state?: Record<string, unknown>;
 }
 
 /** User navigation adds history; automatic initial selection updates the entry. */
@@ -9,14 +10,18 @@ export function navigate(target: URL | string, options: NavigationOptions = {}) 
   if (url.href === window.location.href) return;
   const position: number = window.history.state?.scopecatPosition ?? 0;
   if (options.replace) {
-    window.history.replaceState({ ...window.history.state, scopecatPosition: position }, "", url);
+    window.history.replaceState(
+      { ...window.history.state, ...options.state, scopecatPosition: position },
+      "",
+      url,
+    );
   } else {
     window.history.replaceState(
       { ...window.history.state, scopecatPosition: position },
       "",
       window.location.href,
     );
-    window.history.pushState({ scopecatPosition: position + 1 }, "", url);
+    window.history.pushState({ ...options.state, scopecatPosition: position + 1 }, "", url);
   }
   window.dispatchEvent(new HashChangeEvent("hashchange"));
 }
