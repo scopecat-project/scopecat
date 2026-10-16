@@ -514,6 +514,7 @@ journey_paths = [
   "packages/scopecat-app/tests/test_installed_adapter_journey.py",
   "packages/scopecat-app/tests/test_calibration_teaching_journey.py",
   "packages/scopecat-app/tests/test_task_calibration_teaching_journey.py",
+  "packages/scopecat-app/tests/test_procedure_teaching_journey.py",
   "packages/scopecat-app/tests/test_application_runtime.py",
   "packages/scopecat-app/tests/test_notebook_workspace_journey.py",
   "packages/scopecat-app/tests/test_unknown_parameter_authoring.py",
