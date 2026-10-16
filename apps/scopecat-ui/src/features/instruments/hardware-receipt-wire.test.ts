@@ -217,6 +217,8 @@ describe("receipt header validation", () => {
     scalar,
     unavailable,
     { ...unavailable, shape: [] },
+    { ...unavailable, shape: [2 ** 53] },
+    { kind: "scalar", dtype: "float64", value: 1.5 },
   ])("preserves valid inline measurements %j", (value) => {
     expect(decodeCollectReceipt(framedReceipt({ value }, [])).readback?.values?.value).toEqual(
       value,

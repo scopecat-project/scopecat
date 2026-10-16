@@ -267,7 +267,10 @@ function isNonnegativeInteger(value: unknown): value is number {
 function isUnavailableShape(value: unknown): value is (number | null)[] {
   return (
     Array.isArray(value) &&
-    value.every((size: unknown) => size === null || isNonnegativeInteger(size))
+    value.every(
+      (size: unknown) =>
+        size === null || (typeof size === "number" && Number.isInteger(size) && size >= 0),
+    )
   );
 }
 
