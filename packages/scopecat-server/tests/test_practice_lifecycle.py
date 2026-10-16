@@ -14,6 +14,17 @@ from scopecat_server.lifecycle import start_project, stop_project
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 
 
+def test_retained_practice_definition_keeps_its_exact_identity() -> None:
+    from scopecat_server.practice_lesson import manual_peaks, manual_peaks_v2
+
+    # Existing records name this exact reference, not merely an id/version pair.
+    assert manual_peaks.ref.fingerprint == (
+        "sha256:6b45c27d6461eba949568a2ba56caf8cde5f21640e9d8b9d771af671e9cb2bb5"
+    )
+    assert manual_peaks.ref.version == "1"
+    assert manual_peaks_v2.ref.version == "2"
+
+
 def _wait(client: DaemonClient, identity: str, state: str) -> None:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
@@ -41,6 +52,7 @@ def test_practice_restores_decision_without_reacquisition_then_clears_owned_cont
         with DaemonClient(endpoint.base_url) as client:
             scope = client.create_practice(PracticeCreateCommand(request_key="lesson"))
             assert scope.procedure_id is not None
+            assert client.get_procedure(scope.procedure_id).definition.version == "2"
             _wait(client, scope.procedure_id, "waiting_for_input")
             steps = client.list_procedure_step_attempts(
                 scope.procedure_id, ProcedureStepAttemptListQuery()

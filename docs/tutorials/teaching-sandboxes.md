@@ -15,7 +15,8 @@ another application, a Python environment or a notebook kernel.
 
 You can close the page and return through Help. The existing task retains its
 scan and decision; opening it does not measure again. Start a new practice when
-you want a fresh attempt.
+you want a fresh attempt. Existing practices retain their original question and
+procedure version; start a new practice to use updated lesson hints.
 
 ## Keep notes and finish
 

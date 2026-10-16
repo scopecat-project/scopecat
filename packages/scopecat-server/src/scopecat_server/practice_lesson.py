@@ -89,6 +89,53 @@ def manual_peaks(context: LabProcedureContext, intent: PeakPracticeIntent) -> No
             f"choose-{attempt}",
             title="Choose a peak frequency",
             instructions=(
+                "Read the synthetic curve below. Enter a frequency in MHz between "
+                "6490 and 6510, or choose No clear peak / Unsure and leave it empty. "
+                "Recording a choice does not publish a calibration. " + problem
+            ),
+            schema=PEAK_CHOICE,
+            inputs=(scan, plotted),
+            response_template=PeakChoice("Unsure", None),
+            metadata={"field_labels": {"frequency_mhz": "Peak frequency (MHz)"}},
+        )
+        value = choice.value
+        if (
+            value.outcome == "Peak selected"
+            and value.frequency_mhz is not None
+            and 6490 <= value.frequency_mhz <= 6510
+        ) or (value.outcome != "Peak selected" and value.frequency_mhz is None):
+            return
+        problem = (
+            "The previous choice did not match these conditions; please review it."
+        )
+        attempt += 1
+
+
+# Version one stays byte-for-byte stable for retained practice identities.
+@sc.procedure(
+    id="scopecat.practice.manual-peaks", version="2", intent=PeakPracticeIntent
+)
+def manual_peaks_v2(context: LabProcedureContext, intent: PeakPracticeIntent) -> None:
+    scan = context.run(
+        "scan",
+        sweep.build(frequency=sc.Quantity(6500, "MHz")).with_axis(
+            sc.axis(
+                sweep.controls.fields[0].ref,
+                [sc.Quantity(6490 + index * 0.25, "MHz") for index in range(81)],
+            )
+        ),
+        config=intent.config,
+        setup=intent.setup,
+        name="Practice: synthetic frequency scan",
+    )
+    plotted = context.analyze_run("curve", scan, curve())
+    attempt = 1
+    problem = ""
+    while True:
+        choice = context.interpret(
+            f"choose-{attempt}",
+            title="Choose a peak frequency",
+            instructions=(
                 "Find the highest point of the upward peak (not a dip). "
                 "Hover over the curve "
                 "to read its horizontal coordinate, then type the frequency; "
@@ -134,4 +181,4 @@ def manual_peaks(context: LabProcedureContext, intent: PeakPracticeIntent) -> No
 
 
 def application() -> LabApplication:
-    return LabApplication(procedures=(manual_peaks,))
+    return LabApplication(procedures=(manual_peaks, manual_peaks_v2))

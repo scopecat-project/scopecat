@@ -81,9 +81,9 @@ def run_project_procedure(root: Path, procedure_id: str) -> None:
     with DaemonClient(resolve_daemon_endpoint(root)) as client:
         stored = client.get_procedure(procedure_id)
         from scopecat_server.practice_lesson import application as practice_application
-        from scopecat_server.practice_lesson import manual_peaks
+        from scopecat_server.practice_lesson import manual_peaks, manual_peaks_v2
 
-        if stored.definition == manual_peaks.ref:
+        if stored.definition in (manual_peaks.ref, manual_peaks_v2.ref):
             scope = client.practice(str(stored.intent["scope_id"]))
             if scope.state != "active" or scope.procedure_id != procedure_id:
                 raise ValueError("Practice is not active or does not own this task")
