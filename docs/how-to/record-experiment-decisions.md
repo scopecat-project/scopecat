@@ -108,6 +108,42 @@ unknown and must be reconciled. Do not turn an expected scientific choice into
 an execution failure merely to pause the procedure.
 
 
+## 在普通作者会话中回答已查看的问题
+
+先取得待答对象，再检查问题和证据；不要等输入完答案才重新选择“最新问题”。
+沿用上文的 `RESONATOR_SELECTION`，在 `project.authoring()` 会话中：
+
+```python
+task = author.procedures.get(procedure_run_id)
+task.wait(timeout=60)
+pending = task.pending_input("select-resonator", schema=RESONATOR_SELECTION)
+print(pending.request.title, pending.request.instructions)
+print(pending.inputs)  # 据此打开并检查对应的保留证据
+
+receipt = pending.respond(
+    ResonatorSelection("r2", 6.713e9, 0.86, "已检查偏置响应"),
+    actor="operator@example.org",
+)
+# 普通项目 worker 在人工输入处暂停；确认后续操作合适时显式继续。
+task.resume()
+```
+
+`pending` 保存原问题、证据引用、schema 与并发校验字段的独立快照；
+`respond` 只接受该 schema 的答案，不重新读取状态来改答另一个问题。
+即使新问题使用相同 schema，旧答复也不能覆盖它。冲突后重新取得待答对象、
+重新审阅；不要自动更新 hash/revision 重发。重复完全相同的答案、actor、note
+沿用服务端幂等协议；不确定是否成功时也不要改成回答一个新问题。
+该对象属于当前会话，不是可跨进程重开的 receipt 文件。
+
+作者不用手填 attempt、request hash 或 revisions；它们仍用于服务端校验。
+返回的 receipt 是已保存答复的记录，`respond` 本身不调用 resume/dispatch。
+普通项目 worker 在等待输入时暂停；若另有独立驻留执行器轮询 ready 工作，
+答复可能允许它继续，应先确认该执行器的策略，不能把答复理解为额外人工停顿。
+读取与答复不预留执行权，仍可能与其他操作者冲突。
+
+旧 `lab.procedures.get(...).respond(...)` 继续在调用时选择当前问题；
+普通作者路径用 `pending_input` 明确绑定实际查看过的问题。
+
 ## Recover unfinished edits
 
 The Decisions editor automatically saves reviewer, reasoning, JSON/form mode and

@@ -19,6 +19,7 @@ from scopecat.api._runner import (
     _prepare_run_submission,
 )
 from scopecat.api.analysis import AnalysisInvocation, AnalysisStep
+from scopecat.api.procedure_inputs import PendingProcedureInput
 from scopecat.api.procedure_planner import (
     ProcedurePlanningConfig,
     ProcedurePlanningContext,
@@ -56,7 +57,6 @@ from scopecat.automation import (
     ProcedureStepAttemptListQuery,
     ProcedureStepAttemptPage,
     ProcedureStepAttentionRetryCommand,
-    ProcedureStepInputSubmitCommand,
     ProcedureStepOperation,
     ProcedureStepOutputRef,
     ProcedureSubmitCommand,
@@ -1066,29 +1066,8 @@ class LabProcedureOperations:
         if run.state != "waiting_for_input":
             raise ValueError("procedure is not waiting for interpretation input")
         step = self._waiting_step(procedure_run_id, step_key=step_key)
-        request = step.interpretation_request
-        if request is None:
-            raise RuntimeError("waiting interpretation has no durable request")
-        if (
-            request.schema_id != schema.id
-            or request.schema_codec != schema.schema_codec
-            or request.schema_hash != schema.schema_hash
-            or request.structure != schema.structure
-        ):
-            raise ValueError("local response schema does not match the durable request")
-        receipt = self._client.submit_procedure_step_input(
-            ProcedureStepInputSubmitCommand(
-                procedure_run_id=procedure_run_id,
-                expected_run_revision=run.revision,
-                step_key=step.step_key,
-                attempt=step.attempt,
-                expected_step_revision=step.revision,
-                request_hash=request.request_hash,
-                actor=actor,
-                actor_kind=actor_kind,
-                value=schema.encode(value),
-                note=note,
-            )
+        receipt = PendingProcedureInput(self._client, run, step, schema).respond(
+            value, actor=actor, actor_kind=actor_kind, note=note
         )
         return ProcedureHandle(self, receipt.run.procedure_run_id)
 

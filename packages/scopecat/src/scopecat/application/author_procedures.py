@@ -10,6 +10,8 @@ from pathlib import Path
 import httpx2
 from pydantic import BaseModel
 
+from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.api.procedure_inputs import PendingProcedureInput
 from scopecat.application.launch import LaunchSubmission
 from scopecat.automation.definition import ProcedureDefinition
 from scopecat.automation.models import (
@@ -190,6 +192,28 @@ class AuthorProcedure:
             self.id, ProcedureStepAttemptListQuery(limit=limit, cursor=cursor)
         )
 
+    def pending_input[ValueT](
+        self, step_key: str, *, schema: AnalysisFactSchema[ValueT]
+    ) -> PendingProcedureInput[ValueT]:
+        """Capture a typed question before reviewing it, without reserving it.
+
+        Reads can race another operator. Answer submission checks the captured
+        revisions and exact request; it never silently answers a newer question.
+        """
+        run = self.snapshot
+        if run.state != "waiting_for_input":
+            raise ValueError("procedure is not waiting for interpretation input")
+        cursor: int | None = None
+        while True:
+            page = self.steps(limit=200, cursor=cursor)
+            for step in page.items:
+                if step.step_key == step_key:
+                    # Never fall back to an older waiting attempt.
+                    return PendingProcedureInput(self.session, run, step, schema)
+            if page.next_cursor is None:
+                raise KeyError(f"Procedure has no step {step_key!r}")
+            cursor = page.next_cursor
+
     def output(self, step_key: str) -> ProcedureStepOutputRef:
         """Read a step's newest output; reject incomplete attempts without execution."""
         cursor: int | None = None
@@ -219,7 +243,7 @@ class AuthorProcedure:
     def resume(self) -> LaunchSubmission:
         """Explicitly dispatch ready work through the existing server gate.
 
-        Answer waiting input using submit_procedure_step_input before resuming.
+        Answer a captured pending_input before resuming.
         Attention/unknown outcomes still require their existing reconciliation.
         """
         return self.session.dispatch_project_procedure(self.id)
