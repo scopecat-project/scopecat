@@ -6,12 +6,15 @@ from threading import Event
 from unittest.mock import Mock
 
 import pytest
+from pydantic import TypeAdapter
 
 from scopecat_app import notebook_journey as journey
-from scopecat_tutorials.lessons import TOPICS
+from scopecat_tutorials.lessons import TOPICS, LessonTopic
 
 
-def test_other_window_observes_preparation_failure_and_retry(tmp_path, monkeypatch):
+def test_other_window_observes_preparation_failure_and_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     runtime = Mock(home=tmp_path)
     source_started, allow_source, environment_started, allow_environment = (
         Event() for _ in range(4)
@@ -57,7 +60,7 @@ def test_other_window_observes_preparation_failure_and_retry(tmp_path, monkeypat
 
 
 def test_explicit_repair_retries_client_failure_without_replacing_edited_course(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     runtime = Mock(home=tmp_path)
     client = Mock()
@@ -77,7 +80,8 @@ def test_explicit_repair_retries_client_failure_without_replacing_edited_course(
         journey.prepare(runtime, repair=True)
     client.assert_called_with(runtime, original.directory, rebuild=True)
     assert journey.status(runtime)["state"] == "retryable"
-    assert journey.current(runtime).rebuild_client
+    current = journey.current(runtime)
+    assert current is not None and current.rebuild_client
     client.side_effect = None
     execution.return_value = Path("new-execution")
     repaired = journey.prepare(runtime)
@@ -92,7 +96,7 @@ def test_explicit_repair_retries_client_failure_without_replacing_edited_course(
 
 @pytest.mark.parametrize("topic", TOPICS)
 def test_retry_and_continue_preserve_files_and_environment(
-    tmp_path, monkeypatch, topic
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic
 ):
     runtime = Mock(home=tmp_path)
     client = Mock()
@@ -136,7 +140,7 @@ def test_retry_and_continue_preserve_files_and_environment(
     assert not pending.notebook.exists()
 
 
-def test_fresh_sources_have_independent_identity_and_no_manager_tasks(tmp_path):
+def test_fresh_sources_have_independent_identity_and_no_manager_tasks(tmp_path: Path):
     first, second = (tmp_path / name for name in ("first", "second"))
     for source in (first, second):
         journey.create_lesson_source(source)
@@ -155,7 +159,7 @@ def test_fresh_sources_have_independent_identity_and_no_manager_tasks(tmp_path):
 
 @pytest.mark.parametrize("topic", ["parameters", "groups"])
 def test_windows_editor_opens_folder_and_notebook_without_command_shell(
-    tmp_path, monkeypatch, topic
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic
 ):
     installation = tmp_path / "VS Code"
     (installation / "bin").mkdir(parents=True)
@@ -183,7 +187,7 @@ def test_windows_editor_opens_folder_and_notebook_without_command_shell(
 @pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
 @pytest.mark.parametrize("active_venv", [None, "application-venv"])
 def test_editor_does_not_inherit_application_virtual_env(
-    tmp_path, monkeypatch, platform, active_venv
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform, active_venv
 ):
     installation = tmp_path / "editor"
     (installation / "bin").mkdir(parents=True)
@@ -212,7 +216,9 @@ def test_editor_does_not_inherit_application_virtual_env(
     assert journey.os.environ == original
 
 
-def test_old_parameters_receipt_is_continued_without_replacement(tmp_path, monkeypatch):
+def test_old_parameters_receipt_is_continued_without_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     import json
 
     runtime = Mock(home=tmp_path)
@@ -233,14 +239,18 @@ def test_old_parameters_receipt_is_continued_without_replacement(tmp_path, monke
     client.assert_not_called()
 
 
-def test_topics_keep_separate_receipts_and_reject_unknown_topics(tmp_path, monkeypatch):
+def test_topics_keep_separate_receipts_and_reject_unknown_topics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     runtime = Mock(home=tmp_path)
     monkeypatch.setattr(journey, "create_client_environment", Mock())
     monkeypatch.setattr(journey, "prepare_execution_environment", Mock())
-    saved = {topic: journey.prepare(runtime, topic=topic) for topic in TOPICS}
+    topics = TypeAdapter(list[LessonTopic]).validate_python(list(TOPICS))
+    saved = {topic: journey.prepare(runtime, topic=topic) for topic in topics}
     assert len({item.directory for item in saved.values()}) == len(TOPICS)
     identities = set()
-    for topic, item in saved.items():
+    for topic in topics:
+        item = saved[topic]
         assert journey.current(Mock(home=tmp_path), topic) == item
         assert item.notebook.name == f"{topic}.ipynb"
         identities.add(
@@ -251,14 +261,14 @@ def test_topics_keep_separate_receipts_and_reject_unknown_topics(tmp_path, monke
     assert len(identities) == len(TOPICS)
     parameters = saved["parameters"]
     with pytest.raises(ValueError, match="尚不支持"):
-        journey.prepare(runtime, topic="../outside")
+        journey.prepare(runtime, topic="../outside")  # pyright: ignore[reportArgumentType] -- exercise runtime rejection of an invalid topic
     receipt = tmp_path / "learning/groups.json"
     receipt.write_text(parameters.model_dump_json(), encoding="utf-8")
     with pytest.raises(ValueError, match="不符"):
         journey.current(runtime, "groups")
 
 
-def test_dead_preparation_process_becomes_retryable(tmp_path):
+def test_dead_preparation_process_becomes_retryable(tmp_path: Path):
     import subprocess
     import sys
 

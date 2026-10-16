@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_host_preserves_process_identity_and_python_subprocesses(tmp_path):
+def test_host_preserves_process_identity_and_python_subprocesses(tmp_path: Path):
     app = tmp_path / "Relocated 中文 app"
     python = app / "resources/python"
     python.mkdir(parents=True)
@@ -91,7 +91,9 @@ def test_host_preserves_process_identity_and_python_subprocesses(tmp_path):
     assert state["isolated"] == 1 and state["bytecode"] is True
 
 
-def test_development_host_preserves_venv_and_editable_source(tmp_path, monkeypatch):
+def test_development_host_preserves_venv_and_editable_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     source = tmp_path / "checkout 中文"
     source.mkdir()
     monkeypatch.setattr(

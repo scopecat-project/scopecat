@@ -2,6 +2,7 @@
 
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import psutil
@@ -17,7 +18,7 @@ from scopecat_server.lifecycle import write_daemon_endpoint_record
 
 
 @pytest.fixture
-def application(tmp_path: Path):
+def application(tmp_path: Path) -> Iterator[ApplicationRuntime]:
     gui = tmp_path / "gui"
     gui.mkdir()
     (gui / "index.html").write_text("<html>application</html>")
@@ -27,14 +28,16 @@ def application(tmp_path: Path):
     runtime.stop()
 
 
-def test_idle_exit_uses_live_service_and_releases_ownership(application):
+def test_idle_exit_uses_live_service_and_releases_ownership(
+    application: ApplicationRuntime,
+):
     application.start()
     assert not application.activity().busy
     assert application.stop_if_idle()
     assert application.status().state == "stopped"
 
 
-def test_application_starts_without_source_manifest(application):
+def test_application_starts_without_source_manifest(application: ApplicationRuntime):
     assert not (application.root / "scopecat.toml").exists()
     before = application.installation()
     assert application.qualify(before.python, before.static_dir) == before
@@ -46,7 +49,7 @@ def test_application_starts_without_source_manifest(application):
 
 
 def test_unavailable_author_folder_does_not_block_application_update(
-    application, tmp_path
+    application: ApplicationRuntime, tmp_path: Path
 ):
     import httpx2
 
@@ -70,7 +73,7 @@ def test_unavailable_author_folder_does_not_block_application_update(
 
 
 def test_select_existing_environment_validates_before_publishing(
-    application, tmp_path, monkeypatch
+    application: ApplicationRuntime, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     source = tmp_path / "author"
     (source / "src").mkdir(parents=True)
@@ -108,7 +111,9 @@ def test_select_existing_environment_validates_before_publishing(
     assert location.read_bytes() == before
 
 
-def test_two_sources_share_empty_application_without_owning_it(application, tmp_path):
+def test_two_sources_share_empty_application_without_owning_it(
+    application: ApplicationRuntime, tmp_path: Path
+):
     import httpx2
 
     from scopecat.daemon.endpoint import resolve_daemon_endpoint
@@ -149,7 +154,7 @@ def test_two_sources_share_empty_application_without_owning_it(application, tmp_
     assert application.start().data_root == record.data_root
 
 
-def test_killed_owner_reconciles_without_touching_data(application):
+def test_killed_owner_reconciles_without_touching_data(application: ApplicationRuntime):
     record = application.start()
     evidence = record.data_root / "retained-evidence"
     evidence.write_bytes(b"retain")
@@ -167,7 +172,9 @@ def test_killed_owner_reconciles_without_touching_data(application):
     assert application.start().data_root == record.data_root
 
 
-def test_conflicting_interpreter_has_explicit_stop_recovery(application):
+def test_conflicting_interpreter_has_explicit_stop_recovery(
+    application: ApplicationRuntime,
+):
     record = application.start()
     assert record.python == Path(sys.executable).absolute()
     write_daemon_endpoint_record(record.model_copy(update={"python": None}))
@@ -177,7 +184,9 @@ def test_conflicting_interpreter_has_explicit_stop_recovery(application):
     assert application.start().python == Path(sys.executable).absolute()
 
 
-def test_failed_candidate_does_not_replace_selected_runtime(application):
+def test_failed_candidate_does_not_replace_selected_runtime(
+    application: ApplicationRuntime,
+):
     before = application.installation()
     application.start()
     with pytest.raises(ValueError, match="仍在运行或更新中"):
@@ -191,7 +200,7 @@ def test_failed_candidate_does_not_replace_selected_runtime(application):
     assert not application.pending.exists()
 
 
-def test_legacy_home_keeps_exact_locations_without_loading_source(tmp_path):
+def test_legacy_home_keeps_exact_locations_without_loading_source(tmp_path: Path):
     root = tmp_path / "home/runtime"
     root.mkdir(parents=True)
     (root / "scopecat.toml").write_text("[lab]\n[authors]\ndependencies = []\n")
@@ -221,7 +230,9 @@ def test_legacy_home_keeps_exact_locations_without_loading_source(tmp_path):
         runtime.stop()
 
 
-def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch):
+def test_interrupted_selection_is_fenced_and_retryable(
+    application: ApplicationRuntime, monkeypatch: pytest.MonkeyPatch
+):
     before = application.installation()
     candidate = application.qualify(
         before.python,
@@ -254,7 +265,7 @@ def test_interrupted_selection_is_fenced_and_retryable(application, monkeypatch)
 
 
 def test_stopping_development_does_not_stop_another_application_home(
-    application, tmp_path
+    application: ApplicationRuntime, tmp_path: Path
 ):
     other = ApplicationRuntime(tmp_path / "daily")
     other.configure(static_dir=application.installation().static_dir)
@@ -268,7 +279,7 @@ def test_stopping_development_does_not_stop_another_application_home(
         other.stop()
 
 
-def test_blank_real_backend_restarts_without_registering_authors(tmp_path):
+def test_blank_real_backend_restarts_without_registering_authors(tmp_path: Path):
     """Real startup invariant without rebuilding the offline payload in unit tests."""
     import threading
 
@@ -294,7 +305,7 @@ def test_blank_real_backend_restarts_without_registering_authors(tmp_path):
 
 
 @pytest.mark.parametrize("layout", ["orphan", "mixed"])
-def test_ambiguous_existing_home_is_not_replaced(tmp_path, layout):
+def test_ambiguous_existing_home_is_not_replaced(tmp_path: Path, layout):
     home = tmp_path / "home"
     home.mkdir()
     if layout == "orphan":

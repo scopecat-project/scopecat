@@ -396,7 +396,7 @@ def test_native_public_wheels_must_match_preview(
         "gui/../../outside",
     ],
 )
-def test_native_resources_reject_unselected_files(release, extra):
+def test_native_resources_reject_unselected_files(release: tuple[Path, Path], extra):
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -413,7 +413,7 @@ def test_native_resources_reject_unselected_files(release, extra):
 @pytest.mark.parametrize(
     "missing", ["author.json", "requirements.lock", "gui/index.html"]
 )
-def test_native_resources_require_recipe_and_gui(release, missing):
+def test_native_resources_require_recipe_and_gui(release: tuple[Path, Path], missing):
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -423,7 +423,9 @@ def test_native_resources_require_recipe_and_gui(release, missing):
         assets.assemble(root, SHA, config)
 
 
-def test_legacy_full_delivery_is_not_a_native_author_payload(release):
+def test_legacy_full_delivery_is_not_a_native_author_payload(
+    release: tuple[Path, Path],
+):
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -433,7 +435,7 @@ def test_legacy_full_delivery_is_not_a_native_author_payload(release):
         assets.assemble(root, SHA, config)
 
 
-def test_native_recipe_requires_a_sha256_digest(release):
+def test_native_recipe_requires_a_sha256_digest(release: tuple[Path, Path]):
     root, config = release
     path = root / "macos-bundle.json"
     document = json.loads(path.read_bytes())
@@ -443,7 +445,9 @@ def test_native_recipe_requires_a_sha256_digest(release):
         assets.assemble(root, SHA, config)
 
 
-def test_export_uses_real_projection_and_keeps_preview_consumers(release, tmp_path):
+def test_export_uses_real_projection_and_keeps_preview_consumers(
+    release: tuple[Path, Path], tmp_path: Path
+):
     from scripts.app_build.preview import read_preview
 
     root, config = release
@@ -473,7 +477,7 @@ def test_export_uses_real_projection_and_keeps_preview_consumers(release, tmp_pa
 @pytest.mark.parametrize(
     "change", ["evidence", "installer", "extra", "missing", "inventory"]
 )
-def test_export_rejects_tampering(release, tmp_path, change):
+def test_export_rejects_tampering(release: tuple[Path, Path], tmp_path: Path, change):
     root, config = release
     assets.assemble(root, SHA, config)
     destination = tmp_path / "published"
@@ -497,7 +501,9 @@ def test_export_rejects_tampering(release, tmp_path, change):
         assets.verify(destination, SHA, config)
 
 
-def test_export_preserves_windows_evidence_bytes(release, tmp_path):
+def test_export_preserves_windows_evidence_bytes(
+    release: tuple[Path, Path], tmp_path: Path
+):
     root, config = release
     bundle = root / "windows-bundle.json"
     bundle.write_bytes(
@@ -516,7 +522,9 @@ def test_export_preserves_windows_evidence_bytes(release, tmp_path):
 
 
 @pytest.mark.parametrize("dependency", ["scopecat>=0.1", "scopecat==0.2.0"])
-def test_release_rejects_mixed_batch_dependencies(release, dependency):
+def test_release_rejects_mixed_batch_dependencies(
+    release: tuple[Path, Path], dependency
+):
     root, config = release
     wheel = next(root.glob("scopecat_server-*.whl"))
     with zipfile.ZipFile(wheel, "w") as archive:

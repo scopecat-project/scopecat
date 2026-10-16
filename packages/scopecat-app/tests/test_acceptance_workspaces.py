@@ -11,6 +11,7 @@ import pytest
 def load_script(name):
     path = Path(__file__).resolve().parents[3] / "scripts" / f"{name}.py"
     spec = spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -55,7 +56,7 @@ def test_native_upload_contract_rejects_missing_reports(relative):
 
 @pytest.mark.parametrize("failure", [False, True])
 def test_every_native_report_survives_cleanup_and_is_uploaded(
-    tmp_path, monkeypatch, failure
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure
 ):
     # Independent inventory of each probe's diagnostics, including early failures.
     relatives = [
@@ -109,7 +110,7 @@ def test_every_native_report_survives_cleanup_and_is_uploaded(
 @pytest.mark.parametrize("keep_work", [False, True])
 @pytest.mark.parametrize("failure", [False, True])
 def test_replacement_reclaims_packages_and_environment(
-    tmp_path, monkeypatch, keep_work, failure
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keep_work, failure
 ):
     previous, current = tmp_path / "previous", tmp_path / "current"
     previous.mkdir()
@@ -146,7 +147,7 @@ def test_replacement_reclaims_packages_and_environment(
 @pytest.mark.parametrize("failure", [False, True])
 @pytest.mark.parametrize("storage_reports", ["cocoa-storage", "windows-storage"])
 def test_native_acceptance_preserves_candidate_and_reports(
-    tmp_path, monkeypatch, keep_work, failure, storage_reports
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, keep_work, failure, storage_reports
 ):
     app = tmp_path / "Scopecat.app"
     app.mkdir()
@@ -213,7 +214,7 @@ def test_native_acceptance_preserves_candidate_and_reports(
     )
 
 
-def test_acceptance_rejects_reports_inside_candidate(tmp_path):
+def test_acceptance_rejects_reports_inside_candidate(tmp_path: Path):
     app = tmp_path / "app"
     app.mkdir()
     with pytest.raises(ValueError, match="outside"):
@@ -221,7 +222,9 @@ def test_acceptance_rejects_reports_inside_candidate(tmp_path):
     assert not list(app.iterdir())
 
 
-def test_download_failure_cleans_disposable_app_but_keeps_report(tmp_path, monkeypatch):
+def test_download_failure_cleans_disposable_app_but_keeps_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     def check(installer: Path, home: Path):
         home.mkdir()
         (home / "Scopecat.app").mkdir()
@@ -235,7 +238,9 @@ def test_download_failure_cleans_disposable_app_but_keeps_report(tmp_path, monke
     assert list(reports.iterdir()) == [reports / "report.json"]
 
 
-def test_native_window_opt_in_refuses_local_before_copying(tmp_path, monkeypatch):
+def test_native_window_opt_in_refuses_local_before_copying(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     app, reports = tmp_path / "app", tmp_path / "reports"
     with pytest.raises(subprocess.CalledProcessError):
@@ -245,7 +250,7 @@ def test_native_window_opt_in_refuses_local_before_copying(tmp_path, monkeypatch
 
 @pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_reset_failure_keeps_report_and_owned_logs(
-    tmp_path, monkeypatch, cleanup_fails
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_fails
 ):
     import json
     from types import SimpleNamespace
@@ -296,7 +301,7 @@ def test_reset_failure_keeps_report_and_owned_logs(
     ("window_code", "reset_code"), [(0, 0), (7, 0), (0, 8), (7, 8)]
 )
 def test_native_sequence_collects_independent_results(
-    tmp_path, monkeypatch, window_code, reset_code
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, window_code, reset_code
 ):
     import json
 
@@ -329,9 +334,11 @@ def test_native_sequence_collects_independent_results(
     if window_code or reset_code:
         with pytest.raises(ExceptionGroup) as error:
             verify_native_application.verify_recovery_probes(tmp_path / "app", tmp_path)
-        assert [e.returncode for e in error.value.exceptions] == [
-            c for c in (window_code, reset_code) if c
-        ]
+        codes: list[int] = []
+        for exception in error.value.exceptions:
+            assert isinstance(exception, subprocess.CalledProcessError)
+            codes.append(exception.returncode)
+        assert codes == [c for c in (window_code, reset_code) if c]
     else:
         verify_native_application.verify_recovery_probes(tmp_path / "app", tmp_path)
     assert calls == ["verify_native_windows.py", "verify_native_reset.py"]
@@ -351,7 +358,9 @@ def test_native_sequence_collects_independent_results(
         {"host_stopped": True, "cleanup_completed": False},
     ],
 )
-def test_native_sequence_refuses_unverified_cleanup(tmp_path, monkeypatch, receipt):
+def test_native_sequence_refuses_unverified_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt
+):
     import json
 
     reports = tmp_path / "native-windows"
@@ -385,7 +394,7 @@ def test_native_sequence_refuses_unverified_cleanup(tmp_path, monkeypatch, recei
     ],
 )
 def test_teaching_delivery_requires_same_invocation_application_checks(
-    tmp_path, monkeypatch, receipt
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt
 ):
     import json
 

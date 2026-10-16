@@ -17,13 +17,14 @@ ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location(
     "verify_acceptance_artifacts", ROOT / "scripts/verify_acceptance_artifacts.py"
 )
+assert spec is not None and spec.loader is not None
 verify = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify)
 COMMIT = "a" * 40
 
 
 @pytest.fixture
-def bundle(tmp_path):
+def bundle(tmp_path: Path) -> Path:
     with zipfile.ZipFile(tmp_path / "scopecat-ui.zip", "w") as archive:
         archive.writestr(
             "build-info.json",
@@ -44,7 +45,7 @@ def bundle(tmp_path):
     return tmp_path
 
 
-def test_exact_bundle_checks_every_declared_file(bundle):
+def test_exact_bundle_checks_every_declared_file(bundle: Path):
     assert verify.verify_bundle(bundle, COMMIT)["source_commit"] == COMMIT
     (bundle / "sample.whl").write_bytes(b"changed")
     with pytest.raises(ValueError, match="checksum"):
@@ -55,7 +56,7 @@ def test_exact_bundle_checks_every_declared_file(bundle):
     "failure",
     ["commit", "gui_commit", "gui_version", "missing_gui", "missing_wheel", "path"],
 )
-def test_reject_mixed_or_missing_artifacts(bundle, failure):
+def test_reject_mixed_or_missing_artifacts(bundle: Path, failure):
     path = bundle / "preview.json"
     manifest = json.loads(path.read_text())
     if failure == "commit":
@@ -219,7 +220,9 @@ def test_browser_scope_preserves_default_and_integrated_profiles(profile, shard)
     import re
 
     workflow = (ROOT / ".github/workflows/acceptance.yml").read_text()
-    expression = re.search(r"shard: \$\{\{ fromJSON\((.*?)\) \}\}", workflow)[1]
+    match = re.search(r"shard: \$\{\{ fromJSON\((.*?)\) \}\}", workflow)
+    assert match is not None
+    expression = match[1]
     inputs = {"inputs.profile": profile, "inputs.browser_shard": shard}
     # Evaluate the workflow's restricted string comparisons and &&/|| chains.
     # Unlike duplicating the selection logic, this checks its actual guards.

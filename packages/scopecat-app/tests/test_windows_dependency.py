@@ -18,10 +18,12 @@ from scripts.app_build.dependency_wheel import write_wheel
 
 
 @pytest.fixture(scope="module")
-def source_pair():
+def source_pair() -> tuple[bytes, bytes]:
     source = Path(
-        importlib.metadata.distribution("pywebview").locate_file(
-            "webview/platforms/edgechromium.py"
+        str(
+            importlib.metadata.distribution("pywebview").locate_file(
+                "webview/platforms/edgechromium.py"
+            )
         )
     ).read_bytes()
     return source, windows_dependency.patch_windows(source)
@@ -63,7 +65,10 @@ def drain(view):
 
 
 @pytest.fixture
-def browser_class(source_pair):
+def browser_class(source_pair: tuple[bytes, bytes]):
+    # This class is extracted from hash-checked vendor source and executed with
+    # CLR stand-ins below. Its dynamic surface is intentional; keep diagnostics
+    # visible rather than pretending it is the installed Windows WebView class.
     tree = ast.parse(source_pair[1])
     browser = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     names = {
@@ -216,7 +221,7 @@ def test_nonprivate_navigation_and_closed_pending_view(browser_class):
     assert private.webview.Source is None
 
 
-def test_explicit_cookie_api_is_unchanged(source_pair):
+def test_explicit_cookie_api_is_unchanged(source_pair: tuple[bytes, bytes]):
     def methods(source):
         browser = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef))
         return {n.name: n for n in browser.body if isinstance(n, ast.FunctionDef)}
@@ -226,7 +231,7 @@ def test_explicit_cookie_api_is_unchanged(source_pair):
         assert ast.dump(before[name]) == ast.dump(after[name])
 
 
-def test_windows_patch_rejects_unknown_source_and_wheel(tmp_path):
+def test_windows_patch_rejects_unknown_source_and_wheel(tmp_path: Path):
     with pytest.raises(ValueError, match="differs"):
         windows_dependency.patch_windows(b"unknown backend")
     (tmp_path / "pywebview-6.2.1-py3-none-any.whl").write_bytes(b"unknown wheel")
@@ -234,7 +239,7 @@ def test_windows_patch_rejects_unknown_source_and_wheel(tmp_path):
         windows_dependency.patch_wheel(tmp_path)
 
 
-def test_shared_wheel_writer_records_every_member_reproducibly(tmp_path):
+def test_shared_wheel_writer_records_every_member_reproducibly(tmp_path: Path):
     import zipfile
 
     record = "example.dist-info/RECORD"

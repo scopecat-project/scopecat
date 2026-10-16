@@ -8,6 +8,7 @@ import sys
 import tomllib
 import zipfile
 from email.parser import BytesParser
+from pathlib import Path
 
 import pytest
 from packaging.version import Version
@@ -26,7 +27,7 @@ def test_pins_preserve_extras_markers_and_external_requirements():
         validate_dependencies(["scopecat>=0.1"], "0.1.0")
 
 
-def test_real_wheels_and_explicit_resolver_switch(tmp_path):
+def test_real_wheels_and_explicit_resolver_switch(tmp_path: Path):
     wheels = tmp_path / "wheels"
     wheels.mkdir()
     identity = ReleaseIdentity("0.1.0", 1)

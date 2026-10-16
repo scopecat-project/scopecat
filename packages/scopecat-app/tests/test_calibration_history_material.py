@@ -18,7 +18,7 @@ from testing.app_support.project import create_project
     ],
 )
 def test_history_reads_all_pages_and_excludes_other_lessons(
-    tmp_path: Path, monkeypatch, topic, cell_id, prefix, api
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic, cell_id, prefix, api
 ):
     root = create_project(tmp_path / topic, topic=topic).parent
     notebook = root / "notebooks" / f"{topic}.ipynb"

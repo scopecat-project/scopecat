@@ -1,5 +1,7 @@
 """Coordinated wheel identities preserve platform constraints."""
 
+from pathlib import Path
+
 import pytest
 from packaging.version import Version
 from scripts.app_build.release_identity import (
@@ -41,7 +43,7 @@ def test_invalid_public_versions(version):
         ReleaseIdentity(version, 1)
 
 
-def test_placeholder_cannot_be_released(tmp_path):
+def test_placeholder_cannot_be_released(tmp_path: Path):
     path = tmp_path / "release.toml"
     path.write_text('version="0.0.0"\nbuild_number=0\n')
     assert read_release(path).build_number == 0
@@ -61,7 +63,7 @@ def test_native_build_number_respects_macos_single_field_limit() -> None:
         ReleaseIdentity("0.3.0", 10000)
 
 
-def test_historical_source_without_release_file_only_allows_preview(tmp_path):
+def test_historical_source_without_release_file_only_allows_preview(tmp_path: Path):
     missing = tmp_path / "release.toml"
     assert read_source_identity(missing) == ReleaseIdentity("0.0.0", 0)
     with pytest.raises(FileNotFoundError):
@@ -74,7 +76,7 @@ def test_historical_source_without_release_file_only_allows_preview(tmp_path):
 
 
 def test_preview_build_archives_historical_commit_without_release_file(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     import importlib.util
     import json

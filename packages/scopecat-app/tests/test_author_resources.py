@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from scripts.app_build import author_resources as resource_builder
@@ -10,10 +11,13 @@ from scripts.app_build import installer
 from scripts.app_build.author_resources import build as build_author_resources
 
 from scopecat_app import author_python, author_resources, bundle
+from scopecat_app.application_runtime import ApplicationRuntime
+
+type Selection = tuple[Mock, Path, Path]
 
 
 @pytest.fixture
-def delivery(tmp_path):
+def delivery(tmp_path: Path) -> Path:
     root = tmp_path / "full"
     for folder in ("gui", "wheels", "toolchain"):
         (root / folder).mkdir(parents=True)
@@ -48,7 +52,9 @@ def delivery(tmp_path):
     return root
 
 
-def test_projection_has_own_identity_and_keeps_full_delivery(delivery, tmp_path):
+def test_projection_has_own_identity_and_keeps_full_delivery(
+    delivery: Path, tmp_path: Path
+):
     before = (delivery / bundle.MANIFEST).read_bytes()
     resource = build_author_resources(delivery, tmp_path / "author")
     document = author_resources.verify_resources(resource)
@@ -73,7 +79,7 @@ def test_projection_has_own_identity_and_keeps_full_delivery(delivery, tmp_path)
 @pytest.mark.parametrize(
     "extra", ["toolchain/python.tar", "wheels/numpy-1.whl", "build.lock"]
 )
-def test_extra_delivery_files_are_rejected(delivery, tmp_path, extra):
+def test_extra_delivery_files_are_rejected(delivery: Path, tmp_path: Path, extra):
     resource = build_author_resources(delivery, tmp_path / "author")
     (resource / extra).write_text("unexpected")
     with pytest.raises(ValueError, match="多余"):
@@ -81,7 +87,7 @@ def test_extra_delivery_files_are_rejected(delivery, tmp_path, extra):
 
 
 @pytest.fixture
-def selection(tmp_path, monkeypatch):
+def selection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Selection:
     source = tmp_path / "source"
     source.mkdir()
     (source / "pyproject.toml").write_text(
@@ -91,13 +97,14 @@ def selection(tmp_path, monkeypatch):
     resource.mkdir()
     (resource / "author.json").write_text('{"python":"3.14.7"}')
     app_python = tmp_path / "application/bin/python"
-    runtime = SimpleNamespace(installation=lambda: SimpleNamespace(python=app_python))
+    runtime = Mock(spec=ApplicationRuntime)
+    runtime.installation.return_value = SimpleNamespace(python=app_python)
     monkeypatch.delenv("UV_PYTHON", raising=False)
     return runtime, source, resource
 
 
 def test_uv_manages_pinned_python_without_shell_changes(
-    selection, monkeypatch, tmp_path
+    selection: Selection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     runtime, source, resource = selection
     calls = []
@@ -128,7 +135,9 @@ def test_uv_manages_pinned_python_without_shell_changes(
 @pytest.mark.parametrize(
     "mode", ["incompatible", "application", "based-on-application"]
 )
-def test_explicit_python_is_checked_before_use(selection, monkeypatch, tmp_path, mode):
+def test_explicit_python_is_checked_before_use(
+    selection: Selection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode
+):
     runtime, source, resource = selection
     python = tmp_path / "user/bin/python"
     app = runtime.installation().python
@@ -151,7 +160,9 @@ def test_explicit_python_is_checked_before_use(selection, monkeypatch, tmp_path,
         author_python.resolve(runtime, source, resource, python=python)
 
 
-def test_offline_missing_python_never_downloads(selection, monkeypatch):
+def test_offline_missing_python_never_downloads(
+    selection: Selection, monkeypatch: pytest.MonkeyPatch
+):
     runtime, source, resource = selection
     calls = []
 
@@ -165,7 +176,9 @@ def test_offline_missing_python_never_downloads(selection, monkeypatch):
     assert len(calls) == 1 and "find" in calls[0]
 
 
-def test_workspace_pin_overrides_recipe_and_latest_is_rejected(selection, monkeypatch):
+def test_workspace_pin_overrides_recipe_and_latest_is_rejected(
+    selection: Selection, monkeypatch: pytest.MonkeyPatch
+):
     runtime, source, resource = selection
     pin = source / ".python-version"
     pin.write_text("3.14.8\n")
@@ -183,7 +196,7 @@ def test_workspace_pin_overrides_recipe_and_latest_is_rejected(selection, monkey
 
 
 def test_recipe_uses_probed_runtime_version_and_rejects_target_mismatch(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     target = bundle.target_identity()
     info = {"version": "3.14.99", "target": target}
@@ -199,7 +212,9 @@ def test_recipe_uses_probed_runtime_version_and_rejects_target_mismatch(
         resource_builder._recipe(tmp_path / "packaged-python", target)
 
 
-def test_python_identity_tracks_same_path_binary_library_and_abi(tmp_path, monkeypatch):
+def test_python_identity_tracks_same_path_binary_library_and_abi(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     binary = tmp_path / "python"
     library = tmp_path / "libpython"
     binary.write_bytes(b"first")

@@ -10,12 +10,13 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts/verify_native_replacement.py"
 spec = spec_from_file_location("verify_native_replacement", SCRIPT)
+assert spec is not None and spec.loader is not None
 probe = module_from_spec(spec)
 spec.loader.exec_module(probe)
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_selection_uses_candidate_runtime(tmp_path, legacy):
+def test_selection_uses_candidate_runtime(tmp_path: Path, legacy):
     home = tmp_path / "isolated home"
     data = home / "data"
     state = data if legacy else data / "state"
@@ -31,7 +32,7 @@ def test_selection_uses_candidate_runtime(tmp_path, legacy):
     assert observed.read_text() == "retained selection"
 
 
-def test_selection_rejects_mixed_layout_without_mutation(tmp_path):
+def test_selection_rejects_mixed_layout_without_mutation(tmp_path: Path):
     data = tmp_path / "data"
     (data / "runtime").mkdir(parents=True)
     (data / "state").mkdir()

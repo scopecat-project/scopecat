@@ -8,6 +8,8 @@ import sys
 import sysconfig
 from pathlib import Path
 
+import pytest
+
 from scopecat.api.devices import LabDeviceOperations
 from scopecat.daemon.client import DaemonClient
 from scopecat_app.application_runtime import ApplicationRuntime
@@ -299,7 +301,7 @@ def check_notebook_kernel(project: Path, python: Path, kernel_home: Path) -> Non
 
 
 def test_installed_adapter_wheel_local_refresh_and_missing_adapter_stop(
-    tmp_path: Path, monkeypatch, delivery: Path
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delivery: Path
 ) -> None:
     environment = dict(os.environ)
     environment.pop("SCOPECAT_DAEMON_URL", None)

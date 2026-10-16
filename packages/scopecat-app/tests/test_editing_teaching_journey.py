@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+import pytest
 from nbclient import NotebookClient
 from nbformat import v4, write
 from testing.app_support.project import create_project
@@ -19,7 +20,7 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 
 def test_editing_lessons_share_application_and_reopen_after_restart(
-    tmp_path: Path, monkeypatch, author_kernel_python
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, author_kernel_python: Path
 ) -> None:
     runtime = ApplicationRuntime(tmp_path / "application")
     gui = tmp_path / "gui"
@@ -51,11 +52,11 @@ def test_editing_lessons_share_application_and_reopen_after_restart(
         finally:
             write(document, root / f"notebooks/verified-{name}.ipynb")
 
+    evidence = f"isolation_path = {str(tmp_path / 'isolation.json')!r}\n"
     try:
         record = start_project(application, timeout=120)
         for topic, root in roots.items():
             document = editing_notebook(root, topic)
-            evidence = f"isolation_path = {str(tmp_path / 'isolation.json')!r}\n"
             if topic == "refresh":
                 document.cells.insert(
                     _cell_index(document.cells, "refresh-2"),

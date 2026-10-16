@@ -16,7 +16,9 @@ from scopecat.project import open_project
 from scopecat_server.lifecycle import start_project, stop_project
 
 
-def test_notebook_workspace_cells(tmp_path: Path, notebook_imports) -> None:
+def test_notebook_workspace_cells(
+    tmp_path: Path, notebook_imports: pytest.MonkeyPatch
+) -> None:
     notebook_module = importlib.import_module("scopecat.notebook_workspace")
     shell = InteractiveShell()
     notebook_imports.setattr(notebook_module, "_shell", lambda: shell)
@@ -76,7 +78,9 @@ def test_notebook_workspace_cells(tmp_path: Path, notebook_imports) -> None:
             )
             result = shell.run_cell("import scopecat as sc; sc.notebook(root)")
             assert isinstance(result.error_in_exec, ValueError)
-            assert "author imports require scopecat==" in str(result.error_in_exec)
+            message = str(result.error_in_exec)
+            assert "execution dependency scopecat==" in message
+            assert "does not accept installed 0.1.99" in message
         cell("""
 import scopecat as sc
 session = sc.notebook(root)
@@ -242,7 +246,7 @@ session.close()
 
 @pytest.mark.parametrize("other_registered", [False, True])
 def test_unregistered_workspace_keeps_kernel_hint(
-    tmp_path: Path, monkeypatch, other_registered: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, other_registered: bool
 ) -> None:
     from scopecat.author_workspaces import (
         LocalAuthorWorkspace,

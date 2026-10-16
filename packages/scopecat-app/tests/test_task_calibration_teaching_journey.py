@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from nbclient import NotebookClient
 from nbformat import read, v4, write
 from testing.app_support.project import create_project
@@ -14,7 +15,7 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 
 def test_managed_task_calibration_shipped_kernel(
-    tmp_path, monkeypatch, author_kernel_python
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, author_kernel_python: Path
 ):
     root = create_project(tmp_path / "作者代码", topic="task-calibration").parent
     material = (

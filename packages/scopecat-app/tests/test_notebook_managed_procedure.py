@@ -3,12 +3,15 @@
 import importlib
 from pathlib import Path
 
+import pytest
 from IPython.core.interactiveshell import InteractiveShell
 
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
 
 
-def test_notebook_managed_procedure(tmp_path: Path, notebook_imports) -> None:
+def test_notebook_managed_procedure(
+    tmp_path: Path, notebook_imports: pytest.MonkeyPatch
+) -> None:
     shell = InteractiveShell()
     notebook_module = importlib.import_module("scopecat.notebook_workspace")
     notebook_imports.setattr(notebook_module, "_shell", lambda: shell)

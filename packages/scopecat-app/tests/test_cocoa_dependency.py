@@ -12,8 +12,10 @@ from scripts.app_build import cocoa_dependency
 @pytest.mark.skipif(sys.platform == "win32", reason="Darwin dependency build tool")
 def test_locked_cocoa_patch_constructs_with_shared_store_and_preserves_cookie_api():
     source = Path(
-        importlib.metadata.distribution("pywebview").locate_file(
-            "webview/platforms/cocoa.py"
+        str(
+            importlib.metadata.distribution("pywebview").locate_file(
+                "webview/platforms/cocoa.py"
+            )
         )
     ).read_bytes()
     patched = cocoa_dependency.patch_cocoa(source)
@@ -67,7 +69,7 @@ def test_patch_rejects_unreviewed_source():
         cocoa_dependency.patch_cocoa(b"another backend")
 
 
-def test_wheel_rejects_unreviewed_dependency(tmp_path):
+def test_wheel_rejects_unreviewed_dependency(tmp_path: Path):
     (tmp_path / "pywebview-6.2.1-py3-none-any.whl").write_bytes(b"unreviewed")
     with pytest.raises(ValueError, match="differs"):
         cocoa_dependency.patch_wheel(tmp_path)

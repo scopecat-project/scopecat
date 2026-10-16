@@ -11,9 +11,14 @@ from scripts.app_build import delivery
 
 from scopecat_app.bundle import MANIFEST, verify_bundle
 
+type BuildCalls = list[tuple[list[str], Path]]
+
 
 def test_recipe_can_consume_public_artifacts_without_a_checkout(
-    recipe, tmp_path, build_tools, monkeypatch
+    recipe: Path,
+    tmp_path: Path,
+    build_tools: BuildCalls,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     preview = tmp_path / "preview"
     preview.mkdir()
@@ -47,7 +52,7 @@ def test_recipe_can_consume_public_artifacts_without_a_checkout(
     )
     original = delivery.run
 
-    def run(command, *, cwd):
+    def run(command: list[str], *, cwd: Path) -> None:
         original(command, cwd=cwd)
         if "pip" in command and "wheel" in command:
             target = Path(command[command.index("--wheel-dir") + 1])
@@ -76,7 +81,7 @@ def project(path: Path, name: str) -> None:
 
 
 @pytest.fixture
-def recipe(tmp_path):
+def recipe(tmp_path: Path) -> Path:
     project(tmp_path, "my-adapter")
     public = tmp_path / "public"
     project(public, "public-workspace")
@@ -107,10 +112,10 @@ def recipe(tmp_path):
 
 
 @pytest.fixture
-def build_tools(monkeypatch):
-    calls = []
+def build_tools(monkeypatch: pytest.MonkeyPatch) -> BuildCalls:
+    calls: BuildCalls = []
 
-    def run(command, *, cwd):
+    def run(command: list[str], *, cwd: Path) -> None:
         calls.append((command, cwd))
         if command[1] == "export":
             Path(command[command.index("--output-file") + 1]).write_text(
@@ -151,7 +156,7 @@ def build_tools(monkeypatch):
 
 
 def test_recipe_build_uses_locked_lab_and_public_toolchain(
-    recipe, tmp_path, build_tools
+    recipe: Path, tmp_path: Path, build_tools: BuildCalls
 ):
     gui = tmp_path / "gui"
     gui.mkdir()
@@ -202,7 +207,9 @@ def test_recipe_build_uses_locked_lab_and_public_toolchain(
     verify_bundle(result)
 
 
-def test_default_build_includes_instrument_dependency(recipe, tmp_path, build_tools):
+def test_default_build_includes_instrument_dependency(
+    recipe: Path, tmp_path: Path, build_tools: BuildCalls
+):
     gui = tmp_path / "gui"
     gui.mkdir()
     (gui / "index.html").write_text("<html>workbench</html>")
@@ -215,7 +222,7 @@ def test_default_build_includes_instrument_dependency(recipe, tmp_path, build_to
 
 
 def test_managed_recipe_build_uses_explicit_separate_public_checkout(
-    recipe, tmp_path, build_tools
+    recipe: Path, tmp_path: Path, build_tools: BuildCalls
 ):
     external = tmp_path / "separate-checkout"
     shutil.move(str(tmp_path / "public"), external)
@@ -257,7 +264,9 @@ def test_managed_recipe_build_uses_explicit_separate_public_checkout(
     }
 
 
-def test_selected_public_root_rejects_package_escape_and_symlinks(recipe, tmp_path):
+def test_selected_public_root_rejects_package_escape_and_symlinks(
+    recipe: Path, tmp_path: Path
+):
     public = tmp_path / "public"
     original = recipe.read_text()
     for bad in ("../outside", "/absolute", "C:\\outside"):
@@ -279,14 +288,16 @@ def test_selected_public_root_rejects_package_escape_and_symlinks(recipe, tmp_pa
 
 
 @pytest.mark.parametrize("bad", ["../outside", "/absolute", "C:\\outside"])
-def test_recipe_paths_cannot_escape(recipe, bad):
+def test_recipe_paths_cannot_escape(recipe: Path, bad):
     text = recipe.read_text().replace('lock_project="."', f"lock_project='{bad}'")
     recipe.write_text(text)
     with pytest.raises(ValueError, match="relative directories"):
         delivery.load_recipe(recipe)
 
 
-def test_duplicate_package_names_fail_before_build(recipe, tmp_path, build_tools):
+def test_duplicate_package_names_fail_before_build(
+    recipe: Path, tmp_path: Path, build_tools: BuildCalls
+):
     (tmp_path / "public/packages/scopecat-app/pyproject.toml").write_text(
         '[project]\nname="my_adapter"\n'
     )
@@ -296,7 +307,7 @@ def test_duplicate_package_names_fail_before_build(recipe, tmp_path, build_tools
     assert build_tools == []
 
 
-def test_duplicate_wheel_distribution_is_rejected(tmp_path):
+def test_duplicate_wheel_distribution_is_rejected(tmp_path: Path):
     for filename, name in (("one.whl", "same-package"), ("two.whl", "same_package")):
         with zipfile.ZipFile(tmp_path / filename, "w") as wheel:
             wheel.writestr("same.dist-info/METADATA", f"Name: {name}\nVersion: 1\n")
@@ -305,7 +316,10 @@ def test_duplicate_wheel_distribution_is_rejected(tmp_path):
 
 
 def test_managed_build_retains_previous_success_on_failure_and_then_advances(
-    recipe, tmp_path, build_tools, monkeypatch
+    recipe: Path,
+    tmp_path: Path,
+    build_tools: BuildCalls,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     from scopecat_app.bundle import CURRENT_DELIVERY, resolve_delivery
 
@@ -337,7 +351,9 @@ def test_managed_build_retains_previous_success_on_failure_and_then_advances(
     assert resolve_delivery(first) == first
 
 
-def test_managed_build_busy_fails_before_build(recipe, tmp_path, build_tools):
+def test_managed_build_busy_fails_before_build(
+    recipe: Path, tmp_path: Path, build_tools: BuildCalls
+):
     from filelock import FileLock
 
     home = tmp_path / "output"
@@ -350,7 +366,9 @@ def test_managed_build_busy_fails_before_build(recipe, tmp_path, build_tools):
     assert not (home / "builds").exists() and build_tools == []
 
 
-def test_managed_selection_binds_manifest_and_rejects_escape(tmp_path, delivery):
+def test_managed_selection_binds_manifest_and_rejects_escape(
+    tmp_path: Path, delivery: Path
+):
     import shutil
 
     from scopecat_app.bundle import CURRENT_DELIVERY, resolve_delivery
@@ -371,7 +389,10 @@ def test_managed_selection_binds_manifest_and_rejects_escape(tmp_path, delivery)
 
 
 def test_unverified_completed_build_does_not_replace_current(
-    recipe, tmp_path, build_tools, monkeypatch
+    recipe: Path,
+    tmp_path: Path,
+    build_tools: BuildCalls,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     from scopecat_app.bundle import resolve_delivery
 
@@ -394,7 +415,10 @@ def test_unverified_completed_build_does_not_replace_current(
 
 
 def test_public_release_artifacts_feed_native_delivery(
-    recipe, tmp_path, build_tools, monkeypatch
+    recipe: Path,
+    tmp_path: Path,
+    build_tools: BuildCalls,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     artifacts = tmp_path / "release"
     artifacts.mkdir()
@@ -466,7 +490,7 @@ def test_public_release_artifacts_feed_native_delivery(
         )
 
 
-def test_historical_source_identity_requires_metadata_only_for_release(tmp_path):
+def test_historical_source_identity_requires_metadata_only_for_release(tmp_path: Path):
     assert delivery._public_identity(None, tmp_path)[0].version == "0.0.0"
     with pytest.raises(FileNotFoundError):
         delivery._public_identity(None, tmp_path, release=True)

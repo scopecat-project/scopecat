@@ -6,6 +6,7 @@ import subprocess
 import sys
 import sysconfig
 import venv
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from scopecat_app import bundle
 
 
 @pytest.fixture
-def notebook_imports(monkeypatch):
+def notebook_imports(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     # The reference fixture keeps its endpoint override for the whole test session.
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     previous = {

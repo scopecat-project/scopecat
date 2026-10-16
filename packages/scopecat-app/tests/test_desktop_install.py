@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -10,7 +11,7 @@ from scopecat_app import installation_paths
 from scopecat_app.installation_paths import InstallationPaths
 
 
-def test_isolated_installation_does_not_use_daily_locations(tmp_path):
+def test_isolated_installation_does_not_use_daily_locations(tmp_path: Path):
     paths = InstallationPaths.isolated(tmp_path)
     assert all(
         path.is_relative_to(tmp_path)
@@ -23,7 +24,9 @@ def test_isolated_installation_does_not_use_daily_locations(tmp_path):
     assert paths.entry is None or paths.entry.is_relative_to(tmp_path)
 
 
-def test_mac_entry_is_outside_data_and_cache(tmp_path, monkeypatch):
+def test_mac_entry_is_outside_data_and_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(installation_paths.sys, "platform", "darwin")
     monkeypatch.setattr(installation_paths.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(
@@ -34,6 +37,7 @@ def test_mac_entry_is_outside_data_and_cache(tmp_path, monkeypatch):
     )
     paths = InstallationPaths.current_user()
     assert paths.entry == tmp_path / "Applications/Scopecat.app"
+    assert paths.entry is not None
     assert not paths.state.is_relative_to(paths.entry)
 
 
@@ -46,10 +50,17 @@ def test_windows_user_program_and_start_menu_locations():
     assert paths.workspace == Path.home() / "Scopecat/experiments"
 
 
-@pytest.fixture
-def native_start(tmp_path, monkeypatch):
-    from types import SimpleNamespace
+type NativeStart = tuple[
+    ModuleType,
+    SimpleNamespace,
+    InstallationPaths,
+    SimpleNamespace,
+    list[SimpleNamespace],
+]
 
+
+@pytest.fixture
+def native_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> NativeStart:
     from scopecat_app import native_bootstrap
 
     paths = InstallationPaths.isolated(tmp_path / "isolated")
@@ -58,7 +69,7 @@ def native_start(tmp_path, monkeypatch):
     payload.mkdir()
     (payload / "bundle.json").write_text('{"build": "first"}')
     selected = SimpleNamespace(python=Path(sys.executable), package="first")
-    updates = []
+    updates: list[SimpleNamespace] = []
 
     def receipt():
         return json.dumps({"python": str(selected.python), "package": selected.package})
@@ -117,7 +128,9 @@ def native_start(tmp_path, monkeypatch):
     return native_bootstrap, args, paths, selected, updates
 
 
-def test_native_package_selects_its_own_version_before_reporting_ready(native_start):
+def test_native_package_selects_its_own_version_before_reporting_ready(
+    native_start: NativeStart,
+):
     bootstrap, args, paths, selected, updates = native_start
     bootstrap.launch(args, paths)
     selected.python = paths.state.parent / "previous-app/python"
@@ -129,7 +142,9 @@ def test_native_package_selects_its_own_version_before_reporting_ready(native_st
     assert selected.python == Path(sys.executable)
 
 
-def test_native_package_refreshes_runtime_at_the_same_install_path(native_start):
+def test_native_package_refreshes_runtime_at_the_same_install_path(
+    native_start: NativeStart,
+):
     bootstrap, args, paths, selected, updates = native_start
     bootstrap.launch(args, paths)
     (args.payload / "bundle.json").write_text('{"build": "second"}')

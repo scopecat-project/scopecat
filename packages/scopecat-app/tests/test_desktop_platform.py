@@ -14,7 +14,9 @@ from scopecat_app.desktop_platform import (
 )
 
 
-def test_window_menu_excludes_auxiliary_windows_on_the_main_loop(monkeypatch):
+def test_window_menu_excludes_auxiliary_windows_on_the_main_loop(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(sys, "platform", "darwin")
     document, auxiliary, app = Mock(), Mock(), Mock()
     app.windows.return_value = [document, auxiliary]
@@ -48,7 +50,9 @@ def test_window_menu_excludes_auxiliary_windows_on_the_main_loop(monkeypatch):
     )
 
 
-def test_cocoa_tray_is_created_and_shown_on_the_main_loop(monkeypatch):
+def test_cocoa_tray_is_created_and_shown_on_the_main_loop(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(
         "scopecat_app.desktop_platform.macos_bundle_identifier",
