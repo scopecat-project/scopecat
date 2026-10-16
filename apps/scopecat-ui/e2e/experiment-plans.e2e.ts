@@ -70,9 +70,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await page.getByLabel("Frequency unit").selectOption("GHz");
     await expect(frequency).toHaveValue("4.9wat");
     await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Unknown or incompatible unit" }),
-    ).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "未知或不兼容的单位" })).toBeVisible();
     await page
       .getByRole("group", { name: "Controls", exact: true })
       .screenshot({ path: testInfo.outputPath("unit-error.png") });

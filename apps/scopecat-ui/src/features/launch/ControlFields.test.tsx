@@ -96,7 +96,7 @@ it("retains edits until blur and atomically refuses unit changes with invalid dr
   fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
   expect(input).toHaveValue("1wat");
   expect(screen.getByLabelText("Frequency unit")).toHaveValue("GHz");
-  expect(screen.getByRole("alert")).toHaveTextContent("Unknown or incompatible unit");
+  expect(screen.getByRole("alert")).toHaveTextContent("未知或不兼容的单位");
 });
 it("parses scan endpoints and values while keeping point counts plain", () => {
   expect(controlEdits({ f: { mode: "values", unit: "MHz", values: "1G,250k" } }).f).toEqual({
@@ -160,4 +160,43 @@ it("switches phase units without changing the declared default", () => {
   expect(screen.getByLabelText("Phase")).toHaveValue(String(Math.PI));
   fireEvent.change(screen.getByLabelText("Phase source"), { target: { value: "default" } });
   expect(screen.getByText("180 deg · Declared default")).toBeVisible();
+});
+
+it("discards errors when an external plan replaces a draft with the same control id", () => {
+  const invalid = { mode: "fixed" as const, value: "4.9wat", unit: "GHz" };
+  const view = render(
+    <ControlFields controls={[frequency]} drafts={{ frequency: invalid }} onChange={() => {}} />,
+  );
+  const input = screen.getByLabelText("Frequency");
+  fireEvent.blur(input);
+  expect(screen.getByRole("alert")).toHaveTextContent("未知或不兼容的单位");
+  view.rerender(
+    <ControlFields
+      controls={[frequency]}
+      drafts={{ frequency: { ...invalid, value: "4.8" } }}
+      onChange={() => {}}
+    />,
+  );
+  expect(screen.getByLabelText("Frequency")).toBe(input);
+  expect(input).toHaveValue("4.8");
+  expect(screen.queryByRole("alert")).toBeNull();
+  // A different recovered plan with identical raw text must be validated afresh.
+  view.rerender(
+    <ControlFields
+      controls={[frequency]}
+      drafts={{ frequency: { ...invalid } }}
+      onChange={() => {}}
+    />,
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.blur(input);
+  expect(screen.getByRole("alert")).toHaveTextContent("未知或不兼容的单位");
+});
+it("documents compact suffixes for whitespace-separated scan lists", () => {
+  render(<DraftForm />);
+  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "values" } });
+  expect(screen.getByText(/单位后缀紧接数字，不加空格/)).toBeVisible();
+  expect(() =>
+    controlEdits({ frequency: { mode: "values", values: "1 GHz, 500 MHz", unit: "MHz" } }),
+  ).toThrow("finite numbers");
 });

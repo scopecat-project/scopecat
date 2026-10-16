@@ -30,7 +30,7 @@ export function controlNumber(text: string, unit: string | null): number {
     target.scale === null ||
     source.scale === null
   )
-    throw new Error(`Unknown or incompatible unit: ${match[2]}.`);
+    throw new Error(`未知或不兼容的单位：${match[2]}。`);
   const result = (value * source.scale) / target.scale;
   if (!Number.isFinite(result)) throw new Error("Control values must be finite numbers.");
   return result;
@@ -47,7 +47,7 @@ export function convertControlNumber(text: string, from: string | null, to: stri
     source.scale === null ||
     target.scale === null
   )
-    throw new Error("Choose a compatible unit.");
+    throw new Error("请选择兼容的单位。");
   const result = (value * source.scale) / target.scale;
   if (!Number.isFinite(result)) throw new Error("Control values must be finite numbers.");
   return String(result);

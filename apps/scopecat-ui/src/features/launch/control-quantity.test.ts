@@ -28,7 +28,7 @@ it.each([
   ["1e309", "Hz"],
   ["1W", "dBm"],
 ])("rejects %s in %s", (text, unit) =>
-  expect(() => controlNumber(text, unit)).toThrow(/finite numbers|Unknown or incompatible unit/),
+  expect(() => controlNumber(text, unit)).toThrow(/finite numbers|未知或不兼容的单位/),
 );
 it("converts representation without changing the physical value", () => {
   expect(convertControlNumber("180", "deg", "rad")).toBe(String(Math.PI));

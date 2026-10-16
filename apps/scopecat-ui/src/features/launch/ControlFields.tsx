@@ -103,14 +103,19 @@ export function ControlFields({
   drafts: ControlDrafts;
   onChange: (id: string, draft: ControlDraft) => void;
 }) {
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<
+    Record<string, { draft: ControlDraft | undefined; message: string } | undefined>
+  >({});
   function update(id: string, action: () => ControlDraft) {
     try {
       const next = action();
       if (JSON.stringify(next) !== JSON.stringify(drafts[id])) onChange(id, next);
-      setErrors((previous) => ({ ...previous, [id]: "" }));
+      setErrors((previous) => ({ ...previous, [id]: undefined }));
     } catch (error) {
-      setErrors((previous) => ({ ...previous, [id]: (error as Error).message }));
+      setErrors((previous) => ({
+        ...previous,
+        [id]: { draft: drafts[id], message: (error as Error).message },
+      }));
     }
   }
   const groups = [...new Set(controls.map((control) => control.group))];
@@ -133,6 +138,10 @@ export function ControlFields({
                     </p>
                   </div>
                 );
+              // LaunchForm reuses this component when opening another plan. Errors belong
+              // to the exact validated draft, not an id shared by multiple plans.
+              const error =
+                errors[control.id]?.draft === draft ? errors[control.id]?.message : undefined;
               const declaredUnit = control.unit;
               const declared = declaredUnit ? units[declaredUnit] : undefined;
               const choices = declaredUnit
@@ -161,7 +170,7 @@ export function ControlFields({
                     {control.title}
                     {control.default == null ? " (required)" : ""}
                   </strong>
-                  {errors[control.id] && <p role="alert">{errors[control.id]}</p>}
+                  {error && <p role="alert">{error}</p>}
                   <p className="text-sm">
                     {control.provenance}
                     {control.minimum != null || control.maximum != null
@@ -197,10 +206,7 @@ export function ControlFields({
                   ) : (
                     <>
                       {draft.unit && (
-                        <p className="text-sm">
-                          Bare numbers use {draft.unit}. Unit suffixes are converted on leaving the
-                          field; changing units preserves the physical value.
-                        </p>
+                        <p className="text-sm">裸数按 {draft.unit}；单位简写失焦后换算。</p>
                       )}
                       {draft.unit && (
                         <label>
@@ -249,8 +255,7 @@ export function ControlFields({
                             className="border rounded p-2"
                           />
                           <span className="text-sm">
-                            Numbers with optional unit suffixes, separated by commas or newlines;
-                            one value remains an explicit scan.
+                            逗号、空白或换行分隔；单位后缀紧接数字，不加空格。单值仍为扫描。
                           </span>
                         </label>
                       )}
