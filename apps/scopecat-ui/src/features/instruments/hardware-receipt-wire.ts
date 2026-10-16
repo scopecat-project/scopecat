@@ -9,8 +9,10 @@ const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
 type MeasurementDType = "float64" | "int64" | "complex128" | "bool" | "string";
 type ArrayValue = Extract<MeasurementAcquisitionValue, { kind: "array" }>;
-type ArrayLeaf = boolean | number | string | { imag: number; real: number };
-type ArrayTree = ArrayLeaf | ArrayTree[];
+type ArrayLeaf = Extract<MeasurementAcquisitionValue, { kind: "scalar" }>["value"];
+type ArrayTree = ArrayValue["values"][number];
+type Problem = InstrumentCollectReceipt["problems"][number];
+type ProblemLocation = NonNullable<Problem["location"]>;
 
 interface ArrayReference {
   kind: "array_attachment";
@@ -79,7 +81,7 @@ export function decodeCollectReceipt(content: ArrayBuffer): InstrumentCollectRec
   );
   return {
     metadata: optionalRecord(header.metadata, "metadata"),
-    problems: header.problems as InstrumentCollectReceipt["problems"],
+    problems: header.problems.map(problem),
     readback:
       readback === null || readback === undefined
         ? null
@@ -130,7 +132,7 @@ function decodeArray(reference: ArrayReference, content: Uint8Array): ArrayValue
     unit: reference.unit,
     shape: reference.shape,
     metadata: reference.metadata,
-    values: reshape(leaves, reference.shape) as ArrayValue["values"],
+    values: reshape(leaves, reference.shape),
   };
 }
 
@@ -181,26 +183,183 @@ function arrayElementCount(shape: number[]): number {
 function isArrayReference(value: unknown): value is ArrayReference {
   if (!isRecord(value) || value.kind !== "array_attachment") return false;
   if (
-    !Number.isSafeInteger(value.index) ||
-    (value.index as number) < 0 ||
-    !Number.isSafeInteger(value.size_bytes) ||
-    (value.size_bytes as number) < 0 ||
+    !isNonnegativeInteger(value.index) ||
+    !isNonnegativeInteger(value.size_bytes) ||
     !isMeasurementDType(value.dtype) ||
     !(value.unit === null || typeof value.unit === "string") ||
-    !Array.isArray(value.shape) ||
+    !isShape(value.shape) ||
     !isRecord(value.metadata)
   ) {
     throw invalidReceipt("array descriptor");
   }
-  arrayElementCount(value.shape as number[]);
+  arrayElementCount(value.shape);
   return true;
 }
 
 function measurementValue(value: unknown): MeasurementAcquisitionValue {
-  if (!isRecord(value) || !["scalar", "unavailable"].includes(String(value.kind))) {
+  if (
+    !isRecord(value) ||
+    !isMeasurementDType(value.dtype) ||
+    !(value.unit === undefined || value.unit === null || typeof value.unit === "string") ||
+    !(value.metadata === undefined || isRecord(value.metadata))
+  ) {
     throw invalidReceipt("measurement value");
   }
-  return value as MeasurementAcquisitionValue;
+  if (value.kind === "scalar" && isLeaf(value.value, value.dtype)) {
+    return {
+      ...value,
+      kind: "scalar",
+      dtype: value.dtype,
+      value: value.value,
+      ...(value.unit === undefined ? {} : { unit: value.unit }),
+      ...(value.metadata === undefined ? {} : { metadata: value.metadata }),
+    };
+  }
+  if (
+    value.kind === "unavailable" &&
+    isReason(value.reason) &&
+    isUnavailableShape(value.shape) &&
+    (value.unit === null || typeof value.unit === "string") &&
+    isRecord(value.metadata)
+  ) {
+    return {
+      ...value,
+      kind: "unavailable",
+      dtype: value.dtype,
+      reason: value.reason,
+      shape: value.shape,
+      unit: value.unit,
+      metadata: value.metadata,
+    };
+  }
+  throw invalidReceipt("measurement value");
+}
+
+function isLeaf(value: unknown, dtype: MeasurementDType): value is ArrayLeaf {
+  switch (dtype) {
+    case "string":
+      return typeof value === "string";
+    case "bool":
+      return typeof value === "boolean";
+    case "float64":
+      return typeof value === "number" && Number.isFinite(value);
+    case "int64":
+      return typeof value === "number" && Number.isInteger(value);
+    case "complex128":
+      return (
+        isRecord(value) &&
+        typeof value.real === "number" &&
+        Number.isFinite(value.real) &&
+        typeof value.imag === "number" &&
+        Number.isFinite(value.imag)
+      );
+  }
+}
+
+function isReason(value: unknown): value is "missing" | "invalid" | "overload" {
+  return value === "missing" || value === "invalid" || value === "overload";
+}
+
+function isNonnegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isUnavailableShape(value: unknown): value is (number | null)[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (size: unknown) =>
+        size === null || (typeof size === "number" && Number.isInteger(size) && size >= 0),
+    )
+  );
+}
+
+function isShape(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((size: unknown) => typeof size === "number");
+}
+
+function problem(value: unknown): Problem {
+  if (
+    !isRecord(value) ||
+    typeof value.code !== "string" ||
+    typeof value.message !== "string" ||
+    !isProblemPhase(value.phase) ||
+    !Array.isArray(value.related_locations) ||
+    !value.related_locations.every(isProblemLocation) ||
+    !(
+      value.location === undefined ||
+      value.location === null ||
+      isProblemLocation(value.location)
+    ) ||
+    !isOptionalString(value.occurrence_id)
+  )
+    throw invalidReceipt("problem");
+  return {
+    ...value,
+    code: value.code,
+    message: value.message,
+    phase: value.phase,
+    related_locations: value.related_locations,
+    ...(value.location === undefined ? {} : { location: value.location }),
+    ...(value.occurrence_id === undefined ? {} : { occurrence_id: value.occurrence_id }),
+  };
+}
+
+function isProblemPhase(value: unknown): value is Problem["phase"] {
+  return (
+    value === "definition" ||
+    value === "authoring" ||
+    value === "configuration" ||
+    value === "planning" ||
+    value === "provider_preflight" ||
+    value === "execution" ||
+    value === "persistence" ||
+    value === "analysis"
+  );
+}
+
+function isOptionalString(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown): value is number | null | undefined {
+  return (
+    value === undefined || value === null || (typeof value === "number" && Number.isFinite(value))
+  );
+}
+
+function isProblemLocation(value: unknown): value is ProblemLocation {
+  if (!isRecord(value)) return false;
+  if (value.kind === "runtime")
+    return (
+      isOptionalString(value.run_id) &&
+      isOptionalString(value.instrument_id) &&
+      isOptionalString(value.operation_id) &&
+      isOptionalNumber(value.point_index)
+    );
+  if (
+    !Array.isArray(value.path) ||
+    !value.path.every(
+      (item: unknown) =>
+        typeof item === "string" || (typeof item === "number" && Number.isInteger(item)),
+    )
+  )
+    return false;
+  switch (value.kind) {
+    case "model":
+      return typeof value.root === "string";
+    case "storage":
+      return isOptionalString(value.ref) && isOptionalString(value.run_id);
+    case "external":
+      return (
+        typeof value.uri === "string" &&
+        isOptionalString(value.sheet) &&
+        isOptionalNumber(value.row) &&
+        (isOptionalString(value.column) || isOptionalNumber(value.column))
+      );
+    default:
+      return false;
+  }
 }
 
 function optionalRecord(value: unknown, field: string): Record<string, unknown> {
@@ -221,7 +380,13 @@ function isCollectStatus(value: unknown): value is InstrumentCollectReceipt["sta
 }
 
 function isMeasurementDType(value: unknown): value is MeasurementDType {
-  return ["float64", "int64", "complex128", "bool", "string"].includes(String(value));
+  return (
+    value === "float64" ||
+    value === "int64" ||
+    value === "complex128" ||
+    value === "bool" ||
+    value === "string"
+  );
 }
 
 function safeOffset(value: bigint): number {

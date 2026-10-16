@@ -47,6 +47,15 @@
       "env": {
         "node": true
       }
+    },
+    {
+      "files": [
+        "src/features/runs/measurement-arrow.ts",
+        "src/features/instruments/hardware-receipt-wire.ts"
+      ],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "error"
+      }
     }
   ]
 }

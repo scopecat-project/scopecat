@@ -6,6 +6,9 @@ type MeasurementPartitionedArray = Extract<MeasurementValue, { kind: "partitione
 type MeasurementSegmentedArray = Extract<MeasurementValue, { kind: "segmented_array" }>;
 type MeasurementUnavailable = Extract<MeasurementValue, { kind: "unavailable" }>;
 type MeasurementDType = MeasurementValue["dtype"];
+type MeasurementLeaf = Extract<MeasurementValue, { kind: "scalar" }>["value"];
+type ArrayItem = MeasurementArray["values"][number];
+type ValidItem = NonNullable<MeasurementArray["availability"]>["valid"][number];
 
 const textDecoder = new TextDecoder();
 
@@ -20,8 +23,15 @@ export function decodeMeasurementArrowRecord(content: ArrayBuffer): MeasurementR
     if (!field.name.startsWith("value:")) continue;
     const variableId = field.name.slice("value:".length);
     const role = requiredMetadata(field, "scopecat.variable_role");
-    const dtype = requiredMetadata(field, "scopecat.variable_dtype") as MeasurementDType;
+    const dtype = requiredMetadata(field, "scopecat.variable_dtype");
+    if (!isDType(dtype)) throw new Error("live measurement Arrow dtype is invalid");
+    if (role !== "coordinate" && role !== "observable") {
+      throw new Error("live measurement Arrow variable role is invalid");
+    }
     const declaredKind = requiredMetadata(field, "scopecat.variable_kind");
+    if (declaredKind !== "scalar" && declaredKind !== "array") {
+      throw new Error("live measurement Arrow variable kind is invalid");
+    }
     const unit = field.metadata.get("scopecat.variable_unit") ?? null;
     const metadata = decodeJsonColumn(table, `metadata:${variableId}`);
     const reason = columnValue(table, `unavailable_reason:${variableId}`);
@@ -30,17 +40,23 @@ export function decodeMeasurementArrowRecord(content: ArrayBuffer): MeasurementR
     const rawValue = plainValue(columnValue(table, field.name));
     let value: MeasurementValue;
 
-    if (typeof reason === "string") {
+    if (reason !== null) {
+      if (!isReason(reason) || rawValue !== null) {
+        throw new Error("live measurement Arrow unavailable value is invalid");
+      }
       value = decodeUnavailable(reason, dtype, unit, shapeSidecar, metadata);
     } else if (declaredKind === "scalar") {
       value = {
         kind: "scalar",
         dtype,
         unit,
-        value: rawValue as Extract<MeasurementValue, { kind: "scalar" }>["value"],
+        value: measurementLeaf(rawValue, dtype),
         metadata,
       };
-    } else if (isSegmentShapeSidecar(shapeSidecar)) {
+    } else if (shapeSidecar !== null && "segments" in shapeSidecar) {
+      if (!isSegmentShapeSidecar(shapeSidecar)) {
+        throw new Error("live measurement Arrow segmented shape is invalid");
+      }
       value = decodeSegmentedArray(
         rawValue,
         dtype,
@@ -77,7 +93,7 @@ export function decodeMeasurementArrowRecord(content: ArrayBuffer): MeasurementR
 
   return {
     run_id: requiredSchemaMetadata(table, "scopecat.run_id"),
-    logical_point_id: columnValue(table, "__scopecat.logical_point_id") as string | null,
+    logical_point_id: logicalPointId(columnValue(table, "__scopecat.logical_point_id")),
     point_index: numericValue(columnValue(table, "__scopecat.point_index")),
     coordinates,
     observables,
@@ -94,6 +110,7 @@ function decodePartitionedArray(
   availabilitySidecar: Record<string, unknown>,
   metadata: Record<string, unknown>,
 ): MeasurementPartitionedArray {
+  validateShape(rawValue, shapeSidecar.shape);
   const diagnostics = availabilitySidecar.partitions;
   if (!Array.isArray(diagnostics) || diagnostics.length !== shapeSidecar.partition_sizes.length) {
     throw new Error("live measurement Arrow partition diagnostics are invalid");
@@ -136,7 +153,7 @@ function sliceNestedAxis(value: unknown, axis: number, offset: number, size: num
 }
 
 function decodeUnavailable(
-  reason: string,
+  reason: MeasurementUnavailable["reason"],
   dtype: MeasurementDType,
   unit: string | null,
   shapeSidecar: Record<string, unknown> | null,
@@ -146,7 +163,7 @@ function decodeUnavailable(
   if (!isShape(shape)) throw new Error("live measurement Arrow unavailable shape is invalid");
   return {
     kind: "unavailable",
-    reason: reason as MeasurementUnavailable["reason"],
+    reason,
     dtype,
     unit,
     shape,
@@ -162,19 +179,37 @@ function decodeArray(
   availabilitySidecar: Record<string, unknown>,
   metadata: Record<string, unknown>,
 ): MeasurementArray {
+  validateShape(rawValue, shape);
   const unavailable = unavailableGroups(availabilitySidecar);
+  const missing: number[] = [];
+  let leafIndex = 0;
+  const collectMissing = (item: unknown): void => {
+    if (Array.isArray(item)) item.forEach(collectMissing);
+    else {
+      if (item === null) missing.push(leafIndex);
+      leafIndex += 1;
+    }
+  };
+  collectMissing(rawValue);
+  const indices = unavailable.flatMap((group) => group.flat_indices).sort((a, b) => a - b);
+  if (indices.length !== missing.length || indices.some((index, i) => index !== missing[i])) {
+    throw new Error("live measurement Arrow availability does not match null leaves");
+  }
   const decoded = decodeNullableArray(rawValue, dtype);
+  if (!Array.isArray(decoded.values) || !Array.isArray(decoded.valid)) {
+    throw new Error("live measurement Arrow array value is not nested");
+  }
   const value: MeasurementArray = {
     kind: "array",
     dtype,
     unit,
     shape,
-    values: decoded.values as MeasurementArray["values"],
+    values: decoded.values,
     metadata,
   };
   if (unavailable.length > 0) {
     value.availability = {
-      valid: decoded.valid as NonNullable<MeasurementArray["availability"]>["valid"],
+      valid: decoded.valid,
       unavailable,
     };
   }
@@ -210,12 +245,12 @@ function decodeSegmentedArray(
     }
     const shapeSpec = segmentShape(shapeSpecs[index]);
     if (rawDiagnostic.kind === "unavailable") {
-      if (typeof rawDiagnostic.reason !== "string" || shapeSpec === null) {
+      if (!isReason(rawDiagnostic.reason) || shapeSpec === null || rawValue[index] !== null) {
         throw new Error("live measurement Arrow unavailable segment is invalid");
       }
       return {
         kind: "unavailable" as const,
-        reason: rawDiagnostic.reason as MeasurementUnavailable["reason"],
+        reason: rawDiagnostic.reason,
         dtype,
         unit,
         shape: shapeSpec,
@@ -225,14 +260,14 @@ function decodeSegmentedArray(
     if (rawDiagnostic.kind !== "array" || rawValue[index] === null) {
       throw new Error("live measurement Arrow available segment is invalid");
     }
-    if (shapeSpec?.some((extent) => extent === null)) {
+    if (shapeSpec !== null && !isConcreteShape(shapeSpec)) {
       throw new Error("live measurement Arrow available segment shape is not concrete");
     }
     return decodeArray(
       rawValue[index],
       dtype,
       unit,
-      (shapeSpec as number[] | null) ?? nestedShape(rawValue[index]),
+      shapeSpec ?? nestedShape(rawValue[index]),
       rawDiagnostic,
       segmentMetadata,
     );
@@ -244,10 +279,10 @@ function decodeSegmentedArray(
 function decodeNullableArray(
   value: unknown,
   dtype: MeasurementDType,
-): { values: unknown; valid: unknown } {
+): { values: ArrayItem; valid: ValidItem } {
   if (!Array.isArray(value)) {
     return {
-      values: value === null ? unavailableFill(dtype) : value,
+      values: value === null ? unavailableFill(dtype) : measurementLeaf(value, dtype),
       valid: value !== null,
     };
   }
@@ -258,7 +293,7 @@ function decodeNullableArray(
   };
 }
 
-function unavailableFill(dtype: MeasurementDType): unknown {
+function unavailableFill(dtype: MeasurementDType): MeasurementLeaf {
   if (dtype === "string") return "";
   if (dtype === "bool") return false;
   if (dtype === "complex128") return { real: 0, imag: 0 };
@@ -334,7 +369,22 @@ function unavailableGroups(
   if (!Array.isArray(groups)) {
     throw new Error("live measurement Arrow array availability is invalid");
   }
-  return groups as NonNullable<MeasurementArray["availability"]>["unavailable"];
+  return groups.map((group: unknown) => {
+    if (
+      !isJsonObject(group) ||
+      !isReason(group.reason) ||
+      !isConcreteShape(group.flat_indices) ||
+      group.flat_indices.length === 0 ||
+      (group.metadata !== undefined && !isJsonObject(group.metadata))
+    ) {
+      throw new Error("live measurement Arrow array availability group is invalid");
+    }
+    return {
+      reason: group.reason,
+      flat_indices: group.flat_indices,
+      ...(group.metadata === undefined ? {} : { metadata: group.metadata }),
+    };
+  });
 }
 
 function columnValue(table: Table, name: string): unknown {
@@ -346,7 +396,7 @@ function columnValue(table: Table, name: string): unknown {
 function decodeJsonColumn(table: Table, name: string): Record<string, unknown> {
   const value = columnValue(table, name);
   if (!(value instanceof Uint8Array)) throw new Error(`${name} is not binary JSON metadata`);
-  const decoded = JSON.parse(textDecoder.decode(value)) as unknown;
+  const decoded: unknown = JSON.parse(textDecoder.decode(value));
   if (!isJsonObject(decoded)) throw new Error(`${name} JSON metadata is not an object`);
   return decoded;
 }
@@ -355,7 +405,7 @@ function decodeOptionalJsonColumn(table: Table, name: string): Record<string, un
   const value = columnValue(table, name);
   if (value === null) return null;
   if (!(value instanceof Uint8Array)) throw new Error(`${name} is not binary JSON metadata`);
-  const decoded = JSON.parse(textDecoder.decode(value)) as unknown;
+  const decoded: unknown = JSON.parse(textDecoder.decode(value));
   if (!isJsonObject(decoded)) throw new Error(`${name} JSON metadata is not an object`);
   return decoded;
 }
@@ -367,8 +417,8 @@ function plainValue(value: unknown): unknown {
   if ("toJSON" in value && typeof value.toJSON === "function") {
     return plainValue(value.toJSON());
   }
-  if (Symbol.iterator in value) {
-    return Array.from(value as Iterable<unknown>, plainValue);
+  if (isIterable(value)) {
+    return Array.from(value, plainValue);
   }
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plainValue(item)]));
 }
@@ -420,4 +470,62 @@ function numericValue(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") return Number(value);
   throw new Error("live measurement Arrow point index is not numeric");
+}
+
+function isIterable(value: object): value is Iterable<unknown> {
+  return Symbol.iterator in value && typeof value[Symbol.iterator] === "function";
+}
+
+function isDType(value: unknown): value is MeasurementDType {
+  return (
+    value === "float64" ||
+    value === "int64" ||
+    value === "complex128" ||
+    value === "bool" ||
+    value === "string"
+  );
+}
+
+function isReason(value: unknown): value is MeasurementUnavailable["reason"] {
+  return value === "missing" || value === "invalid" || value === "overload";
+}
+
+function measurementLeaf(value: unknown, dtype: MeasurementDType): MeasurementLeaf {
+  if (dtype === "string" && typeof value === "string") return value;
+  if (dtype === "bool" && typeof value === "boolean") return value;
+  if (
+    (dtype === "float64" || dtype === "int64") &&
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    (dtype !== "int64" || Number.isInteger(value))
+  )
+    return value;
+  if (
+    dtype === "complex128" &&
+    isJsonObject(value) &&
+    typeof value.real === "number" &&
+    typeof value.imag === "number" &&
+    Number.isFinite(value.real) &&
+    Number.isFinite(value.imag)
+  ) {
+    return { real: value.real, imag: value.imag };
+  }
+  throw new Error("live measurement Arrow value does not match dtype");
+}
+
+// Empty axes retain the remaining extents from the validated sidecar.
+function validateShape(value: unknown, shape: number[], dimension = 0): void {
+  if (dimension === shape.length) {
+    if (Array.isArray(value)) throw new Error("live measurement Arrow array shape is invalid");
+    return;
+  }
+  if (!Array.isArray(value) || value.length !== shape[dimension]) {
+    throw new Error("live measurement Arrow array shape is invalid");
+  }
+  value.forEach((child: unknown) => validateShape(child, shape, dimension + 1));
+}
+
+function logicalPointId(value: unknown): string | null {
+  if (value === null || typeof value === "string") return value;
+  throw new Error("live measurement Arrow logical point id is invalid");
 }

@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { decodeCollectReceipt } from "./hardware-receipt-wire";
 
@@ -122,16 +124,26 @@ function arrayReference(
   };
 }
 
-function framedReceipt(values: Record<string, unknown>, attachments: Uint8Array[]): ArrayBuffer {
-  const header = new TextEncoder().encode(
+function framedReceipt(
+  values: Record<string, unknown>,
+  attachments: Uint8Array[],
+  overrides: Record<string, unknown> = {},
+): ArrayBuffer {
+  return framedHeader(
     JSON.stringify({
       format_id: "scopecat.collect_receipt.v1",
       status: "collected",
       problems: [],
       readback: { values, metadata: {} },
       metadata: {},
+      ...overrides,
     }),
+    attachments,
   );
+}
+
+function framedHeader(headerJson: string, attachments: Uint8Array[]): ArrayBuffer {
+  const header = new TextEncoder().encode(headerJson);
   const result = new Uint8Array(
     16 + header.byteLength + sum(attachments.map((item) => item.byteLength)),
   );
@@ -175,3 +187,116 @@ function stringAttachment(values: string[]): Uint8Array {
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
+
+const scalar = { kind: "scalar", dtype: "float64", value: 1.5, unit: null, metadata: {} };
+const unavailable = {
+  kind: "unavailable",
+  dtype: "float64",
+  reason: "missing",
+  shape: [null],
+  unit: null,
+  metadata: {},
+};
+
+describe("receipt header validation", () => {
+  it.each([
+    { ...scalar, dtype: "invalid" },
+    { ...scalar, value: "1.5" },
+    { ...scalar, value: null },
+    { ...scalar, unit: 1 },
+    { ...scalar, metadata: [] },
+    { ...scalar, dtype: "complex128", value: { real: 1 } },
+    { ...unavailable, reason: "broken" },
+    { ...unavailable, shape: [-1] },
+    { ...unavailable, shape: ["1"] },
+    { kind: "scalar" },
+  ])("rejects malformed inline measurement %j", (value) => {
+    expect(() => decodeCollectReceipt(framedReceipt({ value }, []))).toThrow(
+      "Invalid hardware receipt",
+    );
+  });
+
+  it.each([
+    { ...scalar, dtype: "int64", value: -4 },
+    { ...scalar, dtype: "bool", value: false },
+    { ...scalar, dtype: "string", value: "猫" },
+    { ...scalar, dtype: "complex128", value: { real: -1, imag: 2 } },
+    scalar,
+    unavailable,
+    { ...unavailable, shape: [] },
+    { ...unavailable, shape: [2 ** 53] },
+    { kind: "scalar", dtype: "float64", value: 1.5 },
+  ])("preserves valid inline measurements %j", (value) => {
+    expect(decodeCollectReceipt(framedReceipt({ value }, [])).readback?.values?.value).toEqual(
+      value,
+    );
+  });
+
+  it.each([
+    null,
+    {},
+    { code: "bad", message: 42, phase: "execution", related_locations: [] },
+    { code: "bad", message: "bad", phase: "other", related_locations: [] },
+    {
+      code: "bad",
+      message: "bad",
+      phase: "execution",
+      related_locations: [{ kind: "model", root: "x", path: false }],
+    },
+  ])("rejects malformed problems %j", (problem) => {
+    expect(() => decodeCollectReceipt(framedReceipt({}, [], { problems: [problem] }))).toThrow(
+      "Invalid hardware receipt",
+    );
+  });
+
+  it("preserves problem locations and opaque details", () => {
+    const problem = {
+      code: "bad",
+      message: "bad",
+      phase: "execution",
+      details: { context: [1, "context"] },
+      location: { kind: "runtime", run_id: "run", point_index: 0 },
+      related_locations: [
+        { kind: "model", root: "plan", path: ["steps", 0] },
+        { kind: "storage", path: [], ref: "data" },
+        { kind: "external", uri: "file:test", path: [], row: 1, column: "A" },
+      ],
+    };
+    expect(decodeCollectReceipt(framedReceipt({}, [], { problems: [problem] })).problems).toEqual([
+      problem,
+    ]);
+  });
+});
+
+it("accepts inline headers serialized by the current Python producer", () => {
+  const generated: { header_json: string }[] = JSON.parse(
+    execFileSync(
+      "uv",
+      [
+        "run",
+        "--no-sync",
+        "python",
+        fileURLToPath(new URL("./test-fixtures/receipt_header.py", import.meta.url)),
+      ],
+      { encoding: "utf8" },
+    ),
+  );
+  expect(generated).toHaveLength(3);
+  const receipts = generated.map((sample) => {
+    const header = JSON.parse(sample.header_json);
+    // This tests header compatibility only. The current producer's v2 envelope
+    // requires a separate transport migration; the UI still consumes v1 here.
+    const decoded = decodeCollectReceipt(framedHeader(sample.header_json, []));
+    expect(decoded).toEqual({
+      status: header.status,
+      problems: header.problems,
+      readback: header.readback,
+      metadata: header.metadata,
+    });
+    return decoded;
+  });
+  const values = receipts[0]?.readback?.values;
+  expect(values?.int_min).toMatchObject({ value: Number(-(2n ** 63n)) });
+  expect(values?.int_max).toMatchObject({ value: Number(2n ** 63n - 1n) });
+  expect(values?.complex).toMatchObject({ value: { real: -0, imag: 2 } });
+});
