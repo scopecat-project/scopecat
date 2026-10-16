@@ -143,3 +143,195 @@ def test_output_schema_factory_preserves_structural_shape_and_native_call() -> N
 
     with pytest.raises(TypeError, match="unknown"):
         sc.compute(samples.eager, output_type=invalid_shape)
+
+
+@sc.compute
+def lorentzian(frequency: sc.Quantity, center: sc.Quantity) -> float:
+    delta = frequency.to("MHz").value - center.to("MHz").value
+    return 1 / (1 + delta**2)
+
+
+@pytest.mark.parametrize("value", ["wrong", 5.0])
+def test_quantity_parameter_rejects_wrong_literals_during_build(
+    value: str | float,
+) -> None:
+    @sc.experiment(id="test.invalid-frequency")
+    def experiment(ctx: sc.ExperimentContext) -> sc.DataRef[float]:
+        return lorentzian(value, center=sc.Quantity(5, "MHz"))
+
+    with pytest.raises(
+        TypeError, match="compute 'lorentzian' input 'frequency' expects Quantity"
+    ):
+        experiment.build()
+
+
+def test_quantity_parameter_accepts_input_value_and_measured_references() -> None:
+    @sc.experiment(id="test.quantity-references")
+    def experiment(
+        ctx: sc.ExperimentContext,
+        frequency: Annotated[sc.Input[sc.Quantity], sc.QuantityType(unit="MHz")],
+    ) -> dict[str, sc.DataRef[float]]:
+        center = sc.Quantity(5000, "kHz")
+        value = ctx.compute(
+            fn=lambda: center, output_type=sc.ScalarType(sc.QuantityType(unit="kHz"))
+        )
+        measured = ctx._product("frequency", dtype="float64", unit="MHz")
+        return {
+            "input": lorentzian(frequency, center),
+            "value": lorentzian(value, center),
+            "measured": lorentzian(measured, center),
+        }
+
+    assert (
+        compile_invocation(experiment.build(frequency=sc.Quantity(5, "MHz")))
+        is not None
+    )
+
+
+@pytest.mark.parametrize("measured", [False, True])
+def test_quantity_parameter_rejects_incompatible_reference_schema(
+    measured: bool,
+) -> None:
+    @sc.experiment(id="test.invalid-frequency-reference")
+    def experiment(ctx: sc.ExperimentContext) -> sc.DataRef[float]:
+        value = (
+            ctx._product("frequency", dtype="float64", unit=None)
+            if measured
+            else ctx.compute(
+                fn=lambda: "wrong", output_type=sc.ScalarType(sc.StringType())
+            )
+        )
+        return lorentzian(value, sc.Quantity(5, "MHz"))
+
+    with pytest.raises(TypeError, match="input 'frequency' expects Quantity"):
+        experiment.build()
+
+
+@pytest.mark.parametrize("unit, succeeds", [("kHz", True), ("ns", False)])
+def test_plain_quantity_keeps_conversion_at_native_execution(
+    unit: str, succeeds: bool
+) -> None:
+    from scopecat.compiler.frontend.elaboration import compose_module
+    from scopecat.compiler.frontend.logical_verification import verify_logical_program
+    from scopecat.compiler.relations.context import EvalContext
+    from scopecat.compiler.value_resolution import logical_program_value
+    from scopecat.execution.effects.boundary import EffectBoundary
+    from scopecat.execution.effects.compute import (
+        ComputeEffectExecutor,
+        EffectEvaluationFrame,
+    )
+    from scopecat.kernel.problems import Problem
+    from scopecat.planning.local_compute import bind_compute_operations
+    from scopecat.sdk.payloads import EMPTY_PAYLOAD_CODECS
+
+    @sc.module(id="test.quantity-execution")
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        return lorentzian(sc.Quantity(5000, unit), sc.Quantity(5, "MHz"))
+
+    logical = compose_module(module.definition)
+    verified = verify_logical_program(logical)
+    [compute] = logical.compute_nodes
+    problems: list[Problem] = []
+    operations, _ = bind_compute_operations(
+        logical.compute_nodes,
+        logical.implementations,
+        {
+            value_id: logical_program_value(verified, value_id)
+            for _, value_id in compute.inputs
+        },
+        operation_prefix="quantity",
+        ctx=EvalContext(),
+        demanded_payload_results=frozenset(),
+        problems=problems,
+    )
+    assert problems == []
+    boundary = EffectBoundary(run_id="quantity")
+    frame = EffectEvaluationFrame()
+    ComputeEffectExecutor(
+        boundary=boundary, payload_codecs=EMPTY_PAYLOAD_CODECS
+    ).execute(frame, operations)
+    if succeeds:
+        assert boundary.problems == []
+        assert frame.compute_results[compute.result_id] == 1.0
+    else:
+        assert [problem.code for problem in boundary.problems] == [
+            "compute_operation_failed"
+        ]
+        assert frame.compute_results == {}
+
+
+type FrequencyQuantity = sc.Quantity
+
+
+@pytest.mark.parametrize(
+    "annotation", [FrequencyQuantity, Annotated[FrequencyQuantity, "frequency"]]
+)
+def test_quantity_alias_contract_also_applies_to_explicit_compute(
+    annotation: object,
+) -> None:
+    def response(frequency: sc.Quantity) -> float:
+        return frequency.to("MHz").value
+
+    response.__annotations__["frequency"] = annotation
+    with pytest.raises(
+        TypeError, match="compute 'response' input 'frequency' expects Quantity"
+    ):
+        sc.ModuleContext().compute(fn=response, frequency="wrong")
+
+
+def test_quantity_keyword_and_default_arguments_are_checked() -> None:
+    default_frequency = sc.Quantity(5, "MHz")
+
+    @sc.compute
+    def response(*, frequency: sc.Quantity = default_frequency) -> float:
+        return frequency.to("MHz").value
+
+    @sc.experiment(id="test.quantity-default")
+    def valid(ctx: sc.ExperimentContext) -> sc.DataRef[float]:
+        return response()
+
+    assert compile_invocation(valid.build()) is not None
+
+    @sc.experiment(id="test.quantity-keyword")
+    def invalid(ctx: sc.ExperimentContext) -> sc.DataRef[float]:
+        return response(frequency="wrong")
+
+    with pytest.raises(
+        TypeError, match="compute 'response' input 'frequency' expects Quantity"
+    ):
+        invalid.build()
+
+
+@pytest.mark.parametrize("unit", ["kHz", "ns"])
+def test_measured_quantity_executes_without_changing_float_consumers(unit: str) -> None:
+    from scopecat.compiler.frontend.elaboration import compose_module
+    from scopecat.measurements.results import MeasurementScalar
+
+    @sc.compute
+    def magnitude(frequency: float) -> float:
+        assert isinstance(frequency, float)
+        return frequency
+
+    @sc.module(id="test.measured-quantity-native")
+    def module(ctx: sc.ModuleContext) -> dict[str, sc.DataRef[float]]:
+        measured = ctx._product("frequency", dtype="float64", unit=unit)
+        return {
+            "quantity": lorentzian(measured, sc.Quantity(5, "MHz")),
+            "magnitude": magnitude(measured),
+        }
+
+    quantity_compute, magnitude_compute = compose_module(
+        module.definition
+    ).measurement_computes
+    measured_value = MeasurementScalar.create(value=5000.0, dtype="float64", unit=unit)
+    magnitude_result = magnitude_compute.kernel({"frequency": measured_value})
+    assert magnitude_result["result"] == MeasurementScalar.create(value=5000.0)
+    inputs = {"frequency": measured_value, "center": sc.Quantity(5, "MHz")}
+    if unit == "kHz":
+        result = quantity_compute.kernel(inputs)
+        assert result["result"] == MeasurementScalar.create(value=1.0)
+    else:
+        # The measurement wrapper preserves the source unit; the function's
+        # existing native conversion rejects a time quantity as a frequency.
+        with pytest.raises(ValueError, match="convert"):
+            quantity_compute.kernel(inputs)

@@ -261,9 +261,11 @@ def _validate_inferred_compute_annotation(
     )
 
 
-def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
+def _compute_parameter_contracts(
+    fn: ComputeFunction,
+) -> dict[str, DataType | type[Quantity]]:
     hints = cast("Mapping[str, object]", get_type_hints(fn, include_extras=True))
-    contracts: dict[str, DataType] = {}
+    contracts: dict[str, DataType | type[Quantity]] = {}
     for name, annotation in hints.items():
         if name == "return" or get_origin(annotation) is not Annotated:
             if name == "return":
@@ -271,6 +273,8 @@ def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
             while isinstance(annotation, TypeAliasType):
                 annotation = cast("object", annotation.__value__)
             if get_origin(annotation) is not Annotated:
+                if annotation is Quantity:
+                    contracts[name] = Quantity
                 continue
         native_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
         declared, unit = value_annotation_metadata(metadata)
@@ -280,6 +284,11 @@ def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
             declared = unit_scalar_type(native_type, unit)
         if declared is not None:
             contracts[name] = declared
+        else:
+            while isinstance(native_type, TypeAliasType):
+                native_type = cast("object", native_type.__value__)
+            if native_type is Quantity:
+                contracts[name] = Quantity
     return contracts
 
 
@@ -287,18 +296,34 @@ def _validate_compute_input_contracts(
     compute_id: str,
     fn: ComputeFunction,
     inputs: Mapping[str, ComputeInput | ProductRef],
-) -> None:
+) -> frozenset[str]:
+    quantity_parameters: set[str] = set()
     for name, expected in _compute_parameter_contracts(fn).items():
         value = inputs.get(name)
         if value is None and name not in inputs:
             continue
-        actual = _compute_input_data_type(value)
-        if _compute_contract_assignable(actual, expected):
-            continue
+        try:
+            actual = _compute_input_data_type(value)
+        except TypeError as error:
+            raise TypeError(
+                f"compute {compute_id!r} input {name!r}: {error}"
+            ) from error
+        if isinstance(expected, type):
+            # Plain Quantity promises a native quantity, not a particular unit.
+            # Read the producer schema so symbolic inputs remain symbolic.
+            if isinstance(actual, ScalarType) and isinstance(actual.atom, QuantityType):
+                quantity_parameters.add(name)
+                continue
+            expected_description = "Quantity"
+        else:
+            if _compute_contract_assignable(actual, expected):
+                continue
+            expected_description = describe_value_type(expected)
         raise TypeError(
             f"compute {compute_id!r} input {name!r} expects "
-            f"{describe_value_type(expected)}, got {describe_value_type(actual)}"
+            f"{expected_description}, got {describe_value_type(actual)}"
         )
+    return frozenset(quantity_parameters)
 
 
 def _compute_input_data_type(value: object) -> DataType:
@@ -394,10 +419,16 @@ def _measurement_compute_output_spec(
     return dtype, unit, ()
 
 
-def _native_measurement_value(value: MeasurementValue) -> object:
+def _native_measurement_value(
+    value: MeasurementValue, *, as_quantity: bool = False
+) -> object:
     if isinstance(value, MeasurementArray | MeasurementPartitionedArray):
         return value.values
     if isinstance(value, MeasurementScalar):
+        if as_quantity:
+            # The declaration boundary checked a unit-bearing real scalar schema.
+            # Adapt only plain Quantity consumers; float consumers keep magnitudes.
+            return Quantity(cast("float", value.value), cast("str", value.unit))
         return value.value
     raise AssertionError(
         "unavailable measurement values must not reach compute kernels"
@@ -1337,7 +1368,9 @@ class ModuleContext:
             _compute_name_hint(fn) if id is None else id,
             explicit=id is not None,
         )
-        _validate_compute_input_contracts(selected_id, fn, selected_inputs)
+        quantity_parameters = _validate_compute_input_contracts(
+            selected_id, fn, selected_inputs
+        )
         if any(isinstance(value, ProductRef) for value in selected_inputs.values()):
             return self._compute_measurements(
                 selected_id,
@@ -1345,6 +1378,7 @@ class ModuleContext:
                 inputs=selected_inputs,
                 output_type=selected_output_type,
                 axes_from=axes_from,
+                quantity_parameters=quantity_parameters,
             )
         if axes_from is not None:
             raise ValueError("compute axes_from must name one of its measured inputs")
@@ -1469,6 +1503,7 @@ class ModuleContext:
         inputs: Mapping[str, ComputeInput | ProductRef],
         output_type: (DataType | Mapping[str, DataType] | type[ProductBundle]),
         axes_from: ProductRef | None,
+        quantity_parameters: frozenset[str],
     ) -> ProductRef | ProductRefs | ProductBundle:
         """Lower measured inputs to the point-local observation stage."""
 
@@ -1522,7 +1557,8 @@ class ModuleContext:
                 **{
                     name: (
                         _native_measurement_value(
-                            cast("MeasurementValue", values[name])
+                            cast("MeasurementValue", values[name]),
+                            as_quantity=name in quantity_parameters,
                         )
                         if name in product_inputs
                         else unwrap_payload_values(values[name])
