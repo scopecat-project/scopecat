@@ -224,10 +224,19 @@ def _encode_value(
     value: MeasurementAcquisitionValue,
     attachments: list[EncodedMeasurementArray],
 ) -> _WireValue:
+    # v2 attachments carry values only. Never let padding become valid samples.
     if isinstance(value, MeasurementPartitionedArray):
+        if any(part.availability is not None for part in value.partitions):
+            raise HardwareReceiptWireError(
+                "hardware receipt v2 does not support measurement array availability"
+            )
         value = value.materialize()
     if not isinstance(value, MeasurementArray):
         return value
+    if value.availability is not None:
+        raise HardwareReceiptWireError(
+            "hardware receipt v2 does not support measurement array availability"
+        )
     try:
         content = encode_measurement_array(value)
     except MeasurementArrayWireError as error:

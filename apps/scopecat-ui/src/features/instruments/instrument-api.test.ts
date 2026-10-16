@@ -1,4 +1,8 @@
-import { hardwareReceiptResponse, producerReceipts } from "./receipt-fixture.test-support";
+import {
+  hardwareReceiptResponse,
+  producerReceipts,
+  unsupportedAvailabilityResponse,
+} from "./receipt-fixture.test-support";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   InstrumentAcquisition,
@@ -406,4 +410,25 @@ describe("interactive collection request shaping", () => {
       "/api/v1/instrument-sessions/session-1/close",
     ]);
   });
+});
+
+it("surfaces the real endpoint availability error without returning padded samples", async () => {
+  const fetchMock = vi.fn(() => Promise.resolve(unsupportedAvailabilityResponse()));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(
+    sendInstrumentAcquisition(
+      session(),
+      "vna-1",
+      {
+        interfaceId: "test.receipt/v1",
+        componentPath: [],
+        acquisition: { id: "read", results: [] },
+      },
+      "collect-unavailable",
+    ),
+  ).rejects.toMatchObject({
+    status: 500,
+    message: "hardware receipt v2 does not support measurement array availability",
+  });
+  expect(fetchMock).toHaveBeenCalledOnce();
 });
