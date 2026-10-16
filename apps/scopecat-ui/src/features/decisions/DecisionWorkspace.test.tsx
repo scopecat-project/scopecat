@@ -67,6 +67,60 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("renders the shipped nullable peak schema and blocks invalid combinations before recording", async () => {
+    const step = waitingStep();
+    step.interpretation_request!.structure = {
+      type: "object",
+      fields: {
+        outcome: { type: "literal", values: ["Peak selected", "No clear peak", "Unsure"] },
+        frequency_mhz: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+      },
+    };
+    step.interpretation_request!.response_template = { outcome: "Unsure", frequency_mhz: null };
+    step.interpretation_request!.metadata = {
+      reviewer: "learner",
+      field_labels: { frequency_mhz: "Peak frequency (MHz)" },
+      field_constraints: {
+        frequency_mhz: {
+          minimum: 6490,
+          maximum: 6510,
+          required_when: { field: "outcome", value: "Peak selected" },
+          empty_otherwise: true,
+        },
+      },
+    };
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    renderWorkspace();
+    const frequency = await screen.findByLabelText("Peak frequency (MHz)");
+    expect(frequency).toHaveValue("");
+    expect(screen.queryByText("Structured judgment (JSON)")).toBeNull();
+    fireEvent.change(screen.getByLabelText("outcome"), {
+      target: { value: JSON.stringify("Peak selected") },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter Peak frequency");
+    fireEvent.change(frequency, { target: { value: "6600" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("between 6490 and 6510");
+    expect(submitProcedureInput).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("outcome"), {
+      target: { value: JSON.stringify("No clear peak") },
+    });
+    fireEvent.change(frequency, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    await waitFor(() =>
+      expect(submitProcedureInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: { outcome: "No clear peak", frequency_mhz: null },
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
   it("shows the retained parameter branch receipt as decision evidence", async () => {
     const step = waitingStep();
     step.inputs = [
@@ -86,15 +140,16 @@ describe("DecisionWorkspace", () => {
       items: [step],
     });
     renderWorkspace();
-    expect(
-      await screen.findByText("parameters · daily · generation 4 · joint-verified"),
-    ).toBeVisible();
+    await screen.findByText("Evidence retained by this decision");
+    fireEvent.click(screen.getByText("Evidence retained by this decision"));
+    expect(screen.getByText("parameters · daily · generation 4 · joint-verified")).toBeVisible();
   });
 
   it("shows exact evidence and submits an identified structured judgment", async () => {
     renderWorkspace();
 
     expect(await screen.findByText("Select a physical readout resonator")).toBeVisible();
+    fireEvent.click(screen.getByText("Evidence retained by this decision"));
     expect(screen.getByRole("link", { name: "run · readout-s21" })).toHaveAttribute(
       "href",
       "/?run=readout-s21#runs",

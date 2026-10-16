@@ -23,6 +23,7 @@ export function HelpWorkspace({
           to stop and restart the recorded background process.
         </p>
       )}
+      <PracticePanel reachable={reachable} />
       <section className={section}>
         <h3 className="font-semibold">Start an experiment</h3>
         <ol className="list-decimal space-y-2 pl-5">
@@ -106,7 +107,6 @@ export function HelpWorkspace({
         </a>
       </section>
       <NotebookJourneyPanel reachable={reachable} />
-      <PracticePanel reachable={reachable} />
     </section>
   );
 }

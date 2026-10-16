@@ -114,15 +114,17 @@ export function ProcedureProgress({
           </p>
           {!run.closure && (
             <p>
-              {view.dispatch.worker_running
-                ? "Worker process active"
-                : view.dispatch.management === "paused"
-                  ? view.dispatch.failure
-                    ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
-                    : "Waiting for your explicit Continue action. Recorded decisions do not automatically run the next step."
-                  : view.dispatch.management === "active"
-                    ? "Managed by the console; ready work can continue when a worker is available."
-                    : "No console worker is assigned to this admitted procedure."}
+              {run.state === "waiting_for_input"
+                ? "Review the evidence and record your answer in Decisions first. Then return here to continue."
+                : view.dispatch.worker_running
+                  ? "Worker process active"
+                  : view.dispatch.management === "paused"
+                    ? view.dispatch.failure
+                      ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
+                      : "Waiting for your explicit Continue action. Recorded decisions do not automatically run the next step."
+                    : view.dispatch.management === "active"
+                      ? "Managed by the console; ready work can continue when a worker is available."
+                      : "No console worker is assigned to this admitted procedure."}
             </p>
           )}
           {view.dispatch.failure && (

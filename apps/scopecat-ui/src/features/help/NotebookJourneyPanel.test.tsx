@@ -16,6 +16,7 @@ const courseNames: Record<string, string> = {
   groups: "Grouped analysis and history",
   calibration: "Parameter calibration and recovery",
   "joint-calibration": "Joint calibration and coupled checks",
+  procedure: "Procedures and human decisions",
   "task-calibration": "Background calibration and publication",
 };
 const course = (topic: string) => screen.getByRole("radio", { name: courseNames[topic] });
@@ -75,11 +76,19 @@ it("keeps desktop preparation distinct from browser-only Help", () => {
   show();
   expect(screen.getByText(/Open Help in the Scopecat desktop/)).toBeVisible();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  expect(screen.getAllByRole("radio")).toHaveLength(7);
+  expect(screen.getAllByRole("radio")).toHaveLength(8);
   fireEvent.click(course("groups"));
   expect(course("groups")).toBeChecked();
 });
-it.each(["groups", "refresh", "compute", "calibration", "joint-calibration", "task-calibration"])(
+it.each([
+  "procedure",
+  "groups",
+  "refresh",
+  "compute",
+  "calibration",
+  "joint-calibration",
+  "task-calibration",
+])(
   "selects %s without borrowing the parameters receipt and locks selection during preparation",
   async (topic) => {
     const parameters = {

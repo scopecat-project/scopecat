@@ -50,11 +50,14 @@ before deleting anything you intend to retain.
 Start with **Parameters and scans**, then **Edit and refresh experiments** if you
 want to keep authoring. The first lesson already lets you run an experiment, open
 its result in Scopecat, edit Python and run again. You can stop there and use the
-same editable folder for your own work; seven topics are not seven required steps.
+same editable folder for your own work; the topics are not required sequential steps.
 
 Choose **Mean IQ and typed results** when you need calculated outputs, or
 **Grouped analysis and history** when you need to summarize several curves. They
 are independent options after the basics, not prerequisites for one another.
+Choose **Procedures and human decisions** (`procedure`) for a small editable
+scan → retained question → typed answer → explicit continuation workflow. It uses
+`pending_input` before reviewing the evidence and needs no calibration or task scheduler.
 Move to **Parameter calibration and recovery** when you need to decide whether a
 proposed parameter correction should be adopted. Follow it with **Joint
 calibration and coupled checks**, then **Background calibration and publication**
@@ -71,6 +74,7 @@ table are suggested knowledge, not a requirement to import another lesson's runs
 | **Edit and refresh experiments** (`refresh`) — continue authoring | The first lesson's request, preview and run cycle | Save an edit, distinguish old and new requests, add an experiment from the supplied source, and reopen an exact run. |
 | **Mean IQ and typed results** (`compute`) — optional calculation | Scan points, shots and basic NumPy arrays | Compare per-shot IQ with its mean, read typed rows, and reopen the chosen mean run. Recognize that averaging removes the shot distribution. |
 | **Grouped analysis and history** (`groups`) — optional analysis | Scans and retained run IDs | Analyze two amplitude groups across 42 frequency-scan points; add a third group for 63 points; reopen the saved analysis by its publication ID. |
+| **Procedures and human decisions** (`procedure`) — optional workflow | The basic scan and Python functions | Submit a synthetic procedure, inspect its curve, answer the captured typed question, explicitly resume and reopen its retained history. |
 | **Parameter calibration and recovery** (`calibration`) — advanced adoption | Saved parameter branches, measurements and analysis; reading Python functions | Trace a fitted candidate through fresh verification to publication; compare acceptance with rejection that leaves its branch unchanged. Health checks and capability reports are a later extension. |
 | **Joint calibration and coupled checks** (`joint-calibration`) — advanced composition | Candidate, verification and publication concepts from calibration | Explain why individually accepted corrections can fail together, inspect the coupled decision and required target coverage, and find the original procedure again. |
 | **Background calibration and publication** (`task-calibration`) — advanced tasks | Joint verification and parameter branch versions | Inspect accepted, scientifically rejected and branch-conflict tasks; distinguish passed stages, final verification and an actual publication receipt. |

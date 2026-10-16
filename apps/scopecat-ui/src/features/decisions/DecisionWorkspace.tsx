@@ -14,6 +14,7 @@ import {
   DecisionFields,
   decisionFields,
   decisionValueError,
+  decisionConstraintError,
   decisionFormValue,
 } from "./DecisionFields";
 import { errorMessage, formatRelative } from "../../lib/presentation";
@@ -327,6 +328,11 @@ function DecisionEditor({
         return;
       }
     }
+    const constraintError = decisionConstraintError(value, request.metadata);
+    if (constraintError) {
+      setParseError(constraintError);
+      return;
+    }
     setParseError(undefined);
     const command: ProcedureStepInputSubmitCommand = {
       procedure_run_id: procedure.procedure_run_id,
@@ -345,7 +351,10 @@ function DecisionEditor({
 
   return (
     <article className="rounded-lg border border-line bg-panel p-4">
-      <div className="mb-3 grid gap-2 text-sm" aria-live="polite">
+      <div
+        className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs"
+        aria-live="polite"
+      >
         <p>
           {draft.status === "saved"
             ? draft.started
@@ -389,7 +398,7 @@ function DecisionEditor({
         </button>
       </div>
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="mb-1 text-[0.61rem] font-bold tracking-[0.08em] text-text-dim uppercase">
             {procedure.definition.id} · {step.step_key}
           </div>
@@ -405,162 +414,166 @@ function DecisionEditor({
       </header>
 
       {step.inputs.length > 0 && (
-        <section className="mb-4 rounded-md border border-line bg-panel-soft p-3">
-          <div className="mb-2 text-[0.62rem] font-bold tracking-[0.06em] text-text-dim uppercase">
+        <details className="mb-3 rounded-md border border-line bg-panel-soft p-2">
+          <summary className="cursor-pointer text-xs text-text-dim">
             Evidence retained by this decision
-          </div>
+          </summary>
           <div className="flex flex-wrap gap-2">
             {step.inputs.map((input) => (
               <EvidenceLink input={input} key={JSON.stringify(input)} />
             ))}
           </div>
-        </section>
+        </details>
       )}
 
-      <div className="mb-4 grid gap-3 lg:grid-cols-2">
-        {step.inputs
-          .filter((input) => input.kind === "analysis")
-          .map((input) => (
-            <DecisionEvidence key={JSON.stringify(input)} input={input} />
-          ))}
-      </div>
-      <fieldset
-        disabled={draft.discarding || submit.isPending || submit.isSuccess}
-        className="grid grid-cols-[minmax(0,1.3fr)_minmax(260px,0.7fr)] gap-4 max-[850px]:grid-cols-1"
-      >
-        <div className="grid content-start gap-3">
-          {fields && (
-            <button
-              type="button"
-              className="text-left text-xs text-accent"
-              onClick={() => {
-                try {
-                  if (!isRecord(JSON.parse(valueText)))
-                    throw new Error("Judgment must be an object.");
-                  setUseJson(!useJson);
-                  setParseError(undefined);
-                } catch (error) {
-                  setParseError(errorMessage(error));
-                }
-              }}
-            >
-              {useJson ? "Use form" : "Edit JSON"}
-            </button>
-          )}
-          {!useJson && fields ? (
-            <DecisionFields
-              fields={fields}
-              labels={isRecord(request.metadata?.field_labels) ? request.metadata.field_labels : {}}
-              value={JSON.parse(valueText)}
-              onChange={(value) => setValueText(JSON.stringify(value, null, 2))}
-            />
-          ) : (
-            <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
-              Structured judgment (JSON)
-              <textarea
-                className="min-h-[220px] resize-y rounded-md border border-line bg-bg p-3 font-mono text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
-                spellCheck={false}
-                value={valueText}
-                onChange={(event) => setValueText(event.target.value)}
-              />
-            </label>
-          )}
-        </div>
-        <div className="grid content-start gap-3">
-          <div className="grid gap-1.5 text-[0.64rem] text-text-dim">
-            <label className="grid gap-1.5 font-bold">
-              Recorded reviewer
-              <input
-                className="rounded-md border border-line bg-bg px-3 py-2.5 text-[0.7rem] text-text outline-none focus:border-accent"
-                placeholder="name, agent id, or service id"
-                value={actor}
-                onChange={(event) => setActor(event.target.value)}
-              />
-            </label>
-            <span className="font-normal leading-4 text-text-dim">
-              Name the lab operator, analysis agent, or service so this judgment can be traced
-              during later experiment review.
-            </span>
-          </div>
-          <div
-            className="grid grid-cols-3 gap-1 rounded-md border border-line bg-bg p-1"
-            role="group"
-          >
-            {(["human", "ai", "service"] as const).map((kind) => (
-              <button
-                className={classes(
-                  "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-2 text-[0.62rem] font-bold capitalize text-text-dim",
-                  actorKind === kind && "bg-panel-strong text-text",
-                )}
-                key={kind}
-                onClick={() => setActorKind(kind)}
-                type="button"
-              >
-                {kind === "human" ? <UserRound size={13} /> : <Bot size={13} />}
-                {kind}
-              </button>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="grid gap-3">
+          {step.inputs
+            .filter((input) => input.kind === "analysis")
+            .map((input) => (
+              <DecisionEvidence key={JSON.stringify(input)} input={input} />
             ))}
+        </div>
+        <fieldset
+          disabled={draft.discarding || submit.isPending || submit.isSuccess}
+          className="grid min-w-0 gap-4"
+        >
+          <div className="grid content-start gap-3">
+            {fields && (
+              <button
+                type="button"
+                className="text-left text-xs text-accent"
+                onClick={() => {
+                  try {
+                    if (!isRecord(JSON.parse(valueText)))
+                      throw new Error("Judgment must be an object.");
+                    setUseJson(!useJson);
+                    setParseError(undefined);
+                  } catch (error) {
+                    setParseError(errorMessage(error));
+                  }
+                }}
+              >
+                {useJson ? "Use form" : "Edit JSON"}
+              </button>
+            )}
+            {!useJson && fields ? (
+              <DecisionFields
+                fields={fields}
+                labels={
+                  isRecord(request.metadata?.field_labels) ? request.metadata.field_labels : {}
+                }
+                value={JSON.parse(valueText)}
+                onChange={(value) => setValueText(JSON.stringify(value, null, 2))}
+              />
+            ) : (
+              <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
+                Structured judgment (JSON)
+                <textarea
+                  className="min-h-[220px] resize-y rounded-md border border-line bg-bg p-3 font-mono text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
+                  spellCheck={false}
+                  value={valueText}
+                  onChange={(event) => setValueText(event.target.value)}
+                />
+              </label>
+            )}
           </div>
-          <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
-            Reasoning note (optional)
-            <textarea
-              className="min-h-[90px] resize-y rounded-md border border-line bg-bg px-3 py-2.5 text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
-              placeholder="Why this selection is experimentally credible"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </label>
-          <details className="rounded-md border border-line bg-panel-soft px-3 py-2 text-[0.62rem] text-text-dim">
-            <summary className="cursor-pointer font-bold text-text-soft">
-              Expected structure
-            </summary>
-            <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[0.58rem] leading-4">
-              {JSON.stringify(request.structure, null, 2)}
-            </pre>
-          </details>
-          {request.metadata && Object.keys(request.metadata).length > 0 && (
+          <div className="grid content-start gap-3">
+            <div className="grid gap-1.5 text-[0.64rem] text-text-dim">
+              <label className="grid gap-1.5 font-bold">
+                Recorded reviewer
+                <input
+                  className="rounded-md border border-line bg-bg px-3 py-2.5 text-[0.7rem] text-text outline-none focus:border-accent"
+                  placeholder="name, agent id, or service id"
+                  value={actor}
+                  onChange={(event) => setActor(event.target.value)}
+                />
+              </label>
+              <span className="font-normal leading-4 text-text-dim">
+                Name the lab operator, analysis agent, or service so this judgment can be traced
+                during later experiment review.
+              </span>
+            </div>
+            <div
+              className="grid grid-cols-3 gap-1 rounded-md border border-line bg-bg p-1"
+              role="group"
+            >
+              {(["human", "ai", "service"] as const).map((kind) => (
+                <button
+                  className={classes(
+                    "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-2 text-[0.62rem] font-bold capitalize text-text-dim",
+                    actorKind === kind && "bg-panel-strong text-text",
+                  )}
+                  key={kind}
+                  onClick={() => setActorKind(kind)}
+                  type="button"
+                >
+                  {kind === "human" ? <UserRound size={13} /> : <Bot size={13} />}
+                  {kind}
+                </button>
+              ))}
+            </div>
+            <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
+              Reasoning note (optional)
+              <textarea
+                className="min-h-[90px] resize-y rounded-md border border-line bg-bg px-3 py-2.5 text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
+                placeholder="Why this selection is experimentally credible"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </label>
             <details className="rounded-md border border-line bg-panel-soft px-3 py-2 text-[0.62rem] text-text-dim">
               <summary className="cursor-pointer font-bold text-text-soft">
-                Presentation hints
+                Expected structure
               </summary>
               <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[0.58rem] leading-4">
-                {JSON.stringify(request.metadata, null, 2)}
+                {JSON.stringify(request.structure, null, 2)}
               </pre>
             </details>
-          )}
-          {(parseError || submit.isError) && (
-            <p className="m-0 text-[0.64rem] leading-5 text-red" role="alert">
-              {parseError ?? errorMessage(submit.error)}
-            </p>
-          )}
-          {submit.isSuccess && (
-            <p className="m-0 inline-flex items-center gap-1.5 text-[0.64rem] text-green">
-              <Check size={14} /> Decision recorded.{" "}
-              <a
-                className="underline"
-                href={`?procedure=${encodeURIComponent(procedure.procedure_run_id)}#launch`}
-              >
-                Open task and continue
-              </a>
-            </p>
-          )}
-          <button
-            className={primaryButton}
-            disabled={
-              submit.isPending ||
-              submit.isSuccess ||
-              draft.invalid ||
-              draft.status === "conflict" ||
-              draft.status === "saving"
-            }
-            onClick={() => void record()}
-            type="button"
-          >
-            {submit.isPending && <LoaderCircle className="animate-spin" size={14} />}
-            Record decision
-          </button>
-        </div>
-      </fieldset>
+            {request.metadata && Object.keys(request.metadata).length > 0 && (
+              <details className="rounded-md border border-line bg-panel-soft px-3 py-2 text-[0.62rem] text-text-dim">
+                <summary className="cursor-pointer font-bold text-text-soft">
+                  Presentation hints
+                </summary>
+                <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[0.58rem] leading-4">
+                  {JSON.stringify(request.metadata, null, 2)}
+                </pre>
+              </details>
+            )}
+            {(parseError || submit.isError) && (
+              <p className="m-0 text-[0.64rem] leading-5 text-red" role="alert">
+                {parseError ?? errorMessage(submit.error)}
+              </p>
+            )}
+            {submit.isSuccess && (
+              <p className="m-0 inline-flex items-center gap-1.5 text-[0.64rem] text-green">
+                <Check size={14} /> Decision recorded.{" "}
+                <a
+                  className="underline"
+                  href={`?procedure=${encodeURIComponent(procedure.procedure_run_id)}#launch`}
+                >
+                  Open task and continue
+                </a>
+              </p>
+            )}
+            <button
+              className={primaryButton}
+              disabled={
+                submit.isPending ||
+                submit.isSuccess ||
+                draft.invalid ||
+                draft.status === "conflict" ||
+                draft.status === "saving"
+              }
+              onClick={() => void record()}
+              type="button"
+            >
+              {submit.isPending && <LoaderCircle className="animate-spin" size={14} />}
+              Record decision
+            </button>
+          </div>
+        </fieldset>
+      </div>
     </article>
   );
 }

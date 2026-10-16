@@ -108,6 +108,18 @@ unknown and must be reconciled. Do not turn an expected scientific choice into
 an execution failure merely to pause the procedure.
 
 
+For a complete editable example, choose **Help → Learn with Notebooks →
+Procedures and human decisions**. Its generated `procedure.ipynb` and
+`src/my_experiment/procedure.py` cover synthetic acquisition, evidence, typed
+answers and explicit continuation without parameter publication.
+
+The GUI supports nullable numeric fields as blank inputs (`null`, never zero).
+Optional `metadata.field_constraints` gives immediate presentation feedback: each
+field can declare `minimum`, `maximum`, `required_when: {field, value}` and
+`empty_otherwise: true`. `field_labels` supplies readable names and units. These
+hints do not enforce scientific validity for Python or other clients; validate
+meaning inside the procedure and retain a new question when correction is needed.
+
 ## 在普通作者会话中回答已查看的问题
 
 先取得待答对象，再检查问题和证据；不要等输入完答案才重新选择“最新问题”。

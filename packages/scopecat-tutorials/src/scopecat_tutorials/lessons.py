@@ -11,6 +11,7 @@ LessonTopic = Literal[
     "groups",
     "refresh",
     "compute",
+    "procedure",
     "calibration",
     "joint-calibration",
     "task-calibration",
@@ -21,12 +22,14 @@ TOPICS = {
     "compute": "平均 IQ 与类型化读取",
     "refresh": "修改、刷新和新增实验",
     "groups": "分组分析与历史",
+    "procedure": "Procedure 与人工判断",
     "calibration": "参数校准与恢复",
     "joint-calibration": "联合校准与耦合验证",
     "task-calibration": "后台标定与最终发布",
 }
 
 TOPIC_PROCEDURES = {
+    "procedure": ("my_experiment.procedure:survey",),
     "calibration": (
         "my_experiment.calibration:calibrate",
         "my_experiment.calibration:check_zero",
@@ -96,8 +99,14 @@ def install_lesson(root: Path, topic: str) -> Path:
             _ = (root / "src/my_experiment/task_calibration.py").write_bytes(
                 lesson.joinpath("task_calibration.py.txt").read_bytes()
             )
+    if topic == "procedure":
+        (source / "procedure.py").write_bytes(
+            lesson.joinpath("procedure.py.txt").read_bytes()
+        )
+        (source / "teaching.py").unlink()
+    if topic in TOPIC_PROCEDURES:
         manifest = root / "scopecat.toml"
-        _ = manifest.write_text(
+        manifest.write_text(
             manifest.read_text(encoding="utf-8").replace(
                 "[lab.capabilities]",
                 "[lab.capabilities]\n"

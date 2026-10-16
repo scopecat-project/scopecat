@@ -89,25 +89,47 @@ def manual_peaks(context: LabProcedureContext, intent: PeakPracticeIntent) -> No
             f"choose-{attempt}",
             title="Choose a peak frequency",
             instructions=(
-                "Read the synthetic curve below. Enter a frequency in MHz between "
+                "Find the highest point of the upward peak (not a dip). "
+                "Hover over the curve "
+                "to read its horizontal coordinate, then type the frequency; "
+                "clicking does not fill it. "
+                "Enter a frequency in MHz between "
                 "6490 and 6510, or choose No clear peak / Unsure and leave it empty. "
-                "Recording a choice does not publish a calibration. " + problem
+                "Record your answer, open the task and choose Continue task to finish. "
+                "This example peaks at about 6500 MHz; "
+                "completion records your judgment, "
+                "not its correctness or a published calibration. " + problem
             ),
             schema=PEAK_CHOICE,
             inputs=(scan, plotted),
             response_template=PeakChoice("Unsure", None),
-            metadata={"field_labels": {"frequency_mhz": "Peak frequency (MHz)"}},
+            metadata={
+                "field_labels": {
+                    "outcome": "Your judgment",
+                    "frequency_mhz": "Peak frequency (MHz)",
+                },
+                "field_constraints": {
+                    "frequency_mhz": {
+                        "minimum": 6490,
+                        "maximum": 6510,
+                        "required_when": {"field": "outcome", "value": "Peak selected"},
+                        "empty_otherwise": True,
+                    }
+                },
+            },
         )
         value = choice.value
-        if (
-            value.outcome == "Peak selected"
-            and value.frequency_mhz is not None
-            and 6490 <= value.frequency_mhz <= 6510
-        ) or (value.outcome != "Peak selected" and value.frequency_mhz is None):
+        if value.outcome == "Peak selected":
+            if value.frequency_mhz is None:
+                problem = "Enter a peak frequency when choosing Peak selected."
+            elif not 6490 <= value.frequency_mhz <= 6510:
+                problem = "Peak frequency must be between 6490 and 6510 MHz."
+            else:
+                return
+        elif value.frequency_mhz is not None:
+            problem = "Leave the frequency empty for No clear peak or Unsure."
+        else:
             return
-        problem = (
-            "The previous choice did not match these conditions; please review it."
-        )
         attempt += 1
 
 

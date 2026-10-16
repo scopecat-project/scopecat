@@ -29,6 +29,12 @@ const lessons: Record<LessonTopic, { title: string; goal: string; description: s
     description:
       "Optional after basic scans: analyze two synthetic curves by group, add a third, and reopen the saved analysis without collecting again.",
   },
+  procedure: {
+    title: "Procedures and human decisions",
+    goal: "Scan, inspect evidence, answer a typed question and explicitly continue.",
+    description:
+      "After the basics: edit a small synthetic procedure, capture its pending question and record an answer without calibration or task scheduling.",
+  },
   calibration: {
     title: "Parameter calibration and recovery",
     goal: "Verify a proposed correction before adopting it.",
@@ -51,7 +57,11 @@ const lessons: Record<LessonTopic, { title: string; goal: string; description: s
 
 const courseGroups: { title: string; hint: string; topics: LessonTopic[] }[] = [
   { title: "Basics", hint: "Start here, then keep authoring.", topics: ["parameters", "refresh"] },
-  { title: "Optional", hint: "Choose the skill you need next.", topics: ["compute", "groups"] },
+  {
+    title: "Optional",
+    hint: "Choose the skill you need next.",
+    topics: ["compute", "groups", "procedure"],
+  },
   {
     title: "Advanced",
     hint: "Combine verified corrections.",
@@ -77,7 +87,7 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
       </h3>
       <p>
         Begin with Parameters and scans, then continue editing. Choose calculation or grouped
-        analysis as needed; calibration is an advanced route. You do not need all seven courses or
+        analysis as needed; calibration is an advanced route. You do not need every course or
         another course’s data.
       </p>
       <CourseBrowser topic={topic} busy={busy} />
