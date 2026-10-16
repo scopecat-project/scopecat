@@ -24,7 +24,17 @@ test("saves, reopens, copies and submits an immutable plan without activating co
   let passed = false;
   try {
     await copyAuthorWorkspace(project);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, project);
     const { base_url: endpoint } = JSON.parse(
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
@@ -50,6 +60,25 @@ test("saves, reopens, copies and submits an immutable plan without activating co
       expect(result.status(), await result.text()).toBe(200);
       return await result.json();
     }
+    const frequency = page.getByLabel("Frequency", { exact: true });
+    await page.getByLabel("Frequency unit").selectOption("MHz");
+    await frequency.fill("4.9G");
+    await expect(frequency).toHaveValue("4.9G");
+    await frequency.blur();
+    await expect(frequency).toHaveValue("4900");
+    await frequency.fill("4.9wat");
+    await page.getByLabel("Frequency unit").selectOption("GHz");
+    await expect(frequency).toHaveValue("4.9wat");
+    await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
+    await expect(page.getByRole("alert").filter({ hasText: "未知或不兼容的单位" })).toBeVisible();
+    await page
+      .getByRole("group", { name: "Controls", exact: true })
+      .screenshot({ path: testInfo.outputPath("unit-error.png") });
+    await frequency.fill("4900M");
+    await frequency.blur();
+    await page
+      .getByRole("group", { name: "Controls", exact: true })
+      .screenshot({ path: testInfo.outputPath("unit-input.png") });
     await preview();
     await page.getByLabel("Plan name").fill("Signal baseline");
     // Plan persistence and debounced page-input persistence are separate writes.
@@ -73,6 +102,8 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     ).toBeVisible();
     await page.getByRole("button", { name: "Open Signal baseline r1", exact: true }).click();
     await expect(page.getByLabel("Plan name")).toHaveValue("Signal baseline");
+    await expect(frequency).toHaveValue("4900");
+    await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
     ).toBeEnabled();
@@ -97,7 +128,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await page.screenshot({ path: testInfo.outputPath("plan-origin.png"), fullPage: true });
     passed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (passed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved plan project", { body: project, contentType: "text/plain" });

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { controlNumber, convertControlNumber } from "./control-quantity";
 import type { components } from "../../api-schema";
 import registry from "../../unit-registry.json";
 
@@ -37,7 +39,7 @@ function number(value: string): number {
   return parsed;
 }
 function quantity(value: string, unit: string | null) {
-  return unit ? { value: number(value), unit } : number(value);
+  return unit ? { value: controlNumber(value, unit), unit } : controlNumber(value, null);
 }
 export function controlEdits(drafts: ControlDrafts): Record<string, Edit> {
   return Object.fromEntries(
@@ -76,21 +78,17 @@ export function controlEdits(drafts: ControlDrafts): Record<string, Edit> {
 }
 function convertDraft(
   draft: Exclude<ControlDraft, { mode: "default" }>,
-  unit: string,
+  unit: string | null,
 ): ControlDraft {
-  const oldScale = units[draft.unit ?? ""]?.scale;
-  const newScale = units[unit]?.scale;
   const convert = (value: string) =>
-    value.trim() && Number.isFinite(Number(value)) && oldScale && newScale
-      ? String((number(value) * oldScale) / newScale)
-      : value;
+    value.trim() ? convertControlNumber(value, draft.unit, unit) : value;
   if (draft.mode === "fixed") return { ...draft, value: convert(draft.value), unit };
   if (draft.mode === "values")
     return {
       ...draft,
       values: draft.values
         .split(/([\s,]+)/)
-        .map((value) => (/^[\s,]+$/.test(value) ? value : convert(value)))
+        .map((value) => (/^[\s,]*$/.test(value) ? value : convert(value)))
         .join(""),
       unit,
     };
@@ -105,6 +103,21 @@ export function ControlFields({
   drafts: ControlDrafts;
   onChange: (id: string, draft: ControlDraft) => void;
 }) {
+  const [errors, setErrors] = useState<
+    Record<string, { draft: ControlDraft | undefined; message: string } | undefined>
+  >({});
+  function update(id: string, action: () => ControlDraft) {
+    try {
+      const next = action();
+      if (JSON.stringify(next) !== JSON.stringify(drafts[id])) onChange(id, next);
+      setErrors((previous) => ({ ...previous, [id]: undefined }));
+    } catch (error) {
+      setErrors((previous) => ({
+        ...previous,
+        [id]: { draft: drafts[id], message: (error as Error).message },
+      }));
+    }
+  }
   const groups = [...new Set(controls.map((control) => control.group))];
   return (
     <div className="space-y-3">
@@ -125,6 +138,10 @@ export function ControlFields({
                     </p>
                   </div>
                 );
+              // LaunchForm reuses this component when opening another plan. Errors belong
+              // to the exact validated draft, not an id shared by multiple plans.
+              const error =
+                errors[control.id]?.draft === draft ? errors[control.id]?.message : undefined;
               const declaredUnit = control.unit;
               const declared = declaredUnit ? units[declaredUnit] : undefined;
               const choices = declaredUnit
@@ -153,6 +170,7 @@ export function ControlFields({
                     {control.title}
                     {control.default == null ? " (required)" : ""}
                   </strong>
+                  {error && <p role="alert">{error}</p>}
                   <p className="text-sm">
                     {control.provenance}
                     {control.minimum != null || control.maximum != null
@@ -165,8 +183,7 @@ export function ControlFields({
                       aria-label={`${control.title} source`}
                       value={draft.mode}
                       onChange={(event) =>
-                        onChange(
-                          control.id,
+                        update(control.id, () =>
                           newSource(control, event.target.value as ControlDraft["mode"]),
                         )
                       }
@@ -189,13 +206,16 @@ export function ControlFields({
                   ) : (
                     <>
                       {draft.unit && (
+                        <p className="text-sm">裸数按 {draft.unit}；单位简写失焦后换算。</p>
+                      )}
+                      {draft.unit && (
                         <label>
                           Unit{" "}
                           <select
                             aria-label={`${control.title} unit`}
                             value={draft.unit}
                             onChange={(event) =>
-                              onChange(control.id, convertDraft(draft, event.target.value))
+                              update(control.id, () => convertDraft(draft, event.target.value))
                             }
                             className="border rounded p-2"
                           >
@@ -210,6 +230,12 @@ export function ControlFields({
                           {...numeric}
                           aria-label={control.title}
                           value={draft.value}
+                          onBlur={() =>
+                            update(control.id, () => ({
+                              ...draft,
+                              value: String(controlNumber(draft.value, draft.unit)),
+                            }))
+                          }
                           onChange={(event) =>
                             onChange(control.id, { ...draft, value: event.target.value })
                           }
@@ -222,14 +248,14 @@ export function ControlFields({
                             required
                             aria-label={`${control.title} scan values`}
                             value={draft.values}
+                            onBlur={() => update(control.id, () => convertDraft(draft, draft.unit))}
                             onChange={(event) =>
                               onChange(control.id, { ...draft, values: event.target.value })
                             }
                             className="border rounded p-2"
                           />
                           <span className="text-sm">
-                            Numbers separated by commas or newlines; one value remains an explicit
-                            scan.
+                            逗号、空白或换行分隔；单位后缀紧接数字，不加空格。单值仍为扫描。
                           </span>
                         </label>
                       )}
@@ -240,6 +266,12 @@ export function ControlFields({
                             aria-label={`${control.title} start`}
                             placeholder="Start"
                             value={draft.start}
+                            onBlur={() =>
+                              update(control.id, () => ({
+                                ...draft,
+                                start: String(controlNumber(draft.start, draft.unit)),
+                              }))
+                            }
                             onChange={(event) =>
                               onChange(control.id, { ...draft, start: event.target.value })
                             }
@@ -249,6 +281,12 @@ export function ControlFields({
                             aria-label={`${control.title} stop`}
                             placeholder="Stop"
                             value={draft.stop}
+                            onBlur={() =>
+                              update(control.id, () => ({
+                                ...draft,
+                                stop: String(controlNumber(draft.stop, draft.unit)),
+                              }))
+                            }
                             onChange={(event) =>
                               onChange(control.id, { ...draft, stop: event.target.value })
                             }

@@ -74,3 +74,129 @@ it("keeps a required control empty and offers only explicit sources", () => {
   expect(screen.queryByRole("option", { name: "Declared default" })).toBeNull();
   expect(() => controlEdits(drafts)).toThrow("finite numbers");
 });
+
+function DraftForm() {
+  const [drafts, setDrafts] = useState(initialControlDrafts([frequency]));
+  return (
+    <ControlFields
+      controls={[frequency]}
+      drafts={drafts}
+      onChange={(id, draft) => setDrafts({ ...drafts, [id]: draft })}
+    />
+  );
+}
+it("retains edits until blur and atomically refuses unit changes with invalid drafts", () => {
+  render(<DraftForm />);
+  const input = screen.getByLabelText("Frequency");
+  fireEvent.change(input, { target: { value: "5000M" } });
+  expect(input).toHaveValue("5000M");
+  fireEvent.blur(input);
+  expect(input).toHaveValue("5");
+  fireEvent.change(input, { target: { value: "1wat" } });
+  fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
+  expect(input).toHaveValue("1wat");
+  expect(screen.getByLabelText("Frequency unit")).toHaveValue("GHz");
+  expect(screen.getByRole("alert")).toHaveTextContent("未知或不兼容的单位");
+});
+it("parses scan endpoints and values while keeping point counts plain", () => {
+  expect(controlEdits({ f: { mode: "values", unit: "MHz", values: "1G,250k" } }).f).toEqual({
+    mode: "scan",
+    axis: {
+      kind: "values",
+      values: [
+        { value: 1000, unit: "MHz" },
+        { value: 0.25, unit: "MHz" },
+      ],
+    },
+  });
+  expect(
+    controlEdits({ f: { mode: "range", unit: "MHz", start: "250k", stop: "1G", points: "3" } }).f,
+  ).toEqual({
+    mode: "scan",
+    axis: {
+      kind: "range",
+      start: { value: 0.25, unit: "MHz" },
+      stop: { value: 1000, unit: "MHz" },
+      points: 3,
+    },
+  });
+  expect(() =>
+    controlEdits({ f: { mode: "range", unit: "MHz", start: "1", stop: "2", points: "3k" } }),
+  ).toThrow("finite numbers");
+});
+
+it("switches scan units atomically and preserves empty range endpoints", () => {
+  render(<DraftForm />);
+  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
+  fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
+  expect(screen.getByLabelText("Frequency start")).toHaveValue("4800");
+  expect(screen.getByLabelText("Frequency stop")).toHaveValue("");
+  fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "1e" } });
+  fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "GHz" } });
+  expect(screen.getByLabelText("Frequency unit")).toHaveValue("MHz");
+  expect(screen.getByLabelText("Frequency start")).toHaveValue("4800");
+  expect(screen.getByLabelText("Frequency stop")).toHaveValue("1e");
+  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "values" } });
+  fireEvent.change(screen.getByLabelText("Frequency scan values"), {
+    target: { value: "4.8G, 4900M" },
+  });
+  fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
+  expect(screen.getByLabelText("Frequency scan values")).toHaveValue("4800, 4900");
+  fireEvent.change(screen.getByLabelText("Frequency scan values"), {
+    target: { value: "4800, oops" },
+  });
+  fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "GHz" } });
+  expect(screen.getByLabelText("Frequency scan values")).toHaveValue("4800, oops");
+  expect(screen.getByLabelText("Frequency unit")).toHaveValue("MHz");
+});
+
+it("switches phase units without changing the declared default", () => {
+  render(
+    <Form
+      fields={[{ ...frequency, title: "Phase", unit: "deg", default: { value: 180, unit: "deg" } }]}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("Phase unit"), { target: { value: "rad" } });
+  expect(screen.getByLabelText("Phase")).toHaveValue(String(Math.PI));
+  fireEvent.change(screen.getByLabelText("Phase source"), { target: { value: "default" } });
+  expect(screen.getByText("180 deg · Declared default")).toBeVisible();
+});
+
+it("discards errors when an external plan replaces a draft with the same control id", () => {
+  const invalid = { mode: "fixed" as const, value: "4.9wat", unit: "GHz" };
+  const view = render(
+    <ControlFields controls={[frequency]} drafts={{ frequency: invalid }} onChange={() => {}} />,
+  );
+  const input = screen.getByLabelText("Frequency");
+  fireEvent.blur(input);
+  expect(screen.getByRole("alert")).toHaveTextContent("未知或不兼容的单位");
+  view.rerender(
+    <ControlFields
+      controls={[frequency]}
+      drafts={{ frequency: { ...invalid, value: "4.8" } }}
+      onChange={() => {}}
+    />,
+  );
+  expect(screen.getByLabelText("Frequency")).toBe(input);
+  expect(input).toHaveValue("4.8");
+  expect(screen.queryByRole("alert")).toBeNull();
+  // A different recovered plan with identical raw text must be validated afresh.
+  view.rerender(
+    <ControlFields
+      controls={[frequency]}
+      drafts={{ frequency: { ...invalid } }}
+      onChange={() => {}}
+    />,
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.blur(input);
+  expect(screen.getByRole("alert")).toHaveTextContent("未知或不兼容的单位");
+});
+it("documents compact suffixes for whitespace-separated scan lists", () => {
+  render(<DraftForm />);
+  fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "values" } });
+  expect(screen.getByText(/单位后缀紧接数字，不加空格/)).toBeVisible();
+  expect(() =>
+    controlEdits({ frequency: { mode: "values", values: "1 GHz, 500 MHz", unit: "MHz" } }),
+  ).toThrow("finite numbers");
+});
