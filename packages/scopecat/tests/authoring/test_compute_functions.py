@@ -335,3 +335,72 @@ def test_measured_quantity_executes_without_changing_float_consumers(unit: str) 
         # existing native conversion rejects a time quantity as a frequency.
         with pytest.raises(ValueError, match="convert"):
             quantity_compute.kernel(inputs)
+
+
+type KHzQuantity = Annotated[sc.Quantity, sc.Unit("kHz")]
+type KHzSchemaQuantity = Annotated[
+    sc.Quantity, sc.ScalarType(sc.QuantityType(unit="kHz"))
+]
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        Annotated[sc.Quantity, sc.Unit("kHz")],
+        Annotated[FrequencyQuantity, sc.Unit("kHz")],
+        KHzQuantity,
+        Annotated[sc.Quantity, sc.ScalarType(sc.QuantityType(unit="kHz"))],
+        Annotated[FrequencyQuantity, sc.ScalarType(sc.QuantityType(unit="kHz"))],
+        KHzSchemaQuantity,
+    ],
+)
+@pytest.mark.parametrize("unit", ["kHz", "MHz", "ns"])
+def test_annotated_quantity_measurement_keeps_native_type_and_exact_unit(
+    annotation: object, unit: str
+) -> None:
+    from scopecat.compiler.frontend.elaboration import compose_module
+    from scopecat.measurements.results import MeasurementScalar
+
+    def frequency(q: sc.Quantity) -> float:
+        assert isinstance(q, sc.Quantity)
+        assert q.unit == "kHz"
+        return q.to("MHz").value
+
+    frequency.__annotations__["q"] = annotation
+
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        source = ctx._product("source", dtype="float64", unit=unit)
+        return ctx.compute(fn=frequency, q=source)
+
+    if unit != "kHz":
+        with pytest.raises(TypeError, match="input 'q' expects Scalar"):
+            sc.module(module, id="test.annotated-quantity-native")
+        return
+    definition = sc.module(module, id="test.annotated-quantity-native").definition
+    [compute] = compose_module(definition).measurement_computes
+    result = compute.kernel(
+        {"q": MeasurementScalar.create(value=5000.0, dtype="float64", unit=unit)}
+    )
+    assert result["result"] == MeasurementScalar.create(value=5.0)
+
+
+def test_quantity_schema_does_not_turn_native_float_parameter_into_quantity() -> None:
+    from scopecat.compiler.frontend.elaboration import compose_module
+    from scopecat.measurements.results import MeasurementScalar
+
+    @sc.compute
+    def magnitude(
+        q: Annotated[float, sc.ScalarType(sc.QuantityType(unit="kHz"))],
+    ) -> float:
+        assert isinstance(q, float)
+        return q
+
+    @sc.module(id="test.explicit-float-native")
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        return magnitude(ctx._product("frequency", dtype="float64", unit="kHz"))
+
+    [compute] = compose_module(module.definition).measurement_computes
+    result = compute.kernel(
+        {"q": MeasurementScalar.create(value=5000.0, dtype="float64", unit="kHz")}
+    )
+    assert result["result"] == MeasurementScalar.create(value=5000.0)

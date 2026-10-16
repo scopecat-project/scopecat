@@ -80,9 +80,12 @@ each native argument type into its corresponding reference type.
 `response` 的参数声明为 `Quantity` 时，`response("wrong", center)` 会报出
 compute 和参数名。`ctx.compute` 也使用同一检查，不在此处转换单位或限定量纲。
 允许不同频率单位时，在原生函数内调用 `.to("MHz")`。
-测量标量传给普通 `Quantity` 参数时，包装边界会用数值及保留单位构造 Quantity；
-普通 `float` 参数仍接收原生数值。显式 `Annotated` 契约保持原有规则，
-不包含在这次测量值适配中。其他普通 Python 参数注解尚未普遍支持构图时检查。
+测量标量传给原生类型声明为 `Quantity` 的参数时，包装边界会用数值及保留单位
+构造 Quantity。这也适用于 `Annotated[Quantity, Unit("kHz")]`、显式
+`ScalarType(QuantityType(unit="kHz"))` 契约及其类型别名。显式单位仍要求完全一致：
+kHz 输入不会自动转换以满足 MHz 注解；需要换算时在普通 Quantity 函数中显式转换。
+普通 `float` 参数仍接收测量原始数值；schema 中的 QuantityType 本身不会将原生
+float 参数改为 Quantity。其他普通 Python 参数注解尚未普遍支持构图时检查。
 
 `experiment.compute(fn=ordinary_function, ...)` remains available for explicit
 node IDs, output schemas, structured bundles and axis inheritance. When its

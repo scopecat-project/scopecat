@@ -261,34 +261,37 @@ def _validate_inferred_compute_annotation(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _ComputeParameterContract:
+    expected: DataType | type[Quantity]
+    as_quantity: bool
+
+
 def _compute_parameter_contracts(
     fn: ComputeFunction,
-) -> dict[str, DataType | type[Quantity]]:
+) -> dict[str, _ComputeParameterContract]:
     hints = cast("Mapping[str, object]", get_type_hints(fn, include_extras=True))
-    contracts: dict[str, DataType | type[Quantity]] = {}
+    contracts: dict[str, _ComputeParameterContract] = {}
     for name, annotation in hints.items():
-        if name == "return" or get_origin(annotation) is not Annotated:
-            if name == "return":
-                continue
-            while isinstance(annotation, TypeAliasType):
-                annotation = cast("object", annotation.__value__)
-            if get_origin(annotation) is not Annotated:
-                if annotation is Quantity:
-                    contracts[name] = Quantity
-                continue
-        native_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
-        declared, unit = value_annotation_metadata(metadata)
-        if unit is not None:
+        if name == "return":
+            continue
+        while isinstance(annotation, TypeAliasType):
+            annotation = cast("object", annotation.__value__)
+        native_type = annotation
+        declared = None
+        if get_origin(annotation) is Annotated:
+            native_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
+            declared, unit = value_annotation_metadata(metadata)
             while isinstance(native_type, TypeAliasType):
                 native_type = cast("object", native_type.__value__)
-            declared = unit_scalar_type(native_type, unit)
+            if unit is not None:
+                declared = unit_scalar_type(native_type, unit)
         if declared is not None:
-            contracts[name] = declared
-        else:
-            while isinstance(native_type, TypeAliasType):
-                native_type = cast("object", native_type.__value__)
-            if native_type is Quantity:
-                contracts[name] = Quantity
+            contracts[name] = _ComputeParameterContract(
+                declared, as_quantity=native_type is Quantity
+            )
+        elif native_type is Quantity:
+            contracts[name] = _ComputeParameterContract(Quantity, as_quantity=True)
     return contracts
 
 
@@ -298,7 +301,8 @@ def _validate_compute_input_contracts(
     inputs: Mapping[str, ComputeInput | ProductRef],
 ) -> frozenset[str]:
     quantity_parameters: set[str] = set()
-    for name, expected in _compute_parameter_contracts(fn).items():
+    for name, contract in _compute_parameter_contracts(fn).items():
+        expected = contract.expected
         value = inputs.get(name)
         if value is None and name not in inputs:
             continue
@@ -317,6 +321,12 @@ def _validate_compute_input_contracts(
             expected_description = "Quantity"
         else:
             if _compute_contract_assignable(actual, expected):
+                if (
+                    contract.as_quantity
+                    and isinstance(actual, ScalarType)
+                    and isinstance(actual.atom, QuantityType)
+                ):
+                    quantity_parameters.add(name)
                 continue
             expected_description = describe_value_type(expected)
         raise TypeError(
@@ -427,7 +437,7 @@ def _native_measurement_value(
     if isinstance(value, MeasurementScalar):
         if as_quantity:
             # The declaration boundary checked a unit-bearing real scalar schema.
-            # Adapt only plain Quantity consumers; float consumers keep magnitudes.
+            # Adapt declared Quantity consumers; float consumers keep magnitudes.
             return Quantity(cast("float", value.value), cast("str", value.unit))
         return value.value
     raise AssertionError(
