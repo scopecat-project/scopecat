@@ -1,6 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { producerContent, producerReceipts } from "./receipt-fixture.test-support";
 import { decodeCollectReceipt } from "./hardware-receipt-wire";
 
 describe("hardware receipt wire", () => {
@@ -24,11 +23,11 @@ describe("hardware receipt wire", () => {
     const receipt = decodeCollectReceipt(
       framedReceipt(
         {
-          float: arrayReference(0, float, "float64", [1, 2]),
-          integer: arrayReference(1, integer, "int64", [2]),
-          complex: arrayReference(2, complex, "complex128", [2]),
-          bool: arrayReference(3, bool, "bool", [2]),
-          string: arrayReference(4, string, "string", [2]),
+          float: arrayReference(0, "float64", [1, 2]),
+          integer: arrayReference(1, "int64", [2]),
+          complex: arrayReference(2, "complex128", [2]),
+          bool: arrayReference(3, "bool", [2]),
+          string: arrayReference(4, "string", [2]),
           missing: {
             kind: "unavailable",
             reason: "missing",
@@ -99,9 +98,7 @@ describe("hardware receipt wire", () => {
 
   it("rejects a truncated attachment", () => {
     const attachment = numericAttachment(8, (view) => view.setFloat64(0, 1, true));
-    const content = framedReceipt({ trace: arrayReference(0, attachment, "float64", [1]) }, [
-      attachment,
-    ]);
+    const content = framedReceipt({ trace: arrayReference(0, "float64", [1]) }, [attachment]);
 
     expect(() => decodeCollectReceipt(content.slice(0, -1))).toThrow("truncated attachment");
   });
@@ -109,14 +106,12 @@ describe("hardware receipt wire", () => {
 
 function arrayReference(
   index: number,
-  content: Uint8Array,
   dtype: "float64" | "int64" | "complex128" | "bool" | "string",
   shape: number[],
 ): Record<string, unknown> {
   return {
     kind: "array_attachment",
     index,
-    size_bytes: content.byteLength,
     dtype,
     unit: null,
     shape,
@@ -144,13 +139,19 @@ function framedReceipt(
 
 function framedHeader(headerJson: string, attachments: Uint8Array[]): ArrayBuffer {
   const header = new TextEncoder().encode(headerJson);
+  const headerOffset = 20 + attachments.length * 8;
   const result = new Uint8Array(
-    16 + header.byteLength + sum(attachments.map((item) => item.byteLength)),
+    headerOffset + header.byteLength + sum(attachments.map((item) => item.byteLength)),
   );
-  result.set(new TextEncoder().encode("SCRCPT01"));
-  new DataView(result.buffer).setBigUint64(8, BigInt(header.byteLength), true);
-  result.set(header, 16);
-  let offset = 16 + header.byteLength;
+  result.set(new TextEncoder().encode("SCATBND1"));
+  const view = new DataView(result.buffer);
+  view.setBigUint64(8, BigInt(header.byteLength), true);
+  view.setUint32(16, attachments.length, true);
+  attachments.forEach((attachment, index) =>
+    view.setBigUint64(20 + index * 8, BigInt(attachment.byteLength), true),
+  );
+  result.set(header, headerOffset);
+  let offset = headerOffset + header.byteLength;
   for (const attachment of attachments) {
     result.set(attachment, offset);
     offset += attachment.byteLength;
@@ -268,35 +269,91 @@ describe("receipt header validation", () => {
   });
 });
 
-it("accepts inline headers serialized by the current Python producer", () => {
-  const generated: { header_json: string }[] = JSON.parse(
-    execFileSync(
-      "uv",
-      [
-        "run",
-        "--no-sync",
-        "python",
-        fileURLToPath(new URL("./test-fixtures/receipt_header.py", import.meta.url)),
-      ],
-      { encoding: "utf8" },
-    ),
-  );
-  expect(generated).toHaveLength(3);
-  const receipts = generated.map((sample) => {
-    const header = JSON.parse(sample.header_json);
-    // This tests header compatibility only. The current producer's v2 envelope
-    // requires a separate transport migration; the UI still consumes v1 here.
-    const decoded = decodeCollectReceipt(framedHeader(sample.header_json, []));
-    expect(decoded).toEqual({
-      status: header.status,
-      problems: header.problems,
-      readback: header.readback,
-      metadata: header.metadata,
-    });
-    return decoded;
-  });
-  const values = receipts[0]?.readback?.values;
+it.each([0, 1, 2])("decodes current Python HTTP response %i without reframing", (index) => {
+  expect(decodeCollectReceipt(producerContent(index))).toEqual(producerReceipts[index]!.expected);
+});
+
+it("preserves signed zero and the existing int64 Number conversion", () => {
+  const values = decodeCollectReceipt(producerContent()).readback?.values;
   expect(values?.int_min).toMatchObject({ value: Number(-(2n ** 63n)) });
   expect(values?.int_max).toMatchObject({ value: Number(2n ** 63n - 1n) });
-  expect(values?.complex).toMatchObject({ value: { real: -0, imag: 2 } });
+  expect(values?.complex_array).toMatchObject({ values: [{ real: -0, imag: 2 }] });
+});
+
+it.each([
+  ["attachment count", (view: DataView) => view.setUint32(16, 1025, true)],
+  ["header size", (view: DataView) => view.setBigUint64(8, 8388609n, true)],
+  ["attachment size limit", (view: DataView) => view.setBigUint64(20, 134217729n, true)],
+  ["truncated attachment", (view: DataView) => view.setBigUint64(20, 10000n, true)],
+] as const)("rejects producer bytes with invalid %s", (error, mutate) => {
+  const content = producerContent();
+  mutate(new DataView(content));
+  expect(() => decodeCollectReceipt(content)).toThrow(error);
+});
+
+it("rejects a truncated size table", () => {
+  expect(() => decodeCollectReceipt(producerContent().slice(0, 21))).toThrow(
+    "attachment size table",
+  );
+});
+
+it("rejects trailing bytes", () => {
+  const content = new Uint8Array(producerContent());
+  const extra = new Uint8Array(content.length + 1);
+  extra.set(content);
+  expect(() => decodeCollectReceipt(extra.buffer)).toThrow("trailing attachment bytes");
+});
+
+it("rejects an attachment without a matching reference", () => {
+  expect(() => decodeCollectReceipt(framedReceipt({}, [new Uint8Array(0)]))).toThrow(
+    "attachment count",
+  );
+});
+
+it("rejects a reference without an attachment", () => {
+  expect(() =>
+    decodeCollectReceipt(framedReceipt({ value: arrayReference(0, "float64", [0]) }, [])),
+  ).toThrow("attachment count");
+});
+
+it("rejects legacy v1 framing", () => {
+  const content = new Uint8Array(producerContent());
+  content.set(new TextEncoder().encode("SCRCPT01"));
+  expect(() => decodeCollectReceipt(content.buffer)).toThrow("prefix");
+});
+
+it("enforces the aggregate attachment limit before slicing", () => {
+  const content = producerContent();
+  const view = new DataView(content);
+  for (let index = 0; index < view.getUint32(16, true); index += 1) {
+    view.setBigUint64(20 + index * 8, 134217728n, true);
+  }
+  expect(() => decodeCollectReceipt(content)).toThrow("attachment total size");
+});
+
+it("rejects invalid UTF-8 in the header", () => {
+  const content = producerContent();
+  const view = new DataView(content);
+  view.setUint8(20 + view.getUint32(16, true) * 8, 255);
+  expect(() => decodeCollectReceipt(content)).toThrow("header");
+});
+
+it("rejects duplicate attachment references", () => {
+  const reference = arrayReference(0, "float64", [0]);
+  expect(() =>
+    decodeCollectReceipt(
+      framedReceipt({ a: reference, b: reference }, [new Uint8Array(0), new Uint8Array(0)]),
+    ),
+  ).toThrow("attachment indexes");
+});
+
+it.each([
+  { source: "adapter", unavailable_reason: "", acquire_seconds: -1 },
+  { source: "adapter", unavailable_reason: "", uploaded_bytes: 1.5 },
+  { source: "adapter", unavailable_reason: "", retained_bytes: "16" },
+  { source: 1, unavailable_reason: "" },
+])("rejects malformed measured cost %j", (measured_cost) => {
+  expect(() => decodeCollectReceipt(framedReceipt({}, [], { measured_cost }))).toThrow(
+    "measured cost",
+  );
 });

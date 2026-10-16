@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hardwareReceiptResponse } from "./receipt-fixture.test-support";
 import { ApiError } from "../../api-client";
 import type {
   InstrumentInterface,
@@ -130,6 +131,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -894,6 +896,44 @@ describe("instrument workspace", () => {
     ).toBeVisible();
     expect(screen.queryByText("session-1")).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Connect" })).toBeVisible();
+  });
+
+  it("displays a current Python HTTP receipt through the real collection API", async () => {
+    const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
+    vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(hardwareReceiptResponse()));
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace();
+    await screen.findAllByText("Drive source");
+    await connectInstrument();
+    fireEvent.click(await screen.findByRole("button", { name: "Collect" }));
+    expect(await screen.findByText("Collect receipt: Collected")).toBeVisible();
+    expect(screen.getByText("15 results returned")).toBeVisible();
+    expect(screen.getByText("2 results unavailable")).toBeVisible();
+    expect(screen.getByText("Reasons: Invalid, Missing")).toBeVisible();
+    expect(screen.getByRole("img", { name: /trace preview/i })).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      1,
+      "The collection result is unknown. The daemon quarantined this session for operator review.",
+    ],
+    [2, "Collect receipt: Not Collected"],
+  ] as const)("handles current Python receipt status %i", async (index, message) => {
+    const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
+    vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(hardwareReceiptResponse(index)));
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace();
+    await screen.findAllByText("Drive source");
+    await connectInstrument();
+    fireEvent.click(await screen.findByRole("button", { name: "Collect" }));
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("summarizes unavailable collect results without plotting them", async () => {

@@ -1,3 +1,4 @@
+import { hardwareReceiptResponse, producerReceipts } from "./receipt-fixture.test-support";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   InstrumentAcquisition,
@@ -38,26 +39,6 @@ function session(): InstrumentSession {
     renewed_at: "2026-07-27T08:00:00Z",
     expires_at: "2026-07-27T08:01:00Z",
   };
-}
-
-function hardwareReceiptResponse(): Response {
-  const header = new TextEncoder().encode(
-    JSON.stringify({
-      format_id: "scopecat.collect_receipt.v1",
-      status: "collected",
-      problems: [],
-      readback: { values: {}, metadata: {} },
-      metadata: {},
-    }),
-  );
-  const content = new Uint8Array(16 + header.byteLength);
-  content.set(new TextEncoder().encode("SCRCPT01"));
-  new DataView(content.buffer).setBigUint64(8, BigInt(header.byteLength), true);
-  content.set(header, 16);
-  return new Response(content, {
-    status: 200,
-    headers: { "Content-Type": "application/vnd.scopecat.hardware-receipt.v1" },
-  });
 }
 
 describe("instrument connection summary", () => {
@@ -311,7 +292,9 @@ describe("interactive collection request shaping", () => {
       },
     };
 
-    await sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry");
+    await expect(
+      sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry"),
+    ).resolves.toEqual(producerReceipts[0]!.expected);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(requestPath(fetchMock.mock.calls[0]?.[0])).toBe(
@@ -319,7 +302,7 @@ describe("interactive collection request shaping", () => {
     );
     expect(
       requestHeaders(fetchMock.mock.calls[0]?.[0], fetchMock.mock.calls[0]?.[1]).get("Accept"),
-    ).toBe("application/vnd.scopecat.hardware-receipt.v1");
+    ).toBe(producerReceipts[0]!.media_type);
     await expect(
       requestJson(fetchMock.mock.calls[0]?.[0], fetchMock.mock.calls[0]?.[1]),
     ).resolves.toEqual({
@@ -382,8 +365,12 @@ describe("interactive collection request shaping", () => {
     await applyInstrumentState(session(), "vna-1", properties, "apply-retry");
     await invokeInstrumentOperation(session(), "vna-1", operationTarget, [], "invoke-retry");
     await invokeInstrumentOperation(session(), "vna-1", operationTarget, [], "invoke-retry");
-    await sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry");
-    await sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry");
+    await expect(
+      sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry"),
+    ).resolves.toEqual(producerReceipts[0]!.expected);
+    await expect(
+      sendInstrumentAcquisition(session(), "vna-1", target, "collect-retry"),
+    ).resolves.toEqual(producerReceipts[0]!.expected);
     await closeInstrumentSession("session-1");
     await closeInstrumentSession("session-1");
 

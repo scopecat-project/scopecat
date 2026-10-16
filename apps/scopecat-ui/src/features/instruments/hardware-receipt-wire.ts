@@ -1,10 +1,14 @@
 import type { InstrumentCollectReceipt, MeasurementAcquisitionValue } from "../../api-contract";
 
-export const HARDWARE_RECEIPT_MEDIA_TYPE = "application/vnd.scopecat.hardware-receipt.v1";
+export const HARDWARE_RECEIPT_MEDIA_TYPE = "application/vnd.scopecat.hardware-receipt.v2";
 
-const MAGIC = new TextEncoder().encode("SCRCPT01");
-const PREFIX_SIZE = MAGIC.byteLength + 8;
+const MAGIC = new TextEncoder().encode("SCATBND1");
+const PREFIX_SIZE = MAGIC.byteLength + 8 + 4;
+// Match hardware_receipt_wire.py's AttachmentBundleLimits.
 const MAX_HEADER_BYTES = 8 * 1024 * 1024;
+const MAX_ATTACHMENTS = 1024;
+const MAX_ATTACHMENT_BYTES = 128 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 512 * 1024 * 1024;
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
 type MeasurementDType = "float64" | "int64" | "complex128" | "bool" | "string";
@@ -17,7 +21,6 @@ type ProblemLocation = NonNullable<Problem["location"]>;
 interface ArrayReference {
   kind: "array_attachment";
   index: number;
-  size_bytes: number;
   dtype: MeasurementDType;
   unit: string | null;
   shape: number[];
@@ -31,15 +34,37 @@ export function decodeCollectReceipt(content: ArrayBuffer): InstrumentCollectRec
     throw invalidReceipt("prefix");
   }
 
-  const headerSizeBigInt = new DataView(content).getBigUint64(MAGIC.byteLength, true);
+  const view = new DataView(content);
+  const headerSizeBigInt = view.getBigUint64(MAGIC.byteLength, true);
   if (headerSizeBigInt > BigInt(MAX_HEADER_BYTES)) throw invalidReceipt("header size");
-  const headerSize = Number(headerSizeBigInt);
-  const bodyOffset = PREFIX_SIZE + headerSize;
+  const attachmentCount = view.getUint32(MAGIC.byteLength + 8, true);
+  if (attachmentCount > MAX_ATTACHMENTS) throw invalidReceipt("attachment count");
+  const headerOffset = PREFIX_SIZE + attachmentCount * 8;
+  if (headerOffset > bytes.byteLength) throw invalidReceipt("attachment size table");
+  const bodyOffset = headerOffset + Number(headerSizeBigInt);
   if (bodyOffset > bytes.byteLength) throw invalidReceipt("header size");
+  let totalAttachmentBytes = 0;
+  const sizes = Array.from({ length: attachmentCount }, (_, index) => {
+    const size = view.getBigUint64(PREFIX_SIZE + index * 8, true);
+    if (size > BigInt(MAX_ATTACHMENT_BYTES)) throw invalidReceipt("attachment size limit");
+    totalAttachmentBytes += Number(size);
+    if (totalAttachmentBytes > MAX_TOTAL_ATTACHMENT_BYTES)
+      throw invalidReceipt("attachment total size");
+    return Number(size);
+  });
+  let attachmentOffset = bodyOffset;
+  const attachments = sizes.map((size) => {
+    const end = attachmentOffset + size;
+    if (end > bytes.byteLength) throw invalidReceipt("truncated attachment");
+    const attachment = bytes.subarray(attachmentOffset, end);
+    attachmentOffset = end;
+    return attachment;
+  });
+  if (attachmentOffset !== bytes.byteLength) throw invalidReceipt("trailing attachment bytes");
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(textDecoder.decode(bytes.subarray(PREFIX_SIZE, bodyOffset)));
+    parsed = JSON.parse(textDecoder.decode(bytes.subarray(headerOffset, bodyOffset)));
   } catch {
     throw invalidReceipt("header");
   }
@@ -61,15 +86,7 @@ export function decodeCollectReceipt(content: ArrayBuffer): InstrumentCollectRec
     throw invalidReceipt("attachment indexes");
   }
 
-  let attachmentOffset = bodyOffset;
-  const attachments = references.map((reference) => {
-    const end = attachmentOffset + reference.size_bytes;
-    if (end > bytes.byteLength) throw invalidReceipt("truncated attachment");
-    const attachment = bytes.subarray(attachmentOffset, end);
-    attachmentOffset = end;
-    return attachment;
-  });
-  if (attachmentOffset !== bytes.byteLength) throw invalidReceipt("trailing attachment bytes");
+  if (references.length !== attachments.length) throw invalidReceipt("attachment count");
 
   const values = Object.fromEntries(
     Object.entries(wireValues).map(([id, value]) => [
@@ -90,6 +107,9 @@ export function decodeCollectReceipt(content: ArrayBuffer): InstrumentCollectRec
             values,
           },
     status: header.status,
+    ...(header.measured_cost === undefined
+      ? {}
+      : { measured_cost: measuredCost(header.measured_cost) }),
   };
 }
 
@@ -184,7 +204,6 @@ function isArrayReference(value: unknown): value is ArrayReference {
   if (!isRecord(value) || value.kind !== "array_attachment") return false;
   if (
     !isNonnegativeInteger(value.index) ||
-    !isNonnegativeInteger(value.size_bytes) ||
     !isMeasurementDType(value.dtype) ||
     !(value.unit === null || typeof value.unit === "string") ||
     !isShape(value.shape) ||
@@ -400,4 +419,40 @@ function requireByteLength(content: Uint8Array, expected: number): void {
 
 function invalidReceipt(field: string): Error {
   return new Error(`Invalid hardware receipt ${field}.`);
+}
+
+function measuredCost(value: unknown): InstrumentCollectReceipt["measured_cost"] {
+  if (value === null) return null;
+  if (
+    !isRecord(value) ||
+    typeof value.source !== "string" ||
+    typeof value.unavailable_reason !== "string"
+  ) {
+    throw invalidReceipt("measured cost");
+  }
+  const result: NonNullable<InstrumentCollectReceipt["measured_cost"]> = {
+    source: value.source,
+    unavailable_reason: value.unavailable_reason,
+  };
+  for (const key of [
+    "transfer_seconds",
+    "acquire_seconds",
+    "uploaded_bytes",
+    "reused_bytes",
+    "rendered_bytes",
+    "retained_bytes",
+  ] as const) {
+    const raw = value[key];
+    if (raw === undefined) continue;
+    if (
+      raw !== null &&
+      (typeof raw !== "number" ||
+        !Number.isFinite(raw) ||
+        raw < 0 ||
+        (key.endsWith("_bytes") && !Number.isInteger(raw)))
+    )
+      throw invalidReceipt("measured cost");
+    result[key] = raw;
+  }
+  return result;
 }
