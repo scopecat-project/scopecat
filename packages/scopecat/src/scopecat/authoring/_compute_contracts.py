@@ -42,9 +42,8 @@ from scopecat.program.products import ProductRef
 from scopecat.program.value_refs import ValueRef, internal_literal_value_ref
 from scopecat.program.values import ComputeFunction, ComputeInput
 
-type ComputeArgument = (
-    ComputeInput | ProductRef | NDArray[np.generic] | Sequence[object]
-)
+type ComputeValueArgument = ComputeInput | NDArray[np.generic] | Sequence[object]
+type ComputeArgument = ComputeValueArgument | ProductRef
 
 
 def validate_compute_annotation(

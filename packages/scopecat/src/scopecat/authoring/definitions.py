@@ -17,7 +17,11 @@ from typing import (
     overload,
 )
 
-from scopecat.authoring._compute_contracts import validate_compute_annotation
+from scopecat.authoring._compute_contracts import (
+    ComputeArgument,
+    ComputeValueArgument,
+    validate_compute_annotation,
+)
 from scopecat.authoring._experiment_module import (
     ExperimentModule,
     create_experiment_module_internal,
@@ -154,7 +158,6 @@ from scopecat.program.value_types import (
 )
 from scopecat.program.values import (
     ComputeFunction,
-    ComputeInput,
     MetadataValue,
     ModuleInput,
     RuntimeInput,
@@ -525,10 +528,10 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: Callable[..., T],
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: None = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> DataRef[T]: ...
 
     @overload
@@ -559,7 +562,7 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput] | None = None,
+        inputs: Mapping[str, ComputeValueArgument] | None = None,
         output_type: Scalar | Array,
         axes_from: ProductRef | None = None,
     ) -> ValueRef: ...
@@ -570,7 +573,7 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef],
+        inputs: Mapping[str, ComputeArgument],
         output_type: Scalar | Array,
         axes_from: ProductRef | None = None,
     ) -> ProductRef: ...
@@ -581,7 +584,7 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef],
+        inputs: Mapping[str, ComputeArgument],
         output_type: Mapping[str, DataType],
         axes_from: ProductRef | None = None,
     ) -> ProductRefs: ...
@@ -592,10 +595,10 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ProductBundleKernel[BundleT],
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: None = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> BundleT: ...
 
     @overload
@@ -604,10 +607,10 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: type[BundleT],
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> BundleT: ...
 
     @overload
@@ -616,10 +619,10 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: Scalar | Array | Mapping[str, DataType] | None = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> ValueRef | ProductRef | ProductRefs: ...
 
     def compute(
@@ -627,12 +630,12 @@ class ExperimentContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: (
             Scalar | Array | Mapping[str, DataType] | type[ProductBundle] | None
         ) = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> ValueRef | ProductRef | ProductRefs | ProductBundle:
         """Declare an experiment compute, optionally reusing matching input axes."""
 

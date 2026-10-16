@@ -18,6 +18,7 @@ from typing import (
 from scopecat.authoring._compute_contracts import (
     ComputeArgument,
     ComputeInputAdapter,
+    ComputeValueArgument,
     adapt_compute_function,
     bind_compute_inputs,
     compute_input_data_type,
@@ -1101,7 +1102,7 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput] | None = None,
+        inputs: Mapping[str, ComputeValueArgument] | None = None,
         output_type: ScalarType | ArrayType,
         axes_from: ProductRef | None = None,
     ) -> ValueRef: ...
