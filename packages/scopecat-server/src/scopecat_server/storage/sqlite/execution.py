@@ -446,7 +446,6 @@ class SQLiteRecoveryGroups:
 _DOMAIN_JOB_TRANSITION: TypeAdapter[DomainJobTransitionRecord] = TypeAdapter(
     DomainJobTransitionRecord
 )
-_STRING_LIST = TypeAdapter(list[str])
 
 
 class SQLiteDomainJobTransitions:
@@ -2456,14 +2455,6 @@ def _text(row: sqlite3.Row, column: str) -> str:
 
 def _integer(row: sqlite3.Row, column: str) -> int:
     return cast("int", row[column])
-
-
-def _string_tuple(row: sqlite3.Row, column: str) -> tuple[str, ...]:
-    try:
-        value = _STRING_LIST.validate_json(_text(row, column))
-    except ValueError as error:
-        raise ExecutionStateError(f"invalid string tuple in {column}") from error
-    return tuple(value)
 
 
 def _domain_job_transition_view(row: sqlite3.Row) -> RunDomainJobTransitionView:

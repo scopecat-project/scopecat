@@ -102,7 +102,7 @@ it("retains the exact workspace and pinned code during declaration refresh until
   expect(state.draft?.workspaceId).toBe("workspace-B");
   expect(state.draft?.codeRevision).toEqual({ content_hash: "sha256:pinned" });
   expect(state.draft?.values.note).toBe("reviewed");
-  act(() => state.useCurrentSource());
+  act(() => state.selectCurrentSource());
   expect(state.workspaceId).toBe("workspace-B");
   expect(state.draft?.codeRevision).toBeUndefined();
   expect(state.draft?.experiment).toBe("rabi");
@@ -229,7 +229,7 @@ it("keeps adopted inputs through source refresh but detaches a historical handof
   act(() => state.selectConfiguration(choice, origin));
   act(() => state.select(entry));
   expect(state.draft?.workingInput).toEqual(origin);
-  act(() => state.useCurrentSource());
+  act(() => state.selectCurrentSource());
   act(() => state.select(entry));
   expect(state.draft?.workingInput).toEqual(origin);
   const selection = state.draft!.selection;
