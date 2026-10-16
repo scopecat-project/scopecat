@@ -20,7 +20,7 @@ HASH = "sha256:" + "a" * 64
 
 
 def test_cancelled_download_preserves_destination_and_removes_partial(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     target = tmp_path / "kept.scopecat"
     target.write_bytes(b"original")
@@ -50,7 +50,9 @@ def test_title_change_targets_only_its_own_native_window():
     second.set_title.assert_called_once_with("Beta · source · Scopecat")
 
 
-def test_file_dialog_uses_connection_selected_after_dialog(tmp_path, monkeypatch):
+def test_file_dialog_uses_connection_selected_after_dialog(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())
     session.connected("http://localhost:1234")
@@ -72,7 +74,7 @@ def test_file_dialog_uses_connection_selected_after_dialog(tmp_path, monkeypatch
     download.assert_called_once_with("http://localhost:4321", HASH, target, ANY)
 
 
-def _transport(monkeypatch, handler):
+def _transport(monkeypatch: pytest.MonkeyPatch, handler):
     client = httpx2.Client
     monkeypatch.setattr(
         "scopecat_app.desktop_files.httpx2.Client",
@@ -80,7 +82,9 @@ def _transport(monkeypatch, handler):
     )
 
 
-def test_native_import_streams_file_and_validates_receipt(tmp_path, monkeypatch):
+def test_native_import_streams_file_and_validates_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     content = b"capture" * 200_000
     source = tmp_path / "input.scopecat"
     source.write_bytes(content)
@@ -107,7 +111,9 @@ def test_native_import_streams_file_and_validates_receipt(tmp_path, monkeypatch)
     assert receipt.capture.content_hash == HASH
 
 
-def test_native_save_replaces_only_after_completed_download(tmp_path, monkeypatch):
+def test_native_save_replaces_only_after_completed_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     target = tmp_path / "output.scopecat"
     target.write_bytes(b"previous")
     _transport(monkeypatch, lambda _request: httpx2.Response(200, content=b"complete"))
@@ -119,7 +125,7 @@ def test_native_save_replaces_only_after_completed_download(tmp_path, monkeypatc
 @pytest.mark.parametrize("save", [save_capture, export_run])
 @pytest.mark.parametrize("failure", ["server", "interrupted"])
 def test_native_save_failure_preserves_existing_file(
-    tmp_path, monkeypatch, failure, save
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, save
 ):
     target = tmp_path / "output.scopecat"
     target.write_bytes(b"previous")
@@ -143,7 +149,7 @@ def test_native_save_failure_preserves_existing_file(
 
 @pytest.mark.parametrize("selection_type", [str, tuple], ids=["cocoa", "path-tuple"])
 def test_native_dialog_cancel_does_not_transfer_or_restart(
-    tmp_path, monkeypatch, selection_type
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selection_type
 ):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())
@@ -173,7 +179,7 @@ def test_native_dialog_cancel_does_not_transfer_or_restart(
 
 
 def test_artifact_save_uses_record_identity_and_native_destination(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())
@@ -217,7 +223,7 @@ def test_artifact_save_uses_record_identity_and_native_destination(
 @pytest.mark.parametrize("source", [False, True], ids=["configuration", "source"])
 @pytest.mark.parametrize("selection_type", [str, tuple], ids=["cocoa", "path-tuple"])
 def test_configuration_native_save_cancel_path_and_failed_transfer(
-    tmp_path, monkeypatch, source, selection_type
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source, selection_type
 ):
     runtime, window = Mock(), Mock()
     session = DesktopSession(runtime, threading.Event())

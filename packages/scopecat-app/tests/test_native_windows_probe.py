@@ -6,6 +6,7 @@ import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Protocol, runtime_checkable
 
 import httpx2
 import psutil
@@ -17,11 +18,12 @@ from scopecat_server.scaffold import write_author_scaffold
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts/verify_native_windows.py"
 spec = spec_from_file_location("verify_native_windows", SCRIPT)
+assert spec is not None and spec.loader is not None
 probe = module_from_spec(spec)
 spec.loader.exec_module(probe)
 
 
-def test_native_bootstrap_captures_failure_without_inherited_output(tmp_path):
+def test_native_bootstrap_captures_failure_without_inherited_output(tmp_path: Path):
     script = tmp_path / "failure.py"
     script.write_text(
         "import logging\n"
@@ -47,7 +49,7 @@ def test_probe_wait_has_a_deadline():
         probe.wait_for(lambda: False, "bridge unavailable", timeout=0)
 
 
-def test_probe_nonzero_exit_preserves_diagnostic(tmp_path):
+def test_probe_nonzero_exit_preserves_diagnostic(tmp_path: Path):
     log = tmp_path / "host.log"
     with pytest.raises(subprocess.CalledProcessError):
         probe.run_bounded(
@@ -58,7 +60,7 @@ def test_probe_nonzero_exit_preserves_diagnostic(tmp_path):
     assert "native failure" in log.read_text()
 
 
-def test_probe_timeout_reaps_host_and_owned_child(tmp_path):
+def test_probe_timeout_reaps_host_and_owned_child(tmp_path: Path):
     marker = tmp_path / "pids.json"
     code = """
 import json, os, subprocess, sys
@@ -77,7 +79,9 @@ child.wait()
         assert not psutil.pid_exists(pid)
 
 
-def test_cleanup_after_host_crash_uses_recorded_client_identity(tmp_path, monkeypatch):
+def test_cleanup_after_host_crash_uses_recorded_client_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     reports = tmp_path / "native-windows"
     reports.mkdir()
     receipt = reports / "acquisition-process.json"
@@ -124,7 +128,7 @@ raise SystemExit(7)
     ],
 )
 def test_probe_refuses_local_or_mismatched_runner(
-    tmp_path, monkeypatch, setting, value
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setting, value
 ):
     hosted_runner(tmp_path, monkeypatch)
     monkeypatch.setenv(setting, value)
@@ -132,7 +136,7 @@ def test_probe_refuses_local_or_mismatched_runner(
         probe.require_hosted_runner(tmp_path / "home")
 
 
-def hosted_runner(tmp_path, monkeypatch):
+def hosted_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(probe.sys, "platform", "win32")
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.setenv("RUNNER_ENVIRONMENT", "github-hosted")
@@ -140,7 +144,9 @@ def hosted_runner(tmp_path, monkeypatch):
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
 
 
-def test_probe_requires_home_below_disposable_runner_temp(tmp_path, monkeypatch):
+def test_probe_requires_home_below_disposable_runner_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     hosted_runner(tmp_path, monkeypatch)
     probe.require_hosted_runner(tmp_path / "home")
     for home in (tmp_path, tmp_path.parent / "outside"):
@@ -151,7 +157,7 @@ def test_probe_requires_home_below_disposable_runner_temp(tmp_path, monkeypatch)
 @pytest.mark.parametrize("fail_cleanup", [False, True])
 @pytest.mark.parametrize("host_failure", ["exit", "timeout", "teardown"])
 def test_host_failure_overrides_partial_pass_and_retains_reports(
-    tmp_path, monkeypatch, fail_cleanup, host_failure
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_cleanup, host_failure
 ):
     hosted_runner(tmp_path, monkeypatch)
     app, home = tmp_path / "app", tmp_path / "home"
@@ -202,7 +208,7 @@ def test_host_failure_overrides_partial_pass_and_retains_reports(
     assert bootstrap.read_text() == "original candidate"
 
 
-def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path):
+def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path: Path):
     """Exercise the probe's fixture/API assertions on Linux without a fake GUI."""
     gui = tmp_path / "gui"
     gui.mkdir()
@@ -249,6 +255,7 @@ def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path):
             (tmp_path / "release").touch()
             assert child.wait(timeout=45) == 0
             after = RunDetail.model_validate(http.get(f"/api/v1/runs/{run_id}").json())
+            assert after.snapshot.outcome is not None
             assert after.snapshot.outcome.result == "succeeded"
             assert runtime.status().record == record
             assert (tmp_path / "completed").read_text() == run_id
@@ -258,18 +265,48 @@ def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path):
         runtime.stop()
 
 
+@runtime_checkable
+class WindowsStorageProbe(Protocol):
+    """Contract exercised by the freshly loaded native storage script."""
+
+    HOST: str
+
+    def finish_host(
+        self,
+        process: subprocess.Popen[str],
+        stage: str,
+        reports: Path,
+        *,
+        timeout: float = 90,
+    ) -> dict[str, object]: ...
+
+    def require_observation(
+        self, observed: dict[str, object], cookie: str | None, marker: str | None
+    ) -> None: ...
+
+    def host_bootstrap(
+        self, stage: str, reports: Path, origin: str, base_url: str
+    ) -> str: ...
+
+    def verify(self, app: Path, home: Path) -> None: ...
+
+
 @pytest.fixture
-def windows_storage_probe(monkeypatch):
+def windows_storage_probe(monkeypatch: pytest.MonkeyPatch) -> WindowsStorageProbe:
     monkeypatch.syspath_prepend(str(SCRIPT.parent))
     storage_spec = spec_from_file_location(
         "verify_windows_storage", SCRIPT.with_name("verify_windows_storage.py")
     )
+    assert storage_spec is not None and storage_spec.loader is not None
     storage = module_from_spec(storage_spec)
     storage_spec.loader.exec_module(storage)
+    assert isinstance(storage, WindowsStorageProbe)
     return storage
 
 
-def test_windows_storage_embedded_host_compiles(windows_storage_probe):
+def test_windows_storage_embedded_host_compiles(
+    windows_storage_probe: WindowsStorageProbe,
+):
     compile(windows_storage_probe.HOST, "windows-storage-host", "exec")
 
 
@@ -283,7 +320,7 @@ def test_windows_storage_embedded_host_compiles(windows_storage_probe):
     ],
 )
 def test_windows_storage_rejects_incomplete_host_evidence(
-    tmp_path, windows_storage_probe, exit_code, report, error
+    tmp_path: Path, windows_storage_probe: WindowsStorageProbe, exit_code, report, error
 ):
     """Failure-report validation only; these child processes are not WebViews."""
     if report is not None:
@@ -297,7 +334,9 @@ def test_windows_storage_rejects_incomplete_host_evidence(
         windows_storage_probe.finish_host(process, "A", tmp_path, timeout=5)
 
 
-def test_windows_storage_host_wait_is_bounded(tmp_path, windows_storage_probe):
+def test_windows_storage_host_wait_is_bounded(
+    tmp_path: Path, windows_storage_probe: WindowsStorageProbe
+):
     with subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(60)"], text=True
     ) as process:
@@ -311,9 +350,11 @@ def test_windows_storage_host_wait_is_bounded(tmp_path, windows_storage_probe):
 
 
 @pytest.mark.parametrize("surface", ["cookies", "document", "http", "marker"])
-def test_windows_storage_cookie_or_marker_loss_fails(windows_storage_probe, surface):
+def test_windows_storage_cookie_or_marker_loss_fails(
+    windows_storage_probe: WindowsStorageProbe, surface
+):
     """Validate rejection of recorded loss, not native browser behavior."""
-    observed = {
+    observed: dict[str, object] = {
         "cookies": {"scopecat_host_cookie": "C"},
         "document": "scopecat_host_cookie=C",
         "http": "scopecat_host_cookie=C",
@@ -326,7 +367,9 @@ def test_windows_storage_cookie_or_marker_loss_fails(windows_storage_probe, surf
 
 
 def test_windows_storage_bootstrap_retains_early_failure(
-    tmp_path, monkeypatch, windows_storage_probe
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    windows_storage_probe: WindowsStorageProbe,
 ):
     # Exercise only bootstrap diagnostics in a real child; no native result is mocked.
     monkeypatch.setattr(
@@ -347,7 +390,9 @@ def test_windows_storage_bootstrap_retains_early_failure(
 
 
 def test_windows_storage_aggregate_retains_setup_error(
-    tmp_path, monkeypatch, windows_storage_probe
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    windows_storage_probe: WindowsStorageProbe,
 ):
     hosted_runner(tmp_path, monkeypatch)
 
@@ -363,7 +408,7 @@ def test_windows_storage_aggregate_retains_setup_error(
 
 
 def test_window_diagnostics_retains_initialization_failure_before_cleanup(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     """Exercise subscriptions/retention only; fake native objects do not qualify UI."""
     import logging
@@ -459,7 +504,7 @@ def test_window_diagnostics_retains_initialization_failure_before_cleanup(
 
 
 def test_window_diagnostics_unavailable_does_not_replace_acceptance_failure(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     path = tmp_path / "diagnostics.jsonl"
     diagnostics = probe.WindowDiagnostics(path)

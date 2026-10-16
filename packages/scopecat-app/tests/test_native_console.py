@@ -13,8 +13,11 @@ from scripts.app_build.native_package import _write_macos_console
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="macOS POSIX console")
 
 
+type ConsoleRuntime = tuple[Path, dict[str, str]]
+
+
 @pytest.fixture
-def console_runtime(tmp_path):
+def console_runtime(tmp_path: Path) -> ConsoleRuntime:
     staging = tmp_path / ".native-build-original"
     python = staging / "Scopecat.app/Contents/Resources/python"
     venv.EnvBuilder(with_pip=False).create(python)
@@ -37,7 +40,9 @@ def console_runtime(tmp_path):
     return python, environment
 
 
-def run_console(python, environment, *arguments):
+def run_console(
+    python: Path, environment: dict[str, str], *arguments: str
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - disposable test runtime
         [str(python / "bin/scopecat"), *arguments],
         env=environment,
@@ -49,7 +54,9 @@ def run_console(python, environment, *arguments):
     )
 
 
-def test_relocated_console_runs_real_help_and_status(console_runtime, tmp_path):
+def test_relocated_console_runs_real_help_and_status(
+    console_runtime: ConsoleRuntime, tmp_path: Path
+):
     python, environment = console_runtime
 
     def contents():
@@ -73,7 +80,9 @@ def test_relocated_console_runs_real_help_and_status(console_runtime, tmp_path):
     assert contents() == before
 
 
-def test_console_forwards_arguments_identity_and_exit_code(console_runtime):
+def test_console_forwards_arguments_identity_and_exit_code(
+    console_runtime: ConsoleRuntime,
+):
     python, environment = console_runtime
     library = next((python / "lib").glob("python*/site-packages"))
     module = library / "scopecat_app"
@@ -106,7 +115,9 @@ def test_console_forwards_arguments_identity_and_exit_code(console_runtime):
     assert str(python / "bin/python3") in missing.stderr
 
 
-def test_build_replaces_console_before_signing_and_rename(tmp_path, monkeypatch):
+def test_build_replaces_console_before_signing_and_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     import tarfile
 
     from scripts.app_build import cocoa_dependency, macos_signing, native_package

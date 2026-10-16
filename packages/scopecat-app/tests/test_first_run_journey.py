@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import httpx2
+import pytest
 
 from scopecat.daemon.views import RunSummaryPage
 from scopecat.project import open_project
@@ -15,7 +16,7 @@ from scopecat_server.scaffold import write_author_scaffold
 
 
 def test_author_source_run_and_reopen_direct_workbench(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runtime = ApplicationRuntime(tmp_path / "application home")
     source = tmp_path / "实验代码"

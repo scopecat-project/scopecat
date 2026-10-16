@@ -11,12 +11,14 @@ import pytest
 
 from scopecat_app import author_environment as environments
 
+type Preparation = tuple[Mock, Path, list[list[str]], Mock]
+
 
 @pytest.mark.parametrize("rebuild", [False, True])
 @pytest.mark.parametrize("stage", ["install", "ensurepip"])
 @pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
 def test_interrupted_client_preparation_preserves_retry(
-    tmp_path, monkeypatch, rebuild, stage, failure
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rebuild, stage, failure
 ):
     workspace = tmp_path / "authors"
     workspace.mkdir()
@@ -78,7 +80,7 @@ def test_interrupted_client_preparation_preserves_retry(
 
 
 @pytest.fixture
-def preparation(tmp_path, monkeypatch):
+def preparation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Preparation:
     source = tmp_path / "source"
     source.mkdir()
     (source / "pyproject.toml").write_text('[project]\nname = "example"\n')
@@ -100,9 +102,9 @@ def preparation(tmp_path, monkeypatch):
     monkeypatch.setattr(
         environments, "identity", lambda _: {"binary_sha256": "original"}
     )
-    calls = []
+    calls: list[list[str]] = []
 
-    def run(command):
+    def run(command: list[str]) -> None:
         calls.append(command)
         if "compile" in command:
             Path(command[command.index("--output-file") + 1]).write_text("locked==1\n")
@@ -113,7 +115,7 @@ def preparation(tmp_path, monkeypatch):
     return runtime, source, calls, capture
 
 
-def test_short_candidates_reuse_full_identity_receipts(preparation):
+def test_short_candidates_reuse_full_identity_receipts(preparation: Preparation):
     runtime, source, calls, capture = preparation
     python = environments.prepare_execution_environment(runtime, source)
     receipts = list((runtime.home / "environments").glob("*/environment.json"))
@@ -135,7 +137,9 @@ def test_short_candidates_reuse_full_identity_receipts(preparation):
 
 
 @pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
-def test_failed_candidate_preserves_other_environments(preparation, failure):
+def test_failed_candidate_preserves_other_environments(
+    preparation: Preparation, failure
+):
     runtime, source, _, capture = preparation
     retained = runtime.home / "environments/e-retained/runtime"
     retained.mkdir(parents=True)
@@ -152,7 +156,9 @@ def test_failed_candidate_preserves_other_environments(preparation, failure):
     assert retained.is_dir()
 
 
-def test_concurrent_preparation_publishes_one_candidate_per_identity(preparation):
+def test_concurrent_preparation_publishes_one_candidate_per_identity(
+    preparation: Preparation,
+):
     runtime, source, calls, capture = preparation
     with ThreadPoolExecutor(max_workers=2) as workers:
         results = list(
@@ -178,7 +184,9 @@ def test_concurrent_preparation_publishes_one_candidate_per_identity(preparation
     assert previous.parent.parent.parent.is_dir()
 
 
-def test_online_newer_dependency_cannot_override_delivery_lock(tmp_path, monkeypatch):
+def test_online_newer_dependency_cannot_override_delivery_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Exercise uv's real resolver/installer against a newer HTTP candidate."""
     import functools
     import subprocess
@@ -288,7 +296,9 @@ def test_online_newer_dependency_cannot_override_delivery_lock(tmp_path, monkeyp
         thread.join(timeout=10)
 
 
-def test_workspace_lock_is_exported_without_refresh(tmp_path, monkeypatch):
+def test_workspace_lock_is_exported_without_refresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     import subprocess
     import sys
 
@@ -334,7 +344,7 @@ def test_workspace_lock_is_exported_without_refresh(tmp_path, monkeypatch):
 
 
 def test_changed_interpreter_identity_does_not_reuse_candidate(
-    preparation, monkeypatch
+    preparation: Preparation, monkeypatch: pytest.MonkeyPatch
 ):
     runtime, source, calls, _capture = preparation
     before = environments.prepare_execution_environment(runtime, source)

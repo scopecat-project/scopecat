@@ -2,11 +2,12 @@
 
 import subprocess
 import sys
+from pathlib import Path
 
 from scopecat_app.application_runtime import ApplicationRuntime, write_state
 
 
-def test_application_lock_excludes_process_and_state_replaces(tmp_path):
+def test_application_lock_excludes_process_and_state_replaces(tmp_path: Path):
     runtime = ApplicationRuntime(tmp_path)
     child = (
         "import sys\nfrom filelock import FileLock, Timeout\n"

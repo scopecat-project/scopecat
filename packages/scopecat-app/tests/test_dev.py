@@ -4,6 +4,7 @@ import json
 import queue
 import subprocess
 import threading
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -14,7 +15,9 @@ from scripts.app_build import dev_resources
 from scopecat_app.desktop_session import DesktopSession
 
 
-def test_home_is_stable_canonical_external_and_worktree_specific(tmp_path, monkeypatch):
+def test_home_is_stable_canonical_external_and_worktree_specific(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(
         dev_resources, "user_data_path", lambda *_a, **_k: tmp_path / "user"
     )
@@ -31,7 +34,7 @@ def test_home_is_stable_canonical_external_and_worktree_specific(tmp_path, monke
     assert not dev_resources.development_home(source).is_relative_to(source)
 
 
-def test_resources_track_dirty_untracked_locks_but_not_live_gui(tmp_path):
+def test_resources_track_dirty_untracked_locks_but_not_live_gui(tmp_path: Path):
     subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)  # noqa: S603, S607
     package = tmp_path / "packages/example/src/example"
     package.mkdir(parents=True)
@@ -56,13 +59,15 @@ def test_resources_track_dirty_untracked_locks_but_not_live_gui(tmp_path):
 
 
 @pytest.mark.parametrize("busy", [True, False])
-def test_restart_uses_atomic_idle_admission_and_updates_endpoint_before_windows(busy):
+def test_restart_uses_atomic_idle_admission_and_updates_endpoint_before_windows(
+    busy: bool,
+):
     runtime = Mock()
     runtime.stop_if_idle.return_value = not busy
     session = DesktopSession(runtime, threading.Event())
     session.ui_url = "http://127.0.0.1:5173"
     session.connected("http://127.0.0.1:1000")
-    events = []
+    events: list[tuple[str, str]] = []
     session.endpoint_changed = lambda url: events.append(("proxy", url))
     session.connection_changed = lambda _old, new: events.append(("windows", new))
     start = Mock(side_effect=lambda: session.connected("http://127.0.0.1:2000"))
@@ -92,7 +97,9 @@ def test_unknown_activity_never_restarts():
     runtime.stop.assert_not_called()
 
 
-def test_existing_owner_reused_without_preparing_or_stopping(tmp_path, monkeypatch):
+def test_existing_owner_reused_without_preparing_or_stopping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     source = tmp_path / "source"
     home = tmp_path / "home"
     home.mkdir()
@@ -108,7 +115,9 @@ def test_existing_owner_reused_without_preparing_or_stopping(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("layout", ["legacy", "application"])
-def test_installed_or_other_checkout_home_never_stopped(tmp_path, monkeypatch, layout):
+def test_installed_or_other_checkout_home_never_stopped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, layout: str
+):
     home = tmp_path / "home"
     home.mkdir()
     if layout == "legacy":
@@ -129,12 +138,14 @@ def test_installed_or_other_checkout_home_never_stopped(tmp_path, monkeypatch, l
     stop.assert_not_called()
 
 
-def test_terminal_wait_restarts_only_after_idle(tmp_path, monkeypatch):
+def test_terminal_wait_restarts_only_after_idle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     runtime = Mock()
     runtime.stop_if_idle.side_effect = [False, False, True]
     session = DesktopSession(runtime, threading.Event())
     monkeypatch.setattr(dev, "source_stamp", lambda _: "source")
-    commands = queue.Queue()
+    commands: queue.Queue[str] = queue.Queue()
     commands.put("w")
     start = Mock(side_effect=session.closing.set)
     thread = threading.Thread(
@@ -147,7 +158,9 @@ def test_terminal_wait_restarts_only_after_idle(tmp_path, monkeypatch):
     runtime.stop.assert_not_called()
 
 
-def test_failed_source_watcher_does_not_disable_safe_quit(tmp_path, monkeypatch):
+def test_failed_source_watcher_does_not_disable_safe_quit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     import itertools
 
     runtime = Mock()
@@ -155,14 +168,14 @@ def test_failed_source_watcher_does_not_disable_safe_quit(tmp_path, monkeypatch)
     session = DesktopSession(runtime, threading.Event())
     checked = threading.Event()
 
-    def changed(_source):
+    def changed(_source: Path) -> None:
         checked.set()
         raise FileNotFoundError("editor replaced file")
 
     clock = itertools.count(0, 3)
     monkeypatch.setattr(dev, "source_stamp", changed)
     monkeypatch.setattr(dev.time, "monotonic", lambda: next(clock))
-    commands = queue.Queue()
+    commands: queue.Queue[str] = queue.Queue()
     thread = threading.Thread(
         target=dev.control_session, args=(session, tmp_path, commands, Mock())
     )
@@ -176,7 +189,7 @@ def test_failed_source_watcher_does_not_disable_safe_quit(tmp_path, monkeypatch)
     runtime.stop.assert_not_called()
 
 
-def test_native_endpoint_change_updates_proxy_and_reuse_report(tmp_path):
+def test_native_endpoint_change_updates_proxy_and_reuse_report(tmp_path: Path):
     marker = tmp_path / "development.json"
     marker.write_text(json.dumps({"source": "checkout", "ui": "http://127.0.0.1:5000"}))
     dev.publish_endpoint(tmp_path, "http://127.0.0.1:9001")
@@ -191,7 +204,7 @@ def test_native_endpoint_change_updates_proxy_and_reuse_report(tmp_path):
 
 
 def test_frontend_failure_reports_without_stopping_background_and_can_quit(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     runtime = Mock()
     runtime.stop_if_idle.return_value = True
@@ -207,7 +220,7 @@ def test_frontend_failure_reports_without_stopping_background_and_can_quit(
     monkeypatch.setattr(dev, "source_stamp", lambda _source: "source")
     frontend = Mock(returncode=1)
     frontend.poll.return_value = 1
-    commands = queue.Queue()
+    commands: queue.Queue[str] = queue.Queue()
     thread = threading.Thread(
         target=dev.control_session,
         args=(session, tmp_path, commands, Mock(), frontend, tmp_path / "vite.log"),
@@ -218,6 +231,7 @@ def test_frontend_failure_reports_without_stopping_background_and_can_quit(
         assert not session.closing.is_set()
         runtime.stop_if_idle.assert_not_called()
         runtime.stop.assert_not_called()
+        assert logger.error.call_args is not None
         message = logger.error.call_args.args[0]
         assert "Vite exited (1)" in message
         assert str(tmp_path / "vite.log") in message
@@ -235,7 +249,7 @@ def test_frontend_failure_reports_without_stopping_background_and_can_quit(
 
 
 def test_source_reminder_reads_metadata_but_cache_still_hashes_bytes(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     import os
 
@@ -248,7 +262,7 @@ def test_source_reminder_reads_metadata_but_cache_still_hashes_bytes(
     os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns))
     assert dev_resources.source_identity(tmp_path) != first
 
-    def reject_read(_path):
+    def reject_read(_path: Path) -> bytes:
         raise AssertionError("idle reminder must not read file contents")
 
     monkeypatch.setattr(type(source), "read_bytes", reject_read)
@@ -259,7 +273,7 @@ def test_source_reminder_reads_metadata_but_cache_still_hashes_bytes(
 
 @pytest.mark.parametrize("damage", ["missing", "corrupt"])
 def test_cached_payload_repairs_native_wheel_and_extraction(
-    tmp_path, monkeypatch, damage
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, damage: str
 ):
     import hashlib
     import io
@@ -271,22 +285,22 @@ def test_cached_payload_repairs_native_wheel_and_extraction(
     with zipfile.ZipFile(content, "w") as archive:
         archive.writestr("webview/__init__.py", "reviewed native host")
     wheel_bytes = content.getvalue()
-    builds = []
+    builds: list[Path] = []
     monkeypatch.setattr(dev_resources.sys, "platform", "darwin")
     monkeypatch.setattr(dev_resources, "resource_identity", lambda _: "identity")
     monkeypatch.setattr(dev_resources, "verify_resources", lambda _: None)
 
-    def verify(wheels):
+    def verify(wheels: Path) -> None:
         if (wheels / "pywebview-1.whl").read_bytes() != wheel_bytes:
             raise ValueError("corrupt wheel")
 
-    def build_delivery(destination, **_kwargs):
+    def build_delivery(destination: Path, **_kwargs: object) -> Path:
         builds.append(destination)
         (destination / "wheels").mkdir(parents=True)
         (destination / "wheels/pywebview-1.whl").write_bytes(wheel_bytes)
         return destination
 
-    def project(_delivery, destination):
+    def project(_delivery: Path, destination: Path) -> Path:
         destination.mkdir()
         (destination / "identity").write_text("immutable author resources")
         return destination

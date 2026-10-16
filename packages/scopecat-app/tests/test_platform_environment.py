@@ -18,7 +18,7 @@ from scopecat_app.author_resources import verify_resources
 from scopecat_app.bundle import MANIFEST, file_hash, inventory, target_identity
 
 
-def test_prepared_execution_python_imports_pyarrow(tmp_path):
+def test_prepared_execution_python_imports_pyarrow(tmp_path: Path):
     # Keep pytest's normal OS temp root and descriptive test directory. In #871
     # a nested content-hash environment broke Windows DLL loading at this depth.
     root = Path(__file__).resolve().parents[3]

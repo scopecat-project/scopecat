@@ -16,7 +16,9 @@ from scopecat.records.sample import SampleRevisionDraft
 from scopecat_server.lifecycle import start_project, stop_project
 
 
-def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) -> None:
+def test_minimal_teaching_refresh_and_restart(
+    tmp_path: Path, notebook_imports: pytest.MonkeyPatch
+) -> None:
     root = tmp_path / "minimal"
     create_project(root)
     project = sc.open_project(root)
@@ -113,17 +115,17 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
                 np.asarray(second.measurements()["iq"].require_values()),
             )
             assert analyze_rabi(session, run).pi_amplitude == first_report.pi_amplitude
+            assert refreshed.active is not None
             current = session.analyze(
                 run.id,
                 "my_experiment.analysis:rabi_diagnostic",
                 code_revision=refreshed.active,
             )
-            assert (
-                run.published_analysis(current.analysis_id)
-                .fact("diagnostic")
-                .value["status"]
-                == "fit_failed"
+            diagnostic = (
+                run.published_analysis(current.analysis_id).fact("diagnostic").value
             )
+            assert isinstance(diagnostic, dict)
+            assert diagnostic["status"] == "fit_failed"
             receipt = job.receipt
             run_id = run.id
             assert session.config.registry().entries == ()
@@ -153,7 +155,7 @@ def test_minimal_teaching_refresh_and_restart(tmp_path: Path, notebook_imports) 
 
 
 def test_live_requests_history_and_failed_refresh(
-    tmp_path: Path, notebook_imports
+    tmp_path: Path, notebook_imports: pytest.MonkeyPatch
 ) -> None:
     import importlib
 

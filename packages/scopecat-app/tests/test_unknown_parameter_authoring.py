@@ -36,7 +36,7 @@ def pi_probe(experiment: sc.ExperimentContext) -> sc.ValueRef[float]:
 
 
 def test_new_table_unknowns_freeze_and_structural_history(
-    tmp_path: Path, notebook_imports
+    tmp_path: Path, notebook_imports: pytest.MonkeyPatch
 ) -> None:
     root = create_project(tmp_path / "unknown-parameters").parent
     project = sc.open_project(root)

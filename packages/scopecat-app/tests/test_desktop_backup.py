@@ -40,7 +40,7 @@ def call_bridge(api: DesktopAPI, action: Callable[[], None]) -> None:
 
 def wait_for_page(api: DesktopAPI) -> None:
     # Inspect the retained host thread only to join it deterministically in tests.
-    worker = api._page_thread  # pyright: ignore[reportPrivateUsage]
+    worker = api._page_thread
     if worker is not None:
         worker.join(5)
         assert not worker.is_alive()

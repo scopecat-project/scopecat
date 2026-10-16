@@ -1,6 +1,7 @@
 """Direct entry selects one application home and never an author-owned service."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +11,7 @@ from scopecat_app.application_runtime import ApplicationRuntime
 
 
 def test_select_existing_execution_environment_does_not_prepare_or_start(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     selected = []
     monkeypatch.setattr(
@@ -41,7 +42,7 @@ def test_select_existing_execution_environment_does_not_prepare_or_start(
     assert selected == [(source, python)]
 
 
-def test_select_environment_requires_explicit_interpreter(tmp_path):
+def test_select_environment_requires_explicit_interpreter(tmp_path: Path):
     with pytest.raises(SystemExit) as failure:
         application.main(
             [
@@ -57,7 +58,9 @@ def test_select_environment_requires_explicit_interpreter(tmp_path):
     assert not (tmp_path / "home").exists()
 
 
-def test_status_before_install_has_no_side_effects(tmp_path, capsys):
+def test_status_before_install_has_no_side_effects(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     home = tmp_path / "application"
     application.main(["--home", str(home)])
     assert json.loads(capsys.readouterr().out)["state"] == "not-installed"
@@ -73,7 +76,7 @@ def test_status_before_install_has_no_side_effects(tmp_path, capsys):
     ],
 )
 def test_only_explicit_open_launches_browser(
-    tmp_path, monkeypatch, action, no_browser, opens
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action, no_browser, opens
 ):
     started = []
     opened = []
@@ -97,7 +100,9 @@ def test_only_explicit_open_launches_browser(
     assert opened == (["http://127.0.0.1:1234"] if opens else [])
 
 
-def test_unbound_source_does_not_start_or_open(tmp_path, monkeypatch):
+def test_unbound_source_does_not_start_or_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     source = tmp_path / "author"
     source.mkdir()
     (source / "scopecat.toml").write_text("[authors]\ndependencies=[]\n")
@@ -124,7 +129,9 @@ def test_unbound_source_does_not_start_or_open(tmp_path, monkeypatch):
     assert failure.value.code == 2
 
 
-def test_failed_start_retains_windowless_recovery(tmp_path, monkeypatch):
+def test_failed_start_retains_windowless_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     def fail(_runtime):
         raise ValueError("Please stop the recorded owner")
 
@@ -139,7 +146,7 @@ def test_failed_start_retains_windowless_recovery(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("same_interpreter", [True, False])
 def test_update_resources_follow_actual_selected_interpreter(
-    tmp_path, monkeypatch, same_interpreter
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_interpreter
 ):
     import sys
     from pathlib import Path

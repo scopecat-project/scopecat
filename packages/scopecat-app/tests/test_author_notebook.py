@@ -12,9 +12,11 @@ from typer.testing import CliRunner
 from scopecat_app import author_notebook
 from scopecat_app.public_cli import app
 
+type Laboratory = tuple[Path, Path, SimpleNamespace]
+
 
 @pytest.fixture
-def laboratory(tmp_path, monkeypatch):
+def laboratory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Laboratory:
     source = tmp_path / "author"
     source.mkdir()
     python = (
@@ -42,7 +44,9 @@ def laboratory(tmp_path, monkeypatch):
     return source, home, service
 
 
-def test_launch_keeps_user_python_when_application_changes(laboratory, monkeypatch):
+def test_launch_keeps_user_python_when_application_changes(
+    laboratory: Laboratory, monkeypatch: pytest.MonkeyPatch
+):
     source, home, service = laboratory
     monkeypatch.setenv("PYTHONPATH", "foreign-source")
     monkeypatch.setenv("PYTHONHOME", "foreign-python")
@@ -76,7 +80,9 @@ def test_launch_keeps_user_python_when_application_changes(laboratory, monkeypat
     assert not (source / ".scopecat-notebook").exists()
 
 
-def test_missing_notebook_extra_does_not_launch_or_install(laboratory, monkeypatch):
+def test_missing_notebook_extra_does_not_launch_or_install(
+    laboratory: Laboratory, monkeypatch: pytest.MonkeyPatch
+):
     source, home, _ = laboratory
     monkeypatch.setattr(
         author_notebook.subprocess,
@@ -88,7 +94,9 @@ def test_missing_notebook_extra_does_not_launch_or_install(laboratory, monkeypat
         author_notebook.launch_notebook(source, home)
 
 
-def test_missing_user_python_never_falls_back_to_application(laboratory, monkeypatch):
+def test_missing_user_python_never_falls_back_to_application(
+    laboratory: Laboratory, monkeypatch: pytest.MonkeyPatch
+):
     source, home, _ = laboratory
     author_notebook.project_python(source).unlink()
     monkeypatch.setattr(author_notebook.subprocess, "run", pytest.fail)
@@ -97,7 +105,9 @@ def test_missing_user_python_never_falls_back_to_application(laboratory, monkeyp
         author_notebook.launch_notebook(source, home)
 
 
-def test_pending_runtime_registration_prevents_notebook_launch(tmp_path, monkeypatch):
+def test_pending_runtime_registration_prevents_notebook_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     from scopecat_app.application_runtime import ApplicationRuntime
 
     home = tmp_path / "application"
@@ -110,7 +120,9 @@ def test_pending_runtime_registration_prevents_notebook_launch(tmp_path, monkeyp
         author_notebook.launch_notebook(tmp_path / "author", home)
 
 
-def test_public_notebook_entry_forwards_workspace_options(monkeypatch):
+def test_public_notebook_entry_forwards_workspace_options(
+    monkeypatch: pytest.MonkeyPatch,
+):
     received = []
     monkeypatch.setattr(author_notebook, "main", received.extend)
     arguments = ["author folder", "--home", "application home", "--no-browser"]
@@ -119,7 +131,9 @@ def test_public_notebook_entry_forwards_workspace_options(monkeypatch):
     assert received == arguments
 
 
-def test_default_notebook_opens_sole_registered_source(tmp_path, monkeypatch):
+def test_default_notebook_opens_sole_registered_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     from scopecat import author_workspaces
 
     root = tmp_path / "software laboratory"
@@ -165,7 +179,9 @@ def test_default_notebook_opens_sole_registered_source(tmp_path, monkeypatch):
     assert calls[0][1] == root
 
 
-def test_notebook_requires_explicit_application_home(tmp_path, monkeypatch):
+def test_notebook_requires_explicit_application_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(app, ["notebook", "authors"])
     assert result.exit_code == 2

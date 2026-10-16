@@ -56,7 +56,9 @@ def test_gui_assets_must_match_delivery(delivery: Path):
         bundle.verify_bundle(delivery)
 
 
-def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_path):
+def test_corrupt_wheel_blocks_install_before_environment_creation(
+    delivery: Path, tmp_path: Path
+):
     (delivery / "wheels/example.whl").write_bytes(b"changed")
     destination = tmp_path / "environment"
     with pytest.raises(ValueError, match="被修改"):
@@ -64,7 +66,7 @@ def test_corrupt_wheel_blocks_install_before_environment_creation(delivery, tmp_
     assert not destination.exists()
 
 
-def add_toolchain(delivery, *, unsafe=False):
+def add_toolchain(delivery: Path, *, unsafe=False):
     directory = delivery / "toolchain"
     directory.mkdir()
     with tarfile.open(directory / "python.tar", "w") as archive:
@@ -84,7 +86,7 @@ def add_toolchain(delivery, *, unsafe=False):
 
 
 def test_wheel_delivery_uses_installed_uv_without_host_path(
-    delivery, tmp_path, monkeypatch
+    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     prefix = tmp_path / "application"
     uv = prefix / ("Scripts/uv.exe" if os.name == "nt" else "bin/uv")
@@ -105,7 +107,7 @@ def test_wheel_delivery_uses_installed_uv_without_host_path(
 
 
 def test_toolchain_build_ignores_managed_aliases_and_preserves_input(
-    delivery, tmp_path, monkeypatch
+    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     from types import SimpleNamespace
 
@@ -144,7 +146,7 @@ def test_toolchain_build_ignores_managed_aliases_and_preserves_input(
         assert all(not member.issym() for member in archive.getmembers())
 
 
-def test_installer_rejects_other_platform(delivery, tmp_path):
+def test_installer_rejects_other_platform(delivery: Path, tmp_path: Path):
     path = delivery / bundle.MANIFEST
     data = json.loads(path.read_text(encoding="utf-8"))
     data["target"]["machine"] = "other-architecture"
@@ -153,7 +155,7 @@ def test_installer_rejects_other_platform(delivery, tmp_path):
         installer.install_bundle(delivery, tmp_path / "environment")
 
 
-def test_manifest_paths_stay_inside_delivery(delivery):
+def test_manifest_paths_stay_inside_delivery(delivery: Path):
     path = delivery / bundle.MANIFEST
     data = json.loads(path.read_text(encoding="utf-8"))
     data["files"]["../outside"] = "0" * 64
@@ -162,14 +164,26 @@ def test_manifest_paths_stay_inside_delivery(delivery):
         bundle.verify_bundle(delivery)
 
 
-def test_start_checks_reused_service_gui(delivery, monkeypatch):
-    from types import SimpleNamespace
+def test_start_checks_reused_service_gui(
+    delivery: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from datetime import UTC, datetime
 
     import httpx2 as httpx
 
+    from scopecat.daemon.endpoint import DaemonEndpointRecord
     from scopecat_app.application_runtime import _check_served_gui
 
-    record = SimpleNamespace(base_url="http://127.0.0.1:12345")
+    record = DaemonEndpointRecord(
+        project_root=delivery,
+        data_root=delivery,
+        deployment_root=delivery,
+        pid=1,
+        process_create_time=1.0,
+        base_url="http://127.0.0.1:12345",
+        shutdown_token="test-only-token-" * 3,
+        started_at=datetime.now(UTC),
+    )
     monkeypatch.setattr(
         httpx,
         "get",
@@ -187,7 +201,9 @@ def test_start_checks_reused_service_gui(delivery, monkeypatch):
     _check_served_gui(record, delivery / "gui")
 
 
-def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_path):
+def test_public_install_bundle_still_refuses_existing_destination(
+    delivery: Path, tmp_path: Path
+):
     destination = tmp_path / "existing"
     destination.mkdir()
     with pytest.raises(FileExistsError, match="已存在"):
@@ -195,7 +211,7 @@ def test_public_install_bundle_still_refuses_existing_destination(delivery, tmp_
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows symlink creation needs privileges")
-def test_application_paths_reject_redirected_runtime_directory(tmp_path):
+def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
     from scopecat_app.application_runtime import ApplicationRuntime
 
     home = tmp_path / "application"
@@ -209,7 +225,9 @@ def test_application_paths_reject_redirected_runtime_directory(tmp_path):
 
 
 @pytest.mark.parametrize("problem", ["relative", "missing", "changed"])
-def test_installer_receipt_never_guesses_a_replacement(delivery, tmp_path, problem):
+def test_installer_receipt_never_guesses_a_replacement(
+    delivery: Path, tmp_path: Path, problem
+):
     prefix = tmp_path / "environment"
     prefix.mkdir()
     root = delivery if problem != "relative" else Path("../delivery")
@@ -238,7 +256,7 @@ def test_installer_receipt_never_guesses_a_replacement(delivery, tmp_path, probl
 
 
 def test_delivery_resources_are_independent_of_gui_location(
-    delivery, tmp_path, monkeypatch
+    delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     from scopecat_app import application_runtime, author_environment
     from scopecat_app.application_runtime import ApplicationRuntime
@@ -298,8 +316,8 @@ def test_delivery_resources_are_independent_of_gui_location(
 
 
 def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_it(
-    tmp_path,
-    monkeypatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     import sys
 
@@ -330,7 +348,7 @@ def test_existing_author_environment_needs_no_delivery_and_failed_rebuild_keeps_
     assert not list(workspace.glob(".venv-retained-*"))
 
 
-def test_standalone_installer_runs_without_installed_application(tmp_path):
+def test_standalone_installer_runs_without_installed_application(tmp_path: Path):
     import subprocess
     import sys
 

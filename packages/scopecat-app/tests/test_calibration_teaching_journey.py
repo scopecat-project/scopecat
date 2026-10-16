@@ -375,7 +375,7 @@ assert report.items[2].selection.reason == "no_matching_evidence"
 
 @pytest.mark.parametrize("topic", ["calibration", "joint-calibration"])
 def test_managed_calibration_shipped_kernel(
-    tmp_path, monkeypatch, topic, author_kernel_python
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic, author_kernel_python: Path
 ):
     import json
 

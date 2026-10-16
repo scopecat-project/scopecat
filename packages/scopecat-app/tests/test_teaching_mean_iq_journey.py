@@ -25,7 +25,7 @@ type MeanIQ = Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]
 
 
 def test_teaching_can_record_mean_iq_without_losing_old_shots(
-    tmp_path: Path, notebook_imports
+    tmp_path: Path, notebook_imports: pytest.MonkeyPatch
 ):
     root = tmp_path / "mean-iq"
     create_project(root)
@@ -89,7 +89,9 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
             values = mean.measurements()["iq"]
             assert values.dtype == "complex128"
             assert values.unit == "ratio"
-            np.testing.assert_allclose(values.require_values(), shots.mean(axis=1))
+            np.testing.assert_allclose(
+                np.asarray(values.require_values()), shots.mean(axis=1)
+            )
             rows = mean.result().rows_as(TeachingRow[MeanIQ])
             np.testing.assert_allclose([row.iq for row in rows], shots.mean(axis=1))
             assert all(row.amplitude.unit == "arb" for row in rows)
@@ -119,7 +121,12 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
 
 
 @pytest.mark.parametrize("topic", ["refresh", "compute", None])
-def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, topic):
+def test_shipped_editing_lessons(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    notebook_imports: pytest.MonkeyPatch,
+    topic,
+):
     from nbclient import NotebookClient
     from nbformat import read, v4, write
     from testing.app_support.verify_editing import (
@@ -198,14 +205,14 @@ def test_shipped_editing_lessons(tmp_path: Path, monkeypatch, notebook_imports, 
             write(document, root / f"notebooks/verified-{name}.ipynb")
             stop_project(project)
 
-    if topic is None:
-        from testing.app_support.verify_groups import (
-            ADD_ANALYSIS,
-            GROUP_CHECKS,
-            GROUP_REOPEN_CELLS,
-        )
-        from testing.app_support.verify_groups import lesson_path as groups_path
+    from testing.app_support.verify_groups import (
+        ADD_ANALYSIS,
+        GROUP_CHECKS,
+        GROUP_REOPEN_CELLS,
+    )
+    from testing.app_support.verify_groups import lesson_path as groups_path
 
+    if topic is None:
         groups = read(groups_path(root), as_version=4)
         groups.cells.append(v4.new_code_cell(GROUP_CHECKS))
         execute("groups", groups)

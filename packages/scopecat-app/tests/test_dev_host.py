@@ -13,9 +13,12 @@ import pytest
 from scripts import dev
 from scripts.app_build import dev_host, dev_host_windows
 
+type HostInputs = tuple[Path, Path, Path, Path, Path]
+type HostBuild = tuple[Path, list[list[str]]]
+
 
 @pytest.fixture
-def inputs(tmp_path, monkeypatch):
+def inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> HostInputs:
     source = tmp_path / "checkout"
     source.mkdir()
     python = source / ".venv/bin/python"
@@ -41,7 +44,7 @@ def inputs(tmp_path, monkeypatch):
     return source, python, library, module, icon
 
 
-def test_host_identity_ignores_regular_source_and_gui_edits(inputs):
+def test_host_identity_ignores_regular_source_and_gui_edits(inputs: HostInputs):
     source, *_ = inputs
     first = dev_host.host_identity(source)
     (source / "app.py").write_text("changed source")
@@ -53,7 +56,9 @@ def test_host_identity_ignores_regular_source_and_gui_edits(inputs):
     "changed",
     ["python", "library", "icon", "launcher", "builder", "venv", "abi", "checkout"],
 )
-def test_host_inputs_invalidate_cache(inputs, monkeypatch, changed):
+def test_host_inputs_invalidate_cache(
+    inputs: HostInputs, monkeypatch: pytest.MonkeyPatch, changed: str
+):
     source, python, library, module, icon = inputs
     first = dev_host.host_identity(source)
     paths = {
@@ -75,7 +80,7 @@ def test_host_inputs_invalidate_cache(inputs, monkeypatch, changed):
     assert dev_host.host_identity(source) != first
 
 
-def test_interpreter_symlink_path_is_not_resolved_away(inputs):
+def test_interpreter_symlink_path_is_not_resolved_away(inputs: HostInputs):
     source, python, *_ = inputs
     actual = python.parent / "actual-python"
     python.rename(actual)
@@ -86,15 +91,17 @@ def test_interpreter_symlink_path_is_not_resolved_away(inputs):
 
 
 @pytest.fixture
-def builder(inputs, tmp_path, monkeypatch):
+def builder(
+    inputs: HostInputs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> HostBuild:
     source, *_ = inputs
-    commands = []
+    commands: list[list[str]] = []
     monkeypatch.setattr(
         dev_host, "development_home", lambda _source: tmp_path / "worktree-id"
     )
     monkeypatch.setattr(dev_host, "check_interpreter", Mock())
 
-    def run(command, **_kwargs):
+    def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
         commands.append(command)
         if command[0] == "/usr/bin/clang":
             Path(command[-1]).write_bytes(b"Mach-O fixture")
@@ -112,7 +119,7 @@ def builder(inputs, tmp_path, monkeypatch):
     return source, commands
 
 
-def test_build_is_thin_seals_icon_and_reuses_without_recompile(builder):
+def test_build_is_thin_seals_icon_and_reuses_without_recompile(builder: HostBuild):
     source, commands = builder
     executable = dev_host.build_host(source)
     assert dev_host.build_host(source) == executable
@@ -128,7 +135,7 @@ def test_build_is_thin_seals_icon_and_reuses_without_recompile(builder):
     assert not (app / "Contents/Resources/python").exists()
 
 
-def test_changed_cache_is_rejected_without_overwrite(builder):
+def test_changed_cache_is_rejected_without_overwrite(builder: HostBuild):
     source, _ = builder
     executable = dev_host.build_host(source)
     executable.write_bytes(b"changed")
@@ -137,7 +144,9 @@ def test_changed_cache_is_rejected_without_overwrite(builder):
     assert executable.read_bytes() == b"changed"
 
 
-def test_rebuild_retains_previous_host_and_worktree_identity(builder, inputs):
+def test_rebuild_retains_previous_host_and_worktree_identity(
+    builder: HostBuild, inputs: HostInputs
+):
     source, _ = builder
     first = dev_host.build_host(source)
     inputs[-1].write_bytes(b"icon")  # Same content keeps the cached host.
@@ -151,7 +160,9 @@ def test_rebuild_retains_previous_host_and_worktree_identity(builder, inputs):
     assert one["CFBundleIdentifier"] == two["CFBundleIdentifier"]
 
 
-def test_probe_rejects_escape_from_venv(inputs, monkeypatch):
+def test_probe_rejects_escape_from_venv(
+    inputs: HostInputs, monkeypatch: pytest.MonkeyPatch
+):
     source, *_ = inputs
     identity = dev_host.host_identity(source)
     monkeypatch.setattr(
@@ -169,7 +180,9 @@ def test_probe_rejects_escape_from_venv(inputs, monkeypatch):
         dev_host.check_interpreter(Path("host"), identity)
 
 
-def test_exec_preserves_process_terminal_and_passes_one_home(inputs, monkeypatch):
+def test_exec_preserves_process_terminal_and_passes_one_home(
+    inputs: HostInputs, monkeypatch: pytest.MonkeyPatch
+):
     source, python, *_ = inputs
     executable = source / "host/Scopecat Dev.app/Contents/MacOS/scopecat-dev"
     monkeypatch.delenv(dev_host.MARKER, raising=False)
@@ -216,7 +229,7 @@ def test_exec_preserves_process_terminal_and_passes_one_home(inputs, monkeypatch
     ],
 )
 def test_entry_selects_host_before_application_owner(
-    tmp_path, monkeypatch, platform, browser, host_calls
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform, browser, host_calls
 ):
     events = []
     monkeypatch.setattr(dev.sys, "platform", platform)
@@ -236,7 +249,9 @@ def test_entry_selects_host_before_application_owner(
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS compiled source host")
-def test_compiled_mac_host_loads_relocated_entries(tmp_path, monkeypatch):
+def test_compiled_mac_host_loads_relocated_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     source = Path(__file__).resolve().parents[3]
     monkeypatch.setattr(dev_host, "development_home", lambda _: tmp_path / "cache")
     executable = dev_host.build_host(source)
@@ -260,7 +275,7 @@ def test_compiled_mac_host_loads_relocated_entries(tmp_path, monkeypatch):
 
 
 def test_windows_reentry_selects_source_cwd_before_loading_repository_module(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     source = tmp_path / "checkout"
     home = tmp_path / "retained-home"

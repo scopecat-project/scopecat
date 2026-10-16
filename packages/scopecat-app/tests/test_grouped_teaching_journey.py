@@ -19,7 +19,12 @@ from scopecat_server.lifecycle import start_project, stop_project
 
 
 @pytest.mark.parametrize("topic", ["groups", None])
-def test_grouped_teaching_restart(tmp_path: Path, monkeypatch, notebook_imports, topic):
+def test_grouped_teaching_restart(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    notebook_imports: pytest.MonkeyPatch,
+    topic,
+):
     root = create_project(tmp_path / "分组 教材", topic=topic).parent
     path = lesson_path(root)
     material = (

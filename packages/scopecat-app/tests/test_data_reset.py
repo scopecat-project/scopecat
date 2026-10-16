@@ -5,6 +5,8 @@ import os
 import shutil
 import sqlite3
 import threading
+from collections.abc import Callable, Iterator
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, create_autospec
 
@@ -26,9 +28,11 @@ from scopecat_app.desktop_session import DesktopSession
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.schema import PROJECT_SCHEMA_VERSION
 
+type Legacy = tuple[ApplicationRuntime, UnsupportedDataSpace, Callable[[], None], Path]
+
 
 @pytest.fixture
-def legacy(tmp_path, request):
+def legacy(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[Legacy]:
     gui = tmp_path / "gui"
     gui.mkdir()
     (gui / "index.html").write_text("<html>empty application</html>")
@@ -103,7 +107,7 @@ def assert_empty(runtime):
 
 
 @pytest.mark.parametrize("backup_first", [True, False])
-def test_host_confirm_reset_and_restart(legacy, backup_first):
+def test_host_confirm_reset_and_restart(legacy: Legacy, backup_first):
     runtime, _, prepare, backup = legacy
     home = runtime.home
     data = runtime.instance.runtime_binding.data_root
@@ -168,7 +172,7 @@ def test_host_confirm_reset_and_restart(legacy, backup_first):
         "inside-backup",
     ],
 )
-def test_refusal_preserves_database(legacy, unsafe):
+def test_refusal_preserves_database(legacy: Legacy, unsafe):
     runtime, error, prepare, backup = legacy
     data = runtime.instance.runtime_binding.data_root
     original = (data / "control.sqlite3").read_bytes()
@@ -216,7 +220,9 @@ def test_refusal_preserves_database(legacy, unsafe):
         (runtime.root / "scopecat.runtime.toml").unlink(missing_ok=True)
 
 
-def test_backup_failure_never_falls_back_to_delete(legacy, monkeypatch):
+def test_backup_failure_never_falls_back_to_delete(
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch
+):
     runtime, error, prepare, backup = legacy
     db = runtime.instance.runtime_binding.data_root / "control.sqlite3"
     before = db.read_bytes()
@@ -231,7 +237,7 @@ def test_backup_failure_never_falls_back_to_delete(legacy, monkeypatch):
 
 
 def test_interrupted_delete_requires_confirmation_and_verified_backup(
-    legacy, monkeypatch
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch
 ):
     runtime, error, prepare, backup = legacy
     from pathlib import Path
@@ -262,7 +268,7 @@ def test_other_errors_do_not_offer_reset():
     )
 
 
-def test_folder_cancel_does_not_delete_or_remember_skip(legacy):
+def test_folder_cancel_does_not_delete_or_remember_skip(legacy: Legacy):
     runtime, _, prepare, _ = legacy
     session = DesktopSession(runtime, threading.Event())
     session.prepare_reset = prepare
@@ -283,7 +289,9 @@ def test_folder_cancel_does_not_delete_or_remember_skip(legacy):
 
 
 @pytest.mark.parametrize("cancel", [True, False])
-def test_host_uses_pinned_folder_dialog_contract(legacy, monkeypatch, cancel):
+def test_host_uses_pinned_folder_dialog_contract(
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, cancel
+):
     """Exercise pywebview's real adapter; only its OS GUI backend is substituted."""
     runtime, _, prepare, backup = legacy
     settings = runtime.home / "desktop/reset-backup.json"
@@ -325,7 +333,9 @@ def test_host_uses_pinned_folder_dialog_contract(legacy, monkeypatch, cancel):
 
 
 @pytest.mark.parametrize("damage", ["archive", "new-object"])
-def test_resume_refuses_unbacked_or_corrupt_content(legacy, monkeypatch, damage):
+def test_resume_refuses_unbacked_or_corrupt_content(
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, damage
+):
     from pathlib import Path
 
     runtime, error, prepare, backup = legacy
@@ -357,7 +367,9 @@ def test_resume_refuses_unbacked_or_corrupt_content(legacy, monkeypatch, damage)
     ).read_bytes() == before
 
 
-def test_inventory_error_prevents_backup_and_deletion(legacy, monkeypatch):
+def test_inventory_error_prevents_backup_and_deletion(
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch
+):
     runtime, error, prepare, backup = legacy
     walk = data_reset.os.walk
 
@@ -378,7 +390,9 @@ def test_inventory_error_prevents_backup_and_deletion(legacy, monkeypatch):
     assert not list(backup.iterdir())
 
 
-def test_initialization_failure_has_separate_retry_phase(legacy, monkeypatch):
+def test_initialization_failure_has_separate_retry_phase(
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch
+):
     from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
     runtime, error, prepare, backup = legacy
@@ -395,7 +409,7 @@ def test_initialization_failure_has_separate_retry_phase(legacy, monkeypatch):
 
 
 @pytest.mark.parametrize("backup_first", [True, False])
-def test_sqlite_writer_blocks_backup_and_skip(legacy, backup_first):
+def test_sqlite_writer_blocks_backup_and_skip(legacy: Legacy, backup_first):
     runtime, error, prepare, backup = legacy
     database = runtime.instance.runtime_binding.data_root / "control.sqlite3"
     with sqlite3.connect(database, isolation_level=None) as writer:
@@ -414,7 +428,7 @@ def test_sqlite_writer_blocks_backup_and_skip(legacy, backup_first):
 
 
 @pytest.mark.parametrize("legacy", ["application"], indirect=True)
-def test_new_layout_reset_keeps_registrations_and_environments(legacy):
+def test_new_layout_reset_keeps_registrations_and_environments(legacy: Legacy):
     runtime, failure, prepare, backup = legacy
     record = reset_store(runtime, failure, prepare, backup)
     assert record.data_root == runtime.home / "data"
@@ -424,7 +438,7 @@ def test_new_layout_reset_keeps_registrations_and_environments(legacy):
 
 
 def test_reset_backup_preserves_recoverable_wal_without_reading_locked_index(
-    legacy, monkeypatch, tmp_path
+    legacy: Legacy, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     runtime, failure, prepare, backup = legacy
     data = runtime.instance.runtime_binding.data_root

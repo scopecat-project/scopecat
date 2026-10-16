@@ -44,7 +44,9 @@ def test_unclassified_files_require_a_decision(tmp_path: Path, suite: str) -> No
         ("assert False", 1),
     ],
 )
-def test_platform_smoke_requires_actual_passes(tmp_path, monkeypatch, body, expected):
+def test_platform_smoke_requires_actual_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, expected: int
+):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from scripts import platform_smoke
 

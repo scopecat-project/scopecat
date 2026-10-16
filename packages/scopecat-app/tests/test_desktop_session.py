@@ -1,6 +1,7 @@
 """Native close keeps failure recovery in the same window, without a manager."""
 
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -52,7 +53,9 @@ def test_file_work_allows_other_windows_and_participates_in_quit(stop):
     assert not worker.is_alive()
 
 
-def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
+def test_native_windows_share_backend_and_keep_navigation(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from webview.event import Event
 
     created = []
@@ -75,6 +78,7 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     session = DesktopSession(runtime, threading.Event())
     windows = DesktopWindows(session, prepare)
     first = windows.create()
+    assert isinstance(first.window, Mock)
     first.api.retry()
     first.window.run_js.assert_called_once_with(
         'window.location.replace("http://localhost:1234");'
@@ -84,6 +88,7 @@ def test_native_windows_share_backend_and_keep_navigation(monkeypatch):
     first.api.open_run_window("B &?#/结果")
     second = windows.latest
     assert second is not first
+    assert isinstance(second.window, Mock)
     assert (
         created[1][1]["url"]
         == "http://localhost:1234/?run=B+%26%3F%23%2F%E7%BB%93%E6%9E%9C"
@@ -196,13 +201,20 @@ def test_two_windows_share_quit_decision_and_operation_lock():
     with pytest.raises(ValueError, match="正在关闭"):
         first_api.restart()
     runtime.stop.assert_called_once()
-    session.finish_exit(lambda: (first.destroy(), second.destroy()))
+
+    def destroy_windows() -> None:
+        first.destroy()
+        second.destroy()
+
+    session.finish_exit(destroy_windows)
     first.destroy.assert_called_once()
     second.destroy.assert_called_once()
 
 
 @pytest.mark.parametrize("platform", ["darwin", "win32"])
-def test_window_close_hides_without_requesting_quit(platform, monkeypatch):
+def test_window_close_hides_without_requesting_quit(
+    platform, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr("scopecat_app.desktop.sys.platform", platform)
     window = Mock()
     if platform == "darwin":
@@ -220,7 +232,7 @@ def test_window_close_hides_without_requesting_quit(platform, monkeypatch):
     assert close() is True
 
 
-def test_new_source_preserves_existing_files(tmp_path):
+def test_new_source_preserves_existing_files(tmp_path: Path):
     source = tmp_path / "experiments"
     source.mkdir()
     notes = source / "notes.txt"
@@ -234,7 +246,7 @@ def test_new_source_preserves_existing_files(tmp_path):
 
 
 def test_busy_source_creation_retains_folder_without_interrupting_work(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(
         "scopecat_app.author_environment.create_client_environment", lambda *_: None
@@ -256,7 +268,7 @@ def test_busy_source_creation_retains_folder_without_interrupting_work(
 
 
 @pytest.mark.parametrize("name", ["../outside", "..", "C:outside", "nested\\folder"])
-def test_new_source_name_cannot_escape_selected_parent(tmp_path, name):
+def test_new_source_name_cannot_escape_selected_parent(tmp_path: Path, name):
     api = DesktopAPI(DesktopSession(Mock(), threading.Event()), Mock())
     with pytest.raises(ValueError, match="单个新目录"):
         api.create_source(str(tmp_path), name)
@@ -273,7 +285,7 @@ def test_folder_picker_cancellation_does_not_change_runtime():
 
 
 def test_registration_validates_selected_folder_before_preparing_dependencies(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     from scopecat_server.scaffold import write_author_scaffold
 
