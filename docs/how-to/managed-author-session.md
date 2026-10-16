@@ -203,9 +203,10 @@ editor or point-selection UI.
 
 An imported declaration retains its source identity from load time. Preparation
 compares that contract with the selected revision and rejects a mismatch. After
-editing a declaration, explicitly refresh the session and reload the notebook's
-experiment module, or select the original revision. Helpers execute from the
-selected managed revision; importing a request does not pin notebook helper
+editing a declaration in an explicit `project.authoring()` session, refresh and
+repeat its ordinary import before constructing a new request, or select the original
+revision. With `sc.notebook()`, new requests select saved source automatically as
+explained below. Helpers execute from the selected managed revision; importing a request does not pin notebook helper
 objects or claim to fingerprint their transitive dependencies.
 
 Calling `experiment(...)` creates an editable request without executing its body.
@@ -322,14 +323,28 @@ the job and its receipt when continuing an interrupted notebook cell.
 
 `author.state()` shows the active revision. `author.refresh()` explicitly
 validates current source and selects it for future prepares. It hides the normal
-generation bookkeeping while preserving concurrent-update conflicts. Source edits
-are not automatically selected. Existing previews and runs keep their code.
+generation bookkeeping while preserving concurrent-update conflicts. In an explicit
+`project.authoring()` session, saving edits alone does not select them.
+
+For Notebook/IPython, `author = sc.notebook()` defaults to selecting saved source
+before each cell and when creating new requests. Both normal import styles work;
+new modules become available in the next cell. Existing requests, prepared
+experiments and runs keep their original source. Arbitrary Python objects and
+helper aliases are not hot-reloaded. See the
+[source selection guide](refresh-author-code.md#notebook-path) for the
+`live=False` option and the boundary with explicit refresh.
 
 For deliberate old-code selection, retain `checked.preview.code_revision` and use
 `author.prepare(..., code_revision=old_revision)`. The catalog is loaded from that
 same revision. Saved experiment plans also retain exact code/configuration.
-Registered analysis still uses `author.analyze(..., code_revision=...)`; ordinary
-analysis-function convenience belongs to the next implementation slice.
+Ordinary analysis is available through `author.analyze_as(run_id, "module:function",
+ResultType, arguments={...})`. It uses the run's original source by default;
+`source="current"` explicitly selects the session's current source. Read a saved
+publication without executing again via
+`author.run(run_id).published_analysis(publication_id).result_as(ResultType)`.
+The lower-level `author.analyze(..., code_revision=...)` supports exact revision
+selection. See [ordinary analysis](../guides/ordinary-analysis.md) for the supported
+arguments and publication contract.
 
 
 ### Return a typed point coordinate

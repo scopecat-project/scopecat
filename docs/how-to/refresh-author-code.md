@@ -16,12 +16,15 @@ revisions. In a copy of that project, edit `src/ui_signal`, then choose **Refres
 before publishing it. Preview the updated controls and submit normally. The
 instrument service stays running; admitted procedures retain their original code.
 A helper-only change retains your control edits and scan while invalidating the
-preview. Changed control declarations restore their defaults and retain named
-form inputs for review; check the new controls before previewing again.
+preview. Changed declarations preserve saved edits for review; new fields receive
+current defaults and removed fields remain unresolved until explicitly removed.
+Check the recovered inputs before preparing again; see
+[launch input recovery](declare-experiment-controls.md#keep-a-launch-draft-while-inspecting-the-project).
 
 A syntax or import failure displays its file and traceback. The previous catalog
-remains usable. Fix the file and refresh again. Refresh is explicit: saving a file
-alone never changes the active definitions. Refresh checks source imports and
+remains usable. Fix the file and refresh again. In the GUI and explicit author
+sessions, refresh is explicit: saving a file alone does not select new definitions. `sc.notebook()` instead selects saved source
+before each cell by default, as described below. Refresh checks source imports and
 declaration contracts without running experiment bodies. Preview checks the
 program built for the selected inputs; a successful refresh alone is not a
 validation of all structural choices. Concurrent refreshes compare the
@@ -29,7 +32,23 @@ observed generation; a losing refresh must inspect the new state before retrying
 
 ## Notebook path
 
-Use the revision-aware connection when editing author files during a session:
+With `session = sc.notebook()`, the default `live=True` selects saved author source
+before each cell and checks it again when creating a new experiment request.
+Both `from module import experiment` and `import module as experiments` work:
+new requests select the current declaration, and top-level module aliases are
+rebound. Newly saved modules are available in the next cell. A source validation
+failure blocks new requests until fixed; history and repair cells remain usable.
+`sc.notebook(live=False)` disables automatic selection of subsequent saved edits.
+
+Existing requests, prepared experiments, result instances and historical sources
+remain fixed. This is not a reload of every Python object: helper aliases and
+arbitrary kernel state are not automatically updated. Installed dependency changes
+still require an appropriate environment and a kernel restart.
+
+## Explicit author sessions
+
+For scripts or controlled source selection with `project.authoring()`, use the
+revision-aware connection and explicitly refresh after editing author files:
 
 ```python
 import scopecat as sc
@@ -135,10 +154,13 @@ with project.connect() as lab, project.authoring() as authors:
 This executes only analysis over retained data. Its publication records the
 complete source revision as `author_code_revision`, in addition to the existing
 analysis trace. Choosing the refreshed revision explicitly produces a separate
-analysis using the new helper and analysis definitions. This endpoint supports
-existing analysis declarations with default arguments; parameterized analysis
-continues to use the ordinary Python analysis API in a deliberately selected
-process.
+analysis using the new helper and analysis definitions. Both ordinary functions
+and `@sc.analysis_step` declarations accept managed `arguments`, validated against
+the selected source's annotations and defaults. For ordinary typed conclusions,
+`authors.analyze_as(...)` defaults to the run's original source and supports
+`source="current"` for the selected current source. See
+[ordinary analysis](../guides/ordinary-analysis.md) for supported argument types
+and read-only reopening of saved publications.
 
 `project.connect()` keeps the existing single-code-root process contract.
 Use `project.authoring()` and explicit typed rebinding for author edits; use a fresh
@@ -148,7 +170,8 @@ not a claim of complete helper provenance.
 
 ## Declare simple form inputs
 
-Ordinary Python parameters with defaults become form fields alongside controls.
+Supported ordinary Python parameters become form fields alongside controls,
+with or without defaults.
 For example, the fixture’s `signal` experiment declares
 `polarity: Literal["positive", "negative"] = "positive"`. Select its polarity in
 Experiments, or pass `inputs={"polarity": "negative"}` to `authors.prepare()`.
@@ -158,10 +181,13 @@ in the admitted intent; a later refresh cannot replace those arguments or the
 original implementation.
 
 Use `str`, `int`, `float`, `bool`, or `Literal` choices of one scalar type for
-these structural inputs. Discovery requires defaults and rejects nullable unions,
-containers and other complex objects with a named error; maintainers can compose
-those through the existing Python API. Values for controlled inputs belong in
-`control_edits`, not `inputs`. Fixed and scanned controls keep their units, bounds
+these structural inputs. A parameter without a default becomes a required field;
+discovery does not build the experiment or require a fake default. Supply the value
+in `inputs` before preparation (or in the typed experiment call when creating a
+request). Missing or invalid values fail validation before the program is built.
+Discovery rejects nullable unions, containers and other complex objects with a
+named error; maintainers can compose those through the existing Python API.
+Values for controlled inputs belong in `control_edits`, not `inputs`. Fixed and scanned controls keep their units, bounds
 and existing compiler validation. There is no second per-experiment parser or
 catalog to update when an ordinary author changes a supported parameter.
 
