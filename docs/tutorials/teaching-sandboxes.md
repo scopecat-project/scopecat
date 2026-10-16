@@ -93,11 +93,15 @@ For **Parameters and scans**, run the shipped cells in order: connect with `sc.n
 independent parameter branch, preview seven points, then explicitly acquire
 64 shots per point. The separate result cell only reads the retained run and
 links to it in this application; you can repeat that cell without acquiring again.
-Save a change from `shots: int = 64` to `32` in `src/my_experiment/teaching.py`,
-then reconstruct the request and run it: the new result has seven points and
-32 shots, while the old result retains its original source and 64 shots.
-Change the scan to five points and update its preview assertion for a five-point
-result. Already prepared requests retain their original code.
+Set `request.values["shots"] = 32`, then prepare that request again with
+`prepared = session.prepare(request, parameters=params)` before explicitly running
+the acquisition cell. The new result has seven points and 32 shots; the old result
+retains 64 shots. No source edit or refresh is needed to change this input.
+For five points, set `request.values["amplitude"] = sc.Scan(np.linspace(0, 0.8, 5))`,
+prepare again and check that preview before explicitly acquiring. Editing the default in `src/my_experiment/teaching.py` is a separate source
+authoring exercise: save it and construct a new request to use that default.
+Existing requests and prepared experiments keep their original source; editing a
+request does not change an already prepared experiment.
 
 **Continue parameters Notebook** opens the same files and environment. Reconnect
 and reopen parameters, or use **Runs** to read previous results.

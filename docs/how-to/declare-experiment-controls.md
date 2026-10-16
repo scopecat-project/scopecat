@@ -98,12 +98,18 @@ previewing an experiment.
 
 ## Keep a launch draft while inspecting the project
 
-The console retains the selected experiment, input fields, control sources and
-units, sample, and operator when navigating to configuration, instruments, or
-results and back. This draft belongs to the daemon's project identity and lasts
-only while that console session is open; reloading the page clears it. **Reset
-launch draft** restores the selected declaration's defaults. Neither navigation
-nor restoration previews or submits work automatically.
+Experiment inputs belong to the registered author workspace and experiment in
+application data. Confirmed saved fields, control sources and units, scientific
+selection and operator survive navigation, page reload and application restart.
+Intermediate invalid text is retained too; saving input does not validate it.
+Wait for the saved status before closing: unconfirmed or failed saves cannot be
+promised recoverable after process loss. Keep the window open and retry a failed save.
+
+Changed declarations preserve edits for review. New fields receive current defaults;
+removed or no-longer-editable fields remain unresolved until explicitly removed.
+**Reset launch draft** saves a new revision with the declaration's defaults;
+earlier versions and conflict copies remain in input history. Restored input needs
+review and fresh preparation; restoration never restores permission to execute.
 
 Input edits, changed declarations, and changed parameter/setup revisions
 invalidate the preview. A temporary failure to read configuration blocks
