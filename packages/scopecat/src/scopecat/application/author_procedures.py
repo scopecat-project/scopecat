@@ -137,7 +137,11 @@ class AuthorProcedure:
         return self.session.procedure_progress(self.id)
 
     def wait(self, *, timeout: float = 60, interval: float = 0.2) -> ProcedureRun:
-        """Observe until closed, waiting for input or requiring attention.
+        """Observe until closed, ready for input or requiring attention.
+
+        Input is handed back only after its worker exits, so an immediate answer
+        and resume do not race that worker. Concurrent answers remain observable;
+        this read does not reserve input or authorize dispatch.
 
         A failed scientific decision is a retained closure, not a client exception.
         Timeout only stops waiting; it neither cancels nor retries the procedure.
@@ -158,12 +162,20 @@ class AuthorProcedure:
                 snapshot = self.session.get_procedure(
                     self.id, timeout=max(0.001, deadline - time.monotonic())
                 )
+                worker_running = False
+                if snapshot.state == "waiting_for_input":
+                    view = self.session.procedure_progress(
+                        self.id, timeout=max(0.001, deadline - time.monotonic())
+                    )
+                    snapshot = view.procedure
+                    worker_running = view.dispatch.worker_running
             except httpx2.TimeoutException as error:
                 raise TimeoutError("Wait ended; procedure was not cancelled") from error
-            if snapshot.closure is not None or snapshot.state in {
-                "waiting_for_input",
-                "attention_required",
-            }:
+            if (
+                snapshot.closure is not None
+                or snapshot.state == "attention_required"
+                or (snapshot.state == "waiting_for_input" and not worker_running)
+            ):
                 return snapshot
             remaining = deadline - time.monotonic()
             if remaining <= 0:

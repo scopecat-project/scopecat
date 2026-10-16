@@ -820,13 +820,18 @@ class DaemonClient:
         )
 
     def procedure_progress(
-        self, procedure_run_id: str, *, cursor: int | None = None
+        self,
+        procedure_run_id: str,
+        *,
+        cursor: int | None = None,
+        timeout: float | None = None,
     ) -> ProcedureOperatorView:
         """Read exact active effects plus one bounded history page."""
         return self._get_model(
             self._procedure_path(procedure_run_id, "operator"),
             ProcedureOperatorView,
             params={} if cursor is None else {"cursor": cursor},
+            timeout=timeout,
         )
 
     def get_procedure(
