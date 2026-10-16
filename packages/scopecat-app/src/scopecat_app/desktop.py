@@ -411,6 +411,33 @@ class DesktopAPI:
             self._window(), (self._session.page_url or record.base_url) + location
         )
 
+    def upgrade_data(self) -> bool:
+        """Upgrade only the confirmed stopped format, then retry normal startup."""
+        from .data_reset import upgrade_store
+
+        with self._session.operation():
+            failure = self._unsupported
+            if failure is None or self._session.base_url is not None:
+                raise ValueError("只有格式升级恢复页可以执行此操作")
+            if not self._window().create_confirmation_dialog(
+                "备份并升级应用数据？",
+                "将数据库备份到数据目录的 upgrade-backups，再原地升级。\n"
+                "旧实验和分析保留；旧分析用于受管候选时需重新分析。\n"
+                "失败会回滚数据库；数据目录保持不变。继续？",
+            ):
+                return False
+            backup = upgrade_store(self._runtime, failure)
+            self._unsupported = None
+            notice = f"数据库恢复备份：{backup}" if backup else "此前升级已完成。"
+            self._window().load_html(
+                _page(
+                    "<h1>数据升级完成</h1><p>" + escape(notice) + "</p>"
+                    '<button onclick="retry()">重新打开应用</button>'
+                    '<button onclick="quit()">退出</button>'
+                )
+            )
+            return True
+
     def reset_data(self, skip_backup: bool = False) -> bool:
         """Confirmation belongs to the native host, not the unavailable backend."""
         with self._session.operation():
@@ -530,8 +557,16 @@ def _recovery(error: Exception, *, can_reset: bool = False) -> str:
         if isinstance(error, UnsupportedDataSpace) and can_reset
         else ""
     )
+    upgrade = (
+        "<p>可保留已有数据，备份数据库后原地升级。</p>"
+        '<button onclick="upgradeData()">备份并升级</button>'
+        if isinstance(error, UnsupportedDataSpace)
+        and (error.actual, error.expected) == (115, 116)
+        else ""
+    )
     return _page(
         "<h1>启动未完成</h1>"
+        + upgrade
         + reset
         + "<p>应用尚未准备就绪。可以重试，或停止本应用的后台后重新启动。"
         "如果仍无法完成，请将错误详情交给维护者。</p>"

@@ -560,6 +560,17 @@ class DaemonClient:
         )
         return AnalysisFollowView.model_validate_json(response.content)
 
+    def has_managed_analysis(
+        self, run_id: str, analysis_id: str, publication_hash: str
+    ) -> bool:
+        response = self._request(
+            "GET",
+            f"{_API_PREFIX}/runs/{quote(run_id, safe='')}/analyses/"
+            f"{quote(analysis_id, safe='')}/managed-source",
+            params={"publication_hash": publication_hash},
+        )
+        return response.json() is True
+
     def analyze_author_revision(
         self, request: AuthorAnalysisRequest
     ) -> AuthorAnalysisReceipt:

@@ -173,8 +173,7 @@ remote client/server environment.
 
 The current schema is a development format rather than a compatibility
 baseline. [Backup and restore](../how-to/backup-and-restore.md) supports the current
-format only. Earlier formats are rejected without mutation; use fresh state for
-new development and keep original files separately. See the
+format only. 仅 schema 115 可通过启动恢复页明确备份并原地升级至 116；其他早期格式仍拒绝打开且不修改原件。 See the
 [data compatibility policy](../development/data-compatibility.md).
 
 ### Register another author workspace

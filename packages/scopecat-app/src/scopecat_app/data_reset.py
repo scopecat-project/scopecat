@@ -463,3 +463,27 @@ def reset_store(
     # Release ownership before native preparation constructs its own runtime lock.
     prepare()
     return runtime.start()
+
+
+def upgrade_store(
+    runtime: ApplicationRuntime, expected: UnsupportedDataSpace
+) -> Path | None:
+    """Explicit in-place upgrade, sharing the host's existing ownership fences."""
+    from scopecat_server.storage.sqlite.upgrade_115 import upgrade_115
+
+    if expected.home != runtime.home or (expected.actual, expected.expected) != (
+        115,
+        116,
+    ):
+        raise ValueError("仅支持已确认的 115→116 升级")
+    with runtime.lock:
+        if (runtime.home / "data-reset.json").exists():
+            raise ValueError("数据删除尚未完成，无法升级")
+        with (
+            _store_ownership(runtime) as data,
+            _worker_ownership(runtime.instance.runtime_binding.coordination_root),
+        ):
+            _require_quiet(runtime)
+            database = managed_path(data, data / "control.sqlite3")
+            backups = managed_path(data, data / "upgrade-backups")
+            return upgrade_115(database, backups)

@@ -473,3 +473,44 @@ def test_reset_backup_preserves_recoverable_wal_without_reading_locked_index(
             ("old result",)
         ]
     connection.close()
+
+
+def test_host_upgrade_confirm_ownership_and_same_directory(legacy: Legacy) -> None:
+    from scopecat_server.storage.sqlite.schema import PROJECT_SCHEMA_SQL
+
+    runtime, failure, _, _ = legacy
+    data = runtime.instance.runtime_binding.data_root
+    database = data / "control.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("DROP TABLE project_schema")
+        connection.execute("DROP TABLE old_science")
+        connection.executescript(PROJECT_SCHEMA_SQL)
+        connection.execute("DROP TABLE managed_analysis_publications")
+        connection.execute("UPDATE project_schema SET version=115")
+    before = {
+        path: path.read_bytes()
+        for path in (data / "objects").rglob("*")
+        if path.is_file()
+    }
+    session = DesktopSession(runtime, threading.Event())
+    window = create_autospec(webview.Window, instance=True)
+    api = DesktopAPI(session, lambda: window, lambda: check_format(runtime))
+    with pytest.raises(UnsupportedDataSpace):
+        api.retry()
+    assert 'onclick="upgradeData()"' in window.load_html.call_args.args[0]
+    window.create_confirmation_dialog.return_value = False
+    assert not api.upgrade_data()
+    assert not (data / "upgrade-backups").exists()
+    with (
+        FileLock(runtime.instance.runtime_binding.deployment_root / "deployment.lock"),
+        pytest.raises(ValueError, match="后台"),
+    ):
+        data_reset.upgrade_store(runtime, failure)
+    window.create_confirmation_dialog.return_value = True
+    assert api.upgrade_data()
+    check_format(runtime)
+    assert runtime.instance.runtime_binding.data_root == data
+    assert all(path.read_bytes() == content for path, content in before.items())
+    assert len(list((data / "upgrade-backups").glob("*.sqlite3"))) == 1
+    assert "数据升级完成" in window.load_html.call_args.args[0]
+    assert runtime.status().state == "stopped"

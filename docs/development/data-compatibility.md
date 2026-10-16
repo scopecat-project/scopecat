@@ -1,7 +1,7 @@
 # Data formats before the compatibility baseline
 
 Scopecat has **no designated persistent-data compatibility baseline yet**. Current
-schema **115** is a development format identifier, not the start of a compatibility
+schema **116** is a development format identifier, not the start of a compatibility
 promise. The target, setup, calibration and application ownership models must
 settle before a supported baseline is explicitly designated with its formats,
 retained fixtures, supported operations and upgrade policy.
@@ -13,6 +13,14 @@ snapshot, plan, source manifest or codec. A successful historical test does not
 turn that format into a supported baseline.
 
 ## What remains supported now
+
+Schema 116 增加服务端受管分析与 publication 的绑定。仅支持显式的 115→116 升级：
+启动恢复页选择“备份并升级”，取得停写所有权后生成包含 WAL 提交的 SQLite 备份，
+在单事务内新增表和索引并更新版本。数据目录不变，失败回滚，外部 objects 不修改。
+旧结果仍可读取，不从旧 fact 补造来源；需要受管候选证据时重新分析。
+数据库恢复备份位于数据目录的 `upgrade-backups/`，仅对应升级时点，不替代完整 snapshot。
+这条升级边不承诺支持其他历史格式或重执行旧环境。
+
 
 Schema 115 将精确分析决策来源写入 procedure／子运行接纳记录，并增加按来源 publication
 查询后续运行的索引。来源参与幂等身份；当前格式备份保留正向引用与反向索引。
