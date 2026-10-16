@@ -93,3 +93,56 @@ try:
 finally:
     stop_project(project)
 """
+
+
+def test_shipped_procedure_notebook_in_independent_kernel(tmp_path: Path) -> None:
+    root = tmp_path / "procedure-kernel"
+    create_lesson_source(root, "procedure")
+    env = dict(os.environ)
+    env.pop("SCOPECAT_DAEMON_URL", None)
+    result = subprocess.run(  # noqa: S603 - fixed script and isolated generated source
+        [sys.executable, "-c", _KERNEL_JOURNEY, str(root)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+_KERNEL_JOURNEY = r"""
+import os
+import sys
+from pathlib import Path
+import nbformat
+from nbclient import NotebookClient
+import scopecat as sc
+from scopecat_app.notebook import kernel_command
+from scopecat_server.lifecycle import start_project, stop_project
+
+root = Path(sys.argv[1])
+# No source PYTHONPATH or injected author session: sc.notebook() owns imports.
+_, environment = kernel_command(root, source_path=False)
+os.environ["JUPYTER_PATH"] = environment["JUPYTER_PATH"]
+project = sc.open_project(root)
+document = nbformat.read(root / "notebooks/procedure.ipynb", as_version=4)
+document.cells.append(nbformat.v4.new_code_cell('''
+assert result.closure.status == "succeeded"
+assert task.output("scan").run_id == next(
+    item.run_id for item in pending.inputs if item.kind == "run"
+)
+assert task.snapshot.closure.status == "succeeded"
+session.close()
+'''))
+start_project(project, timeout=60)
+try:
+    NotebookClient(
+        document,
+        timeout=120,
+        kernel_name="scopecat-lab",
+        resources={"metadata": {"path": str(root / "notebooks")}},
+    ).execute()
+finally:
+    nbformat.write(document, root / "notebooks/verified-procedure.ipynb")
+    stop_project(project)
+"""

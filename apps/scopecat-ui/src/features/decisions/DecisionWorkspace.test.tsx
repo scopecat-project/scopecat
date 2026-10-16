@@ -67,6 +67,15 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("keeps decisions without analysis evidence full width", async () => {
+    renderWorkspace();
+    const field = await screen.findByLabelText("resonator");
+    const layout = field.closest("fieldset")!.parentElement!;
+    expect(layout).not.toHaveClass("xl:grid-cols-2");
+    expect(layout.children).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /readout-s21/ })).toBeInTheDocument();
+  });
+
   it("renders the shipped nullable peak schema and blocks invalid combinations before recording", async () => {
     const step = waitingStep();
     step.interpretation_request!.structure = {

@@ -238,6 +238,7 @@ function DecisionEditor({
   const request = step.interpretation_request;
   if (!request) throw new Error("waiting interpretation request is missing");
   const fields = decisionFields(request.structure);
+  const analysisInputs = step.inputs.filter((input) => input.kind === "analysis");
   const defaults = {
     actor: typeof request.metadata?.reviewer === "string" ? request.metadata.reviewer : "",
     actor_kind: "human" as const,
@@ -426,14 +427,16 @@ function DecisionEditor({
         </details>
       )}
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <div className="grid gap-3">
-          {step.inputs
-            .filter((input) => input.kind === "analysis")
-            .map((input) => (
+      <div
+        className={classes("grid items-start gap-4", analysisInputs.length > 0 && "xl:grid-cols-2")}
+      >
+        {analysisInputs.length > 0 && (
+          <div className="grid gap-3">
+            {analysisInputs.map((input) => (
               <DecisionEvidence key={JSON.stringify(input)} input={input} />
             ))}
-        </div>
+          </div>
+        )}
         <fieldset
           disabled={draft.discarding || submit.isPending || submit.isSuccess}
           className="grid min-w-0 gap-4"
