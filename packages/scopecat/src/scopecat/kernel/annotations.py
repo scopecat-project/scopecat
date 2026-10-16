@@ -13,7 +13,7 @@ from scopecat.kernel.value_types import Quantity as QuantityType
 
 @dataclass(frozen=True, slots=True)
 class Unit:
-    """An exact unit contract in ``Annotated``; it does not convert stored data."""
+    """A compute input target unit or an exact retained-result unit."""
 
     name: str
 

@@ -20,7 +20,14 @@ import scopecat as sc
 
 @sc.compute
 def mean_iq(
-    iq: NDArray[np.complex128],
+    iq: Annotated[
+        NDArray[np.complex128],
+        sc.ArrayType(
+            dtype="complex128",
+            unit="ratio",
+            dimensions=(sc.ArrayDimension("shot", None),),
+        ),
+    ],
 ) -> Annotated[complex, sc.Unit("ratio")]:
     return complex(iq.mean())
 
@@ -53,7 +60,9 @@ helpers inside that body should use their `.eager(...)` entry too.
 `sc.Unit("ratio")` supplements the native `complex` type; scalar shape and dtype
 are inferred. A shared alias such as `type IQ = Annotated[complex, sc.Unit("ratio")]`
 can be used both for the compute return and a native dataclass reader's field.
-Unit contracts check the exact retained unit; they do not silently convert data.
+Return annotations declare the stored unit; retained readers check that unit exactly.
+Compute input contracts normalize compatible units at the consumer boundary;
+they do not rewrite stored measurements.
 For real scalar computations with units, use `Annotated[sc.Quantity, sc.Unit("V")]`
 and return a `sc.Quantity`. A plain `float` still denotes a unitless computation.
 Array computations still need explicit `ArrayType` dimensions; a unit alone cannot
@@ -76,16 +85,41 @@ native argument checking. Symbolic argument names and required arguments are
 checked during graph construction; symbolic calls do not yet statically transform
 each native argument type into its corresponding reference type.
 
-普通 `Quantity` 参数会在构图时按字面量或引用的 schema 检查。例如，
-`response` 的参数声明为 `Quantity` 时，`response("wrong", center)` 会报出
-compute 和参数名。`ctx.compute` 也使用同一检查，不在此处转换单位或限定量纲。
-允许不同频率单位时，在原生函数内调用 `.to("MHz")`。
-测量标量传给原生类型声明为 `Quantity` 的参数时，包装边界会用数值及保留单位
-构造 Quantity。这也适用于 `Annotated[Quantity, Unit("kHz")]`、显式
-`ScalarType(QuantityType(unit="kHz"))` 契约及其类型别名。显式单位仍要求完全一致：
-kHz 输入不会自动转换以满足 MHz 注解；需要换算时在普通 Quantity 函数中显式转换。
-普通 `float` 参数仍接收测量原始数值；schema 中的 QuantityType 本身不会将原生
-float 参数改为 Quantity。其他普通 Python 参数注解尚未普遍支持构图时检查。
+compute 的单位由消费函数声明，不隐式继承调用它的实验。所有普通值、
+Input/ValueRef 和测量 ProductRef 在进入原生函数前遵循同一规则：
+
+- `x: Quantity` 保留输入单位；函数可显式调用 `x.to("MHz").value`。
+- `x: Annotated[Quantity, Unit("MHz")]` 将兼容输入归一化为 MHz，传入 Quantity。
+- `x: Annotated[float, Unit("MHz")]` 将兼容输入归一化为 MHz，传入 float。
+  也可用 `Annotated[float, ScalarType(QuantityType(unit="MHz"))]`。
+- 数组使用 `Annotated[NDArray[...], ArrayType(..., unit="MHz")]`，传入已换算的
+  NumPy 数组；dtype、shape、轴 id/kind/单位仍需匹配。元素单位换算不会改写坐标轴。
+
+```python
+@sc.compute
+def response(f: Annotated[float, sc.Unit("MHz")]) -> float:
+    return 1 / (1 + (f - 5.0) ** 2)
+```
+
+`response(Quantity(5, "MHz"))` 与 `response(Quantity(5000, "kHz"))` 在构图内
+产生相同结果，原生函数均收到 `5.0`。`ns` 不满足这个频率契约。
+显式 float／数组目标契约下的无单位数值按目标单位解释（例如 `f=5.0` 即 5 MHz）；
+这也适用于函数默认值。已有单位的输入必须兼容，不能重新贴标签。
+普通 float／数组参数（包括未声明单位的参数）现在拒绝带单位输入；错误指出
+compute 和参数名，并提示补充契约或显式转换取数。无单位数值仍可自然使用 float。
+原先先 `ctx.convert(ref, "MHz")` 再交给裸 float／数组的调用也需要补消费侧契约：
+convert 改变引用单位，不移除它。
+
+若要复用纯数值函数，可保留 `Quantity` 适配函数，在内部执行
+`core(f.to("MHz").value)`。数组可在带 ArrayType 单位契约的适配函数内调用纯 NumPy
+函数。不要逐元素包装 Quantity；Quantity 本身只支持单个实数。
+
+仅支持注册的兼容线性换算；同单位无需换算。不会推导 ADC 标定、阻抗、
+频率与角频率，或 offset/log 换算。整数数组仅在换算后仍为整数且不溢出时接受，
+否则报错；浮点换算溢出也会报错。原测量值、dtype、单位和轴身份保持不变。
+
+`.eager` 是普通 Python 原生入口，不经过符号构图的消费边界；直接调用时应提供
+函数声明单位下的原生值。其他普通 Python 参数注解尚未普遍支持构图时检查。
 
 `experiment.compute(fn=ordinary_function, ...)` remains available for explicit
 node IDs, output schemas, structured bundles and axis inheritance. When its

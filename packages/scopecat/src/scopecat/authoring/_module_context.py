@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass, replace
+from inspect import signature
 from typing import (
     Annotated,
     TypeAliasType,
@@ -14,6 +15,14 @@ from typing import (
     overload,
 )
 
+from scopecat.authoring._compute_contracts import (
+    ComputeInputAdapter,
+    adapt_compute_function,
+    bind_compute_inputs,
+    compute_input_data_type,
+    convert_array_unit,
+    validate_compute_annotation,
+)
 from scopecat.authoring._module_invocation import (
     DomainCallProvider,
     ModuleInvocation,
@@ -47,14 +56,8 @@ from scopecat.kernel.resource_identity import (
     normalize_resource_role,
 )
 from scopecat.kernel.units import compatible_units, is_linear_unit
-from scopecat.kernel.value_type_compatibility import (
-    describe_value_type,
-    is_assignable,
-    literal_scalar_type,
-)
 from scopecat.kernel.value_types import (
     Array,
-    ArrayDimension,
     Bool,
     Complex,
     DataType,
@@ -191,7 +194,7 @@ def _infer_compute_output_type(
         if unit is not None:
             return unit_scalar_type(native_type, unit)
         if declared is not None:
-            _validate_inferred_compute_annotation(native_type, declared)
+            validate_compute_annotation(native_type, declared)
             return declared
     if annotation is bool:
         return ScalarType(Bool())
@@ -208,191 +211,6 @@ def _infer_compute_output_type(
         "is bool, int, float, complex, str, or Annotated with ScalarType/ArrayType, or "
         "the function is decorated with ProductBundle.kernel"
     )
-
-
-def _validate_inferred_compute_annotation(
-    native_type: object,
-    declared: DataType,
-) -> None:
-    """Keep inferred native read types consistent with the declared wire schema."""
-    while isinstance(native_type, TypeAliasType):
-        native_type = cast("object", native_type.__value__)
-    if isinstance(declared, ScalarType):
-        if isinstance(declared.atom, Payload) and (
-            native_type is object or get_origin(native_type) in (dict, Mapping)
-        ):
-            # Opaque command payloads use their own codec contract and do not
-            # participate in native measurement-result inference.
-            return
-        expected: dict[type[object], object] = {
-            Bool: bool,
-            Int: int,
-            Float: float,
-            Complex: complex,
-            String: str,
-            QuantityType: Quantity,
-            EntityType: EntityRef,
-        }
-        if native_type is expected.get(type(declared.atom)):
-            return
-    else:
-        import numpy as np
-        from numpy.typing import NDArray
-
-        arguments = get_args(native_type)
-        scalar_types: dict[str, object] = {
-            "bool": np.bool_,
-            "int64": np.int64,
-            "float64": np.float64,
-            "complex128": np.complex128,
-            "string": np.str_,
-        }
-        if get_origin(native_type) is NDArray:
-            dtype_arguments = arguments
-        elif get_origin(native_type) is np.ndarray and len(arguments) == 2:
-            dtype_arguments = get_args(arguments[1])
-        else:
-            dtype_arguments = ()
-        if dtype_arguments == (scalar_types[declared.dtype],):
-            return
-    raise TypeError(
-        "compute return annotation disagrees with its declared ScalarType/ArrayType: "
-        f"{native_type!r} with {describe_value_type(declared)}"
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class _ComputeParameterContract:
-    expected: DataType | type[Quantity]
-    as_quantity: bool
-
-
-def _compute_parameter_contracts(
-    fn: ComputeFunction,
-) -> dict[str, _ComputeParameterContract]:
-    hints = cast("Mapping[str, object]", get_type_hints(fn, include_extras=True))
-    contracts: dict[str, _ComputeParameterContract] = {}
-    for name, annotation in hints.items():
-        if name == "return":
-            continue
-        while isinstance(annotation, TypeAliasType):
-            annotation = cast("object", annotation.__value__)
-        native_type = annotation
-        declared = None
-        if get_origin(annotation) is Annotated:
-            native_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
-            declared, unit = value_annotation_metadata(metadata)
-            while isinstance(native_type, TypeAliasType):
-                native_type = cast("object", native_type.__value__)
-            if unit is not None:
-                declared = unit_scalar_type(native_type, unit)
-        if declared is not None:
-            contracts[name] = _ComputeParameterContract(
-                declared, as_quantity=native_type is Quantity
-            )
-        elif native_type is Quantity:
-            contracts[name] = _ComputeParameterContract(Quantity, as_quantity=True)
-    return contracts
-
-
-def _validate_compute_input_contracts(
-    compute_id: str,
-    fn: ComputeFunction,
-    inputs: Mapping[str, ComputeInput | ProductRef],
-) -> frozenset[str]:
-    quantity_parameters: set[str] = set()
-    for name, contract in _compute_parameter_contracts(fn).items():
-        expected = contract.expected
-        value = inputs.get(name)
-        if value is None and name not in inputs:
-            continue
-        try:
-            actual = _compute_input_data_type(value)
-        except TypeError as error:
-            raise TypeError(
-                f"compute {compute_id!r} input {name!r}: {error}"
-            ) from error
-        if isinstance(expected, type):
-            # Plain Quantity promises a native quantity, not a particular unit.
-            # Read the producer schema so symbolic inputs remain symbolic.
-            if isinstance(actual, ScalarType) and isinstance(actual.atom, QuantityType):
-                quantity_parameters.add(name)
-                continue
-            expected_description = "Quantity"
-        else:
-            if _compute_contract_assignable(actual, expected):
-                if (
-                    contract.as_quantity
-                    and isinstance(actual, ScalarType)
-                    and isinstance(actual.atom, QuantityType)
-                ):
-                    quantity_parameters.add(name)
-                continue
-            expected_description = describe_value_type(expected)
-        raise TypeError(
-            f"compute {compute_id!r} input {name!r} expects "
-            f"{expected_description}, got {describe_value_type(actual)}"
-        )
-    return frozenset(quantity_parameters)
-
-
-def _compute_input_data_type(value: object) -> DataType:
-    if isinstance(value, ProductRef):
-        spec = value.value_spec
-        if spec.axes:
-            return ArrayType(
-                dtype=spec.dtype,
-                unit=spec.unit,
-                dimensions=tuple(
-                    ArrayDimension(
-                        id=axis.id,
-                        size=(
-                            axis.size
-                            if isinstance(axis.size, int)
-                            and not isinstance(axis.size, bool)
-                            else None
-                        ),
-                        kind=axis.kind,
-                        unit=axis.unit,
-                    )
-                    for axis in spec.axes
-                ),
-            )
-        if spec.dtype == "bool":
-            return ScalarType(Bool())
-        if spec.dtype == "int64" and spec.unit is None:
-            return ScalarType(Int())
-        if spec.dtype == "float64":
-            return ScalarType(
-                Float() if spec.unit is None else QuantityType(unit=spec.unit)
-            )
-        if spec.dtype == "complex128":
-            return ScalarType(Complex(unit=spec.unit))
-        if spec.dtype == "string" and spec.unit is None:
-            return ScalarType(String())
-        raise TypeError(
-            f"product {value.id!r} scalar schema cannot be expressed as a compute "
-            "parameter contract"
-        )
-    if isinstance(value, ValueRef):
-        if not isinstance(value.value_type, ScalarType | ArrayType):
-            raise TypeError(
-                "compute parameter contracts require scalar or array values"
-            )
-        return value.value_type
-    return literal_scalar_type(value)
-
-
-def _compute_contract_assignable(actual: DataType, expected: DataType) -> bool:
-    if (
-        isinstance(actual, ScalarType)
-        and isinstance(expected, ScalarType)
-        and isinstance(actual.atom, QuantityType)
-        and isinstance(expected.atom, QuantityType)
-        and actual.atom.unit != expected.atom.unit
-    ):
-        return False
-    return is_assignable(actual, expected)
 
 
 def _measurement_compute_output_spec(
@@ -496,8 +314,11 @@ def _convert_unit_value(
 ) -> object:
     if isinstance(value, Quantity):
         return value.to(target_unit)
-    scale = Quantity(1.0, source_unit).to(target_unit).value
-    return cast("object", value * scale)  # pyright: ignore[reportOperatorIssue]
+    if isinstance(value, complex):
+        return value * Quantity(1.0, source_unit).to(target_unit).value
+    if isinstance(value, int | float):
+        return Quantity(value, source_unit).to(target_unit).value
+    return convert_array_unit(value, source_unit, target_unit)
 
 
 def _measurement_compute_result(
@@ -1218,7 +1039,7 @@ class ModuleContext:
     ) -> ValueRef | ProductRef:
         """Convert a unit-bearing reference without changing its availability."""
 
-        source_type = _compute_input_data_type(value)
+        source_type = compute_input_data_type(value)
         output_type = _converted_unit_type(source_type, unit)
         source_unit = (
             source_type.unit
@@ -1378,8 +1199,15 @@ class ModuleContext:
             _compute_name_hint(fn) if id is None else id,
             explicit=id is not None,
         )
-        quantity_parameters = _validate_compute_input_contracts(
-            selected_id, fn, selected_inputs
+        validate_compute_function_internal(selected_id, fn, tuple(selected_inputs))
+        bound = signature(fn).bind(**selected_inputs)
+        bound.apply_defaults()
+        selected_inputs = cast("dict[str, ComputeInput | ProductRef]", bound.arguments)
+        # convert() is the explicit schema-driven primitive, not a native consumer.
+        adapters = (
+            {}
+            if fn is _convert_unit_value
+            else bind_compute_inputs(selected_id, fn, selected_inputs)
         )
         if any(isinstance(value, ProductRef) for value in selected_inputs.values()):
             return self._compute_measurements(
@@ -1388,16 +1216,17 @@ class ModuleContext:
                 inputs=selected_inputs,
                 output_type=selected_output_type,
                 axes_from=axes_from,
-                quantity_parameters=quantity_parameters,
+                adapters=adapters,
             )
         if axes_from is not None:
             raise ValueError("compute axes_from must name one of its measured inputs")
 
+        native_fn = adapt_compute_function(fn, adapters)
         bundle_type = _as_product_bundle_type(selected_output_type)
         if bundle_type is not None:
             return self._compute_values_bundle(
                 selected_id,
-                fn=fn,
+                fn=native_fn,
                 inputs=selected_inputs,
                 bundle_type=bundle_type,
             )
@@ -1410,7 +1239,7 @@ class ModuleContext:
         }
         definition = define_compute(
             selected_id,
-            fn=fn,
+            fn=native_fn,
             inputs=captured_inputs,
             output_type=selected_output_type,
         )
@@ -1513,7 +1342,7 @@ class ModuleContext:
         inputs: Mapping[str, ComputeInput | ProductRef],
         output_type: (DataType | Mapping[str, DataType] | type[ProductBundle]),
         axes_from: ProductRef | None,
-        quantity_parameters: frozenset[str],
+        adapters: Mapping[str, ComputeInputAdapter],
     ) -> ProductRef | ProductRefs | ProductBundle:
         """Lower measured inputs to the point-local observation stage."""
 
@@ -1560,15 +1389,19 @@ class ModuleContext:
                 axes=axes,
             )
 
+        native_fn = adapt_compute_function(fn, adapters)
+
         def kernel(
             values: Mapping[str, object],
         ) -> Mapping[str, MeasurementValue]:
-            raw = fn(
+            raw = native_fn(
                 **{
                     name: (
                         _native_measurement_value(
                             cast("MeasurementValue", values[name]),
-                            as_quantity=name in quantity_parameters,
+                            as_quantity=(
+                                name in adapters and adapters[name].source_quantity
+                            ),
                         )
                         if name in product_inputs
                         else unwrap_payload_values(values[name])

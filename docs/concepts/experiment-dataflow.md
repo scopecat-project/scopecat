@@ -417,7 +417,17 @@ samples = experiment.compute(
 )
 
 
-def peak_value(*, values) -> float:
+def peak_value(
+    *,
+    values: Annotated[
+        NDArray[np.float64],
+        sc.ArrayType(
+            dtype="float64",
+            unit="ratio",
+            dimensions=(sc.ArrayDimension("sample", 128),),
+        ),
+    ],
+) -> float:
     return float(values.max())
 
 
@@ -548,7 +558,17 @@ class Probabilities(sc.ProductBundle):
 
 
 @Probabilities.kernel
-def discriminate(*, shots) -> tuple[float, float]: ...
+def discriminate(
+    *,
+    shots: Annotated[
+        NDArray[np.complex128],
+        sc.ArrayType(
+            dtype="complex128",
+            unit="ratio",
+            dimensions=(sc.ArrayDimension("shot", None, kind="shot", unit="count"),),
+        ),
+    ],
+) -> tuple[float, float]: ...
 
 
 probabilities = experiment.compute(

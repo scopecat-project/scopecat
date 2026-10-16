@@ -125,7 +125,9 @@ def test_compute_reads_child_product_and_is_hygienically_scoped() -> None:
 
 
 def test_compute_lowers_multiple_measured_inputs_to_the_observation_stage() -> None:
-    def pair(*, left: float, right: float) -> NDArray[np.float64]:
+    def pair(
+        *, left: Annotated[float, sc.Unit("V")], right: Annotated[float, sc.Unit("V")]
+    ) -> NDArray[np.float64]:
         return np.asarray([left, right])
 
     @sc.module(id="test.measurement-compute")
@@ -184,6 +186,7 @@ def test_compute_can_preserve_semantic_axes_from_a_measured_input() -> None:
         source = context._product(
             "iq_shots",
             dtype="complex128",
+            unit=None,
             axes=(
                 entity_axis("entity", entities, shared_as="targets"),
                 shot_axis(4, shared_as="shot"),
@@ -223,6 +226,7 @@ def test_compute_preserves_axes_from_a_nested_product_scope() -> None:
         return context._product(
             "iq_shots",
             dtype="complex128",
+            unit=None,
             axes=(shot_axis(4, shared_as="shot"),),
         )
 
@@ -255,7 +259,9 @@ def test_compute_joins_measured_products_with_earlier_compute_values() -> None:
     def double(*, base: float) -> float:
         return base * 2.0
 
-    def classify_value(*, signal: float, threshold: float) -> bool:
+    def classify_value(
+        *, signal: Annotated[float, sc.Unit("V")], threshold: float
+    ) -> bool:
         return signal > threshold
 
     @sc.module(id="test.mixed-availability-compute")
@@ -357,7 +363,9 @@ def test_convert_preserves_local_array_shape() -> None:
 
 def test_compute_instantiates_an_annotated_product_bundle_schema() -> None:
     @_ProbabilityProducts.kernel
-    def probabilities(*, signal: float) -> tuple[float, float]:
+    def probabilities(
+        *, signal: Annotated[float, sc.Unit("ratio")]
+    ) -> tuple[float, float]:
         return signal, 1.0 - signal
 
     @sc.module(id="test.typed-structured-compute")
@@ -418,7 +426,9 @@ def test_compute_instantiates_an_annotated_product_bundle_schema() -> None:
 
 
 def test_measured_compute_infers_bool_output_and_binds_keyword_inputs() -> None:
-    def classify(*, signal: float, threshold: float) -> bool:
+    def classify(
+        *, signal: Annotated[float, sc.Unit("ratio")], threshold: float
+    ) -> bool:
         return signal >= threshold
 
     @sc.module(id="test.inferred-measurement-compute")
@@ -463,7 +473,7 @@ def test_compute_parameter_annotations_validate_measurement_units() -> None:
 
         @sc.module(id="test.measurement-unit-mismatch")
         def invalid(context: sc.ModuleContext) -> None:
-            signal = context._product("signal", unit="mV")
+            signal = context._product("signal", unit="ns")
             context.compute(fn=threshold, signal=signal)
 
 
@@ -556,7 +566,15 @@ def test_domain_and_compute_cannot_own_the_same_product() -> None:
 
 def test_complex_scalar_mean_and_linear_unit_conversion_have_no_local_axis() -> None:
     def iq_mean(
-        *, values: object
+        *,
+        values: Annotated[
+            NDArray[np.complex128],
+            sc.ArrayType(
+                dtype="complex128",
+                unit="mV",
+                dimensions=(sc.ArrayDimension("shot", 2, kind="shot", unit="count"),),
+            ),
+        ],
     ) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="mV"))]:
         return complex(np.mean(np.asarray(values, dtype=np.complex128)))
 
@@ -601,7 +619,7 @@ def test_complex_scalar_rejects_real_output_and_nonlinear_conversion() -> None:
 
     @sc.module(id="test.complex-real-output")
     def module(context: sc.ModuleContext) -> sc.ProductRef:
-        source = context._product("iq", dtype="complex128")
+        source = context._product("iq", dtype="complex128", unit=None)
         return context.compute(
             "wrong",
             fn=identity,

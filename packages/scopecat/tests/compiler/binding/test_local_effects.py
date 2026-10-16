@@ -119,7 +119,7 @@ def _implementation(
     )
 
 
-def _wrap_value(*, value: object) -> dict[str, object]:
+def _wrap_value(*, value: Quantity) -> dict[str, object]:
     return {"value": value}
 
 

@@ -14,7 +14,7 @@ _FREQUENCY_ATOM = sc.QuantityType(unit="GHz")
 _FREQUENCY_TYPE = sc.ScalarType(_FREQUENCY_ATOM)
 
 
-def _identity(value: object) -> object:
+def _identity(value: sc.Quantity) -> sc.Quantity:
     return value
 
 

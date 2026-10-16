@@ -19,7 +19,15 @@ class MeanResult:
 
 
 def mean_iq(
-    *, iq: NDArray[np.complex128]
+    *,
+    iq: Annotated[
+        NDArray[np.complex128],
+        sc.ArrayType(
+            dtype="complex128",
+            unit="ratio",
+            dimensions=(sc.ArrayDimension("shot", None),),
+        ),
+    ],
 ) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]:
     return complex(iq.mean())
 
@@ -115,7 +123,16 @@ type ShortIQ = Annotated[complex, sc.Unit("ratio")]
 
 
 @sc.compute
-def short_mean(iq: NDArray[np.complex128]) -> ShortIQ:
+def short_mean(
+    iq: Annotated[
+        NDArray[np.complex128],
+        sc.ArrayType(
+            dtype="complex128",
+            unit="ratio",
+            dimensions=(sc.ArrayDimension("shot", None),),
+        ),
+    ],
+) -> ShortIQ:
     return complex(iq.mean())
 
 

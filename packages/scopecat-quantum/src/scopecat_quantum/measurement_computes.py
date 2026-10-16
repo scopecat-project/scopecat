@@ -11,6 +11,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, model_validator
 from scopecat import (
+    ArrayDimension,
+    ArrayType,
     ExperimentContext,
     ModuleContext,
     ProductBundle,
@@ -84,7 +86,14 @@ def binary_iq_probabilities(
     @BinaryIqProbabilityProducts.kernel
     def calculate(
         *,
-        iq_shots: object,
+        iq_shots: Annotated[
+            NDArray[np.complex128],
+            ArrayType(
+                dtype="complex128",
+                unit="ratio",
+                dimensions=(ArrayDimension("shot", None, kind="shot", unit="count"),),
+            ),
+        ],
         discriminator: BinaryIqDiscriminator,
     ) -> tuple[float, float]:
         return _binary_iq_probability_value(

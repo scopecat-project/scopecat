@@ -545,6 +545,9 @@ def test_parameter_lookup_checks_table_column_and_entity_type() -> None:
 
 
 def test_parameter_lookup_checks_primary_key_shape_and_typed_key_values() -> None:
+    def identity_quantity(value: sc.Quantity) -> sc.Quantity:
+        return value
+
     config = _config_with_parameter_table()
 
     @sc.module(id="test.typed-parameter-key")
@@ -554,7 +557,7 @@ def test_parameter_lookup_checks_primary_key_shape_and_typed_key_values() -> Non
     ) -> None:
         context.compute(
             "consume-typed-parameter-key",
-            fn=_identity,
+            fn=identity_quantity,
             inputs={"value": frequency},
             output_type=sc.ScalarType(sc.QuantityType(unit="GHz")),
         )
@@ -605,7 +608,7 @@ def test_parameter_lookup_checks_primary_key_shape_and_typed_key_values() -> Non
         ) -> None:
             context.compute(
                 "consume-wrong-parameter-key",
-                fn=_identity,
+                fn=identity_quantity,
                 inputs={"value": frequency},
                 output_type=sc.ScalarType(sc.QuantityType(unit="GHz")),
             )

@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Never, cast
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 from scopecat_testkit.authoring import load_config
 from scopecat_testkit.bound_program import (
     DomainExecutionFixture,
@@ -755,7 +756,15 @@ def test_array_compute_results_are_ordered_and_recordable() -> None:
     def produce() -> np.ndarray:
         return np.asarray([1.0, 2.0, 3.0])
 
-    def peak(*, trace: np.ndarray) -> float:
+    def peak(
+        *,
+        trace: Annotated[
+            NDArray[np.float64],
+            sc.ArrayType(
+                dtype="float64", unit="V", dimensions=(sc.ArrayDimension("sample", 3),)
+            ),
+        ],
+    ) -> float:
         observed.append(trace.tolist())
         return float(np.max(trace))
 

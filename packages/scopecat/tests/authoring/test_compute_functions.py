@@ -20,6 +20,12 @@ def declared_unit(
     return value
 
 
+def declared_voltage(
+    value: Annotated[complex, sc.Unit("V")],
+) -> Annotated[complex, sc.Unit("V")]:
+    return value
+
+
 def test_direct_calls_build_dependencies_and_keep_native_test_entry() -> None:
     assert_type(offset.eager(1 + 2j), complex)
     assert offset.eager(1 + 2j) == 1 + 3j
@@ -52,7 +58,7 @@ def test_measured_direct_call_preserves_units_and_context_after_nested_module() 
         ctx.use(nested())
         ctx.use(inner())
         source = ctx._product("source", dtype="complex128", unit="V")
-        return declared_unit(source)
+        return ctx.compute(fn=declared_voltage, value=source)
 
     output = outer.build().output
     assert isinstance(output, sc.ProductRef)
@@ -303,7 +309,7 @@ def test_quantity_keyword_and_default_arguments_are_checked() -> None:
 
 
 @pytest.mark.parametrize("unit", ["kHz", "ns"])
-def test_measured_quantity_executes_without_changing_float_consumers(unit: str) -> None:
+def test_measured_quantity_requires_contract_for_float_consumers(unit: str) -> None:
     from scopecat.compiler.frontend.elaboration import compose_module
     from scopecat.measurements.results import MeasurementScalar
 
@@ -315,17 +321,12 @@ def test_measured_quantity_executes_without_changing_float_consumers(unit: str) 
     @sc.module(id="test.measured-quantity-native")
     def module(ctx: sc.ModuleContext) -> dict[str, sc.DataRef[float]]:
         measured = ctx._product("frequency", dtype="float64", unit=unit)
-        return {
-            "quantity": lorentzian(measured, sc.Quantity(5, "MHz")),
-            "magnitude": magnitude(measured),
-        }
+        with pytest.raises(TypeError, match="unit-bearing input requires"):
+            magnitude(measured)
+        return {"quantity": lorentzian(measured, sc.Quantity(5, "MHz"))}
 
-    quantity_compute, magnitude_compute = compose_module(
-        module.definition
-    ).measurement_computes
+    [quantity_compute] = compose_module(module.definition).measurement_computes
     measured_value = MeasurementScalar.create(value=5000.0, dtype="float64", unit=unit)
-    magnitude_result = magnitude_compute.kernel({"frequency": measured_value})
-    assert magnitude_result["result"] == MeasurementScalar.create(value=5000.0)
     inputs = {"frequency": measured_value, "center": sc.Quantity(5, "MHz")}
     if unit == "kHz":
         result = quantity_compute.kernel(inputs)
@@ -355,7 +356,7 @@ type KHzSchemaQuantity = Annotated[
     ],
 )
 @pytest.mark.parametrize("unit", ["kHz", "MHz", "ns"])
-def test_annotated_quantity_measurement_keeps_native_type_and_exact_unit(
+def test_annotated_quantity_measurement_keeps_native_type_and_converts_unit(
     annotation: object, unit: str
 ) -> None:
     from scopecat.compiler.frontend.elaboration import compose_module
@@ -372,14 +373,18 @@ def test_annotated_quantity_measurement_keeps_native_type_and_exact_unit(
         source = ctx._product("source", dtype="float64", unit=unit)
         return ctx.compute(fn=frequency, q=source)
 
-    if unit != "kHz":
+    if unit == "ns":
         with pytest.raises(TypeError, match="input 'q' expects Scalar"):
             sc.module(module, id="test.annotated-quantity-native")
         return
     definition = sc.module(module, id="test.annotated-quantity-native").definition
     [compute] = compose_module(definition).measurement_computes
     result = compute.kernel(
-        {"q": MeasurementScalar.create(value=5000.0, dtype="float64", unit=unit)}
+        {
+            "q": MeasurementScalar.create(
+                value=5000.0 if unit == "kHz" else 5.0, dtype="float64", unit=unit
+            )
+        }
     )
     assert result["result"] == MeasurementScalar.create(value=5.0)
 

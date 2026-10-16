@@ -160,7 +160,7 @@ def test_binary_iq_compute_rejects_non_iq_input() -> None:
 
     [compute] = discriminate.definition.body.measurement_computes
 
-    with pytest.raises(ValueError, match="complex128"):
+    with pytest.raises(ValueError, match="1D array"):
         compute.kernel(
             {
                 "iq_shots": MeasurementScalar.create(

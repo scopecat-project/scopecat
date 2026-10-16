@@ -17,6 +17,7 @@ from typing import (
     overload,
 )
 
+from scopecat.authoring._compute_contracts import validate_compute_annotation
 from scopecat.authoring._experiment_module import (
     ExperimentModule,
     create_experiment_module_internal,
@@ -2254,7 +2255,7 @@ def _annotation_value_type(annotation: object, *, parameter: str) -> ValueType:
 
 
 def _is_value_type(value: object) -> bool:
-    if isinstance(value, Scalar | Table):
+    if isinstance(value, Scalar | Array | Table):
         return True
     return isinstance(
         value,
@@ -2263,7 +2264,7 @@ def _is_value_type(value: object) -> bool:
 
 
 def _as_value_type(value: object) -> ValueType:
-    if isinstance(value, Scalar | Table):
+    if isinstance(value, Scalar | Array | Table):
         return value
     if isinstance(
         value,
@@ -2283,6 +2284,12 @@ def _python_annotation_matches(annotation: object, value_type: ValueType) -> boo
             for option in cast("tuple[object, ...]", get_args(annotation))
         )
     if annotation is object:
+        return True
+    if isinstance(value_type, Array):
+        try:
+            validate_compute_annotation(annotation, value_type, position="input")
+        except TypeError:
+            return False
         return True
     if isinstance(value_type, Scalar):
         atom = value_type.atom
