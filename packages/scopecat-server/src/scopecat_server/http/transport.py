@@ -114,6 +114,7 @@ from scopecat.daemon.endpoint import (
 )
 from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
+    HardwareReceiptWireError,
     encode_collect_receipt,
     encode_run_hardware_receipt,
 )
@@ -3175,6 +3176,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
 
 def _install_error_mapping(app: FastAPI) -> None:
+    @app.exception_handler(HardwareReceiptWireError)
+    async def invalid_hardware_receipt(
+        _request: Request,
+        error: HardwareReceiptWireError,
+    ) -> JSONResponse:
+        # The operation may already have executed; this is not a rejected command.
+        return JSONResponse(status_code=500, content={"detail": str(error)})
+
     @app.exception_handler(CommandPayloadTooLarge)
     async def payload_too_large(
         _request: Request,

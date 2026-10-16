@@ -202,6 +202,9 @@ function arrayElementCount(shape: number[]): number {
 
 function isArrayReference(value: unknown): value is ArrayReference {
   if (!isRecord(value) || value.kind !== "array_attachment") return false;
+  if (value.availability !== undefined && value.availability !== null) {
+    throw invalidReceipt("unsupported array availability");
+  }
   if (
     !isNonnegativeInteger(value.index) ||
     !isMeasurementDType(value.dtype) ||

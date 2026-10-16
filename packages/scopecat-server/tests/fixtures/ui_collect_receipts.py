@@ -22,6 +22,7 @@ from scopecat.records.instrument import InstrumentReadback
 from scopecat.records.measurement import (
     MeasurementAcquisitionValue,
     MeasurementArray,
+    MeasurementArrayAvailability,
     MeasurementScalar,
     MeasurementUnavailable,
 )
@@ -135,4 +136,33 @@ for sample in (
             "content_base64": base64.b64encode(content).decode("ascii"),
         }
     )
-print(json.dumps(samples, ensure_ascii=False))
+application.instruments.collect.return_value = CollectReceipt(
+    readback=InstrumentReadback(
+        values={
+            "trace": MeasurementArray.create(
+                values=[1.0, 0.0],
+                availability=MeasurementArrayAvailability.create(valid=[True, False]),
+            )
+        }
+    )
+)
+response = client.post(
+    "/api/v1/instrument-sessions/session-1/instruments/vna-1/collect",
+    json=request,
+)
+assert response.status_code == 500
+assert "does not support measurement array availability" in response.json()["detail"]
+assert "readback" not in response.json()
+print(
+    json.dumps(
+        {
+            "receipts": samples,
+            "unsupported": {
+                "status": response.status_code,
+                "body": response.json(),
+                "media_type": response.headers["content-type"],
+            },
+        },
+        ensure_ascii=False,
+    )
+)

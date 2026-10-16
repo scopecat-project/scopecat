@@ -10,7 +10,10 @@ type ProducerReceipt = {
 
 // The real HTTP route and Python encoder supply these bytes; do not hand-frame
 // successful responses here, or protocol drift can hide behind matching mocks.
-export const producerReceipts: ProducerReceipt[] = JSON.parse(
+const producer: {
+  receipts: ProducerReceipt[];
+  unsupported: { status: number; body: { detail: string }; media_type: string };
+} = JSON.parse(
   execFileSync(
     "uv",
     [
@@ -22,6 +25,15 @@ export const producerReceipts: ProducerReceipt[] = JSON.parse(
     { encoding: "utf8" },
   ),
 );
+
+export const producerReceipts = producer.receipts;
+
+export function unsupportedAvailabilityResponse(): Response {
+  return new Response(JSON.stringify(producer.unsupported.body), {
+    status: producer.unsupported.status,
+    headers: { "Content-Type": producer.unsupported.media_type },
+  });
+}
 
 export function producerContent(index = 0): ArrayBuffer {
   return new Uint8Array(Buffer.from(producerReceipts[index]!.content_base64, "base64")).buffer;

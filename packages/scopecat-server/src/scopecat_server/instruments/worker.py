@@ -1244,7 +1244,9 @@ def _error_response(request_id: int, error: BaseException) -> _RpcResponse:
             code="instrument_backend_unavailable",
             message=str(error)[:512],
         )
-    elif isinstance(error, InstrumentBackendError):
+    elif isinstance(error, (InstrumentBackendError, WorkerWireError)):
+        # A receipt encoding failure occurs after the driver may have executed.
+        # Preserve the diagnostic as a backend error, never as a safe rejection.
         payload = _RpcError(
             kind="backend_error",
             code="instrument_backend_error",

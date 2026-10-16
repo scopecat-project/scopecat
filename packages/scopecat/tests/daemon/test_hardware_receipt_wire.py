@@ -22,6 +22,8 @@ from scopecat.records.instrument import (
 from scopecat.records.measurement import (
     InstrumentAcquisitionEvidence,
     MeasurementArray,
+    MeasurementArrayAvailability,
+    MeasurementPartitionedArray,
     MeasurementScalar,
     MeasurementUnavailable,
 )
@@ -163,3 +165,53 @@ def _evidence(result_id: str) -> InstrumentAcquisitionEvidence:
         started_at=_NOW,
         completed_at=_NOW,
     )
+
+
+@pytest.mark.parametrize("partitioned", [False, True])
+@pytest.mark.parametrize("valid", [[True, False], [False, False]])
+def test_receipt_round_trip_rejects_array_availability(
+    partitioned: bool, valid: list[bool]
+) -> None:
+    array = MeasurementArray.create(
+        values=[1.0, 0.0],
+        availability=MeasurementArrayAvailability.create(
+            valid=valid, reason="missing", metadata={"detail": "no sample"}
+        ),
+    )
+    value = (
+        MeasurementPartitionedArray.create(partitions=(array,), axis=0)
+        if partitioned
+        else array
+    )
+    collect = CollectReceipt(readback=InstrumentReadback(values={"trace": value}))
+    run = RunHardwareBatchReceipt(
+        operation_id="batch-1",
+        completed_effect_ids=("collect-1",),
+        values=(
+            RunHardwareValue(
+                value_id="trace", value=value, evidence=_evidence("trace")
+            ),
+        ),
+    )
+    with pytest.raises(
+        HardwareReceiptWireError, match=r"does not support.*availability"
+    ):
+        decode_collect_receipt(encode_collect_receipt(collect))
+    with pytest.raises(
+        HardwareReceiptWireError, match=r"does not support.*availability"
+    ):
+        decode_run_hardware_receipt(encode_run_hardware_receipt(run))
+    assert array.availability is not None
+    assert array.availability.valid.tolist() == valid
+
+
+def test_collect_receipt_round_trips_fully_available_partitioned_array() -> None:
+    array = MeasurementArray.create(values=[1.0, 0.0])
+    value = MeasurementPartitionedArray.create(partitions=(array, array), axis=0)
+    restored = decode_collect_receipt(
+        encode_collect_receipt(
+            CollectReceipt(readback=InstrumentReadback(values={"trace": value}))
+        )
+    )
+    assert restored.readback is not None
+    assert restored.readback.values["trace"] == value.materialize()

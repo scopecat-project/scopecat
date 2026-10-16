@@ -357,3 +357,16 @@ it.each([
     "measured cost",
   );
 });
+
+it.each([
+  { valid: [true, false], unavailable: [{ reason: "missing", flat_indices: [1], metadata: {} }] },
+  {},
+])("rejects unsupported availability instead of discarding it: %j", (availability) => {
+  const content = framedReceipt(
+    {
+      trace: { ...arrayReference(0, "float64", [2]), availability },
+    },
+    [numericAttachment(16, (view) => view.setFloat64(0, 1, true))],
+  );
+  expect(() => decodeCollectReceipt(content)).toThrow("unsupported array availability");
+});

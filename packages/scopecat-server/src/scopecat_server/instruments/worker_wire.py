@@ -422,8 +422,18 @@ def split_collect_receipt(
     if readback is not None:
         for request_id, value in sorted(readback.values.items()):
             if isinstance(value, MeasurementPartitionedArray):
+                if any(part.availability is not None for part in value.partitions):
+                    raise WorkerWireError(
+                        "worker collect wire does not support "
+                        "measurement array availability"
+                    )
                 value = value.materialize()
             if isinstance(value, MeasurementArray):
+                if value.availability is not None:
+                    raise WorkerWireError(
+                        "worker collect wire does not support "
+                        "measurement array availability"
+                    )
                 selected_arrays.append((request_id, value))
             else:
                 inline_values[request_id] = value
