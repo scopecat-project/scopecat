@@ -261,9 +261,11 @@ def _validate_inferred_compute_annotation(
     )
 
 
-def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
+def _compute_parameter_contracts(
+    fn: ComputeFunction,
+) -> dict[str, DataType | type[Quantity]]:
     hints = cast("Mapping[str, object]", get_type_hints(fn, include_extras=True))
-    contracts: dict[str, DataType] = {}
+    contracts: dict[str, DataType | type[Quantity]] = {}
     for name, annotation in hints.items():
         if name == "return" or get_origin(annotation) is not Annotated:
             if name == "return":
@@ -271,6 +273,8 @@ def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
             while isinstance(annotation, TypeAliasType):
                 annotation = cast("object", annotation.__value__)
             if get_origin(annotation) is not Annotated:
+                if annotation is Quantity:
+                    contracts[name] = Quantity
                 continue
         native_type, *metadata = cast("tuple[object, ...]", get_args(annotation))
         declared, unit = value_annotation_metadata(metadata)
@@ -280,6 +284,11 @@ def _compute_parameter_contracts(fn: ComputeFunction) -> dict[str, DataType]:
             declared = unit_scalar_type(native_type, unit)
         if declared is not None:
             contracts[name] = declared
+        else:
+            while isinstance(native_type, TypeAliasType):
+                native_type = cast("object", native_type.__value__)
+            if native_type is Quantity:
+                contracts[name] = Quantity
     return contracts
 
 
@@ -292,12 +301,25 @@ def _validate_compute_input_contracts(
         value = inputs.get(name)
         if value is None and name not in inputs:
             continue
-        actual = _compute_input_data_type(value)
-        if _compute_contract_assignable(actual, expected):
-            continue
+        try:
+            actual = _compute_input_data_type(value)
+        except TypeError as error:
+            raise TypeError(
+                f"compute {compute_id!r} input {name!r}: {error}"
+            ) from error
+        if isinstance(expected, type):
+            # Plain Quantity promises a native quantity, not a particular unit.
+            # Read the producer schema so symbolic inputs remain symbolic.
+            if isinstance(actual, ScalarType) and isinstance(actual.atom, QuantityType):
+                continue
+            expected_description = "Quantity"
+        else:
+            if _compute_contract_assignable(actual, expected):
+                continue
+            expected_description = describe_value_type(expected)
         raise TypeError(
             f"compute {compute_id!r} input {name!r} expects "
-            f"{describe_value_type(expected)}, got {describe_value_type(actual)}"
+            f"{expected_description}, got {describe_value_type(actual)}"
         )
 
 

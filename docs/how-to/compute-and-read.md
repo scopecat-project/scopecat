@@ -76,6 +76,14 @@ native argument checking. Symbolic argument names and required arguments are
 checked during graph construction; symbolic calls do not yet statically transform
 each native argument type into its corresponding reference type.
 
+Plain `Quantity` parameters are checked at graph construction against literal or
+reference schemas. For example, `response("wrong", center)` fails with the compute
+and input names when `response` declares that input as `Quantity`. This check
+also applies to `ctx.compute`; it does not convert values or impose a dimension.
+Use the native function's `.to("MHz")` conversion when different frequency units
+are welcome. Explicit `Annotated` unit contracts retain their exact-unit check.
+Other plain Python parameter annotations are not generally checked at construction.
+
 `experiment.compute(fn=ordinary_function, ...)` remains available for explicit
 node IDs, output schemas, structured bundles and axis inheritance. When its
 `output_type` is omitted it also preserves the native return type. If reusing a
