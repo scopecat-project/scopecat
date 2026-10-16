@@ -37,6 +37,8 @@ class ManagedAnalysisRepository:
             receipt.analysis_id,
             *(g.analysis_id for g in receipt.groups if g.error is None),
         )
+        # analysis_index.insert_publication enforces a globally unique, immutable ID.
+        # Changed content under the same key receives a new UUID; never use latest.
         with self.sqlite.write_transaction() as connection:
             for identity in identities:
                 row = cast(

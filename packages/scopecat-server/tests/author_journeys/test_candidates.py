@@ -97,8 +97,10 @@ def test_typed_candidates_retain_cells_and_independent_policy(
                 key="signal",
                 fields={"center": "frequency"},
             )
+        fit_key = fit.publication.view.analysis.key
+        assert fit_key is not None
         claimed = (
-            run.analysis("claimed managed estimate")
+            run.analysis("claimed managed estimate", key=fit_key)
             .result()
             .fact(
                 "result",
@@ -112,6 +114,13 @@ def test_typed_candidates_retain_cells_and_independent_policy(
             .save()
             .result_as(PeakResult)
         )
+        # A later revision under the same key cannot replace the worker's exact ID.
+        assert claimed.publication.id != fit.publication.id
+        assert (
+            run.published_analysis(fit.publication.id).publication_hash
+            == fit.publication.publication_hash
+        )
+        assert run.published_analysis(fit_key).id == claimed.publication.id
         with pytest.raises(ValueError, match="no managed author source receipt"):
             author.config.stage(
                 claimed,
