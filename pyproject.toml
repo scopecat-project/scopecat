@@ -103,6 +103,9 @@ reportUnreachable = "hint"
 # roots must precede their parent projects.
 [[tool.basedpyright.executionEnvironments]]
 root = "packages/scopecat-app/tests"
+# Keep dynamic fixture/JSON warnings visible without blocking this newly covered
+# test root. Errors still fail; other roots retain their existing warning gate.
+failOnWarnings = false
 # Lifecycle and packaging tests intentionally inspect private state and helpers.
 # Keep argument/member/optional checks active, including for test doubles.
 reportPrivateUsage = "none"
