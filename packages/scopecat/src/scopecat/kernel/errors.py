@@ -47,6 +47,14 @@ class CheckFailed(ProblemFailure):
     """A definition, authoring, configuration, or planning check failed."""
 
 
+class ComputeInputContractError(TypeError):
+    """An authored type error with a structured preparation rejection."""
+
+    def __init__(self, finding: Problem) -> None:
+        self.problems = (finding,)
+        super().__init__(finding.message)
+
+
 class OperationFailure(ProblemFailure):
     """An expected non-check operation failed."""
 

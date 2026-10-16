@@ -16,6 +16,7 @@ from typing import (
 )
 
 from scopecat.authoring._compute_contracts import (
+    ComputeArgument,
     ComputeInputAdapter,
     adapt_compute_function,
     bind_compute_inputs,
@@ -1066,10 +1067,10 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: Callable[..., T],
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: None = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> DataRef[T]: ...
 
     @overload
@@ -1111,7 +1112,7 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef],
+        inputs: Mapping[str, ComputeArgument],
         output_type: ScalarType | ArrayType,
         axes_from: ProductRef | None = None,
     ) -> ProductRef: ...
@@ -1122,7 +1123,7 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef],
+        inputs: Mapping[str, ComputeArgument],
         output_type: Mapping[str, DataType],
         axes_from: ProductRef | None = None,
     ) -> ProductRefs: ...
@@ -1133,10 +1134,10 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ProductBundleKernel[BundleT],
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: None = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> BundleT: ...
 
     @overload
@@ -1145,10 +1146,10 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: type[BundleT],
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> BundleT: ...
 
     @overload
@@ -1157,10 +1158,10 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: ScalarType | ArrayType | Mapping[str, DataType] | None = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> ValueRef | ProductRef | ProductRefs: ...
 
     def compute(
@@ -1168,12 +1169,12 @@ class ModuleContext:
         id: str | None = None,
         *,
         fn: ComputeFunction,
-        inputs: Mapping[str, ComputeInput | ProductRef] | None = None,
+        inputs: Mapping[str, ComputeArgument] | None = None,
         output_type: (
             ScalarType | ArrayType | Mapping[str, DataType] | type[ProductBundle] | None
         ) = None,
         axes_from: ProductRef | None = None,
-        **input_bindings: ComputeInput | ProductRef,
+        **input_bindings: ComputeArgument,
     ) -> ValueRef | ProductRef | ProductRefs | ProductBundle:
         """Declare a compute where its inputs exist.
 
@@ -1201,19 +1202,19 @@ class ModuleContext:
         )
         validate_compute_function_internal(selected_id, fn, tuple(selected_inputs))
         bound = signature(fn).bind(**selected_inputs)
-        bound.apply_defaults()
-        selected_inputs = cast("dict[str, ComputeInput | ProductRef]", bound.arguments)
+        selected_inputs = cast("dict[str, ComputeArgument]", bound.arguments)
         # convert() is the explicit schema-driven primitive, not a native consumer.
         adapters = (
             {}
             if fn is _convert_unit_value
             else bind_compute_inputs(selected_id, fn, selected_inputs)
         )
-        if any(isinstance(value, ProductRef) for value in selected_inputs.values()):
+        typed_inputs = cast("dict[str, ComputeInput | ProductRef]", selected_inputs)
+        if any(isinstance(value, ProductRef) for value in typed_inputs.values()):
             return self._compute_measurements(
                 selected_id,
                 fn=fn,
-                inputs=selected_inputs,
+                inputs=typed_inputs,
                 output_type=selected_output_type,
                 axes_from=axes_from,
                 adapters=adapters,
@@ -1227,7 +1228,7 @@ class ModuleContext:
             return self._compute_values_bundle(
                 selected_id,
                 fn=native_fn,
-                inputs=selected_inputs,
+                inputs=typed_inputs,
                 bundle_type=bundle_type,
             )
         if not isinstance(selected_output_type, ScalarType | ArrayType):
@@ -1235,7 +1236,7 @@ class ModuleContext:
 
         captured_inputs = {
             name: cast("ComputeInput", self._capture_domain_value(value))
-            for name, value in selected_inputs.items()
+            for name, value in typed_inputs.items()
         }
         definition = define_compute(
             selected_id,

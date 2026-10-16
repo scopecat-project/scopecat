@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from functools import wraps
+from inspect import Parameter, signature
 from typing import Annotated, TypeAliasType, cast, get_args, get_origin, get_type_hints
+
+import numpy as np
+from numpy.typing import NDArray
 
 from scopecat.kernel.annotations import unit_scalar_type, value_annotation_metadata
 from scopecat.kernel.entity import EntityRef
+from scopecat.kernel.errors import ComputeInputContractError
+from scopecat.kernel.problems import ProblemPhase, problem
 from scopecat.kernel.quantity import Quantity
 from scopecat.kernel.units import compatible_units
 from scopecat.kernel.value_type_compatibility import (
@@ -33,8 +39,12 @@ from scopecat.kernel.value_types import Quantity as QuantityType
 from scopecat.kernel.value_types import Scalar as ScalarType
 from scopecat.kernel.value_validation import coerce_literal
 from scopecat.program.products import ProductRef
-from scopecat.program.value_refs import ValueRef
+from scopecat.program.value_refs import ValueRef, internal_literal_value_ref
 from scopecat.program.values import ComputeFunction, ComputeInput
+
+type ComputeArgument = (
+    ComputeInput | ProductRef | NDArray[np.generic] | Sequence[object]
+)
 
 
 def validate_compute_annotation(
@@ -247,16 +257,46 @@ def _parameter_contracts(
 def bind_compute_inputs(
     compute_id: str,
     fn: ComputeFunction,
-    inputs: Mapping[str, ComputeInput | ProductRef],
+    inputs: dict[str, ComputeArgument],
 ) -> dict[str, ComputeInputAdapter]:
     try:
         contracts = _parameter_contracts(fn)
     except TypeError as error:
-        raise TypeError(f"compute {compute_id!r}: {error}") from error
+        raise _contract_error(f"compute {compute_id!r}: {error}") from error
+    parameters = signature(fn).parameters
+    for name, parameter in parameters.items():
+        default = cast("object", parameter.default)
+        if name not in inputs and default is not Parameter.empty:
+            native, declared = contracts.get(name, (None, None))
+            if (
+                declared is not None
+                or native is Quantity
+                or isinstance(default, Quantity | str | int | float | complex | bool)
+            ):
+                inputs[name] = cast("ComputeArgument", default)
     adapters: dict[str, ComputeInputAdapter] = {}
-    for name, value in inputs.items():
+    for name, value in tuple(inputs.items()):
         native, target = contracts.get(name, (None, None))
         try:
+            if (
+                value is None
+                and target is None
+                and cast("object", parameters[name].default) is None
+            ):
+                # Preserve native optional defaults without inventing a null wire type.
+                del inputs[name]
+                continue
+            if isinstance(target, ArrayType) and not isinstance(
+                value, ValueRef | ProductRef
+            ):
+                # Native arrays/lists have no source unit. The explicit consumer
+                # contract supplies axes and the unit in which magnitudes are written.
+                value = internal_literal_value_ref(
+                    value,
+                    replace(target, unit=None),
+                    path=("compute", compute_id, name),
+                )
+                inputs[name] = value
             if (
                 isinstance(value, ValueRef)
                 and not isinstance(value.value_type, ScalarType | ArrayType)
@@ -312,8 +352,16 @@ def bind_compute_inputs(
                 adapter.apply(value)
             adapters[name] = adapter
         except (TypeError, ValueError, ArithmeticError) as error:
-            raise TypeError(f"compute {compute_id!r} input {name!r} {error}") from error
+            raise _contract_error(
+                f"compute {compute_id!r} input {name!r} {error}"
+            ) from error
     return adapters
+
+
+def _contract_error(message: str) -> ComputeInputContractError:
+    return ComputeInputContractError(
+        problem("compute_input_contract", message, phase=ProblemPhase.AUTHORING)
+    )
 
 
 def _assignable(source: DataType, target: DataType) -> bool:

@@ -401,3 +401,122 @@ def test_typed_array_input_build_snapshots_native_values_before_conversion() -> 
     invocation = experiment.build(x=raw)
     raw[:] = 0.0
     assert _execute(compile_invocation(invocation).program.program) == 5.5
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_native_optional_and_list_defaults_do_not_require_scalar_schemas(
+    direct: bool,
+) -> None:
+    @sc.compute
+    def optional(x: float | None = None) -> float:
+        assert x is None
+        return 7.0
+
+    default_values = [2.0, 3.0]
+
+    @sc.compute
+    def sequence(x: list[float] = default_values) -> float:
+        assert isinstance(x, list)
+        return sum(x)
+
+    default_array = np.array([4.0, 6.0])
+
+    @sc.compute
+    def array_default(x: NDArray[np.float64] = default_array) -> float:
+        assert isinstance(x, np.ndarray)
+        return float(x.mean())
+
+    @sc.module(id="units.native-defaults")
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        if direct:
+            ctx.compute(fn=optional.eager)
+            ctx.compute(fn=sequence.eager)
+            return ctx.compute(fn=array_default.eager)
+        optional()
+        optional(None)
+        sequence()
+        return array_default()
+
+    assert _execute(compose_module(module.definition)) == 5.0
+
+
+@pytest.mark.parametrize("container", ["ndarray", "list"])
+@pytest.mark.parametrize("default", [False, True])
+def test_direct_array_literals_and_defaults_use_consumer_contract(
+    container: str, default: bool
+) -> None:
+    raw = np.array([5.0, 6.0])
+    values = raw if container == "ndarray" else [5.0, 6.0]
+
+    default_values = cast("MHzArray", values)
+
+    @sc.compute
+    def consume(x: MHzArray = default_values) -> float:
+        assert x.dtype == np.float64
+        np.testing.assert_array_equal(x, [5.0, 6.0])
+        return float(x.mean())
+
+    @sc.module(id="units.literal-array")
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        return consume() if default else consume(values)
+
+    logical = compose_module(module.definition)
+    raw[:] = 0.0
+    if isinstance(values, list):
+        values[:] = [0.0, 0.0]
+    assert _execute(logical) == 5.5
+
+
+type ComplexMHzArray = Annotated[
+    NDArray[np.complex128],
+    sc.ArrayType(dtype="complex128", unit="MHz", dimensions=_DIMENSIONS),
+]
+
+
+@pytest.mark.parametrize("path", ["input", "literal", "default"])
+def test_complex_array_snapshots_execute_with_native_dtype(path: str) -> None:
+    from scopecat.compiler.frontend.resolution import compile_invocation
+
+    raw = np.array([5000 + 1000j, 6000 + 2000j], dtype=np.complex128)
+
+    default_values = raw / 1000
+
+    @sc.compute
+    def consume(x: ComplexMHzArray = default_values) -> float:
+        assert x.dtype == np.complex128
+        np.testing.assert_array_equal(x, [5 + 1j, 6 + 2j])
+        return float(x.real.mean())
+
+    @sc.experiment(id="units.complex-array")
+    def experiment(
+        ctx: sc.ExperimentContext,
+        x: Annotated[
+            sc.Input[NDArray[np.complex128]],
+            sc.ArrayType(dtype="complex128", unit="kHz", dimensions=_DIMENSIONS),
+        ],
+    ) -> sc.DataRef[float]:
+        if path == "input":
+            return consume(sc.input_ref(x))
+        if path == "default":
+            return consume()
+        return consume(raw / 1000)
+
+    invocation = experiment.build(x=raw)
+    if path == "input":
+        raw[:] = 0
+    logical = compile_invocation(invocation).program.program
+    raw[:] = 0
+    assert _execute(logical) == 5.5
+
+
+@pytest.mark.parametrize("values", [[5.0, 6.0, 7.0], [5 + 1j, 6 + 2j]])
+def test_direct_array_literals_still_validate_shape_and_dtype(values: object) -> None:
+    @sc.compute
+    def consume(x: MHzArray) -> float:
+        raise AssertionError("invalid literals must fail before execution")
+
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        return consume(cast("list[object]", values))
+
+    with pytest.raises(TypeError, match=r"compute.*consume.*input.*x"):
+        compose_module(sc.module(module, id="units.invalid-literal-array").definition)

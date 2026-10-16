@@ -59,7 +59,10 @@ def test_teaching_can_record_mean_iq_without_losing_old_shots(
                 "from numpy.typing import NDArray\n"
                 "import numpy as np\n\n"
                 "@sc.compute\n"
-                "def mean_iq(iq: NDArray[np.complex128]) -> Annotated[\n"
+                "def mean_iq(iq: Annotated[NDArray[np.complex128], sc.ArrayType(\n"
+                '    dtype="complex128", unit="ratio",\n'
+                '    dimensions=(sc.ArrayDimension("shot", None),),\n'
+                ")]) -> Annotated[\n"
                 '    complex, sc.ScalarType(sc.ComplexType(unit="ratio"))\n'
                 "]:\n"
                 "    return complex(iq.mean())",

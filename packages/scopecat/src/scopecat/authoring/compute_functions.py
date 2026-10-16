@@ -9,11 +9,11 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Protocol, cast, overload
 
+from scopecat.authoring._compute_contracts import ComputeArgument
 from scopecat.authoring._module_results import DataRef
 from scopecat.program.products import ProductNativeValue, ProductRef, ProductRefs
 from scopecat.program.value_refs import ValueRef
 from scopecat.program.value_types import Array, Scalar
-from scopecat.program.values import ComputeInput
 
 type ComputeOutput = Scalar | Array | Callable[..., Scalar | Array]
 
@@ -23,7 +23,7 @@ class _ComputeRecorder(Protocol):
         self,
         *,
         fn: Callable[..., ProductNativeValue],
-        inputs: Mapping[str, ComputeInput | ProductRef],
+        inputs: Mapping[str, ComputeArgument],
         output_type: Scalar | Array | None = None,
     ) -> ValueRef | ProductRef | ProductRefs: ...
 
@@ -56,9 +56,7 @@ class DeferredCompute[**P, T: ProductNativeValue]:
     _signature: inspect.Signature
     _output_type: ComputeOutput | None = None
 
-    def __call__(
-        self, *args: ComputeInput | ProductRef, **kwargs: ComputeInput | ProductRef
-    ) -> DataRef[T]:
+    def __call__(self, *args: ComputeArgument, **kwargs: ComputeArgument) -> DataRef[T]:
         context = _current_context.get()
         if context is None:
             raise RuntimeError(
@@ -66,6 +64,7 @@ class DeferredCompute[**P, T: ProductNativeValue]:
                 "use .eager(...) to execute with native values"
             )
         bound = self._signature.bind(*args, **kwargs)
+        supplied = dict(bound.arguments)
         bound.apply_defaults()
         output_type = self._output_type
         if callable(output_type):
@@ -79,7 +78,7 @@ class DeferredCompute[**P, T: ProductNativeValue]:
             context.compute(
                 fn=self.eager,
                 output_type=output_type,
-                inputs=cast("Mapping[str, ComputeInput | ProductRef]", bound.arguments),
+                inputs=cast("Mapping[str, ComputeArgument]", supplied),
             ),
         )
 

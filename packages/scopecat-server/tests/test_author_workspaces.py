@@ -14,6 +14,7 @@ from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import resolve_daemon_endpoint
 from scopecat.project import open_project
+from scopecat.records.launch_rejection import AuthorLaunchRejected
 from scopecat.records.scientific_selection import ParameterConfiguration
 from scopecat_testkit.project_loading import isolated_project_imports
 
@@ -180,8 +181,12 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
             )
             b.refresh()
             # The changed field now violates the consumer contract during graph build.
-            with pytest.raises(httpx2.HTTPStatusError) as incompatible:
+            with pytest.raises(AuthorLaunchRejected) as incompatible:
                 b.prepare("signal")
+            assert (
+                incompatible.value.diagnostic.problems[0].code
+                == "compute_input_contract"
+            )
             assert "scale" in str(incompatible.value)
             assert a.state() == initial_a
             assert a.devices.drivers() == driver_versions
