@@ -76,13 +76,13 @@ native argument checking. Symbolic argument names and required arguments are
 checked during graph construction; symbolic calls do not yet statically transform
 each native argument type into its corresponding reference type.
 
-Plain `Quantity` parameters are checked at graph construction against literal or
-reference schemas. For example, `response("wrong", center)` fails with the compute
-and input names when `response` declares that input as `Quantity`. This check
-also applies to `ctx.compute`; it does not convert values or impose a dimension.
-Use the native function's `.to("MHz")` conversion when different frequency units
-are welcome. Explicit `Annotated` unit contracts retain their exact-unit check.
-Other plain Python parameter annotations are not generally checked at construction.
+普通 `Quantity` 参数会在构图时按字面量或引用的 schema 检查。例如，
+`response` 的参数声明为 `Quantity` 时，`response("wrong", center)` 会报出
+compute 和参数名。`ctx.compute` 也使用同一检查，不在此处转换单位或限定量纲。
+允许不同频率单位时，在原生函数内调用 `.to("MHz")`。
+测量标量传给普通 `Quantity` 参数时，包装边界会用数值及保留单位构造 Quantity；
+普通 `float` 参数仍接收原生数值。显式 `Annotated` 契约保持原有规则，
+不包含在这次测量值适配中。其他普通 Python 参数注解尚未普遍支持构图时检查。
 
 `experiment.compute(fn=ordinary_function, ...)` remains available for explicit
 node IDs, output schemas, structured bundles and axis inheritance. When its

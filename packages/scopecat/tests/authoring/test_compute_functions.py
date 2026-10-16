@@ -300,3 +300,38 @@ def test_quantity_keyword_and_default_arguments_are_checked() -> None:
         TypeError, match="compute 'response' input 'frequency' expects Quantity"
     ):
         invalid.build()
+
+
+@pytest.mark.parametrize("unit", ["kHz", "ns"])
+def test_measured_quantity_executes_without_changing_float_consumers(unit: str) -> None:
+    from scopecat.compiler.frontend.elaboration import compose_module
+    from scopecat.measurements.results import MeasurementScalar
+
+    @sc.compute
+    def magnitude(frequency: float) -> float:
+        assert isinstance(frequency, float)
+        return frequency
+
+    @sc.module(id="test.measured-quantity-native")
+    def module(ctx: sc.ModuleContext) -> dict[str, sc.DataRef[float]]:
+        measured = ctx._product("frequency", dtype="float64", unit=unit)
+        return {
+            "quantity": lorentzian(measured, sc.Quantity(5, "MHz")),
+            "magnitude": magnitude(measured),
+        }
+
+    quantity_compute, magnitude_compute = compose_module(
+        module.definition
+    ).measurement_computes
+    measured_value = MeasurementScalar.create(value=5000.0, dtype="float64", unit=unit)
+    magnitude_result = magnitude_compute.kernel({"frequency": measured_value})
+    assert magnitude_result["result"] == MeasurementScalar.create(value=5000.0)
+    inputs = {"frequency": measured_value, "center": sc.Quantity(5, "MHz")}
+    if unit == "kHz":
+        result = quantity_compute.kernel(inputs)
+        assert result["result"] == MeasurementScalar.create(value=1.0)
+    else:
+        # The measurement wrapper preserves the source unit; the function's
+        # existing native conversion rejects a time quantity as a frequency.
+        with pytest.raises(ValueError, match="convert"):
+            quantity_compute.kernel(inputs)
