@@ -286,7 +286,14 @@ export default function App() {
   }, []);
   const selectAnalysis = useCallback((analysisId: string, options?: NavigationOptions) => {
     setSelectedAnalysisId(analysisId);
-    navigateToView("analyses", { analysisId }, options);
+    navigateToView(
+      "analyses",
+      { analysisId },
+      {
+        ...options,
+        state: { scopecatComparison: window.history.state?.scopecatComparison, ...options?.state },
+      },
+    );
   }, []);
   const selectSample = useCallback((sampleId: string, revision?: number) => {
     setSelectedSampleId(sampleId);
@@ -752,6 +759,9 @@ function navigateToView(
     location.searchParams.delete("run");
   }
   if (selection.analysisId) {
+    location.searchParams.delete("compare");
+    location.searchParams.delete("comparison-analysis");
+    location.searchParams.delete("workspace");
     location.searchParams.set("analysis", selection.analysisId);
   } else {
     location.searchParams.delete("analysis");
