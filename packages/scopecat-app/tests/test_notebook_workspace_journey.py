@@ -78,7 +78,9 @@ def test_notebook_workspace_cells(
             )
             result = shell.run_cell("import scopecat as sc; sc.notebook(root)")
             assert isinstance(result.error_in_exec, ValueError)
-            assert "author imports require scopecat==" in str(result.error_in_exec)
+            message = str(result.error_in_exec)
+            assert "execution dependency scopecat==" in message
+            assert "does not accept installed 0.1.99" in message
         cell("""
 import scopecat as sc
 session = sc.notebook(root)
