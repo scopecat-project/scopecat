@@ -240,3 +240,97 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
     finally:
         release_notebook_imports(project.root)
         stop_project(project)
+
+
+def test_wait_hands_off_input_only_after_worker_exit(tmp_path: Path) -> None:
+    """Hold a real worker after its durable input wait, before process exit."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    project = initialize_project(tmp_path / "handoff")
+    manifest = project.root / "scopecat.toml"
+    manifest.write_text(
+        manifest.read_text()
+        + '\n[lab.capabilities]\nprocedures = ["scopecat_lab.workflow:ordinary"]\n'
+    )
+    gate = tmp_path / "exit.lock"
+    source = project.root / "src/scopecat_lab/workflow.py"
+    source.write_text(
+        _SOURCE.replace(
+            "    time.sleep(2)\n",
+            "    import atexit\n"
+            "    from filelock import FileLock\n"
+            "    def exiting():\n"
+            f"        with FileLock({str(gate)!r}, timeout=60):\n"
+            "            pass\n"
+            "    atexit.register(exiting)\n",
+        )
+    )
+    source.with_name("helper.py").write_text('LABEL = "exit barrier"\n')
+    start_project(project, timeout=60)
+    try:
+        with isolated_project_imports(), project.authoring() as author:
+            author.refresh()
+            module = importlib.import_module("scopecat_lab.workflow")
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                with FileLock(gate, timeout=60):
+                    handle = author.procedures.prepare(
+                        module.ordinary,
+                        module.Intent(label="Review"),
+                        request_key="exit",
+                    ).submit()
+                    observed = Event()
+                    read_progress = author.procedure_progress
+
+                    def progress(
+                        procedure_id: str,
+                        *,
+                        cursor: int | None = None,
+                        timeout: float | None = None,
+                    ):
+                        result = read_progress(
+                            procedure_id, cursor=cursor, timeout=timeout
+                        )
+                        if (
+                            result.procedure.state == "waiting_for_input"
+                            and result.dispatch.worker_running
+                        ):
+                            observed.set()
+                        return result
+
+                    with patch.object(
+                        author, "procedure_progress", side_effect=progress
+                    ):
+                        waiting = executor.submit(handle.wait)
+                        assert observed.wait(30), (
+                            "wait did not observe the exit barrier"
+                        )
+                        assert not waiting.done()
+                assert waiting.result(timeout=60).state == "waiting_for_input"
+            view = handle.progress()
+            assert not view.dispatch.worker_running
+            step = view.steps.items[0]
+            assert step.interpretation_request is not None
+            author.submit_procedure_step_input(
+                ProcedureStepInputSubmitCommand(
+                    procedure_run_id=handle.id,
+                    expected_run_revision=view.procedure.revision,
+                    step_key=step.step_key,
+                    attempt=step.attempt,
+                    expected_step_revision=step.revision,
+                    request_hash=step.interpretation_request.request_hash,
+                    actor="test-author",
+                    actor_kind="human",
+                    value={"accepted": True},
+                )
+            )
+            assert handle.resume().dispatch_error is None
+            _wait(handle, "closed")
+            closure = handle.snapshot.closure
+            assert closure is not None and closure.status == "succeeded"
+            steps = handle.steps().items
+            assert len(steps) == 1
+            assert steps[0].attempt == 1 and steps[0].state == "succeeded"
+    finally:
+        release_notebook_imports(project.root)
+        stop_project(project)
