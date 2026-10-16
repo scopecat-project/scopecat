@@ -27,6 +27,7 @@ from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
 from scopecat_server.storage.sqlite.experimental_batches import ExperimentalBatchStore
+from scopecat_server.storage.sqlite.managed_analysis import ManagedAnalysisRepository
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.record_collections import RecordCollectionStore
 from scopecat_server.storage.sqlite.research_projects import ResearchProjectStore
@@ -96,6 +97,7 @@ class DaemonApplication:
         self.deployment_id = deployment_id
         self._project_store = project_store
         self.data_exchange = DataExchangeService(project_store)
+        self.managed_analyses = ManagedAnalysisRepository(project_store.sqlite)
         self.analysis_follows = AnalysisFollowRepository(project_store.sqlite)
         self.driver_sources = DriverSourceService(
             self.project_root, project_store, devices, instruments

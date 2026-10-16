@@ -1362,8 +1362,8 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
     """Seed terminal records through services; policy checks need no acquisition.
 
     The reference journey covers actual managed analysis/source capture. Here the
-    registered source bundle and result facts are explicit fixtures, while HTTP,
-    SQLite receipts and both client/server verification remain real.
+    source bundle, result facts and server execution binding are explicit fixtures.
+    HTTP, SQLite receipts and both client/server verification remain real.
     """
     (tmp_path / "src").mkdir()
     (tmp_path / "src/policy.py").write_text("# Retained policy fixture.\n")
@@ -1372,9 +1372,14 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         '[authors]\nsource_roots=["src"]\nrefresh_roots=["src"]\n'
     )
     bundle = capture_sources(load_project(tmp_path / "scopecat.toml"))
+    from scopecat.records.author_revision import (
+        AuthorAnalysisReceipt,
+        AuthorAnalysisRequest,
+    )
+
     from scopecat_server.author_registration import register_author_workspace
 
-    source = register_author_workspace(tmp_path, tmp_path)
+    workspace = register_author_workspace(tmp_path, tmp_path)
     schema = ordinary_result_schema(_CandidateDecision)
     with (
         LocalDaemonRuntime(
@@ -1382,10 +1387,10 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
         ) as runtime,
         TestClient(runtime.app()) as transport,
     ):
-        runtime.application.author_workspaces.get(source.id).repository.publish(
+        runtime.application.author_workspaces.get(workspace.id).repository.publish(
             bundle, expected_generation=0
         )
-        lab = LabClient(_daemon_client(transport, workspace_id=source.id))
+        lab = LabClient(_daemon_client(transport, workspace_id=workspace.id))
         sample = lab.samples.create(
             "policy-sample",
             kind="synthetic",
@@ -1451,6 +1456,22 @@ def test_typed_candidate_policy_uses_retained_decision_and_workpoint(
                 .fact("author_code_revision", bundle.manifest.ref.content_hash)
                 .save()
                 .result_as(_CandidateDecision)
+            )
+            with pytest.raises(ValueError, match="no managed author source receipt"):
+                candidate.verify(result)
+            # Seed the server-only receipt just as this test seeds terminal runs.
+            # The author journey separately executes and checks a real managed worker.
+            runtime.application.managed_analyses.retain(
+                AuthorAnalysisRequest(
+                    workspace_id=workspace.id,
+                    code_revision=bundle.manifest.ref,
+                    run_id=run_id,
+                    analysis="policy:fixture",
+                ),
+                AuthorAnalysisReceipt(
+                    code_revision=bundle.manifest.ref,
+                    analysis_id=result.publication.id,
+                ),
             )
             if context_id is None:
                 # Editing the returned dataclass cannot override the saved rejection.

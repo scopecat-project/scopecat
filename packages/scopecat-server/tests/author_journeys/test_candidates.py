@@ -1,6 +1,7 @@
 """Receipt cells and independent verification without publishing shared defaults."""
 
 import shutil
+import sqlite3
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -21,6 +22,7 @@ from ui_signal.application import initial_parameters
 from ui_signal.signal import SignalParameters
 
 from scopecat_server.lifecycle import start_project, stop_project
+from scopecat_server.storage.sqlite.upgrade_115 import upgrade_115
 
 from .conftest import FIXTURE_ROOT
 
@@ -95,6 +97,43 @@ def test_typed_candidates_retain_cells_and_independent_policy(
                 key="signal",
                 fields={"center": "frequency"},
             )
+        fit_key = fit.publication.view.analysis.key
+        assert fit_key is not None
+        claimed = (
+            run.analysis("claimed managed estimate", key=fit_key)
+            .result()
+            .fact(
+                "result",
+                replace(fit.value, frequency=sc.Quantity(5.9, "GHz")),
+                schema=ordinary_result_schema(PeakResult),
+            )
+            .fact(
+                "author_code_revision",
+                fit.publication.fact("author_code_revision").value,
+            )
+            .save()
+            .result_as(PeakResult)
+        )
+        # A later revision under the same key cannot replace the worker's exact ID.
+        assert claimed.publication.id != fit.publication.id
+        assert (
+            run.published_analysis(fit.publication.id).publication_hash
+            == fit.publication.publication_hash
+        )
+        assert run.published_analysis(fit_key).id == claimed.publication.id
+        with pytest.raises(ValueError, match="no managed author source receipt"):
+            author.config.stage(
+                claimed,
+                name="claimed-manual",
+                table="signal",
+                key="signal",
+                fields={"center": "frequency"},
+            )
+        with httpx2.Client(base_url=endpoint.base_url) as client:
+            path = f"/api/v1/runs/{run.id}/analyses/{fit.publication.id}/managed-source"
+            assert (
+                client.get(path, params={"publication_hash": "wrong"}).json() is False
+            )
         original = run.config.parameter_snapshot.get("signal")
         resolved = author.config.resolve(candidate.config).parameter_snapshot.get(
             "signal"
@@ -158,6 +197,32 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         )
         with pytest.raises(ValueError, match="exact candidate"):
             other.verify(check)
+        manual_check = (
+            check_run.analysis("claimed managed verification")
+            .result()
+            .fact(
+                "result", check.value, schema=ordinary_result_schema(PeakVerification)
+            )
+            .fact(
+                "author_code_revision",
+                check.publication.fact("author_code_revision").value,
+            )
+            .save()
+            .result_as(PeakVerification)
+        )
+        with pytest.raises(ValueError, match="no managed author source receipt"):
+            candidate.verify(manual_check)
+        rejected = author.analyze_as(
+            check_run.id,
+            f"{analysis_module}:verify_peak",
+            PeakVerification,
+            arguments={
+                "expected_frequency": sc.Quantity(5.9, "GHz"),
+                "tolerance": sc.Quantity(0.01, "GHz"),
+            },
+        )
+        with pytest.raises(ValueError, match="verification rejected"):
+            candidate.verify(rejected)
         verified = candidate.verify(check)
         # Discovery applies the same exact-candidate gate as publication.
         with httpx2.Client(base_url=endpoint.base_url) as client:
@@ -220,3 +285,72 @@ def test_typed_candidates_retain_cells_and_independent_policy(
         assert lab.parameters.get(baseline.id) == baseline
         assert lab.parameters.checkout("daily").head.generation == branch.generation + 1
         assert lab.parameters.checkout("daily").head.revision == advanced.ref
+
+    # Reconnect after a real daemon restart: bindings are durable, not session facts.
+    stop_project(project)
+    endpoint = start_project(project)
+    with project.authoring() as author:
+        retained = (
+            author.run(run.id)
+            .published_analysis(fit.publication.id)
+            .result_as(PeakResult)
+        )
+        reopened = author.config.candidate(run.id, candidate.name)
+        reopened.verify(
+            author.run(check_run.id)
+            .published_analysis(check.publication.id)
+            .result_as(PeakVerification)
+        )
+        author.config.stage(
+            retained,
+            name="reopened",
+            table="signal",
+            key="signal",
+            fields={"center": "frequency"},
+        )
+        for bad, owner, result_type in (
+            (claimed, run, PeakResult),
+            (manual_check, check_run, PeakVerification),
+        ):
+            reread = (
+                author.run(owner.id)
+                .published_analysis(bad.publication.id)
+                .result_as(result_type)
+            )
+            assert reread.value == bad.value
+            with pytest.raises(ValueError, match="no managed author source receipt"):
+                reopened.verify(reread)
+
+    # Model the exact old schema, where publications existed without managed bindings.
+    stop_project(project)
+    database = project.runtime_binding.data_root / "control.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("DROP TABLE managed_analysis_publications")
+        connection.execute("UPDATE project_schema SET version=115")
+    assert upgrade_115(database, tmp_path / "upgrade-backup") is not None
+    start_project(project)
+    with project.authoring() as author:
+        old_fit = (
+            author.run(run.id)
+            .published_analysis(fit.publication.id)
+            .result_as(PeakResult)
+        )
+        assert old_fit.value == fit.value
+        with pytest.raises(ValueError, match="no managed author source receipt"):
+            author.config.stage(
+                old_fit,
+                name="old",
+                table="signal",
+                key="signal",
+                fields={"center": "frequency"},
+            )
+        repeated = author.analyze_as(
+            run.id, f"{analysis_module}:estimate_peak", PeakResult
+        )
+        author.config.stage(
+            repeated,
+            name="reanalyzed",
+            table="signal",
+            key="signal",
+            fields={"center": "frequency"},
+        )

@@ -37,7 +37,6 @@ from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.value_types import Table
 from scopecat.kernel.value_validation import coerce_literal
 from scopecat.records.analysis import ProjectAnalysisDecisionReference
-from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.parameter import ParameterAtomValue
 from scopecat.records.parameter_branch import ParameterBranch
@@ -350,16 +349,13 @@ def _managed_result[ResultT](
             "candidate evidence requires a completed successful retained run"
         )
     publication = run.published_analysis(result.publication.id)
-    try:
-        revision = publication.fact("author_code_revision").value
-    except KeyError:
+    if not operations.client.has_managed_analysis(
+        run.id, publication.id, publication.view.analysis.publication_hash
+    ):
         raise ValueError(
             "result has no managed author source receipt; "
             "manual values belong in a workspace"
-        ) from None
-    if not isinstance(revision, str):
-        raise ValueError("result has no managed author source revision")
-    operations.client.author_revision(AuthorRevisionRef(content_hash=revision))
+        )
     value = publication.fact_as("result", ordinary_result_schema(type(result.value)))
     return run, publication, value
 

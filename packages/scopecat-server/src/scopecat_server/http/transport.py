@@ -792,6 +792,11 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             raise HTTPException(
                 422, lines[-1] if lines else f"Retained {operation} failed"
             )
+        if isinstance(command, AnalysisCall):
+            application.managed_analyses.retain(
+                command.request,
+                AuthorAnalysisReceipt.model_validate_json(completed.stdout),
+            )
         return completed.stdout
 
     def validate_task_call(command: ProcedureSubmitCommand) -> None:
@@ -849,6 +854,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             lambda run_id: application.runs.get_run_request(run_id), describe_actions
         )
     )
+
+    @app.get(f"{_API_PREFIX}/runs/{{run_id}}/analyses/{{analysis_id}}/managed-source")
+    def managed_analysis_source(
+        run_id: str, analysis_id: str, publication_hash: str
+    ) -> bool:
+        return application.managed_analyses.contains(
+            run_id, analysis_id, publication_hash
+        )
 
     @app.post(f"{_API_PREFIX}/author-revisions/analyze")
     def analyze_author_revision(

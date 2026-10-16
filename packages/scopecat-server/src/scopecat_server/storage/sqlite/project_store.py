@@ -132,8 +132,8 @@ def _has_project_schema(connection: sqlite3.Connection) -> bool:
 
 _VERSION_GUIDANCE = (
     "Preserve the original project and snapshot. Use its pinned Scopecat reader; "
-    "start a fresh data space for this development version. "
-    "No compatibility baseline or development-store upgrade path is supported."
+    "Only schema 115 has an explicit backup-and-upgrade action in startup recovery. "
+    "Other development formats have no supported upgrade path."
 )
 
 

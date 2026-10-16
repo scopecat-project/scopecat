@@ -133,6 +133,16 @@ def context_group_peak(context: sc.AnalysisContext) -> sc.Analysis:
             assert [group.value for group in followed] == [
                 group.value for group in first.groups
             ]
+            # Both offline grouping and follow go through the shared server retain.
+            with httpx2.Client(base_url=endpoint.base_url) as client:
+                for group in (*first.groups, *followed):
+                    publication = group.publication
+                    response = client.get(
+                        f"/api/v1/runs/{run.id}/analyses/{publication.id}/managed-source",
+                        params={"publication_hash": publication.publication_hash},
+                    )
+                    response.raise_for_status()
+                    assert response.json() is (group.receipt.error is None)
             exported = tmp_path / "groups.scopecat"
             response = httpx2.get(
                 f"{endpoint.base_url}/api/v1/data/runs/{run.id}/file",

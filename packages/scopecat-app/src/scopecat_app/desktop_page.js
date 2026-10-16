@@ -64,3 +64,10 @@ window.addEventListener("keydown", (event) => {
   event.preventDefault();
   if (!event.repeat) quit();
 });
+
+function upgradeData() {
+  return operate("正在备份并升级数据，请稍候…", async () => {
+    const changed = await pywebview.api.upgrade_data();
+    if (!changed) progress("");
+  });
+}

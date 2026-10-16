@@ -171,11 +171,9 @@ environment and retained source snapshot. Retaining data does not promise execut
 of arbitrary old code in a new runtime. This is local execution, not an independent
 remote client/server environment.
 
-The current schema is a development format rather than a compatibility
-baseline. [Backup and restore](../how-to/backup-and-restore.md) supports the current
-format only. Earlier formats are rejected without mutation; use fresh state for
-new development and keep original files separately. See the
-[data compatibility policy](../development/data-compatibility.md).
+当前 schema 是开发期数据格式，尚未被指定为长期兼容基线。
+[备份与恢复](../how-to/backup-and-restore.md)支持当前格式；schema 115 可在启动恢复页选择备份并原地升级至 116。
+其他早期格式仍拒绝打开且不修改原件，具体边界见[数据兼容策略](../development/data-compatibility.md)。
 
 ### Register another author workspace
 
