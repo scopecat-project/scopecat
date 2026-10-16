@@ -6,12 +6,14 @@ import importlib
 import json
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
 import httpx2
 import pytest
 from filelock import FileLock
+from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.application.author_imports import release_notebook_imports
 from scopecat.application.author_procedures import AuthorProcedure
 from scopecat.automation.wire import (
@@ -149,19 +151,19 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                 receipt = Path(view.dispatch.log_path).with_name("process.json")
                 assert json.loads(receipt.read_text())["pid"] != os.getpid()
                 assert prepared.reconnect(reconnected).submit().id == handle.id
-                reconnected.submit_procedure_step_input(
-                    ProcedureStepInputSubmitCommand(
-                        procedure_run_id=handle.id,
-                        expected_run_revision=observed.snapshot.revision,
-                        step_key=step.step_key,
-                        attempt=step.attempt,
-                        expected_step_revision=step.revision,
-                        request_hash=step.interpretation_request.request_hash,
-                        actor="test-author",
-                        actor_kind="human",
-                        value={"accepted": True},
-                    )
+
+                @dataclass(frozen=True)
+                class Answer:
+                    accepted: bool
+
+                pending = observed.pending_input(
+                    "confirm", schema=AnalysisFactSchema("test.answer.v1", Answer)
                 )
+                assert pending.request.instructions == "original source"
+                answered = pending.respond(Answer(True), actor="test-author")
+                assert answered.run.state == "ready"
+                assert pending.respond(Answer(True), actor="test-author") == answered
+                assert observed.progress().dispatch.management == "paused"
                 assert observed.resume().dispatch_error is None
                 _wait(observed, "closed")
                 closure = observed.snapshot.closure

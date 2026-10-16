@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.api.procedure_inputs import PendingProcedureInput
 from scopecat.automation import (
     InterpretationRequest,
     ProcedureCloseCommand,
@@ -28,6 +30,7 @@ from scopecat.automation import (
 )
 from scopecat.config.scientific_binding import bind_scientific_evidence
 from scopecat.control.models import RunPlanSummary
+from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.wire import RunSubmission, SampleCreateCommand, SampleReviseCommand
 from scopecat.records.config import InstrumentRegistry, RoutingGraph
 from scopecat.records.run_request import RunRequest
@@ -259,7 +262,38 @@ def test_interpretation_waits_without_a_lease_and_resumes_after_typed_input(
         value={"resonator": "r2"},
         note="clearest isolated dip",
     )
-    answered = service.submit_step_input(answer_command)
+    # A displayed question with the same answer schema must not be silently
+    # rebound to the current question. Keep revisions equal to exercise the
+    # request-hash fence specifically, through the real service transaction.
+    client = Mock(spec=DaemonClient)
+    client.submit_procedure_step_input.side_effect = service.submit_step_input
+    previous_request = request.model_copy(update={"title": "A different question"})
+    previous_step = waiting.step.model_copy(
+        update={
+            "interpretation_request": previous_request,
+            "intent_hash": previous_request.request_hash,
+        }
+    )
+    stale = PendingProcedureInput(client, waiting.run, previous_step, schema)
+    with pytest.raises(BackendConflict, match="request changed"):
+        stale.respond(_ResonatorSelection("r2"), actor="operator@example.test")
+    assert client.submit_procedure_step_input.call_count == 1
+    client.get_procedure.assert_not_called()
+    client.dispatch_project_procedure.assert_not_called()
+    pending = PendingProcedureInput(client, waiting.run, waiting.step, schema)
+    answered = pending.respond(
+        _ResonatorSelection("r2"),
+        actor="operator@example.test",
+        note="clearest isolated dip",
+    )
+    assert (
+        pending.respond(
+            _ResonatorSelection("r2"),
+            actor="operator@example.test",
+            note="clearest isolated dip",
+        )
+        == answered
+    )
 
     assert answered.run.state == "ready"
     assert answered.output.response.value == {"resonator": "r2"}
