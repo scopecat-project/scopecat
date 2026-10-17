@@ -90,7 +90,7 @@ export function PlanSave({
     }
   }
   return (
-    <section aria-label="Save experiment plan" className="border rounded p-3 space-y-2">
+    <section aria-label="Save experiment plan" className="border border-line rounded p-3 space-y-2">
       <Field>
         Plan name{" "}
         <Input
