@@ -1,3 +1,4 @@
+import { Field, Select, Notice } from "../../ui/Controls";
 import { secondaryButton } from "../../ui/styles";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -55,13 +56,12 @@ export function ParameterBranchPicker({
       </button>
       {browse && (
         <>
-          <label className="flex flex-col gap-1">
+          <Field className="flex-col">
             Parameter branch
-            <select
+            <Select
               aria-label="Parameter branch"
               value={name}
               disabled={disabled || heads.isPending}
-              className="border rounded p-2"
               onChange={(event) => setName(event.target.value)}
             >
               <option value="">Choose a branch</option>
@@ -70,8 +70,8 @@ export function ParameterBranchPicker({
                   {item.name} · generation {item.generation}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
           {branch && (
             <p>
               {branch.name} · generation {branch.generation} · {branch.actor}
@@ -114,7 +114,7 @@ export function ParameterBranchPicker({
               Load more parameter branches
             </button>
           )}
-          {heads.error && <p role="alert">{heads.error.message}</p>}
+          {heads.error && <Notice role="alert">{heads.error.message}</Notice>}
           {heads.isSuccess && items.length === 0 && (
             <p>No parameter branches yet. Create one in your author session.</p>
           )}

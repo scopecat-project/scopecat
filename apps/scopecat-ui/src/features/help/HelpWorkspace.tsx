@@ -1,3 +1,5 @@
+import { pageTitle, sectionTitle, pageContent, classes } from "../../ui/styles";
+import { Notice } from "../../ui/Controls";
 import type { ProjectHealth } from "../../types";
 import { NotebookJourneyPanel } from "./NotebookJourneyPanel";
 import { PracticePanel } from "./PracticePanel";
@@ -13,19 +15,19 @@ export function HelpWorkspace({
   reachable: boolean;
 }) {
   return (
-    <section aria-labelledby="help-heading" className="grid max-w-4xl gap-4 p-6">
-      <h2 id="help-heading" className="text-lg font-semibold">
+    <section aria-labelledby="help-heading" className={classes(pageContent, "max-w-4xl")}>
+      <h2 id="help-heading" className={pageTitle}>
         Help
       </h2>
       {!reachable && (
-        <p role="status">
+        <Notice role="status">
           The application cannot currently be reached. Reopen Scopecat and use its recovery action
           to stop and restart the recorded background process.
-        </p>
+        </Notice>
       )}
       <PracticePanel reachable={reachable} />
       <section className={section}>
-        <h3 className="font-semibold">Start an experiment</h3>
+        <h3 className={sectionTitle}>Start an experiment</h3>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
             Open your code folder in VS Code. Select the Python interpreter shown in{" "}
@@ -49,7 +51,7 @@ export function HelpWorkspace({
         </ol>
       </section>
       <section className={section}>
-        <h3 className="font-semibold">Devices and measurement context</h3>
+        <h3 className={sectionTitle}>Devices and measurement context</h3>
         <p>
           Maintain devices in{" "}
           <a className="underline" href="#instruments">
@@ -72,7 +74,7 @@ export function HelpWorkspace({
         </a>
       </section>
       <section className={section}>
-        <h3 className="font-semibold">Finish work or keep it running</h3>
+        <h3 className={sectionTitle}>Finish work or keep it running</h3>
         <p>
           Save your files. Closing the last window keeps Scopecat in the background. Use Open in the
           menu bar or system tray to return, or Quit to exit the application. With unfinished work,

@@ -1,3 +1,4 @@
+import { Notice, Button, Field, Select } from "../../ui/Controls";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { errorMessage } from "../../lib/presentation";
 import {
@@ -68,25 +69,24 @@ export function TargetPicker({
           )}
           {selected.isPending && <p>Resolving the selected exact target revision…</p>}
           {selected.error && (
-            <p role="alert">
+            <Notice role="alert">
               Cannot resolve this exact registered target: {errorMessage(selected.error)}{" "}
-              <button type="button" disabled={disabled} onClick={() => void selected.refetch()}>
+              <Button type="button" disabled={disabled} onClick={() => void selected.refetch()}>
                 Retry target resolution
-              </button>
-            </p>
+              </Button>
+            </Notice>
           )}
           {selected.data && unsupportedTarget(selected.data) && (
-            <p role="alert">{unsupportedTarget(selected.data)}</p>
+            <Notice role="alert">{unsupportedTarget(selected.data)}</Notice>
           )}
         </div>
       )}
       {browse && (
         <>
-          <label className="flex flex-col gap-1">
+          <Field className="flex-col">
             Registered target
-            <select
+            <Select
               aria-label="Registered target"
-              className="border rounded p-2"
               disabled={disabled || heads.isPending}
               value={selectedKey}
               onChange={(event) => {
@@ -115,26 +115,26 @@ export function TargetPicker({
                   {unsupportedTarget(target) ? ` · unsupported: ${unsupportedTarget(target)}` : ""}
                 </option>
               ))}
-            </select>
-          </label>
-          <button
+            </Select>
+          </Field>
+          <Button
             type="button"
             disabled={disabled || heads.isFetching}
             onClick={() => void heads.refetch()}
           >
             Refresh target list
-          </button>
+          </Button>
           {heads.hasNextPage && (
-            <button
+            <Button
               type="button"
               disabled={disabled || heads.isFetchingNextPage}
               onClick={() => void heads.fetchNextPage()}
             >
               Load more targets
-            </button>
+            </Button>
           )}
           {heads.error && (
-            <p role="alert">Cannot read target catalog: {errorMessage(heads.error)}</p>
+            <Notice role="alert">Cannot read target catalog: {errorMessage(heads.error)}</Notice>
           )}
           {heads.isSuccess && items.length === 0 && <p>No registered targets in this catalog.</p>}
           <p>

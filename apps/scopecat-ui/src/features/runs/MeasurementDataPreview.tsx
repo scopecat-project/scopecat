@@ -1,3 +1,4 @@
+import { Field, Select, Input, Notice } from "../../ui/Controls";
 import { useMeasurementFocus } from "./MeasurementWorkspace";
 import { classes } from "../../ui/styles";
 import { MeasurementRecordTable } from "./MeasurementRecordTable";
@@ -213,11 +214,10 @@ export function MeasurementDataPreview({
                 supportsAxisSelection &&
                 slicePlan.numericAxes.length > 0 && (
                   <>
-                    <label className="grid gap-1 text-xs text-text-soft">
+                    <Field>
                       Horizontal axis
-                      <select
+                      <Select
                         aria-label="Horizontal axis"
-                        className="rounded border border-line bg-panel px-2 py-1"
                         value={slicePlan.varyingAxes[0]?.id}
                         onChange={(event) =>
                           onMeasurementAxesChange({
@@ -235,13 +235,12 @@ export function MeasurementDataPreview({
                             {axis.unit ? ` [${axis.unit}]` : ""}
                           </option>
                         ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-xs text-text-soft">
+                      </Select>
+                    </Field>
+                    <Field>
                       Vertical axis
-                      <select
+                      <Select
                         aria-label="Vertical axis"
-                        className="rounded border border-line bg-panel px-2 py-1"
                         value={slicePlan.varyingAxes[1]?.id ?? ""}
                         onChange={(event) =>
                           onMeasurementAxesChange({
@@ -259,8 +258,8 @@ export function MeasurementDataPreview({
                               {axis.unit ? ` [${axis.unit}]` : ""}
                             </option>
                           ))}
-                      </select>
-                    </label>
+                      </Select>
+                    </Field>
                   </>
                 )}
               {slicePlan.fixedAxes.map((axis) => {
@@ -282,9 +281,9 @@ export function MeasurementDataPreview({
                         −
                       </button>
                       {axis.size <= MAX_SLICE_SELECT_OPTIONS ? (
-                        <select
+                        <Select
                           aria-label={`${axis.label} slice`}
-                          className="min-w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+                          className="min-w-28"
                           value={selectedIndex}
                           onChange={(event) =>
                             onFixedAxisIndexChange(axis.id, Number(event.target.value))
@@ -295,7 +294,7 @@ export function MeasurementDataPreview({
                               {sliceAxisOption(axis, index)}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       ) : (
                         <>
                           <MeasurementSliceIndex
@@ -418,9 +417,9 @@ export function MeasurementDataPreview({
                     );
                   })
                 ) : (
-                  <select
+                  <Select
                     aria-label={`${axis.label} entity`}
-                    className="max-w-52 rounded border border-line bg-panel px-2 py-1 text-[0.6rem] text-text-soft"
+                    className="max-w-52"
                     onChange={(event) => {
                       if (event.target.value === "all") selectAllEntities(axis.id);
                       else if (event.target.value !== MULTIPLE_ENTITY_SELECTION) {
@@ -446,7 +445,7 @@ export function MeasurementDataPreview({
                         {member.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <span className="text-[0.54rem] text-text-dim">
                   {allSelected ? "Comparing all" : `${selected.length} selected`}
@@ -472,11 +471,11 @@ export function MeasurementDataPreview({
             className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-text-dim"
             hidden={charts.length === 1}
           >
-            <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
+            <Field>
               Trace
-              <select
+              <Select
                 aria-label="Measurement trace"
-                className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+                className="max-w-[min(70vw,420px)]"
                 onChange={(event) => onTracePlanChange?.(event.target.value)}
                 value={selectedTracePlan?.id ?? ""}
               >
@@ -485,8 +484,8 @@ export function MeasurementDataPreview({
                     {plan.label}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
           </div>
           <MeasurementTraceResult
             preview={tracePreview}
@@ -790,9 +789,9 @@ function MeasurementSliceIndex({
     setDraft(undefined);
   };
   return (
-    <input
+    <Input
       aria-label={`${axis.label} slice index`}
-      className="w-28 rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+      className="w-28"
       max={axis.size}
       min={1}
       step={1}
@@ -856,11 +855,11 @@ export function MeasurementChartPicker({
               : "chart candidates"}
         </span>
         {charts.length > 1 && (
-          <label className="flex items-center gap-2 font-bold tracking-[0.04em] uppercase">
+          <Field>
             {signalViews ? "Signal" : "Chart"}
-            <select
+            <Select
               aria-label="Measurement chart"
-              className="max-w-[min(70vw,420px)] rounded border border-line bg-panel px-2 py-1 text-[0.62rem] font-medium tracking-normal text-text-soft normal-case"
+              className="max-w-[min(70vw,420px)]"
               onChange={(event) => (onChartChange ?? setLocalChartId)(event.target.value)}
               value={selectedChart?.id ?? ""}
             >
@@ -869,8 +868,8 @@ export function MeasurementChartPicker({
                   {chartOptionLabel(chart)}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         )}
       </div>
       {selectedChart && <MeasurementChart chart={selectedChart} />}
@@ -942,7 +941,7 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
         </span>
       </figcaption>
       {points.length === 0 ? (
-        <p role="status">No available values for this signal in the selected slice.</p>
+        <Notice role="status">No available values for this signal in the selected slice.</Notice>
       ) : chart.layout === "small-multiples" && chart.series.length > 1 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-2">
           {chart.series.map((series) => (

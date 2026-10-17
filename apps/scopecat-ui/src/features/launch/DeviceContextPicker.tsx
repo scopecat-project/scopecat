@@ -1,3 +1,4 @@
+import { Field, Select, Notice } from "../../ui/Controls";
 import { secondaryButton } from "../../ui/styles";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getSetupDefinitions, getSetupRevision, resolveSetupDefinition } from "../config/setup-api";
@@ -46,11 +47,10 @@ export function DeviceContextPicker({
   const items = revisions.data?.items ?? [];
   return (
     <div className="space-y-2">
-      <label className="flex flex-col gap-1">
+      <Field className="flex-col">
         Experiment setup
-        <select
+        <Select
           aria-label="Experiment setup"
-          className="border rounded p-2"
           value={selectedDefinition ?? ""}
           disabled={disabled || revisions.isPending || revisions.isError || resolution.isPending}
           onChange={(event) => {
@@ -66,8 +66,8 @@ export function DeviceContextPicker({
               {item.id}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
       <button
         className={`${secondaryButton} mr-2`}
         type="button"
@@ -76,9 +76,9 @@ export function DeviceContextPicker({
       >
         Refresh setups
       </button>
-      {revisions.error && <p role="alert">{revisions.error.message}</p>}
-      {resolution.error && <p role="alert">{resolution.error.message}</p>}
-      {retained.error && <p role="alert">{retained.error.message}</p>}
+      {revisions.error && <Notice role="alert">{revisions.error.message}</Notice>}
+      {resolution.error && <Notice role="alert">{resolution.error.message}</Notice>}
+      {retained.error && <Notice role="alert">{retained.error.message}</Notice>}
       {selectedDefinition && (
         <button
           className={`${secondaryButton} mr-2`}

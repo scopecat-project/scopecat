@@ -1,9 +1,8 @@
+import { Notice, Button, Field, Select, Input } from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { errorMessage, titleCase } from "../../lib/presentation";
-import { secondaryButton } from "../../ui/styles";
-
 import type { components } from "../../api-schema";
 
 export type AnalysisActionInput = components["schemas"]["AnalysisActionInput"];
@@ -59,23 +58,24 @@ function DeclaredAnalysisCatalog({ runId }: { runId: string }) {
   if (catalog.isError)
     return (
       <div className="space-y-2 text-sm text-text-soft">
-        <p role="status">Could not load declared analyses: {errorMessage(catalog.error)}</p>
+        <Notice role="status">
+          Could not load declared analyses: {errorMessage(catalog.error)}
+        </Notice>
         <p>
           If the application connection was interrupted, reconnect and reload. Otherwise, use the
           error details above to check this run's original source and environment, or ask its author
           for help. Reloading reads the saved source's declarations; it does not run an analysis.
           Existing results remain available.
         </p>
-        <button
+        <Button
           type="button"
-          className={secondaryButton}
           disabled={catalog.isFetching}
           onClick={() => {
             void catalog.refetch({ cancelRefetch: false });
           }}
         >
           {catalog.isFetching ? "Reloading analyses…" : "Reload declared analyses"}
-        </button>
+        </Button>
       </div>
     );
   if (!catalog.data)
@@ -237,15 +237,15 @@ function AnalysisActionForm({
         <>
           <fieldset disabled={pending} className="my-3 grid gap-3 sm:grid-cols-2">
             {inputs.map((input) => (
-              <label key={input.name} className="grid min-w-0 gap-1">
+              <Field key={input.name} className="min-w-0">
                 <span>
                   {titleCase(input.name)}
                   {input.required ? " (required)" : ""}
                 </span>
                 {input.kind === "boolean" || input.kind === "choice" ? (
-                  <select
+                  <Select
                     aria-label={titleCase(input.name)}
-                    className="min-w-0 rounded border border-line bg-panel p-2"
+                    className="min-w-0"
                     value={values[input.name]!.value}
                     required={input.required}
                     onChange={(event) => edit(input.name, "value", event.target.value)}
@@ -260,12 +260,12 @@ function AnalysisActionForm({
                         </option>
                       ),
                     )}
-                  </select>
+                  </Select>
                 ) : (
                   <div className="flex min-w-0 gap-2">
-                    <input
+                    <Input
                       aria-label={titleCase(input.name)}
-                      className="min-w-0 w-full rounded border border-line bg-panel p-2"
+                      className="min-w-0 w-full"
                       type={
                         ["number", "integer", "quantity"].includes(input.kind) ? "number" : "text"
                       }
@@ -278,9 +278,9 @@ function AnalysisActionForm({
                       onChange={(event) => edit(input.name, "value", event.target.value)}
                     />
                     {input.kind === "quantity" && (
-                      <input
+                      <Input
                         aria-label={`${titleCase(input.name)} unit`}
-                        className="w-24 min-w-0 rounded border border-line bg-panel p-2"
+                        className="w-24 min-w-0"
                         placeholder="Unit"
                         required={input.required || values[input.name]!.value !== ""}
                         value={values[input.name]!.unit}
@@ -289,16 +289,16 @@ function AnalysisActionForm({
                     )}
                   </div>
                 )}
-              </label>
+              </Field>
             ))}
           </fieldset>
-          <button type="submit" className={secondaryButton} disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? "Analyzing…" : `Run ${action.title}`}
-          </button>
+          </Button>
         </>
       )}
       {execute.data && (
-        <p className="mt-2" role="status">
+        <Notice className="mt-2" role="status">
           Analysis finished.{" "}
           <a
             className="text-accent underline"
@@ -306,13 +306,13 @@ function AnalysisActionForm({
           >
             View saved result
           </a>
-        </p>
+        </Notice>
       )}
       {execute.isError && (
-        <p className="mt-2 text-red" role="alert">
+        <Notice className="mt-2 text-red" role="alert">
           {errorMessage(execute.error)} Check analysis history before trying again if the response
           was lost. No automatic retry was submitted.
-        </p>
+        </Notice>
       )}
     </form>
   );

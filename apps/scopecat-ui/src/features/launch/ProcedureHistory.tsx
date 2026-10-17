@@ -27,7 +27,7 @@ export function ProcedureHistory({
   });
   return (
     <details
-      className="border rounded p-4 space-y-2"
+      className="border border-line rounded p-4 space-y-2"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary className="font-semibold">Experiment history</summary>

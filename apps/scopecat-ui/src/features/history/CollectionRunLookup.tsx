@@ -1,7 +1,7 @@
+import { Field, Input, Button, Notice } from "../../ui/Controls";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
-import { secondaryButton } from "../../ui/styles";
 
 export function CollectionRunLookup({
   collection,
@@ -46,11 +46,11 @@ export function CollectionRunLookup({
           }
         }}
       >
-        <label className="flex flex-col gap-1">
+        <Field className="flex-col">
           Collection run number{" "}
-          <input
+          <Input
             aria-label="Collection run number"
-            className="w-28 rounded border border-line p-2"
+            className="w-28"
             value={input}
             type="text"
             inputMode="numeric"
@@ -62,27 +62,24 @@ export function CollectionRunLookup({
               setNumber(undefined);
             }}
           />
-        </label>
-        <button
-          className={secondaryButton}
-          disabled={!collection || unavailable || !input || result.isFetching}
-        >
+        </Field>
+        <Button disabled={!collection || unavailable || !input || result.isFetching}>
           Find run
-        </button>
+        </Button>
       </form>
       <p className="text-xs text-text-dim">Collection only · ignores the filters below.</p>
       {number && !unavailable && result.isPending && (
-        <p role="status">Finding collection run #{number}…</p>
+        <Notice role="status">Finding collection run #{number}…</Notice>
       )}
       {number && result.error && (
-        <p role="alert">
+        <Notice role="alert">
           Could not find collection run #{number}: {result.error.message}
-        </p>
+        </Notice>
       )}
       {!unavailable && !result.error && result.data && (
-        <button className={secondaryButton} onClick={() => onOpenRun(result.data.run_id)}>
+        <Button onClick={() => onOpenRun(result.data.run_id)}>
           Open collection run #{result.data.number}
-        </button>
+        </Button>
       )}
     </div>
   );

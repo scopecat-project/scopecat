@@ -1,6 +1,6 @@
+import { Notice, Button, Field, Select } from "../../ui/Controls";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
-import { secondaryButton } from "../../ui/styles";
 import { MeasurementRecordTable } from "../runs/MeasurementRecordTable";
 import { measurementTable, planMeasurementCharts } from "../runs/measurement-visualization";
 import { MeasurementChartPicker } from "../runs/MeasurementDataPreview";
@@ -23,8 +23,8 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
         }),
       ),
   });
-  if (evidence.error) return <p role="alert">{evidence.error.message}</p>;
-  if (!evidence.data) return <p role="status">Loading data…</p>;
+  if (evidence.error) return <Notice role="alert">{evidence.error.message}</Notice>;
+  if (!evidence.data) return <Notice role="status">Loading data…</Notice>;
   const capture = evidence.data;
   const run = capture.runs.find(
     (item) => item.snapshot.run_id === (selection.runId ?? capture.roots[0]),
@@ -32,26 +32,24 @@ export function CaptureDetail({ contentHash }: { contentHash: string }) {
   if (!run)
     return (
       <div>
-        <p role="alert">The referenced run is missing from this file.</p>
-        <button className={secondaryButton} onClick={() => selectRun()}>
-          Back to captured run
-        </button>
+        <Notice role="alert">The referenced run is missing from this file.</Notice>
+        <Button onClick={() => selectRun()}>Back to captured run</Button>
       </div>
     );
   return (
     <section className="mt-3 space-y-3" aria-label="Captured run">
       <WindowTitle title={`${run.snapshot.run_id} · ${capture.source_project_id} · Scopecat`} />
-      <label>
+      <Field>
         Run{" "}
-        <select value={run.snapshot.run_id} onChange={(event) => selectRun(event.target.value)}>
+        <Select value={run.snapshot.run_id} onChange={(event) => selectRun(event.target.value)}>
           {capture.runs.map((item) => (
             <option key={item.snapshot.run_id} value={item.snapshot.run_id}>
               {item.request.display_name ?? item.request.experiment_id ?? item.snapshot.run_id} ·{" "}
               {item.snapshot.run_id}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
       <h4 className="font-semibold">
         {run.request.display_name ?? run.request.experiment_id ?? run.snapshot.run_id}
       </h4>
@@ -109,9 +107,9 @@ function CaptureRecording({
   );
   return (
     <div className="space-y-3">
-      <label>
+      <Field>
         Measurements{" "}
-        <select
+        <Select
           value={selection}
           onChange={(event) => {
             selectCapture(contentHash, {
@@ -123,10 +121,10 @@ function CaptureRecording({
         >
           <option value="acquired">Acquisition history</option>
           <option value="selected">Retained analysis selection</option>
-        </select>
-      </label>
-      {page.isPending && <p role="status">Loading measurements…</p>}
-      {page.error && <p role="alert">{page.error.message}</p>}
+        </Select>
+      </Field>
+      {page.isPending && <Notice role="status">Loading measurements…</Notice>}
+      {page.error && <Notice role="alert">{page.error.message}</Notice>}
       {page.data && (
         <>
           <p>
@@ -163,24 +161,19 @@ function CaptureRecording({
             </section>
           )}
           <div className="flex gap-3">
-            <button
-              className={secondaryButton}
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - 100))}
-            >
+            <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>
               Previous measurements
-            </button>
+            </Button>
             <span>
               {page.data.items.length ? offset + 1 : 0}–{offset + page.data.items.length} /{" "}
               {page.data.record_count}
             </span>
-            <button
-              className={secondaryButton}
+            <Button
               disabled={page.data.next_offset === null}
               onClick={() => setOffset(page.data.next_offset!)}
             >
               Next measurements
-            </button>
+            </Button>
           </div>
         </>
       )}

@@ -1,8 +1,8 @@
+import { Button, Notice } from "../../ui/Controls";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { type LessonTopic, useDesktopAvailable } from "../application/DesktopSession";
 import { navigate, navigateLink, useLocationUrl } from "../../lib/navigation";
-import { primaryButton, secondaryButton } from "../../ui/styles";
 
 const lessons: Record<LessonTopic, { title: string; goal: string; description: string }> = {
   parameters: {
@@ -264,8 +264,8 @@ function NotebookJourneyCourse({
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
-            <button
-              className={primaryButton}
+            <Button
+              variant="primary"
               disabled={!reachable || busy || status.isPending || status.isError}
               onClick={() => {
                 open.reset();
@@ -279,11 +279,11 @@ function NotebookJourneyCourse({
                   : journey
                     ? "Retry preparation"
                     : `Start ${topic} Notebook`}
-            </button>
+            </Button>
             {!journey && status.isSuccess && !preparing && (
-              <button className={secondaryButton} disabled={busy} onClick={() => choose.mutate()}>
+              <Button disabled={busy} onClick={() => choose.mutate()}>
                 Choose another save location…
-              </button>
+              </Button>
             )}
           </div>
           {!journey && status.isSuccess && !preparing && (
@@ -296,16 +296,18 @@ function NotebookJourneyCourse({
         </>
       )}
       {busy && (
-        <p role="status">
+        <Notice role="status">
           {preparing
             ? "Preparing code and Python; this may take a few minutes. Preparation does not start measurements."
             : choose.isPending
               ? "Choosing save location…"
               : "Opening editor…"}
-        </p>
+        </Notice>
       )}
       {open.isSuccess && !busy && (
-        <p role="status">Editor open requested. Select the displayed Python kernel in VS Code.</p>
+        <Notice role="status">
+          Editor open requested. Select the displayed Python kernel in VS Code.
+        </Notice>
       )}
       {journey && (
         <div className="grid gap-1 break-words">
@@ -342,8 +344,7 @@ function NotebookJourneyCourse({
               notebook and future background work. Existing tasks keep their original execution
               environment. Reinstall any packages you added locally afterwards.
             </p>
-            <button
-              className={secondaryButton}
+            <Button
               disabled={!reachable || busy || status.isError}
               onClick={() => {
                 open.reset();
@@ -351,7 +352,7 @@ function NotebookJourneyCourse({
               }}
             >
               Repair environments and open Notebook
-            </button>
+            </Button>
           </details>
           {journey.ready && (
             <>
@@ -376,7 +377,9 @@ function NotebookJourneyCourse({
           )}
         </div>
       )}
-      {error && <p role="alert">{error instanceof Error ? error.message : String(error)}</p>}
+      {error && (
+        <Notice role="alert">{error instanceof Error ? error.message : String(error)}</Notice>
+      )}
     </section>
   );
 }

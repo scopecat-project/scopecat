@@ -1,4 +1,12 @@
-import { detailCard, eyebrow, secondaryButton } from "../../ui/styles";
+import {
+  pageTitle,
+  sectionTitle,
+  pageContent,
+  classes,
+  detailCard,
+  eyebrow,
+  secondaryButton,
+} from "../../ui/styles";
 import { LaunchRecoveryPanel } from "./LaunchRecoveryPanel";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { useEffect, useRef } from "react";
@@ -111,10 +119,10 @@ export function LaunchWorkspace({
     onHandoffImported?.();
   }, [handoff, handoffTarget, importHandoff, onHandoffImported]);
   return (
-    <section className="p-6 space-y-5 max-w-6xl mx-auto">
+    <section className={classes(pageContent, "max-w-6xl mx-auto")}>
       <header>
         <p className={eyebrow}>Experiment workbench</p>
-        <h2 className="text-xl font-semibold">Experiments</h2>
+        <h2 className={pageTitle}>Experiments</h2>
         <p className="mt-2 text-sm text-text-dim">
           Prepare an experiment, check its inputs, then start acquisition.
         </p>
@@ -140,7 +148,7 @@ export function LaunchWorkspace({
         className={`${detailCard} space-y-4 scroll-mt-24`}
       >
         <div>
-          <h3 id="experiment-preparation" className="font-semibold">
+          <h3 id="experiment-preparation" className={sectionTitle}>
             Prepare an experiment
           </h3>
           <p className="text-sm text-text-dim">
@@ -236,7 +244,7 @@ export function LaunchWorkspace({
         )}
       </section>
       <section aria-labelledby="experiment-history" className="space-y-3">
-        <h3 id="experiment-history" className="font-semibold">
+        <h3 id="experiment-history" className={sectionTitle}>
           Reuse and recovery
         </h3>
         <PlanLibrary

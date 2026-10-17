@@ -1,6 +1,6 @@
+import { ActionRow, Field, Select, Button, Input, Notice } from "../../ui/Controls";
 import { useId, useState } from "react";
 import type { LaunchCatalogEntry } from "./launch-api";
-import { secondaryButton } from "../../ui/styles";
 
 type Entry = LaunchCatalogEntry;
 
@@ -26,10 +26,10 @@ export function ExperimentPicker({
   });
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="min-w-0 flex-1">
+      <ActionRow>
+        <Field className="min-w-0 flex-1 basis-64">
           Experiment
-          <select
+          <Select
             aria-label="Experiment"
             disabled={disabled}
             value={selectedId}
@@ -37,7 +37,7 @@ export function ExperimentPicker({
               const entry = entries.find((item) => item.id === event.target.value);
               if (entry) onSelect(entry);
             }}
-            className="mt-1 block w-full min-w-0 border rounded p-2"
+            className="mt-1 w-full min-w-0"
           >
             {!selected && <option value={selectedId}>{selectedId} (unavailable)</option>}
             {entries.map((entry) => (
@@ -45,39 +45,38 @@ export function ExperimentPicker({
                 {entry.title}
               </option>
             ))}
-          </select>
-        </label>
-        <button
+          </Select>
+        </Field>
+        <Button
           type="button"
-          className={secondaryButton}
           disabled={disabled}
           aria-expanded={browsing}
           aria-controls={browserId}
           onClick={() => setBrowsing(!browsing)}
         >
           {browsing ? "Close experiment browser" : "Browse experiments"}
-        </button>
-      </div>
+        </Button>
+      </ActionRow>
       {browsing && (
         <section
           id={browserId}
           aria-label="Browse experiments"
           className="rounded border border-line p-3 space-y-3"
         >
-          <label className="block">
+          <Field>
             Search experiments
-            <input
+            <Input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Name, description or ID"
-              className="mt-1 block w-full border rounded p-2"
+              className="mt-1 w-full"
             />
-          </label>
-          <p role="status" className="text-sm text-text-dim">
+          </Field>
+          <Notice role="status" className="text-sm text-text-dim">
             {matches.length} of {entries.length} experiments. Browsing keeps your current
             preparation.
-          </p>
+          </Notice>
           {matches.length === 0 && <p>No matching experiments. Try another name or description.</p>}
           <ul className="grid gap-3 md:grid-cols-2 max-h-96 overflow-y-auto">
             {matches.map((entry) => (
@@ -85,15 +84,14 @@ export function ExperimentPicker({
                 <h4 className="font-semibold">{entry.title}</h4>
                 <p className="text-sm text-text-dim whitespace-pre-line">{entry.description}</p>
                 <p className="text-xs text-text-dim break-all">{entry.id}</p>
-                <button
+                <Button
                   type="button"
-                  className={secondaryButton}
                   disabled={disabled || entry.id === selectedId}
                   aria-label={`Prepare ${entry.title}`}
                   onClick={() => onSelect(entry)}
                 >
                   {entry.id === selectedId ? "Selected" : "Prepare this experiment"}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

@@ -1,7 +1,8 @@
+import { ActionRow, Notice, Button, Field, Input, Select } from "../../ui/Controls";
+import { pageTitle, sectionTitle, pageContent, classes } from "../../ui/styles";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ProjectHealth } from "../../types";
-import { secondaryButton } from "../../ui/styles";
 import { errorMessage } from "../../lib/presentation";
 import type { InstallationStatus } from "./DesktopSession";
 
@@ -71,18 +72,18 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
   const dataRoot = health?.details.data_root;
   return (
     <section
-      className="grid min-w-0 max-w-4xl gap-4 p-6"
+      className={classes(pageContent, "max-w-4xl")}
       aria-labelledby="application-settings-heading"
     >
-      <h2 id="application-settings-heading" className="text-lg font-semibold">
+      <h2 id="application-settings-heading" className={pageTitle}>
         Application settings
       </h2>
-      {operation.error && <p role="alert">{errorMessage(operation.error)}</p>}
-      {picker.error && <p role="alert">{errorMessage(picker.error)}</p>}
-      {operation.data && <p role="status">{operation.data}</p>}
-      {status.error && <p role="alert">{errorMessage(status.error)}</p>}
+      {operation.error && <Notice role="alert">{errorMessage(operation.error)}</Notice>}
+      {picker.error && <Notice role="alert">{errorMessage(picker.error)}</Notice>}
+      {operation.data && <Notice role="status">{operation.data}</Notice>}
+      {status.error && <Notice role="alert">{errorMessage(status.error)}</Notice>}
       <section className={section}>
-        <h3 className="font-semibold">Software and data</h3>
+        <h3 className={sectionTitle}>Software and data</h3>
         {status.data && (
           <p>
             Application home: <code>{status.data.home}</code>
@@ -111,13 +112,9 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
               Python environments and the application installer need separate copies. The service
               stays stopped until you reopen it from the backup result page.
             </p>
-            <button
-              className={secondaryButton}
-              disabled={busy}
-              onClick={() => operation.mutate("backup")}
-            >
+            <Button disabled={busy} onClick={() => operation.mutate("backup")}>
               Back up application data…
-            </button>
+            </Button>
           </>
         )}
         {!native && (
@@ -130,61 +127,56 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       {native && (
         <>
           <section className={section}>
-            <h3 className="font-semibold">Author code</h3>
+            <h3 className={sectionTitle}>Author code</h3>
             <p>
               Create a folder with a device-free example and its own Python environment, or add
               existing Scopecat code. Open the folder normally in VS Code. All folders share this
               application and its data. Choose an existing execution Python when adding code;
               registration does not install packages or restart the application.
             </p>
-            <div className="flex gap-2">
-              <button className={secondaryButton} disabled={busy} onClick={() => setCreating(true)}>
+            <ActionRow>
+              <Button disabled={busy} onClick={() => setCreating(true)}>
                 New code folder
-              </button>
-              <button
-                className={secondaryButton}
-                disabled={busy}
-                onClick={() => setCreating(false)}
-              >
+              </Button>
+              <Button disabled={busy} onClick={() => setCreating(false)}>
                 Use existing folder
-              </button>
-            </div>
+              </Button>
+            </ActionRow>
             {creating ? (
               <div className="grid gap-3">
-                <button className={secondaryButton} disabled={busy} onClick={() => picker.mutate()}>
+                <Button disabled={busy} onClick={() => picker.mutate()}>
                   Choose save location…
-                </button>
+                </Button>
                 {parent && (
                   <p>
                     Save in: <code>{parent}</code>
                   </p>
                 )}
-                <label className="grid gap-1">
+                <Field>
                   New folder name
-                  <input
+                  <Input
                     value={name}
                     disabled={busy}
                     onChange={(event) => setName(event.target.value)}
                   />
-                </label>
+                </Field>
                 <p>
                   Creates a new folder without replacing existing files. No device connection or
                   measurement is started.
                 </p>
-                <button
-                  className={secondaryButton}
+                <Button
                   disabled={busy || !parent || !name.trim()}
                   onClick={() => operation.mutate("create")}
                 >
                   Create folder and prepare Python
-                </button>
+                </Button>
               </div>
             ) : (
               <>
                 {!!status.data?.sources.length && (
-                  <label className="grid gap-1">
+                  <Field>
                     Your code folders
-                    <select
+                    <Select
                       className="min-w-0 max-w-full"
                       value={selected ? source.trim() : ""}
                       disabled={busy}
@@ -196,51 +188,49 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                           {item.directory}
                         </option>
                       ))}
-                    </select>
-                  </label>
+                    </Select>
+                  </Field>
                 )}
-                <button className={secondaryButton} disabled={busy} onClick={() => picker.mutate()}>
+                <Button disabled={busy} onClick={() => picker.mutate()}>
                   Browse for code folder…
-                </button>
-                <label className="grid gap-1">
+                </Button>
+                <Field>
                   Author directory
-                  <input
+                  <Input
                     value={source}
                     onChange={(event) => setSource(event.target.value)}
                     disabled={busy}
                     placeholder="Folder containing scopecat.toml"
                   />
-                </label>
-                <label className="grid gap-1">
+                </Field>
+                <Field>
                   Execution Python
-                  <input
+                  <Input
                     value={interpreter}
                     disabled={busy}
                     onChange={(event) => setInterpreter(event.target.value)}
                     placeholder="Full path to python or python.exe"
                   />
-                </label>
-                <button
-                  className={secondaryButton}
+                </Field>
+                <Button
                   disabled={busy || !source.trim() || !interpreter.trim() || !!selected}
                   onClick={() => operation.mutate("source")}
                 >
                   Add code folder
-                </button>
+                </Button>
                 {selected && (
                   <p>
                     Current execution Python: <code>{selected.execution_python}</code>
                   </p>
                 )}
-                <button
-                  className={secondaryButton}
+                <Button
                   disabled={busy || !selected || !interpreter.trim()}
                   onClick={() => operation.mutate("environment")}
                 >
                   Use this execution Python
-                </button>
+                </Button>
                 {selected && (
-                  <p role="status">
+                  <Notice role="status">
                     Folder ready. Open <code>{selected.directory}</code> in VS Code.
                     {selected.python ? (
                       <>
@@ -251,7 +241,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                     ) : (
                       <> Create its local Python environment below.</>
                     )}
-                  </p>
+                  </Notice>
                 )}
                 <p>
                   Create a local Python environment for this folder, then select its .venv in VS
@@ -260,20 +250,18 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   packages needed by background experiments in pyproject.toml, then prepare their
                   execution environment. Existing tasks keep their original environment.
                 </p>
-                <button
-                  className={secondaryButton}
+                <Button
                   disabled={busy || !selected || !!selected.python}
                   onClick={() => operation.mutate("client")}
                 >
                   Create local Python environment
-                </button>
-                <button
-                  className={secondaryButton}
+                </Button>
+                <Button
                   disabled={busy || !source.trim()}
                   onClick={() => operation.mutate("dependencies")}
                 >
                   Prepare execution environment from pyproject.toml
-                </button>
+                </Button>
                 <details>
                   <summary>Local environment repair</summary>
                   <p>
@@ -281,34 +269,31 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                     Rebuilding preserves the previous environment separately and keeps your source
                     files.
                   </p>
-                  <button
-                    className={secondaryButton}
+                  <Button
                     disabled={busy || !selected}
                     onClick={() => operation.mutate("rebuild-client")}
                   >
                     Rebuild local Python environment
-                  </button>
+                  </Button>
                 </details>
               </>
             )}
           </section>
           <section className={section}>
-            <h3 className="font-semibold">Restart application</h3>
+            <h3 className={sectionTitle}>Restart application</h3>
             <p>
               Restart to recover the connection or apply changes to local settings. This stops
               active work and releases devices. Saved records and source files are retained.
             </p>
-            <button
-              className={secondaryButton}
-              disabled={busy}
-              onClick={() => operation.mutate("restart")}
-            >
+            <Button disabled={busy} onClick={() => operation.mutate("restart")}>
               Stop work and restart
-            </button>
+            </Button>
           </section>
         </>
       )}
-      {busy && <p role="status">Working… You can keep this window open to see the result.</p>}
+      {busy && (
+        <Notice role="status">Working… You can keep this window open to see the result.</Notice>
+      )}
     </section>
   );
 }

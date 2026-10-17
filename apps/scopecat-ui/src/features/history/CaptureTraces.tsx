@@ -1,3 +1,4 @@
+import { Field, Select } from "../../ui/Controls";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MeasurementDatasetSchema, MeasurementRecord } from "../../api-contract";
@@ -65,9 +66,9 @@ export function CaptureTraces({
   return (
     <section className="space-y-3" aria-label="Captured waveforms">
       <p>Waveforms for one record on this page. Long traces use bounded min/max sampling.</p>
-      <label>
+      <Field>
         Waveform record{" "}
-        <select
+        <Select
           value={recordIndex}
           onChange={(event) => setRecordIndex(Number(event.target.value))}
         >
@@ -77,11 +78,11 @@ export function CaptureTraces({
               Point {record.point_index}
             </option>
           ))}
-        </select>
-      </label>
-      <label>
+        </Select>
+      </Field>
+      <Field>
         Waveform{" "}
-        <select
+        <Select
           value={plan?.id}
           onChange={(event) => {
             setRequestedPlan(event.target.value);
@@ -93,12 +94,12 @@ export function CaptureTraces({
               {item.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
       {entityAxis && (
-        <label>
+        <Field>
           Waveform entity{" "}
-          <select
+          <Select
             value={entityIndex ?? "all"}
             onChange={(event) =>
               setEntityIndex(event.target.value === "all" ? undefined : Number(event.target.value))
@@ -110,8 +111,8 @@ export function CaptureTraces({
                 {member.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
       )}
       <MeasurementTraceResult
         preview={preview.data}
