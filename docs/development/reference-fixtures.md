@@ -219,29 +219,18 @@ importing author code or acquiring again. The former `gallery_inputs` helper has
 no remaining consumers and is removed. Physical scientific journeys keep their
 separate reference fixtures.
 
-`measurement-slicing.e2e.ts` adds a synthetic four-dimensional complex signal
-(4 frequencies × 3 biases × 3 repeats × 2 modes) to that retained workspace.
-It checks independent axes, fixed slices, signal retention and focus controls at
-1280×720 and 390×844, using real acquisition, storage and measurement queries.
-Only the final failure/attention presentation checks inject responses; they do
-not change acquisition or retained scientific evidence.
-
-For changes to this path, run from `apps/scopecat-ui`:
+`measurement-slicing.e2e.ts` 使用无设备的真实采集与保留记录，检查多维轴、
+固定切片（含超过下拉阈值的大轴）、信号选择及普通/聚焦图框。
+仅末段异常呈现使用响应注入，不改变科学数据。相关改动在 `apps/scopecat-ui` 定向运行：
 
 ```sh
 pnpm run build
 pnpm exec playwright test measurement-slicing ui-controls --retries=0 --workers=1
 ```
 
-These two journeys share `e2e/daemon.ts`, which owns the internal server module
-entry and endpoint discovery. `e2e/daemon.test.ts` exercises that same command
-entry with `start/stop --help` during ordinary UI tests, without starting a daemon
-or browser. The public `scopecat start/stop` commands are retired. Keep browser
-runs targeted to relevant changes; this does not add the slow suite to PR gates.
-If a container's PID 1 does not reap detached children, run the test command under
-an init/subreaper: a daemon already shut down but left as a zombie can make the
-identity-safe stop wait time out. Do not hide that cleanup failure or increase
-browser timeouts.
+两份浏览器测试复用 `e2e/daemon.ts` 的实际服务入口；普通 UI 测试通过
+`e2e/daemon.test.ts` 检查同入口的 `start/stop --help`，不启动服务或浏览器。
+公共 `scopecat start/stop` 已退役；此定向策略不将全慢测恢复为 PR gate。
 
 Generic browser authoring, parameter editing, sample-map handoff, saved plans,
 independent workbench contexts and lost-submission recovery use

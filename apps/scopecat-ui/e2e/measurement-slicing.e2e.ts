@@ -1,7 +1,7 @@
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import type { components } from "../src/api-schema";
 import { ROOT, uv, startProject, stopProject } from "./daemon";
 
@@ -13,6 +13,50 @@ async function cleanupProject(project: string, passed: boolean, testInfo: TestIn
     await testInfo.attach("Cleanup failure", { body: String(error), contentType: "text/plain" });
   }
 }
+async function createProject() {
+  const project = await mkdtemp(join(tmpdir(), "scopecat-slicing-e2e-"));
+  for (const name of ["src", "scopecat.toml"])
+    await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
+      recursive: true,
+    });
+  await cp("e2e/fixtures/slicing-signal.py", join(project, "src/ui_signal/slicing.py"));
+  const app = join(project, "src/ui_signal/application.py");
+  const application = await readFile(app, "utf8");
+  expect(application).toContain('author_modules=("ui_signal.signal",');
+  await writeFile(
+    app,
+    application.replace(
+      'author_modules=("ui_signal.signal",',
+      'author_modules=("ui_signal.slicing", "ui_signal.signal",',
+    ),
+  );
+  return project;
+}
+
+async function expectContainedPlots(page: Page, count: number) {
+  const plots = page.locator("figure").getByRole("img");
+  await expect(plots).toHaveCount(count);
+  for (const plot of await plots.all()) {
+    await expect(plot.locator("canvas, svg").first()).toBeVisible();
+    await expect
+      .poll(async () => {
+        const bounds = await plot.boundingBox();
+        const frame = await plot.locator("xpath=ancestor::figure").boundingBox();
+        return (
+          bounds !== null &&
+          frame !== null &&
+          bounds.height >= 150 &&
+          bounds.width > 0 &&
+          bounds.x >= frame.x &&
+          bounds.y >= frame.y &&
+          bounds.x + bounds.width <= frame.x + frame.width &&
+          bounds.y + bounds.height <= frame.y + frame.height
+        );
+      })
+      .toBe(true);
+  }
+}
+
 const SEED = `
 import json, sys
 import scopecat as sc
@@ -37,24 +81,9 @@ test("browses independent dimensions and keeps a compatible signal across slices
 }, testInfo) => {
   test.setTimeout(120_000);
   page.setDefaultTimeout(10_000);
-  const project = await mkdtemp(join(tmpdir(), "scopecat-slicing-e2e-"));
+  const project = await createProject();
   let passed = false;
   try {
-    for (const name of ["src", "scopecat.toml"])
-      await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
-        recursive: true,
-      });
-    await cp("e2e/fixtures/slicing-signal.py", join(project, "src/ui_signal/slicing.py"));
-    const app = join(project, "src/ui_signal/application.py");
-    const application = await readFile(app, "utf8");
-    expect(application).toContain('author_modules=("ui_signal.signal",');
-    await writeFile(
-      app,
-      application.replace(
-        'author_modules=("ui_signal.signal",',
-        'author_modules=("ui_signal.slicing", "ui_signal.signal",',
-      ),
-    );
     const baseUrl = await startProject(project);
     const runId = JSON.parse(uv(["python", "-c", SEED, project])) as string;
     const slices: {
@@ -106,6 +135,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
       .filter({ hasText: "phase" })
       .getAttribute("value"))!;
     await chart.selectOption(phase);
+    await expectContainedPlots(page, 1);
     await page.getByRole("button", { name: "Next Repeat value", exact: true }).click();
     await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 1");
     await expect(chart).toHaveValue(phase);
@@ -299,3 +329,111 @@ test("browses independent dimensions and keeps a compatible signal across slices
       });
   }
 });
+
+const LARGE_AXIS_SEED = `
+import json, sys
+import scopecat as sc
+project = sc.open_project(sys.argv[1])
+project.load_application()
+from ui_signal.slicing import signal, FREQUENCY, BIAS, REPEAT, MODE
+from ui_signal.application import save_inputs
+with project.connect() as lab:
+    inputs = save_inputs(lab)
+    plan = signal.build()
+    for control, values in (
+        (FREQUENCY.ref, [sc.Quantity(v, "GHz") for v in (4.6, 5.2)]),
+        (BIAS.ref, [sc.Quantity(0, "V")]),
+        (REPEAT, list(range(257))), (MODE, ["low"]),
+    ):
+        plan = plan.with_axis(sc.axis(control, values))
+    print(json.dumps(lab.run(plan, config=inputs).id))
+`;
+
+test("contains large-axis controls and multi-series plots in normal and focused views", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const project = await createProject();
+  let passed = false;
+  try {
+    const baseUrl = await startProject(project);
+    const runId = JSON.parse(uv(["python", "-c", LARGE_AXIS_SEED, project])) as string;
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${baseUrl}/?run=${encodeURIComponent(runId)}#runs`);
+    await page.getByLabel("Vertical axis").selectOption("");
+    const index = page.getByLabel("Repeat slice index", { exact: true });
+    await expect(index).toHaveAttribute("max", "257");
+    const column = index.locator("xpath=../..");
+    await expectContainedPlots(page, 1);
+    await testInfo.attach("large-axis-narrow", {
+      body: await page.screenshot({
+        path: testInfo.outputPath("large-axis-narrow.png"),
+        fullPage: true,
+      }),
+      contentType: "image/png",
+    });
+    expect(await column.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+      await column.evaluate((element) => element.clientWidth),
+    );
+    await index.fill("257");
+    await index.press("Enter");
+    await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 256");
+    await expect(
+      page.getByRole("button", { name: "Next Repeat value", exact: true }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "Previous Repeat value", exact: true }).click();
+    await expect(index).toHaveValue("256");
+    await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+    await expect(index).toBeInViewport({ ratio: 1 });
+    await index.fill("1");
+    await index.press("Tab");
+    await expect(
+      page.getByRole("button", { name: "Previous Repeat value", exact: true }),
+    ).toBeDisabled();
+    expect(await column.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+      await column.evaluate((element) => element.clientWidth),
+    );
+    await page.keyboard.press("Escape");
+
+    const traceRunId = JSON.parse(uv(["python", "-c", TRACE_SEED, project])) as string;
+    await page.goto(`${baseUrl}/?run=${encodeURIComponent(traceRunId)}#runs`);
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const focused of [false, true]) {
+        if (focused) await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+        await expectContainedPlots(page, 1);
+        await expect(page.locator("figure").getByRole("img")).toHaveAccessibleDescription(
+          /2 data series/,
+        );
+        await testInfo.attach(`overlay-${width}-${focused}`, {
+          body: await page
+            .locator("figure")
+            .screenshot({ path: testInfo.outputPath(`overlay-${width}-${focused}.png`) }),
+          contentType: "image/png",
+        });
+        if (focused) await page.keyboard.press("Escape");
+      }
+    }
+    passed = true;
+  } finally {
+    await cleanupProject(project, passed, testInfo);
+    if (passed) await rm(project, { recursive: true, force: true });
+    else
+      await testInfo.attach("Preserved synthetic project", {
+        body: project,
+        contentType: "text/plain",
+      });
+  }
+});
+
+const TRACE_SEED = `
+import json, sys
+import scopecat as sc
+project = sc.open_project(sys.argv[1])
+project.load_application()
+from ui_signal.slicing import overlay, REPEAT
+from ui_signal.application import save_inputs
+with project.connect() as lab:
+    inputs = save_inputs(lab)
+    print(json.dumps(lab.run(overlay.build().with_axis(sc.axis(REPEAT, [0, 1])), config=inputs).id))
+`;

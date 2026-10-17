@@ -2,6 +2,9 @@
 
 import math
 
+import numpy as np
+from numpy.typing import NDArray
+
 import scopecat as sc
 
 FREQUENCY = sc.Control(
@@ -33,4 +36,20 @@ def signal(context: sc.ExperimentContext):
             "repeat": REPEAT,
             "mode": MODE,
         },
+    )
+
+
+def trace_response(repeat: int) -> NDArray[np.float64]:
+    return np.asarray([repeat, repeat + 1, repeat - 1], dtype=float)
+
+
+@sc.experiment(id="ui_signal.overlay")
+def overlay(context: sc.ExperimentContext):
+    return context.compute(
+        "trace",
+        fn=trace_response,
+        inputs={"repeat": REPEAT},
+        output_type=sc.ArrayType(
+            dtype="float64", dimensions=(sc.ArrayDimension("sample", 3),)
+        ),
     )

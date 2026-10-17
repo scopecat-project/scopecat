@@ -296,18 +296,12 @@ export function MeasurementDataPreview({
                           ))}
                         </Select>
                       ) : (
-                        <>
-                          <MeasurementSliceIndex
-                            key={`${axis.id}:${selectedIndex}`}
-                            axis={axis}
-                            selectedIndex={selectedIndex}
-                            onCommit={(index) => onFixedAxisIndexChange(axis.id, index)}
-                          />
-                          <span className="max-w-52 truncate font-medium tracking-normal text-text-soft normal-case">
-                            {sliceAxisOption(axis, selectedIndex)} · {axis.size.toLocaleString()}{" "}
-                            values
-                          </span>
-                        </>
+                        <MeasurementSliceIndex
+                          key={`${axis.id}:${selectedIndex}`}
+                          axis={axis}
+                          selectedIndex={selectedIndex}
+                          onCommit={(index) => onFixedAxisIndexChange(axis.id, index)}
+                        />
                       )}
                       <button
                         type="button"
@@ -319,6 +313,11 @@ export function MeasurementDataPreview({
                         +
                       </button>
                     </span>
+                    {axis.size > MAX_SLICE_SELECT_OPTIONS && (
+                      <span className="max-w-52 truncate font-medium tracking-normal text-text-soft normal-case">
+                        {sliceAxisOption(axis, selectedIndex)} · {axis.size.toLocaleString()} values
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -791,7 +790,7 @@ function MeasurementSliceIndex({
   return (
     <Input
       aria-label={`${axis.label} slice index`}
-      className="w-28"
+      className="w-full min-w-0 sm:w-28"
       max={axis.size}
       min={1}
       step={1}
