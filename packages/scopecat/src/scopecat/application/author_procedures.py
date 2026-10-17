@@ -17,6 +17,7 @@ from scopecat.automation.definition import ProcedureDefinition
 from scopecat.automation.models import (
     ProcedureRun,
     ProcedureSource,
+    ProcedureStepAttempt,
     ProcedureStepOutputRef,
 )
 from scopecat.automation.wire import (
@@ -193,24 +194,42 @@ class AuthorProcedure:
         )
 
     def pending_input[ValueT](
-        self, step_key: str, *, schema: AnalysisFactSchema[ValueT]
+        self, step_key: str | None = None, *, schema: AnalysisFactSchema[ValueT]
     ) -> PendingProcedureInput[ValueT]:
         """Capture a typed question before reviewing it, without reserving it.
 
         Reads can race another operator. Answer submission checks the captured
         revisions and exact request; it never silently answers a newer question.
+        Without a key, require exactly one current waiting step across all pages.
+        Only the newest attempt of each key can be current; schema compatibility
+        validates the selected question, never chooses between questions.
         """
         run = self.snapshot
         if run.state != "waiting_for_input":
             raise ValueError("procedure is not waiting for interpretation input")
         cursor: int | None = None
+        seen: set[str] = set()
+        waiting: ProcedureStepAttempt | None = None
         while True:
             page = self.steps(limit=200, cursor=cursor)
             for step in page.items:
                 if step.step_key == step_key:
                     # Never fall back to an older waiting attempt.
                     return PendingProcedureInput(self.session, run, step, schema)
+                if step_key is None and step.step_key not in seen:
+                    seen.add(step.step_key)
+                    if step.state == "waiting_for_input":
+                        if waiting is not None:
+                            raise ValueError(
+                                "procedure has multiple current waiting inputs; "
+                                "specify step_key after reviewing the steps"
+                            )
+                        waiting = step
             if page.next_cursor is None:
+                if step_key is None:
+                    if waiting is None:
+                        raise ValueError("procedure has no current waiting input")
+                    return PendingProcedureInput(self.session, run, waiting, schema)
                 raise KeyError(f"Procedure has no step {step_key!r}")
             cursor = page.next_cursor
 

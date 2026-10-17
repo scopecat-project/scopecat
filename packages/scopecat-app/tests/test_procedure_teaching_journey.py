@@ -26,8 +26,10 @@ def test_generated_procedure_lesson_answers_and_recovers(tmp_path: Path) -> None
 _JOURNEY = r"""
 import json
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 import scopecat as sc
+from scopecat.daemon.client import DaemonConflictError
 from scopecat_server.lifecycle import start_project, stop_project
 
 root = Path(sys.argv[1])
@@ -40,7 +42,8 @@ cells = {
 }
 start_project(project, timeout=60)
 try:
-    with project.authoring() as session:
+    with ExitStack() as sessions:
+        session = sessions.enter_context(project.authoring())
         session.refresh()
         ns = {"sc": sc, "session": session}
 
@@ -61,10 +64,19 @@ try:
             )
             if outcome == "Peak selected":
                 # Python bypasses UI hints; the procedure still checks meaning.
-                pending.respond(ns["PeakChoice"](outcome, 6600), actor="learner")
+                answer = ns["PeakChoice"](outcome, 6600)
+                receipt = pending.respond(answer, actor="learner")
+                assert pending.respond(answer, actor="learner") == receipt
                 assert task.snapshot.state == "ready"
+                assert task.progress().dispatch.management == "paused"
                 task.resume()
                 assert task.wait(timeout=60).state == "waiting_for_input"
+                try:
+                    pending.respond(ns["PeakChoice"](outcome, 6500), actor="learner")
+                except DaemonConflictError:
+                    pass
+                else:
+                    raise AssertionError("old pending must not answer the new question")
                 run("procedure-inspect")
                 assert "between 6490 and 6510" in ns["pending"].request.instructions
                 assert (
@@ -75,6 +87,30 @@ try:
                     )
                     == scan
                 )
+                # Restart while the correction question is pending. Reconnect
+                # by the retained ID, without preparing/submitting another scan.
+                identity = task.id
+                question = ns["pending"].request
+                source = task.snapshot.source
+                runs = session.list_runs()
+                assert runs.next_cursor is None and len(runs.items) == 1
+                session.close()
+                stop_project(project)
+                start_project(project, timeout=60)
+                session = sessions.enter_context(project.authoring())
+                ns = {"sc": sc, "session": session}
+                run("procedure-history")
+                task = session.procedures.get(identity)
+                ns["task"] = task
+                run("procedure-inspect")
+                assert ns["pending"].request == question
+                assert task.snapshot.source == source
+                assert task.output("scan").run_id == scan
+                assert session.list_runs() == runs
+                assert [
+                    step.step_key for step in task.steps().items
+                    if step.state == "waiting_for_input"
+                ] == ["choose-2"]
                 run("procedure-answer")
             else:
                 ns["receipt"] = pending.respond(
@@ -84,6 +120,12 @@ try:
             run("procedure-continue")
             assert ns["result"].closure.status == "succeeded"
             assert task.output("scan").run_id == scan
+            scan_steps = [
+                step for step in task.steps().items if step.step_key == "scan"
+            ]
+            assert len(scan_steps) == 1 and scan_steps[0].attempt == 1
+            if outcome == "Peak selected":
+                assert session.list_runs() == runs
         # History works after closing the author session, without new acquisitions.
         identity = task.id
     with project.authoring() as reopened:
