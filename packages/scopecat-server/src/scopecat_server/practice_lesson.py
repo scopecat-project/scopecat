@@ -111,5 +111,74 @@ def manual_peaks(context: LabProcedureContext, intent: PeakPracticeIntent) -> No
         attempt += 1
 
 
+# Version one stays byte-for-byte stable for retained practice identities.
+@sc.procedure(
+    id="scopecat.practice.manual-peaks", version="2", intent=PeakPracticeIntent
+)
+def manual_peaks_v2(context: LabProcedureContext, intent: PeakPracticeIntent) -> None:
+    scan = context.run(
+        "scan",
+        sweep.build(frequency=sc.Quantity(6500, "MHz")).with_axis(
+            sc.axis(
+                sweep.controls.fields[0].ref,
+                [sc.Quantity(6490 + index * 0.25, "MHz") for index in range(81)],
+            )
+        ),
+        config=intent.config,
+        setup=intent.setup,
+        name="Practice: synthetic frequency scan",
+    )
+    plotted = context.analyze_run("curve", scan, curve())
+    attempt = 1
+    problem = ""
+    while True:
+        choice = context.interpret(
+            f"choose-{attempt}",
+            title="Choose a peak frequency",
+            instructions=(
+                "Find the highest point of the upward peak (not a dip). "
+                "Hover over the curve "
+                "to read its horizontal coordinate, then type the frequency; "
+                "clicking does not fill it. "
+                "Enter a frequency in MHz between "
+                "6490 and 6510, or choose No clear peak / Unsure and leave it empty. "
+                "Record your answer, open the task and choose Continue task to finish. "
+                "This example peaks at about 6500 MHz; "
+                "completion records your judgment, "
+                "not its correctness or a published calibration. " + problem
+            ),
+            schema=PEAK_CHOICE,
+            inputs=(scan, plotted),
+            response_template=PeakChoice("Unsure", None),
+            metadata={
+                "field_labels": {
+                    "outcome": "Your judgment",
+                    "frequency_mhz": "Peak frequency (MHz)",
+                },
+                "field_constraints": {
+                    "frequency_mhz": {
+                        "minimum": 6490,
+                        "maximum": 6510,
+                        "required_when": {"field": "outcome", "value": "Peak selected"},
+                        "empty_otherwise": True,
+                    }
+                },
+            },
+        )
+        value = choice.value
+        if value.outcome == "Peak selected":
+            if value.frequency_mhz is None:
+                problem = "Enter a peak frequency when choosing Peak selected."
+            elif not 6490 <= value.frequency_mhz <= 6510:
+                problem = "Peak frequency must be between 6490 and 6510 MHz."
+            else:
+                return
+        elif value.frequency_mhz is not None:
+            problem = "Leave the frequency empty for No clear peak or Unsure."
+        else:
+            return
+        attempt += 1
+
+
 def application() -> LabApplication:
-    return LabApplication(procedures=(manual_peaks,))
+    return LabApplication(procedures=(manual_peaks, manual_peaks_v2))

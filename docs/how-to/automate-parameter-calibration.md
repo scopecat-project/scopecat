@@ -172,7 +172,7 @@ or the installed single-target teaching model.
 
 Use `ctx.interpret()` when the next value should come from inspecting a measured
 curve. Include the source run and a published curve analysis in `inputs`; the
-Decisions page shows that figure beside the response form. An interpretation is
+Decisions page shows that figure alongside the response form on wide screens. An interpretation is
 a retained judgment, not a fitted result or calibration acceptance.
 
 The form supports scalar fields, literal choices and lists of scalar values.
@@ -182,9 +182,10 @@ not a zero. Pass `metadata={"field_labels": {"frequencies_mhz": "Peak frequency 
 "reviewer": operator}` for readable labels and an editable reviewer default.
 The response schema and metadata are part of the retained request identity.
 
-Unsubmitted edits are kept in this browser for the exact request. They are not
-scientific evidence until recorded; clearing browser storage removes them. Recorded
-responses live in the project store and can be reopened after a restart. After
+Unsubmitted edits are saved in application data for the exact request. They are
+not scientific evidence until recorded. Wait for the draft-saved confirmation;
+see [decision draft recovery](record-experiment-decisions.md#recover-unfinished-edits).
+Recorded responses also live in the project store and can be reopened after a restart. After
 recording, **Open task and continue** returns to the existing procedure controls;
 recording an answer does not itself submit a new acquisition.
 

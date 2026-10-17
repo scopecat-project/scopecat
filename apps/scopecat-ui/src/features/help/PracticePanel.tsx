@@ -37,6 +37,8 @@ export function PracticePanel({ reachable }: { reachable: boolean }) {
       <p>
         Scan a synthetic response, read its curve and enter a peak frequency. Use the same task and
         Decisions pages as an experiment. No device connection or separate application is needed.
+        Finish by recording an answer, opening the task and choosing Continue task. This practices a
+        recorded judgment, not publishing a calibration.
       </p>
       <button type="button" disabled={!reachable || pending} onClick={() => void start()}>
         {pending ? "Starting…" : "Start peak practice"}

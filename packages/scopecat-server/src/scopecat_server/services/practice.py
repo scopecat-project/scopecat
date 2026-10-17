@@ -71,7 +71,8 @@ class PracticeService:
             return self._create(command)
 
     def _create(self, command: PracticeCreateCommand) -> PracticeScope:
-        from scopecat_server.practice_lesson import PeakPracticeIntent, manual_peaks
+        from scopecat_server.practice_lesson import PeakPracticeIntent
+        from scopecat_server.practice_lesson import manual_peaks_v2 as manual_peaks
 
         identity = uuid5(NAMESPACE_URL, f"scopecat-practice:{command.request_key}").hex
         with self.store.sqlite.write_transaction() as connection:

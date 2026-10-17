@@ -30,6 +30,7 @@ export type LessonTopic =
   | "groups"
   | "refresh"
   | "compute"
+  | "procedure"
   | "calibration"
   | "joint-calibration"
   | "task-calibration";

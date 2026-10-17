@@ -1,12 +1,25 @@
 import { useId } from "react";
 
-type ScalarField =
+type ScalarField = (
   | { type: "bool" | "string" | "float" | "int" }
-  | { type: "literal"; values: unknown[] };
+  | { type: "literal"; values: unknown[] }
+) & { nullable?: boolean };
 type DecisionField = ScalarField | { type: "array"; items: ScalarField };
 
 function scalarField(value: unknown): ScalarField | undefined {
   if (!isRecord(value)) return;
+  if (value.type === "union" && Array.isArray(value.variants) && value.variants.length === 2) {
+    const variants = value.variants.filter((item) => isRecord(item) && item.type !== "null");
+    if (
+      variants.length !== 1 ||
+      !value.variants.some((item) => isRecord(item) && item.type === "null")
+    )
+      return;
+    const inner = scalarField(variants[0]);
+    if (inner && (inner.type === "float" || inner.type === "int"))
+      return { ...inner, nullable: true };
+    return;
+  }
   if (["bool", "string", "float", "int"].includes(String(value.type)))
     return { type: value.type as "bool" | "string" | "float" | "int" };
   if (value.type === "literal" && Array.isArray(value.values))
@@ -30,6 +43,7 @@ export function decisionFields(structure: unknown): Record<string, DecisionField
 }
 
 const scalar = (field: ScalarField, item: unknown) => {
+  if (field.nullable && typeof item === "string" && item.trim() === "") return null;
   if ((field.type === "float" || field.type === "int") && typeof item === "string") {
     if (!/^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(item.trim()))
       return item;
@@ -60,6 +74,7 @@ export function decisionFormValue(fields: Record<string, DecisionField>, value: 
 }
 
 function validScalar(field: ScalarField, value: unknown): boolean {
+  if (field.nullable && value === null) return true;
   if (field.type === "literal") return field.values.includes(value);
   if (field.type === "string") return typeof value === "string";
   if (field.type === "bool") return typeof value === "boolean";
@@ -82,6 +97,31 @@ export function decisionValueError(
         ? Array.isArray(item) && item.every((entry) => validScalar(field.items, entry))
         : validScalar(field, item);
     if (!valid) return `Complete ${name.replaceAll("_", " ")} before recording.`;
+  }
+  return undefined;
+}
+
+// Presentation constraints give immediate feedback; procedures still validate scientific meaning.
+export function decisionConstraintError(value: unknown, metadata: unknown): string | undefined {
+  if (!isRecord(value) || !isRecord(metadata) || !isRecord(metadata.field_constraints)) return;
+  const labels = isRecord(metadata.field_labels) ? metadata.field_labels : {};
+  for (const [name, rule] of Object.entries(metadata.field_constraints)) {
+    if (!isRecord(rule)) continue;
+    const label = typeof labels[name] === "string" ? labels[name] : name.replaceAll("_", " ");
+    const item = value[name];
+    if (isRecord(rule.required_when) && typeof rule.required_when.field === "string") {
+      const choice = rule.required_when;
+      const selected = value[choice.field as string] === choice.value;
+      if (selected && item == null) return `Enter ${label} when choosing ${String(choice.value)}.`;
+      if (!selected && rule.empty_otherwise === true && item != null)
+        return `Leave ${label} empty unless choosing ${String(choice.value)}.`;
+    }
+    if (typeof item !== "number") continue;
+    if (
+      (typeof rule.minimum === "number" && item < rule.minimum) ||
+      (typeof rule.maximum === "number" && item > rule.maximum)
+    )
+      return `${label} must be between ${typeof rule.minimum === "number" ? rule.minimum : "−∞"} and ${typeof rule.maximum === "number" ? rule.maximum : "∞"}.`;
   }
   return undefined;
 }

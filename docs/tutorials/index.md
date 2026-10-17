@@ -6,9 +6,9 @@ then edit the Python source and run again. Help prepares the editable author
 folder and its Python environment without source-registration forms.
 
 - [Choose a Notebook route](teaching-sandboxes.md#choose-a-notebook-route) explains
-  what each of the seven topics teaches, suggested knowledge and completion goals.
+  what each topic teaches, suggested knowledge and completion goals.
   Continue with source editing, choose computation or grouped analysis as needed,
-  and leave multi-step calibration until you need it. You do not need all seven.
+  and leave multi-step calibration until you need it. Choose only the topics you need.
 - [Practice in Scopecat](teaching-sandboxes.md) starts with a synthetic scan and
   manual decision entirely in the application, without a Notebook kernel.
 - [Edit and analyze a starter experiment](starter-authoring.md) uses a separate
