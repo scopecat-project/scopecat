@@ -47,8 +47,11 @@ with project.connect() as lab, project.authoring() as author:
     space.measurements(b, id="second")
     space_result = space.result().fact("score", 4).save()
     space_revised = space.result().fact("score", 5).save()
+    single = a.analysis("Single run summary", key="single")
+    single.measurements(id="only")
+    single_result = single.result().fact("score", 6).save()
     owner_note = a.analysis("Owner note", key="owner-note").result().fact("note", "no direct inputs").save()
-    print(json.dumps({"runs": [a.id, b.id], "ids": [first.id, revised.id, summary.id, space_result.id, space_revised.id], "owner_note":owner_note.id}))
+    print(json.dumps({"runs": [a.id, b.id], "ids": [first.id, revised.id, summary.id, space_result.id, space_revised.id], "owner_note":owner_note.id, "single":single_result.id}))
 `;
 
 test("finds the same run, sample and space publications from either direct input", async ({
@@ -81,7 +84,20 @@ test("finds the same run, sample and space publications from either direct input
       runs: string[];
       ids: string[];
       owner_note: string;
+      single: string;
     };
+    const unexpectedWrites: string[] = [];
+    context.on("request", (request) => {
+      if (["GET", "HEAD", "OPTIONS"].includes(request.method())) return;
+      if (request.method() === "POST" && request.url().endsWith("/measurements/query")) return;
+      if (
+        request.method() === "POST" &&
+        request.url().endsWith("/run-comparison") &&
+        request.postDataJSON().action === "list"
+      )
+        return;
+      unexpectedWrites.push(`${request.method()} ${request.url()}`);
+    });
     // Bound each response through the real endpoint, so navigation exercises multiple pages.
     await page.route("**/api/v1/analysis-publications?*", async (route) => {
       const url = new URL(route.request().url());
@@ -112,7 +128,8 @@ test("finds the same run, sample and space publications from either direct input
           .poll(() => related.locator(":scope > details > summary").count())
           .toBeGreaterThan(previous);
       }
-      const expected = run === seed.runs[0] ? [...seed.ids, seed.owner_note] : seed.ids;
+      const expected =
+        run === seed.runs[0] ? [...seed.ids, seed.owner_note, seed.single] : seed.ids;
       await expect(related.locator(":scope > details > summary")).toHaveCount(expected.length);
       for (const summary of await related.locator(":scope > details > summary").all())
         await summary.click();
@@ -137,6 +154,7 @@ test("finds the same run, sample and space publications from either direct input
       .locator('[aria-label="Direct run inputs"]')
       .getByRole("button")
       .filter({ has: page.locator(`[title="Run ${seed.runs[0]}"]`) });
+    await row.getByText("Sources and execution evidence", { exact: true }).click();
     await source.scrollIntoViewIfNeeded();
     const originalScroll = await page
       .locator("html")
@@ -157,8 +175,75 @@ test("finds the same run, sample and space publications from either direct input
         ),
       )
       .toBeLessThan(120);
+    await expect(
+      row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
+    ).toHaveAttribute("open", "");
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
+    await page.goBack();
+    const savedVersion = row.getByRole("link", { name: "Open saved version", exact: true });
+    await savedVersion.scrollIntoViewIfNeeded();
+    const savedVersionScroll = await page
+      .locator("html")
+      .evaluate((element) => element.ownerDocument.defaultView!.scrollY);
+    const popupPromise = context.waitForEvent("page");
+    await savedVersion.click({ modifiers: ["Shift"] });
+    const popup = await popupPromise;
+    await expect(
+      popup
+        .getByRole("region", { name: "Linked analysis", exact: true })
+        .getByTestId("publication-id"),
+    ).toHaveText(seed.ids[0]);
+    await popup.close();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await savedVersion.click();
+    const exactResult = page.getByRole("region", { name: "Linked analysis", exact: true });
+    await expect(exactResult.getByTestId("publication-id")).toHaveText(seed.ids[0]);
+    const exactSources = exactResult.getByText("Sources and execution evidence", { exact: true });
+    // Leave in the same native toggle dispatch, without another page click or a 200ms wait.
+    const backOnToggle = () =>
+      exactSources.locator("..").evaluate((element) => {
+        element.addEventListener(
+          "toggle",
+          () => element.ownerDocument.defaultView!.history.back(),
+          { once: true },
+        );
+      });
+    await backOnToggle();
+    await exactSources.click();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await page.goForward();
+    await expect(exactSources.locator("..")).toHaveAttribute("open", "");
+    await backOnToggle();
+    await exactSources.click();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await page.goForward();
+    await expect(exactSources.locator("..")).not.toHaveAttribute("open");
+    await page.goBack();
+    await expect(
+      row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
+    ).toHaveAttribute("open", "");
+    await expect
+      .poll(async () =>
+        Math.abs(
+          (await page
+            .locator("html")
+            .evaluate((element) => element.ownerDocument.defaultView!.scrollY)) -
+            savedVersionScroll,
+        ),
+      )
+      .toBeLessThan(120);
+    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await expect(page.getByLabel("Full run ID", { exact: true })).toHaveValue(seed.runs[1]);
+    await expect(page.getByLabel("From (local time)", { exact: true })).toHaveValue(
+      "2099-01-01T00:00",
+    );
+    await page.goBack();
+    await expect(
+      row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
+    ).toHaveAttribute("open", "");
+    await page.screenshot({ path: testInfo.outputPath("run-analysis-return.png"), fullPage: true });
+
     await page.goto(
       `${endpoint.base_url}/?run=${encodeURIComponent(seed.runs[0])}&run-analysis=${encodeURIComponent(seed.ids[0])}#runs`,
     );
@@ -174,16 +259,22 @@ test("finds the same run, sample and space publications from either direct input
     });
     // A project publication and a comparison are distinct navigable pages.
     await page.setViewportSize({ width: 1024, height: 600 });
-    const comparisonActions: string[] = [];
-    const acquisitionRequests: string[] = [];
-    context.on("request", (request) => {
-      if (request.method() !== "POST") return;
-      if (request.url().endsWith("/run-comparison"))
-        comparisonActions.push(request.postDataJSON().action);
-      if (request.url().endsWith("/experiment-launcher/submit"))
-        acquisitionRequests.push(request.url());
-    });
+    await pinned.getByText("Sources and execution evidence", { exact: true }).click();
+    await pinned.getByRole("button", { name: seed.runs[1], exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await page.goBack();
+    await expect(pinned.getByTestId("publication-id")).toHaveText(seed.ids[0]);
+    await expect(
+      pinned.getByText("Sources and execution evidence", { exact: true }).locator(".."),
+    ).toHaveAttribute("open", "");
     await page.getByRole("link", { name: "Compare retained runs", exact: true }).click();
+    await expect(page.getByLabel("Primary run", { exact: true })).toHaveValue(seed.runs[0]);
+    await page.goBack();
+    await expect(pinned.getByTestId("publication-id")).toHaveText(seed.ids[0]);
+    await expect(
+      pinned.getByText("Sources and execution evidence", { exact: true }).locator(".."),
+    ).toHaveAttribute("open", "");
+    await page.goForward();
     await page.getByLabel("Secondary run", { exact: true }).selectOption(seed.runs[1]);
     await page.getByLabel("Primary selected positions", { exact: true }).fill("0,2");
     await page.getByRole("button", { name: "Project analysis history", exact: true }).click();
@@ -245,8 +336,7 @@ test("finds the same run, sample and space publications from either direct input
     ).toBeDisabled();
     await expect(other.getByTestId("run-detail-header")).toContainText(seed.runs[1]);
     await other.close();
-    expect(comparisonActions.every((action) => action === "list")).toBe(true);
-    expect(acquisitionRequests).toEqual([]);
+    expect(unexpectedWrites).toEqual([]);
     passed = true;
   } finally {
     uv(["python", "-m", "scopecat_server.cli", "stop", project]);
