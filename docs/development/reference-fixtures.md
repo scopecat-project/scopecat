@@ -219,6 +219,19 @@ importing author code or acquiring again. The former `gallery_inputs` helper has
 no remaining consumers and is removed. Physical scientific journeys keep their
 separate reference fixtures.
 
+`measurement-slicing.e2e.ts` 使用无设备的真实采集与保留记录，检查多维轴、
+固定切片（含超过下拉阈值的大轴）、信号选择及普通/聚焦图框。
+仅末段异常呈现使用响应注入，不改变科学数据。相关改动在 `apps/scopecat-ui` 定向运行：
+
+```sh
+pnpm run build
+pnpm exec playwright test measurement-slicing ui-controls --retries=0 --workers=1
+```
+
+两份浏览器测试复用 `e2e/daemon.ts` 的实际服务入口；普通 UI 测试通过
+`e2e/daemon.test.ts` 检查同入口的 `start/stop --help`，不启动服务或浏览器。
+公共 `scopecat start/stop` 已退役；此定向策略不将全慢测恢复为 PR gate。
+
 Generic browser authoring, parameter editing, sample-map handoff, saved plans,
 independent workbench contexts and lost-submission recovery use
 `apps/scopecat-ui/e2e/fixtures/author-workspace`. Its two signal objects and empty
