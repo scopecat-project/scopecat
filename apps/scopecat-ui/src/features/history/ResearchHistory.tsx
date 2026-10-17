@@ -1,6 +1,5 @@
-import { ActionRow } from "../../ui/Controls";
-import { pageTitle, sectionTitle, pageContent } from "../../ui/styles";
-import { Notice, Field, Select, Button, Input } from "../../ui/Controls";
+import { ActionRow, Notice, Field, Select, Button, Input } from "../../ui/Controls";
+import { pageTitle, sectionTitle, pageContent, detailCard, secondaryButton } from "../../ui/styles";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ScopeCatalog } from "../context/ScopeCatalog";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
@@ -13,7 +12,6 @@ import { ImportedCaptures } from "./ImportedCaptures";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
-import { detailCard, secondaryButton } from "../../ui/styles";
 
 type Project = components["schemas"]["ResearchProject"];
 
@@ -378,12 +376,7 @@ export function ResearchHistory({
         >
           <Field>
             Project name{" "}
-            <Input
-              required
-
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
+            <Input required value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
           <Button variant="primary" disabled={pending || !name.trim()}>
             {selected ? "Rename project" : "Create project"}

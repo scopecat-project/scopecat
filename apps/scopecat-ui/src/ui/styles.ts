@@ -40,7 +40,7 @@ export const fieldLabel = "grid min-w-0 gap-1.5 text-sm leading-5 text-text-soft
 export const pageTitle = "m-0 text-lg font-semibold leading-7 text-text";
 export const sectionTitle = "m-0 text-base font-semibold leading-6 text-text";
 export const pageContent = "min-w-0 space-y-4 p-4 text-sm leading-6";
-export const notice =
-  "rounded-md border border-line bg-panel-soft px-3 py-2 text-sm leading-6 text-text-soft";
+// Routine saved/loading messages stay subordinate to fields and blocking errors.
+export const notice = "text-sm leading-6 text-text-dim";
 export const errorNotice =
   "rounded-md border border-red/50 bg-red-soft px-3 py-2 text-sm leading-6 text-red";

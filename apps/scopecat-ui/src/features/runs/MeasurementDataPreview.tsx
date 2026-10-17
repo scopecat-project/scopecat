@@ -218,7 +218,6 @@ export function MeasurementDataPreview({
                       Horizontal axis
                       <Select
                         aria-label="Horizontal axis"
-
                         value={slicePlan.varyingAxes[0]?.id}
                         onChange={(event) =>
                           onMeasurementAxesChange({
@@ -242,7 +241,6 @@ export function MeasurementDataPreview({
                       Vertical axis
                       <Select
                         aria-label="Vertical axis"
-
                         value={slicePlan.varyingAxes[1]?.id ?? ""}
                         onChange={(event) =>
                           onMeasurementAxesChange({

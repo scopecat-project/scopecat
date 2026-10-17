@@ -51,7 +51,6 @@ export function DeviceContextPicker({
         Experiment setup
         <Select
           aria-label="Experiment setup"
-
           value={selectedDefinition ?? ""}
           disabled={disabled || revisions.isPending || revisions.isError || resolution.isPending}
           onChange={(event) => {

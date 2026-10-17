@@ -1,10 +1,8 @@
-import { ActionRow } from "../../ui/Controls";
+import { ActionRow, Notice, Button, Field, Input, Select } from "../../ui/Controls";
 import { pageTitle, sectionTitle, pageContent, classes } from "../../ui/styles";
-import { Notice, Button, Field, Input, Select } from "../../ui/Controls";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ProjectHealth } from "../../types";
-
 import { errorMessage } from "../../lib/presentation";
 import type { InstallationStatus } from "./DesktopSession";
 

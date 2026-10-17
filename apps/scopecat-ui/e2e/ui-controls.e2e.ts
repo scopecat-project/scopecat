@@ -57,6 +57,20 @@ test("shared controls remain readable, keyboard accessible and contained across 
         },
       });
     })()`);
+    // Exercise an enum-array request through the real LaunchForm renderer.
+    // This UI-only field is never submitted to acquisition.
+    await page.route("**/api/v1/experiment-launcher", async (route) => {
+      const response = await route.fetch();
+      const catalog = await response.json();
+      for (const entry of catalog.entries) {
+        entry.request.properties.review_channels = {
+          type: "array",
+          title: "Review channels",
+          items: { type: "string", enum: ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"] },
+        };
+      }
+      await route.fulfill({ response, json: catalog });
+    });
     for (const width of [1280, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       for (const [route, heading] of [
@@ -73,6 +87,17 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible({
             timeout: 60_000,
           });
+          const channels = page.getByRole("listbox", { name: "Review channels", exact: true });
+          await expect(channels).toBeVisible();
+          expect((await channels.boundingBox())!.height).toBeGreaterThanOrEqual(128);
+          await expect(channels).toHaveAttribute("size", "5");
+          const review = page.getByRole("button", { name: "Confirm reviewed input", exact: true });
+          if (await review.isVisible()) await review.click();
+          await expect(channels).toBeEnabled();
+          await channels.selectOption(["alpha", "gamma"]);
+          await expect(channels).toHaveValues(["alpha", "gamma"]);
+          await channels.focus();
+          await expect(channels).toHaveCSS("outline-width", "2px");
         }
         if (route === "settings") {
           const input = page.getByLabel("Author directory", { exact: true });

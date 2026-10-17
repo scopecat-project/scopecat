@@ -1,5 +1,4 @@
 import { Field, Input, Button, Notice } from "../../ui/Controls";
-
 import { normalizeSelection, subjectSample, reviewedForRequest } from "./scientific-selection";
 import type { PlanRevision } from "./experiment-plans";
 import { useState } from "react";

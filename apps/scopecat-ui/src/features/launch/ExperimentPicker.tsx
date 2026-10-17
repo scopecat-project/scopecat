@@ -1,5 +1,4 @@
-import { ActionRow } from "../../ui/Controls";
-import { Field, Select, Button, Input, Notice } from "../../ui/Controls";
+import { ActionRow, Field, Select, Button, Input, Notice } from "../../ui/Controls";
 import { useId, useState } from "react";
 import type { LaunchCatalogEntry } from "./launch-api";
 
@@ -50,7 +49,6 @@ export function ExperimentPicker({
         </Field>
         <Button
           type="button"
-
           disabled={disabled}
           aria-expanded={browsing}
           aria-controls={browserId}
@@ -88,7 +86,6 @@ export function ExperimentPicker({
                 <p className="text-xs text-text-dim break-all">{entry.id}</p>
                 <Button
                   type="button"
-
                   disabled={disabled || entry.id === selectedId}
                   aria-label={`Prepare ${entry.title}`}
                   onClick={() => onSelect(entry)}

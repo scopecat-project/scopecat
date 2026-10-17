@@ -1,5 +1,12 @@
-import { pageTitle, sectionTitle, pageContent, classes } from "../../ui/styles";
-import { detailCard, eyebrow, secondaryButton } from "../../ui/styles";
+import {
+  pageTitle,
+  sectionTitle,
+  pageContent,
+  classes,
+  detailCard,
+  eyebrow,
+  secondaryButton,
+} from "../../ui/styles";
 import { LaunchRecoveryPanel } from "./LaunchRecoveryPanel";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { useEffect, useRef } from "react";

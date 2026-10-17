@@ -3,7 +3,6 @@ import { useRef, useState } from "react";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import { errorMessage, titleCase } from "../../lib/presentation";
-
 import type { components } from "../../api-schema";
 
 export type AnalysisActionInput = components["schemas"]["AnalysisActionInput"];
@@ -70,7 +69,6 @@ function DeclaredAnalysisCatalog({ runId }: { runId: string }) {
         </p>
         <Button
           type="button"
-
           disabled={catalog.isFetching}
           onClick={() => {
             void catalog.refetch({ cancelRefetch: false });

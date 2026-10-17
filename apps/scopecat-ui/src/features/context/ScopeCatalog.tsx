@@ -1,5 +1,4 @@
 import { Notice, Button, Field, Input, Select } from "../../ui/Controls";
-
 import { useScopeCatalog } from "./scope-catalog";
 import { RenameCollection } from "./RenameCollection";
 import { useRef, useState } from "react";

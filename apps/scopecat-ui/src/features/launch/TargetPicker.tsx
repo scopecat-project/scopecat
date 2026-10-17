@@ -87,7 +87,6 @@ export function TargetPicker({
             Registered target
             <Select
               aria-label="Registered target"
-
               disabled={disabled || heads.isPending}
               value={selectedKey}
               onChange={(event) => {

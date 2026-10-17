@@ -1,5 +1,4 @@
 import { Notice, Button, Field, Select, Input } from "../../ui/Controls";
-
 import { readParameterDraft, freezeParameterDraft } from "../config/parameter-draft-api";
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
@@ -352,7 +351,6 @@ export function LaunchForm({
       )}
       <Button
         type="button"
-
         onClick={() => {
           void recovery.retry();
         }}
@@ -382,7 +380,6 @@ export function LaunchForm({
           )}
           <Button
             type="button"
-
             onClick={() =>
               update((current) => ({
                 ...invalidateDraft(current, "Input reviewed. Ready to start or inspect a preview."),
@@ -436,7 +433,6 @@ export function LaunchForm({
           {workingError && <Notice role="alert">{workingError}</Notice>}
           <Button
             type="button"
-
             disabled={Boolean(pending) || !recovery.ready}
             onClick={async () => {
               const revision = draft.revision;
@@ -532,6 +528,8 @@ export function LaunchForm({
               {field.type === "array" && field.items?.enum ? (
                 <Select
                   multiple
+                  size={5}
+                  className="min-h-32"
                   aria-label={field.title ?? name}
                   required={entry.request.required?.includes(name)}
                   value={(values[name] ?? "").split("\n").filter(Boolean)}
@@ -610,7 +608,6 @@ export function LaunchForm({
             <Button
               type="submit"
               value="preview"
-
               disabled={!canPrepare || Boolean(pending)}
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
@@ -618,19 +615,13 @@ export function LaunchForm({
             </Button>
           )}
           {attempt?.status === "confirmed" && (
-            <Button
-              type="button"
-
-              disabled={Boolean(pending)}
-              onClick={rerun}
-            >
+            <Button type="button" disabled={Boolean(pending)} onClick={rerun}>
               Prepare another acquisition
             </Button>
           )}
           {(pending === "prepare" || pending === "preview") && (
             <Button
               type="button"
-
               onClick={() => {
                 activePreparation.current?.finish();
                 update((current) =>
@@ -647,7 +638,7 @@ export function LaunchForm({
           starting. Details appear below when supplied by the experiment.
         </p>
         {pending && (
-          <Notice role="status">
+          <Notice role="status" className="font-medium text-text-soft">
             {pending === "submit"
               ? "Waiting for submission confirmation. Acquisition may already have started."
               : "Checking the experiment inputs. Acquisition has not been submitted."}

@@ -62,7 +62,6 @@ export function ParameterBranchPicker({
               aria-label="Parameter branch"
               value={name}
               disabled={disabled || heads.isPending}
-
               onChange={(event) => setName(event.target.value)}
             >
               <option value="">Choose a branch</option>
