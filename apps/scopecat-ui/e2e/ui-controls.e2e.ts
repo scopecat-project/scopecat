@@ -93,8 +93,9 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await expect(select).toHaveCSS("outline-width", "2px");
           await page.keyboard.press("Tab");
           await expect(page.getByLabel("Sample", { exact: true })).toBeFocused();
-          await page.getByText("Find by full run ID", { exact: true }).click();
           const lookup = page.getByLabel("Full run ID", { exact: true });
+          if (!(await lookup.isVisible()))
+            await page.getByText("Find by full run ID", { exact: true }).click();
           await lookup.fill("invalid/path");
           await page.getByRole("button", { name: "Find exact run", exact: true }).click();
           await expect(lookup).toHaveAttribute("aria-invalid", "true");
