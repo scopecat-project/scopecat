@@ -29,6 +29,11 @@ vi.mock("./AnalysisPublicationView", () => ({
     <div>
       {analysis.title}
       <span data-testid="publication-id">{analysis.id}</span>
+      {analysis.id === "second" && (
+        <details>
+          <summary>Output metadata</summary>
+        </details>
+      )}
       <details>
         <summary>Sources and execution evidence</summary>
         <button onClick={() => onOpenRun("other-input")}>Open input</button>
@@ -235,7 +240,7 @@ it("waits for every expanded cold detail before restoring the saved reading posi
         projectId: "space",
         runId: "owner",
         expanded: ["first", "second"],
-        details: { first: [0], second: [0] },
+        details: { first: [0], second: [1] },
         scroll: 900,
       },
     },
@@ -288,7 +293,60 @@ it("waits for every expanded cold detail before restoring the saved reading posi
   expect(scroll).not.toHaveBeenCalled();
   finish({ ...detail, id: "second", title: "Second detail" });
   await screen.findByText("Second detail");
+  expect(screen.getByText("Output metadata").closest("details")).not.toHaveAttribute("open");
   await waitFor(() => expect(scroll).toHaveBeenCalledExactlyOnceWith(0, 900));
+});
+
+it("saves source open and close before any scroll timer or return navigation", async () => {
+  window.history.replaceState({ scopecatPosition: 1 }, "", "/?run-analysis=exact#runs");
+  vi.mocked(getRunAnalysis).mockResolvedValue({
+    id: "exact",
+    title: "Exact",
+    revision: 1,
+    publicationHash: "hash",
+    publishedAt: "2026-10-13T00:00:00Z",
+    subject: "run",
+    inputs: [],
+    outputs: [],
+    executions: [],
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [], next_cursor: null })),
+  );
+  vi.stubGlobal("scrollTo", vi.fn());
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = () => (
+    <QueryClientProvider client={client}>
+      <RelatedAnalyses projectId="space" runId="owner" collectionNames={new Map()} />
+    </QueryClientProvider>
+  );
+  const mounted = render(view());
+  await screen.findByText("Exact · revision 1");
+  const sources = screen.getByText("Sources and execution evidence").closest("details")!;
+  // Click capture runs before the browser toggles the element.
+  fireEvent.click(sources.querySelector("summary")!);
+  const beforeScroll = window.history.state.runResults.scroll;
+  vi.stubGlobal("scrollY", 900);
+  sources.open = true;
+  fireEvent(sources, new Event("toggle"));
+  // No timer advance, waitFor or second page click can mask the immediate return boundary.
+  expect(window.history.state.runResults.details.exact).toEqual([0]);
+  expect(window.history.state.runResults.scroll).toBe(beforeScroll);
+  const outgoing = window.history.state;
+  window.history.replaceState({ scopecatPosition: 2 }, "", "/?run-analysis=exact#runs");
+  fireEvent(sources, new Event("toggle"));
+  expect(window.history.state.runResults).toBeUndefined();
+  mounted.unmount();
+  window.history.replaceState(outgoing, "", "/?run-analysis=exact#runs");
+  render(view());
+  const restoredSources = (await screen.findByText("Sources and execution evidence")).closest(
+    "details",
+  )!;
+  expect(restoredSources).toHaveAttribute("open");
+  restoredSources.open = false;
+  fireEvent(restoredSources, new Event("toggle"));
+  expect(window.history.state.runResults.details.exact).toEqual([]);
 });
 
 function publication(id: string) {

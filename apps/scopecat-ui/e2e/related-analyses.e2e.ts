@@ -197,11 +197,28 @@ test("finds the same run, sample and space publications from either direct input
     await popup.close();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
     await savedVersion.click();
-    await expect(
-      page
-        .getByRole("region", { name: "Linked analysis", exact: true })
-        .getByTestId("publication-id"),
-    ).toHaveText(seed.ids[0]);
+    const exactResult = page.getByRole("region", { name: "Linked analysis", exact: true });
+    await expect(exactResult.getByTestId("publication-id")).toHaveText(seed.ids[0]);
+    const exactSources = exactResult.getByText("Sources and execution evidence", { exact: true });
+    // Leave in the same native toggle dispatch, without another page click or a 200ms wait.
+    const backOnToggle = () =>
+      exactSources.locator("..").evaluate((element) => {
+        element.addEventListener(
+          "toggle",
+          () => element.ownerDocument.defaultView!.history.back(),
+          { once: true },
+        );
+      });
+    await backOnToggle();
+    await exactSources.click();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await page.goForward();
+    await expect(exactSources.locator("..")).toHaveAttribute("open", "");
+    await backOnToggle();
+    await exactSources.click();
+    await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
+    await page.goForward();
+    await expect(exactSources.locator("..")).not.toHaveAttribute("open");
     await page.goBack();
     await expect(
       row.getByText("Sources and execution evidence", { exact: true }).locator(".."),

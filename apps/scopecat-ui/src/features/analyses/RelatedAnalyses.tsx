@@ -90,7 +90,7 @@ function RunResults({
     if (!element) return;
     const position = window.history.state?.scopecatPosition ?? 0;
     let timer: number | undefined;
-    const save = () => {
+    const snapshot = (includeScroll: boolean) => {
       // Outgoing effects must never write into the destination history entry.
       if ((window.history.state?.scopecatPosition ?? 0) !== position) return;
       const saved = window.history.state?.runResults;
@@ -110,13 +110,21 @@ function RunResults({
             runId,
             expanded: saved?.projectId === projectId && saved.runId === runId ? saved.expanded : [],
             details,
-            scroll: window.scrollY,
+            scroll: includeScroll
+              ? window.scrollY
+              : saved?.projectId === projectId && saved.runId === runId
+                ? saved.scroll
+                : undefined,
           },
         },
         "",
         location.href,
       );
     };
+    const save = () => snapshot(true);
+    // Toggle is a discrete change: save it before a browser/keyboard Back can leave.
+    // Keep the previous scroll snapshot while cold content is still settling.
+    const rememberDetails = () => snapshot(false);
     const rememberScroll = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
@@ -134,13 +142,13 @@ function RunResults({
     window.addEventListener("click", save, true);
     window.addEventListener("scroll", rememberScroll);
     window.addEventListener("pagehide", save);
-    element.addEventListener("toggle", rememberScroll, true);
+    element.addEventListener("toggle", rememberDetails, true);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("click", save, true);
       window.removeEventListener("scroll", rememberScroll);
       window.removeEventListener("pagehide", save);
-      element.removeEventListener("toggle", rememberScroll, true);
+      element.removeEventListener("toggle", rememberDetails, true);
     };
   }, [projectId, runId]);
   const query = useInfiniteQuery({
