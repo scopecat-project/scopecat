@@ -1,4 +1,5 @@
-import { primaryButton, secondaryButton } from "../../ui/styles";
+import { Notice, Button, Field, Select, Input } from "../../ui/Controls";
+
 import { readParameterDraft, freezeParameterDraft } from "../config/parameter-draft-api";
 import { LaunchRejectionDetails } from "./LaunchRejectionDetails";
 import { ExecutionScenario } from "../../ui/ExecutionScenario";
@@ -339,37 +340,32 @@ export function LaunchForm({
         </p>
         {entry.review && <p>{entry.review.instructions}</p>}
       </section>
-      <p role="status">{recovery.status}</p>
+      <Notice role="status">{recovery.status}</Notice>
       {recovery.unsavedTargets.length > 0 && (
-        <p role="alert">
+        <Notice role="alert">
           Input is not confirmed saved for:{" "}
           {recovery.unsavedTargets
             .map(([workspace, experiment]) => `${workspace} / ${experiment}`)
             .join(", ")}
           . Keep this application open and return to retry these copies.
-        </p>
+        </Notice>
       )}
-      <button
+      <Button
         type="button"
-        className={secondaryButton}
+
         onClick={() => {
           void recovery.retry();
         }}
       >
         Retry saving input
-      </button>
+      </Button>
       {recovery.conflict && (
         <section aria-label="Conflicting experiment input">
           <p>Both copies are retained. Review the other window’s saved input before choosing.</p>
           <pre>{JSON.stringify(recovery.head?.input, null, 2)}</pre>
-          <button
-            className={secondaryButton}
-            type="button"
-            disabled={recovery.writing}
-            onClick={() => recovery.adoptLocal()}
-          >
+          <Button type="button" disabled={recovery.writing} onClick={() => recovery.adoptLocal()}>
             Keep my copy after review
-          </button>
+          </Button>
         </section>
       )}
       {draft.needsReview && (
@@ -379,14 +375,14 @@ export function LaunchForm({
             New defaults have not replaced your edits.
           </p>
           {Boolean(draft.unresolvedFields?.length) && (
-            <p role="alert">
+            <Notice role="alert">
               Unavailable fields need explicit removal: {draft.unresolvedFields?.join(", ")}. Their
               original values remain in recovery history.
-            </p>
+            </Notice>
           )}
-          <button
+          <Button
             type="button"
-            className={secondaryButton}
+
             onClick={() =>
               update((current) => ({
                 ...invalidateDraft(current, "Input reviewed. Ready to start or inspect a preview."),
@@ -409,7 +405,7 @@ export function LaunchForm({
           >
             Confirm reviewed input
             {draft.unresolvedFields?.length ? " and remove unavailable fields" : ""}
-          </button>
+          </Button>
         </section>
       )}
       <fieldset disabled={pending === "submit" || !recovery.ready}>
@@ -426,21 +422,21 @@ export function LaunchForm({
             <summary>Source working table</summary>
             <p className="break-all">{draft.workingInput.draft_id}</p>
           </details>
-          <p id={workingStatusId} role="status">
+          <Notice id={workingStatusId} role="status">
             {workingBlockReason ??
               (result
                 ? "The preview uses this adopted copy."
                 : "The adopted copy matches the saved working table. Start checks it before acquisition.")}
-          </p>
+          </Notice>
           {!workingCurrent && working.data && !working.isError && (
             <p>
               Working inputs changed or could not be checked. Preview and acquisition are blocked.
             </p>
           )}
-          {workingError && <p role="alert">{workingError}</p>}
-          <button
+          {workingError && <Notice role="alert">{workingError}</Notice>}
+          <Button
             type="button"
-            className={secondaryButton}
+
             disabled={Boolean(pending) || !recovery.ready}
             onClick={async () => {
               const revision = draft.revision;
@@ -464,7 +460,7 @@ export function LaunchForm({
             }}
           >
             Use current working inputs
-          </button>
+          </Button>
         </section>
       )}
       {draft.selection.configuration.kind === "parameters" && (
@@ -497,18 +493,17 @@ export function LaunchForm({
           ? "Checking the retained preview against current project context…"
           : draft.notice}
       </p>
-      <button
+      <Button
         type="button"
         disabled={Boolean(pending) || !recovery.ready}
         onClick={() => select(entry, true)}
-        className={secondaryButton}
       >
         Reset launch draft
-      </button>
+      </Button>
       {!supported && (
-        <p role="alert">
+        <Notice role="alert">
           This request schema needs a project-specific form. Use the project's Python workflow.
-        </p>
+        </Notice>
       )}
       <section aria-label="Inputs for this run" className="space-y-3 border-t border-line pt-4">
         <div>
@@ -532,10 +527,10 @@ export function LaunchForm({
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           {fields.map(([name, field]) => (
-            <label key={name} className="flex flex-col gap-1">
+            <Field key={name} className="flex-col">
               {field.title ?? name}
               {field.type === "array" && field.items?.enum ? (
-                <select
+                <Select
                   multiple
                   aria-label={field.title ?? name}
                   required={entry.request.required?.includes(name)}
@@ -546,21 +541,19 @@ export function LaunchForm({
                       Array.from(event.target.selectedOptions, (option) => option.value).join("\n"),
                     )
                   }
-                  className="border rounded p-2 min-h-32"
                 >
                   {field.items.enum.map((value) => (
                     <option key={value} value={value}>
                       {value}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : field.enum || field.type === "boolean" ? (
-                <select
+                <Select
                   aria-label={field.title ?? name}
                   required={entry.request.required?.includes(name)}
                   value={values[name]}
                   onChange={(event) => change(name, event.target.value)}
-                  className="border rounded p-2"
                 >
                   <option value="">Select…</option>
                   {(field.enum ?? ["true", "false"]).map((value) => (
@@ -568,9 +561,9 @@ export function LaunchForm({
                       {String(value)}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
-                <input
+                <Input
                   aria-label={field.title ?? name}
                   required={entry.request.required?.includes(name)}
                   type="text"
@@ -582,10 +575,9 @@ export function LaunchForm({
                   max={field.maximum ?? undefined}
                   value={values[name]}
                   onChange={(event) => change(name, event.target.value)}
-                  className="border rounded p-2"
                 />
               )}
-            </label>
+            </Field>
           ))}
         </fieldset>
       </section>
@@ -600,10 +592,10 @@ export function LaunchForm({
         </p>
         <div className="flex flex-wrap items-center gap-3">
           {entry.actions.includes("submit") && (
-            <button
+            <Button
               type="submit"
               value="start"
-              className={primaryButton}
+              variant="primary"
               disabled={!canPrepare || Boolean(pending) || Boolean(attempt) || !attemptsReady}
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
@@ -612,33 +604,33 @@ export function LaunchForm({
                 : pending === "submit"
                   ? "Submitting acquisition…"
                   : "Start acquisition"}
-            </button>
+            </Button>
           )}
           {entry.actions.includes("preview") && (
-            <button
+            <Button
               type="submit"
               value="preview"
-              className={secondaryButton}
+
               disabled={!canPrepare || Boolean(pending)}
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
               {pending === "preview" ? "Preparing preview…" : "Preview"}
-            </button>
+            </Button>
           )}
           {attempt?.status === "confirmed" && (
-            <button
+            <Button
               type="button"
-              className={secondaryButton}
+
               disabled={Boolean(pending)}
               onClick={rerun}
             >
               Prepare another acquisition
-            </button>
+            </Button>
           )}
           {(pending === "prepare" || pending === "preview") && (
-            <button
+            <Button
               type="button"
-              className={secondaryButton}
+
               onClick={() => {
                 activePreparation.current?.finish();
                 update((current) =>
@@ -647,7 +639,7 @@ export function LaunchForm({
               }}
             >
               Cancel preparation
-            </button>
+            </Button>
           )}
         </div>
         <p className="text-sm text-text-dim">
@@ -655,11 +647,11 @@ export function LaunchForm({
           starting. Details appear below when supplied by the experiment.
         </p>
         {pending && (
-          <p role="status">
+          <Notice role="status">
             {pending === "submit"
               ? "Waiting for submission confirmation. Acquisition may already have started."
               : "Checking the experiment inputs. Acquisition has not been submitted."}
-          </p>
+          </Notice>
         )}
         <p className="text-sm text-text-dim">
           {attempt
@@ -677,7 +669,7 @@ export function LaunchForm({
           (draft.rejection ? (
             <LaunchRejectionDetails rejection={draft.rejection} />
           ) : (
-            <p role="alert">{error}</p>
+            <Notice role="alert">{error}</Notice>
           ))}
         {result && (
           <>

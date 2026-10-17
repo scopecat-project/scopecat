@@ -1,4 +1,5 @@
-import { secondaryButton } from "../../ui/styles";
+import { Notice, Button, Field, Input, Select } from "../../ui/Controls";
+
 import { useScopeCatalog } from "./scope-catalog";
 import { RenameCollection } from "./RenameCollection";
 import { useRef, useState } from "react";
@@ -103,10 +104,9 @@ export function ScopeCatalog({
         <RenameCollection key={current.id} collection={current} disabled={disabled || pending} />
       )}
       {created && (
-        <p role="status">
+        <Notice role="status">
           Created {created.name}.{" "}
-          <button
-            className={secondaryButton}
+          <Button
             type="button"
             disabled={disabled}
             onClick={() => {
@@ -115,15 +115,15 @@ export function ScopeCatalog({
             }}
           >
             Use {created.name}
-          </button>
-        </p>
+          </Button>
+        </Notice>
       )}
       {!disabled &&
         (creating ? (
           <div className="flex flex-wrap gap-2">
-            <label>
+            <Field>
               {label} name{" "}
-              <input
+              <Input
                 aria-label={`${label} name`}
                 value={name}
                 maxLength={200}
@@ -135,44 +135,33 @@ export function ScopeCatalog({
                     void create();
                   }
                 }}
-                className="border rounded p-2"
               />
-            </label>
-            <button
-              className={secondaryButton}
-              type="button"
-              disabled={pending || !name.trim()}
-              onClick={() => void create()}
-            >
+            </Field>
+            <Button type="button" disabled={pending || !name.trim()} onClick={() => void create()}>
               Create {kind === "batch" ? "batch" : "collection"}
-            </button>
-            <button
-              className={secondaryButton}
-              type="button"
-              disabled={pending}
-              onClick={() => setCreating(false)}
-            >
+            </Button>
+            <Button type="button" disabled={pending} onClick={() => setCreating(false)}>
               Cancel new {kind}
-            </button>
+            </Button>
           </div>
         ) : (
-          <button className={secondaryButton} type="button" onClick={() => setCreating(true)}>
+          <Button type="button" onClick={() => setCreating(true)}>
             New {kind === "batch" ? "batch" : "collection"}
-          </button>
+          </Button>
         ))}
     </>
   );
   return (
     <div className={compact ? "flex min-w-0 flex-wrap items-end gap-2" : "space-y-2 min-w-0"}>
-      <label className={compact ? "flex min-w-0 flex-1 flex-col gap-1" : "flex flex-col gap-1"}>
+      <Field className={compact ? "flex min-w-0 flex-1 flex-col gap-1" : "flex flex-col gap-1"}>
         {label}
-        <select
+        <Select
           aria-label={selectLabel ?? label}
           title={value}
           value={value ?? ""}
           disabled={disabled || pending}
           onChange={(event) => onChange(event.target.value || undefined)}
-          className="min-w-0 max-w-full border rounded p-2"
+          className="min-w-0 max-w-full"
         >
           <option value="">{empty}</option>
           {value && !items.some((item) => item.id === value) && (
@@ -186,26 +175,25 @@ export function ScopeCatalog({
                 : ""}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
       {(error || pages.error || selected.error) && (
-        <p role="alert">{error || pages.error?.message || selected.error?.message}</p>
+        <Notice role="alert">{error || pages.error?.message || selected.error?.message}</Notice>
       )}
-      {pages.isPending && <p role="status">Loading {label.toLowerCase()} choices…</p>}
+      {pages.isPending && <Notice role="status">Loading {label.toLowerCase()} choices…</Notice>}
       {pages.hasNextPage && (
-        <button
-          className={secondaryButton}
+        <Button
           type="button"
           disabled={pages.isFetchingNextPage}
           onClick={() => void pages.fetchNextPage()}
         >
           Load more {kind === "batch" ? "batches" : "collections"}
-        </button>
+        </Button>
       )}
       {pages.isError && (
-        <button className={secondaryButton} type="button" onClick={() => void pages.refetch()}>
+        <Button type="button" onClick={() => void pages.refetch()}>
           Retry {label.toLowerCase()} list
-        </button>
+        </Button>
       )}
       {compact ? (
         <details className="min-w-0">

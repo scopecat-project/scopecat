@@ -1,3 +1,4 @@
+import { Button, Notice, Field, Select } from "../../ui/Controls";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -40,10 +41,10 @@ export function PracticePanel({ reachable }: { reachable: boolean }) {
         Finish by recording an answer, opening the task and choosing Continue task. This practices a
         recorded judgment, not publishing a calibration.
       </p>
-      <button type="button" disabled={!reachable || pending} onClick={() => void start()}>
+      <Button type="button" disabled={!reachable || pending} onClick={() => void start()}>
         {pending ? "Starting…" : "Start peak practice"}
-      </button>
-      {(error || catalog.error) && <p role="alert">{error || catalog.error?.message}</p>}
+      </Button>
+      {(error || catalog.error) && <Notice role="alert">{error || catalog.error?.message}</Notice>}
       {catalog.data?.items.map((scope) => (
         <PracticeCard key={scope.id} scope={scope} refresh={() => catalog.refetch()} />
       ))}
@@ -114,11 +115,13 @@ function PracticeCard({ scope, refresh }: { scope: Scope; refresh: () => Promise
           </a>
         </>
       )}
-      {(error || scope.cleanup_error) && <p role="alert">{error || scope.cleanup_error}</p>}
+      {(error || scope.cleanup_error) && (
+        <Notice role="alert">{error || scope.cleanup_error}</Notice>
+      )}
       {scope.state === "cleaning" ? (
-        <button type="button" disabled={pending} onClick={() => void clear()}>
+        <Button type="button" disabled={pending} onClick={() => void clear()}>
           {pending ? "Clearing…" : "Retry cleanup"}
-        </button>
+        </Button>
       ) : (
         scope.state === "active" &&
         (confirming ? (
@@ -127,28 +130,28 @@ function PracticeCard({ scope, refresh }: { scope: Scope; refresh: () => Promise
               Stop this practice and remove its scans, analysis and decisions. Your other work stays
               available.
             </p>
-            <label>
+            <Field>
               Practice files{" "}
-              <select
+              <Select
                 value={choice}
                 onChange={(event) => setChoice(event.target.value as "preserve" | "discard")}
                 disabled={pending}
               >
                 <option value="preserve">Keep notes and edited files</option>
                 <option value="discard">Delete all files in this practice folder</option>
-              </select>
-            </label>
-            <button type="button" disabled={pending} onClick={() => void clear()}>
+              </Select>
+            </Field>
+            <Button type="button" disabled={pending} onClick={() => void clear()}>
               {pending ? "Clearing…" : "Clear this practice"}
-            </button>
-            <button type="button" disabled={pending} onClick={() => setConfirming(false)}>
+            </Button>
+            <Button type="button" disabled={pending} onClick={() => setConfirming(false)}>
               Cancel
-            </button>
+            </Button>
           </>
         ) : (
-          <button type="button" onClick={() => setConfirming(true)}>
+          <Button type="button" onClick={() => setConfirming(true)}>
             Clear practice…
-          </button>
+          </Button>
         ))
       )}
     </article>

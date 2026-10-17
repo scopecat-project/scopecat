@@ -15,8 +15,9 @@
   --color-line-strong: #3b444d;
   --color-text: #edf0f2;
   --color-text-soft: #b8c0c7;
-  --color-text-dim: #818b94;
+  --color-text-dim: #98a2ab;
   --color-accent: #80a3cf;
+  --color-accent-hover: #a4bee0;
   --color-accent-soft: rgb(128 163 207 / 12%);
   --color-blue: #80a3cf;
   --color-blue-soft: rgb(128 163 207 / 12%);
@@ -55,6 +56,7 @@
 
   button,
   input,
+  select,
   textarea {
     font: inherit;
   }
@@ -67,6 +69,8 @@
   button:focus-visible,
   a:focus-visible,
   input:focus-visible,
+  select:focus-visible,
+  summary:focus-visible,
   textarea:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;

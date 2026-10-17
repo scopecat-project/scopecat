@@ -1,3 +1,6 @@
+import { ActionRow } from "../../ui/Controls";
+import { pageTitle, sectionTitle, pageContent } from "../../ui/styles";
+import { Notice, Field, Select, Button, Input } from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ScopeCatalog } from "../context/ScopeCatalog";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
@@ -10,10 +13,9 @@ import { ImportedCaptures } from "./ImportedCaptures";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
-import { detailCard, primaryButton, secondaryButton } from "../../ui/styles";
+import { detailCard, secondaryButton } from "../../ui/styles";
 
 type Project = components["schemas"]["ResearchProject"];
-const inputClass = "max-w-full min-w-0 rounded border border-line bg-bg px-2 py-1 text-sm";
 
 export function ResearchHistory({
   onOpenRun,
@@ -146,14 +148,14 @@ export function ResearchHistory({
     projects.error ?? samples.error ?? members.error ?? runs.error ?? save.error ?? associate.error;
   const pending = daemonUnavailable || save.isPending || associate.isPending;
   return (
-    <section className="space-y-4 p-4" aria-label="Data">
-      <h2 className="text-lg font-semibold">Data</h2>
+    <section className={pageContent} aria-label="Data">
+      <h2 className={pageTitle}>Data</h2>
       <p className="text-sm text-text-dim">
         Find retained runs by collection, project, sample or time. Open a run for its measurements
         and saved analyses, or open it independently alongside your current acquisition. Imported
         results remain available below with their original source.
       </p>
-      {error && <p role="alert">{error.message}</p>}
+      {error && <Notice role="alert">{error.message}</Notice>}
       <div className={`${detailCard} flex flex-wrap items-start gap-3`}>
         <div className="min-w-0 flex-1 basis-80">
           <ScopeCatalog
@@ -189,11 +191,10 @@ export function ResearchHistory({
         names={collectionNames}
         onOpenRun={onOpenRun}
       />
-      <div className={`${detailCard} flex flex-wrap items-end gap-3`}>
-        <label>
+      <ActionRow className={detailCard}>
+        <Field>
           Research project{" "}
-          <select
-            className={inputClass}
+          <Select
             aria-label="Research project"
             value={selected?.id ?? ""}
             onChange={(event) => {
@@ -212,18 +213,15 @@ export function ResearchHistory({
                   {project.name}
                 </option>
               ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
         {projects.hasNextPage && (
-          <button className={secondaryButton} onClick={() => void projects.fetchNextPage()}>
-            More projects
-          </button>
+          <Button onClick={() => void projects.fetchNextPage()}>More projects</Button>
         )}
 
-        <label>
+        <Field>
           Sample{" "}
-          <select
-            className={inputClass}
+          <Select
             aria-label="Sample"
             value={sample}
             onChange={(event) => setSample(event.target.value)}
@@ -236,32 +234,28 @@ export function ResearchHistory({
                   {item.revision.content.display_name} ({item.record.id})
                 </option>
               ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
         {samples.hasNextPage && (
-          <button className={secondaryButton} onClick={() => void samples.fetchNextPage()}>
-            More samples
-          </button>
+          <Button onClick={() => void samples.fetchNextPage()}>More samples</Button>
         )}
-        <label>
+        <Field>
           From (local time){" "}
-          <input
-            className={inputClass}
+          <Input
             type="datetime-local"
             value={after}
             onChange={(event) => setAfter(event.target.value)}
           />
-        </label>
-        <label>
+        </Field>
+        <Field>
           Before (local time){" "}
-          <input
-            className={inputClass}
+          <Input
             type="datetime-local"
             value={before}
             onChange={(event) => setBefore(event.target.value)}
           />
-        </label>
-      </div>
+        </Field>
+      </ActionRow>
       <details className={detailCard}>
         <summary className="cursor-pointer">
           Advanced source filters{workingPoint || bench ? " · active" : ""}
@@ -271,31 +265,23 @@ export function ResearchHistory({
           conditions.
         </p>
         <div className="mt-2 flex flex-wrap gap-3">
-          <label>
+          <Field>
             Working point{" "}
-            <input
-              className={inputClass}
-              value={workingPoint}
-              onChange={(event) => setWorkingPoint(event.target.value)}
-            />
-          </label>
-          <label>
+            <Input value={workingPoint} onChange={(event) => setWorkingPoint(event.target.value)} />
+          </Field>
+          <Field>
             Bench deployment{" "}
-            <input
-              className={inputClass}
-              value={bench}
-              onChange={(event) => setBench(event.target.value)}
-            />
-          </label>
+            <Input value={bench} onChange={(event) => setBench(event.target.value)} />
+          </Field>
         </div>
       </details>
       <div className={detailCard}>
-        <h3 className="mt-0 text-base font-semibold">Retained runs</h3>
+        <h3 className={sectionTitle}>Retained runs</h3>
         {allRuns && selected && (
-          <p role="status">Showing runs across all projects for association.</p>
+          <Notice role="status">Showing runs across all projects for association.</Notice>
         )}
         {daemonUnavailable ? (
-          <p role="status">Data unavailable while the application service is offline.</p>
+          <Notice role="status">Data unavailable while the application service is offline.</Notice>
         ) : runs.isPending ? (
           <p>Loading history…</p>
         ) : (
@@ -342,8 +328,7 @@ export function ResearchHistory({
                       .join(", ")}
                   </span>
                   {managing && selected && (
-                    <button
-                      className={secondaryButton}
+                    <Button
                       disabled={pending}
                       onClick={() =>
                         associate.mutate({
@@ -354,7 +339,7 @@ export function ResearchHistory({
                       }
                     >
                       {allRuns ? "Associate run" : "Remove run association"}
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}
@@ -362,13 +347,9 @@ export function ResearchHistory({
         )}
         {runs.data?.pages[0]?.items.length === 0 && <p>No runs match these filters.</p>}
         {runs.hasNextPage && (
-          <button
-            className={secondaryButton}
-            disabled={runs.isFetchingNextPage}
-            onClick={() => void runs.fetchNextPage()}
-          >
+          <Button disabled={runs.isFetchingNextPage} onClick={() => void runs.fetchNextPage()}>
             Older runs
-          </button>
+          </Button>
         )}
       </div>
       <ImportedCaptures unavailable={daemonUnavailable} projectId={projectId} />
@@ -395,18 +376,18 @@ export function ResearchHistory({
             });
           }}
         >
-          <label>
+          <Field>
             Project name{" "}
-            <input
+            <Input
               required
-              className={inputClass}
+
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
-          </label>
-          <button className={primaryButton} disabled={pending || !name.trim()}>
+          </Field>
+          <Button variant="primary" disabled={pending || !name.trim()}>
             {selected ? "Rename project" : "Create project"}
-          </button>
+          </Button>
         </form>
         {selected && (
           <div className="mt-3 space-y-2">
@@ -415,35 +396,29 @@ export function ResearchHistory({
               .flatMap((page) => page.ids)
               .map((id) => (
                 <div key={id} className="flex gap-2">
-                  <button className={secondaryButton} onClick={() => setSample(id)}>
-                    {id}
-                  </button>
-                  <button
-                    className={secondaryButton}
+                  <Button onClick={() => setSample(id)}>{id}</Button>
+                  <Button
                     disabled={pending}
                     onClick={() =>
                       associate.mutate({ kind: "samples", identity: id, present: false })
                     }
                   >
                     Remove sample association
-                  </button>
+                  </Button>
                 </div>
               ))}
             {members.hasNextPage && (
-              <button className={secondaryButton} onClick={() => void members.fetchNextPage()}>
-                More associated samples
-              </button>
+              <Button onClick={() => void members.fetchNextPage()}>More associated samples</Button>
             )}
           </div>
         )}
         {selected && sample && (
-          <button
-            className={secondaryButton}
+          <Button
             disabled={pending}
             onClick={() => associate.mutate({ kind: "samples", identity: sample, present: true })}
           >
             Associate sample
-          </button>
+          </Button>
         )}
         {selected && (
           <label>

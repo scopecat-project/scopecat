@@ -1,4 +1,5 @@
-import { secondaryButton } from "../../ui/styles";
+import { Field, Input, Button, Notice } from "../../ui/Controls";
+
 import { normalizeSelection, subjectSample, reviewedForRequest } from "./scientific-selection";
 import type { PlanRevision } from "./experiment-plans";
 import { useState } from "react";
@@ -90,44 +91,41 @@ export function PlanSave({
   }
   return (
     <section aria-label="Save experiment plan" className="border rounded p-3 space-y-2">
-      <label>
+      <Field>
         Plan name{" "}
-        <input
+        <Input
           aria-label="Plan name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="border p-1"
         />
-      </label>
+      </Field>
       <p>
         {draft?.plan
           ? `${draft.plan.name}, revision ${draft.plan.ref.revision}${draft.planDirty ? " · unsaved input changes" : ""}`
           : "Save these inputs and exact configuration for later."}
       </p>
-      <button
-        className={secondaryButton}
+      <Button
         type="button"
         disabled={!preview?.definition_hash || !name.trim() || saving}
         onClick={() => void save(false)}
       >
         {draft?.plan ? "Save new revision" : "Save plan"}
-      </button>
+      </Button>
       {draft?.plan && (
-        <button
-          className={secondaryButton}
+        <Button
           type="button"
           disabled={!preview?.definition_hash || !name.trim() || saving}
           onClick={() => void save(true)}
         >
           Save as copy
-        </button>
+        </Button>
       )}
       {!preview && (
         <p>
           Preview the current inputs before saving. No request key or execution permission is saved.
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <Notice role="alert">{error}</Notice>}
     </section>
   );
 }

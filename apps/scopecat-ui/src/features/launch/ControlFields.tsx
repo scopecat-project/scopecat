@@ -1,3 +1,4 @@
+import { Notice, Field, Select, Input, Textarea } from "../../ui/Controls";
 import { useState } from "react";
 import { controlNumber, convertControlNumber } from "./control-quantity";
 import type { components } from "../../api-schema";
@@ -122,7 +123,7 @@ export function ControlFields({
   return (
     <div className="space-y-3">
       {groups.map((group) => (
-        <fieldset key={group} className="rounded border p-3 space-y-3">
+        <fieldset key={group} className="rounded-md border border-line p-3 space-y-3">
           <legend>{group || "Controls"}</legend>
           {controls
             .filter((control) => control.group === group)
@@ -162,7 +163,7 @@ export function ControlFields({
                 required: true,
                 min: control.minimum == null ? undefined : control.minimum * scale,
                 max: control.maximum == null ? undefined : control.maximum * scale,
-                className: "border rounded p-2",
+                "aria-invalid": Boolean(error),
               };
               return (
                 <div key={control.id} className="space-y-2">
@@ -170,16 +171,16 @@ export function ControlFields({
                     {control.title}
                     {control.default == null ? " (required)" : ""}
                   </strong>
-                  {error && <p role="alert">{error}</p>}
+                  {error && <Notice role="alert">{error}</Notice>}
                   <p className="text-sm">
                     {control.provenance}
                     {control.minimum != null || control.maximum != null
                       ? ` · Allowed: ${control.minimum ?? "−∞"}–${control.maximum ?? "∞"} ${control.unit ?? ""}`
                       : ""}
                   </p>
-                  <label>
+                  <Field>
                     Source{" "}
-                    <select
+                    <Select
                       aria-label={`${control.title} source`}
                       value={draft.mode}
                       onChange={(event) =>
@@ -187,7 +188,6 @@ export function ControlFields({
                           newSource(control, event.target.value as ControlDraft["mode"]),
                         )
                       }
-                      className="border rounded p-2"
                     >
                       <option value="fixed">Fixed value</option>
                       {control.default != null && <option value="default">Declared default</option>}
@@ -197,8 +197,8 @@ export function ControlFields({
                           <option value="range">Scan range</option>
                         </>
                       )}
-                    </select>
-                  </label>
+                    </Select>
+                  </Field>
                   {draft.mode === "default" ? (
                     <p>
                       {defaultNumber(control)} {control.unit} · Declared default
@@ -209,24 +209,23 @@ export function ControlFields({
                         <p className="text-sm">裸数按 {draft.unit}；单位简写失焦后换算。</p>
                       )}
                       {draft.unit && (
-                        <label>
+                        <Field>
                           Unit{" "}
-                          <select
+                          <Select
                             aria-label={`${control.title} unit`}
                             value={draft.unit}
                             onChange={(event) =>
                               update(control.id, () => convertDraft(draft, event.target.value))
                             }
-                            className="border rounded p-2"
                           >
                             {choices.map((unit) => (
                               <option key={unit}>{unit}</option>
                             ))}
-                          </select>
-                        </label>
+                          </Select>
+                        </Field>
                       )}
                       {draft.mode === "fixed" && (
-                        <input
+                        <Input
                           {...numeric}
                           aria-label={control.title}
                           value={draft.value}
@@ -244,7 +243,7 @@ export function ControlFields({
                       {draft.mode === "values" && (
                         <label>
                           Values{" "}
-                          <textarea
+                          <Textarea
                             required
                             aria-label={`${control.title} scan values`}
                             value={draft.values}
@@ -252,7 +251,7 @@ export function ControlFields({
                             onChange={(event) =>
                               onChange(control.id, { ...draft, values: event.target.value })
                             }
-                            className="border rounded p-2"
+                            aria-invalid={Boolean(error)}
                           />
                           <span className="text-sm">
                             逗号、空白或换行分隔；单位后缀紧接数字，不加空格。单值仍为扫描。
@@ -261,7 +260,7 @@ export function ControlFields({
                       )}
                       {draft.mode === "range" && (
                         <div className="flex gap-2">
-                          <input
+                          <Input
                             {...numeric}
                             aria-label={`${control.title} start`}
                             placeholder="Start"
@@ -276,7 +275,7 @@ export function ControlFields({
                               onChange(control.id, { ...draft, start: event.target.value })
                             }
                           />
-                          <input
+                          <Input
                             {...numeric}
                             aria-label={`${control.title} stop`}
                             placeholder="Stop"
@@ -291,7 +290,7 @@ export function ControlFields({
                               onChange(control.id, { ...draft, stop: event.target.value })
                             }
                           />
-                          <input
+                          <Input
                             type="text"
                             inputMode="decimal"
                             min={2}
@@ -302,7 +301,7 @@ export function ControlFields({
                             onChange={(event) =>
                               onChange(control.id, { ...draft, points: event.target.value })
                             }
-                            className="border rounded p-2 w-24"
+                            className="w-24"
                           />
                         </div>
                       )}

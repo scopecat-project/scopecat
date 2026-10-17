@@ -1,7 +1,8 @@
+import { Field, Input, Button, Notice } from "../../ui/Controls";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "../../api-client";
-import { secondaryButton } from "../../ui/styles";
+
 import { getRun } from "../runs/run-api";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
 import { useRunCollectionName } from "../runs/use-run-collection-name";
@@ -54,11 +55,12 @@ export function RunIdLookup({
             else setSubmitted(value);
           }}
         >
-          <label className="min-w-0 flex-1 basis-72">
+          <Field className="min-w-0 flex-1 basis-72">
             Full run ID
-            <input
+            <Input
               aria-label="Full run ID"
-              className="mt-1 block w-full min-w-0 rounded border border-line p-2"
+              aria-invalid={invalid}
+              className="mt-1 w-full min-w-0"
               value={input}
               onChange={(event) => {
                 setInput(event.target.value);
@@ -67,31 +69,33 @@ export function RunIdLookup({
               }}
               placeholder="Paste the complete ID"
             />
-          </label>
-          <button className={secondaryButton} disabled={unavailable || result.isFetching}>
-            Find exact run
-          </button>
+          </Field>
+          <Button disabled={unavailable || result.isFetching}>Find exact run</Button>
         </form>
         <p className="mt-1 text-xs text-text-dim">
           Current data space only · ignores collection and list filters.
         </p>
         {invalid && (
-          <p role="alert">Invalid run ID format. Paste a complete ID, not a URL or path.</p>
+          <Notice role="alert">
+            Invalid run ID format. Paste a complete ID, not a URL or path.
+          </Notice>
         )}
         {unavailable ? (
-          <p role="status">Run lookup unavailable: reconnect to this data space.</p>
+          <Notice role="status">Run lookup unavailable: reconnect to this data space.</Notice>
         ) : (
           submitted && (
             <>
-              {(result.isPending || result.isFetching) && <p role="status">Finding run…</p>}
+              {(result.isPending || result.isFetching) && (
+                <Notice role="status">Finding run…</Notice>
+              )}
               {error && !result.isFetching && (
-                <p role="alert">
+                <Notice role="alert">
                   {error instanceof ApiError && error.status === 404
                     ? "Run not found in this data space. Check the complete ID and data space."
                     : error instanceof ApiError && (error.status === 400 || error.status === 422)
                       ? `Invalid run reference: ${error.message}`
                       : `Run lookup unavailable: ${error.message}`}
-                </p>
+                </Notice>
               )}
               {result.data && !error && !result.isFetching && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -100,9 +104,7 @@ export function RunIdLookup({
                     sequence={result.data.sequence}
                     collectionName={collection.name}
                   />
-                  <button className={secondaryButton} onClick={() => onOpenRun(result.data.runId)}>
-                    Open found run
-                  </button>
+                  <Button onClick={() => onOpenRun(result.data.runId)}>Open found run</Button>
                 </div>
               )}
             </>

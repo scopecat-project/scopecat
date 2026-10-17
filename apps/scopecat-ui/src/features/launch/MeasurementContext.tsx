@@ -1,3 +1,4 @@
+import { Field, Input, Button, Select, Notice } from "../../ui/Controls";
 import { selectedBatch } from "./scientific-selection";
 import { useId, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -64,17 +65,16 @@ export function MeasurementContext({
         />
       )}
       <div className="flex flex-wrap gap-3">
-        <label>
+        <Field>
           Sample ID{" "}
-          <input
+          <Input
             aria-label="Sample ID"
             list={listId}
             disabled={subjectLocked}
             value={selectedSample}
             onChange={(event) => changeSample(event.target.value)}
-            className="border rounded p-2"
           />
-        </label>
+        </Field>
         <datalist id={listId}>
           {samples.data?.pages
             .flatMap((page) => page.items)
@@ -84,15 +84,14 @@ export function MeasurementContext({
               </option>
             ))}
         </datalist>
-        <label>
+        <Field>
           Operator{" "}
-          <input
+          <Input
             aria-label="Operator"
             value={draft.actor}
             onChange={(event) => onChange({ actor: event.target.value })}
-            className="border rounded p-2"
           />
-        </label>
+        </Field>
       </div>
       <ScopeCatalog
         kind="collection"
@@ -117,7 +116,7 @@ export function MeasurementContext({
         }}
       />
       {subject.kind === "registered_target" && !choosingSubject && (
-        <button
+        <Button
           type="button"
           onClick={() => {
             setChoosingSubject(true);
@@ -125,21 +124,20 @@ export function MeasurementContext({
           }}
         >
           Choose another subject
-        </button>
+        </Button>
       )}
-      <button type="button" aria-expanded={browse} onClick={() => setBrowse(!browse)}>
+      <Button type="button" aria-expanded={browse} onClick={() => setBrowse(!browse)}>
         {browse ? "Hide context choices" : "Browse samples, batches and collections"}
-      </button>
+      </Button>
       {browse && (
         <>
-          <label className="flex flex-col gap-1">
+          <Field className="flex-col">
             Registered sample
-            <select
+            <Select
               aria-label="Registered sample"
               disabled={subjectLocked}
               value={selectedSample}
               onChange={(event) => changeSample(event.target.value)}
-              className="border rounded p-2"
             >
               <option value="">No sample selected</option>
               {selectedSample &&
@@ -153,24 +151,24 @@ export function MeasurementContext({
                     {sample.revision.content.display_name} · {sample.record.id}
                   </option>
                 ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
           {samples.error && (
-            <p role="alert">
+            <Notice role="alert">
               {samples.error.message}{" "}
-              <button type="button" onClick={() => void samples.refetch()}>
+              <Button type="button" onClick={() => void samples.refetch()}>
                 Retry sample list
-              </button>
-            </p>
+              </Button>
+            </Notice>
           )}
           {samples.hasNextPage && (
-            <button
+            <Button
               type="button"
               disabled={samples.isFetchingNextPage}
               onClick={() => void samples.fetchNextPage()}
             >
               Load more samples
-            </button>
+            </Button>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <ScopeCatalog

@@ -43,7 +43,7 @@ export function CalibrationTasks({
   return (
     <details
       open={expanded}
-      className="border rounded p-4 space-y-3"
+      className="border border-line rounded p-4 space-y-3"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary className="font-semibold">Calibration tasks</summary>
@@ -181,7 +181,7 @@ function TaskDetail({
               <label>
                 Task operator
                 <input
-                  className="block border rounded p-1"
+                  className="block border border-line rounded p-1"
                   value={actor}
                   onChange={(event) => setActor(event.target.value)}
                 />
@@ -189,7 +189,7 @@ function TaskDetail({
               <label>
                 Task control reason
                 <input
-                  className="block border rounded p-1"
+                  className="block border border-line rounded p-1"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                 />
@@ -260,7 +260,10 @@ function TaskDetail({
             </p>
           )}
           {view.task.specification.finalization && (
-            <section aria-label="Task finalization" className="border rounded p-3 space-y-1">
+            <section
+              aria-label="Task finalization"
+              className="border border-line rounded p-3 space-y-1"
+            >
               <h4 className="font-semibold">Final verification and publication</h4>
               <p>
                 {view.finalization
@@ -295,7 +298,7 @@ function TaskDetail({
               const planned = { ...specification, check: resolved ?? specification.check };
               const admissionError = view.task.dispatch_errors?.[stage.id];
               return (
-                <li key={stage.id} className="border rounded p-3 space-y-1">
+                <li key={stage.id} className="border border-line rounded p-3 space-y-1">
                   <h4 className="font-semibold">
                     {stage.id} · {stage.state.replaceAll("_", " ")}
                   </h4>

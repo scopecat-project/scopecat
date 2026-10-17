@@ -87,7 +87,10 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
     }
   }
   return (
-    <section aria-label="Saved experiment plans" className="border rounded p-3 space-y-2">
+    <section
+      aria-label="Saved experiment plans"
+      className="border border-line rounded p-3 space-y-2"
+    >
       <h3 className="font-semibold">Saved plans</h3>
       <p>
         Saving and opening never start an experiment or change the lab default. Each run needs a
