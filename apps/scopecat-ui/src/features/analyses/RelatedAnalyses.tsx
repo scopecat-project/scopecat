@@ -24,6 +24,7 @@ interface RelatedContext {
   collectionNames: Map<string, string>;
   onOpenRun?: (runId: string) => void;
   restorePosition?: () => void;
+  resultRunId?: string;
 }
 
 export function RelatedAnalyses(props: RelatedContext & { runId: string }) {
@@ -43,6 +44,7 @@ function RunResults({
   onOpenRun,
 }: RelatedContext & { runId: string }) {
   const client = useQueryClient();
+  const region = useRef<HTMLElement>(null);
   const linked = new URLSearchParams(location.search).get("run-analysis");
   const [expanded, setExpanded] = useState<string[]>(() => {
     const saved = window.history.state?.runResults;
@@ -53,21 +55,27 @@ function RunResults({
   const remember = (ids: string[]) => {
     setExpanded(ids);
     window.history.replaceState(
-      { ...window.history.state, runResults: { projectId, runId, expanded: ids } },
+      {
+        ...window.history.state,
+        runResults: { ...window.history.state?.runResults, projectId, runId, expanded: ids },
+      },
       "",
       location.href,
     );
   };
+  const initialPosition = useRef(window.history.state?.runResults);
   const restored = useRef(false);
   const restorePosition = () => {
-    const saved = window.history.state?.runResults;
+    const saved = initialPosition.current;
     // A cold detail above the saved position must finish before scroll restoration.
     const settled = expanded.every((id) => {
       const state = client.getQueryState(["analysis", "publication", projectId, id]);
       return state?.status === "success" || state?.status === "error";
     });
     if (
+      !query.isPending &&
       settled &&
+      (!linked || !linkedDetail.isPending) &&
       !restored.current &&
       saved?.projectId === projectId &&
       saved.runId === runId &&
@@ -77,17 +85,64 @@ function RunResults({
       requestAnimationFrame(() => window.scrollTo(0, saved.scroll));
     }
   };
-  const openInput = (id: string) => {
-    window.history.replaceState(
-      {
-        ...window.history.state,
-        runResults: { projectId, runId, expanded, scroll: window.scrollY },
-      },
-      "",
-      location.href,
-    );
-    onOpenRun?.(id);
-  };
+  useEffect(() => {
+    const element = region.current;
+    if (!element) return;
+    const position = window.history.state?.scopecatPosition ?? 0;
+    let timer: number | undefined;
+    const save = () => {
+      // Outgoing effects must never write into the destination history entry.
+      if ((window.history.state?.scopecatPosition ?? 0) !== position) return;
+      const saved = window.history.state?.runResults;
+      const details = {
+        ...(saved?.projectId === projectId && saved.runId === runId ? saved.details : {}),
+      };
+      element.querySelectorAll<HTMLElement>("[data-publication-body]").forEach((body) => {
+        details[body.dataset.publicationBody!] = [...body.querySelectorAll("details")].flatMap(
+          (detail, index) => (detail.open ? [index] : []),
+        );
+      });
+      window.history.replaceState(
+        {
+          ...window.history.state,
+          runResults: {
+            projectId,
+            runId,
+            expanded: saved?.projectId === projectId && saved.runId === runId ? saved.expanded : [],
+            details,
+            scroll: window.scrollY,
+          },
+        },
+        "",
+        location.href,
+      );
+    };
+    const rememberScroll = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const initial = initialPosition.current;
+        if (
+          initial?.projectId === projectId &&
+          initial.runId === runId &&
+          typeof initial.scroll === "number" &&
+          !restored.current
+        )
+          return;
+        save();
+      }, 200);
+    };
+    window.addEventListener("click", save, true);
+    window.addEventListener("scroll", rememberScroll);
+    window.addEventListener("pagehide", save);
+    element.addEventListener("toggle", rememberScroll, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("click", save, true);
+      window.removeEventListener("scroll", rememberScroll);
+      window.removeEventListener("pagehide", save);
+      element.removeEventListener("toggle", rememberScroll, true);
+    };
+  }, [projectId, runId]);
   const query = useInfiniteQuery({
     queryKey: ["analyses", "related", projectId, runId, "including-owned"],
     queryFn: ({ pageParam, signal }) =>
@@ -107,6 +162,9 @@ function RunResults({
     queryFn: ({ signal }) => getRunAnalysis(runId, linked!, signal),
     enabled: Boolean(linked),
   });
+  useEffect(() => {
+    restorePosition();
+  });
   const items = [
     ...new Map(
       query.data?.pages.flatMap((page) => page.items ?? []).map((item) => [item.record.id, item]),
@@ -114,7 +172,11 @@ function RunResults({
   ];
   const linkedId = linkedDetail.data?.id ?? linked;
   return (
-    <section className="grid min-w-0 gap-2 rounded-lg border border-line p-4" aria-label="Analyses">
+    <section
+      ref={region}
+      className="grid min-w-0 gap-2 rounded-lg border border-line p-4"
+      aria-label="Analyses"
+    >
       <h3 className="m-0 text-sm font-semibold">Analyses</h3>
       <p className="m-0 text-xs text-text-dim">
         Results saved on this run or directly using its measurements or configuration, wherever
@@ -139,7 +201,8 @@ function RunResults({
                 subject={{ kind: "run", run_id: runId }}
                 projectId={projectId}
                 collectionNames={collectionNames}
-                onOpenRun={openInput}
+                onOpenRun={onOpenRun}
+                resultRunId={runId}
                 restorePosition={restorePosition}
               />
             </>
@@ -159,7 +222,8 @@ function RunResults({
             summary={item}
             projectId={projectId}
             collectionNames={collectionNames}
-            onOpenRun={openInput}
+            onOpenRun={onOpenRun}
+            resultRunId={runId}
             restorePosition={restorePosition}
             expanded={expanded.includes(item.record.id)}
             onExpanded={(open) =>
@@ -243,6 +307,16 @@ function PublicationBody({
   subject,
   ...context
 }: RelatedContext & { analysis: AnalysisPublication; subject: Summary["subject"] }) {
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const saved = window.history.state?.runResults;
+    if (saved?.projectId !== context.projectId || saved.runId !== context.resultRunId) return;
+    const expanded = saved.details?.[analysis.id];
+    if (!Array.isArray(expanded)) return;
+    body.current?.querySelectorAll("details").forEach((detail, index) => {
+      detail.open = expanded.includes(index);
+    });
+  }, [analysis.id, context.projectId, context.resultRunId]);
   const restorePosition = context.restorePosition;
   useEffect(() => {
     restorePosition?.();
@@ -264,7 +338,7 @@ function PublicationBody({
     ),
   ];
   return (
-    <div className="mt-3 min-w-0 space-y-3">
+    <div ref={body} data-publication-body={analysis.id} className="mt-3 min-w-0 space-y-3">
       <AnalysisPublicationView
         analysis={analysis}
         onOpenRun={context.onOpenRun}

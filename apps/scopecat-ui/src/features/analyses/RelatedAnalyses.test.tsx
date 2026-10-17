@@ -29,7 +29,10 @@ vi.mock("./AnalysisPublicationView", () => ({
     <div>
       {analysis.title}
       <span data-testid="publication-id">{analysis.id}</span>
-      <button onClick={() => onOpenRun("other-input")}>Open input</button>
+      <details>
+        <summary>Sources and execution evidence</summary>
+        <button onClick={() => onOpenRun("other-input")}>Open input</button>
+      </details>
     </div>
   ),
 }));
@@ -127,8 +130,10 @@ it("isolates the same run, publication and source references across data spaces 
     await screen.findByText(`Detail ${space}`);
   };
   await open("a run result");
+  screen.getByText("Sources and execution evidence").closest("details")!.open = true;
   fireEvent.click(screen.getByRole("button", { name: "Open input" }));
   expect(onOpenRun).toHaveBeenCalledWith("other-input");
+  expect(window.history.state.runResults.details).toEqual({ "same-publication": [0] });
   space = "b";
   mounted.rerender(view());
   await screen.findByText("b run result");
@@ -139,6 +144,9 @@ it("isolates the same run, publication and source references across data spaces 
   fireEvent.click(screen.getByRole("button", { name: "Load older analyses" }));
   await screen.findByText("Sample Chip b");
   await open("b run result");
+  expect(screen.getByText("Sources and execution evidence").closest("details")).not.toHaveAttribute(
+    "open",
+  );
   await waitFor(() => expect(getRunAnalysis).toHaveBeenCalledTimes(2));
   space = "a";
   mounted.rerender(view());
@@ -227,13 +235,18 @@ it("waits for every expanded cold detail before restoring the saved reading posi
         projectId: "space",
         runId: "owner",
         expanded: ["first", "second"],
+        details: { first: [0], second: [0] },
         scroll: 900,
       },
     },
     "",
     "/",
   );
-  const scroll = vi.fn();
+  const scroll = vi.fn(() => {
+    for (const summary of screen.getAllByText("Sources and execution evidence")) {
+      expect(summary.closest("details")).toHaveAttribute("open");
+    }
+  });
   vi.stubGlobal("scrollTo", scroll);
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
