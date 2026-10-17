@@ -7,6 +7,7 @@ from typing import Annotated
 
 import numpy as np
 import scopecat as sc
+from numpy.typing import NDArray
 
 from reference_lab.parameters import QubitParameters
 from reference_lab.quantum_runner import prepare_quantum_hardware
@@ -15,7 +16,14 @@ from reference_lab.workflows.ramsey import ramsey_program
 
 @sc.compute
 def _iq_mean(
-    values: object,
+    values: Annotated[
+        NDArray[np.complex128],
+        sc.ArrayType(
+            dtype="complex128",
+            unit="ratio",
+            dimensions=(sc.ArrayDimension("shot", None, kind="shot", unit="count"),),
+        ),
+    ],
 ) -> Annotated[complex, sc.ScalarType(sc.ComplexType(unit="ratio"))]:
     """Reduce the acquired shots to one complex value, without an aggregate axis."""
     return complex(np.mean(np.asarray(values, dtype=np.complex128)))

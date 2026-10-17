@@ -176,8 +176,8 @@ def test_compute_inputs_close_experiment_inputs_before_logical_verification() ->
     def build_program(
         *,
         qubit: object,
-        length: object,
-        frequency: object,
+        length: Quantity,
+        frequency: Quantity,
     ) -> dict[str, object]:
         return {
             "qubit": qubit,

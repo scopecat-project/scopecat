@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
 import pytest
 from scopecat_testkit.authoring import bind_invocation, load_config
@@ -165,7 +166,11 @@ def test_hidden_input_use_ids_are_stable_and_scoped(tmp_path: Path) -> None:
 
 
 def test_measurement_compute_mints_one_live_use_for_each_named_input() -> None:
-    def add(*, left: float, right: float) -> float:
+    def add(
+        *,
+        left: Annotated[float, sc.Unit("ratio")],
+        right: Annotated[float, sc.Unit("ratio")],
+    ) -> float:
         return left + right
 
     @sc.module(id="test.measurement-compute.lowering")

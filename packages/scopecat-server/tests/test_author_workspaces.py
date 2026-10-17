@@ -180,8 +180,13 @@ def test_two_workspace_publication_and_execution(tmp_path: Path) -> None:
                 )
             )
             b.refresh()
+            # The changed field now violates the consumer contract during graph build.
             with pytest.raises(AuthorLaunchRejected) as incompatible:
                 b.prepare("signal")
+            assert (
+                incompatible.value.diagnostic.problems[0].code
+                == "compute_input_contract"
+            )
             assert "scale" in str(incompatible.value)
             assert a.state() == initial_a
             assert a.devices.drivers() == driver_versions

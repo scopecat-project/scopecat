@@ -6,6 +6,8 @@ import math
 from collections.abc import Mapping
 from typing import Never, cast
 
+import numpy as np
+
 import scopecat.kernel.frozen as _frozen
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.payloads import PayloadValue
@@ -93,6 +95,10 @@ def _capture_value(
     active_containers: set[int],
     path: str,
 ) -> object:
+    if isinstance(value, np.ndarray):
+        # Snapshot native array inputs as closed data; the declared Array schema
+        # validates dtype and shape when the input is bound.
+        value = cast("object", value.tolist())
     if value is None or isinstance(value, str | int | bool):
         return value
     if isinstance(value, float):

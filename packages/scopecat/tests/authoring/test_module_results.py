@@ -439,6 +439,9 @@ def test_passthrough_and_expression_results_bind_instance_inputs() -> None:
 
 
 def test_direct_result_preserves_its_declared_assignable_input_type() -> None:
+    def capture_quantity(*, consumed: sc.Quantity) -> sc.Quantity:
+        return consumed
+
     ghz_type = sc.ScalarType(sc.QuantityType(unit="GHz"))
 
     @sc.module(id="test.results.assignable-direct-result")
@@ -451,7 +454,7 @@ def test_direct_result_preserves_its_declared_assignable_input_type() -> None:
         result = context.use(source.instantiate("source", value=sc.input_ref(value)))
         context.compute(
             "capture",
-            fn=_identity_consumed,
+            fn=capture_quantity,
             inputs={"consumed": result},
             output_type=ghz_type,
         )

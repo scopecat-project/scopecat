@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from inspect import unwrap
 from types import CodeType
+from typing import cast
 
 from scopecat.program.values import ComputeFunction
 
@@ -66,7 +68,7 @@ def compute_implementation_internal(
 def compute_capture_names_internal(fn: ComputeFunction) -> tuple[str, ...]:
     """Return stable names for Python nonlocals hidden outside explicit inputs."""
 
-    code = getattr(fn, "__code__", None)
+    code = getattr(cast("object", unwrap(fn)), "__code__", None)
     return () if not isinstance(code, CodeType) else code.co_freevars
 
 

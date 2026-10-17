@@ -37,7 +37,15 @@ def teaching_rabi(
 
 
 @sc.compute
-def mean_iq(iq: NDArray[np.complex128]) -> IQ:
+def mean_iq(
+    iq: Annotated[
+        NDArray[np.complex128],
+        sc.ArrayType(
+            dtype="complex128", unit="ratio",
+            dimensions=(sc.ArrayDimension("shot", None),),
+        ),
+    ],
+) -> IQ:
     return complex(iq.mean())
 
 

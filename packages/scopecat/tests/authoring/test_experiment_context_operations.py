@@ -300,7 +300,17 @@ def test_experiment_composes_and_records_array_compute_results() -> None:
         unit="V",
     )
 
-    def peak_value(*, values: NDArray[np.float64]) -> float:
+    def peak_value(
+        *,
+        values: Annotated[
+            NDArray[np.float64],
+            sc.ArrayType(
+                dtype="float64",
+                unit="V",
+                dimensions=(sc.ArrayDimension("sample", 3, kind="time", unit="ns"),),
+            ),
+        ],
+    ) -> float:
         return float(np.max(values))
 
     @sc.experiment(id="test.direct.array-value-record", kind="direct")

@@ -48,7 +48,7 @@ from scopecat.automation.models import (
 )
 from scopecat.daemon.views import ConfigContextResolution, ParameterResolution
 from scopecat.kernel.content_identity import sha256_json_hash
-from scopecat.kernel.errors import CheckFailed
+from scopecat.kernel.errors import CheckFailed, ComputeInputContractError
 from scopecat.kernel.frozen import thaw_json_value
 from scopecat.kernel.python_source import python_source_identity
 from scopecat.planning.preflight import (
@@ -499,7 +499,7 @@ class AuthorExperiments:
                         scope_basis="One authored run; all selected points.",
                     ),
                 )
-        except CheckFailed as error:
+        except (CheckFailed, ComputeInputContractError) as error:
             raise LaunchRequestRejected(
                 "Experiment preparation failed its checks",
                 problems=error.problems,
