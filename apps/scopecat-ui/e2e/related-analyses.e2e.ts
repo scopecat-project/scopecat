@@ -183,7 +183,9 @@ test("finds the same run, sample and space publications from either direct input
     await page.goBack();
     const savedVersion = row.getByRole("link", { name: "Open saved version", exact: true });
     await savedVersion.scrollIntoViewIfNeeded();
-    const savedVersionScroll = await page.evaluate(() => window.scrollY);
+    const savedVersionScroll = await page
+      .locator("html")
+      .evaluate((element) => element.ownerDocument.defaultView!.scrollY);
     const popupPromise = context.waitForEvent("page");
     await savedVersion.click({ modifiers: ["Shift"] });
     const popup = await popupPromise;
@@ -205,7 +207,14 @@ test("finds the same run, sample and space publications from either direct input
       row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
     ).toHaveAttribute("open", "");
     await expect
-      .poll(async () => Math.abs((await page.evaluate(() => window.scrollY)) - savedVersionScroll))
+      .poll(async () =>
+        Math.abs(
+          (await page
+            .locator("html")
+            .evaluate((element) => element.ownerDocument.defaultView!.scrollY)) -
+            savedVersionScroll,
+        ),
+      )
       .toBeLessThan(120);
     await page.getByRole("button", { name: "Data", exact: true }).click();
     await expect(page.getByLabel("Full run ID", { exact: true })).toHaveValue(seed.runs[1]);
