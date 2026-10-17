@@ -28,7 +28,7 @@ export function ExperimentPicker({
   return (
     <div className="space-y-3">
       <ActionRow>
-        <Field className="min-w-0 flex-1">
+        <Field className="min-w-0 flex-1 basis-64">
           Experiment
           <Select
             aria-label="Experiment"
