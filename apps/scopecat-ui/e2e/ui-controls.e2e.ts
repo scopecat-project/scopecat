@@ -42,7 +42,7 @@ test("shared controls remain readable, keyboard accessible and contained across 
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
     );
     // Exercise desktop-only fields without invoking any native operation.
-    await page.addInitScript(() => {
+    await page.addInitScript(`(() => {
       Object.assign(window, {
         pywebview: {
           api: {
@@ -52,10 +52,11 @@ test("shared controls remain readable, keyboard accessible and contained across 
               installation: { python: "/test/python", environment: {} },
             }),
             set_window_title: async () => {},
+            notebook_journey: async () => ({ state: "not_started", journey: null }),
           },
         },
       });
-    });
+    })()`);
     for (const width of [1280, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       for (const [route, heading] of [
@@ -68,6 +69,11 @@ test("shared controls remain readable, keyboard accessible and contained across 
         await expect(
           page.getByRole("heading", { name: heading, exact: true }).first(),
         ).toBeVisible();
+        if (route === "launch") {
+          await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible({
+            timeout: 60_000,
+          });
+        }
         if (route === "settings") {
           const input = page.getByLabel("Author directory", { exact: true });
           await expect(input).toBeVisible();
@@ -84,12 +90,22 @@ test("shared controls remain readable, keyboard accessible and contained across 
         if (route === "history") {
           const select = page.getByLabel("Research project", { exact: true });
           await select.focus();
+          await expect(select).toHaveCSS("outline-width", "2px");
           await page.keyboard.press("Tab");
           await expect(page.getByLabel("Sample", { exact: true })).toBeFocused();
+          await page.getByText("Find by full run ID", { exact: true }).click();
+          const lookup = page.getByLabel("Full run ID", { exact: true });
+          await lookup.fill("invalid/path");
+          await page.getByRole("button", { name: "Find exact run", exact: true }).click();
+          await expect(lookup).toHaveAttribute("aria-invalid", "true");
+          await expect(lookup).toHaveCSS("border-top-color", "rgb(215, 126, 121)");
+          await expect(
+            page.getByRole("alert").filter({ hasText: "Invalid run ID format" }),
+          ).toBeVisible();
         }
-        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-          width,
-        );
+        expect(
+          await page.evaluate<number>("document.documentElement.scrollWidth"),
+        ).toBeLessThanOrEqual(width);
         await testInfo.attach(`${route}-${width}`, {
           body: await page.screenshot({ fullPage: true }),
           contentType: "image/png",
