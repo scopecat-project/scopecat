@@ -209,7 +209,7 @@ export function MeasurementDataPreview({
             className="flex flex-wrap items-end justify-between gap-2 border-b border-line bg-panel-soft px-3 py-2"
             data-testid="measurement-slice-controls"
           >
-            <div className="flex flex-wrap items-end gap-2">
+            <div className="grid w-full grid-cols-2 items-end gap-2 sm:flex sm:w-auto sm:flex-wrap">
               {onMeasurementAxesChange &&
                 supportsAxisSelection &&
                 slicePlan.numericAxes.length > 0 && (
@@ -266,7 +266,7 @@ export function MeasurementDataPreview({
                 const selectedIndex = fixedAxisIndices[axis.id] ?? 0;
                 return (
                   <div
-                    className="grid gap-1 text-xs font-bold tracking-[0.04em] text-text-dim uppercase"
+                    className="grid min-w-0 gap-1 text-xs font-bold tracking-[0.04em] text-text-dim uppercase"
                     key={axis.id}
                   >
                     <span>{axis.label} slice</span>
@@ -283,7 +283,7 @@ export function MeasurementDataPreview({
                       {axis.size <= MAX_SLICE_SELECT_OPTIONS ? (
                         <Select
                           aria-label={`${axis.label} slice`}
-                          className="min-w-28"
+                          className="w-full min-w-0 sm:w-auto sm:min-w-28"
                           value={selectedIndex}
                           onChange={(event) =>
                             onFixedAxisIndexChange(axis.id, Number(event.target.value))
@@ -839,7 +839,7 @@ export function MeasurementChartPicker({
     charts.find((chart) => chart.id === (requestedChartId ?? localChartId)) ?? charts[0];
   return (
     <div
-      className={classes("border-b border-line p-2.5", focused && "flex min-h-64 flex-1 flex-col")}
+      className={classes("border-b border-line p-2.5", focused && "flex min-h-min flex-1 flex-col")}
       data-testid="measurement-charts"
     >
       <div
@@ -914,7 +914,7 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
     <figure
       className={classes(
         "m-0 min-w-0 rounded-md border border-line bg-panel-soft p-2.5",
-        focused && "flex min-h-0 flex-1 flex-col",
+        focused && "flex min-h-min flex-1 flex-col",
       )}
     >
       <figcaption className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
@@ -949,15 +949,17 @@ export function MeasurementChart({ chart }: { chart: MeasurementChartPlan }) {
           ))}
         </div>
       ) : (
-        <div ref={plotArea} className={focused ? "min-h-48 flex-1" : undefined}>
-          <EChart
-            ariaLabel={accessibleTitle}
-            height={focused ? focusHeight : expanded ? 540 : compact ? 240 : 340}
-            option={option}
-            pointCount={points.length}
-            seriesLabels={chart.series.map((series) => series.label)}
-            seriesCount={chart.series.length}
-          />
+        <div ref={plotArea} className={focused ? "relative min-h-48 flex-1" : undefined}>
+          <div className={focused ? "absolute inset-0" : undefined}>
+            <EChart
+              ariaLabel={accessibleTitle}
+              height={focused ? focusHeight : expanded ? 540 : compact ? 240 : 340}
+              option={option}
+              pointCount={points.length}
+              seriesLabels={chart.series.map((series) => series.label)}
+              seriesCount={chart.series.length}
+            />
+          </div>
         </div>
       )}
       {chart.note && <p className="mt-1.5 mb-0 text-xs text-text-dim">{chart.note}</p>}

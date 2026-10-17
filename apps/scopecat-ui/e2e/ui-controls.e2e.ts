@@ -1,21 +1,8 @@
-import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-
-const ROOT = resolve(process.cwd(), "../..");
-function uv(args: string[]) {
-  const env = { ...process.env };
-  delete env.SCOPECAT_DAEMON_URL;
-  const result = spawnSync("uv", ["run", "--locked", "--project", ROOT, ...args], {
-    env,
-    encoding: "utf8",
-    timeout: 60_000,
-  });
-  if (result.error || result.status !== 0)
-    throw new Error(result.error?.message ?? result.stdout + result.stderr);
-}
+import { ROOT, startProject, stopProject } from "./daemon";
 
 test("shared controls remain readable, keyboard accessible and contained across pages", async ({
   page,
@@ -27,20 +14,7 @@ test("shared controls remain readable, keyboard accessible and contained across 
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    uv([
-      "python",
-      "-m",
-      "scopecat_server.cli",
-      "start",
-      project,
-      "--port",
-      "0",
-      "--static-dir",
-      resolve("dist"),
-    ]);
-    const { base_url: baseUrl } = JSON.parse(
-      await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
-    );
+    const baseUrl = await startProject(project);
     // Exercise desktop-only fields without invoking any native operation.
     await page.addInitScript(`(() => {
       Object.assign(window, {
@@ -144,7 +118,7 @@ test("shared controls remain readable, keyboard accessible and contained across 
       await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
     }
   } finally {
-    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
+    stopProject(project);
     await rm(project, { recursive: true, force: true });
   }
 });
