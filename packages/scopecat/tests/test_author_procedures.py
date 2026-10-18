@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import assert_type, cast
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import httpx2
 import pytest
@@ -24,6 +24,7 @@ from scopecat.automation import (
 )
 from scopecat.automation.models import ProcedureSource, procedure_intent_hash
 from scopecat.automation.wire import (
+    ProcedureStepAttemptListQuery,
     ProcedureStepInputSubmitCommand,
     ProcedureSubmitCommand,
 )
@@ -122,7 +123,10 @@ def _pending_states() -> tuple[
     return run, step, schema
 
 
-def test_pending_input_captures_question_schema_evidence_and_submission_fence() -> None:
+@pytest.mark.parametrize("step_key", [None, "review"])
+def test_pending_input_captures_question_schema_evidence_and_submission_fence(
+    step_key: str | None,
+) -> None:
     run, step, schema = _pending_states()
     client = Mock(spec=DaemonClient)
     client.get_procedure.return_value = run
@@ -134,11 +138,15 @@ def test_pending_input_captures_question_schema_evidence_and_submission_fence() 
     ]
     pending = assert_type(
         AuthorProcedure(client, run.procedure_run_id).pending_input(
-            "review", schema=schema
+            step_key, schema=schema
         ),
         PendingProcedureInput[_Answer],
     )
     original_hash = pending.request.request_hash
+    assert client.list_procedure_step_attempts.call_args_list == [
+        call(run.procedure_run_id, ProcedureStepAttemptListQuery(limit=200)),
+        call(run.procedure_run_id, ProcedureStepAttemptListQuery(limit=200, cursor=5)),
+    ]
     assert pending.inputs == (RunOutputRef(run_id="run-1"),)
     # Incoming models and outgoing display views are detached, including nested JSON.
     assert step.interpretation_request is not None
@@ -176,7 +184,12 @@ def test_pending_input_captures_question_schema_evidence_and_submission_fence() 
 def test_pending_response_conflict_does_not_refresh_or_retry() -> None:
     run, step, schema = _pending_states()
     client = Mock(spec=DaemonClient)
-    pending = PendingProcedureInput(client, run, step, schema)
+    client.get_procedure.return_value = run
+    client.list_procedure_step_attempts.return_value = ProcedureStepAttemptPage(
+        procedure_run_id=run.procedure_run_id, items=(step,)
+    )
+    pending = AuthorProcedure(client, run.procedure_run_id).pending_input(schema=schema)
+    client.reset_mock()
     conflict = DaemonConflictError(
         "procedure interpretation request changed", response=httpx2.Response(409)
     )
@@ -214,6 +227,88 @@ def test_pending_input_does_not_fall_back_to_older_waiting_attempt() -> None:
         AuthorProcedure(client, run.procedure_run_id).pending_input(
             "review", schema=schema
         )
+    client.submit_procedure_step_input.assert_not_called()
+
+
+@pytest.mark.parametrize("other_waiting", [False, True])
+def test_current_pending_input_checks_all_pages_and_latest_attempts(
+    other_waiting: bool,
+) -> None:
+    run, step, schema = _pending_states()
+    client = Mock(spec=DaemonClient)
+    client.get_procedure.return_value = run
+    old = step.model_copy(update={"step_key": "old-question"})
+    latest = old.model_copy(update={"attempt": 3, "state": "running"})
+    other = step.model_copy(update={"step_key": "other-question"})
+    client.list_procedure_step_attempts.side_effect = [
+        ProcedureStepAttemptPage(
+            procedure_run_id=run.procedure_run_id,
+            items=(step, latest),
+            next_cursor=5,
+        ),
+        ProcedureStepAttemptPage(
+            procedure_run_id=run.procedure_run_id,
+            items=(old, other) if other_waiting else (old,),
+        ),
+    ]
+    task = AuthorProcedure(client, run.procedure_run_id)
+    if other_waiting:
+        with pytest.raises(ValueError, match="multiple current waiting inputs"):
+            task.pending_input(schema=schema)
+    else:
+        pending = assert_type(
+            task.pending_input(schema=schema), PendingProcedureInput[_Answer]
+        )
+        assert pending.request == step.interpretation_request
+    assert client.list_procedure_step_attempts.call_count == 2
+    client.submit_procedure_step_input.assert_not_called()
+    client.dispatch_project_procedure.assert_not_called()
+
+
+@pytest.mark.parametrize("older_waiting", [False, True])
+def test_current_pending_input_rejects_missing_current_question(
+    older_waiting: bool,
+) -> None:
+    run, step, schema = _pending_states()
+    client = Mock(spec=DaemonClient)
+    client.get_procedure.return_value = run
+    client.list_procedure_step_attempts.side_effect = [
+        ProcedureStepAttemptPage(
+            procedure_run_id=run.procedure_run_id,
+            items=(step.model_copy(update={"attempt": 3, "state": "running"}),),
+            next_cursor=5,
+        ),
+        ProcedureStepAttemptPage(
+            procedure_run_id=run.procedure_run_id,
+            items=(step,) if older_waiting else (),
+        ),
+    ]
+    with pytest.raises(ValueError, match="no current waiting input"):
+        AuthorProcedure(client, run.procedure_run_id).pending_input(schema=schema)
+    client.submit_procedure_step_input.assert_not_called()
+
+
+def test_current_pending_input_validates_schema_without_selecting_by_it() -> None:
+    run, step, schema = _pending_states()
+    client = Mock(spec=DaemonClient)
+    client.get_procedure.return_value = run
+    client.list_procedure_step_attempts.return_value = ProcedureStepAttemptPage(
+        procedure_run_id=run.procedure_run_id, items=(step,)
+    )
+    task = AuthorProcedure(client, run.procedure_run_id)
+    with pytest.raises(ValueError, match="schema does not match"):
+        task.pending_input(schema=AnalysisFactSchema("other.v1", _Answer))
+    client.list_procedure_step_attempts.return_value = ProcedureStepAttemptPage(
+        procedure_run_id=run.procedure_run_id,
+        items=(step.model_copy(update={"step_key": "another"}), step),
+    )
+    with pytest.raises(ValueError, match="multiple current waiting inputs"):
+        task.pending_input(schema=AnalysisFactSchema("other.v1", _Answer))
+    client.get_procedure.return_value = run.model_copy(update={"state": "ready"})
+    client.reset_mock()
+    with pytest.raises(ValueError, match="not waiting for interpretation input"):
+        task.pending_input(schema=schema)
+    client.list_procedure_step_attempts.assert_not_called()
     client.submit_procedure_step_input.assert_not_called()
 
 

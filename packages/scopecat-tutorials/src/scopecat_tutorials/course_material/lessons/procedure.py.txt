@@ -1,4 +1,9 @@
-"""Editable synthetic procedure: acquire, ask a person, validate and finish."""
+"""Editable synthetic procedure: acquire, ask a person, validate and finish.
+
+The notebook uses task.pending_input(schema=PEAK_CHOICE) to read the current
+question, including a later correction round. The choose-N keys below still
+identify separate retained judgments; reading a question never starts a scan.
+"""
 
 from dataclasses import dataclass
 from typing import Annotated, Literal, cast
