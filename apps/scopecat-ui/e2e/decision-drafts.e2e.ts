@@ -94,7 +94,7 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await a.getByLabel("Recorded reviewer").fill("operator A");
     await a.getByLabel("frequency", { exact: true }).fill("1e");
     await a.getByLabel("rationale", { exact: true }).fill("unfinished useful reasoning");
-    await expect(a.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(a.getByText("Draft saved", { exact: true })).toBeVisible();
     await b.getByRole("button", { name: "Decision options" }).click();
     await b.getByLabel("Reasoning note (optional)").fill("window B conflicting note");
     await expect(b.getByText(/Your conflicting copy is retained/)).toBeVisible();
@@ -135,9 +135,7 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
       "unfinished useful reasoning",
     );
     await reopened.getByLabel("frequency", { exact: true }).fill("6.2");
-    await expect(
-      reopened.getByText("Draft saved in application data", { exact: true }),
-    ).toBeVisible();
+    await expect(reopened.getByText("Draft saved", { exact: true })).toBeVisible();
     await reopened.route(
       "**/attempts/1/input",
       (route) =>

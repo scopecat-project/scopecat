@@ -192,7 +192,7 @@ export function InstrumentConfigDialog({
                 {device ? "Edit device" : "Add device"}
               </Dialog.Title>
               <Dialog.Description className={dialogDescription}>
-                Save the connection once for all experiments. Saving does not connect hardware.
+                Save connection settings, then use Test connection to check the device.
               </Dialog.Description>
             </header>
             <fieldset

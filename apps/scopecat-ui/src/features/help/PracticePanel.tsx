@@ -35,12 +35,7 @@ export function PracticePanel({ reachable }: { reachable: boolean }) {
   return (
     <section className="grid gap-3 rounded-lg border border-line bg-panel p-4">
       <h3 className="font-semibold">Practice without devices</h3>
-      <p>
-        Scan a synthetic response, read its curve and enter a peak frequency. Use the same task and
-        Decisions pages as an experiment. No device connection or separate application is needed.
-        Finish by recording an answer, opening the task and choosing Continue task. This practices a
-        recorded judgment, not publishing a calibration.
-      </p>
+      <p>Try reading a synthetic curve and recording a peak choice in Decisions.</p>
       <Button type="button" disabled={!reachable || pending} onClick={() => void start()}>
         {pending ? "Starting…" : "Start peak practice"}
       </Button>

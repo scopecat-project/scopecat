@@ -68,7 +68,17 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     JSON.parse(await readFile(join(home, ".scopecat/daemon.json"), "utf8")).base_url as string;
   try {
     await copyAuthorWorkspace(home);
-    uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      home,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, home);
     const firstUrl = await endpoint();
     const context = await browser.newContext();
@@ -92,12 +102,22 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     await openTable(b, firstUrl);
     await expect(field).toHaveValue("1e");
     await context.close();
-    uv(["scopecat", "stop", home]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", home]);
     await new Promise<void>((done, reject) => {
       blocker.once("error", reject);
       blocker.listen(Number(new URL(firstUrl).port), "127.0.0.1", done);
     });
-    uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      home,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const url = await endpoint();
     expect(url).not.toBe(firstUrl);
     const fresh = await browser.newContext();
@@ -114,7 +134,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
       .click();
     await work.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await work.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
-    await expect(work.getByText(/Using working input revision/)).toBeVisible();
+    await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     const oldB = await preview(work);
     expect(oldB.reviewed.config_source.overrides).toHaveLength(1);
     const editor = await fresh.newPage();
@@ -222,7 +242,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await work.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await expect(work.getByText(/Using working input revision/)).toBeVisible();
+    await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     await work.getByRole("button", { name: "Configuration", exact: true }).click();
     await expect(continuedField).toHaveValue("5.5");
     await testInfo.attach("working-inputs-evidence", {
@@ -241,7 +261,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await fresh.close();
   } finally {
     if (blocker.listening) await new Promise<void>((done) => blocker.close(() => done()));
-    uv(["scopecat", "stop", home]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", home]);
     await rm(home, { recursive: true, force: true });
   }
 });
@@ -251,7 +271,17 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
   const home = await mkdtemp(join(tmpdir(), "scopecat-working-close-"));
   try {
     await copyAuthorWorkspace(home);
-    uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      home,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, home);
     const url = JSON.parse(await readFile(join(home, ".scopecat/daemon.json"), "utf8"))
       .base_url as string;
@@ -280,7 +310,7 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await context.close();
   } finally {
-    uv(["scopecat", "stop", home]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", home]);
     await rm(home, { recursive: true, force: true });
   }
 });

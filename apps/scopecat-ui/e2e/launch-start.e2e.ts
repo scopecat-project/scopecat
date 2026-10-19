@@ -36,7 +36,17 @@ test("Start prepares internally while cancelled and edited preparations never ac
         `    if frequency.to("GHz").value > 4.8:\n        import time\n        from pathlib import Path\n        deadline = time.monotonic() + 60\n        while not Path(${JSON.stringify(releasePath)}).exists():\n            if time.monotonic() > deadline:\n                raise TimeoutError("Browser did not release second point")\n            time.sleep(0.05)\n    detuning =`,
       ),
     );
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -69,7 +79,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await page.getByRole("button", { name: "Close experiment browser" }).click();
     await expect(
       page.getByRole("region", { name: "Selected experiment", exact: true }),
-    ).toContainText("does not publish parameter changes");
+    ).not.toContainText("does not publish parameter changes");
     await expect(page.getByRole("region", { name: "Parameter source", exact: true })).toContainText(
       "no overrides",
     );
@@ -230,7 +240,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     expect(await runs()).toHaveLength(2);
   } finally {
     await writeFile(releasePath, "release");
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     await rm(project, { recursive: true, force: true });
   }
 });

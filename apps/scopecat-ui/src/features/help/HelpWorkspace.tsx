@@ -7,13 +7,7 @@ import { PracticePanel } from "./PracticePanel";
 const docs = "https://scopecat-project.github.io/scopecat/";
 const section = "grid gap-3 rounded-lg border border-line bg-panel p-4";
 
-export function HelpWorkspace({
-  health,
-  reachable,
-}: {
-  health?: ProjectHealth;
-  reachable: boolean;
-}) {
+export function HelpWorkspace({ reachable }: { health?: ProjectHealth; reachable: boolean }) {
   return (
     <section aria-labelledby="help-heading" className={classes(pageContent, "max-w-4xl")}>
       <h2 id="help-heading" className={pageTitle}>
@@ -25,72 +19,42 @@ export function HelpWorkspace({
           to stop and restart the recorded background process.
         </Notice>
       )}
+      <NotebookJourneyPanel reachable={reachable} />
       <PracticePanel reachable={reachable} />
       <section className={section}>
-        <h3 className={sectionTitle}>Start an experiment</h3>
+        <h3 className={sectionTitle}>Run your own experiment</h3>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Open your code folder in VS Code. Select the Python interpreter shown in{" "}
+            Open your code folder in VS Code. For the Notebook kernel, use the folder’s Notebook
+            interpreter shown in{" "}
             <a className="underline" href="#settings">
               Application settings
             </a>
-            . Python files and notebooks use the same application as this window.
+            .
           </li>
           <li>
             In{" "}
             <a className="underline" href="#launch">
               Experiments
             </a>
-            , select your code and experiment. Refresh author code after editing; this does not
-            rebuild dependencies.
+            , select your code and experiment. After editing code, use Refresh author code.
           </li>
           <li>
-            Choose the setup and saved parameters for this measurement, then preview and submit.
-            Reopening a result does not run it again.
+            Choose the setup and parameters, then Start acquisition. Start checks your inputs;
+            Preview is optional.
           </li>
         </ol>
       </section>
-      <section className={section}>
-        <h3 className={sectionTitle}>Devices and measurement context</h3>
-        <p>
-          Maintain devices in{" "}
-          <a className="underline" href="#instruments">
-            Devices and drivers
-          </a>
-          . Setup selects device revisions, topology and routing. Each task selects independent
-          parameters and setup, or a saved candidate with its retained setup.
-        </p>
-        <p>
-          Finish active measurements and close instrument sessions before changing connections or
-          applying a software update.
-        </p>
+      <nav aria-label="More help" className={section}>
+        <h3 className={sectionTitle}>Setup and maintenance</h3>
         <a
           className="underline"
           href={docs + "how-to/maintain-executable-setup/"}
           target="_blank"
           rel="noopener noreferrer"
         >
-          Maintain executable setup
+          Set up devices and connections
         </a>
-      </section>
-      <section className={section}>
-        <h3 className={sectionTitle}>Finish work or keep it running</h3>
-        <p>
-          Save your files. Closing the last window keeps Scopecat in the background. Use Open in the
-          menu bar or system tray to return, or Quit to exit the application. With unfinished work,
-          choose to wait, stop it, or keep Scopecat in the background. An idle Python session does
-          not prevent quitting. Closing a browser tab only closes that view.
-        </p>
-        <p>
-          Application settings shows software updates, source registration and data locations.
-          Updates preserve records and source files. After switching environments, reopen Python
-          kernels with the selected interpreter.
-        </p>
-        {health && typeof health.details.data_root === "string" && (
-          <p>
-            Scientific data: <code>{health.details.data_root}</code>
-          </p>
-        )}
         <a
           className="underline"
           href={docs + "how-to/backup-and-restore/"}
@@ -105,10 +69,9 @@ export function HelpWorkspace({
           target="_blank"
           rel="noopener noreferrer"
         >
-          Maintain the application
+          Close, restart or update the application
         </a>
-      </section>
-      <NotebookJourneyPanel reachable={reachable} />
+      </nav>
     </section>
   );
 }

@@ -19,7 +19,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-it("shows current locations and qualified maintenance steps without discovering a manager", () => {
+it("prioritizes learning and links to setup and maintenance", () => {
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [] })));
   vi.stubGlobal("fetch", fetch);
   render(
@@ -35,7 +35,7 @@ it("shows current locations and qualified maintenance steps without discovering 
     />,
     { wrapper: Wrapper },
   );
-  expect(screen.getByText("/lab/scientific-data")).toBeVisible();
+  expect(screen.queryByText("/lab/scientific-data")).toBeNull();
   expect(screen.getByRole("link", { name: "Application settings" })).toHaveAttribute(
     "href",
     "#settings",

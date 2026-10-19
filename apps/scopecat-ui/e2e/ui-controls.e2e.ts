@@ -65,6 +65,22 @@ test("shared controls remain readable, keyboard accessible and contained across 
         await expect(
           page.getByRole("heading", { name: heading, exact: true }).first(),
         ).toBeVisible();
+        if (route === "help") {
+          const course = page.getByRole("combobox", { name: "Course", exact: true });
+          await course.focus();
+          await expect(course).toHaveCSS("outline-width", "2px");
+          const start = page.getByRole("button", {
+            name: "Start parameters Notebook",
+            exact: true,
+          });
+          await expect(start).toBeEnabled();
+          expect((await start.boundingBox())!.y).toBeLessThan(800);
+          await course.selectOption("groups");
+          await expect(
+            page.getByRole("button", { name: "Start groups Notebook", exact: true }),
+          ).toBeEnabled();
+          await course.selectOption("parameters");
+        }
         if (route === "configuration") {
           const operator = page.getByLabel("Operator", { exact: true });
           await operator.focus();

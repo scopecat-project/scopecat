@@ -84,7 +84,7 @@ function mount(read: () => Promise<Response>, recoveryRead?: Promise<void>) {
 it("keeps the adopted copy after edits and requires adoption before preview", async () => {
   let latest = source;
   const { client, fetcher } = mount(async () => Response.json(latest));
-  await screen.findByText(/adopted copy matches the saved working table/);
+  await screen.findByText(/Inputs up to date/);
   const preview = screen.getByRole("button", { name: "Preview" });
   await waitFor(() => expect(preview).toBeEnabled());
   expect(
@@ -94,17 +94,16 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["launch-working-input"] });
   });
-  expect(screen.getByText(/Using working input revision 3/)).toBeVisible();
+  expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
   await screen.findByText(/The working table has newer saved edits/);
   expect(preview).toBeDisabled();
   expect(preview).toHaveAccessibleDescription(/newer saved edits.*Use current working inputs/);
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
   expect(fetcher.mock.calls.some(([request]) => request.url.endsWith("/freeze"))).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Use current working inputs" }));
-  await screen.findByText(/Using working input revision 4/);
+  await screen.findByText(/Working inputs · revision 4/);
   expect(preview).toBeEnabled();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
-  expect(screen.getByText(/Submitted experiments keep the inputs captured/)).toBeVisible();
 });
 it("waits for experiment input recovery even when the working table already matches", async () => {
   let releaseRecovery!: () => void;
@@ -112,7 +111,7 @@ it("waits for experiment input recovery even when the working table already matc
     releaseRecovery = resolve;
   });
   mount(async () => Response.json(source), recoveryRead);
-  await screen.findByText(/adopted copy matches the saved working table/);
+  await screen.findByText(/Inputs up to date/);
   const preview = screen.getByRole("button", { name: "Preview" });
   expect(preview).toBeDisabled();
   await act(async () => releaseRecovery());
@@ -134,7 +133,7 @@ it("distinguishes a pending check from an unavailable source without replacing i
   });
   await screen.findByText(/Cannot check the source working table/);
   expect(preview).toHaveAccessibleDescription(/Cannot check.*adopted copy is unchanged/);
-  expect(screen.getByText(/Using working input revision 3/)).toBeVisible();
+  expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
 });
 it.each([
   ["branch", { ...source, branch_changed: true }, /Review the latest branch head in Configuration/],
@@ -155,14 +154,14 @@ it("does not trust a cached matching source when its next check fails", async ()
       ? Response.json({ detail: "Service unavailable" }, { status: 503 })
       : Response.json(source),
   );
-  await screen.findByText(/adopted copy matches the saved working table/);
+  await screen.findByText(/Inputs up to date/);
   unavailable = true;
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["launch-working-input"] });
   });
   await screen.findByText(/Cannot check the source working table/);
   expect(client.getQueryData(["launch-working-input", "test", "table-a"])).toEqual(source);
-  expect(screen.getByText(/Using working input revision 3/)).toBeVisible();
+  expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
   expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
 });

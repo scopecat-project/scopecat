@@ -148,11 +148,7 @@ export function ResearchHistory({
   return (
     <section className={pageContent} aria-label="Data">
       <h2 className={pageTitle}>Data</h2>
-      <p className="text-sm text-text-dim">
-        Find retained runs by collection, project, sample or time. Open a run for its measurements
-        and saved analyses, or open it independently alongside your current acquisition. Imported
-        results remain available below with their original source.
-      </p>
+
       {error && <Notice role="alert">{error.message}</Notice>}
       <div className={`${detailCard} flex flex-wrap items-start gap-3`}>
         <div className="min-w-0 flex-1 basis-80">
@@ -360,10 +356,7 @@ export function ResearchHistory({
         }}
       >
         <summary className="cursor-pointer font-semibold">Research project management</summary>
-        <p className="text-sm text-text-dim">
-          Manage the project selected above. Associations do not move data or change parameter
-          selections.
-        </p>
+        <p className="text-sm text-text-dim">Manage {selected?.name ?? "a research project"}.</p>
         <form
           className="mt-3 flex flex-wrap gap-2"
           onSubmit={(event) => {
