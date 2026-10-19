@@ -16,6 +16,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from filelock import FileLock, Timeout
 
+from scopecat.records.practice import NotebookPracticeClearCommand
 from scopecat_tutorials.lessons import LessonTopic
 
 from .application_runtime import ApplicationRuntime
@@ -216,6 +217,24 @@ class DesktopAPI:
             if journey is None or not journey.ready:
                 raise ValueError("请先从 Help 准备所选课程")
             open_editor(journey)
+
+    def preview_notebook_cleanup(self, topic: LessonTopic) -> dict[str, object]:
+        from .notebook_cleanup import preview
+
+        with self._session.operation():
+            return preview(self._runtime, topic)
+
+    def clear_notebook_course(
+        self, topic: LessonTopic, command_json: str
+    ) -> dict[str, object]:
+        from .notebook_cleanup import clear
+
+        with self._session.operation():
+            return clear(
+                self._runtime,
+                topic,
+                NotebookPracticeClearCommand.model_validate_json(command_json),
+            )
 
     def create_source(self, parent: str, name: str) -> str:
         from scopecat_server.scaffold import write_author_scaffold

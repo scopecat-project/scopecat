@@ -316,6 +316,11 @@ class AnalysisService:
                 input_owners.extend(("run", run_id) for run_id in input_run_ids)
                 with self._control.write_transaction() as connection:
                     ownership = PracticeOwnership(connection)
+                    from scopecat_server.request_workspace import request_workspace
+
+                    workspace = request_workspace.get()
+                    if workspace is not None:
+                        input_owners.append(("source", workspace))
                     owner = ownership.require_shared(*input_owners)
                     if owner is not None:
                         if isinstance(command.subject, SampleAnalysisSubject):

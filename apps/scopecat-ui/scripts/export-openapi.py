@@ -51,6 +51,8 @@ _OPERATIONS = {
     ("/api/v1/data/captures/{content_hash}/runs/{run_id}/recording", "get"),
     ("/api/v1/data/captures/{content_hash}/runs/{run_id}/recording/traces", "post"),
     ("/api/v1/practice", "get"),
+    ("/api/v1/practice/{scope_id}", "get"),
+    ("/api/v1/notebook-practice/{scope_id}/preview", "get"),
     ("/api/v1/practice", "post"),
     ("/api/v1/practice/{scope_id}/clear", "post"),
     ("/api/v1/data-cleanup", "get"),

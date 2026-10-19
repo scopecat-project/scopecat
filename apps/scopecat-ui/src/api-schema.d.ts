@@ -1391,6 +1391,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notebook-practice/{scope_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Notebook Practice */
+        get: operations["preview_notebook_practice_api_v1_notebook_practice__scope_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parameter-drafts": {
         parameters: {
             query?: never;
@@ -1642,6 +1659,23 @@ export interface paths {
         put?: never;
         /** Create Practice */
         post: operations["create_practice_api_v1_practice_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/practice/{scope_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Practice Scope */
+        get: operations["practice_scope_api_v1_practice__scope_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5629,6 +5663,21 @@ export interface components {
              */
             analyses: string[];
             /**
+             * Branches
+             * @default []
+             */
+            branches: string[];
+            /**
+             * Calibration Profiles
+             * @default []
+             */
+            calibration_profiles: string[];
+            /**
+             * Calibration Tasks
+             * @default []
+             */
+            calibration_tasks: string[];
+            /**
              * Captures
              * @default []
              */
@@ -5639,6 +5688,11 @@ export interface components {
              */
             parameters: string[];
             /**
+             * Plans
+             * @default []
+             */
+            plans: string[];
+            /**
              * Procedures
              * @default []
              */
@@ -5648,6 +5702,11 @@ export interface components {
              * @default []
              */
             runs: string[];
+            /**
+             * Schedules
+             * @default []
+             */
+            schedules: string[];
             /**
              * Setup Definitions
              * @default []
@@ -9700,6 +9759,7 @@ export interface components {
         PracticeScope: {
             /** Cleanup Error */
             cleanup_error?: string | null;
+            cleanup_preview?: components["schemas"]["DataCleanupPreview"] | null;
             /**
              * Created At
              * Format: date-time
@@ -9710,6 +9770,12 @@ export interface components {
             file_disposition?: components["schemas"]["PracticeFileDisposition"] | null;
             /** Id */
             id: string;
+            /**
+             * Kind
+             * @default peak
+             * @enum {string}
+             */
+            kind: "peak" | "notebook";
             /** Lesson */
             lesson: string;
             /** Procedure Id */
@@ -9727,6 +9793,8 @@ export interface components {
              * @default false
              */
             workers_retired: boolean;
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /** PreflightCost */
         PreflightCost: {
@@ -15768,6 +15836,37 @@ export interface operations {
             };
         };
     };
+    preview_notebook_practice_api_v1_notebook_practice__scope_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataCleanupPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     parameter_draft_history_api_v1_parameter_drafts_get: {
         parameters: {
             query: {
@@ -16279,6 +16378,37 @@ export interface operations {
                 "application/json": components["schemas"]["PracticeCreateCommand"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeScope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    practice_scope_api_v1_practice__scope_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -17029,6 +17159,7 @@ export interface operations {
                 created_before?: string | null;
                 deployment_id?: string | null;
                 limit?: number;
+                practice_scope?: string | null;
                 record_collection?: string | null;
                 research_project?: string | null;
                 sample_id?: components["schemas"]["SampleId"] | null;

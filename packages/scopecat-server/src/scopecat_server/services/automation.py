@@ -615,7 +615,9 @@ class AutomationService:
     ) -> ProcedureRun:
         """Admit a run while participating in a caller-owned SQLite transaction."""
 
-        scope = procedure_scope(connection, expected_configuration)
+        scope = procedure_scope(
+            connection, expected_configuration, source.workspace_id if source else None
+        )
         if scope is not None and samples:
             raise AutomationConflict("Practice cannot use physical sample bindings")
         if not request_key.strip():

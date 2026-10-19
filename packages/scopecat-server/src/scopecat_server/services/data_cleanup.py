@@ -35,15 +35,41 @@ class DataCleanupService:
 
     def preview(self, selection: DataCleanupSelection) -> DataCleanupPreview:
         with self.store.sqlite.read_transaction() as connection:
-            return self._preview(connection, selection)
+            return self.preview_in_transaction(connection, selection)
 
-    def _preview(
-        self, connection: sqlite3.Connection, selection: DataCleanupSelection
+    def preview_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        selection: DataCleanupSelection,
+        *,
+        practice_scope: str | None = None,
     ) -> DataCleanupPreview:
-        blockers = list(
-            retained_dependencies(connection, self.store.objects, selection)
-        )
         owners = PracticeOwnership(connection)
+        sources = owners.resources(practice_scope, "source") if practice_scope else ()
+        blockers = list(
+            retained_dependencies(
+                connection, self.store.objects, selection, source_ids=sources
+            )
+        )
+        for source in sources:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM author_workspace_preparations WHERE workspace_id=? "
+                    "AND json_extract(record_json, '$.status') "
+                    "IN ('queued', 'running', 'cancelling') LIMIT 1",
+                    (source,),
+                ).fetchone()
+                is not None
+            ):
+                blockers.append(
+                    DataCleanupBlocker(
+                        owner=f"source:{source}",
+                        reason=(
+                            "Wait for source preparation to finish "
+                            "before clearing the course"
+                        ),
+                    )
+                )
         evidence: list[object] = []
         size = 0
         for kind, identity in selection_resources(selection):
@@ -51,10 +77,16 @@ class DataCleanupService:
             scope = owners.get(owner) if owner is not None else None
             clearing_practice = (
                 scope is not None
+                and scope.kind == "peak"
                 and scope.state == "cleaning"
                 and scope.workers_retired
             )
-            if scope is not None and not clearing_practice:
+            course_cleanup = (
+                scope is not None
+                and scope.kind == "notebook"
+                and scope.id == practice_scope
+            )
+            if scope is not None and not clearing_practice and not course_cleanup:
                 blockers.append(
                     DataCleanupBlocker(
                         owner=f"practice:{scope.id}",
@@ -72,6 +104,11 @@ class DataCleanupService:
                 "setup_definition": ("setup_definitions", "definition_id"),
                 "parameters": ("parameter_revisions", "revision_id"),
                 "capture": ("imported_captures", "content_hash"),
+                "branch": ("parameter_branch_commits", "name"),
+                "plan": ("experiment_plan_heads", "plan_id"),
+                "schedule": ("procedure_schedules", "schedule_id"),
+                "calibration_task": ("calibration_tasks", "task_id"),
+                "calibration_profile": ("calibration_profiles", "profile_id"),
             }[kind]
             row = cast(
                 "sqlite3.Row | None",
@@ -89,6 +126,15 @@ class DataCleanupService:
                 )
             elif row is not None:
                 evidence.append(tuple(row))
+                if kind == "branch":
+                    evidence.extend(
+                        tuple(item)
+                        for item in connection.execute(
+                            "SELECT * FROM parameter_branch_commits WHERE "
+                            "name=? ORDER BY generation",
+                            (identity,),
+                        )
+                    )
                 if kind == "analysis" and row["run_id"] is not None:
                     blockers.append(
                         DataCleanupBlocker(
@@ -99,6 +145,22 @@ class DataCleanupService:
                             ),
                         )
                     )
+            if row is not None and (
+                (kind == "schedule" and row["state"] == "pending")
+                or (
+                    kind == "calibration_task"
+                    and row["mode"] not in {"cancelled", "finished"}
+                )
+            ):
+                blockers.append(
+                    DataCleanupBlocker(
+                        owner=f"{kind}:{identity}",
+                        reason=(
+                            "Finish or cancel this task through its normal "
+                            "controls before clearing data"
+                        ),
+                    )
+                )
             if kind in {"run", "analysis", "capture"}:
                 directory = resource_directory(self.store.objects, kind, identity)
                 size += sum(
@@ -200,6 +262,7 @@ class DataCleanupService:
         command: DataCleanupCommand,
         *,
         settle: Callable[[str], None] | None = None,
+        practice_scope: str | None = None,
     ) -> DataCleanupOperation:
         identity = uuid5(NAMESPACE_URL, f"scopecat-cleanup:{command.request_key}").hex
         with self._lock:
@@ -222,7 +285,11 @@ class DataCleanupService:
                             "a different selection"
                         )
                 else:
-                    preview = self._preview(connection, command.preview.selection)
+                    preview = self.preview_in_transaction(
+                        connection,
+                        command.preview.selection,
+                        practice_scope=practice_scope,
+                    )
                     if preview.fingerprint != command.preview.fingerprint:
                         raise ValueError(
                             "Data or retaining dependencies changed; "
@@ -233,13 +300,21 @@ class DataCleanupService:
                             "Resolve retaining dependencies and active tasks "
                             "before clearing data"
                         )
-                    if not preview.record_count:
+                    if not preview.record_count and practice_scope is None:
                         raise ValueError("Select records to clear")
                     operation = DataCleanupOperation(
                         id=identity, selection=preview.selection
                     )
                     self._save(connection, operation)
-                    for kind, resource_id in selection_resources(operation.selection):
+                    resources = list(selection_resources(operation.selection))
+                    if practice_scope is not None:
+                        resources.extend(
+                            ("source", source)
+                            for source in PracticeOwnership(connection).resources(
+                                practice_scope, "source"
+                            )
+                        )
+                    for kind, resource_id in resources:
                         connection.execute(
                             "INSERT OR IGNORE INTO deleted_resources VALUES (?,?,?)",
                             (kind, resource_id, operation.id),

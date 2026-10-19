@@ -6,6 +6,8 @@ from typing import cast
 from scopecat.daemon.calibration_checks import CalibrationProfilePage
 from scopecat.records.calibration_policy import CalibrationProfileRecord
 
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
 
 class CalibrationProfileStore:
     def read(
@@ -27,6 +29,9 @@ class CalibrationProfileStore:
     def insert(
         self, connection: sqlite3.Connection, record: CalibrationProfileRecord
     ) -> None:
+        PracticeOwnership(connection).claim_created(
+            "calibration_profile", record.profile.id
+        )
         connection.execute(
             "INSERT INTO calibration_profiles(profile_id, record_json) VALUES (?, ?)",
             (record.profile.id, record.model_dump_json()),

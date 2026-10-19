@@ -12,9 +12,11 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+import httpx2
 from filelock import FileLock, Timeout
 from pydantic import BaseModel, ConfigDict
 
+from scopecat.records.practice import NotebookPracticeClearCommand, PracticeScope
 from scopecat_tutorials.lessons import TOPICS, LessonTopic, install_lesson
 
 from .author_environment import (
@@ -39,6 +41,13 @@ class NotebookJourney(BaseModel):
     directory: Path
     ready: bool = False
     rebuild_client: bool = False
+    registered_context: bool = False
+    scope_id: str | None = None
+    workspace_id: str | None = None
+    cleared: bool = False
+    directory_device: int | None = None
+    directory_inode: int | None = None
+    cleanup_command: NotebookPracticeClearCommand | None = None
 
     @property
     def notebook(self) -> Path:
@@ -50,15 +59,20 @@ class NotebookJourney(BaseModel):
             "notebook": str(self.notebook),
             "python": str(environment_python(self.directory / ".venv")),
             "ready": self.ready,
+            "scope_id": self.scope_id,
+            "cleared": self.cleared,
+            "cleanup_files": self.cleanup_command.files
+            if self.cleanup_command
+            else None,
         }
 
 
-def _receipt(runtime: ApplicationRuntime, topic: LessonTopic) -> Path:
+def receipt_path(runtime: ApplicationRuntime, topic: LessonTopic) -> Path:
     _validate_topic(topic)
     return runtime.home / f"learning/{topic}.json"
 
 
-def _save(receipt: Path, journey: NotebookJourney) -> None:
+def save_journey(receipt: Path, journey: NotebookJourney) -> None:
     staged = receipt.with_suffix(".tmp")
     _ = staged.write_text(journey.model_dump_json(indent=2), encoding="utf-8")
     staged.replace(receipt)
@@ -67,7 +81,7 @@ def _save(receipt: Path, journey: NotebookJourney) -> None:
 def current(
     runtime: ApplicationRuntime, topic: LessonTopic = "parameters"
 ) -> NotebookJourney | None:
-    path = _receipt(runtime, topic)
+    path = receipt_path(runtime, topic)
     if not path.exists():
         return None
     journey = NotebookJourney.model_validate_json(path.read_bytes())
@@ -84,7 +98,7 @@ def status(
     A receipt describes completed work, not whether its writer is still alive.
     The OS releases the lock on failure or process exit, making retry available.
     """
-    receipt = _receipt(runtime, topic)
+    receipt = receipt_path(runtime, topic)
     if not receipt.parent.exists():
         return {"state": "not_started", "journey": None}
     try:
@@ -150,19 +164,28 @@ def prepare(
     repair: bool = False,
 ) -> NotebookJourney:
     """Retry preparation without rewriting source; continue without dependency work."""
-    receipt = _receipt(runtime, topic)
+    receipt = receipt_path(runtime, topic)
     receipt.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(receipt.with_suffix(".lock"), timeout=30):
         journey = current(runtime, topic)
-        if journey is None:
+        if journey is None or journey.cleared:
             destination = Path(parent) if parent else runtime.home / "authors"
             if not destination.is_absolute() or (parent and not destination.is_dir()):
                 raise ValueError("请选择已有保存目录的完整路径")
             journey = NotebookJourney(
-                topic=topic, directory=destination / f"{topic}-{uuid4().hex[:12]}"
+                topic=topic,
+                directory=destination / f"{topic}-{uuid4().hex[:12]}",
+                registered_context=True,
             )
             create_lesson_source(journey.directory, topic)
-            _save(receipt, journey)
+            stat = journey.directory.stat()
+            journey = journey.model_copy(
+                update={
+                    "directory_device": stat.st_dev,
+                    "directory_inode": stat.st_ino,
+                }
+            )
+            save_journey(receipt, journey)
         if not journey.notebook.is_file():
             raise ValueError(
                 f"练习文件不可用，请恢复原目录后继续；不会重建或覆盖修改：{journey.directory}"
@@ -171,7 +194,7 @@ def prepare(
             journey = journey.model_copy(
                 update={"ready": False, "rebuild_client": True}
             )
-            _save(receipt, journey)
+            save_journey(receipt, journey)
         if journey.ready:
             _ = runtime.source(journey.directory)
             if not environment_python(journey.directory / ".venv").is_file():
@@ -182,14 +205,42 @@ def prepare(
         if journey.rebuild_client:
             _ = create_client_environment(runtime, journey.directory, rebuild=True)
             journey = journey.model_copy(update={"rebuild_client": False})
-            _save(receipt, journey)
+            save_journey(receipt, journey)
         else:
             _ = create_client_environment(runtime, journey.directory)
         python = prepare_execution_environment(runtime, journey.directory)
-        _ = runtime.register_source(journey.directory, python=python)
+        workspace_id = runtime.register_source(journey.directory, python=python)
+        if journey.registered_context:
+            scope = enroll_course(runtime, workspace_id, topic)
+            if scope.state != "active":
+                raise ValueError(
+                    "此课程已进入清理，不能继续写入；请完成清理后准备新课程"
+                )
+            journey = journey.model_copy(
+                update={
+                    "scope_id": scope.id,
+                    "workspace_id": scope.workspace_id,
+                }
+            )
         journey = journey.model_copy(update={"ready": True})
-        _save(receipt, journey)
+        save_journey(receipt, journey)
         return journey
+
+
+def enroll_course(
+    runtime: ApplicationRuntime, workspace_id: str, topic: LessonTopic
+) -> PracticeScope:
+    endpoint = runtime.status().record
+    if endpoint is None:
+        raise ValueError("应用服务不可用；课程文件已保留，请恢复服务后重试")
+    response = httpx2.post(
+        endpoint.base_url + "/api/v1/notebook-practice",
+        json={"workspace_id": workspace_id, "lesson": topic},
+        timeout=30,
+        trust_env=False,
+    )
+    response.raise_for_status()
+    return PracticeScope.model_validate_json(response.content)
 
 
 def open_editor(journey: NotebookJourney) -> None:

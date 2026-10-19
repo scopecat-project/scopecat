@@ -52,6 +52,11 @@ export function ClearData({
       setups: [],
       setup_definitions: [],
       parameters: [],
+      branches: [],
+      plans: [],
+      schedules: [],
+      calibration_tasks: [],
+      calibration_profiles: [],
     },
   ) {
     setPending(true);

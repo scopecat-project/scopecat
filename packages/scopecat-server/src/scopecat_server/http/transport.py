@@ -331,6 +331,8 @@ from scopecat.records.parameter_branch import ParameterBranch
 from scopecat.records.parameter_revision import ParameterRevision
 from scopecat.records.plan_ref import ExperimentPlanRef
 from scopecat.records.practice import (
+    NotebookPracticeClearCommand,
+    NotebookPracticeCreateCommand,
     PracticeCatalog,
     PracticeClearCommand,
     PracticeCreateCommand,
@@ -567,6 +569,19 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         _CommandBodyLimitMiddleware,
         max_body_bytes=max_command_body_bytes,
     )
+
+    @app.middleware("http")
+    async def registered_workspace_context(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        from scopecat_server.request_workspace import request_workspace
+
+        token = request_workspace.set(request.headers.get("X-Scopecat-Workspace"))
+        try:
+            return await call_next(request)
+        finally:
+            request_workspace.reset(token)
+
     _install_error_mapping(app)
     app.include_router(data_exchange_router(application))
     app.include_router(configuration_exchange_router(application))
@@ -600,6 +615,40 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     @app.get("/api/v1/practice")
     def practice_catalog() -> PracticeCatalog:
         return application.practice.catalog()
+
+    @app.post("/api/v1/notebook-practice")
+    def enroll_notebook_practice(
+        command: NotebookPracticeCreateCommand,
+    ) -> PracticeScope:
+        source = authors(command.workspace_id)
+        try:
+            return application.notebook_practice.enroll(
+                command.workspace_id, source.root, command.lesson
+            )
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.get("/api/v1/notebook-practice/{scope_id}/preview")
+    def preview_notebook_practice(scope_id: str) -> DataCleanupPreview:
+        try:
+            return application.notebook_practice.preview(scope_id)
+        except KeyError as error:
+            raise HTTPException(404, "Course context not found") from error
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post("/api/v1/notebook-practice/{scope_id}/clear")
+    def clear_notebook_practice(
+        scope_id: str, command: NotebookPracticeClearCommand
+    ) -> PracticeScope:
+        try:
+            return application.notebook_practice.clear(
+                scope_id, command, settle=project_workers.finish_closed
+            )
+        except KeyError as error:
+            raise HTTPException(404, "Course context not found") from error
+        except (ValueError, RuntimeError, OSError) as error:
+            raise HTTPException(409, str(error)) from error
 
     @app.get("/api/v1/practice/{scope_id}")
     def practice_scope(scope_id: str) -> PracticeScope:
@@ -2519,6 +2568,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         record_collection: str | None = None,
         batch_id: str | None = None,
         research_project: str | None = None,
+        practice_scope: str | None = None,
         working_point: str | None = None,
         deployment_id: str | None = None,
         created_after: datetime | None = None,
@@ -2533,6 +2583,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 record_collection=record_collection,
                 batch_id=batch_id,
                 research_project=research_project,
+                practice_scope=practice_scope,
                 working_point=working_point,
                 deployment_id=deployment_id,
                 created_after=created_after,

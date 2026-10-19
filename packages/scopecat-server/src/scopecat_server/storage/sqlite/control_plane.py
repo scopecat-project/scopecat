@@ -229,6 +229,13 @@ class SQLiteControlPlane:
             )
             parameters.append(sample_id)
         if history is not None:
+            if history.practice_scope is not None:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM practice_resources pr "
+                    "WHERE pr.kind='run' AND pr.resource_id=scheduler_runs.run_id "
+                    "AND pr.scope_id=?)"
+                )
+                parameters.append(history.practice_scope)
             if history.batch_id is not None:
                 clauses.append(
                     "EXISTS (SELECT 1 FROM run_sample_batches rb "

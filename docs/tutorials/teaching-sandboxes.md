@@ -209,3 +209,25 @@ The optional command-line entry uses the same installed application:
 to list practices or `--clear ID` to clear one while preserving its files.
 It prints locations without opening a browser. Per-topic environments and
 `--reset` / `--stop` sandbox commands are retired.
+
+### Course data and cleanup
+
+New Help-prepared Notebook folders join one recorded practice context inside the
+current application. The regular author APIs remain editable; new configurations,
+branches, tasks, measurements and analyses retain that course's ownership. Reusing
+an existing record does not transfer its ownership. Ordinary work and another
+course's inputs cannot silently become part of the course.
+
+Use **View this course in Data** to inspect its measurements and retained tasks.
+**Clear this course** previews the exact owned records and retaining references.
+Finish or cancel unfinished tasks through their normal controls first, including
+paused procedures and questions awaiting input. Cleanup does not cancel them.
+The default keeps edited source. Deleting the code and local Python folder is a
+separate explicit choice, checked against the original registration and directory
+identity; an interrupted cleanup retains its original selection for retry.
+
+Old course receipts without reliable ownership remain available to continue, but
+are not retrospectively adopted or deleted by course cleanup. Earlier peak
+practices retain their recovery and cleanup controls; new learning starts from
+Notebook courses. After clearing a course, preparing again creates a fresh folder
+and context without reusing cleared record identities.

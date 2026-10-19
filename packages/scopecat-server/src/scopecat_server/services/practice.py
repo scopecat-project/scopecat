@@ -64,6 +64,8 @@ class PracticeService:
             return self._located(PracticeOwnership(connection).get(scope_id))
 
     def _located(self, scope: PracticeScope) -> PracticeScope:
+        if scope.kind == "notebook":
+            return scope
         return scope.model_copy(update={"directory": str(self.directory / scope.id)})
 
     def create(self, command: PracticeCreateCommand) -> PracticeScope:
@@ -167,6 +169,10 @@ class PracticeService:
             with self.store.sqlite.write_transaction() as connection:
                 owners = PracticeOwnership(connection)
                 scope = self._located(owners.get(scope_id))
+                if scope.kind != "peak":
+                    raise ValueError(
+                        "Notebook courses require their complete cleanup preview"
+                    )
                 if scope.state == "cleared":
                     return scope
                 if (
@@ -250,6 +256,8 @@ class PracticeService:
 
     def export_files(self, scope_id: str) -> bytes:
         scope = self.get(scope_id)
+        if scope.kind != "peak":
+            raise ValueError("Open the registered Notebook folder to export its source")
         directory = self.directory / scope.id
         if directory.is_symlink():
             raise ValueError(

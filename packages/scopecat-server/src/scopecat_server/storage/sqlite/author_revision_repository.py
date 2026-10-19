@@ -180,6 +180,13 @@ class AuthorRevisionRepository:
 
     def save_preparation(self, operation: AuthorPreparation) -> None:
         with self.store.sqlite.write_transaction() as connection:
+            if not operation.terminal:
+                from .practice import PracticeOwnership
+
+                owners = PracticeOwnership(connection)
+                owner = owners.owner("source", self.workspace_id)
+                if owner is not None:
+                    owners.require_active(owner)
             connection.execute(
                 "INSERT INTO author_workspace_preparations VALUES (?, ?, ?) "
                 "ON CONFLICT(workspace_id, operation_id) "

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from scopecat.automation import ProcedureSchedule, ProcedureScheduleState
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class ProcedureScheduleStoreError(RuntimeError):
@@ -210,6 +211,11 @@ class SQLiteProcedureScheduleStore:
                     schedule.model_dump_json(),
                 ),
             )
+            PracticeOwnership(connection).claim_created(
+                "schedule",
+                schedule.schedule_id,
+                workspace_id=schedule.source.workspace_id if schedule.source else None,
+            )
         except sqlite3.IntegrityError as error:
             raise ProcedureScheduleConflict(
                 "procedure schedule id or materialized run already exists"
@@ -222,6 +228,7 @@ class SQLiteProcedureScheduleStore:
         *,
         expected_revision: int,
     ) -> None:
+        PracticeOwnership(connection).require_writer("schedule", schedule.schedule_id)
         current = self.read_in_transaction(connection, schedule.schedule_id)
         if current.revision != expected_revision:
             raise ProcedureScheduleConflict("procedure schedule revision changed")

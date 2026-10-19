@@ -206,3 +206,62 @@ finally:
     nbformat.write(document, root / "notebooks/verified-procedure.ipynb")
     stop_project(project)
 """
+
+
+def test_registered_course_procedure_owns_children_and_cleans_exact_data(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "owned-procedure"
+    create_lesson_source(root, "procedure")
+    env = dict(os.environ)
+    env.pop("SCOPECAT_DAEMON_URL", None)
+    script = (
+        _JOURNEY.replace(
+            "start_project(project, timeout=60)\ntry:",
+            """endpoint = start_project(project, timeout=60)
+import httpx2
+from scopecat.author_workspaces import author_workspace_id
+with httpx2.Client(base_url=endpoint.base_url, trust_env=False, timeout=30) as web:
+    response = web.post("/api/v1/notebook-practice", json={
+        "workspace_id": author_workspace_id(project.root), "lesson": "procedure"
+    })
+    assert response.status_code == 200, response.text
+    scope_id = response.json()["id"]
+try:""",
+            1,
+        )
+        .replace(
+            "finally:\n    stop_project(project)",
+            """    with httpx2.Client(
+        base_url=endpoint.base_url, trust_env=False, timeout=30
+    ) as web:
+        preview = web.get(f"/api/v1/notebook-practice/{scope_id}/preview")
+        assert preview.status_code == 200, preview.text
+        content = preview.json()
+        assert len(content["selection"]["runs"]) == 3, content
+        assert len(content["selection"]["procedures"]) == 3, content
+        assert content["selection"]["parameters"], content
+        assert not content["blockers"], content
+        cleared = web.post(f"/api/v1/notebook-practice/{scope_id}/clear", json={
+            "preview": content, "files": "preserve"
+        })
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["state"] == "cleared"
+        assert (root / "src/my_experiment/procedure.py").is_file()
+finally:
+    stop_project(project)""",
+            1,
+        )
+        .replace(
+            "start_project(project, timeout=60)\n                session =",
+            "endpoint = start_project(project, timeout=60)\n                session =",
+        )
+    )
+    result = subprocess.run(  # noqa: S603 - generated lesson in an isolated test source
+        [sys.executable, "-c", script, str(root)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

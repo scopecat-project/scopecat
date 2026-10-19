@@ -6,6 +6,8 @@ from typing import cast
 
 from scopecat.records.practice import PracticeResource, PracticeScope
 
+from scopecat_server.request_workspace import request_workspace
+
 
 class PracticeOwnership:
     def __init__(self, connection: sqlite3.Connection) -> None:
@@ -39,6 +41,48 @@ class PracticeOwnership:
             "ON CONFLICT(scope_id) DO UPDATE SET record_json=excluded.record_json",
             (scope.id, scope.model_dump_json()),
         )
+
+    def workspace_scope(self, workspace_id: str | None = None) -> str | None:
+        """Resolve an explicitly registered course, never infer from resource names."""
+        workspace = (
+            workspace_id if workspace_id is not None else request_workspace.get()
+        )
+        if workspace is None:
+            return None
+        return self.owner("source", workspace)
+
+    def claim_created(
+        self,
+        kind: PracticeResource,
+        resource_id: str,
+        *,
+        workspace_id: str | None = None,
+    ) -> None:
+        """Call in the creating transaction, after excluding pre-existing records."""
+        from .data_cleanup import require_retained_resource
+
+        require_retained_resource(self.connection, kind, resource_id)
+        scope = self.workspace_scope(workspace_id)
+        existing = self.owner(kind, resource_id)
+        if existing is not None:
+            self.require_active(existing)
+            if existing != scope:
+                raise ValueError(
+                    "A retained practice identity cannot become ordinary work"
+                )
+        if scope is not None:
+            self.claim(scope, kind, resource_id)
+
+    def require_writer(self, kind: PracticeResource, resource_id: str) -> None:
+        """Reject ordinary/cross-course mutations; never adopt an existing record."""
+        owner = self.owner(kind, resource_id)
+        scope = self.workspace_scope()
+        if request_workspace.get() is not None and owner != scope:
+            raise ValueError(
+                "This resource belongs to another practice or ordinary work"
+            )
+        if owner is not None:
+            self.require_active(owner)
 
     def require_active(self, scope_id: str) -> None:
         if self.get(scope_id).state != "active":
