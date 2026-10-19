@@ -401,9 +401,9 @@ function InstrumentInspectorContent({
             </h2>
             <AvailabilityBadge availability={instrument.availability} connected={connected} />
           </div>
-          <code className="mt-1 block text-[0.61rem] text-text-dim">{instrumentId}</code>
+          <code className="mt-1 block text-xs text-text-dim">{instrumentId}</code>
           {description?.description && (
-            <p className="mt-[9px] mb-0 max-w-[760px] text-[0.68rem] leading-[1.55] text-text-dim">
+            <p className="mt-[9px] mb-0 max-w-[760px] text-xs leading-[1.55] text-text-dim">
               {description.description}
             </p>
           )}
@@ -524,10 +524,10 @@ function InstrumentInspectorContent({
           {connected && stagedCount > 0 && (
             <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
               <div className="grid gap-0.5 max-[460px]:col-span-full">
-                <strong className="text-[0.67rem]">
+                <strong className="text-xs">
                   {stagedCount} staged {stagedCount === 1 ? "property" : "properties"}
                 </strong>
-                <small className="text-[0.54rem] text-text-dim">
+                <small className="text-xs text-text-dim">
                   Values remain local until you apply the complete staged change once.
                 </small>
               </div>

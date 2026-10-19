@@ -9,6 +9,7 @@ import {
   dialogTitle,
   dialogViewport,
   primaryButton,
+  dangerButton,
   secondaryButton,
 } from "./styles";
 
@@ -68,13 +69,10 @@ function ConfirmationDialog({
                 </AlertDialog.Description>
               </div>
             </header>
-            <footer className="flex justify-end gap-2 border-t border-line bg-panel-soft px-[18px] py-3">
+            <footer className="flex flex-wrap justify-end gap-2 border-t border-line bg-panel-soft px-[18px] py-3">
               <AlertDialog.Close className={secondaryButton}>Cancel</AlertDialog.Close>
               <AlertDialog.Close
-                className={classes(
-                  primaryButton,
-                  request.intent === "danger" && "border-red bg-red text-[#170d0c]",
-                )}
+                className={request.intent === "danger" ? dangerButton : primaryButton}
                 onClick={confirm}
               >
                 {request.confirmLabel}

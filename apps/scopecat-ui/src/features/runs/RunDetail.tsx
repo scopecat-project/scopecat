@@ -149,7 +149,7 @@ export function RunDetail({
             </h2>
             <span
               className={classes(
-                "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[0.62rem] font-extrabold tracking-[0.04em] uppercase",
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-extrabold tracking-[0.04em] uppercase",
                 runStatusBadge[run.status],
               )}
               data-testid="run-status"
@@ -207,10 +207,10 @@ export function RunDetail({
             </div>
 
             <div className="grid gap-1.5">
-              <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
+              <dt className="text-xs font-extrabold tracking-[0.09em] text-text-dim uppercase">
                 Accepted
               </dt>
-              <dd className="m-0 text-[0.69rem] text-text-soft">
+              <dd className="m-0 text-xs text-text-soft">
                 {run.createdAt ? (
                   <time dateTime={run.createdAt}>{formatDateTime(run.createdAt)}</time>
                 ) : (
@@ -219,10 +219,10 @@ export function RunDetail({
               </dd>
             </div>
             <div className="grid gap-1.5">
-              <dt className="text-[0.6rem] font-extrabold tracking-[0.09em] text-text-dim uppercase">
+              <dt className="text-xs font-extrabold tracking-[0.09em] text-text-dim uppercase">
                 Config
               </dt>
-              <dd className="m-0 text-[0.69rem] text-text-soft">
+              <dd className="m-0 text-xs text-text-soft">
                 <code title={run.configHash}>
                   {run.configHash ? shorten(run.configHash, 15) : "Not reported"}
                 </code>
@@ -250,14 +250,14 @@ export function RunDetail({
           className="mt-[18px] flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel-soft px-3 py-2.5"
           aria-label="Bound samples"
         >
-          <span className="mr-1 inline-flex items-center gap-2 text-[0.62rem] font-extrabold tracking-[0.08em] text-text-dim uppercase">
+          <span className="mr-1 inline-flex items-center gap-2 text-xs font-extrabold tracking-[0.08em] text-text-dim uppercase">
             <Boxes size={14} aria-hidden="true" />
             Samples
           </span>
           {run.samples.map((sample) => (
             <button
               key={`${sample.role}:${sample.sample_id}:${sample.context_id ?? ""}`}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[rgb(128_163_207_/_20%)] bg-accent-soft px-2.5 py-1.5 text-left text-[0.66rem] text-text-soft hover:border-line-strong hover:bg-panel-strong disabled:cursor-default"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[rgb(128_163_207_/_20%)] bg-accent-soft px-2.5 py-1.5 text-left text-xs text-text-soft hover:border-line-strong hover:bg-panel-strong disabled:cursor-default"
               type="button"
               title={`${sample.sample_id} · exact revision ${sample.revision}`}
               disabled={!onOpenSample}
@@ -265,7 +265,7 @@ export function RunDetail({
             >
               <span className="grid gap-0.5">
                 <strong className="font-[650] text-accent">{sample.display_name}</strong>
-                <span className="text-[0.58rem] text-text-dim">
+                <span className="text-xs text-text-dim">
                   {sample.role} · r{sample.revision}
                   {sample.context_id ? ` · ${sample.context_id}` : ""}
                 </span>

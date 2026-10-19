@@ -6,9 +6,11 @@ import { analysisAxisLabel, analysisFigureOption } from "./chart-options";
 export function AnalysisOutputView({
   output,
   getArtifactDownload,
+  showMetadata = true,
 }: {
   output: AnalysisOutput;
   getArtifactDownload: AnalysisArtifactDownloader;
+  showMetadata?: boolean;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string>();
@@ -44,10 +46,16 @@ export function AnalysisOutputView({
   if (output.kind === "table") {
     content = <AnalysisTableView content={output.content} title={output.title} />;
   } else if (output.kind === "figure") {
-    content = <AnalysisFigureView content={output.content} title={output.title} />;
+    content = (
+      <AnalysisFigureView
+        content={output.content}
+        title={output.title}
+        showMetadata={showMetadata}
+      />
+    );
   } else if (output.kind === "dataset") {
     content = (
-      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-[0.62rem]">
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-xs">
         <dt className="font-bold text-text-dim">Dataset</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.dataset_id}</code>
@@ -64,14 +72,12 @@ export function AnalysisOutputView({
     );
   } else if (output.kind === "fact") {
     content = (
-      <div className="p-[9px] text-[0.62rem] text-text-soft">
-        <div className="mb-1 text-[0.58rem] font-bold text-text-dim">
-          {output.content.schema_id}
-        </div>
-        <div className="mb-1 overflow-hidden text-ellipsis whitespace-nowrap text-[0.55rem] text-text-dim">
+      <div className="p-[9px] text-xs text-text-soft">
+        <div className="mb-1 text-xs font-bold text-text-dim">{output.content.schema_id}</div>
+        <div className="mb-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-text-dim">
           <code title={output.content.schema_hash}>{output.content.schema_hash}</code>
         </div>
-        <div className="mb-1 overflow-hidden text-ellipsis whitespace-nowrap text-[0.55rem] text-text-dim">
+        <div className="mb-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-text-dim">
           <code>{output.content.schema_codec}</code>
         </div>
         <pre className="m-0 max-h-36 overflow-auto whitespace-pre-wrap">
@@ -81,7 +87,7 @@ export function AnalysisOutputView({
     );
   } else if (output.kind === "artifact") {
     content = (
-      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-[0.62rem]">
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-xs">
         <dt className="font-bold text-text-dim">Artifact</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.artifact_id}</code>
@@ -97,7 +103,7 @@ export function AnalysisOutputView({
         <dt className="font-bold text-text-dim">Content</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <button
-            className="cursor-pointer rounded border border-line bg-panel-soft px-2 py-1 text-[0.58rem] font-bold text-text-soft hover:border-line-strong disabled:cursor-wait disabled:opacity-60"
+            className="cursor-pointer rounded border border-line bg-panel-soft px-2 py-1 text-xs font-bold text-text-soft hover:border-line-strong disabled:cursor-wait disabled:opacity-60"
             disabled={downloading}
             onClick={downloadArtifact}
             type="button"
@@ -119,7 +125,7 @@ export function AnalysisOutputView({
     );
   } else {
     content = (
-      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-[0.62rem]">
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-[9px] text-xs">
         <dt className="font-bold text-text-dim">Proposal</dt>
         <dd className="m-0 min-w-0 text-text-soft">
           <code>{output.content.proposal_id}</code>
@@ -135,7 +141,7 @@ export function AnalysisOutputView({
   return (
     <>
       {content}
-      <AnalysisMetadataView metadata={output.metadata} />
+      {showMetadata && <AnalysisMetadataView metadata={output.metadata} />}
     </>
   );
 }
@@ -151,7 +157,7 @@ function AnalysisTableView({ content, title }: { content: TableContent; title: s
   const rows = preview.rows ?? [];
   return (
     <div className="max-h-72 overflow-auto" data-testid="analysis-table">
-      <table className="w-full border-collapse text-left text-[0.61rem]" aria-label={title}>
+      <table className="w-full border-collapse text-left text-xs" aria-label={title}>
         <thead className="sticky top-0 z-[1] bg-panel-strong text-text-dim">
           <tr>
             {preview.columns.map((column) => (
@@ -187,9 +193,9 @@ function AnalysisTableView({ content, title }: { content: TableContent; title: s
           ))}
         </tbody>
       </table>
-      {rows.length === 0 ? <p className="m-0 p-3 text-[0.61rem] text-text-dim">No rows</p> : null}
+      {rows.length === 0 ? <p className="m-0 p-3 text-xs text-text-dim">No rows</p> : null}
       {content.truncated ? (
-        <p className="m-0 p-3 text-[0.58rem] text-text-dim">
+        <p className="m-0 p-3 text-xs text-text-dim">
           Showing {rows.length} of {content.total_rows} rows
         </p>
       ) : null}
@@ -199,7 +205,15 @@ function AnalysisTableView({ content, title }: { content: TableContent; title: s
 
 type FigureContent = Extract<AnalysisOutput, { kind: "figure" }>["content"];
 
-function AnalysisFigureView({ content, title }: { content: FigureContent; title: string }) {
+function AnalysisFigureView({
+  content,
+  title,
+  showMetadata,
+}: {
+  content: FigureContent;
+  title: string;
+  showMetadata: boolean;
+}) {
   const first = content.layers[0]!.preview;
   const series = content.layers.flatMap((layer) => layer.preview.series);
   const pointCount = series.reduce((total, item) => total + item.x.length, 0);
@@ -239,25 +253,27 @@ function AnalysisFigureView({ content, title }: { content: FigureContent; title:
                 {layer.projection.uncertainty.meaning} (absolute lower/upper bounds)
               </p>
             )}
-            <details>
-              <summary>Retained source and projection</summary>
-              {layer.source.kind === "dataset" ? (
-                <p>
-                  Dataset output in this publication: <code>{layer.source.output_id}</code>
-                </p>
-              ) : (
-                <>
+            {showMetadata && (
+              <details>
+                <summary>Retained source and projection</summary>
+                {layer.source.kind === "dataset" ? (
                   <p>
-                    Analysis <code>{layer.source.source.analysis_record_id}</code> · dataset output{" "}
-                    <code>{layer.source.source.output_id}</code>
+                    Dataset output in this publication: <code>{layer.source.output_id}</code>
                   </p>
-                  <code>{layer.source.dataset.content_hash}</code>
-                </>
-              )}
-              <pre className="overflow-auto">
-                {JSON.stringify({ source: layer.source, projection: layer.projection }, null, 2)}
-              </pre>
-            </details>
+                ) : (
+                  <>
+                    <p>
+                      Analysis <code>{layer.source.source.analysis_record_id}</code> · dataset
+                      output <code>{layer.source.source.output_id}</code>
+                    </p>
+                    <code>{layer.source.dataset.content_hash}</code>
+                  </>
+                )}
+                <pre className="overflow-auto">
+                  {JSON.stringify({ source: layer.source, projection: layer.projection }, null, 2)}
+                </pre>
+              </details>
+            )}
           </li>
         ))}
       </ul>
@@ -278,9 +294,9 @@ function exactNumber(value: number): string {
 export function AnalysisMetadataView({ metadata }: { metadata: Record<string, unknown> }) {
   if (Object.keys(metadata).length === 0) return null;
   return (
-    <details className="border-t border-line px-[9px] py-[7px] text-[0.58rem] text-text-dim">
+    <details className="border-t border-line px-[9px] py-[7px] text-xs text-text-dim">
       <summary className="cursor-pointer font-bold">Metadata</summary>
-      <pre className="mt-1.5 mb-0 max-h-36 overflow-auto whitespace-pre-wrap text-[0.58rem] text-text-soft">
+      <pre className="mt-1.5 mb-0 max-h-36 overflow-auto whitespace-pre-wrap text-xs text-text-soft">
         {JSON.stringify(metadata, null, 2)}
       </pre>
     </details>

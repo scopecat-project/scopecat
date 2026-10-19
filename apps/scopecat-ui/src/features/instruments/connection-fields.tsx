@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import type { DriverConnectionSpec, DriverSpec, InstrumentConnection } from "../../api-contract";
 export type ConnectionKind = InstrumentConnection["kind"];
@@ -30,14 +31,14 @@ export function TcpConnectionFields({
   onChange: (connection: TcpConnection) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2.5 max-[680px]:grid-cols-2 max-[460px]:grid-cols-1 [&_label]:grid [&_label]:gap-[5px]">
-      <label>
+    <div className="grid grid-cols-3 gap-2.5 max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
+      <Controls.Field>
         <span>Host</span>
-        <input
+        <Controls.Input
           value={connection.host}
           onChange={(event) => onChange({ ...connection, host: event.target.value })}
         />
-      </label>
+      </Controls.Field>
       <NumberField
         label="Port"
         value={connection.port}
@@ -65,18 +66,18 @@ export function SerialConnectionFields({
 }) {
   return (
     <fieldset className="m-0 min-w-0 rounded-sm border border-line p-2.5">
-      <legend className="px-[5px] text-[0.53rem] font-extrabold tracking-[0.07em] text-text-dim uppercase">
+      <legend className="px-[5px] text-xs font-extrabold tracking-[0.07em] text-text-dim uppercase">
         Serial transport
       </legend>
-      <div className="grid grid-cols-3 gap-2.5 max-[680px]:grid-cols-2 max-[460px]:grid-cols-1 [&_label]:grid [&_label]:gap-[5px]">
-        <label>
+      <div className="grid grid-cols-3 gap-2.5 max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
+        <Controls.Field>
           <span>Port</span>
-          <input
+          <Controls.Input
             value={connection.port}
             placeholder="/dev/ttyUSB0"
             onChange={(event) => onChange({ ...connection, port: event.target.value })}
           />
-        </label>
+        </Controls.Field>
         <NumberField
           label="Baud rate"
           value={connection.baud_rate}
@@ -84,9 +85,9 @@ export function SerialConnectionFields({
           integer
           onChange={(baud_rate) => onChange({ ...connection, baud_rate })}
         />
-        <label>
+        <Controls.Field>
           <span>Data bits</span>
-          <select
+          <Controls.Select
             value={connection.data_bits}
             onChange={(event) =>
               onChange({
@@ -100,11 +101,11 @@ export function SerialConnectionFields({
                 {dataBits}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
+          </Controls.Select>
+        </Controls.Field>
+        <Controls.Field>
           <span>Parity</span>
-          <select
+          <Controls.Select
             value={connection.parity}
             onChange={(event) =>
               onChange({
@@ -118,11 +119,11 @@ export function SerialConnectionFields({
                 {titleCase(parity)}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
+          </Controls.Select>
+        </Controls.Field>
+        <Controls.Field>
           <span>Stop bits</span>
-          <select
+          <Controls.Select
             value={connection.stop_bits}
             onChange={(event) => onChange({ ...connection, stop_bits: Number(event.target.value) })}
           >
@@ -131,8 +132,8 @@ export function SerialConnectionFields({
                 {stopBits}
               </option>
             ))}
-          </select>
-        </label>
+          </Controls.Select>
+        </Controls.Field>
         <NumberField
           label="Read timeout (seconds)"
           value={connection.timeout_seconds}
@@ -145,39 +146,39 @@ export function SerialConnectionFields({
           minimum={0.001}
           onChange={(write_timeout_seconds) => onChange({ ...connection, write_timeout_seconds })}
         />
-        <label className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
+        <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
           <input
             className="min-h-[15px] w-[15px]"
             type="checkbox"
             checked={connection.rtscts}
             onChange={(event) => onChange({ ...connection, rtscts: event.target.checked })}
           />
-          <span className="text-[0.62rem] font-normal tracking-normal text-text-soft normal-case">
+          <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
             RTS/CTS flow control
           </span>
-        </label>
-        <label className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
+        </Controls.Field>
+        <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
           <input
             className="min-h-[15px] w-[15px]"
             type="checkbox"
             checked={connection.xonxoff}
             onChange={(event) => onChange({ ...connection, xonxoff: event.target.checked })}
           />
-          <span className="text-[0.62rem] font-normal tracking-normal text-text-soft normal-case">
+          <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
             XON/XOFF flow control
           </span>
-        </label>
-        <label className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
+        </Controls.Field>
+        <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
           <input
             className="min-h-[15px] w-[15px]"
             type="checkbox"
             checked={connection.dsrdtr}
             onChange={(event) => onChange({ ...connection, dsrdtr: event.target.checked })}
           />
-          <span className="text-[0.62rem] font-normal tracking-normal text-text-soft normal-case">
+          <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
             DSR/DTR flow control
           </span>
-        </label>
+        </Controls.Field>
       </div>
     </fieldset>
   );
@@ -196,28 +197,28 @@ export function OptionInput({
 }) {
   if (field.type === "boolean") {
     return (
-      <label className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
+      <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
         <input
           className="min-h-[15px] w-[15px]"
           type="checkbox"
           checked={value === true}
           onChange={(event) => onChange(event.target.checked)}
         />
-        <span className="text-[0.62rem] font-normal tracking-normal text-text-soft normal-case">
+        <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
           {field.label}
         </span>
-      </label>
+      </Controls.Field>
     );
   }
   if (field.type === "string") {
     return (
-      <label>
+      <Controls.Field>
         <span>{field.label}</span>
-        <input
+        <Controls.Input
           value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(event.target.value)}
         />
-      </label>
+      </Controls.Field>
     );
   }
   if (field.type === "array" || field.type === "object") {
@@ -278,19 +279,17 @@ function JsonOptionInput({
     }
   };
   return (
-    <label className="col-span-full grid gap-[5px]">
+    <Controls.Field className="col-span-full grid gap-[5px]">
       <span>{field.label}</span>
-      <textarea
-        className="min-h-[76px] w-full resize-y rounded-sm border border-line bg-bg px-[9px] py-2 font-mono text-[0.59rem] text-text outline-0 focus:border-accent aria-invalid:border-red"
+      <Controls.Textarea
+        className="min-h-[76px] w-full resize-y font-mono aria-invalid:border-red"
         value={raw}
         aria-invalid={!valid}
         placeholder={field.type === "array" ? "[]" : "{}"}
         onChange={(event) => edit(event.target.value)}
       />
-      {!valid && (
-        <small className="text-[0.52rem] text-red">Enter a valid JSON {field.type}.</small>
-      )}
-    </label>
+      {!valid && <small className="text-xs text-red">Enter a valid JSON {field.type}.</small>}
+    </Controls.Field>
   );
 }
 
@@ -310,9 +309,9 @@ function NumberField({
   onChange: (value: number) => void;
 }) {
   return (
-    <label>
+    <Controls.Field>
       <span>{label}</span>
-      <input
+      <Controls.Input
         type="number"
         value={Number.isNaN(value) ? "" : value}
         min={minimum}
@@ -320,7 +319,7 @@ function NumberField({
         step={integer ? 1 : "any"}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-    </label>
+    </Controls.Field>
   );
 }
 

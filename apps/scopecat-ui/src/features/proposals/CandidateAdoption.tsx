@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getHealth } from "../../data/project-api";
@@ -210,10 +211,10 @@ function AdoptionReview({
         Adoption publishes this exact candidate to one reviewed branch after independent
         verification. Existing runs and prepared experiments keep their original inputs.
       </p>
-      <label>
+      <Controls.Field>
         Target parameter branch
-        <select
-          className="block rounded border p-2"
+        <Controls.Select
+          className="block"
           aria-label="Target parameter branch"
           value={name}
           disabled={busy || !!attempt || !!receipt}
@@ -229,12 +230,12 @@ function AdoptionReview({
               {item.name} · generation {item.generation}
             </option>
           ))}
-        </select>
-      </label>
+        </Controls.Select>
+      </Controls.Field>
       {heads.hasNextPage && (
-        <button disabled={heads.isFetching} onClick={() => void heads.fetchNextPage()}>
+        <Controls.Button disabled={heads.isFetching} onClick={() => void heads.fetchNextPage()}>
           Load more branches
-        </button>
+        </Controls.Button>
       )}
       {head && (
         <p>
@@ -356,10 +357,10 @@ function AdoptionReview({
           </pre>
         </details>
       )}
-      <label>
+      <Controls.Field>
         Independent verification
-        <select
-          className="block rounded border p-2"
+        <Controls.Select
+          className="block"
           aria-label="Independent verification"
           value={decision}
           disabled={busy || !!attempt || !!receipt}
@@ -376,8 +377,8 @@ function AdoptionReview({
               {item.unavailable_reason ? " (unavailable)" : ""}
             </option>
           ))}
-        </select>
-      </label>
+        </Controls.Select>
+      </Controls.Field>
       {checks.map((item) => (
         <div key={`${item.reference.analysis_record_id}/${item.reference.output_id}`}>
           <a
@@ -390,9 +391,12 @@ function AdoptionReview({
         </div>
       ))}
       {evidence.hasNextPage && (
-        <button disabled={evidence.isFetching} onClick={() => void evidence.fetchNextPage()}>
+        <Controls.Button
+          disabled={evidence.isFetching}
+          onClick={() => void evidence.fetchNextPage()}
+        >
           Load older verification records
-        </button>
+        </Controls.Button>
       )}
       {evidence.isSuccess && !checks.some((item) => !item.unavailable_reason) && (
         <p>
@@ -401,24 +405,24 @@ function AdoptionReview({
           acceptance decision. Reanalysis of old data is insufficient.
         </p>
       )}
-      <label>
+      <Controls.Field>
         Operator
-        <input
-          className="block rounded border p-2"
+        <Controls.Input
+          className="block"
           value={actor}
           disabled={busy || !!attempt || !!receipt}
           onChange={(event) => setActor(event.target.value)}
         />
-      </label>
-      <label>
+      </Controls.Field>
+      <Controls.Field>
         Adoption note
-        <input
-          className="block rounded border p-2"
+        <Controls.Input
+          className="block"
           value={note}
           disabled={busy || !!attempt || !!receipt}
           onChange={(event) => setNote(event.target.value)}
         />
-      </label>
+      </Controls.Field>
       {readError && <p role="alert">{errorMessage(readError)}</p>}
       {error && <p role="alert">{error}</p>}
       {recovery.error && <p role="alert">{recovery.error}</p>}

@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api-client";
@@ -71,9 +72,9 @@ export function DriverSourcePanel({
             : "Using installed drivers."}
         </p>
       )}
-      <label className="grid gap-1">
+      <Controls.Field className="grid gap-1">
         Driver source directory
-        <input
+        <Controls.Input
           value={path}
           disabled={update.isPending}
           aria-describedby="driver-source-help"
@@ -83,10 +84,10 @@ export function DriverSourcePanel({
             update.reset();
           }}
         />
-      </label>
-      <label className="grid gap-1">
+      </Controls.Field>
+      <Controls.Field className="grid gap-1">
         Driver execution Python (optional override)
-        <input
+        <Controls.Input
           value={python}
           disabled={update.isPending}
           placeholder="Use the source folder’s registered execution environment"
@@ -96,7 +97,7 @@ export function DriverSourcePanel({
             update.reset();
           }}
         />
-      </label>
+      </Controls.Field>
       {source.data?.active && (
         <p>
           Active Python: <code>{source.data.active.python}</code>
@@ -107,7 +108,7 @@ export function DriverSourcePanel({
         compiler edits refresh separately when preparing experiments.
       </p>
       {sessionBusy && <p>Release the manual session before updating drivers.</p>}
-      <button
+      <Controls.Button
         type="submit"
         disabled={
           daemonUnavailable ||
@@ -119,7 +120,7 @@ export function DriverSourcePanel({
         }
       >
         {update.isPending ? "Updating drivers…" : "Update from source"}
-      </button>
+      </Controls.Button>
       {(source.error || update.error) && (
         <p role="alert">{errorMessage(update.error ?? source.error)}</p>
       )}

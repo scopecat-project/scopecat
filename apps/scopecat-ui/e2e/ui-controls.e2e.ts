@@ -22,10 +22,11 @@ test("shared controls remain readable, keyboard accessible and contained across 
           api: {
             status: async () => ({
               home: "/test/application",
-              sources: [],
+              sources: [{ directory: "/test/author", python: "/test/notebook-python", execution_python: "/test/exec-python" }],
               installation: { python: "/test/python", environment: {} },
             }),
             set_window_title: async () => {},
+            request_exit: async () => ({ runs: 1 }),
             notebook_journey: async () => ({ state: "not_started", journey: null }),
           },
         },
@@ -52,11 +53,31 @@ test("shared controls remain readable, keyboard accessible and contained across 
         ["launch", "Experiments"],
         ["help", "Help"],
         ["settings", "Application settings"],
+        ["configuration", "Experiment configuration"],
+        ["instruments", "Devices and drivers"],
+        ["samples", "Chips & samples"],
+        ["analyses", "No project analyses saved"],
+        ["runs", "No run selected"],
+        ["reviews", "No live experiment reviews"],
+        ["decisions", "No experiment is waiting for a decision"],
       ]) {
         await page.goto(`${baseUrl}/#${route}`);
         await expect(
           page.getByRole("heading", { name: heading, exact: true }).first(),
         ).toBeVisible();
+        if (route === "configuration") {
+          const operator = page.getByLabel("Operator", { exact: true });
+          await operator.focus();
+          await expect(operator).toHaveCSS("font-size", "14px");
+          await expect(operator).toHaveCSS("outline-width", "2px");
+          expect((await operator.boundingBox())!.height).toBeGreaterThanOrEqual(36);
+        }
+        if (route === "instruments") {
+          const add = page.getByRole("button", { name: "Add device", exact: true });
+          // This source has no driver package; the dedicated virtual-device journey
+          // checks the enabled dialog and its focus return.
+          await expect(add).toBeDisabled();
+        }
         if (route === "launch") {
           await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible({
             timeout: 60_000,
@@ -85,6 +106,16 @@ test("shared controls remain readable, keyboard accessible and contained across 
             page.getByRole("button", { name: "Add code folder", exact: true }),
           ).toBeDisabled();
           expect((await input.boundingBox())!.height).toBeGreaterThanOrEqual(36);
+          await page
+            .getByRole("combobox", { name: "Your code folders", exact: true })
+            .selectOption("/test/author");
+          await expect(page.getByText("/test/exec-python", { exact: true })).not.toBeVisible();
+          await page.getByText("Inspect or change Python environments", { exact: true }).click();
+          await expect(page.getByText("/test/exec-python", { exact: true })).toBeVisible();
+          await page.getByRole("button", { name: "New code folder", exact: true }).click();
+          await expect(page.getByLabel("New folder name", { exact: true })).toBeVisible();
+          await expect(page.getByLabel("Execution Python", { exact: true })).toHaveCount(0);
+          await expect(page.getByText("/test/exec-python", { exact: true })).toHaveCount(0);
         }
         if (route === "history") {
           const select = page.getByLabel("Research project", { exact: true });
@@ -106,12 +137,30 @@ test("shared controls remain readable, keyboard accessible and contained across 
         expect(
           await page.evaluate<number>("document.documentElement.scrollWidth"),
         ).toBeLessThanOrEqual(width);
+        await page.evaluate("window.scrollTo(0, 0)");
         await testInfo.attach(`${route}-${width}`, {
-          body: await page.screenshot({ fullPage: true }),
+          body: await page.screenshot({
+            fullPage: true,
+            ...(process.env.SCOPECAT_SCREENSHOTS
+              ? { path: `${process.env.SCOPECAT_SCREENSHOTS}/${route}-${width}.png` }
+              : {}),
+          }),
           contentType: "image/png",
         });
       }
     }
+    await page.keyboard.press("Control+q");
+    await expect(page.getByRole("dialog", { name: "Quit Scopecat" })).toBeVisible();
+    await testInfo.attach("quit-dialog-390", {
+      body: await page.screenshot({
+        fullPage: true,
+        ...(process.env.SCOPECAT_SCREENSHOTS
+          ? { path: `${process.env.SCOPECAT_SCREENSHOTS}/quit-dialog-390.png` }
+          : {}),
+      }),
+      contentType: "image/png",
+    });
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
       // The application currently supports a dark theme under both OS preferences.

@@ -4,6 +4,7 @@ import {
   fieldLabel,
   formControl,
   primaryButton,
+  dangerButton,
   secondaryButton,
   errorNotice,
   notice,
@@ -15,11 +16,18 @@ export function Button({
   variant = "secondary",
   className,
   ...props
-}: ComponentProps<"button"> & { variant?: "primary" | "secondary" }) {
+}: ComponentProps<"button"> & { variant?: "primary" | "secondary" | "danger" }) {
   return (
     <button
       {...props}
-      className={classes(variant === "primary" ? primaryButton : secondaryButton, className)}
+      className={classes(
+        variant === "primary"
+          ? primaryButton
+          : variant === "danger"
+            ? dangerButton
+            : secondaryButton,
+        className,
+      )}
     />
   );
 }

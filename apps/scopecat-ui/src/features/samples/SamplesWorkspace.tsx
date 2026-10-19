@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import type { ObjectParameterContext, ObjectParameterPanel } from "../config/object-parameters";
 import { SampleArtifacts } from "./SampleArtifacts";
 import { SampleCapabilities } from "./SampleCapabilities";
@@ -135,17 +136,17 @@ export function SamplesWorkspace({
             )}
           </div>
 
-          <label className="flex min-h-10 items-center gap-2.5 rounded-[9px] border border-line bg-bg px-3 text-text-dim focus-within:border-[rgb(128_163_207_/_55%)]">
+          <Controls.Field className="flex min-h-10 items-center gap-2.5 rounded-[9px] border border-line bg-bg px-3 text-text-dim focus-within:border-[rgb(128_163_207_/_55%)]">
             <Search size={16} aria-hidden="true" />
             <span className="sr-only">Search samples</span>
-            <input
-              className="w-full min-w-0 border-0 bg-transparent p-0 text-[0.8rem] text-text outline-none placeholder:text-[#5e6a77]"
+            <Controls.Input
+              className="w-full min-w-0 border-0 bg-transparent placeholder:text-text-dim"
               type="search"
               placeholder="Name, ID, alias, tag"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-          </label>
+          </Controls.Field>
 
           <div className="my-2.5 flex gap-1 overflow-x-auto pb-0.5" aria-label="Filter samples">
             {STATUS_FILTERS.map((item) => (
@@ -153,7 +154,7 @@ export function SamplesWorkspace({
                 key={item.key}
                 type="button"
                 className={classes(
-                  "min-h-7 flex-none cursor-pointer rounded-[7px] border border-transparent bg-transparent px-2 text-[0.66rem] font-bold text-text-dim hover:text-text-soft",
+                  "min-h-7 flex-none cursor-pointer rounded-[7px] border border-transparent bg-transparent px-2 text-xs font-bold text-text-dim hover:text-text-soft",
                   status === item.key &&
                     "border-[rgb(128_163_207_/_17%)] bg-accent-soft text-accent",
                 )}
@@ -275,7 +276,7 @@ function ObjectPanelSlot({
           Open a working table here, then select an object on the map to edit its directly
           referenced values.
         </p>
-        <button
+        <Controls.Button
           onClick={() => {
             const context = document.getElementById("sample-parameter-context");
             context?.setAttribute("open", "");
@@ -283,7 +284,7 @@ function ObjectPanelSlot({
           }}
         >
           Choose working parameter context
-        </button>
+        </Controls.Button>
       </div>
     </div>
   );
@@ -381,15 +382,15 @@ function SampleDetail({
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={content.status} />
-            <span className="text-[0.64rem] font-bold tracking-[0.08em] text-text-dim uppercase">
+            <span className="text-xs font-bold tracking-[0.08em] text-text-dim uppercase">
               {titleCase(effective.record.kind)}
             </span>
-            <span className="text-[0.64rem] text-text-dim">Revision {revision.revision}</span>
+            <span className="text-xs text-text-dim">Revision {revision.revision}</span>
           </div>
           <h2 className="m-0 text-[clamp(1.35rem,2.4vw,2rem)] font-[650] tracking-[-0.035em]">
             {content.display_name}
           </h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.7rem] text-text-dim">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-dim">
             <code className="text-text-soft">{effective.record.id}</code>
             {content.design_ref && (
               <>
@@ -420,7 +421,7 @@ function SampleDetail({
       </header>
 
       {selectedRevisionQuery.isError && (
-        <section className="flex items-center justify-between gap-3 rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-3 py-2 text-[0.68rem] text-[#efc3c0]">
+        <section className="flex items-center justify-between gap-3 rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-3 py-2 text-xs text-red">
           <span>{errorMessage(selectedRevisionQuery.error)}</span>
           <button
             type="button"
@@ -433,7 +434,7 @@ function SampleDetail({
       )}
 
       {historical && (
-        <section className="flex items-center justify-between gap-3 rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3 py-2 text-[0.68rem] text-yellow">
+        <section className="flex items-center justify-between gap-3 rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3 py-2 text-xs text-yellow">
           <span>
             Viewing historical revision {revision.revision}; active revision is{" "}
             {effective.record.active_revision}.
@@ -455,7 +456,7 @@ function SampleDetail({
             <button
               type="button"
               key={`${relation.kind}:${relation.sample_id}`}
-              className="cursor-pointer rounded-md border border-line bg-panel-soft px-2 py-1 text-[0.65rem] text-text-soft hover:border-line-strong"
+              className="cursor-pointer rounded-md border border-line bg-panel-soft px-2 py-1 text-xs text-text-soft hover:border-line-strong"
               onClick={() => onSelectSample(relation.sample_id)}
             >
               <span className="text-text-dim">{titleCase(relation.kind)}</span>{" "}
@@ -500,7 +501,7 @@ function SampleDetail({
               title={entity ? "Selected entity" : "Sample facts"}
             />
             {entity ? (
-              <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.7rem]">
+              <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
                 <Fact term="ID">
                   <code>{entity.id}</code>
                 </Fact>
@@ -514,7 +515,7 @@ function SampleDetail({
                 </Fact>
               </dl>
             ) : (
-              <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.7rem]">
+              <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
                 <Fact term="Created">
                   {effective.record.created_at ? formatDateTime(effective.record.created_at) : "—"}
                 </Fact>
@@ -601,14 +602,14 @@ function SampleDetail({
                 onClick={() => setSelectedAnalysisId(analysis.entry.id)}
               >
                 <span className="grid min-w-0 gap-1">
-                  <strong className="overflow-hidden text-[0.72rem] text-ellipsis whitespace-nowrap">
+                  <strong className="overflow-hidden text-xs text-ellipsis whitespace-nowrap">
                     {analysis.title}
                   </strong>
-                  <span className="text-[0.63rem] text-text-dim">
+                  <span className="text-xs text-text-dim">
                     {analysis.input_count} inputs · {analysis.output_count} outputs
                   </span>
                 </span>
-                <span className="text-[0.62rem] text-text-dim">r{analysis.revision}</span>
+                <span className="text-xs text-text-dim">r{analysis.revision}</span>
               </button>
             ))}
           </HistoryList>
@@ -652,7 +653,7 @@ function SampleDetail({
                   aria-label={`View revision ${item.revision}`}
                   aria-pressed={item.revision === revision.revision}
                   className={classes(
-                    "grid size-[22px] cursor-pointer place-items-center rounded-full border border-line-strong bg-panel text-[0.6rem] font-bold text-accent",
+                    "grid size-[22px] cursor-pointer place-items-center rounded-full border border-line-strong bg-panel text-xs font-bold text-accent",
                     item.revision === revision.revision && "bg-accent-soft",
                   )}
                   onClick={() => onSelectSample(sampleId, item.revision)}
@@ -664,8 +665,8 @@ function SampleDetail({
                   className="grid cursor-pointer gap-1 border-0 bg-transparent p-0 text-left text-inherit"
                   onClick={() => onSelectSample(sampleId, item.revision)}
                 >
-                  <strong className="text-[0.7rem]">{item.content.display_name}</strong>
-                  <span className="text-[0.63rem] text-text-dim">
+                  <strong className="text-xs">{item.content.display_name}</strong>
+                  <span className="text-xs text-text-dim">
                     {item.note ||
                       (index === revisions.length - 1 && !revisionsQuery.hasNextPage
                         ? "Initial registration"
@@ -673,7 +674,7 @@ function SampleDetail({
                     · {item.actor}
                   </span>
                 </button>
-                <time className="text-[0.62rem] text-text-dim" dateTime={item.recorded_at}>
+                <time className="text-xs text-text-dim" dateTime={item.recorded_at}>
                   {item.recorded_at ? formatRelative(item.recorded_at) : "—"}
                 </time>
               </li>
@@ -714,8 +715,8 @@ function SampleMap({
     return (
       <div className="grid min-h-[285px] place-content-center justify-items-center text-center text-text-dim">
         <MapIcon size={28} className="mb-3" />
-        <strong className="text-[0.75rem] text-text-soft">No entity map</strong>
-        <span className="mt-1 text-[0.67rem]">
+        <strong className="text-sm text-text-soft">No entity map</strong>
+        <span className="mt-1 text-xs">
           Add topology and optional geometry to a sample revision.
         </span>
       </div>
@@ -778,7 +779,7 @@ function SampleMap({
               aria-label={`Select object ${entity.id}`}
               aria-pressed={selected}
               tabIndex={0}
-              className="cursor-pointer outline-none"
+              className="cursor-pointer"
               onClick={() => onSelectEntity(entity.id)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") onSelectEntity(entity.id);
@@ -810,7 +811,7 @@ function SampleMap({
           );
         })}
       </svg>
-      <div className="flex items-center justify-between border-t border-line px-3 py-2 text-[0.62rem] text-text-dim">
+      <div className="flex items-center justify-between border-t border-line px-3 py-2 text-xs text-text-dim">
         <span>
           {geometry ? `Geometry in ${geometry.unit ?? "local units"}` : "Automatic topology layout"}
         </span>
@@ -850,7 +851,7 @@ function PropertiesCard({ sample }: { sample: SampleSummary | SampleView }) {
     <section className={detailCard}>
       <SectionHeading icon={<Boxes />} eyebrowText="Metadata" title="Properties & artifacts" />
       {properties.length > 0 && (
-        <dl className="grid grid-cols-[minmax(90px,0.7fr)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.68rem]">
+        <dl className="grid grid-cols-[minmax(90px,0.7fr)_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
           {properties.map(([key, value]) => (
             <Fact key={key} term={titleCase(key)}>
               <code className="break-all">
@@ -882,20 +883,16 @@ function AnalysisPeek({
 }) {
   if (pending)
     return (
-      <p className="mt-3 border-t border-line pt-3 text-[0.66rem] text-text-dim">
+      <p className="mt-3 border-t border-line pt-3 text-xs text-text-dim">
         Loading analysis outputs…
       </p>
     );
   if (error)
-    return (
-      <p className="mt-3 border-t border-line pt-3 text-[0.66rem] text-red">
-        {errorMessage(error)}
-      </p>
-    );
+    return <p className="mt-3 border-t border-line pt-3 text-xs text-red">{errorMessage(error)}</p>;
   if (!analysis) return null;
   return (
     <div className="mt-3 border-t border-line pt-3">
-      <p className="mb-2 text-[0.66rem] font-bold text-text-soft">{analysis.title}</p>
+      <p className="mb-2 text-xs font-bold text-text-soft">{analysis.title}</p>
       <AnalysisPublicationView
         analysis={analysis}
         getArtifactDownload={(selector) =>
@@ -930,18 +927,18 @@ function RunRow({
         )}
       />
       <span className="grid min-w-0 gap-1">
-        <strong className="overflow-hidden text-[0.72rem] text-ellipsis whitespace-nowrap">
+        <strong className="overflow-hidden text-xs text-ellipsis whitespace-nowrap">
           {run.displayName ?? run.experimentId}
         </strong>
-        <code className="text-[0.61rem] text-text-dim">{shorten(run.runId, 22)}</code>
+        <code className="text-xs text-text-dim">{shorten(run.runId, 22)}</code>
         {binding && (
-          <span className="text-[0.59rem] text-text-dim">
+          <span className="text-xs text-text-dim">
             {binding.role} · r{binding.revision}
             {binding.context_id ? ` · ${binding.context_id}` : ""}
           </span>
         )}
       </span>
-      <time className="text-[0.61rem] text-text-dim" dateTime={run.updatedAt}>
+      <time className="text-xs text-text-dim" dateTime={run.updatedAt}>
         {run.updatedAt ? formatRelative(run.updatedAt) : "—"}
       </time>
     </button>
@@ -959,10 +956,10 @@ function HistoryList({
   error: unknown;
   empty: string;
 }) {
-  if (pending) return <p className="text-[0.67rem] text-text-dim">Loading…</p>;
-  if (error) return <p className="text-[0.67rem] text-red">{errorMessage(error)}</p>;
+  if (pending) return <p className="text-xs text-text-dim">Loading…</p>;
+  if (error) return <p className="text-xs text-red">{errorMessage(error)}</p>;
   if (!children || (Array.isArray(children) && children.length === 0))
-    return <p className="text-[0.67rem] text-text-dim">{empty}</p>;
+    return <p className="text-xs text-text-dim">{empty}</p>;
   return <div className="grid gap-1">{children}</div>;
 }
 
@@ -978,7 +975,7 @@ function LoadMoreButton({
   return (
     <button
       type="button"
-      className="mt-2 min-h-8 w-full cursor-pointer rounded-md border border-line bg-panel-soft px-3 text-[0.66rem] font-bold text-text-dim hover:border-line-strong hover:text-text-soft disabled:cursor-wait"
+      className="mt-2 min-h-8 w-full cursor-pointer rounded-md border border-line bg-panel-soft px-3 text-xs font-bold text-text-dim hover:border-line-strong hover:text-text-soft disabled:cursor-wait"
       disabled={pending}
       onClick={onClick}
     >
@@ -1009,24 +1006,24 @@ function SampleListItem({
     >
       <span className="grid min-w-0 content-start">
         <span className="flex min-w-0 items-start justify-between gap-2">
-          <strong className="overflow-hidden text-[0.8rem] text-ellipsis whitespace-nowrap">
+          <strong className="overflow-hidden text-sm text-ellipsis whitespace-nowrap">
             {content.display_name}
           </strong>
           <StatusDot status={content.status} />
         </span>
-        <span className="mt-1 flex items-center gap-1.5 text-[0.63rem] text-text-dim">
+        <span className="mt-1 flex items-center gap-1.5 text-xs text-text-dim">
           <code className="overflow-hidden text-ellipsis">{sample.record.id}</code>
           <span>·</span>
           <span>{titleCase(sample.record.kind)}</span>
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-[5px] border border-line px-1.5 py-1 text-[0.58rem] font-bold text-text-dim">
+          <span className="rounded-[5px] border border-line px-1.5 py-1 text-xs font-bold text-text-dim">
             {sample.run_count} runs
           </span>
           {content.tags.slice(0, 2).map((tag) => (
             <span
               key={tag}
-              className="rounded-[5px] bg-accent-soft px-1.5 py-1 text-[0.58rem] text-accent"
+              className="rounded-[5px] bg-accent-soft px-1.5 py-1 text-xs text-accent"
             >
               {tag}
             </span>
@@ -1052,11 +1049,11 @@ function RegistryMetric({
 }) {
   return (
     <article className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-2 border-r border-line px-3 py-2.5 last:border-0 max-[560px]:border-r-0 max-[560px]:not-first:border-t">
-      <span className="text-[0.59rem] font-extrabold tracking-[0.1em] text-text-dim uppercase">
+      <span className="text-xs font-extrabold tracking-[0.1em] text-text-dim uppercase">
         {label}
       </span>
-      <strong className="text-[0.78rem] text-accent">{value}</strong>
-      <small className="overflow-hidden text-[0.62rem] text-ellipsis whitespace-nowrap text-text-dim">
+      <strong className="text-sm text-accent">{value}</strong>
+      <small className="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-text-dim">
         {detail}
       </small>
     </article>
@@ -1065,16 +1062,14 @@ function RegistryMetric({
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <span className="grid min-w-[68px] justify-items-center border-r border-line px-2.5 py-2 last:border-0">
-      <strong className="text-[0.82rem] text-text">{value}</strong>
-      <small className="text-[0.57rem] font-bold tracking-[0.08em] text-text-dim uppercase">
-        {label}
-      </small>
+      <strong className="text-sm text-text">{value}</strong>
+      <small className="text-xs font-bold tracking-[0.08em] text-text-dim uppercase">{label}</small>
     </span>
   );
 }
 function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-md border border-line bg-panel-soft px-2 py-1 text-[0.62rem] text-text-soft">
+    <span className="rounded-md border border-line bg-panel-soft px-2 py-1 text-xs text-text-soft">
       {children}
     </span>
   );
@@ -1083,7 +1078,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={classes(
-        "rounded-[5px] border px-2 py-1 text-[0.59rem] font-extrabold tracking-[0.08em] uppercase",
+        "rounded-[5px] border px-2 py-1 text-xs font-extrabold tracking-[0.08em] uppercase",
         status === "mounted"
           ? "border-blue/25 bg-blue-soft text-blue"
           : status === "damaged"
@@ -1139,13 +1134,13 @@ function SectionHeading({
     <div className="mb-3 flex items-start justify-between gap-3">
       <div>
         <p className={eyebrow}>{eyebrowText}</p>
-        <h3 id={id} className="m-0 flex items-center gap-2 text-[0.86rem]">
+        <h3 id={id} className="m-0 flex items-center gap-2 text-sm">
           <span className="text-accent [&>svg]:size-4">{icon}</span>
           {title}
         </h3>
       </div>
       {count !== undefined && (
-        <span className="rounded-md border border-line bg-panel px-2 py-1 text-[0.62rem] font-bold text-text-dim">
+        <span className="rounded-md border border-line bg-panel px-2 py-1 text-xs font-bold text-text-dim">
           {count}
         </span>
       )}
@@ -1158,8 +1153,8 @@ function PanelMessage({ icon, title, detail }: { icon: ReactNode; title: string;
       <span className="mb-3 grid size-10 place-items-center rounded-[10px] border border-line bg-panel text-text-soft [&>svg]:w-[18px]">
         {icon}
       </span>
-      <strong className="text-[0.75rem] text-text-soft">{title}</strong>
-      <p className="mt-1.5 mb-0 max-w-[240px] text-[0.67rem] leading-normal">{detail}</p>
+      <strong className="text-sm text-text-soft">{title}</strong>
+      <p className="mt-1.5 mb-0 max-w-[240px] text-xs leading-normal">{detail}</p>
     </div>
   );
 }
@@ -1170,9 +1165,7 @@ function DetailEmpty({ icon, title, detail }: { icon: ReactNode; title: string; 
         {icon}
       </span>
       <h2 className="m-0 text-base">{title}</h2>
-      <p className="mt-2 mb-0 max-w-[420px] text-[0.72rem] leading-[1.55] text-text-dim">
-        {detail}
-      </p>
+      <p className="mt-2 mb-0 max-w-[420px] text-xs leading-[1.55] text-text-dim">{detail}</p>
     </div>
   );
 }

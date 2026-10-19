@@ -3,14 +3,14 @@ import type { MeasurementTableModel } from "./measurement-visualization";
 export function MeasurementRecordTable({ table }: { table: MeasurementTableModel }) {
   return (
     <div className="overflow-x-auto" data-testid="measurement-table">
-      <table className="w-full min-w-max border-collapse text-left text-[0.66rem]">
-        <thead className="bg-panel-soft text-[0.59rem] tracking-[0.06em] text-text-dim uppercase">
+      <table className="w-full min-w-max border-collapse text-left text-xs">
+        <thead className="bg-panel-soft text-xs tracking-[0.06em] text-text-dim uppercase">
           <tr>
             {table.columns.map((column) => (
               <th className="border-b border-line px-3 py-2 font-bold" key={column.id} scope="col">
                 {column.label}
                 {column.role !== "point" && (
-                  <span className="ml-1.5 text-[0.52rem] text-text-dim">{column.role}</span>
+                  <span className="ml-1.5 text-xs text-text-dim">{column.role}</span>
                 )}
               </th>
             ))}

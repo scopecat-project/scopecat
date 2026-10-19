@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MethodResponse } from "openapi-fetch";
@@ -258,23 +259,23 @@ export function ConfigurationExchange({
       className="grid gap-3 rounded-lg border border-line bg-panel p-4"
       aria-label="Share and import configuration"
     >
-      <h3>Share and import configuration</h3>
+      <h3 className="text-base font-semibold leading-6">Share and import configuration</h3>
       <p>
         Share saved parameter definitions and optional initial values, setup and retained source. No
         acquired run is required. Copies use normal parameter and setup editors below.
       </p>
-      <div className="flex gap-3">
-        <button
+      <div className="flex flex-wrap items-end gap-3">
+        <Controls.Button
           onClick={() => {
             setExporting(true);
             setExported(undefined);
           }}
         >
           Export configuration…
-        </button>
-        <label>
+        </Controls.Button>
+        <Controls.Field>
           Import configuration file{" "}
-          <input
+          <Controls.Input
             type="file"
             accept=".json,application/json"
             disabled={busy || saveCopy.isPending}
@@ -284,7 +285,7 @@ export function ConfigurationExchange({
               event.target.value = "";
             }}
           />
-        </label>
+        </Controls.Field>
       </div>
       {exporting && (
         <fieldset
@@ -296,9 +297,9 @@ export function ConfigurationExchange({
             Unsaved edits are not included. Save them in the normal editor first, or choose an
             existing saved version.
           </p>
-          <label>
+          <Controls.Field>
             Parameter version{" "}
-            <select
+            <Controls.Select
               value={version}
               onChange={(event) => {
                 setVersion(event.target.value);
@@ -309,19 +310,19 @@ export function ConfigurationExchange({
               {versions.data?.items.map((item) => (
                 <option key={item.id}>{item.id}</option>
               ))}
-            </select>
-          </label>
-          <label>
+            </Controls.Select>
+          </Controls.Field>
+          <Controls.Field>
             File label{" "}
-            <input
+            <Controls.Input
               value={label}
               onChange={(event) => {
                 setLabel(event.target.value);
                 setExported(undefined);
               }}
             />
-          </label>
-          <label>
+          </Controls.Field>
+          <Controls.Field>
             <input
               type="checkbox"
               checked={values}
@@ -331,10 +332,10 @@ export function ConfigurationExchange({
               }}
             />
             Include current values as initial inputs (not transferred calibration)
-          </label>
-          <label>
+          </Controls.Field>
+          <Controls.Field>
             Setup (optional){" "}
-            <select
+            <Controls.Select
               value={setup}
               onChange={(event) => {
                 setSetup(event.target.value);
@@ -345,11 +346,11 @@ export function ConfigurationExchange({
               {setups.data?.items.map((item) => (
                 <option key={item.id}>{item.id}</option>
               ))}
-            </select>
-          </label>
-          <label>
+            </Controls.Select>
+          </Controls.Field>
+          <Controls.Field>
             Retained source (optional){" "}
-            <select
+            <Controls.Select
               value={workspace}
               onChange={(event) => {
                 setWorkspace(event.target.value);
@@ -362,8 +363,8 @@ export function ConfigurationExchange({
                   {item.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </Controls.Select>
+          </Controls.Field>
           {workspace && (
             <p>
               {sourceState.data?.active
@@ -375,11 +376,14 @@ export function ConfigurationExchange({
             Device connection addresses and SDK installation are not exported as device bindings.
             Review source files and custom setup content for embedded machine information.
           </p>
-          <div className="flex gap-3">
-            <button disabled={exportingMutation.isPending} onClick={() => setExporting(false)}>
+          <div className="flex flex-wrap items-end gap-3">
+            <Controls.Button
+              disabled={exportingMutation.isPending}
+              onClick={() => setExporting(false)}
+            >
               Cancel export
-            </button>
-            <button
+            </Controls.Button>
+            <Controls.Button
               disabled={
                 !version ||
                 !label.trim() ||
@@ -389,15 +393,15 @@ export function ConfigurationExchange({
               onClick={() => exportingMutation.mutate()}
             >
               Review export
-            </button>
+            </Controls.Button>
           </div>
           {exportingMutation.error && <p role="alert">{errorMessage(exportingMutation.error)}</p>}
           {exported && (
             <>
               <Content document={exported} />
-              <button disabled={busy} onClick={() => void saveExport()}>
+              <Controls.Button disabled={busy} onClick={() => void saveExport()}>
                 Save configuration file
-              </button>
+              </Controls.Button>
             </>
           )}
         </fieldset>
@@ -407,7 +411,7 @@ export function ConfigurationExchange({
           <summary>Previously imported originals (latest 100)</summary>
           {imports.data.map((item) => (
             <div key={item.content_hash}>
-              <button
+              <Controls.Button
                 disabled={busy || saveCopy.isPending}
                 onClick={async () => {
                   setBusy(true);
@@ -428,7 +432,7 @@ export function ConfigurationExchange({
                 }}
               >
                 {item.label}
-              </button>
+              </Controls.Button>
               <span>
                 {" "}
                 {item.derivations.map((entry) => entry.branch.name).join(", ") ||
@@ -454,9 +458,9 @@ export function ConfigurationExchange({
           </details>
           {!receipt && (
             <>
-              <label>
+              <Controls.Field>
                 Name for my new parameter branch{" "}
-                <input
+                <Controls.Input
                   value={name}
                   disabled={saveCopy.isPending}
                   onChange={(event) => {
@@ -464,14 +468,14 @@ export function ConfigurationExchange({
                     saveCopy.reset();
                   }}
                 />
-              </label>
+              </Controls.Field>
               <p>
                 Creates a new branch and version. An existing name is rejected; nothing is
                 overwritten. The original stays unchanged.
               </p>
               {review.document.setup && (
                 <>
-                  <label>
+                  <Controls.Field>
                     <input
                       type="checkbox"
                       checked={includeSetup}
@@ -482,7 +486,7 @@ export function ConfigurationExchange({
                       }}
                     />
                     Also create my setup
-                  </label>
+                  </Controls.Field>
                   {!includeSetup && (
                     <p>
                       Only parameters will be created. The original setup remains available for
@@ -492,9 +496,9 @@ export function ConfigurationExchange({
                   )}
                   {includeSetup &&
                     review.document.setup.definition.instruments.map((role) => (
-                      <label key={role.id}>
+                      <Controls.Field key={role.id}>
                         Local device for {role.id}
-                        <select
+                        <Controls.Select
                           value={bindings[role.id] ?? ""}
                           disabled={saveCopy.isPending}
                           onChange={(event) => {
@@ -510,21 +514,23 @@ export function ConfigurationExchange({
                                 {item.device.label}
                               </option>
                             ))}
-                        </select>
-                      </label>
+                        </Controls.Select>
+                      </Controls.Field>
                     ))}
                   {includeSetup && (
                     <p>
                       Missing a device? Keep the original for later, then register it in{" "}
                       <a href="#instruments">Devices and drivers</a>.
-                      <button onClick={() => void devices.refetch()}>Refresh local devices</button>
+                      <Controls.Button onClick={() => void devices.refetch()}>
+                        Refresh local devices
+                      </Controls.Button>
                       Import never connects a device.
                     </p>
                   )}
                 </>
               )}
-              <div className="flex gap-3">
-                <button
+              <div className="flex flex-wrap items-end gap-3">
+                <Controls.Button
                   disabled={busy || saveCopy.isPending}
                   onClick={() => {
                     clearReview();
@@ -532,11 +538,11 @@ export function ConfigurationExchange({
                   }}
                 >
                   Cancel inspection
-                </button>
-                <button disabled={busy || saveCopy.isPending} onClick={() => void keep()}>
+                </Controls.Button>
+                <Controls.Button disabled={busy || saveCopy.isPending} onClick={() => void keep()}>
                   Keep original for later
-                </button>
-                <button
+                </Controls.Button>
+                <Controls.Button
                   disabled={
                     !name.trim() ||
                     !operator.trim() ||
@@ -550,7 +556,7 @@ export function ConfigurationExchange({
                   onClick={() => saveCopy.mutate()}
                 >
                   Create my copy
-                </button>
+                </Controls.Button>
               </div>
             </>
           )}
@@ -585,14 +591,14 @@ export function ConfigurationExchange({
                 No calibration qualification was transferred. Use a fresh normal experiment preview
                 before running.
               </p>
-              <button
+              <Controls.Button
                 onClick={() => {
                   clearReview();
                   saveCopy.reset();
                 }}
               >
                 Done
-              </button>
+              </Controls.Button>
             </div>
           )}
           {review.document.source && (
@@ -603,9 +609,12 @@ export function ConfigurationExchange({
                 does not register code, prepare dependencies, load experiments or create a runnable
                 plan.
               </p>
-              <button disabled={busy || saveCopy.isPending} onClick={() => void acceptSource()}>
+              <Controls.Button
+                disabled={busy || saveCopy.isPending}
+                onClick={() => void acceptSource()}
+              >
                 Accept source and download…
-              </button>
+              </Controls.Button>
               <ol>
                 <li>Extract the downloaded archive into a new folder.</li>
                 <li>

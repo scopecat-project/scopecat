@@ -16,10 +16,7 @@ export function ObjectParameterFields({
 }) {
   const matches = entity ? objectRows(definitions, values, entity) : [];
   return (
-    <section
-      aria-label="Object parameter values"
-      className="grid gap-3 [&_input]:min-w-0 [&_input]:max-w-full [&_input]:w-24 [&_input]:rounded [&_input]:border [&_input]:border-line [&_input]:bg-bg [&_input]:px-2 [&_input]:py-1 [&_label]:text-xs"
-    >
+    <section aria-label="Object parameter values" className="grid gap-3">
       <header>
         <h3 className="text-lg font-semibold">
           {entity ? `${entity.id} · Parameters` : "Select an object"}

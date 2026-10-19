@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -75,7 +76,7 @@ export function CalibrationTasks({
               ))}
           </ul>
           {history.hasNextPage && (
-            <button
+            <Controls.Button
               type="button"
               disabled={history.isFetchingNextPage}
               onClick={() => {
@@ -83,7 +84,7 @@ export function CalibrationTasks({
               }}
             >
               Load earlier tasks
-            </button>
+            </Controls.Button>
           )}
           {selected && (
             <TaskDetail
@@ -178,23 +179,23 @@ function TaskDetail({
           </p>
           {!terminal && (
             <fieldset disabled={pending} className="flex flex-wrap gap-3 items-end">
-              <label>
+              <Controls.Field>
                 Task operator
-                <input
-                  className="block border border-line rounded p-1"
+                <Controls.Input
+                  className="block"
                   value={actor}
                   onChange={(event) => setActor(event.target.value)}
                 />
-              </label>
-              <label>
+              </Controls.Field>
+              <Controls.Field>
                 Task control reason
-                <input
-                  className="block border border-line rounded p-1"
+                <Controls.Input
+                  className="block"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                 />
-              </label>
-              <button
+              </Controls.Field>
+              <Controls.Button
                 type="button"
                 disabled={
                   disabled ||
@@ -207,8 +208,8 @@ function TaskDetail({
                 }}
               >
                 {view.task.mode === "manual" ? "Start task" : "Resume / retry admission"}
-              </button>
-              <button
+              </Controls.Button>
+              <Controls.Button
                 type="button"
                 disabled={disabled || view.task.mode === "paused"}
                 onClick={() => {
@@ -216,8 +217,8 @@ function TaskDetail({
                 }}
               >
                 Pause task
-              </button>
-              <button
+              </Controls.Button>
+              <Controls.Button
                 type="button"
                 disabled={disabled}
                 onClick={() => {
@@ -225,7 +226,7 @@ function TaskDetail({
                 }}
               >
                 Cancel remaining stages
-              </button>
+              </Controls.Button>
             </fieldset>
           )}
           {view.task.last_control && (

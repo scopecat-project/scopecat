@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useEffect, useMemo, useState } from "react";
 import type {
   InstrumentDescription,
@@ -85,29 +86,29 @@ export function InstrumentDefaultsEditor({
     <section className="grid gap-2.5 border-y border-line py-3">
       <header className="flex items-end justify-between gap-3.5 max-[460px]:flex-col max-[460px]:items-stretch">
         <div className="grid gap-[3px]">
-          <strong className="text-[0.66rem] text-text-soft">
+          <strong className="text-xs text-text-soft">
             {mode === "safety" ? "Safe state" : "Experiment start"}
           </strong>
-          <small className="text-[0.56rem] leading-normal text-text-dim">
+          <small className="text-xs leading-normal text-text-dim">
             {mode === "safety"
               ? "These device constraints apply to every experiment that uses this device."
               : "Synchronize first, then optionally apply this sparse member state."}
           </small>
         </div>
         {mode === "startup" && (
-          <label className="grid min-w-[210px] gap-[5px] max-[460px]:min-w-0">
-            <span className="text-[0.53rem] font-extrabold tracking-[0.07em] text-text-dim uppercase">
+          <Controls.Field className="grid min-w-[210px] gap-[5px] max-[460px]:min-w-0">
+            <span className="text-xs font-extrabold tracking-[0.07em] text-text-dim uppercase">
               Start policy
             </span>
-            <select
-              className="min-h-[34px] w-full min-w-0 rounded-sm border border-line bg-bg px-[9px] text-[0.64rem] text-text outline-0 focus:border-accent"
+            <Controls.Select
+              className="w-full min-w-0"
               value={runStart}
               onChange={(event) => onRunStartChange(event.target.value as RunStartPolicy)}
             >
               <option value="preserve">Preserve observed state</option>
               <option value="apply_default_state">Apply configured defaults</option>
-            </select>
-          </label>
+            </Controls.Select>
+          </Controls.Field>
         )}
       </header>
 
@@ -115,10 +116,10 @@ export function InstrumentDefaultsEditor({
         <div className="grid max-h-[330px] gap-2.5 overflow-auto pr-[3px] [scrollbar-color:#344252_transparent] [scrollbar-width:thin]">
           {groups.map((group) => (
             <section className="grid gap-[7px]" key={group.id}>
-              <h5 className="m-0 text-[0.54rem] font-extrabold tracking-[0.05em] text-text-dim uppercase">
+              <h5 className="m-0 text-xs font-extrabold tracking-[0.05em] text-text-dim uppercase">
                 {group.label}
               </h5>
-              {group.detail && <code className="text-[0.51rem] text-text-dim">{group.detail}</code>}
+              {group.detail && <code className="text-xs text-text-dim">{group.detail}</code>}
               <div className="grid gap-1.5">
                 {group.members.map((member) => {
                   const key = stateMemberKey(member.target);
@@ -132,7 +133,7 @@ export function InstrumentDefaultsEditor({
                       data-testid={`instrument-default-property-${member.property.id}`}
                       key={key}
                     >
-                      <label className="flex min-w-0 items-center gap-2">
+                      <Controls.Field className="flex min-w-0 items-center gap-2">
                         <input
                           className="min-h-[15px]! w-[15px] flex-none p-0! accent-accent"
                           type="checkbox"
@@ -141,11 +142,11 @@ export function InstrumentDefaultsEditor({
                           onChange={(event) => toggle(member, event.target.checked)}
                         />
                         <span className="grid min-w-0 gap-0.5">
-                          <strong className="overflow-hidden text-[0.61rem] text-ellipsis whitespace-nowrap text-text-soft">
+                          <strong className="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-text-soft">
                             {memberLabel(member)}
                           </strong>
                         </span>
-                      </label>
+                      </Controls.Field>
                       <InstrumentPropertyInput
                         property={member.property}
                         currentValue={assignment?.value}
@@ -184,9 +185,9 @@ export function InstrumentDefaultsEditor({
 }
 
 const configNote =
-  "m-0 rounded-sm border border-[rgb(128_163_207_/_20%)] bg-accent-soft px-2.5 py-[9px] text-[0.58rem] leading-normal text-text-dim";
+  "m-0 rounded-sm border border-[rgb(128_163_207_/_20%)] bg-accent-soft px-2.5 py-[9px] text-xs leading-normal text-text-dim";
 const defaultsUnavailable =
-  "m-0 rounded-sm border border-dashed border-line px-2.5 py-[9px] text-[0.56rem] leading-normal text-text-dim";
+  "m-0 rounded-sm border border-dashed border-line px-2.5 py-[9px] text-xs leading-normal text-text-dim";
 
 function defaultGroups(description: InstrumentDescription | undefined): DefaultGroup[] {
   if (!description) return [];

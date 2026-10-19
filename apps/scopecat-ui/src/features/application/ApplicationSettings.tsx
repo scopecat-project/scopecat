@@ -129,10 +129,10 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
           <section className={section}>
             <h3 className={sectionTitle}>Author code</h3>
             <p>
-              Create a folder with a device-free example and its own Python environment, or add
-              existing Scopecat code. Open the folder normally in VS Code. All folders share this
-              application and its data. Choose an existing execution Python when adding code;
-              registration does not install packages or restart the application.
+              Create a folder with a device-free example, or add existing Scopecat code. The
+              notebook environment is for interactive editing in VS Code. A separate background
+              environment validates and runs experiments. Both use this application's shared data;
+              neither is the application's own Python.
             </p>
             <ActionRow>
               <Button disabled={busy} onClick={() => setCreating(true)}>
@@ -161,7 +161,8 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   />
                 </Field>
                 <p>
-                  Creates a new folder without replacing existing files. No device connection or
+                  Prepares a notebook environment and a separate background execution environment
+                  for the new folder. Existing files are not replaced; no device connection or
                   measurement is started.
                 </p>
                 <Button
@@ -203,43 +204,40 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                     placeholder="Folder containing scopecat.toml"
                   />
                 </Field>
-                <Field>
-                  Execution Python
-                  <Input
-                    value={interpreter}
-                    disabled={busy}
-                    onChange={(event) => setInterpreter(event.target.value)}
-                    placeholder="Full path to python or python.exe"
-                  />
-                </Field>
-                <Button
-                  disabled={busy || !source.trim() || !interpreter.trim() || !!selected}
-                  onClick={() => operation.mutate("source")}
-                >
-                  Add code folder
-                </Button>
-                {selected && (
-                  <p>
-                    Current execution Python: <code>{selected.execution_python}</code>
-                  </p>
+                {!selected && (
+                  <>
+                    <Field>
+                      Execution Python
+                      <Input
+                        value={interpreter}
+                        disabled={busy}
+                        onChange={(event) => setInterpreter(event.target.value)}
+                        placeholder="Full path to python or python.exe"
+                      />
+                    </Field>
+                    <p className="text-sm text-text-dim">
+                      Use the Python environment for background validation and execution.
+                      Registering an existing folder does not install packages.
+                    </p>
+                    <Button
+                      disabled={busy || !source.trim() || !interpreter.trim()}
+                      onClick={() => operation.mutate("source")}
+                    >
+                      Add code folder
+                    </Button>
+                  </>
                 )}
-                <Button
-                  disabled={busy || !selected || !interpreter.trim()}
-                  onClick={() => operation.mutate("environment")}
-                >
-                  Use this execution Python
-                </Button>
                 {selected && (
                   <Notice role="status">
-                    Folder ready. Open <code>{selected.directory}</code> in VS Code.
+                    Code folder registered. Open it in VS Code.
                     {selected.python ? (
                       <>
                         {" "}
-                        Select <code>{selected.python}</code> for Python or notebook cells. Start
-                        with <code>notebooks/02_edit_scan.py</code> if this is a new example folder.
+                        Select its .venv for Python or notebook cells. Start with{" "}
+                        <code>notebooks/02_edit_scan.py</code> in a new example folder.
                       </>
                     ) : (
-                      <> Create its local Python environment below.</>
+                      <> Create its notebook environment below.</>
                     )}
                   </Notice>
                 )}
@@ -263,7 +261,37 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   Prepare execution environment from pyproject.toml
                 </Button>
                 <details>
-                  <summary>Local environment repair</summary>
+                  <summary>Inspect or change Python environments</summary>
+                  {selected && (
+                    <div className="mt-3 grid gap-3">
+                      <p>
+                        Configured background execution interpreter:{" "}
+                        <code>{selected.execution_python}</code>. This is a saved configuration, not
+                        a running or health status.
+                      </p>
+                      {selected.python && (
+                        <p>
+                          Notebook interpreter: <code>{selected.python}</code>
+                        </p>
+                      )}
+                      <Field>
+                        Execution Python
+                        <Input
+                          value={interpreter}
+                          disabled={busy}
+                          onChange={(event) => setInterpreter(event.target.value)}
+                          placeholder="Full path to python or python.exe"
+                        />
+                      </Field>
+                      <Button
+                        disabled={busy || !interpreter.trim()}
+                        onClick={() => operation.mutate("environment")}
+                      >
+                        Use this execution Python
+                      </Button>
+                    </div>
+                  )}
+                  <h4 className="mt-3 font-semibold">Repair notebook environment</h4>
                   <p>
                     To repair local Python, close its terminals and notebook kernels first.
                     Rebuilding preserves the previous environment separately and keeps your source

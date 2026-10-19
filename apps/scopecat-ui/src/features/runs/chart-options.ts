@@ -208,7 +208,7 @@ export function measurementChartOption(chart: MeasurementChartPlan): EChartsCore
             orient: "horizontal",
             precision: 4,
             text: [chart.colorLabel, ""],
-            textStyle: { color: "#818b94", fontSize: 9 },
+            textStyle: { color: "#98a2ab", fontSize: 12 },
           }
         : undefined,
     xAxis:
@@ -298,13 +298,13 @@ function boundedValueAxis(name: string, boundaries: number[], nameGap: number) {
 
 function valueAxis(name: string, formatter: (value: number) => string, nameGap: number) {
   return {
-    axisLabel: { color: "#818b94", formatter },
+    axisLabel: { color: "#98a2ab", formatter },
     axisLine: { lineStyle: { color: "#3b444d" } },
     axisPointer: { label: { formatter: ({ value }: { value: number }) => formatter(value) } },
     name,
     nameGap,
     nameLocation: "middle" as const,
-    nameTextStyle: { color: "#818b94", fontSize: 10 },
+    nameTextStyle: { color: "#98a2ab", fontSize: 12 },
     scale: true,
     splitLine: { lineStyle: { color: "#2b3137" } },
     type: "value" as const,
@@ -317,8 +317,8 @@ function scrollLegend(labels: string[]) {
     formatter: compactLegendLabel,
     itemHeight: 8,
     itemWidth: 12,
-    pageTextStyle: { color: "#818b94" },
-    textStyle: { color: "#818b94", fontSize: 10 },
+    pageTextStyle: { color: "#98a2ab" },
+    textStyle: { color: "#98a2ab", fontSize: 12 },
     tooltip: { show: true },
     top: 0,
     type: "scroll" as const,

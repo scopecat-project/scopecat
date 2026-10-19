@@ -163,6 +163,7 @@ it("keeps author dependencies independent and uses native application updates", 
   expect(await screen.findByText("Dependencies ready")).toBeVisible();
   expect(dependencies).toHaveBeenCalledWith("/authors");
   expect(restart).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Inspect or change Python environments"));
   fireEvent.change(screen.getByLabelText("Execution Python"), {
     target: { value: "/custom/python" },
   });
@@ -170,7 +171,6 @@ it("keeps author dependencies independent and uses native application updates", 
   await waitFor(() => expect(selectEnvironment).toHaveBeenCalledWith("/authors", "/custom/python"));
   expect(dependencies).toHaveBeenCalledTimes(1);
   expect(restart).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText("Local environment repair"));
   fireEvent.click(screen.getByRole("button", { name: "Rebuild local Python environment" }));
   expect(await screen.findByText("/authors/.venv/bin/python")).toBeVisible();
   expect(client).toHaveBeenCalledWith("/authors", true);

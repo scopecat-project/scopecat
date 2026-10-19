@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InstrumentSession } from "../../api-contract";
@@ -221,21 +222,23 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   };
   return (
     <section className="grid gap-3" aria-labelledby="instruments-heading">
-      <header className="flex items-center justify-between rounded-lg border border-line bg-panel p-4">
+      <header className="flex flex-wrap items-center justify-between rounded-lg border border-line bg-panel p-4">
         <div>
-          <h2 id="instruments-heading">Devices and drivers</h2>
+          <h2 className="text-lg font-semibold leading-7" id="instruments-heading">
+            Devices and drivers
+          </h2>
           <p className="text-sm text-text-dim">
             Manage connections once, then use the same devices in your experiments.
           </p>
         </div>
-        <div className="flex gap-3">
-          <button
+        <div className="flex flex-wrap gap-3">
+          <Controls.Button
             disabled={daemonUnavailable || !catalog.data || busy}
             onClick={() => setConfigTarget({ kind: "add" })}
           >
             Add device
-          </button>
-          <button onClick={refresh}>Refresh</button>
+          </Controls.Button>
+          <Controls.Button onClick={refresh}>Refresh</Controls.Button>
         </div>
       </header>
       <details className="rounded-lg border border-line bg-panel p-4">
@@ -277,7 +280,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               title={`Inspect instrument ${item.device.id}`}
               aria-pressed={item.device.id === selectedId}
               disabled={busy}
-              className="mb-2 grid w-full gap-1 rounded border border-line p-3 text-left disabled:opacity-60"
+              className="mb-2 grid w-full gap-1 rounded-md border border-line p-3 text-left hover:bg-panel-strong aria-pressed:border-accent aria-pressed:bg-accent-soft disabled:opacity-60"
               onClick={() => {
                 if (item.device.id === selectedId) return;
                 if (session)
@@ -308,15 +311,15 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
         <div className="grid content-start gap-3">
           {selectedDevice && (
             <header className="rounded-lg border border-line bg-panel p-3">
-              <h3>{selectedDevice.device.label}</h3>
-              <div className="flex gap-3">
-                <button
+              <h3 className="text-base font-semibold leading-6">{selectedDevice.device.label}</h3>
+              <div className="flex flex-wrap gap-3">
+                <Controls.Button
                   disabled={selectedDevice.device.state === "retired" || !!session || busy || owned}
                   onClick={() => probe.mutate(selectedDevice)}
                 >
                   Test connection
-                </button>
-                <button
+                </Controls.Button>
+                <Controls.Button
                   disabled={
                     selectedDevice.device.state === "retired" ||
                     !!session ||
@@ -329,8 +332,9 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                   }
                 >
                   Edit device
-                </button>
-                <button
+                </Controls.Button>
+                <Controls.Button
+                  variant="danger"
                   disabled={
                     selectedDevice.device.state === "retired" ||
                     !!session ||
@@ -341,7 +345,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
                   onClick={() => retire.mutate()}
                 >
                   Retire device
-                </button>
+                </Controls.Button>
               </div>
               {selectedDevice.last_connection_test ? (
                 <p role="status">
@@ -366,7 +370,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
           {accessQuery.error && <p role="alert">{errorMessage(accessQuery.error)}</p>}
           {!!instrumentsQuery.data?.problems.length && (
             <section aria-label="Instrument provider issues">
-              <h3>Instrument provider issues</h3>
+              <h3 className="text-base font-semibold leading-6">Instrument provider issues</h3>
               {instrumentsQuery.data.problems.map((problem, index) => (
                 <p role="alert" key={index}>
                   {problem.message}

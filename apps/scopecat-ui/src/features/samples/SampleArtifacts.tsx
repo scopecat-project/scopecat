@@ -24,7 +24,7 @@ export function SampleArtifacts({ sampleId, revision }: { sampleId: string; revi
       {query.data?.items.map((item) => (
         <div
           key={item.artifact.id}
-          className="rounded-md border border-line px-2.5 py-2 text-[0.68rem] space-y-1"
+          className="rounded-md border border-line px-2.5 py-2 text-xs space-y-1"
         >
           <div className="flex items-center justify-between gap-2">
             <strong>{item.artifact.title}</strong>

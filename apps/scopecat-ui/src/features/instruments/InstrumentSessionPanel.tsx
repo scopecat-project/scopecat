@@ -62,8 +62,8 @@ export function InstrumentSessionPanel({
             <Cable size={16} />
           </span>
           <div className="grid gap-1">
-            <strong className="text-[0.7rem] text-text-soft">Interactive session connected</strong>
-            <small className="overflow-hidden text-[0.58rem] leading-[1.4] text-ellipsis text-text-dim">
+            <strong className="text-xs text-text-soft">Interactive session connected</strong>
+            <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
               Opened {formatRelative(session.opened_at)}
             </small>
           </div>
@@ -129,7 +129,7 @@ export function InstrumentSessionPanel({
       <div className={attentionPanel}>
         <ShieldAlert className="mt-0.5 flex-none" size={19} aria-hidden="true" />
         <div className="flex-1 max-[680px]:w-full max-[680px]:basis-full">
-          <strong className="text-[0.7rem] text-text-soft">Operator resolution required</strong>
+          <strong className="text-xs text-text-soft">Operator resolution required</strong>
           <p className={attentionCopy}>
             The previous operation left hardware state uncertain. Automatic reuse is blocked.
           </p>
@@ -164,7 +164,7 @@ export function InstrumentSessionPanel({
       <div className={attentionPanel}>
         <Database className="mt-0.5 flex-none" size={18} aria-hidden="true" />
         <div className="flex-1 max-[680px]:w-full max-[680px]:basis-full">
-          <strong className="text-[0.7rem] text-text-soft">Manual controls unavailable</strong>
+          <strong className="text-xs text-text-soft">Manual controls unavailable</strong>
           <p className={attentionCopy}>
             {instrument.owner_kind === "run"
               ? "This instrument is in use. Wait for the run to finish, or request a stop from its run page and wait for cleanup before reconnecting."
@@ -199,7 +199,7 @@ export function InstrumentSessionPanel({
       >
         <CircleOff className="mt-0.5 flex-none" size={18} aria-hidden="true" />
         <div className="flex-1">
-          <strong className="text-[0.7rem] text-text-soft">Connection unavailable</strong>
+          <strong className="text-xs text-text-soft">Connection unavailable</strong>
           <p className={attentionCopy}>
             Fix the provider or connection configuration before opening a session.
           </p>
@@ -211,10 +211,10 @@ export function InstrumentSessionPanel({
   return (
     <div className={sessionPanel}>
       <div className="grid min-w-0 flex-1 gap-1 max-[680px]:w-full max-[680px]:basis-full">
-        <strong className="text-[0.7rem] text-text-soft">
+        <strong className="text-xs text-text-soft">
           Connect only when you are ready to interact
         </strong>
-        <small className="overflow-hidden text-[0.58rem] leading-[1.4] text-ellipsis text-text-dim">
+        <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
           Connect to read or adjust this instrument. Disconnect when finished so an experiment can
           use it. Selecting it does not connect.
         </small>
@@ -229,11 +229,11 @@ export function InstrumentSessionPanel({
 
 function OwnerDescription({ instrument }: { instrument: InstrumentView }) {
   const ownerKind = instrument.owner_kind === "run" ? "Run" : "Interactive session";
-  return <small className="mt-[7px] block text-[0.59rem] text-text-dim">{ownerKind}</small>;
+  return <small className="mt-[7px] block text-xs text-text-dim">{ownerKind}</small>;
 }
 
 const sessionPanel =
   "flex min-h-16 items-center gap-3.5 rounded-md border border-line bg-panel-soft px-[13px] py-[11px] max-[680px]:flex-wrap max-[680px]:items-stretch";
 const attentionPanel =
   "flex min-h-16 items-start gap-3.5 rounded-md border border-[rgb(207_173_104_/_24%)] bg-yellow-soft px-[13px] py-[11px] text-yellow max-[680px]:flex-wrap max-[680px]:items-stretch";
-const attentionCopy = "mt-1 mb-0 text-[0.62rem] leading-normal text-text-dim";
+const attentionCopy = "mt-1 mb-0 text-xs leading-normal text-text-dim";

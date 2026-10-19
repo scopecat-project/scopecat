@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleOff, LoaderCircle, Radio, Send, Waves } from "lucide-react";
@@ -61,10 +62,10 @@ export function ReviewWorkspace({ daemonUnavailable }: { daemonUnavailable: bool
     <div className="grid min-h-[680px] grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-lg border border-line bg-panel max-[900px]:grid-cols-1">
       <aside className="border-r border-line bg-panel-soft p-2.5 max-[900px]:border-r-0 max-[900px]:border-b">
         <div className="flex items-center justify-between px-2 py-2">
-          <strong className="text-[0.68rem] tracking-[0.08em] text-text-dim uppercase">
+          <strong className="text-xs tracking-[0.08em] text-text-dim uppercase">
             Review sessions
           </strong>
-          <span className="text-[0.62rem] text-text-dim">{reviews.data.items.length}</span>
+          <span className="text-xs text-text-dim">{reviews.data.items.length}</span>
         </div>
         <div className="grid gap-1.5 max-[900px]:grid-cols-[repeat(auto-fit,minmax(210px,1fr))]">
           {reviews.data.items.map((session) => (
@@ -80,11 +81,11 @@ export function ReviewWorkspace({ daemonUnavailable }: { daemonUnavailable: bool
               }}
               type="button"
             >
-              <span className="flex items-center justify-between gap-2 text-[0.7rem] font-bold">
+              <span className="flex items-center justify-between gap-2 text-xs font-bold">
                 <span className="truncate">{session.title}</span>
                 <SessionState active={session.active} />
               </span>
-              <span className="truncate font-mono text-[0.58rem] text-text-dim">
+              <span className="truncate font-mono text-xs text-text-dim">
                 {session.experiment_id}
               </span>
             </button>
@@ -122,14 +123,14 @@ function ReviewDetail({ sessionId }: { sessionId: string }) {
         <div>
           <div className="mb-1 flex items-center gap-2">
             <SessionState active={session.active} />
-            <span className="text-[0.6rem] font-bold tracking-[0.07em] text-text-dim uppercase">
+            <span className="text-xs font-bold tracking-[0.07em] text-text-dim uppercase">
               {session.experiment_kind}
             </span>
           </div>
           <h2 className="m-0 text-[1.05rem] tracking-[-0.02em]">{session.title}</h2>
-          <code className="text-[0.62rem] text-text-dim">{session.experiment_id}</code>
+          <code className="text-xs text-text-dim">{session.experiment_id}</code>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-[0.63rem] text-text-dim">
+        <span className="inline-flex items-center gap-1.5 text-xs text-text-dim">
           {session.pending_request_count > 0 && (
             <LoaderCircle className="animate-spin" size={13} aria-hidden="true" />
           )}
@@ -188,8 +189,8 @@ function PointCompiler({
     <div className="mb-4 rounded-md border border-line bg-panel-soft p-3.5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <strong className="text-[0.72rem]">Compile point</strong>
-          <p className="mt-1 mb-0 text-[0.62rem] leading-5 text-text-dim">
+          <strong className="text-xs">Compile point</strong>
+          <p className="mt-1 mb-0 text-xs leading-5 text-text-dim">
             Exact matching, optional snapping, and free coordinates use the same pure compiler and
             waveform viewer.
           </p>
@@ -198,7 +199,7 @@ function PointCompiler({
           {(["exact", "snap", "free"] as const).map((item) => (
             <button
               className={classes(
-                "cursor-pointer rounded px-2.5 py-1.5 text-[0.62rem] font-bold capitalize text-text-dim",
+                "cursor-pointer rounded px-2.5 py-1.5 text-xs font-bold capitalize text-text-dim",
                 mode === item && "bg-panel-strong text-text",
               )}
               key={item}
@@ -212,10 +213,10 @@ function PointCompiler({
       </div>
 
       {session.planned_points.length > 0 && (
-        <label className="mb-2.5 grid max-w-[420px] gap-1.5 text-[0.61rem] font-bold text-text-dim">
+        <Controls.Field className="mb-2.5 grid max-w-[420px] gap-1.5 text-xs font-bold text-text-dim">
           Fill from a planned point
-          <select
-            className="rounded-md border border-line bg-panel px-2.5 py-2 text-[0.68rem] font-medium text-text-soft"
+          <Controls.Select
+            className="font-medium"
             onChange={(event) => {
               const point = session.planned_points[Number(event.target.value)];
               if (point) {
@@ -232,8 +233,8 @@ function PointCompiler({
                 #{(point.point_index ?? 0) + 1} · {formatCoordinateMapping(point.coordinates)}
               </option>
             ))}
-          </select>
-        </label>
+          </Controls.Select>
+        </Controls.Field>
       )}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5">
         {session.coordinates.map((spec) => (
@@ -260,7 +261,7 @@ function PointCompiler({
           )}
           Compile waveform
         </button>
-        <span className="text-[0.61rem] text-text-dim">
+        <span className="text-xs text-text-dim">
           {mode === "exact"
             ? "Reject values outside the authored scan."
             : mode === "snap"
@@ -268,7 +269,7 @@ function PointCompiler({
               : "Allow valid coordinates outside the authored scan."}
         </span>
         {compileError && (
-          <span className="w-full text-[0.62rem] text-red" role="alert">
+          <span className="w-full text-xs text-red" role="alert">
             {errorMessage(compileError)}
           </span>
         )}
@@ -289,27 +290,23 @@ function CoordinateInput({
   const datalistId = `review-coordinate-${spec.id}`;
   if (spec.kind === "bool") {
     return (
-      <label className="grid gap-1.5 text-[0.61rem] font-bold text-text-dim">
+      <Controls.Field className="grid gap-1.5 text-xs font-bold text-text-dim">
         {spec.id}
-        <select
-          className="rounded-md border border-line bg-panel px-2.5 py-2 text-[0.68rem] text-text-soft"
-          onChange={(event) => onChange(event.target.value)}
-          value={value}
-        >
+        <Controls.Select onChange={(event) => onChange(event.target.value)} value={value}>
           <option value="true">true</option>
           <option value="false">false</option>
-        </select>
-      </label>
+        </Controls.Select>
+      </Controls.Field>
     );
   }
   return (
-    <label className="grid gap-1.5 text-[0.61rem] font-bold text-text-dim">
+    <Controls.Field className="grid gap-1.5 text-xs font-bold text-text-dim">
       <span className="flex justify-between gap-2">
         {spec.id}
         {spec.unit && <span className="font-medium text-text-dim">{spec.unit}</span>}
       </span>
-      <input
-        className="rounded-md border border-line bg-panel px-2.5 py-2 text-[0.68rem] font-medium text-text-soft"
+      <Controls.Input
+        className="font-medium"
         list={spec.sampled_values.length > 0 ? datalistId : undefined}
         max={spec.maximum ?? undefined}
         min={spec.minimum ?? undefined}
@@ -329,7 +326,7 @@ function CoordinateInput({
           ))}
         </datalist>
       )}
-    </label>
+    </Controls.Field>
   );
 }
 
@@ -349,17 +346,17 @@ function InspectionResult({
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-panel-soft px-3.5 py-2.5">
         <div>
-          <span className="text-[0.59rem] font-bold tracking-[0.06em] text-text-dim uppercase">
+          <span className="text-xs font-bold tracking-[0.06em] text-text-dim uppercase">
             {point.point_index == null
               ? "Off-grid candidate"
               : `Planned point #${point.point_index + 1}`}
           </span>
-          <div className="mt-1 text-[0.7rem] font-semibold text-text-soft">
+          <div className="mt-1 text-xs font-semibold text-text-soft">
             {formatCoordinateMapping(point.coordinates)}
           </div>
         </div>
         {point.proposal_fingerprint && (
-          <code className="max-w-[350px] truncate text-[0.56rem] text-text-dim">
+          <code className="max-w-[350px] truncate text-xs text-text-dim">
             {point.proposal_fingerprint}
           </code>
         )}
@@ -416,7 +413,7 @@ function SessionState({ active }: { active: boolean }) {
   return (
     <span
       className={classes(
-        "inline-flex items-center gap-1 text-[0.56rem] font-bold uppercase",
+        "inline-flex items-center gap-1 text-xs font-bold uppercase",
         active ? "text-accent" : "text-text-dim",
       )}
     >
@@ -440,10 +437,8 @@ function WorkspaceMessage({
       <span className="mb-3 grid size-12 place-items-center rounded-xl border border-line bg-panel-soft text-text-dim">
         {pending ? <LoaderCircle className="animate-spin" /> : <Waves />}
       </span>
-      <strong className="text-[0.8rem] text-text-soft">{title}</strong>
-      {detail && (
-        <p className="mt-2 max-w-[460px] text-[0.66rem] leading-5 text-text-dim">{detail}</p>
-      )}
+      <h2 className="text-lg font-semibold text-text">{title}</h2>
+      {detail && <p className="mt-2 max-w-[460px] text-xs leading-5 text-text-dim">{detail}</p>}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { primaryButton, secondaryButton } from "../../ui/styles";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -40,17 +41,16 @@ export function RenameCollection({
       </details>
       {editing ? (
         <div className="flex flex-wrap gap-2">
-          <label>
+          <Controls.Field>
             New collection name{" "}
-            <input
+            <Controls.Input
               aria-label="New collection name"
               maxLength={200}
-              className="border rounded p-2"
               value={name}
               disabled={save.isPending || disabled}
               onChange={(event) => setName(event.target.value)}
             />
-          </label>
+          </Controls.Field>
           <button
             className={primaryButton}
             type="button"

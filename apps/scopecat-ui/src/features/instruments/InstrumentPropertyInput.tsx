@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import type { InstrumentProperty, InstrumentStateValue } from "../../api-contract";
 
 export interface InstrumentPropertyDraft {
@@ -25,7 +26,7 @@ export function InstrumentPropertyInput({
   const value = draft?.raw ?? inputValue(currentValue, type.type);
   if (type.type === "bool") {
     return (
-      <span className="flex items-center gap-2 text-[0.63rem] text-text-soft">
+      <span className="flex items-center gap-2 text-xs text-text-soft">
         <input
           className="size-[15px] accent-accent"
           type="checkbox"
@@ -40,7 +41,7 @@ export function InstrumentPropertyInput({
   }
   if (type.type === "string" && type.choices) {
     return (
-      <select
+      <Controls.Select
         className={propertyInput}
         value={typeof value === "string" ? value : ""}
         disabled={!editable}
@@ -55,13 +56,13 @@ export function InstrumentPropertyInput({
             {choice}
           </option>
         ))}
-      </select>
+      </Controls.Select>
     );
   }
   if (type.type === "int" || type.type === "float" || type.type === "quantity") {
     return (
       <span className="grid grid-cols-[minmax(0,1fr)_auto] items-stretch">
-        <input
+        <Controls.Input
           className={`${propertyInput} rounded-r-none!`}
           type="number"
           step={type.type === "int" ? 1 : "any"}
@@ -95,7 +96,7 @@ export function InstrumentPropertyInput({
           }}
         />
         {type.type === "quantity" && (
-          <span className="grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-[0.57rem] text-text-dim">
+          <span className="grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-xs text-text-dim">
             {type.unit ?? "unit required"}
           </span>
         )}
@@ -103,7 +104,7 @@ export function InstrumentPropertyInput({
     );
   }
   return (
-    <input
+    <Controls.Input
       className={propertyInput}
       type="text"
       value={typeof value === "string" ? value : ""}
@@ -115,8 +116,7 @@ export function InstrumentPropertyInput({
   );
 }
 
-const propertyInput =
-  "min-h-[34px] w-full min-w-0 rounded-sm border border-line bg-bg px-[9px] text-[0.64rem] text-text outline-0 focus:border-accent disabled:cursor-not-allowed disabled:text-text-dim disabled:opacity-70 aria-invalid:border-red";
+const propertyInput = "w-full";
 
 function inputValue(
   value: InstrumentStateValue | undefined,

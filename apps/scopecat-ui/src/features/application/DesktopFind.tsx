@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDesktopAvailable } from "./DesktopSession";
 import { secondaryButton } from "../../ui/styles";
@@ -115,13 +116,13 @@ export function DesktopFind() {
       }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="desktop-find">Find in this view</label>
-        <input
+        <Controls.Field htmlFor="desktop-find">Find in this view</Controls.Field>
+        <Controls.Input
           id="desktop-find"
           ref={input}
           type="search"
           value={query}
-          className="min-w-0 rounded border border-line bg-panel-soft px-2 py-1"
+          className="min-w-0 bg-panel-soft"
           onChange={(event) => {
             setQuery(event.target.value);
             setMessage("");

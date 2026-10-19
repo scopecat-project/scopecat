@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { DecisionRuns } from "./DecisionRuns";
 import type { MethodResponse } from "openapi-fetch";
 import { useEffect, useRef, useState } from "react";
@@ -388,10 +389,10 @@ function ComparisonPage({
         </p>
       )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <label>
+        <Controls.Field>
           Primary run{" "}
-          <select
-            className="mt-1 block w-full min-w-0 rounded border border-line p-2"
+          <Controls.Select
+            className="mt-1 block w-full min-w-0"
             aria-label="Primary run"
             value={primary}
             disabled={pending}
@@ -406,12 +407,12 @@ function ComparisonPage({
                 {runLabel(run.runId)}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
+          </Controls.Select>
+        </Controls.Field>
+        <Controls.Field>
           Secondary run{" "}
-          <select
-            className="mt-1 block w-full min-w-0 rounded border border-line p-2"
+          <Controls.Select
+            className="mt-1 block w-full min-w-0"
             aria-label="Secondary run"
             value={secondary}
             disabled={pending}
@@ -426,12 +427,12 @@ function ComparisonPage({
                 {runLabel(run.runId)}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
+          </Controls.Select>
+        </Controls.Field>
+        <Controls.Field>
           Python model{" "}
-          <select
-            className="mt-1 block w-full min-w-0 rounded border border-line p-2"
+          <Controls.Select
+            className="mt-1 block w-full min-w-0"
             aria-label="Python model"
             disabled={pending}
             value={model?.id ?? ""}
@@ -446,8 +447,8 @@ function ComparisonPage({
                 {item.title} · v{item.version}
               </option>
             ))}
-          </select>
-        </label>
+          </Controls.Select>
+        </Controls.Field>
       </div>
       {runs.hasNextPage && (
         <button
@@ -485,32 +486,32 @@ function ComparisonPage({
               automatically.
             </p>
           )}
-          <label className="block">
+          <Controls.Field className="block">
             Primary selected positions
-            <input
+            <Controls.Input
               aria-label="Primary selected positions"
-              className="mt-1 w-full rounded border border-line p-2"
+              className="mt-1 w-full"
               value={leftPoints}
               disabled={pending}
               onChange={(event) => setLeftPoints(event.target.value)}
             />
-          </label>
-          <label className="block">
+          </Controls.Field>
+          <Controls.Field className="block">
             Secondary selected positions
-            <input
+            <Controls.Input
               aria-label="Secondary selected positions"
-              className="mt-1 w-full rounded border border-line p-2"
+              className="mt-1 w-full"
               value={rightPoints}
               disabled={pending}
               onChange={(event) => setRightPoints(event.target.value)}
             />
-          </label>
+          </Controls.Field>
           {model?.parameters.map((parameter) => (
-            <label className="block" key={parameter.name}>
+            <Controls.Field className="block" key={parameter.name}>
               {parameter.label}
-              <input
+              <Controls.Input
                 aria-label={parameter.label}
-                className="mt-1 block w-40 rounded border border-line p-2"
+                className="mt-1 block w-40"
                 type="number"
                 step="any"
                 disabled={pending}
@@ -521,7 +522,7 @@ function ComparisonPage({
                   setParameters({ ...parameters, [parameter.name]: event.target.value })
                 }
               />
-            </label>
+            </Controls.Field>
           ))}
           <button
             className={secondaryButton}
@@ -539,7 +540,7 @@ function ComparisonPage({
       {primary && (
         <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside>
-            <h3>Primary run analysis history</h3>
+            <h3 className="text-base font-semibold leading-6">Primary run analysis history</h3>
             {history.data?.pages
               .flatMap((page) => page.items)
               .map((item) => (
@@ -568,7 +569,7 @@ function ComparisonPage({
           <div className="min-w-0">
             {saved && (
               <>
-                <h3>
+                <h3 className="text-base font-semibold leading-6">
                   {saved.title} · revision {saved.revision}
                 </h3>
                 <p>
@@ -635,17 +636,20 @@ function ComparisonPage({
                         >
                           Review parameter changes and adoption steps
                         </a>
-                        <label>
+                        <Controls.Field>
                           Review actor
-                          <input value={actor} onChange={(event) => setActor(event.target.value)} />
-                        </label>
-                        <label>
+                          <Controls.Input
+                            value={actor}
+                            onChange={(event) => setActor(event.target.value)}
+                          />
+                        </Controls.Field>
+                        <Controls.Field>
                           Rejection reason
-                          <input
+                          <Controls.Input
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}
                           />
-                        </label>
+                        </Controls.Field>
                         <button
                           className={secondaryButton}
                           disabled={pending || !reason.trim()}

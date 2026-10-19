@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramInspectionQuery, ReviewSession } from "../../api-contract";
 import { EChart, type EChartsCoreOption } from "../../ui/EChart";
@@ -25,7 +26,7 @@ export function CompiledInspectionView({
 }) {
   if (inspections.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-line p-4 text-center text-[0.65rem] text-text-dim">
+      <div className="rounded-md border border-dashed border-line p-4 text-center text-xs text-text-dim">
         {emptyTitle}
       </div>
     );
@@ -39,12 +40,10 @@ export function CompiledInspectionView({
         >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3.5 py-2.5">
             <div>
-              <strong className="text-[0.7rem]">{inspection.target_id}</strong>
-              <div className="mt-0.5 font-mono text-[0.56rem] text-text-dim">
-                {inspection.artifact_id}
-              </div>
+              <strong className="text-xs">{inspection.target_id}</strong>
+              <div className="mt-0.5 font-mono text-xs text-text-dim">{inspection.artifact_id}</div>
             </div>
-            <span className="text-[0.58rem] text-text-dim">{inspection.content.kind}</span>
+            <span className="text-xs text-text-dim">{inspection.content.kind}</span>
           </div>
           <div className="grid gap-3 p-3.5">
             {inspection.content.program && (
@@ -200,10 +199,10 @@ function ProgramInspectionView({
     <section className="overflow-hidden rounded-md border border-line bg-panel">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2.5">
         <div>
-          <strong className="block text-[0.7rem]">Quantum program</strong>
-          <code className="text-[0.56rem] text-text-dim">{inspection.program_id}</code>
+          <strong className="block text-xs">Quantum program</strong>
+          <code className="text-xs text-text-dim">{inspection.program_id}</code>
         </div>
-        <span className="text-[0.56rem] text-text-dim">{inspection.dialect_id}</span>
+        <span className="text-xs text-text-dim">{inspection.dialect_id}</span>
       </header>
       <ProgramLayerOverview
         inspection={inspection}
@@ -284,7 +283,7 @@ function ProgramLayerOverview({
     Math.max(4, (Math.log10(count + 1) / Math.log10(largestLayer + 1)) * 100);
   return (
     <div className="border-b border-line bg-panel-soft p-2.5">
-      <div className="mb-2 flex items-center justify-between gap-2 text-[0.53rem] text-text-dim">
+      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-text-dim">
         <span>{inspection.layers.length} abstraction levels</span>
         <span>Log-scaled workload · bounded pages</span>
       </div>
@@ -310,15 +309,13 @@ function ProgramLayerOverview({
               role="tab"
               type="button"
             >
-              <span className="text-[0.49rem] font-bold tracking-[0.07em] text-text-dim uppercase">
+              <span className="text-xs font-bold tracking-[0.07em] text-text-dim uppercase">
                 {programResolutionLabel(candidate)}
               </span>
-              <span className="truncate text-[0.61rem] font-bold">{candidate.label}</span>
+              <span className="truncate text-xs font-bold">{candidate.label}</span>
               <span className="flex items-baseline justify-between gap-2">
-                <strong className="text-[0.72rem]">{candidate.node_count.toLocaleString()}</strong>
-                <span className="text-[0.49rem] text-text-dim">
-                  {loaded.toLocaleString()} loaded
-                </span>
+                <strong className="text-xs">{candidate.node_count.toLocaleString()}</strong>
+                <span className="text-xs text-text-dim">{loaded.toLocaleString()} loaded</span>
               </span>
               <span className="h-1 overflow-hidden rounded bg-panel-soft">
                 <span
@@ -326,7 +323,7 @@ function ProgramLayerOverview({
                   style={{ width: `${scale(candidate.node_count)}%` }}
                 />
               </span>
-              <span className="truncate text-[0.49rem] text-text-dim">
+              <span className="truncate text-xs text-text-dim">
                 {candidate.page.matching_node_count.toLocaleString()} matching
                 {candidate.nodes_truncated ? " · paged" : " · complete"}
               </span>
@@ -379,44 +376,44 @@ function ProgramQueryBar({
         onSubmit();
       }}
     >
-      <input
+      <Controls.Input
         aria-label="Program node search"
-        className="min-w-0 rounded border border-line bg-panel px-2 py-1.5 text-[0.58rem] text-text outline-none focus:border-line-strong"
+        className="min-w-0"
         onChange={(event) => onTextChange(event.target.value)}
         placeholder="Search labels and IDs"
         type="search"
         value={text}
       />
-      <input
+      <Controls.Input
         aria-label="Program node kind"
-        className="min-w-0 rounded border border-line bg-panel px-2 py-1.5 text-[0.58rem] text-text outline-none focus:border-line-strong"
+        className="min-w-0"
         onChange={(event) => onKindChange(event.target.value)}
         placeholder="kind"
         value={kind}
       />
-      <input
+      <Controls.Input
         aria-label="Program entity"
-        className="min-w-0 rounded border border-line bg-panel px-2 py-1.5 text-[0.58rem] text-text outline-none focus:border-line-strong"
+        className="min-w-0"
         onChange={(event) => onEntityChange(event.target.value)}
         placeholder="entity"
         value={entity}
       />
-      <input
+      <Controls.Input
         aria-label="Program resource"
-        className="min-w-0 rounded border border-line bg-panel px-2 py-1.5 text-[0.58rem] text-text outline-none focus:border-line-strong"
+        className="min-w-0"
         onChange={(event) => onResourceChange(event.target.value)}
         placeholder="resource"
         value={resource}
       />
-      <input
+      <Controls.Input
         aria-label="Program result"
-        className="min-w-0 rounded border border-line bg-panel px-2 py-1.5 text-[0.58rem] text-text outline-none focus:border-line-strong"
+        className="min-w-0"
         onChange={(event) => onResultChange(event.target.value)}
         placeholder="result"
         value={result}
       />
       <button
-        className="cursor-pointer rounded border border-line bg-panel-strong px-3 py-1.5 text-[0.58rem] font-bold text-text-soft hover:text-text max-[1050px]:col-span-2"
+        className="cursor-pointer rounded border border-line bg-panel-strong px-3 py-1.5 text-xs font-bold text-text-soft hover:text-text max-[1050px]:col-span-2"
         type="submit"
       >
         Query layer
@@ -452,7 +449,7 @@ function ProgramNodeList({
   const pageEnd = layer.page.offset + layer.page.returned_node_count;
   return (
     <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-[0.54rem] text-text-dim">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2 text-xs text-text-dim">
         <span>
           {layer.page.matching_node_count.toLocaleString()} matching ·{" "}
           {layer.node_count.toLocaleString()} total
@@ -477,15 +474,13 @@ function ProgramNodeList({
               style={{ paddingLeft: `${8 + depth(node) * 13}px` }}
               type="button"
             >
-              <span className="w-16 shrink-0 truncate font-mono text-[0.49rem] text-text-dim">
+              <span className="w-16 shrink-0 truncate font-mono text-xs text-text-dim">
                 {node.kind}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[0.61rem] font-semibold">
-                {node.label}
-              </span>
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold">{node.label}</span>
               {candidateStatus && (
                 <span
-                  className={`rounded px-1.5 py-0.5 text-[0.48rem] font-bold uppercase ${
+                  className={`rounded px-1.5 py-0.5 text-xs font-bold uppercase ${
                     candidateStatus === "selected"
                       ? "bg-accent-soft text-accent"
                       : "bg-red-soft text-red"
@@ -495,13 +490,13 @@ function ProgramNodeList({
                 </span>
               )}
               {node.child_count > 0 && (
-                <span className="text-[0.52rem] text-text-dim">{node.child_count}</span>
+                <span className="text-xs text-text-dim">{node.child_count}</span>
               )}
             </button>
           );
         })}
         {layer.nodes.length === 0 && (
-          <div className="p-4 text-center text-[0.56rem] text-text-dim">
+          <div className="p-4 text-center text-xs text-text-dim">
             No nodes match this layer query.
           </div>
         )}
@@ -509,18 +504,18 @@ function ProgramNodeList({
       {(onPrevious || onNext) && (
         <div className="flex items-center justify-between gap-2 border-t border-line p-2">
           <button
-            className="cursor-pointer rounded border border-line bg-panel-soft px-2.5 py-1.5 text-[0.56rem] font-bold text-text-dim disabled:cursor-default disabled:opacity-35"
+            className="cursor-pointer rounded border border-line bg-panel-soft px-2.5 py-1.5 text-xs font-bold text-text-dim disabled:cursor-default disabled:opacity-35"
             disabled={!onPrevious}
             onClick={onPrevious}
             type="button"
           >
             Previous
           </button>
-          <span className="text-[0.53rem] text-text-dim">
+          <span className="text-xs text-text-dim">
             Server-paged · {layer.page.limit.toLocaleString()} per page
           </span>
           <button
-            className="cursor-pointer rounded border border-line bg-panel-soft px-2.5 py-1.5 text-[0.56rem] font-bold text-text-dim disabled:cursor-default disabled:opacity-35"
+            className="cursor-pointer rounded border border-line bg-panel-soft px-2.5 py-1.5 text-xs font-bold text-text-dim disabled:cursor-default disabled:opacity-35"
             disabled={!onNext}
             onClick={onNext}
             type="button"
@@ -558,7 +553,7 @@ function ProgramTimeline({
   if (events.length === 0 || duration <= 0) return null;
   return (
     <div className="mb-3 rounded border border-line bg-panel-soft p-2.5">
-      <div className="mb-2 flex items-center justify-between text-[0.56rem] text-text-dim">
+      <div className="mb-2 flex items-center justify-between text-xs text-text-dim">
         <strong className="text-text-soft">Visible page timeline</strong>
         <span>
           {events.length.toLocaleString()} events · {lanes.length.toLocaleString()}
@@ -569,7 +564,7 @@ function ProgramTimeline({
       <div className="grid gap-1">
         {lanes.map((lane) => (
           <div className="grid grid-cols-[70px_minmax(0,1fr)] items-center gap-2" key={lane}>
-            <span className="truncate font-mono text-[0.52rem] text-text-dim">{lane}</span>
+            <span className="truncate font-mono text-xs text-text-dim">{lane}</span>
             <div className="relative h-4 overflow-hidden rounded bg-panel">
               {events
                 .filter((event) => event.entity_ids.includes(lane))
@@ -618,14 +613,14 @@ function ProgramNodeInspector({
       <div className="grid gap-2">
         {backTarget && (
           <button
-            className="w-fit cursor-pointer text-[0.55rem] font-bold text-accent hover:underline"
+            className="w-fit cursor-pointer text-xs font-bold text-accent hover:underline"
             onClick={onBack}
             type="button"
           >
             ← Back to {backTarget.label}
           </button>
         )}
-        <div className="rounded border border-dashed border-line p-4 text-center text-[0.6rem] text-text-dim">
+        <div className="rounded border border-dashed border-line p-4 text-center text-xs text-text-dim">
           Select a node to inspect its entities, results, timing, and lowering lineage.
         </div>
       </div>
@@ -649,7 +644,7 @@ function ProgramNodeInspector({
     <div className="grid gap-2.5">
       {backTarget && (
         <button
-          className="w-fit cursor-pointer text-[0.55rem] font-bold text-accent hover:underline"
+          className="w-fit cursor-pointer text-xs font-bold text-accent hover:underline"
           onClick={onBack}
           type="button"
         >
@@ -658,19 +653,19 @@ function ProgramNodeInspector({
       )}
       <div>
         {ancestors.length > 0 && (
-          <div className="mb-1 truncate text-[0.51rem] text-text-dim">
+          <div className="mb-1 truncate text-xs text-text-dim">
             {ancestors.map((ancestor) => ancestor.label).join(" / ")}
           </div>
         )}
-        <span className="text-[0.53rem] font-bold tracking-[0.06em] text-text-dim uppercase">
+        <span className="text-xs font-bold tracking-[0.06em] text-text-dim uppercase">
           {node.kind}
         </span>
-        <strong className="mt-1 block text-[0.68rem]">{node.label}</strong>
-        <code className="mt-1 block truncate text-[0.52rem] text-text-dim">{node.id}</code>
+        <strong className="mt-1 block text-xs">{node.label}</strong>
+        <code className="mt-1 block truncate text-xs text-text-dim">{node.id}</code>
       </div>
       {candidateStatus && (
         <div
-          className={`rounded border px-2.5 py-2 text-[0.58rem] leading-[1.45] ${
+          className={`rounded border px-2.5 py-2 text-xs leading-[1.45] ${
             candidateStatus === "selected"
               ? "border-[rgb(128_163_207_/_28%)] bg-accent-soft text-accent"
               : "border-[rgb(215_126_121_/_25%)] bg-red-soft text-red"
@@ -694,12 +689,12 @@ function ProgramNodeInspector({
         <ReferenceChips ids={node.result_ids} label="result" total={node.result_count} />
       </div>
       {(node.start_seconds != null || node.duration_seconds != null) && (
-        <div className="text-[0.57rem] text-text-dim">
+        <div className="text-xs text-text-dim">
           start {node.start_seconds ?? "—"} s · duration {node.duration_seconds ?? "—"} s
         </div>
       )}
       {(incoming.length > 0 || outgoing.length > 0) && (
-        <div className="grid gap-1 rounded border border-line bg-panel-soft p-2 text-[0.54rem] text-text-dim">
+        <div className="grid gap-1 rounded border border-line bg-panel-soft p-2 text-xs text-text-dim">
           <strong className="text-text-soft">Lowering lineage</strong>
           {[...incoming, ...outgoing].slice(0, 6).map((link) => {
             const isIncoming = link.target_layer_id === layer.id;
@@ -726,7 +721,7 @@ function ProgramNodeInspector({
                   </strong>
                   <code className="block truncate">{targetNode?.label ?? targetNodeId}</code>
                 </span>
-                <span className="text-[0.48rem]">{link.relation} →</span>
+                <span className="text-xs">{link.relation} →</span>
               </button>
             );
           })}
@@ -758,12 +753,12 @@ function ReferenceChips({
   return (
     <>
       {visible.map((id) => (
-        <span className="rounded bg-panel-strong px-2 py-1 text-[0.55rem]" key={`${label}:${id}`}>
+        <span className="rounded bg-panel-strong px-2 py-1 text-xs" key={`${label}:${id}`}>
           {label} {id}
         </span>
       ))}
       {total > visible.length && (
-        <span className="rounded border border-line px-2 py-1 text-[0.55rem] text-text-dim">
+        <span className="rounded border border-line px-2 py-1 text-xs text-text-dim">
           +{(total - visible.length).toLocaleString()} {label}s
         </span>
       )}
@@ -777,12 +772,12 @@ function PointInspection({ point }: { point: PresentedPoint }) {
     <div className="grid gap-3 rounded-md border border-line bg-panel p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <span className="text-[0.61rem] font-bold text-text-soft">Physical realization</span>
-          <code className="mt-1 block max-w-[620px] truncate text-[0.55rem] text-text-dim">
+          <span className="text-xs font-bold text-text-soft">Physical realization</span>
+          <code className="mt-1 block max-w-[620px] truncate text-xs text-text-dim">
             {point.realization_fingerprint}
           </code>
         </div>
-        <span className="text-[0.6rem] text-text-dim">
+        <span className="text-xs text-text-dim">
           {point.waveform_count} waveform{point.waveform_count === 1 ? "" : "s"}
           {point.waveforms_truncated ? "+" : ""}
         </span>
@@ -804,10 +799,8 @@ function PointInspection({ point }: { point: PresentedPoint }) {
             className="rounded border border-line bg-panel-soft px-2.5 py-2"
             key={waveform.channel_id}
           >
-            <strong className="block truncate text-[0.61rem] text-text-soft">
-              {waveform.channel_id}
-            </strong>
-            <span className="mt-1 block text-[0.56rem] text-text-dim">
+            <strong className="block truncate text-xs text-text-soft">{waveform.channel_id}</strong>
+            <span className="mt-1 block text-xs text-text-dim">
               peak {waveform.peak_abs.toPrecision(4)} · rms {waveform.rms.toPrecision(4)} ·{" "}
               {waveform.source_sample_count.toLocaleString()} samples
             </span>
@@ -823,10 +816,10 @@ function FactGrid({ facts }: { facts: PresentedFact[] }) {
     <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
       {facts.map((fact) => (
         <div className="rounded border border-line bg-panel-soft px-2.5 py-2" key={fact.id}>
-          <dt className="text-[0.54rem] font-bold tracking-[0.04em] text-text-dim uppercase">
+          <dt className="text-xs font-bold tracking-[0.04em] text-text-dim uppercase">
             {fact.id.replaceAll("_", " ")}
           </dt>
-          <dd className="mt-1 ml-0 truncate text-[0.62rem] font-semibold text-text-soft">
+          <dd className="mt-1 ml-0 truncate text-xs font-semibold text-text-soft">
             {formatInspectionValue(fact.value)} {fact.unit ?? ""}
           </dd>
         </div>
@@ -840,20 +833,20 @@ function waveformChartOption(point: PresentedPoint): EChartsCoreOption {
     animation: false,
     backgroundColor: "transparent",
     grid: { left: 54, right: 18, top: 34, bottom: 42 },
-    legend: { type: "scroll", top: 0, textStyle: { color: "#9eabb8", fontSize: 10 } },
+    legend: { type: "scroll", top: 0, textStyle: { color: "#9eabb8", fontSize: 12 } },
     tooltip: { trigger: "axis" },
     xAxis: {
       name: "sample",
       nameLocation: "middle",
       nameGap: 28,
       type: "value",
-      axisLabel: { color: "#7f8b97", fontSize: 10 },
+      axisLabel: { color: "#98a2ab", fontSize: 12 },
       splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },
     },
     yAxis: {
       name: "amplitude",
       type: "value",
-      axisLabel: { color: "#7f8b97", fontSize: 10 },
+      axisLabel: { color: "#98a2ab", fontSize: 12 },
       splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },
     },
     series: point.waveforms.map((waveform) => ({

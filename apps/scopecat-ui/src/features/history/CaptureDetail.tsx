@@ -160,7 +160,7 @@ function CaptureRecording({
               <MeasurementChartPicker charts={charts} />
             </section>
           )}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>
               Previous measurements
             </Button>

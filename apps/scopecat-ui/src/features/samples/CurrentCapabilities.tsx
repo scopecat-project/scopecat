@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { objectContextError, type ObjectParameterContext } from "../config/object-parameters";
 import type { SampleView } from "../../api-contract";
 import { useState } from "react";
@@ -124,13 +125,10 @@ export function CurrentCapabilities({
           void resolve();
         }}
       >
-        <fieldset
-          disabled={pending}
-          className="grid gap-3 [&_label]:grid [&_label]:gap-1 [&_input]:rounded [&_input]:border [&_input]:border-line [&_input]:bg-bg [&_input]:p-2 [&_select]:rounded [&_select]:border [&_select]:border-line [&_select]:bg-bg [&_select]:p-2 [&_select]:min-w-0"
-        >
-          <label>
+        <fieldset disabled={pending} className="grid gap-3">
+          <Controls.Field>
             Measurement subject
-            <select
+            <Controls.Select
               value={targetId}
               onChange={(event) => {
                 setTargetId(event.target.value);
@@ -147,10 +145,10 @@ export function CurrentCapabilities({
                   {item.name} · {item.ref.target_id} · r{item.ref.revision}
                 </option>
               ))}
-            </select>
-          </label>
+            </Controls.Select>
+          </Controls.Field>
           {targets.hasNextPage && (
-            <button
+            <Controls.Button
               type="button"
               disabled={targets.isFetchingNextPage}
               onClick={() => {
@@ -158,11 +156,11 @@ export function CurrentCapabilities({
               }}
             >
               Load more target choices
-            </button>
+            </Controls.Button>
           )}
-          <label>
+          <Controls.Field>
             Parameter source
-            <select
+            <Controls.Select
               value={source}
               onChange={(event) => {
                 setSource(event.target.value === "revision" ? "revision" : "branch");
@@ -172,11 +170,11 @@ export function CurrentCapabilities({
             >
               <option value="branch">Parameter branch</option>
               <option value="revision">Exact saved revision</option>
-            </select>
-          </label>
-          <label>
+            </Controls.Select>
+          </Controls.Field>
+          <Controls.Field>
             {source === "branch" ? "Parameter branch" : "Saved parameter revision"}
-            <input
+            <Controls.Input
               required
               value={source === "branch" ? branch : parameterId}
               onChange={(event) => {
@@ -186,10 +184,10 @@ export function CurrentCapabilities({
                 setError("");
               }}
             />
-          </label>
-          <label>
+          </Controls.Field>
+          <Controls.Field>
             Setup for capability context
-            <select
+            <Controls.Select
               value={setupId}
               onChange={(event) => {
                 setSetupId(event.target.value);
@@ -203,9 +201,9 @@ export function CurrentCapabilities({
                   {item.id}
                 </option>
               ))}
-            </select>
-          </label>
-          <button
+            </Controls.Select>
+          </Controls.Field>
+          <Controls.Button
             type="submit"
             disabled={
               !(source === "branch" ? branch.trim() : parameterId.trim()) ||
@@ -215,7 +213,7 @@ export function CurrentCapabilities({
             }
           >
             Resolve capability context
-          </button>
+          </Controls.Button>
         </fieldset>
       </form>
       {setups.error && <p role="alert">Could not load saved setups: {setups.error.message}.</p>}
@@ -251,7 +249,7 @@ export function CurrentCapabilities({
               {objectContextError({ sample, resolution }) ? (
                 <p>{objectContextError({ sample, resolution })}</p>
               ) : (
-                <button
+                <Controls.Button
                   disabled={opening}
                   onClick={async () => {
                     setOpening(true);
@@ -266,7 +264,7 @@ export function CurrentCapabilities({
                   }}
                 >
                   Edit working parameters beside map
-                </button>
+                </Controls.Button>
               )}
             </div>
           )}

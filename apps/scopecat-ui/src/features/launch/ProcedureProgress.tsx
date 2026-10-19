@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ReturnToPreparation } from "./ReturnToPreparation";
 import { secondaryButton } from "../../ui/styles";
@@ -232,20 +233,20 @@ export function ProcedureProgress({
                 Retains completed results. An already-started step, including configuration
                 acceptance, settles before cancellation completes. This is not an emergency stop.
               </p>
-              <label>
+              <Controls.Field>
                 Cancellation actor
-                <input
+                <Controls.Input
                   value={cancelActor}
                   onChange={(event) => setCancelActor(event.target.value)}
                 />
-              </label>
-              <label>
+              </Controls.Field>
+              <Controls.Field>
                 Cancellation reason
-                <input
+                <Controls.Input
                   value={cancelReason}
                   onChange={(event) => setCancelReason(event.target.value)}
                 />
-              </label>
+              </Controls.Field>
               <button
                 className={secondaryButton}
                 type="button"

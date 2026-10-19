@@ -5,7 +5,7 @@ import {
   getRunParameterProposals,
   getOlderRunParameterProposals,
 } from "../../data/parameter-proposals/api";
-import { AnalysisPublicationView } from "../analyses/AnalysisPublicationView";
+import { AnalysisOutputView } from "../runs/AnalysisOutputView";
 import { getProjectAnalysis, getProjectAnalysisArtifactDownload } from "../analyses/analysis-api";
 import { getRunAnalysis, getRunArtifactDownload } from "../runs/run-api";
 import { getSampleAnalysis, getSampleAnalysisArtifactDownload } from "../samples/sample-api";
@@ -70,33 +70,22 @@ export function DecisionEvidence({ input }: { input: Evidence }) {
                 </dl>
               </section>
             ))}
-          <AnalysisPublicationView
-            analysis={{
-              ...analysis.data,
-              inputs: [],
-              executions: [],
-              outputs: analysis.data.outputs.filter(
-                (output) => output.kind === "figure" || output.kind === "table",
-              ),
-            }}
-            getArtifactDownload={download}
-          />
+          {analysis.data.outputs
+            .filter((output) => output.kind === "figure" || output.kind === "table")
+            .map((output) => (
+              <section key={output.id} className="min-w-0">
+                <h4 className="text-sm font-semibold">{output.title}</h4>
+                <AnalysisOutputView
+                  output={output}
+                  getArtifactDownload={download}
+                  showMetadata={false}
+                />
+              </section>
+            ))}
           {subject.kind === "run" &&
             analysis.data.outputs.some((output) => output.kind === "parameter_change_proposal") && (
               <DecisionProposals runId={subject.run_id} analysisId={id} />
             )}
-          <details className="mt-3 text-xs text-text-dim">
-            <summary className="cursor-pointer">Publication details and provenance</summary>
-            <AnalysisPublicationView
-              analysis={{
-                ...analysis.data,
-                outputs: analysis.data.outputs.filter(
-                  (output) => output.kind !== "figure" && output.kind !== "table",
-                ),
-              }}
-              getArtifactDownload={download}
-            />
-          </details>
         </>
       )}
     </section>

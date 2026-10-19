@@ -387,9 +387,7 @@ export function MeasurementDataPreview({
             const allSelected = selected === undefined;
             return (
               <div className="flex min-w-0 flex-wrap items-center gap-1.5" key={axis.id}>
-                <span className="mr-0.5 text-[0.59rem] font-semibold text-text-soft">
-                  {axis.label}
-                </span>
+                <span className="mr-0.5 text-xs font-semibold text-text-soft">{axis.label}</span>
                 <button
                   aria-pressed={allSelected}
                   className={entityChipClasses(allSelected)}
@@ -446,7 +444,7 @@ export function MeasurementDataPreview({
                     ))}
                   </Select>
                 )}
-                <span className="text-[0.54rem] text-text-dim">
+                <span className="text-xs text-text-dim">
                   {allSelected ? "Comparing all" : `${selected.length} selected`}
                 </span>
               </div>
@@ -558,17 +556,14 @@ export function MeasurementDataPreview({
       </details>
 
       <details
-        className={classes(
-          "border-t border-line text-[0.64rem] text-text-dim",
-          focused && "hidden",
-        )}
+        className={classes("border-t border-line text-xs text-text-dim", focused && "hidden")}
       >
         <summary className="cursor-pointer px-3 py-2 font-bold hover:text-text-soft">
           <span>Raw records</span>
           <span className="ml-1 font-medium text-text-dim">in preview</span>
         </summary>
         <pre
-          className="m-0 max-h-[320px] overflow-auto border-t border-line bg-panel-soft p-3 text-[0.63rem] leading-[1.5] text-text-soft"
+          className="m-0 max-h-[320px] overflow-auto border-t border-line bg-panel-soft p-3 text-xs leading-[1.5] text-text-soft"
           data-testid="measurement-preview"
         >
           {JSON.stringify(preview.items, null, 2)}
@@ -624,7 +619,7 @@ export function TraceAvailabilityDetails({ preview }: { preview: MeasurementTrac
   const acquisition = preview.entity_acquisition;
   return (
     <div
-      className="mt-2 grid gap-1.5 rounded border border-line bg-panel-soft p-2 text-[0.59rem] text-text-dim"
+      className="mt-2 grid gap-1.5 rounded border border-line bg-panel-soft p-2 text-xs text-text-dim"
       data-testid="measurement-trace-availability"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1000,7 +995,7 @@ function MeasurementSeriesPanel({
           seriesCount={1}
         />
       ) : (
-        <p className="m-0 grid h-[170px] place-items-center text-[0.6rem] text-text-dim">
+        <p className="m-0 grid h-[170px] place-items-center text-xs text-text-dim">
           {series.status ?? "Unavailable for this point"}
         </p>
       )}
@@ -1010,7 +1005,7 @@ function MeasurementSeriesPanel({
 
 function entityChipClasses(selected: boolean): string {
   return [
-    "rounded-full border px-2 py-1 text-[0.57rem] font-semibold transition-colors",
+    "rounded-full border px-2 py-1 text-xs font-semibold transition-colors",
     selected
       ? "border-blue/50 bg-blue-soft text-blue"
       : "border-line bg-panel text-text-dim hover:text-text-soft",
