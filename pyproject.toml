@@ -474,6 +474,7 @@ fast_paths = [
   "packages/scopecat-app/tests/test_author_environment.py",
   "packages/scopecat-app/tests/test_author_resources.py",
   "packages/scopecat-app/tests/test_notebook_journey.py",
+  "packages/scopecat-app/tests/test_notebook_cleanup.py",
   "packages/scopecat-app/tests/test_calibration_history_material.py",
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
