@@ -23,6 +23,29 @@ from scopecat_app.author_resources import verify_resources
 from scopecat_app.bundle import target_identity
 from scopecat_server.validation_process import terminate_validation_process_tree
 
+DEVELOPMENT_INDEX = """<!doctype html><html lang="en"><meta charset="utf-8">
+<title>Opening Scopecat</title><p id="status">Opening Scopecat…</p>
+<script>
+(async () => {
+  try {
+    const response = await fetch('/_development/ui', {cache: 'no-store'});
+    if (!response.ok) throw new Error('unavailable');
+    const {url} = await response.json();
+    const target = new URL(url);
+    if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' ||
+        target.origin === location.origin) throw new Error('invalid origin');
+    target.pathname = location.pathname;
+    target.search = location.search;
+    target.hash = location.hash;
+    location.replace(target.href);
+  } catch {
+    document.getElementById('status').textContent =
+      'Scopecat development UI is unavailable. ' +
+      'Reopen the development application, then retry this link.';
+  }
+})();
+</script></html>"""
+
 
 def development_home(source: Path) -> Path:
     identity = os.path.normcase(str(source.resolve()))
@@ -122,10 +145,10 @@ def prepare_resources(source: Path, cache: Path) -> Path:
                 gui = staging / "gui"
                 gui.mkdir()
                 (gui / "index.html").write_text(
-                    "<!doctype html><title>Scopecat development backend</title>"
-                    "<p>Open the development UI URL printed by the launcher.</p>",
+                    DEVELOPMENT_INDEX,
                     encoding="utf-8",
                 )
+                (gui / "development-ui.marker").touch()
                 delivery = build_delivery(staging / "delivery", source=source, gui=gui)
                 # Keep repaired desktop wheels in their own host-only cache.
                 native = cache / "native-wheels" / key

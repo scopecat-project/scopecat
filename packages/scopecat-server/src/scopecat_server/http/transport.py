@@ -20,6 +20,7 @@ from typing import Annotated, Literal, cast, override
 from urllib.parse import quote
 from uuid import UUID
 
+import psutil
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -111,6 +112,7 @@ from scopecat.daemon.device_views import DeviceView
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
+    DaemonEndpointError,
 )
 from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
@@ -3180,6 +3182,26 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         root = Path(static_dir)
         if not (root / "index.html").is_file():
             raise ValueError("static_dir must contain index.html")
+        if (root / "development-ui.marker").is_file():
+            from scopecat_server.development_ui import current_ui
+
+            @app.get("/_development/ui", include_in_schema=False)
+            def development_ui() -> JSONResponse:
+                try:
+                    url = current_ui(application.project_root)
+                except OSError, ValueError, psutil.Error, DaemonEndpointError:
+                    return JSONResponse(
+                        {
+                            "detail": (
+                                "Development UI is unavailable. "
+                                "Reopen the development application."
+                            )
+                        },
+                        status_code=503,
+                        headers={"Cache-Control": "no-store"},
+                    )
+                return JSONResponse({"url": url}, headers={"Cache-Control": "no-store"})
+
         app.mount(
             "/",
             _SpaStaticFiles(directory=root, html=True),

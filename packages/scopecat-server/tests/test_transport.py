@@ -700,3 +700,39 @@ def test_quit_ends_existing_sse_but_busy_or_invalid_quit_does_not(
                 await asyncio.gather(pending, return_exceptions=True)
 
     asyncio.run(scenario())
+
+
+def test_development_handoff_is_not_cached_and_reports_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.daemon.endpoint import DaemonEndpointError
+
+    from scopecat_server import development_ui
+
+    (tmp_path / "index.html").write_text("development entry")
+    (tmp_path / "development-ui.marker").touch()
+    selected: str | None = "http://127.0.0.1:8200"
+
+    def current(_root: Path) -> str:
+        if selected == "invalid-record":
+            raise DaemonEndpointError("invalid backend record")
+        if selected is None:
+            raise FileNotFoundError
+        return selected
+
+    monkeypatch.setattr(development_ui, "current_ui", current)
+    backend = FakeApplication()
+    monkeypatch.setattr(backend, "project_root", tmp_path, raising=False)
+    client = TestClient(_create_test_app(backend, static_dir=tmp_path))
+    response = client.get("/_development/ui")
+    assert response.json() == {"url": selected}
+    assert response.headers["cache-control"] == "no-store"
+    selected = "http://127.0.0.1:8201"
+    assert client.get("/_development/ui").json() == {"url": selected}
+
+    for unavailable in (None, "invalid-record"):
+        selected = unavailable
+        response = client.get("/_development/ui")
+        assert response.status_code == 503
+        assert response.headers["cache-control"] == "no-store"
+    assert client.get("/api/v1/health").status_code == 200

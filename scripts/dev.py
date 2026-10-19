@@ -23,8 +23,10 @@ import httpx2
 import psutil
 from filelock import FileLock, Timeout
 
+from scopecat.runtime_binding import load_runtime_binding
 from scopecat_app.application_runtime import ApplicationRuntime, write_state
 from scopecat_app.desktop_session import DesktopSession
+from scopecat_server.development_ui import RECORD_NAME, DevelopmentUI
 from scopecat_server.validation_process import terminate_validation_process_tree
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -253,6 +255,29 @@ def publish_endpoint(home: Path, url: str) -> None:
     report = cast("dict[str, object]", json.loads(marker.read_text()))
     report["backend"] = url
     write_state(marker, json.dumps(report, indent=2))
+    root = home / "runtime" if (home / "runtime").exists() else home
+    ui_record = load_runtime_binding(root).coordination_root / RECORD_NAME
+    if ui_record.is_file():
+        current = DevelopmentUI.model_validate_json(ui_record.read_bytes())
+        write_state(
+            ui_record, current.model_copy(update={"backend": url}).model_dump_json()
+        )
+
+
+def publish_ui(session: DesktopSession, frontend: psutil.Process) -> None:
+    assert session.base_url is not None and session.ui_url is not None
+    record = DevelopmentUI(
+        backend=session.base_url,
+        ui=session.ui_url,
+        owner_pid=os.getpid(),
+        owner_created=psutil.Process().create_time(),
+        frontend_pid=frontend.pid,
+        frontend_created=frontend.create_time(),
+    )
+    write_state(
+        session.runtime.instance.runtime_binding.coordination_root / RECORD_NAME,
+        record.model_dump_json(),
+    )
 
 
 def run(source: Path, home: Path, *, browser: bool) -> None:
@@ -300,6 +325,9 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
     try:
         claim_home(source, home)
         owned = True
+        (
+            session.runtime.instance.runtime_binding.coordination_root / RECORD_NAME
+        ).unlink(missing_ok=True)
         logs = home / "logs"
         logs.mkdir(exist_ok=True)
         logging.basicConfig(filename=logs / "development.log", level=logging.INFO)
@@ -312,6 +340,7 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
         session.connected(session.runtime.start().base_url)
         child, session.ui_url = start_vite(source, endpoint, logs / "vite.log")
         child_owner = psutil.Process(child.pid)
+        publish_ui(session, child_owner)
         report = {
             "source": str(source),
             "home": str(home),
@@ -368,6 +397,9 @@ def run(source: Path, home: Path, *, browser: bool) -> None:
     finally:
         interruptible = False
         if owned:
+            (
+                session.runtime.instance.runtime_binding.coordination_root / RECORD_NAME
+            ).unlink(missing_ok=True)
             stop_when_idle(session.runtime)
         closing.set()
         if controller is not None:
