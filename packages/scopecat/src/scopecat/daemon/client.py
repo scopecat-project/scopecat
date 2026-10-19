@@ -422,17 +422,24 @@ class DaemonClient:
             transport=transport,
         )
 
-    def application_open_host(self) -> DesktopHostStatus:
+    def application_open_host(
+        self, *, timeout: float | None = None
+    ) -> DesktopHostStatus:
         return self._get_model(
-            f"{_API_PREFIX}/application-open/host", DesktopHostStatus
+            f"{_API_PREFIX}/application-open/host", DesktopHostStatus, timeout=timeout
         )
 
     def open_application_object(
-        self, command: ApplicationOpenCommand
+        self, command: ApplicationOpenCommand, *, timeout: float | None = None
     ) -> ApplicationOpenReceipt:
-        return self._post_idempotent_model(
-            f"{_API_PREFIX}/application-open", command, ApplicationOpenReceipt
+        # The caller owns the deadline and retains the command on uncertainty.
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/application-open",
+            json=command.model_dump(mode="json"),
+            timeout=timeout,
         )
+        return ApplicationOpenReceipt.model_validate_json(response.content)
 
     def register_desktop_host(
         self, command: DesktopHostRegistration
@@ -623,8 +630,8 @@ class DaemonClient:
             f"{_API_PREFIX}/author-revisions/analyze", request, AuthorAnalysisReceipt
         )
 
-    def health(self) -> DaemonHealth:
-        return self._get_model(f"{_API_PREFIX}/health", DaemonHealth)
+    def health(self, *, timeout: float | None = None) -> DaemonHealth:
+        return self._get_model(f"{_API_PREFIX}/health", DaemonHealth, timeout=timeout)
 
     def create_review(
         self,

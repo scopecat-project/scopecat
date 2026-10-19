@@ -2,6 +2,8 @@
 
 import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Literal
 from unittest.mock import Mock
 from uuid import uuid4
 
@@ -10,6 +12,7 @@ import pytest
 from scopecat.records.application_open import (
     ApplicationOpenCommand,
     ApplicationOpenTarget,
+    DesktopHostLease,
     DesktopHostRegistration,
     DesktopOpenAcknowledgement,
 )
@@ -18,7 +21,7 @@ from scopecat_server.errors import BackendNotFound
 from scopecat_server.services.application_open import ApplicationOpenService
 
 
-def host(service):
+def host(service: ApplicationOpenService) -> DesktopHostLease:
     return service.register(
         DesktopHostRegistration(
             project_id="data",
@@ -30,7 +33,7 @@ def host(service):
     )
 
 
-def command(lease, **changes):
+def command(lease: DesktopHostLease, **changes: object) -> ApplicationOpenCommand:
     return ApplicationOpenCommand(
         project_id="data",
         deployment_id="app",
@@ -116,12 +119,14 @@ def test_deleted_target_between_submission_and_host_dispatch_is_not_opened():
 
 
 @pytest.mark.parametrize("kind", ["run_analysis", "sample_analysis"])
-def test_owned_analysis_target_requires_owner(kind):
+def test_owned_analysis_target_requires_owner(
+    kind: Literal["run_analysis", "sample_analysis"],
+) -> None:
     with pytest.raises(ValueError, match="exact run or sample"):
         ApplicationOpenTarget(kind=kind, object_id="analysis")
 
 
-def test_http_host_cycle_and_invalid_target(tmp_path):
+def test_http_host_cycle_and_invalid_target(tmp_path: Path) -> None:
     import httpx2
     from fastapi.testclient import TestClient
     from scopecat.daemon.client import DaemonClient, DaemonClientError
@@ -133,7 +138,7 @@ def test_http_host_cycle_and_invalid_target(tmp_path):
         TestClient(runtime.app()) as transport,
     ):
 
-        def send(request):
+        def send(request: httpx2.Request) -> httpx2.Response:
             response = transport.request(
                 request.method,
                 request.url.raw_path.decode(),
