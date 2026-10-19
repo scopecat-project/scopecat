@@ -45,6 +45,22 @@ try:
     with ExitStack() as sessions:
         session = sessions.enter_context(project.authoring())
         session.refresh()
+        from my_experiment.procedure import PeakChoice, peak_choice_problem
+
+        # Editable input rules accept both endpoints, reject missing/out-of-range
+        # selections, and require empty frequencies for either non-selection.
+        for outcome, frequency, valid in [
+            ("Peak selected", 6490.0, True),
+            ("Peak selected", 6510.0, True),
+            ("Peak selected", 6489.0, False),
+            ("Peak selected", 6511.0, False),
+            ("Peak selected", None, False),
+            ("Unsure", None, True),
+            ("Unsure", 6500.0, False),
+            ("No clear peak", None, True),
+            ("No clear peak", 6500.0, False),
+        ]:
+            assert (not peak_choice_problem(PeakChoice(outcome, frequency))) == valid
         ns = {"sc": sc, "session": session}
 
         def run(name):
@@ -62,6 +78,8 @@ try:
             assert (
                 pending.request.structure["fields"]["frequency_mhz"]["type"] == "union"
             )
+            limits = pending.request.metadata["field_constraints"]["frequency_mhz"]
+            assert limits["minimum"] == 6490 and limits["maximum"] == 6510
             if outcome == "Peak selected":
                 # Python bypasses UI hints; the procedure still checks meaning.
                 answer = ns["PeakChoice"](outcome, 6600)
