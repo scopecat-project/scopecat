@@ -144,6 +144,40 @@ and move redundant policy combinations to focused tests. The
 [reference retirement map](reference-gallery-retirement.md) identifies scientific
 and device owners. No test run alone establishes hardware correctness.
 
+### 定向慢验收与失败归因
+
+日常改动先按上表定位受影响的行为：改动真实进程/恢复边界、UI 交互、教学入口或安装
+消费者时，在本地运行对应文件/用例；需要托管产物或目标平台证据时，选上面的验收
+profile，浏览器可进一步限定 shard/files。入口、生成器或共享夹具变更须覆盖实际消费者，
+不能只让启动成功就停止，也不能以单测通过代替受影响的用户路径。
+纯文档不需重跑慢验收。相关改动触发定向运行，不把全量慢测加入 PR gate，也不默认
+增设定时运行；运行范围、通过结果及未覆盖项写进 PR。
+
+发行候选确定后，提前按交付边界完成集成资格化，不等发布前最后一步才检查积累的漂移。
+以候选 SHA 的 `full` 和实际交付所需的安装/原生证据为依据，具体仍遵循
+[发行流程](public-preview.md)及[打包矩阵](architecture/desktop-packaging.md#coverage-by-consumer-boundary)。
+更换代码、依赖或产物后重新核对受影响证据；旧 SHA 的绿色结果、单个浏览器分片或被跳过的
+profile 不能算作新候选的完整资格化。缺少的组明确标为未知，不为填表无条件重跑全矩阵。
+
+失败时记录能定位该失败的 SHA、运行链接及关键日志；涉及产物或平台差异时再补相应身份/环境信息。
+再按最小相关用例复现；修复后走完原先被阻断的路径。
+
+| 分类 | 判据与处理 |
+| --- | --- |
+| 产品缺陷 | 当前有效用户路径违反行为/数据契约；修产品并保留回归，不能改科学语义让测试通过 |
+| 夹具漂移 | 旧命令、选择器、生成内容或 API 假设与当前契约不符；复用实际入口/工具，必要时补低成本 producer-consumer 检查，不另写第二套实现 |
+| 环境问题 | 有证据指向依赖、runner、权限或进程回收；记录环境差异并修正环境，不吞清理错误或盲加 timeout |
+| 未归因 | 只有超时、取消或重试后通过；保留未解决结论和后续诊断，不把绿色重跑当根因修复 |
+
+同 SHA 的已成功任务可按上面的产物复用规则保留；重试须有具体诊断假设，记录实际尝试，
+同一诊断假设未带来新证据时，停止重复重试并转向定位。仅在修复证据覆盖原失败路径后关闭对应问题。
+已有未归因验收失败继续跟踪 [#1058](https://github.com/scopecat-project/scopecat/issues/1058)，
+运行节奏与防漂移证据归 [#1071](https://github.com/scopecat-project/scopecat/issues/1071)。
+
+比较开销时分别记录首个实际 job 开始到 gate 结束的墙钟、实际 job 时长之和及测试步骤
+耗时，标注队列等待、尝试次数和选择范围；runner 秒不是计费分钟，也不等于测试耗时。
+历史数字、run 链接和本地样本放在 issue/PR，不变成永久时限承诺；当前未运行的组仍未知。
+
 ## Representative assertion owners
 
 | Boundary | Combined evidence | Focused or broader evidence |
