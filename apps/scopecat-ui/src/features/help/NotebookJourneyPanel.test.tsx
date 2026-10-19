@@ -9,17 +9,8 @@ import { NotebookJourneyPanel } from "./NotebookJourneyPanel";
 
 type PrepareNotebook = NonNullable<Window["pywebview"]>["api"]["prepare_notebook_journey"];
 
-const courseNames: Record<string, string> = {
-  parameters: "Parameters and scans",
-  refresh: "Edit and refresh experiments",
-  compute: "Mean IQ and typed results",
-  groups: "Grouped analysis and history",
-  calibration: "Parameter calibration and recovery",
-  "joint-calibration": "Joint calibration and coupled checks",
-  procedure: "Procedures and human decisions",
-  "task-calibration": "Background calibration and publication",
-};
-const course = (topic: string) => screen.getByRole("radio", { name: courseNames[topic] });
+const course = (_topic?: string) => screen.getByRole("combobox", { name: "Course" });
+const chooseCourse = (topic: string) => fireEvent.change(course(), { target: { value: topic } });
 
 function savedStatus(journey: NotebookJourney | null) {
   return { state: journey ? (journey.ready ? "ready" : "retryable") : "not_started", journey };
@@ -67,7 +58,10 @@ it("prepares without forms and preserves the saved path when opening the editor 
   fireEvent.click(start);
   expect(await screen.findByRole("alert")).toHaveTextContent("Open the Notebook manually");
   expect(screen.getByText(journey.notebook)).toBeVisible();
-  expect(screen.getByRole("link", { name: "Runs" })).toHaveAttribute("href", "#runs");
+  expect(screen.getByRole("link", { name: "Find saved results in Data" })).toHaveAttribute(
+    "href",
+    "#history",
+  );
   expect(prepare).toHaveBeenCalledWith(undefined, "parameters");
   expect(open).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
@@ -76,9 +70,9 @@ it("keeps desktop preparation distinct from browser-only Help", () => {
   show();
   expect(screen.getByText(/Open Help in the Scopecat desktop/)).toBeVisible();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  expect(screen.getAllByRole("radio")).toHaveLength(8);
-  fireEvent.click(course("groups"));
-  expect(course("groups")).toBeChecked();
+  expect(screen.getAllByRole("option")).toHaveLength(8);
+  chooseCourse("groups");
+  expect(course()).toHaveValue("groups");
 });
 it.each([
   "procedure",
@@ -127,8 +121,10 @@ it.each([
       },
     });
     show();
-    expect(await screen.findByText(parameters.notebook)).toBeVisible();
-    fireEvent.click(course(topic));
+    expect(
+      await screen.findByRole("button", { name: "Continue parameters Notebook" }),
+    ).toBeEnabled();
+    chooseCourse(topic);
     const start = await screen.findByRole("button", { name: `Start ${topic} Notebook` });
     await vi.waitFor(() => expect(start).toBeEnabled());
     expect(screen.queryByText(parameters.notebook)).not.toBeInTheDocument();
@@ -139,11 +135,15 @@ it.each([
       savedStatus(selected === "parameters" ? parameters : groups),
     );
     finish(groups);
-    expect(await screen.findByText(groups.notebook)).toBeVisible();
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: `Continue ${topic} Notebook` })).toBeEnabled(),
+    );
     await vi.waitFor(() => expect(open).toHaveBeenCalledWith(topic));
     await vi.waitFor(() => expect(course(topic)).toBeEnabled());
-    fireEvent.click(course("parameters"));
-    expect(await screen.findByText(parameters.notebook)).toBeVisible();
+    chooseCourse("parameters");
+    expect(
+      await screen.findByRole("button", { name: "Continue parameters Notebook" }),
+    ).toBeEnabled();
     expect(screen.getByRole("button", { name: "Continue parameters Notebook" })).toBeEnabled();
     expect(prepare).toHaveBeenCalledTimes(1);
   },
@@ -163,15 +163,16 @@ it("returns to the selected course and opens its exact Settings folder without p
     value: { api: { notebook_journey: status, prepare_notebook_journey: prepare } },
   });
   const first = show();
-  fireEvent.click(course("groups"));
-  expect(await screen.findByText(journey.notebook)).toBeVisible();
+  chooseCourse("groups");
+  expect(await screen.findByRole("button", { name: "Continue groups Notebook" })).toBeEnabled();
+  expect(screen.queryByText(journey.notebook)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("link", { name: "Manage this code folder in Settings" }));
   expect(new URL(window.location.href).searchParams.get("source")).toBe(journey.directory);
   expect(window.location.hash).toBe("#settings");
   first.unmount();
   // A newly mounted Help reads the page selection, not a component-local default.
   show();
-  expect(course("groups")).toBeChecked();
+  expect(course()).toHaveValue("groups");
   expect(await screen.findByRole("button", { name: "Continue groups Notebook" })).toBeEnabled();
   expect(status).toHaveBeenLastCalledWith("groups");
   expect(prepare).not.toHaveBeenCalled();
@@ -203,7 +204,7 @@ it("shows unfinished preparation without claiming the folder is ready", async ()
   expect(
     screen.queryByRole("button", { name: /Choose another save location/ }),
   ).not.toBeInTheDocument();
-  expect(course("parameters")).toBeChecked();
+  expect(course()).toHaveValue("parameters");
 });
 
 function goToCourse(topic: string, via: "navigate" | "popstate") {
@@ -479,17 +480,17 @@ it("browses grouped goals without preparing or opening a course", async () => {
   });
   show();
   for (const name of ["Basics", "Optional", "Advanced"]) {
-    expect(screen.getByRole("heading", { name })).toBeVisible();
+    expect(screen.getByRole("group", { name })).toBeInTheDocument();
   }
   expect(await screen.findByText("Ready to continue")).toBeVisible();
   expect(course("parameters")).toHaveAccessibleDescription(
     "Run, view a result, edit Python and run again.",
   );
-  fireEvent.click(course("task-calibration"));
+  chooseCourse("task-calibration");
   expect(await screen.findByText("Not prepared")).toBeVisible();
-  expect(course("task-calibration")).toBeChecked();
+  expect(course()).toHaveValue("task-calibration");
   expect(screen.queryByText(parametersJourney.directory)).not.toBeInTheDocument();
-  expect(screen.getByText(/does not mark it complete/)).toBeVisible();
+  expect(screen.queryByText(/does not mark it complete/)).toBeNull();
   expect(prepare).not.toHaveBeenCalled();
   expect(open).not.toHaveBeenCalled();
 });

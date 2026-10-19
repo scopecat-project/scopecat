@@ -214,10 +214,6 @@ export function ConfigWorkspace({
       )}
       <header>
         <h2 className="text-lg font-semibold leading-7">Experiment configuration</h2>
-        <p>
-          Setups bind registered devices. Parameter versions hold scientific inputs; neither changes
-          another page's selection.
-        </p>
         <Controls.Field>
           Operator
           <Controls.Input value={operator} onChange={(event) => setOperator(event.target.value)} />
@@ -258,16 +254,7 @@ export function ConfigWorkspace({
         >
           Open working table
         </Controls.Button>
-        <p>
-          Continue this branch's working inputs. Using them for an experiment is explicit; saving a
-          version is optional.
-        </p>
         {openWorking.error && <p role="alert">{errorMessage(openWorking.error)}</p>}
-        <p>
-          Start from an imported template or a saved version. Unknown values remain unknown; saving
-          a parameter version does not validate a calibration. Drafts recover editing input
-          separately.
-        </p>
         <Controls.Field>
           Saved parameter version
           <Controls.Select
@@ -514,9 +501,7 @@ function ParameterVersionEditor({
               {adoptionContext.subject.ref.revision}
             </p>
           )}
-          <p className="text-sm">
-            Current editable inputs. Selecting an object does not change the next experiment.
-          </p>
+          <p className="text-sm">Working inputs</p>
         </header>
       )}
       <p role="status">
@@ -528,7 +513,6 @@ function ParameterVersionEditor({
               ? "Your conflicting copy is retained. Review before continuing."
               : "Draft has unsaved changes"}
       </p>
-      <p>Draft recovery does not save a parameter version, apply changes or run an experiment.</p>
       {draft.error && <p role="alert">{draft.error}</p>}
       {actionError && <p role="alert">{actionError}</p>}
       {draft.status === "failed" && draft.hasUnsavedChanges && (
@@ -694,8 +678,7 @@ function ParameterVersionEditor({
         <p>
           {adoptionContext &&
             "This also selects the resolved target and setup shown above. The selected map object only filters the editor; it does not narrow the experiment target. "}
-          This captures a copy for a fresh preview. Existing previews and submitted runs never adopt
-          later edits automatically.
+          Uses the inputs shown here for the next preparation.
         </p>
         <ParameterDraftHistory base={base} onResume={onFork} />
         <Controls.Field>

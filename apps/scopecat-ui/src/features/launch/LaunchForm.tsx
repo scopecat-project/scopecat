@@ -330,13 +330,13 @@ export function LaunchForm({
         <p className="text-xs text-text-dim">Selected experiment</p>
         <h3 className="font-semibold text-lg">{entry.title}</h3>
         <p className="text-sm whitespace-pre-line">{entry.description}</p>
-        <p>
-          {entry.configuration_effect === "none"
-            ? "This task does not publish parameter changes."
-            : entry.configuration_effect === "candidate"
+        {entry.configuration_effect !== "none" && (
+          <p>
+            {entry.configuration_effect === "candidate"
               ? "This task produces a parameter candidate. Creating it does not publish it to a branch."
               : "This task can publish parameter changes after its declared review. Review may be automated; starting does not add a separate human approval step."}
-        </p>
+          </p>
+        )}
         {entry.review && <p>{entry.review.instructions}</p>}
       </section>
       <Notice role="status">{recovery.status}</Notice>
@@ -410,20 +410,13 @@ export function LaunchForm({
       </fieldset>
       {draft.workingInput && (
         <section aria-label="Working parameter input" className="border border-line rounded p-3">
-          <p>
-            <strong>Adopted working-table copy.</strong> Using working input revision{" "}
-            {draft.workingInput.revision}. This is a saved editing step, not a parameter version.
-            Submitted experiments keep the inputs captured when they were started.
-          </p>
+          <p>Working inputs · revision {draft.workingInput.revision}</p>
           <details>
             <summary>Source working table</summary>
             <p className="break-all">{draft.workingInput.draft_id}</p>
           </details>
           <Notice id={workingStatusId} role="status">
-            {workingBlockReason ??
-              (result
-                ? "The preview uses this adopted copy."
-                : "The adopted copy matches the saved working table. Start checks it before acquisition.")}
+            {workingBlockReason ?? (result ? "Preview up to date" : "Inputs up to date")}
           </Notice>
           {!workingCurrent && working.data && !working.isError && (
             <p>
@@ -585,8 +578,7 @@ export function LaunchForm({
       >
         <h4 className="font-semibold">Start or inspect</h4>
         <p className="text-sm text-text-dim">
-          Start checks the current inputs before submitting acquisition. Preview is optional and
-          never acquires data.
+          Start checks your inputs. Preview inspects them without acquisition.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           {entry.actions.includes("submit") && (

@@ -127,7 +127,7 @@ it.each([
   mount();
   await screen.findByText(label);
   expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
-  expect(screen.queryByText(/record your answer in Decisions first/) !== null).toBe(
+  expect(screen.queryByText(/Record your decision, then return here to continue/) !== null).toBe(
     state === "waiting_for_input",
   );
   expect(screen.queryByRole("link", { name: /Review results/ })?.getAttribute("href") ?? null).toBe(

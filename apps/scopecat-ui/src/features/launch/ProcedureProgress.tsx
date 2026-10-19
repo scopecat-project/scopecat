@@ -113,42 +113,14 @@ export function ProcedureProgress({
           <p role="status" className="font-semibold">
             {procedurePhase(view)}
           </p>
-          {!run.closure && (
-            <p>
-              {run.state === "waiting_for_input"
-                ? "Review the evidence and record your answer in Decisions first. Then return here to continue."
-                : view.dispatch.worker_running
-                  ? "Worker process active"
-                  : view.dispatch.management === "paused"
-                    ? view.dispatch.failure
-                      ? "Worker dispatch is paused after a start or process failure. The admitted procedure and its results are retained."
-                      : "Waiting for your explicit Continue action. Recorded decisions do not automatically run the next step."
-                    : view.dispatch.management === "active"
-                      ? "Managed by the console; ready work can continue when a worker is available."
-                      : "No console worker is assigned to this admitted procedure."}
-            </p>
+          {!run.closure && run.state === "waiting_for_input" && (
+            <p>Record your decision, then return here to continue.</p>
           )}
           {view.dispatch.failure && (
             <div role="alert" className="space-y-1">
               <p>Worker diagnostic: {view.dispatch.failure.message}</p>
-              <p>
-                Observed at {view.dispatch.failure.observed_at}. The retained execution outcome is
-                shown separately.
-              </p>
             </div>
           )}
-          <details className="border border-line rounded-md p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Execution diagnostics
-            </summary>
-            {view.dispatch.log_path && (
-              <p className="break-all">
-                Worker log: <code>{view.dispatch.log_path}</code>
-              </p>
-            )}
-            <ProcedureWorkerLog procedureId={procedureId} />
-            {run.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
-          </details>
           {run.recovery && (
             <p>
               Recovery from{" "}
@@ -279,6 +251,16 @@ export function ProcedureProgress({
           )}
           <ul className="space-y-3">
             {steps.map((step) => {
+              if (
+                !run.closure &&
+                !run.resource_wait &&
+                step.step_key === view.current_step?.step_key &&
+                step.attempt === view.current_step.attempt &&
+                !step.output &&
+                !step.failure_reason &&
+                !step.attention_reason
+              )
+                return null;
               const child = children.get(step.step_key);
               const href = step.output && outputHref(step.output, procedureId);
               return (
@@ -341,6 +323,24 @@ export function ProcedureProgress({
               Load earlier steps
             </button>
           )}
+          <details className="border border-line rounded-md p-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Execution diagnostics
+            </summary>
+            <p>
+              {view.dispatch.worker_running
+                ? "Worker process active"
+                : `Worker management: ${view.dispatch.management}`}
+            </p>
+            {view.dispatch.failure && <p>Observed at {view.dispatch.failure.observed_at}</p>}
+            {view.dispatch.log_path && (
+              <p className="break-all">
+                Worker log: <code>{view.dispatch.log_path}</code>
+              </p>
+            )}
+            <ProcedureWorkerLog procedureId={procedureId} />
+            {run.state === "closed" && <ClearData key={procedureId} procedures={[procedureId]} />}
+          </details>
         </>
       )}
       {error && <p role="alert">{error}</p>}

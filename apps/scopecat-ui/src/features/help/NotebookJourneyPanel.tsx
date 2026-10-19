@@ -1,4 +1,4 @@
-import { Button, Notice } from "../../ui/Controls";
+import { Button, Notice, Select } from "../../ui/Controls";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { type LessonTopic, useDesktopAvailable } from "../application/DesktopSession";
@@ -85,11 +85,7 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
       <h3 id="notebook-journey-heading" className="font-semibold">
         Learn with Notebooks
       </h3>
-      <p>
-        Begin with Parameters and scans, then continue editing. Choose calculation or grouped
-        analysis as needed; calibration is an advanced route. You do not need every course or
-        another course’s data.
-      </p>
+      <p>Start with Parameters and scans, or continue a course you have already prepared.</p>
       <CourseBrowser topic={topic} busy={busy} />
       <NotebookJourneyCourse
         key={topic}
@@ -104,50 +100,33 @@ export function NotebookJourneyPanel({ reachable }: { reachable: boolean }) {
 function CourseBrowser({ topic, busy }: { topic: LessonTopic; busy: boolean }) {
   const courseId = useId();
   return (
-    <fieldset disabled={busy} className="min-w-0">
-      <legend className="mb-3 font-semibold">Choose a course</legend>
-      <div className="grid gap-4 lg:grid-cols-3">
+    <label className="grid gap-1.5">
+      <span id={`${courseId}-label`}>Course</span>
+      <Select
+        aria-labelledby={`${courseId}-label`}
+        disabled={busy}
+        value={topic}
+        aria-describedby={`${courseId}-goal`}
+        onChange={(event) => {
+          const next = new URL(window.location.href);
+          next.searchParams.set("lesson", event.target.value);
+          navigate(next, { replace: true });
+        }}
+      >
         {courseGroups.map((group) => (
-          <div key={group.title} className="min-w-0">
-            <h4 className="font-semibold">{group.title}</h4>
-            <p className="mb-2 text-text-dim">{group.hint}</p>
-            <div className="grid gap-2">
-              {group.topics.map((value) => (
-                <label key={value} className="block">
-                  <input
-                    type="radio"
-                    name={`${courseId}-course`}
-                    value={value}
-                    checked={topic === value}
-                    aria-label={lessons[value].title}
-                    aria-describedby={`${courseId}-${value}-goal`}
-                    onChange={() => {
-                      const next = new URL(window.location.href);
-                      next.searchParams.set("lesson", value);
-                      navigate(next, { replace: true });
-                    }}
-                    className="peer sr-only"
-                  />
-                  <span className="grid min-h-24 cursor-pointer gap-1 rounded-md border border-line bg-panel-soft p-3 peer-checked:border-accent peer-checked:bg-panel-strong peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent peer-disabled:cursor-not-allowed peer-disabled:opacity-60">
-                    <span className="flex items-start justify-between gap-2 font-semibold">
-                      {lessons[value].title}
-                      {topic === value && (
-                        <span className="text-accent" aria-hidden="true">
-                          ●
-                        </span>
-                      )}
-                    </span>
-                    <span id={`${courseId}-${value}-goal`} className="text-text-soft">
-                      {lessons[value].goal}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <optgroup key={group.title} label={group.title}>
+            {group.topics.map((value) => (
+              <option key={value} value={value}>
+                {lessons[value].title}
+              </option>
+            ))}
+          </optgroup>
         ))}
-      </div>
-    </fieldset>
+      </Select>
+      <span id={`${courseId}-goal`} className="text-sm text-text-dim">
+        {lessons[topic].goal}
+      </span>
+    </label>
   );
 }
 
@@ -240,25 +219,7 @@ function NotebookJourneyCourse({
                       : "Not prepared"}
         </span>
       </div>
-      <p>
-        {lessons[topic].description} No devices are needed. Each course keeps its own code folder
-        and teaching parameters in this application’s data space. Selecting or opening a course does
-        not mark it complete.
-      </p>
-      <details>
-        <summary>Notebook setup and keeping your work</summary>
-        <p>
-          Help prepares a code folder and Python environment. Edit the Notebook in VS Code with the
-          Python and Jupyter extensions; choose the folder’s .venv kernel. Only explicitly running
-          acquisition, procedure, or task cells starts new work. To read existing results after a
-          restart, use the Notebook’s history section.
-        </p>
-        <p>
-          Return to this course in Help to continue its existing folder. Closing the Notebook or
-          application keeps saved files and results; save editor changes before closing. After a
-          kernel restart, run the connection and history cells, not Run All.
-        </p>
-      </details>
+      <p>{lessons[topic].description} Uses synthetic data; no devices are needed.</p>
       {!native ? (
         <p>Open Help in the Scopecat desktop application to prepare this Notebook.</p>
       ) : (
@@ -298,7 +259,7 @@ function NotebookJourneyCourse({
       {busy && (
         <Notice role="status">
           {preparing
-            ? "Preparing code and Python; this may take a few minutes. Preparation does not start measurements."
+            ? "Preparing code and Python; this may take a few minutes. "
             : choose.isPending
               ? "Choosing save location…"
               : "Opening editor…"}
@@ -306,7 +267,8 @@ function NotebookJourneyCourse({
       )}
       {open.isSuccess && !busy && (
         <Notice role="status">
-          Editor open requested. Select the displayed Python kernel in VS Code.
+          Editor open requested. Select the Python kernel below. After a kernel restart, use the
+          connection and history cells to resume; Run All starts new work.
         </Notice>
       )}
       {journey && (
@@ -315,26 +277,27 @@ function NotebookJourneyCourse({
             {preparing
               ? "Preparation is running. This folder will be available when it finishes."
               : journey.ready
-                ? "Preparation saved. Continue checks this folder and opens its Notebook."
+                ? "Ready to open in VS Code."
                 : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
           </p>
-          <p>
-            Code folder: <code className="break-all">{journey.directory}</code>
-          </p>
-          <p>
-            Notebook: <code className="break-all">{journey.notebook}</code>
-          </p>
-          <p>
-            Python kernel: <code className="break-all">{journey.python}</code>
-          </p>
-          <p>
-            Continue preserves edited files and saved parameters. Use{" "}
-            <a className="underline" href="#runs" onClick={navigateLink}>
-              Runs
-            </a>{" "}
-            to reopen a result without collecting again. Manage retained runs in Data; keep your
-            edited files when removing records.
-          </p>
+          {(open.isError || !journey.ready) && (
+            <>
+              <p>
+                Code folder: <code className="break-all">{journey.directory}</code>
+              </p>
+              <p>
+                Notebook: <code className="break-all">{journey.notebook}</code>
+              </p>
+            </>
+          )}
+          {(open.isSuccess || open.isError) && (
+            <p>
+              Python kernel: <code className="break-all">{journey.python}</code>
+            </p>
+          )}
+          <a className="underline" href="#history" onClick={navigateLink}>
+            Find saved results in Data
+          </a>
           <details>
             <summary>Repair Notebook environments</summary>
             <p>

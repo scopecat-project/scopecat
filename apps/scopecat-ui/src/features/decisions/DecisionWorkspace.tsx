@@ -551,7 +551,7 @@ function DecisionEditor({
             <p role="status" className="text-xs text-text-dim">
               {draft.status === "saved"
                 ? draft.started
-                  ? "Draft saved in application data"
+                  ? "Draft saved"
                   : "No unsaved edits"
                 : draft.status === "saving"
                   ? "Saving draft…"

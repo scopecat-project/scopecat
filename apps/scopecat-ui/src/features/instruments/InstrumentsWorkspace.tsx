@@ -244,7 +244,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
       <details className="rounded-lg border border-line bg-panel p-4">
         <summary>Installed drivers</summary>
         <p className="my-2 text-sm text-text-dim">
-          Viewing driver metadata does not connect devices. Prepare capability updates in{" "}
+          Update drivers in{" "}
           <a className="underline" href="#settings">
             Application settings
           </a>
@@ -395,7 +395,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
               }}
             />
           ) : !selectedDevice ? (
-            <p>Select a device to inspect its controls. Selection does not connect hardware.</p>
+            <p>Select a device to inspect its controls.</p>
           ) : instrumentsQuery.isFetching ? (
             <p>Reading device capabilities…</p>
           ) : null}
