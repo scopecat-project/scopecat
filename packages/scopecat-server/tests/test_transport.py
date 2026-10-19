@@ -705,6 +705,8 @@ def test_quit_ends_existing_sse_but_busy_or_invalid_quit_does_not(
 def test_development_handoff_is_not_cached_and_reports_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from scopecat.daemon.endpoint import DaemonEndpointError
+
     from scopecat_server import development_ui
 
     (tmp_path / "index.html").write_text("development entry")
@@ -712,6 +714,8 @@ def test_development_handoff_is_not_cached_and_reports_unavailable(
     selected: str | None = "http://127.0.0.1:8200"
 
     def current(_root: Path) -> str:
+        if selected == "invalid-record":
+            raise DaemonEndpointError("invalid backend record")
         if selected is None:
             raise FileNotFoundError
         return selected
@@ -726,8 +730,9 @@ def test_development_handoff_is_not_cached_and_reports_unavailable(
     selected = "http://127.0.0.1:8201"
     assert client.get("/_development/ui").json() == {"url": selected}
 
-    selected = None
-    response = client.get("/_development/ui")
-    assert response.status_code == 503
-    assert response.headers["cache-control"] == "no-store"
+    for unavailable in (None, "invalid-record"):
+        selected = unavailable
+        response = client.get("/_development/ui")
+        assert response.status_code == 503
+        assert response.headers["cache-control"] == "no-store"
     assert client.get("/api/v1/health").status_code == 200

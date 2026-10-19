@@ -112,6 +112,7 @@ from scopecat.daemon.device_views import DeviceView
 from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_PATH,
     DAEMON_SHUTDOWN_TOKEN_HEADER,
+    DaemonEndpointError,
 )
 from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
@@ -3188,7 +3189,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             def development_ui() -> JSONResponse:
                 try:
                     url = current_ui(application.project_root)
-                except OSError, ValueError, psutil.Error:
+                except OSError, ValueError, psutil.Error, DaemonEndpointError:
                     return JSONResponse(
                         {
                             "detail": (
