@@ -67,6 +67,66 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("keeps numeric conditional input visible through editing and submits normalized values", async () => {
+    const step = waitingStep();
+    step.interpretation_request!.structure = {
+      type: "object",
+      fields: {
+        mode: { type: "int" },
+        detail: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+      },
+    };
+    step.interpretation_request!.response_template = { mode: 1, detail: 2 };
+    step.interpretation_request!.metadata = {
+      reviewer: "Reviewer",
+      field_constraints: {
+        detail: { required_when: { field: "mode", value: 1 }, empty_otherwise: true },
+      },
+    };
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    renderWorkspace();
+    const mode = await screen.findByLabelText("mode");
+    for (const text of ["1", "", "-", "1e", "1.5"]) {
+      fireEvent.change(mode, { target: { value: text } });
+      expect(screen.getByLabelText("detail")).toHaveValue("2");
+    }
+    fireEvent.change(mode, { target: { value: "0" } });
+    expect(screen.queryByLabelText("detail")).not.toBeInTheDocument();
+    fireEvent.change(mode, { target: { value: "1" } });
+    expect(screen.getByLabelText("detail")).toHaveValue("2");
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    await waitFor(() =>
+      expect(submitProcedureInput).toHaveBeenCalledWith(
+        expect.objectContaining({ value: { mode: 1, detail: 2 } }),
+        expect.anything(),
+      ),
+    );
+  });
+  it("distinguishes same-name waiting requests with visible context and selects the exact task", async () => {
+    const first = {
+      ...waitingProcedure(),
+      procedure_run_id: "task-aaaaaaaa",
+      created_at: "2026-10-19T08:00:00Z",
+    };
+    const second = { ...first, procedure_run_id: "task-bbbbbbbb" };
+    vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [first, second] });
+    renderWorkspace();
+    const choice = await screen.findByRole("button", {
+      name: /lab.readout-survey.*Submitted.*bbbbbbbb/,
+    });
+    expect(screen.getByRole("button", { name: /Reference.*aaaaaaaa/ })).toBeVisible();
+    fireEvent.click(choice);
+    await waitFor(() =>
+      expect(getProcedureSteps).toHaveBeenCalledWith(
+        second.procedure_run_id,
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(await screen.findByPlaceholderText("Person’s name")).toBeVisible();
+  });
   it("keeps decisions without analysis evidence full width", async () => {
     renderWorkspace();
     const field = await screen.findByLabelText("resonator");

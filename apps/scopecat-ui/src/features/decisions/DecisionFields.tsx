@@ -66,7 +66,7 @@ export function decisionFormValue(
       const field = fields[name];
       return [
         name,
-        field && inactiveField(name, field, value, metadata)
+        field && inactiveField(name, field, value, metadata, fields)
           ? null
           : !field
             ? item
@@ -87,6 +87,7 @@ function inactiveField(
   field: DecisionField,
   value: Record<string, unknown>,
   metadata: unknown,
+  fields: Record<string, DecisionField>,
 ): boolean {
   if (
     !("nullable" in field) ||
@@ -99,11 +100,21 @@ function inactiveField(
   if (!isRecord(rule) || rule.empty_otherwise !== true || !isRecord(rule.required_when))
     return false;
   const condition = rule.required_when;
-  return (
-    typeof condition.field === "string" &&
-    condition.field in value &&
-    value[condition.field] !== condition.value
-  );
+  if (typeof condition.field !== "string" || !(condition.field in value)) return false;
+  const controller = fields[condition.field];
+  if (!controller || controller.type === "array") return false;
+  const selected = scalar(controller, value[condition.field]);
+  // Incomplete/invalid edits are not a different choice. Keep dependent input visible
+  // and intact until the controlling value is valid in the same schema as submission.
+  if (
+    selected === null ||
+    selected === undefined ||
+    (typeof selected === "string" && !selected.trim()) ||
+    !validScalar(controller, selected) ||
+    !validScalar(controller, condition.value)
+  )
+    return false;
+  return selected !== condition.value;
 }
 
 function validScalar(field: ScalarField, value: unknown): boolean {
@@ -225,7 +236,7 @@ export function DecisionFields({
   return (
     <div className="grid content-start gap-3">
       {Object.entries(fields).map(([name, field]) => {
-        if (inactiveField(name, field, value, metadata)) return null;
+        if (inactiveField(name, field, value, metadata, fields)) return null;
         const label = typeof labels[name] === "string" ? labels[name] : name.replaceAll("_", " ");
         const id = `${prefix}-${name}`;
         if (field.type !== "array")

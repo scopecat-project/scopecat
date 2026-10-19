@@ -18,7 +18,7 @@ import {
   decisionConstraintError,
   decisionFormValue,
 } from "./DecisionFields";
-import { errorMessage } from "../../lib/presentation";
+import { errorMessage, formatDateTime } from "../../lib/presentation";
 import { classes, iconButton, primaryButton } from "../../ui/styles";
 import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
 
@@ -146,6 +146,27 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
                 type="button"
               >
                 <span className="truncate text-xs font-bold">{procedure.definition.id}</span>
+                <span className="text-xs text-text-dim">
+                  {procedure.created_at
+                    ? `Submitted ${formatDateTime(procedure.created_at)}`
+                    : "Submission time unavailable"}
+                </span>
+                {procedure.resolved_samples.length > 0 && (
+                  <span className="truncate text-xs text-text-soft">
+                    {procedure.resolved_samples.map((sample) => sample.sample_id).join(", ")}
+                  </span>
+                )}
+                {procedures.data.items.some(
+                  (other) =>
+                    other.procedure_run_id !== procedure.procedure_run_id &&
+                    other.definition.id === procedure.definition.id &&
+                    (other.created_at ? formatDateTime(other.created_at) : "") ===
+                      (procedure.created_at ? formatDateTime(procedure.created_at) : ""),
+                ) && (
+                  <span className="text-xs text-text-dim">
+                    Reference · {procedure.procedure_run_id.slice(-8)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -489,7 +510,7 @@ function DecisionEditor({
             <Controls.Field>
               Recorded reviewer
               <Controls.Input
-                placeholder="name, agent id, or service id"
+                placeholder="Person’s name"
                 value={actor}
                 onChange={(event) => setActor(event.target.value)}
               />
