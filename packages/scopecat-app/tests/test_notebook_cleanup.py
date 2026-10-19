@@ -150,3 +150,42 @@ def test_old_unowned_receipt_is_not_adopted(registered_course):
             runtime, "parameters", NotebookPracticeClearCommand(preview=preview)
         )
     post.assert_not_called()
+
+
+@pytest.mark.parametrize("retained", [False, True])
+@pytest.mark.parametrize("target_inside", [False, True])
+def test_shared_interpreter_link_and_target_block_before_data_request(
+    registered_course, tmp_path: Path, retained: bool, target_inside: bool
+):
+    runtime, course, registry, preview, post = registered_course
+    other = tmp_path / "other-author"
+    other.mkdir()
+    target = (course.directory if target_inside else other) / "python-target"
+    target.write_text("shared interpreter")
+    link = (other if target_inside else course.directory) / "python-link"
+    link.symlink_to(target)
+    original = LocalAuthorWorkspaces.model_validate_json(registry.read_bytes())
+    shared = LocalAuthorWorkspace(
+        id="other",
+        name="Other",
+        root=other,
+        python=other / "current-python" if retained else link,
+        retained_pythons=(link,) if retained else (),
+    )
+    registry.write_text(
+        original.model_copy(
+            update={"items": (*original.items, shared)}
+        ).model_dump_json()
+    )
+    before = registry.read_bytes()
+    with pytest.raises(ValueError, match="其他作者环境"):
+        cleanup.clear(
+            runtime,
+            "parameters",
+            NotebookPracticeClearCommand(preview=preview, files="discard"),
+        )
+    post.assert_not_called()
+    assert registry.read_bytes() == before
+    assert link.read_text() == "shared interpreter"
+    assert (course.directory / "notes.txt").read_text() == "my edits"
+    assert current(runtime) == course

@@ -82,13 +82,9 @@ def _verify_registry(
     ]
     for item in registry.items:
         if item.id != course.workspace_id:
-            protected.extend(
-                (
-                    item.root.resolve(),
-                    item.python.absolute(),
-                    *[p.absolute() for p in item.retained_pythons],
-                )
-            )
+            protected.append(item.root.resolve())
+            for interpreter in (item.python, *item.retained_pythons):
+                protected.extend((interpreter.absolute(), interpreter.resolve()))
     if any(path == directory or path.is_relative_to(directory) for path in protected):
         raise ValueError("此目录仍包含应用或其他作者环境所需文件；未删除")
     return registry
