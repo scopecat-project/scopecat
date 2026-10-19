@@ -43,7 +43,7 @@ test("course Data and explicit cleanup remain readable and keyboard accessible",
       }),
     );
     await page.addInitScript(
-      ({ selection }) => {
+      ({ selection: courseSelection }) => {
         let cleared = false;
         let previews = 0;
         const journey = () => ({
@@ -65,7 +65,7 @@ test("course Data and explicit cleanup remain readable and keyboard accessible",
               preview_notebook_cleanup: async () => ({
                 files_error: null,
                 preview: {
-                  selection,
+                  selection: courseSelection,
                   record_count: 1,
                   fingerprint: "exact",
                   bytes_to_reclaim: 0,
