@@ -1274,9 +1274,9 @@ def _experiment_invocation(
     experiment: ExperimentSpec, *, config: ConfigProfileSnapshot
 ) -> ExperimentInvocation:
     if isinstance(experiment, ExperimentRequest):
-        from scopecat.application.author_inputs import author_input_model
-        from scopecat.application.controls import edit_controls
-        from scopecat.application.request_inputs import capture_request_inputs
+        from scopecat.authoring.author_inputs import author_input_model
+        from scopecat.authoring.controls import edit_controls
+        from scopecat.authoring.request_inputs import capture_request_inputs
 
         declaration = experiment.declaration
         input_model = author_input_model(declaration, declaration.controls)

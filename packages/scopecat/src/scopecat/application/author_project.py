@@ -50,7 +50,6 @@ from scopecat.application.launch_config import (
     resolve_launch_config,
     validate_editing_selection,
 )
-from scopecat.application.request_inputs import capture_request_inputs
 from scopecat.application.session_context import (
     INHERIT,
     SessionContext,
@@ -58,6 +57,7 @@ from scopecat.application.session_context import (
     SessionDefault,
 )
 from scopecat.authoring.experiments import Experiment, ExperimentRequest
+from scopecat.authoring.request_inputs import capture_request_inputs
 from scopecat.automation.models import ProcedureRun, RunOutputRef
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
