@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Atom, ChevronDown, CircleOff, LoaderCircle } from "lucide-react";
@@ -60,15 +61,18 @@ export function AnalysesWorkspace(props: {
   return (
     <div className="space-y-4">
       <nav className="flex gap-4" aria-label="Analysis workflows">
-        <button aria-current={comparison ? "page" : undefined} onClick={() => selectWorkflow(true)}>
+        <Controls.Button
+          aria-current={comparison ? "page" : undefined}
+          onClick={() => selectWorkflow(true)}
+        >
           Compare retained runs
-        </button>
-        <button
+        </Controls.Button>
+        <Controls.Button
           aria-current={!comparison ? "page" : undefined}
           onClick={() => selectWorkflow(false)}
         >
           Project analysis history
-        </button>
+        </Controls.Button>
       </nav>
       {comparison && !props.daemonUnavailable ? (
         <RunComparison
@@ -178,7 +182,7 @@ function ProjectAnalyses({
       <aside className="border-r border-line bg-panel-soft p-2.5 max-[900px]:border-r-0 max-[900px]:border-b">
         <div className="flex items-center justify-between px-2 py-2">
           <h2
-            className="m-0 text-[0.68rem] tracking-[0.08em] text-text-dim uppercase"
+            className="m-0 text-xs tracking-[0.08em] text-text-dim uppercase"
             id="analyses-heading"
           >
             Project analyses
@@ -200,16 +204,16 @@ function ProjectAnalyses({
               type="button"
               title={`Inspect analysis ${analysis.id}`}
             >
-              <span className="flex items-start justify-between gap-2 text-[0.7rem] font-bold">
+              <span className="flex items-start justify-between gap-2 text-xs font-bold">
                 <span className="line-clamp-2">{analysis.title}</span>
-                <span className="flex-none rounded border border-line px-1.5 py-0.5 text-[0.55rem] text-text-dim">
+                <span className="flex-none rounded border border-line px-1.5 py-0.5 text-xs text-text-dim">
                   r{analysis.revision}
                 </span>
               </span>
-              <span className="truncate font-mono text-[0.58rem] text-text-dim">
+              <span className="truncate font-mono text-xs text-text-dim">
                 {analysis.key ?? analysis.id}
               </span>
-              <span className="text-[0.56rem] text-text-dim">
+              <span className="text-xs text-text-dim">
                 <time dateTime={analysis.publishedAt} title={formatDateTime(analysis.publishedAt)}>
                   {formatRelative(analysis.publishedAt)}
                 </time>{" "}
@@ -219,7 +223,7 @@ function ProjectAnalyses({
             </button>
           ))}
           {analyses.isFetchNextPageError ? (
-            <p className="mx-2 my-1 text-[0.61rem] leading-[1.4] text-red" role="status">
+            <p className="mx-2 my-1 text-xs leading-[1.4] text-red" role="status">
               {errorMessage(analyses.error)}
             </p>
           ) : null}
@@ -333,13 +337,13 @@ function AnalysisDetail({
     <>
       <header className="mb-3 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
         <div className="min-w-0">
-          <div className="mb-1 flex flex-wrap items-center gap-2 text-[0.58rem] font-bold tracking-[0.07em] text-text-dim uppercase">
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-bold tracking-[0.07em] text-text-dim uppercase">
             <span>Project analysis</span>
             <span>Revision {selected.revision}</span>
             {selected.stepId ? <span>{selected.stepId}</span> : null}
           </div>
           <h3 className="m-0 text-[1.05rem] tracking-[-0.02em]">{selected.title}</h3>
-          <code className="text-[0.62rem] text-text-dim">{selected.id}</code>
+          <code className="text-xs text-text-dim">{selected.id}</code>
         </div>
         <span className={countBadge}>{selected.outputs.length} outputs</span>
       </header>
@@ -356,7 +360,7 @@ function AnalysisDetail({
         <summary className="cursor-pointer text-sm font-semibold">
           Publication details and data management
         </summary>
-        <dl className="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-md border border-line bg-panel-soft p-3 text-[0.61rem]">
+        <dl className="mb-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-md border border-line bg-panel-soft p-3 text-xs">
           <dt className="font-bold text-text-dim">Key</dt>
           <dd className="m-0 font-mono text-text-soft">{selected.key ?? "—"}</dd>
           <dt className="font-bold text-text-dim">Publication</dt>
@@ -392,9 +396,7 @@ function WorkspaceMessage({
         {icon}
       </span>
       <h2 className="m-0 text-base">{title}</h2>
-      <p className="mt-2 mb-0 max-w-[430px] text-[0.73rem] leading-[1.55] text-text-dim">
-        {detail}
-      </p>
+      <p className="mt-2 mb-0 max-w-[430px] text-xs leading-[1.55] text-text-dim">{detail}</p>
     </div>
   );
 }

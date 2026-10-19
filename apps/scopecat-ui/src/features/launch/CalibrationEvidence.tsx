@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
@@ -99,10 +100,10 @@ export function CalibrationEvidence({
         }}
       >
         <fieldset disabled={pending} className="flex flex-wrap gap-3 items-end">
-          <label>
+          <Controls.Field>
             Maximum evidence age (hours)
-            <input
-              className="block border rounded p-1"
+            <Controls.Input
+              className="block"
               type="number"
               step="any"
               required
@@ -113,11 +114,11 @@ export function CalibrationEvidence({
                 setError("");
               }}
             />
-          </label>
-          <label>
+          </Controls.Field>
+          <Controls.Field>
             History limit
-            <input
-              className="block border rounded p-1"
+            <Controls.Input
+              className="block"
               type="number"
               min="1"
               max="200"
@@ -130,10 +131,10 @@ export function CalibrationEvidence({
                 setError("");
               }}
             />
-          </label>
-          <button type="submit" disabled={!valid || pending}>
+          </Controls.Field>
+          <Controls.Button type="submit" disabled={!valid || pending}>
             Check evidence for {stage.id}
-          </button>
+          </Controls.Button>
         </fieldset>
       </form>
       {pending && <p role="status">Reading retained evidence…</p>}

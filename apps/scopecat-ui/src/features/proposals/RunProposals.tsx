@@ -74,8 +74,8 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
           <GitCompareArrows size={17} />
         </span>
         <div>
-          <h3 className="m-0 text-[0.78rem]">Parameter proposals</h3>
-          <p className="mt-[3px] mb-0 text-[0.59rem] text-text-dim">
+          <h3 className="m-0 text-sm">Parameter proposals</h3>
+          <p className="mt-[3px] mb-0 text-xs text-text-dim">
             Review proposed changes and test a candidate before publishing it to a parameter branch.
           </p>
         </div>
@@ -117,7 +117,7 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                     <span
                       data-testid="proposal-state"
                       className={classes(
-                        "mb-[7px] inline-flex min-h-5 items-center rounded-full border px-[7px] text-[0.54rem] font-extrabold tracking-[0.05em] uppercase",
+                        "mb-[7px] inline-flex min-h-5 items-center rounded-full border px-[7px] text-xs font-extrabold tracking-[0.05em] uppercase",
                         proposal.approval
                           ? "border-[rgb(128_163_207_/_25%)] bg-accent-soft text-accent"
                           : "border-line bg-yellow-soft text-yellow",
@@ -125,20 +125,20 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                     >
                       {proposal.approval ? "Approval recorded" : "Candidate"}
                     </span>
-                    <h4 className="m-0 overflow-hidden font-mono text-[0.72rem] text-ellipsis whitespace-nowrap">
+                    <h4 className="m-0 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap">
                       {proposal.id}
                     </h4>
-                    <p className="mt-[5px] mb-0 text-[0.66rem] leading-[1.45] text-text-soft">
+                    <p className="mt-[5px] mb-0 text-xs leading-[1.45] text-text-soft">
                       {proposal.reason}
                     </p>
                     <a
-                      className="mt-2 inline-block text-[0.65rem] text-accent underline"
+                      className="mt-2 inline-block text-xs text-accent underline"
                       href={`?run=${encodeURIComponent(proposal.sourceRunId)}&run-analysis=${encodeURIComponent(proposal.analysisRecordId)}#runs`}
                     >
                       View source analysis
                     </a>
                     {proposal.evidenceOutputIds.length > 0 && (
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.56rem] text-text-dim">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-text-dim">
                         <span className="font-extrabold tracking-[0.05em] uppercase">Evidence</span>
                         {proposal.evidenceOutputIds.map((outputId) => (
                           <code
@@ -151,7 +151,7 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
                       </div>
                     )}
                   </div>
-                  <div className="grid content-start justify-items-end gap-[5px] text-[0.57rem] text-text-dim max-[680px]:grid-cols-[auto_minmax(0,1fr)] max-[680px]:justify-items-start">
+                  <div className="grid content-start justify-items-end gap-[5px] text-xs text-text-dim max-[680px]:grid-cols-[auto_minmax(0,1fr)] max-[680px]:justify-items-start">
                     {proposal.confidence !== undefined && (
                       <span>{Math.round(proposal.confidence * 100)}% confidence</span>
                     )}
@@ -173,14 +173,14 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
             );
           })}
           {proposalsQuery.isFetchNextPageError ? (
-            <p className="mx-1 my-0 text-[0.62rem] text-red" role="status">
+            <p className="mx-1 my-0 text-xs text-red" role="status">
               {errorMessage(proposalsQuery.error)}
             </p>
           ) : null}
           {proposalsQuery.hasNextPage ? (
             <button
               className={classes(
-                "inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-line bg-panel px-2.5 text-[0.62rem] font-[750] text-text-soft hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-42",
+                "inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-line bg-panel px-2.5 text-xs font-[750] text-text-soft hover:bg-panel-soft disabled:cursor-not-allowed disabled:opacity-42",
               )}
               disabled={proposalsQuery.isFetchingNextPage}
               onClick={() => void proposalsQuery.fetchNextPage()}
@@ -204,7 +204,7 @@ function ProjectRunProposals({ runId, projectId }: { runId: string; projectId: s
 
 function CandidateNextSteps({ proposal }: { proposal: ParameterProposal }) {
   return (
-    <section className="px-3.5 py-3 text-[0.7rem] leading-relaxed" aria-label="Candidate adoption">
+    <section className="px-3.5 py-3 text-xs leading-relaxed" aria-label="Candidate adoption">
       <p>
         Collect independent verification using your laboratory's policy in an author session, then
         explicitly publish to the reviewed parameter branch. Only that branch advances; existing
@@ -270,7 +270,7 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
       role="table"
     >
       <div
-        className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line bg-panel px-[11px] py-[9px] text-[0.54rem] font-extrabold tracking-[0.07em] text-text-dim uppercase max-[680px]:min-w-[650px]"
+        className="grid grid-cols-[minmax(130px,0.8fr)_minmax(130px,1fr)_22px_minmax(130px,1fr)] items-center gap-2 border-b border-line bg-panel px-[11px] py-[9px] text-xs font-extrabold tracking-[0.07em] text-text-dim uppercase max-[680px]:min-w-[650px]"
         role="row"
       >
         <span role="columnheader">Parameter</span>
@@ -302,24 +302,21 @@ function ProposalDiff({ proposal }: { proposal: ParameterProposal }) {
             role="row"
             key={delta.parameterId}
           >
-            <div
-              className="font-mono text-[0.61rem] text-text-soft [overflow-wrap:anywhere]"
-              role="cell"
-            >
+            <div className="font-mono text-xs text-text-soft [overflow-wrap:anywhere]" role="cell">
               <ProposalValue value={delta.parameterId} />
               {delta.changeKind && (
                 <span className="mt-1 block font-sans text-text-dim">{delta.changeKind}</span>
               )}
             </div>
             <div
-              className="min-w-0 rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-[0.61rem] text-[#c7a6a4] [overflow-wrap:anywhere]"
+              className="min-w-0 rounded-md bg-[rgb(255_140_136_/_6%)] px-2 py-[7px] font-mono text-xs text-red [overflow-wrap:anywhere]"
               role="cell"
             >
               <ProposalValue value={delta.before} />
             </div>
             <ArrowRight size={14} aria-hidden="true" />
             <div
-              className="min-w-0 rounded-md bg-accent-soft px-2 py-[7px] font-mono text-[0.61rem] text-accent [overflow-wrap:anywhere]"
+              className="min-w-0 rounded-md bg-accent-soft px-2 py-[7px] font-mono text-xs text-accent [overflow-wrap:anywhere]"
               role="cell"
             >
               <ProposalValue value={delta.after} />
@@ -335,20 +332,20 @@ function ProposalApproval({ proposal }: { proposal: ParameterProposal }) {
   if (!approval) return null;
   return (
     <div className="mx-3.5 mt-3 grid grid-cols-[120px_minmax(0,1fr)] gap-2.5 rounded-[8px] border border-line bg-panel-soft p-2.5 max-[680px]:grid-cols-[minmax(0,1fr)]">
-      <div className="flex items-center gap-1.5 text-[0.58rem] font-[750] text-text-dim">
+      <div className="flex items-center gap-1.5 text-xs font-[750] text-text-dim">
         <History size={14} aria-hidden="true" />
         <span>Operator approval</span>
       </div>
       <ol className="m-0 grid list-none gap-1.5 p-0">
-        <li className="grid grid-cols-[7px_auto_minmax(0,1fr)_auto] items-baseline gap-[7px] text-[0.58rem] text-text-dim">
+        <li className="grid grid-cols-[7px_auto_minmax(0,1fr)_auto] items-baseline gap-[7px] text-xs text-text-dim">
           <span className="size-[7px] rounded-full bg-accent" />
-          <strong className="text-[0.6rem] text-text-soft">Approved</strong>
+          <strong className="text-xs text-text-soft">Approved</strong>
           <span>by {approval.actor}</span>
           {approval.note && (
             <p className="col-[2/-1] m-0 leading-[1.45] text-text-soft">{approval.note}</p>
           )}
           {approval.approvedAt && (
-            <time className="text-[0.54rem]" dateTime={approval.approvedAt}>
+            <time className="text-xs" dateTime={approval.approvedAt}>
               {formatDateTime(approval.approvedAt)}
             </time>
           )}
@@ -381,8 +378,8 @@ function ProposalMessage({
         {icon}
       </span>
       <div>
-        <strong className="text-[0.7rem] text-text-soft">{title}</strong>
-        <p className="mt-1 mb-0 text-[0.62rem] leading-normal">{detail}</p>
+        <strong className="text-xs text-text-soft">{title}</strong>
+        <p className="mt-1 mb-0 text-xs leading-normal">{detail}</p>
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import {
   dialogPopup,
   dialogTitle,
   dialogViewport,
-  primaryButton,
+  dangerButton,
   secondaryButton,
 } from "../../ui/styles";
 
@@ -246,7 +246,7 @@ export function DesktopSession() {
             )}
             {error && <p role="alert">{error}</p>}
             <div className="flex flex-wrap gap-2">
-              <button className={primaryButton} disabled={busy} onClick={() => void exit(false)}>
+              <button className={dangerButton} disabled={busy} onClick={() => void exit(false)}>
                 Stop and close
               </button>
               <button

@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useQuery } from "@tanstack/react-query";
@@ -199,15 +200,15 @@ export function InstrumentConfigDialog({
               onChange={() => {
                 attempt.current = null;
               }}
-              className="grid gap-4 p-4 [&_label]:grid [&_label]:gap-1 [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-line [&_input:not([type=checkbox])]:p-2 [&_select]:rounded [&_select]:border [&_select]:border-line [&_select]:p-2"
+              className="grid gap-4 p-4"
             >
-              <label>
+              <Controls.Field>
                 Device name
-                <input value={label} onChange={(event) => setLabel(event.target.value)} />
-              </label>
-              <label>
+                <Controls.Input value={label} onChange={(event) => setLabel(event.target.value)} />
+              </Controls.Field>
+              <Controls.Field>
                 Driver
-                <select
+                <Controls.Select
                   value={driverId}
                   onChange={(event) => {
                     setDriverId(event.target.value);
@@ -225,12 +226,12 @@ export function InstrumentConfigDialog({
                       {driverLabel(item)}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Controls.Select>
+              </Controls.Field>
               {driver && (
-                <label>
+                <Controls.Field>
                   Connection
-                  <select
+                  <Controls.Select
                     value={connection.kind}
                     onChange={(event) => {
                       const kind = event.target.value as ConnectionKind;
@@ -248,8 +249,8 @@ export function InstrumentConfigDialog({
                         {connectionKindLabel(item.kind)}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </Controls.Select>
+                </Controls.Field>
               )}
               {connection.kind === "tcpip_socket" && (
                 <TcpConnectionFields connection={connection} onChange={setConnection} />
@@ -289,10 +290,13 @@ export function InstrumentConfigDialog({
                   Declare other access paths that name this same device, one per line. An address
                   already registered to another device must be resolved before access.
                 </p>
-                <label>
+                <Controls.Field>
                   Access aliases
-                  <textarea value={aliases} onChange={(event) => setAliases(event.target.value)} />
-                </label>
+                  <Controls.Textarea
+                    value={aliases}
+                    onChange={(event) => setAliases(event.target.value)}
+                  />
+                </Controls.Field>
               </details>
               <details>
                 <summary>Device safety</summary>
@@ -305,7 +309,7 @@ export function InstrumentConfigDialog({
                   onRunStartChange={() => {}}
                   onValidityChange={setValidState}
                 />
-                <label>
+                <Controls.Field>
                   <input
                     type="checkbox"
                     checked={safety.require_safe_success ?? false}
@@ -314,8 +318,8 @@ export function InstrumentConfigDialog({
                     }
                   />
                   Require safe state after successful work
-                </label>
-                <label>
+                </Controls.Field>
+                <Controls.Field>
                   <input
                     type="checkbox"
                     checked={safety.require_safe_failure ?? false}
@@ -324,8 +328,8 @@ export function InstrumentConfigDialog({
                     }
                   />
                   Require safe state after failure
-                </label>
-                <label>
+                </Controls.Field>
+                <Controls.Field>
                   <input
                     type="checkbox"
                     checked={safety.safe_state_requirement === "required"}
@@ -337,13 +341,13 @@ export function InstrumentConfigDialog({
                     }
                   />
                   Keep device blocked if safe state cannot be confirmed
-                </label>
+                </Controls.Field>
               </details>
               {device && (
-                <label>
+                <Controls.Field>
                   Reason for change
-                  <input value={note} onChange={(event) => setNote(event.target.value)} />
-                </label>
+                  <Controls.Input value={note} onChange={(event) => setNote(event.target.value)} />
+                </Controls.Field>
               )}
               {(error || drivers.error) && (
                 <p role="alert">{error ?? errorMessage(drivers.error)}</p>

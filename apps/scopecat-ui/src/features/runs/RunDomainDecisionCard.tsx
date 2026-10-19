@@ -34,7 +34,7 @@ export function RunDomainDecisionCard({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-text-soft">
           <CircleDot size={17} aria-hidden="true" />
-          <strong className="text-[0.76rem]">Adaptive domain decisions</strong>
+          <strong className="text-sm">Adaptive domain decisions</strong>
         </div>
         <span className={countBadge}>{run.pointPlan?.decisionCount ?? items.length}</span>
       </div>
@@ -55,7 +55,7 @@ export function RunDomainDecisionCard({
         <div className="grid grid-cols-[230px_minmax(0,1fr)] gap-3 max-[760px]:grid-cols-1">
           <div className="grid content-start gap-1.5">
             {page?.next_cursor != null && (
-              <span className="px-2 py-1 text-[0.56rem] text-text-dim">
+              <span className="px-2 py-1 text-xs text-text-dim">
                 Showing the latest {items.length} decisions
               </span>
             )}
@@ -70,13 +70,11 @@ export function RunDomainDecisionCard({
                 onClick={() => setRequestedProposal(item.proposal_index)}
                 type="button"
               >
-                <span className="flex items-center justify-between gap-2 text-[0.62rem] font-bold">
+                <span className="flex items-center justify-between gap-2 text-xs font-bold">
                   Decision #{item.proposal_index + 1}
                   <DecisionStatus decision={item} completedPointCount={completedPointCount} />
                 </span>
-                <span className="truncate text-[0.58rem] text-text-dim">
-                  {formatDomainDecision(item)}
-                </span>
+                <span className="truncate text-xs text-text-dim">{formatDomainDecision(item)}</span>
               </button>
             ))}
           </div>
@@ -92,16 +90,16 @@ function DecisionDetail({ decision }: { decision: DomainDecision }) {
     <div className="min-w-0 rounded-md border border-line bg-panel p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <strong className="text-[0.7rem]">
+          <strong className="text-xs">
             {decision.outcome === "accepted" ? acceptedPointLabel(decision) : "Rejected domain"}
           </strong>
-          <div className="mt-1 text-[0.62rem] text-text-dim">{formatDomainDecision(decision)}</div>
+          <div className="mt-1 text-xs text-text-dim">{formatDomainDecision(decision)}</div>
         </div>
-        <time className="text-[0.57rem] text-text-dim" dateTime={decision.occurred_at}>
+        <time className="text-xs text-text-dim" dateTime={decision.occurred_at}>
           {formatDateTime(decision.occurred_at)}
         </time>
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[0.61rem] max-[620px]:grid-cols-1">
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs max-[620px]:grid-cols-1">
         <DecisionFact label="Source" value={titleCase(decision.proposal.source)} />
         <DecisionFact
           label="Regions"
@@ -119,7 +117,7 @@ function DecisionDetail({ decision }: { decision: DomainDecision }) {
           )}
         />
       </dl>
-      {decision.reason && <p className="mt-3 mb-0 text-[0.61rem] text-red">{decision.reason}</p>}
+      {decision.reason && <p className="mt-3 mb-0 text-xs text-red">{decision.reason}</p>}
     </div>
   );
 }
@@ -201,10 +199,8 @@ function EmptyDecision({
 }) {
   return (
     <div className="rounded-md border border-dashed border-line p-4 text-center">
-      <strong className={classes("text-[0.68rem] text-text-soft", warning && "text-red")}>
-        {title}
-      </strong>
-      {detail && <p className="mt-1.5 mb-0 text-[0.61rem] text-text-dim">{detail}</p>}
+      <strong className={classes("text-xs text-text-soft", warning && "text-red")}>{title}</strong>
+      {detail && <p className="mt-1.5 mb-0 text-xs text-text-dim">{detail}</p>}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDecisionDraftHistory } from "./decision-api";
@@ -14,9 +15,9 @@ export function DecisionDraftHistory() {
   });
   return (
     <section className="mb-3 rounded-md border border-line bg-panel p-3">
-      <button type="button" onClick={() => setOpen(!open)}>
+      <Controls.Button type="button" onClick={() => setOpen(!open)}>
         Recover saved Decision drafts
-      </button>
+      </Controls.Button>
       {open && (
         <div className="grid gap-2 text-sm">
           <p>
@@ -35,7 +36,7 @@ export function DecisionDraftHistory() {
               <p>
                 Saved {draft.created_at}; original request {draft.baseline.request_hash}
               </p>
-              <textarea
+              <Controls.Textarea
                 aria-label={`Retained draft ${draft.revision}`}
                 readOnly
                 rows={8}
@@ -45,14 +46,14 @@ export function DecisionDraftHistory() {
             </details>
           ))}
           {history.data?.next_cursor && (
-            <button type="button" onClick={() => setBefore(history.data.next_cursor!)}>
+            <Controls.Button type="button" onClick={() => setBefore(history.data.next_cursor!)}>
               Older drafts
-            </button>
+            </Controls.Button>
           )}
           {before && (
-            <button type="button" onClick={() => setBefore(undefined)}>
+            <Controls.Button type="button" onClick={() => setBefore(undefined)}>
               Newest drafts
-            </button>
+            </Controls.Button>
           )}
         </div>
       )}

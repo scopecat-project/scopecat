@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -63,7 +64,7 @@ export function ProcedureHistory({
           ))}
       </ul>
       {history.hasNextPage && (
-        <button
+        <Controls.Button
           type="button"
           disabled={history.isFetchingNextPage}
           onClick={() => {
@@ -71,7 +72,7 @@ export function ProcedureHistory({
           }}
         >
           Load earlier procedures
-        </button>
+        </Controls.Button>
       )}
     </details>
   );

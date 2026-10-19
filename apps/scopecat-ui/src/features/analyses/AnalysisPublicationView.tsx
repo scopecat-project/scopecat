@@ -31,19 +31,19 @@ export function AnalysisPublicationView({
           >
             <header className="flex items-center justify-between gap-2.5 border-b border-line px-[9px] py-[7px]">
               <span className="grid min-w-0 gap-0.5">
-                <strong className="text-[0.65rem]">{output.title}</strong>
+                <strong className="text-xs">{output.title}</strong>
                 {output.producedBy ? (
-                  <small className="text-[0.55rem] text-text-dim">
+                  <small className="text-xs text-text-dim">
                     Produced by {formatExecutionOutput(output.producedBy)}
                   </small>
                 ) : output.derivedFrom ? (
-                  <small className="text-[0.55rem] text-text-dim">
+                  <small className="text-xs text-text-dim">
                     Derived from {formatExecutionOutput(output.derivedFrom.source)} via{" "}
                     {output.derivedFrom.adapter}
                   </small>
                 ) : null}
               </span>
-              <span className="text-[0.56rem] font-[750] text-text-dim uppercase">
+              <span className="text-xs font-[750] text-text-dim uppercase">
                 {titleCase(output.kind)}
               </span>
             </header>
@@ -53,7 +53,7 @@ export function AnalysisPublicationView({
       {analysis.outputs.length === 0 && (
         <p className="text-sm text-text-dim">No saved outputs in this publication.</p>
       )}
-      <dl className="text-[0.65rem] text-text-soft">
+      <dl className="text-xs text-text-soft">
         <dt className="text-text-dim">Publication ID</dt>
         <dd className="m-0">
           <code className="break-all" data-testid="publication-id">
@@ -69,7 +69,7 @@ export function AnalysisPublicationView({
         <div className="mt-3 grid min-w-0 gap-2">
           {analysis.inputs.length > 0 ? (
             <section className="rounded-[7px] border border-line bg-panel p-[9px]">
-              <h4 className="mt-0 mb-2 text-[0.58rem] font-extrabold tracking-[0.06em] text-text-dim uppercase">
+              <h4 className="mt-0 mb-2 text-xs font-extrabold tracking-[0.06em] text-text-dim uppercase">
                 Inputs
               </h4>
               <ul className="m-0 grid list-none gap-2 p-0">
@@ -81,7 +81,7 @@ export function AnalysisPublicationView({
                         ? input.source.subject.run_id
                         : undefined;
                   return (
-                    <li className="min-w-0 text-[0.61rem] text-text-soft" key={input.id}>
+                    <li className="min-w-0 text-xs text-text-soft" key={input.id}>
                       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                         <strong>{input.title ?? input.target}</strong>
                         <span className="text-text-dim">
@@ -91,7 +91,7 @@ export function AnalysisPublicationView({
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {onOpenRun && runId ? (
                           <button
-                            className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[0.59rem] text-blue hover:text-text hover:underline"
+                            className="cursor-pointer border-0 bg-transparent p-0 font-mono text-xs text-blue hover:text-text hover:underline"
                             onClick={() => onOpenRun(runId)}
                             type="button"
                           >
@@ -126,7 +126,7 @@ export function AnalysisPublicationView({
                         </code>
                       ) : null}
                       <code
-                        className="mt-1 block overflow-hidden text-ellipsis whitespace-nowrap text-[0.55rem] text-text-dim"
+                        className="mt-1 block overflow-hidden text-ellipsis whitespace-nowrap text-xs text-text-dim"
                         title={input.content_hash}
                       >
                         {input.content_hash}
@@ -141,12 +141,12 @@ export function AnalysisPublicationView({
 
           {analysis.executions.length > 0 ? (
             <section className="rounded-[7px] border border-line bg-panel p-[9px]">
-              <h4 className="mt-0 mb-2 text-[0.58rem] font-extrabold tracking-[0.06em] text-text-dim uppercase">
+              <h4 className="mt-0 mb-2 text-xs font-extrabold tracking-[0.06em] text-text-dim uppercase">
                 Execution evidence
               </h4>
               <ul className="m-0 grid list-none gap-2 p-0">
                 {analysis.executions.map((execution) => (
-                  <li className="min-w-0 text-[0.61rem] text-text-soft" key={execution.id}>
+                  <li className="min-w-0 text-xs text-text-soft" key={execution.id}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <strong>{execution.id}</strong>
                       <span className="text-text-dim">

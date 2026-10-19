@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { RunAddressLabel } from "./RunAddressLabel";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -463,17 +464,17 @@ export function RunsWorkspace({
               )}
             </div>
 
-            <label className="flex min-h-10 items-center gap-[9px] rounded-[9px] border border-line bg-bg px-[11px] text-text-dim transition-[border-color,box-shadow] duration-150 focus-within:border-[rgb(128_163_207_/_55%)] focus-within:shadow-[0_0_0_3px_rgb(128_163_207_/_7%)]">
+            <Controls.Field className="flex min-h-10 items-center gap-[9px] rounded-[9px] border border-line bg-bg px-[11px] text-text-dim transition-[border-color,box-shadow] duration-150 focus-within:border-[rgb(128_163_207_/_55%)] focus-within:shadow-[0_0_0_3px_rgb(128_163_207_/_7%)]">
               <Search size={16} aria-hidden="true" />
               <span className="sr-only">Search by run, experiment, or resource</span>
-              <input
-                className="w-full min-w-0 border-0 bg-transparent p-0 text-[0.8rem] text-text outline-none placeholder:text-[#5e6a77]"
+              <Controls.Input
+                className="w-full min-w-0 border-0 bg-transparent placeholder:text-text-dim"
                 type="search"
                 placeholder="Search runs"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
-            </label>
+            </Controls.Field>
 
             <div
               className="my-2.5 mb-[11px] flex items-center gap-1 text-text-dim max-[460px]:overflow-x-auto"
@@ -484,7 +485,7 @@ export function RunsWorkspace({
                 <button
                   key={item.key}
                   className={classes(
-                    "min-h-7 cursor-pointer rounded-[7px] border border-transparent bg-transparent px-2 text-[0.69rem] font-bold text-text-dim hover:bg-[rgb(255_255_255_/_3%)] hover:text-text-soft",
+                    "min-h-7 cursor-pointer rounded-[7px] border border-transparent bg-transparent px-2 text-xs font-bold text-text-dim hover:bg-[rgb(255_255_255_/_3%)] hover:text-text-soft",
                     filter === item.key &&
                       "border-[rgb(128_163_207_/_17%)] bg-accent-soft text-accent",
                   )}
@@ -538,7 +539,7 @@ export function RunsWorkspace({
                 />
               ))}
               {olderRunsMutation.isError && (
-                <p className="mx-2 mt-1 mb-0 text-[0.67rem] leading-[1.45] text-red" role="status">
+                <p className="mx-2 mt-1 mb-0 text-xs leading-[1.45] text-red" role="status">
                   {errorMessage(olderRunsMutation.error)}
                 </p>
               )}
@@ -703,18 +704,18 @@ function StatusItem({
 }) {
   return (
     <article className="grid min-h-0 min-w-0 grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-2 border-r border-line px-3 py-1 last:border-r-0 max-[680px]:grid-cols-[auto_auto_minmax(0,1fr)] max-[460px]:border-r-0 max-[460px]:not-first:border-t max-[460px]:not-first:border-line">
-      <span className="text-[0.59rem] font-extrabold tracking-[0.1em] text-text-dim uppercase">
+      <span className="text-xs font-extrabold tracking-[0.1em] text-text-dim uppercase">
         {label}
       </span>
       <strong
         className={classes(
-          "overflow-hidden text-[0.74rem] font-[650] tracking-[-0.02em] text-ellipsis whitespace-nowrap",
+          "overflow-hidden text-xs font-[650] tracking-[-0.02em] text-ellipsis whitespace-nowrap",
           statusTone[tone],
         )}
       >
         {value}
       </strong>
-      <small className="overflow-hidden text-[0.61rem] text-ellipsis whitespace-nowrap text-text-dim">
+      <small className="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-text-dim">
         {detail}
       </small>
     </article>
@@ -774,10 +775,10 @@ function RunListItem({
       />
       <span className="grid min-w-0">
         <span className="flex min-w-0 items-baseline justify-between gap-2">
-          <strong className="overflow-hidden text-[0.8rem] font-[650] text-ellipsis whitespace-nowrap">
+          <strong className="overflow-hidden text-sm font-[650] text-ellipsis whitespace-nowrap">
             {run.displayName ?? run.experimentId}
           </strong>
-          <time className="flex-none text-[0.62rem] text-text-dim" dateTime={run.updatedAt}>
+          <time className="flex-none text-xs text-text-dim" dateTime={run.updatedAt}>
             {run.updatedAt ? formatRelative(run.updatedAt) : "No timestamp"}
           </time>
         </span>
@@ -789,7 +790,7 @@ function RunListItem({
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
           <span
             className={classes(
-              "rounded-[5px] border px-1.5 py-[3px] text-[0.6rem] leading-none font-extrabold tracking-[0.05em] uppercase",
+              "rounded-[5px] border px-1.5 py-[3px] text-xs leading-none font-extrabold tracking-[0.05em] uppercase",
               runStatusBadge[run.status],
             )}
           >
@@ -798,7 +799,7 @@ function RunListItem({
           {run.samples.slice(0, 2).map((sample) => (
             <span
               key={`${sample.role}:${sample.sample_id}`}
-              className="rounded-[5px] border border-[rgb(128_163_207_/_18%)] bg-accent-soft px-1.5 py-[3px] text-[0.59rem] leading-none text-accent"
+              className="rounded-[5px] border border-[rgb(128_163_207_/_18%)] bg-accent-soft px-1.5 py-[3px] text-xs leading-none text-accent"
               title={`${sample.role}: ${sample.sample_id} revision ${sample.revision}`}
             >
               {sample.display_name}
@@ -824,8 +825,8 @@ function PanelMessage({ icon, title, detail }: { icon: ReactNode; title: string;
       >
         {icon}
       </span>
-      <strong className="text-[0.78rem] text-text-soft">{title}</strong>
-      <p className="mt-1.5 mb-0 max-w-[230px] text-[0.7rem] leading-normal">{detail}</p>
+      <strong className="text-sm text-text-soft">{title}</strong>
+      <p className="mt-1.5 mb-0 max-w-[230px] text-xs leading-normal">{detail}</p>
     </div>
   );
 }
@@ -840,9 +841,7 @@ function DetailEmpty({ icon, title, detail }: { icon: ReactNode; title: string; 
         {icon}
       </span>
       <h2 className="m-0 text-base">{title}</h2>
-      <p className="mt-2 mb-0 max-w-[410px] text-[0.73rem] leading-[1.55] text-text-dim">
-        {detail}
-      </p>
+      <p className="mt-2 mb-0 max-w-[410px] text-xs leading-[1.55] text-text-dim">{detail}</p>
     </div>
   );
 }

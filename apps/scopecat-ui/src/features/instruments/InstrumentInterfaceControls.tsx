@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { AlertTriangle, Database, LoaderCircle, Play } from "lucide-react";
 import type {
@@ -70,18 +71,16 @@ export function InterfaceCard({
     >
       <header className="flex items-start justify-between gap-3.5 border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3 max-[460px]:flex-col">
         <div>
-          <h4 className="m-0 text-[0.77rem] font-[680]">
+          <h4 className="m-0 text-sm font-[680]">
             {instrumentInterface.label ?? interfaceFallbackLabel(instrumentInterface.id)}
           </h4>
           {instrumentInterface.description && (
-            <p className="mt-1.5 mb-0 max-w-[760px] text-[0.6rem] leading-[1.45] text-text-dim">
+            <p className="mt-1.5 mb-0 max-w-[760px] text-xs leading-[1.45] text-text-dim">
               {instrumentInterface.description}
             </p>
           )}
           {mountPath.length > 0 && (
-            <code className="mt-1.5 block text-[0.52rem] text-text-dim">
-              {mountPath.join(" / ")}
-            </code>
+            <code className="mt-1.5 block text-xs text-text-dim">{mountPath.join(" / ")}</code>
           )}
         </div>
       </header>
@@ -130,12 +129,12 @@ export function DeviceStateCard({
       data-testid={`device-state-card-${deviceState.id}`}
     >
       <header className="border-b border-line bg-[rgb(255_255_255_/_1%)] px-[13px] py-3">
-        <h4 className="m-0 text-[0.77rem] font-[680]">
+        <h4 className="m-0 text-sm font-[680]">
           {deviceState.label ?? interfaceFallbackLabel(deviceState.id)}
         </h4>
-        <code className="mt-1.5 block text-[0.52rem] text-text-dim">{deviceState.id}</code>
+        <code className="mt-1.5 block text-xs text-text-dim">{deviceState.id}</code>
         {deviceState.description && (
-          <p className="mt-1.5 mb-0 max-w-[760px] text-[0.6rem] leading-[1.45] text-text-dim">
+          <p className="mt-1.5 mb-0 max-w-[760px] text-xs leading-[1.45] text-text-dim">
             {deviceState.description}
           </p>
         )}
@@ -222,10 +221,10 @@ function InterfaceEndpoint({
         <section className={componentPath.length > rootDepth ? "border-t border-line" : undefined}>
           {componentPath.length > rootDepth && (
             <header className="bg-panel-strong px-[13px] py-2.5">
-              <h5 className="m-0 text-[0.67rem] text-text-soft">
+              <h5 className="m-0 text-xs text-text-soft">
                 {member.label ?? titleCase(componentPath.at(-1) ?? "")}
               </h5>
-              <small className="mt-[3px] block text-[0.51rem] text-text-dim">
+              <small className="mt-[3px] block text-xs text-text-dim">
                 {componentPath.slice(rootDepth).map(titleCase).join(" / ")}
               </small>
               {member.description && <p>{member.description}</p>}
@@ -366,7 +365,7 @@ function OperationControl({
     <section className="border-t border-line">
       <header className={controlHeader}>
         <div>
-          <strong className="text-[0.66rem] text-text-soft">{label}</strong>
+          <strong className="text-xs text-text-soft">{label}</strong>
           {operation.description && <p className={controlDescription}>{operation.description}</p>}
         </div>
         <button
@@ -433,19 +432,19 @@ function OperationArgumentEditor({
   const label = argument.label ?? titleCase(argument.id);
   const raw = draft?.raw ?? "";
   return (
-    <label className={editorRow}>
+    <Controls.Field className={editorRow}>
       <span className={propertyLabel}>
         <span className="grid min-w-0">
-          <strong className="overflow-hidden text-[0.66rem] font-[670] text-ellipsis whitespace-nowrap">
+          <strong className="overflow-hidden text-xs font-[670] text-ellipsis whitespace-nowrap">
             {label}
           </strong>
         </span>
-        <small className="flex-none text-[0.49rem] font-extrabold tracking-[0.04em] text-text-dim uppercase">
+        <small className="flex-none text-xs font-extrabold tracking-[0.04em] text-text-dim uppercase">
           Argument
         </small>
       </span>
       {type.type === "bool" ? (
-        <select
+        <Controls.Select
           className={controlInput}
           value={typeof raw === "boolean" ? String(raw) : ""}
           disabled={!editable}
@@ -459,9 +458,9 @@ function OperationArgumentEditor({
           </option>
           <option value="true">On</option>
           <option value="false">Off</option>
-        </select>
+        </Controls.Select>
       ) : type.type === "string" && type.choices ? (
-        <select
+        <Controls.Select
           className={controlInput}
           value={typeof raw === "string" ? raw : ""}
           disabled={!editable}
@@ -475,7 +474,7 @@ function OperationArgumentEditor({
               {choice}
             </option>
           ))}
-        </select>
+        </Controls.Select>
       ) : type.type === "int" || type.type === "float" || type.type === "quantity" ? (
         <span
           className={classes(
@@ -485,7 +484,7 @@ function OperationArgumentEditor({
               : "grid-cols-[minmax(0,1fr)]",
           )}
         >
-          <input
+          <Controls.Input
             className={classes(controlInput, type.type === "quantity" && "rounded-r-none")}
             type="number"
             step={type.type === "int" ? 1 : "any"}
@@ -503,7 +502,7 @@ function OperationArgumentEditor({
             (type.unit ? (
               <span className={unitAddon}>{type.unit}</span>
             ) : (
-              <input
+              <Controls.Input
                 className={classes(controlInput, "min-w-16 rounded-l-none border-l-0")}
                 type="text"
                 aria-label={`${label} unit`}
@@ -523,7 +522,7 @@ function OperationArgumentEditor({
             ))}
         </span>
       ) : type.type === "string" ? (
-        <input
+        <Controls.Input
           className={controlInput}
           type="text"
           value={typeof raw === "string" ? raw : ""}
@@ -540,7 +539,7 @@ function OperationArgumentEditor({
           Clear argument
         </button>
       )}
-    </label>
+    </Controls.Field>
   );
 }
 
@@ -565,7 +564,7 @@ function AcquisitionControl({
     <section className="border-t border-line">
       <header className={controlHeader}>
         <div>
-          <strong className="text-[0.66rem] text-text-soft">
+          <strong className="text-xs text-text-soft">
             {acquisition.label ?? titleCase(acquisition.id)}
           </strong>
           {acquisition.description && (
@@ -599,16 +598,16 @@ function AcquisitionControl({
       </header>
       {results.length > 0 && (
         <div className="flex flex-wrap items-center gap-[7px] border-t border-line px-3 py-[9px]">
-          <span className="mr-[3px] text-[0.51rem] font-extrabold tracking-[0.05em] text-text-dim uppercase">
+          <span className="mr-[3px] text-xs font-extrabold tracking-[0.05em] text-text-dim uppercase">
             Results
           </span>
           {results.map((acquisitionResult) => (
             <span
-              className="inline-flex items-baseline gap-[7px] rounded-full border border-line px-[7px] py-1 text-[0.56rem] text-text-soft"
+              className="inline-flex items-baseline gap-[7px] rounded-full border border-line px-[7px] py-1 text-xs text-text-soft"
               key={acquisitionResult.id}
             >
               {acquisitionResult.label ?? titleCase(acquisitionResult.id)}
-              <small className="text-[0.5rem] text-text-dim">
+              <small className="text-xs text-text-dim">
                 {acquisitionResult.dtype}
                 {acquisitionResult.unit ? ` · ${acquisitionResult.unit}` : ""}
               </small>
@@ -636,7 +635,7 @@ function PropertyEditor({
 }) {
   const dirty = draft !== undefined;
   return (
-    <label
+    <Controls.Field
       className={classes(
         editorRow,
         dirty && "bg-accent-soft shadow-[inset_2px_0_var(--color-accent)]",
@@ -646,13 +645,13 @@ function PropertyEditor({
       <span className={propertyLabel}>
         <span className="grid min-w-0">
           <strong
-            className="overflow-hidden text-[0.66rem] font-[670] text-ellipsis whitespace-nowrap"
+            className="overflow-hidden text-xs font-[670] text-ellipsis whitespace-nowrap"
             data-testid="property-label"
           >
             {property.label ?? titleCase(property.id)}
           </strong>
         </span>
-        <small className="flex-none text-[0.49rem] font-extrabold tracking-[0.04em] text-text-dim uppercase">
+        <small className="flex-none text-xs font-extrabold tracking-[0.04em] text-text-dim uppercase">
           {accessLabel(property.access)}
         </small>
       </span>
@@ -679,7 +678,7 @@ function PropertyEditor({
           Reset staged value
         </button>
       )}
-    </label>
+    </Controls.Field>
   );
 }
 
@@ -691,14 +690,14 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
       <div className="flex items-baseline gap-[9px]">
         <strong
           className={classes(
-            "text-[0.62rem] text-accent",
+            "text-xs text-accent",
             (receipt.status === "not_collected" || receipt.status === "unknown") && "text-yellow",
           )}
         >
           Collect receipt: {titleCase(receipt.status)}
         </strong>
         {receipt.readback && (
-          <small className="text-[0.54rem] text-text-dim">
+          <small className="text-xs text-text-dim">
             {Object.keys(receipt.readback.values ?? {}).length} results returned
           </small>
         )}
@@ -706,7 +705,7 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
       {unavailable.count > 0 && (
         <div className="flex items-center gap-[7px] text-yellow" role="status">
           <AlertTriangle size={13} aria-hidden="true" />
-          <span className="text-[0.58rem] font-[650]">
+          <span className="text-xs font-[650]">
             {unavailable.count} {unavailable.count === 1 ? "result" : "results"} unavailable
           </span>
           <small className="text-inherit">
@@ -770,8 +769,8 @@ export function InspectorEmpty({
       >
         {icon}
       </span>
-      <h3 className="m-0 text-[0.76rem] text-text-soft">{title}</h3>
-      <p className="mt-1.5 mb-0 max-w-[370px] text-[0.62rem] leading-normal">{detail}</p>
+      <h3 className="m-0 text-sm text-text-soft">{title}</h3>
+      <p className="mt-1.5 mb-0 max-w-[370px] text-xs leading-normal">{detail}</p>
     </div>
   );
 }
@@ -788,7 +787,7 @@ export function AvailabilityBadge({
   return (
     <span
       className={classes(
-        "inline-flex min-h-[21px] flex-none items-center gap-[5px] rounded-full border border-line px-1.5 text-[0.52rem] font-extrabold tracking-[0.04em] text-text-dim uppercase",
+        "inline-flex min-h-[21px] flex-none items-center gap-[5px] rounded-full border border-line px-1.5 text-xs font-extrabold tracking-[0.04em] text-text-dim uppercase",
         tone,
       )}
     >
@@ -799,25 +798,24 @@ export function AvailabilityBadge({
 }
 
 export const inlineError =
-  "flex items-center gap-2 rounded-md border border-[rgb(215_126_121_/_25%)] bg-red-soft px-3 py-2.5 text-[0.66rem] leading-normal text-[#edb5b2]";
+  "flex items-center gap-2 rounded-md border border-[rgb(215_126_121_/_25%)] bg-red-soft px-3 py-2.5 text-xs leading-normal text-red";
 export const problems =
-  "rounded-md border border-[rgb(215_126_121_/_25%)] bg-red-soft px-3 py-2.5 text-[0.66rem] leading-normal text-[#edb5b2]";
+  "rounded-md border border-[rgb(215_126_121_/_25%)] bg-red-soft px-3 py-2.5 text-xs leading-normal text-red";
 export const receiptStyle =
-  "m-0 rounded-sm border border-line bg-panel-soft px-2.5 py-2 text-[0.61rem] text-text-soft";
+  "m-0 rounded-sm border border-line bg-panel-soft px-2.5 py-2 text-xs text-text-soft";
 const controlGrid =
   "grid grid-cols-[repeat(2,minmax(230px,1fr))] max-[1100px]:grid-cols-[minmax(0,1fr)]";
 const controlHeader = "flex items-start justify-between gap-3.5 px-3 py-2.5 max-[460px]:flex-col";
-const controlDescription = "mt-1.5 mb-0 max-w-[760px] text-[0.6rem] leading-[1.45] text-text-dim";
+const controlDescription = "mt-1.5 mb-0 max-w-[760px] text-xs leading-[1.45] text-text-dim";
 const editorRow =
   "relative grid min-h-[78px] grid-cols-[minmax(130px,1fr)_minmax(140px,0.85fr)] items-center gap-x-3.5 gap-y-[9px] border-r border-b border-line bg-transparent px-[13px] py-2.5 even:border-r-0 max-[1100px]:border-r-0 max-[680px]:grid-cols-[minmax(120px,1fr)_minmax(125px,0.9fr)] max-[460px]:grid-cols-[minmax(0,1fr)]";
 const propertyLabel = "flex min-w-0 items-start justify-between gap-2";
-const controlInput =
-  "min-h-[34px] w-full min-w-0 rounded-sm border border-line bg-bg px-[9px] text-[0.64rem] text-text outline-0 focus:border-accent disabled:cursor-not-allowed disabled:text-text-dim disabled:opacity-70 aria-invalid:border-red";
+const controlInput = "w-full";
 const unitAddon =
-  "grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-[0.57rem] text-text-dim";
-const propertyDescription = "col-span-full text-[0.53rem] leading-[1.4] text-text-dim";
+  "grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-xs text-text-dim";
+const propertyDescription = "col-span-full text-xs leading-[1.4] text-text-dim";
 const propertyReset =
-  "absolute right-3 bottom-[3px] cursor-pointer border-0 bg-transparent p-0 text-[0.49rem] text-accent";
+  "col-span-full justify-self-end cursor-pointer border-0 bg-transparent px-1 py-1 text-xs text-accent underline";
 const positiveReceipt = "border-[rgb(128_163_207_/_24%)] bg-accent-soft text-accent";
 const warningReceipt = "border-[rgb(207_173_104_/_25%)] bg-yellow-soft text-yellow";
 const availabilityTone = {

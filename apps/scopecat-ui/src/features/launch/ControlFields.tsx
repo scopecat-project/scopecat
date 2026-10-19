@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { Notice, Field, Select, Input, Textarea } from "../../ui/Controls";
 import { useState } from "react";
 import { controlNumber, convertControlNumber } from "./control-quantity";
@@ -241,7 +242,7 @@ export function ControlFields({
                         />
                       )}
                       {draft.mode === "values" && (
-                        <label>
+                        <Controls.Field>
                           Values{" "}
                           <Textarea
                             required
@@ -256,7 +257,7 @@ export function ControlFields({
                           <span className="text-sm">
                             逗号、空白或换行分隔；单位后缀紧接数字，不加空格。单值仍为扫描。
                           </span>
-                        </label>
+                        </Controls.Field>
                       )}
                       {draft.mode === "range" && (
                         <div className="flex gap-2">
@@ -331,7 +332,7 @@ export function ControlSummary({ fields, values }: { fields: Control[]; values: 
   if (!values.length) return null;
   return (
     <section>
-      <h3>Resolved controls</h3>
+      <h3 className="text-base font-semibold leading-6">Resolved controls</h3>
       <table className="w-full text-left">
         <thead>
           <tr>

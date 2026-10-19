@@ -329,7 +329,7 @@ export default function App() {
             <Atom size={20} strokeWidth={1.8} />
           </span>
           <span className="grid gap-px">
-            <strong className="text-[0.82rem] tracking-[0.02em]">Scopecat</strong>
+            <strong className="text-sm tracking-[0.02em]">Scopecat</strong>
             <small className="hidden">Project console</small>
           </span>
         </a>
@@ -470,7 +470,7 @@ export default function App() {
             </h1>
           </div>
           <div
-            className="inline-flex flex-none items-center gap-[7px] text-[0.64rem] font-semibold text-text-dim"
+            className="inline-flex flex-none items-center gap-[7px] text-xs font-semibold text-text-dim"
             aria-live="polite"
           >
             {lastUpdated > 0
@@ -481,12 +481,12 @@ export default function App() {
 
         {daemonUnavailable && (
           <div
-            className="mb-[18px] flex items-center gap-[11px] rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-[15px] py-[13px] text-[0.82rem] leading-6 text-[#efc3c0]"
+            className="mb-[18px] flex items-center gap-[11px] rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-[15px] py-[13px] text-sm leading-6 text-red"
             role="status"
           >
             <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
             <span>
-              <strong className="text-[#ffe6e4]">Connection interrupted.</strong>{" "}
+              <strong className="text-red">Connection interrupted.</strong>{" "}
               {window.pywebview
                 ? "If Scopecat is restarting or adding a code folder, wait for it to finish. Otherwise, use Settings → Restart application to reconnect."
                 : "Check that Scopecat is running, then refresh this page."}{" "}
@@ -662,8 +662,8 @@ function ConnectionState({
   return (
     <span
       className={classes(
-        "inline-flex min-h-7 items-center gap-2 rounded-sm border-0 bg-transparent px-2 text-[0.69rem] font-bold max-[680px]:min-h-[30px] max-[680px]:px-[9px] max-[680px]:text-[0.68rem] max-[460px]:max-w-[120px] max-[460px]:overflow-hidden max-[460px]:text-ellipsis max-[460px]:whitespace-nowrap",
-        reachable ? "text-text-soft" : "text-[#eab5b2]",
+        "inline-flex min-h-7 items-center gap-2 rounded-sm border-0 bg-transparent px-2 text-xs font-bold max-[680px]:min-h-[30px] max-[680px]:px-[9px] max-[680px]:text-xs max-[460px]:max-w-[120px] max-[460px]:overflow-hidden max-[460px]:text-ellipsis max-[460px]:whitespace-nowrap",
+        reachable ? "text-text-soft" : "text-red",
       )}
       role="status"
     >
@@ -683,7 +683,7 @@ function ConnectionState({
 
 function navigationClass(active: boolean): string {
   return classes(
-    "inline-flex min-h-[47px] cursor-pointer items-center gap-[7px] border-0 border-b-2 border-transparent bg-transparent px-px text-[0.69rem] font-[750] text-text-dim hover:text-text-soft max-[880px]:px-2 max-[680px]:flex-1",
+    "inline-flex min-h-[47px] cursor-pointer items-center gap-[7px] border-0 border-b-2 border-transparent bg-transparent px-px text-xs font-[750] text-text-dim hover:text-text-soft max-[880px]:px-2 max-[680px]:flex-1",
     active && "border-b-accent text-text",
   );
 }
@@ -698,9 +698,7 @@ function DetailEmpty({ icon, title, detail }: { icon: ReactNode; title: string; 
         {icon}
       </span>
       <h2 className="m-0 text-base">{title}</h2>
-      <p className="mt-2 mb-0 max-w-[410px] text-[0.73rem] leading-[1.55] text-text-dim">
-        {detail}
-      </p>
+      <p className="mt-2 mb-0 max-w-[410px] text-xs leading-[1.55] text-text-dim">{detail}</p>
     </div>
   );
 }

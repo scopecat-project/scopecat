@@ -172,10 +172,10 @@ function ExecutionSegmentItem({ segment }: { segment: RunExecutionSegment }) {
   return (
     <li className="grid gap-2 rounded-[8px] border border-line bg-[rgb(255_255_255_/_1.2%)] p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <strong className="text-[0.7rem] text-text-soft">Segment {segment.ordinal + 1}</strong>
+        <strong className="text-xs text-text-soft">Segment {segment.ordinal + 1}</strong>
         <span
           className={classes(
-            "rounded-[5px] border px-[5px] py-[3px] text-[0.56rem] font-extrabold uppercase",
+            "rounded-[5px] border px-[5px] py-[3px] text-xs font-extrabold uppercase",
             active
               ? "border-[rgb(128_163_207_/_25%)] bg-accent-soft text-accent"
               : segment.result === "succeeded"
@@ -192,7 +192,7 @@ function ExecutionSegmentItem({ segment }: { segment: RunExecutionSegment }) {
         <Fact label="Executor" value={shorten(segment.executor_id, 16)} />
         <Fact label="Run contract" value={shorten(segment.run_contract_fingerprint, 16)} />
       </div>
-      <p className="m-0 text-[0.61rem] leading-[1.45] text-text-dim">
+      <p className="m-0 text-xs leading-[1.45] text-text-dim">
         Started <time dateTime={segment.started_at}>{formatRelative(segment.started_at)}</time>
         {segment.ended_at ? (
           <>
@@ -229,14 +229,14 @@ export function ResourceCard({ run }: { run: Pick<ProjectRun, "resources"> }) {
                 <Box size={15} />
               </span>
               <span className="grid min-w-0 flex-1 gap-0.5">
-                <strong className="overflow-hidden text-[0.7rem] font-[650] text-ellipsis whitespace-nowrap">
+                <strong className="overflow-hidden text-xs font-[650] text-ellipsis whitespace-nowrap">
                   {resource.id}
                 </strong>
-                <small className="overflow-hidden text-[0.6rem] text-ellipsis whitespace-nowrap text-text-dim">
+                <small className="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-text-dim">
                   {titleCase(resource.kind)}
                 </small>
                 {resource.blockedBy && (
-                  <small className="break-all text-[0.6rem] text-yellow">
+                  <small className="break-all text-xs text-yellow">
                     Blocked by{" "}
                     {resource.blockedBy.ownerKind === "run" ? "run" : "interactive session"}{" "}
                     {resource.blockedBy.ownerId}
@@ -246,7 +246,7 @@ export function ResourceCard({ run }: { run: Pick<ProjectRun, "resources"> }) {
               </span>
               <span
                 className={classes(
-                  "flex-none rounded-[5px] border px-[5px] py-[3px] text-[0.56rem] font-extrabold uppercase",
+                  "flex-none rounded-[5px] border px-[5px] py-[3px] text-xs font-extrabold uppercase",
                   leaseStatusClass(resource.status),
                 )}
               >
@@ -299,7 +299,7 @@ export function TimelineCard({
       ) : (
         <>
           {events.length === 500 && (
-            <p className="mt-0 mb-3 text-[0.64rem] leading-[1.45] text-text-dim">
+            <p className="mt-0 mb-3 text-xs leading-[1.45] text-text-dim">
               Showing the latest 500 events; older events are not loaded.
             </p>
           )}
@@ -317,15 +317,13 @@ export function TimelineCard({
                 </span>
                 <div>
                   <div className="flex items-baseline justify-between gap-2.5 pt-0.5">
-                    <strong className="text-[0.71rem] font-[650]">
-                      {humanizeEvent(event.kind)}
-                    </strong>
-                    <span className="font-mono text-[0.57rem] text-text-dim">#{event.id}</span>
+                    <strong className="text-xs font-[650]">{humanizeEvent(event.kind)}</strong>
+                    <span className="font-mono text-xs text-text-dim">#{event.id}</span>
                   </div>
-                  <p className="my-1 text-[0.64rem] leading-[1.45] text-text-dim">
+                  <p className="my-1 text-xs leading-[1.45] text-text-dim">
                     {eventDescription(event)}
                   </p>
-                  <time className="text-[0.58rem] text-[#5f6d7a]" dateTime={event.occurredAt}>
+                  <time className="text-xs text-text-dim" dateTime={event.occurredAt}>
                     {event.occurredAt ? formatDateTime(event.occurredAt) : "Timestamp not reported"}
                   </time>
                 </div>
@@ -522,10 +520,10 @@ export function DataCard({
                       )}
                     </span>
                     <span className="grid min-w-0 flex-1 gap-0.5">
-                      <strong className="overflow-hidden text-[0.7rem] font-[650] text-ellipsis whitespace-nowrap">
+                      <strong className="overflow-hidden text-xs font-[650] text-ellipsis whitespace-nowrap">
                         {content.label}
                       </strong>
-                      <small className="overflow-hidden text-[0.6rem] text-ellipsis whitespace-nowrap text-text-dim">
+                      <small className="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-text-dim">
                         {titleCase(content.role)}
                         {content.detail ? ` · ${content.detail}` : ""}
                       </small>
@@ -536,7 +534,7 @@ export function DataCard({
               ))}
             </ul>
             {contentsError ? (
-              <p className="m-0 text-[0.61rem] text-red" role="status">
+              <p className="m-0 text-xs text-red" role="status">
                 {errorMessage(contentsError)}
               </p>
             ) : null}
@@ -624,7 +622,7 @@ function RunContentPanel({
   return (
     <div className={previewPanel}>
       <div className={previewHeading}>
-        <strong className="text-[0.65rem] text-text-soft">{entry.label}</strong>
+        <strong className="text-xs text-text-soft">{entry.label}</strong>
         <span>{format === "text" ? "Text" : "JSON"}</span>
       </div>
       <pre className={previewContent}>{formatPreviewContent(content)}</pre>
@@ -731,8 +729,8 @@ function CardHeading({
       >
         {icon}
       </span>
-      <h3 className="m-0 text-[0.78rem] font-bold">{title}</h3>
-      {accessory && <div className="text-[0.68rem] text-text-dim">{accessory}</div>}
+      <h3 className="m-0 text-sm font-bold">{title}</h3>
+      {accessory && <div className="text-xs text-text-dim">{accessory}</div>}
     </div>
   );
 }
@@ -740,10 +738,8 @@ function CardHeading({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 gap-1">
-      <span className="text-[0.6rem] font-bold tracking-[0.05em] text-text-dim uppercase">
-        {label}
-      </span>
-      <strong className="overflow-hidden text-[0.72rem] font-[650] text-ellipsis whitespace-nowrap text-text-soft">
+      <span className="text-xs font-bold tracking-[0.05em] text-text-dim uppercase">{label}</span>
+      <strong className="overflow-hidden text-xs font-[650] text-ellipsis whitespace-nowrap text-text-soft">
         {value}
       </strong>
     </div>
@@ -753,13 +749,13 @@ function Fact({ label, value }: { label: string; value: string }) {
 function TagGroup({ label, values }: { label: string; values: string[] }) {
   return (
     <div className="mb-3">
-      <span className="mb-1.5 block text-[0.58rem] font-extrabold tracking-[0.06em] text-text-dim uppercase">
+      <span className="mb-1.5 block text-xs font-extrabold tracking-[0.06em] text-text-dim uppercase">
         {label}
       </span>
       <div className="flex flex-wrap gap-[5px]">
         {values.map((value) => (
           <code
-            className="rounded-[5px] border border-line bg-[rgb(182_156_255_/_7%)] px-1.5 py-1 text-[0.59rem] text-purple"
+            className="rounded-[5px] border border-line bg-[rgb(182_156_255_/_7%)] px-1.5 py-1 text-xs text-purple"
             key={value}
           >
             {value}
@@ -792,8 +788,8 @@ function InlineEmpty({
         <CircleDot size={17} aria-hidden="true" />
       )}
       <div>
-        <strong className="block text-[0.69rem] text-text-soft">{title}</strong>
-        <p className="mt-1 mb-0 text-[0.62rem] leading-[1.45]">{detail}</p>
+        <strong className="block text-xs text-text-soft">{title}</strong>
+        <p className="mt-1 mb-0 text-xs leading-[1.45]">{detail}</p>
       </div>
     </div>
   );
@@ -801,9 +797,9 @@ function InlineEmpty({
 
 const previewPanel = "mt-3 overflow-hidden rounded-[8px] border border-line bg-panel";
 const previewHeading =
-  "flex items-center justify-between border-b border-line px-2.5 py-2 text-[0.6rem] text-text-dim";
+  "flex items-center justify-between border-b border-line px-2.5 py-2 text-xs text-text-dim";
 const previewContent =
-  "m-0 max-h-[260px] overflow-auto p-2.5 text-[0.6rem] leading-normal text-[#aebfd0] [scrollbar-color:#344252_transparent] [scrollbar-width:thin]";
+  "m-0 max-h-[260px] overflow-auto p-2.5 text-xs leading-normal text-text-soft [scrollbar-color:#344252_transparent] [scrollbar-width:thin]";
 
 function leaseStatusClass(status?: string): string {
   if (status === "quarantined" || status === "blocked") {

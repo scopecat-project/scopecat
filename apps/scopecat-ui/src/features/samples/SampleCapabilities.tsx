@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { contextParameterLabel } from "../launch/context-parameters";
 import { useQuery } from "@tanstack/react-query";
@@ -55,9 +56,9 @@ export function SampleCapabilities({
         inspects a historical context, not the current parameter branch or overall sample readiness.
         Joint measurements retain their complete subject, including other samples.
       </p>
-      <label>
+      <Controls.Field>
         Measurement context
-        <select value={runId} onChange={(event) => setRunId(event.target.value)}>
+        <Controls.Select value={runId} onChange={(event) => setRunId(event.target.value)}>
           <option value="">Choose a measurement</option>
           {choices.map((run) => (
             <option key={run.runId} value={run.runId}>
@@ -65,8 +66,8 @@ export function SampleCapabilities({
               {run.runId}
             </option>
           ))}
-        </select>
-      </label>
+        </Controls.Select>
+      </Controls.Field>
       {!choices.length && (
         <p>No loaded measurements for this sample revision. Load older runs below if available.</p>
       )}
@@ -74,7 +75,7 @@ export function SampleCapabilities({
       {query.error && (
         <>
           <p role="alert">{query.error.message}</p>
-          <button
+          <Controls.Button
             type="button"
             disabled={query.isFetching}
             onClick={() => {
@@ -82,7 +83,7 @@ export function SampleCapabilities({
             }}
           >
             Retry reading context
-          </button>
+          </Controls.Button>
         </>
       )}
       {snapshot && !context && (

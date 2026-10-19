@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
@@ -56,7 +57,7 @@ export function SetupPanel({
       aria-label="Experiment setups"
       className="grid gap-3 rounded-lg border border-line bg-panel p-4"
     >
-      <h3>Experiment setups</h3>
+      <h3 className="text-base font-semibold leading-6">Experiment setups</h3>
       <p>
         A setup maps experiment roles and channels to registered devices. Edit addresses and device
         safety in Devices and drivers.
@@ -71,30 +72,30 @@ export function SetupPanel({
           await cache.invalidateQueries({ queryKey: ["devices"] });
         }}
       />
-      <label>
+      <Controls.Field>
         Saved setup
-        <select value={selected} onChange={(event) => choose(event.target.value)}>
+        <Controls.Select value={selected} onChange={(event) => choose(event.target.value)}>
           <option value="">Choose a setup</option>
           {definitions.data?.items.map((item) => (
             <option key={item.id} value={item.id}>
               {item.id}
             </option>
           ))}
-        </select>
-      </label>
-      <button onClick={() => choose("")}>New setup</button>
+        </Controls.Select>
+      </Controls.Field>
+      <Controls.Button onClick={() => choose("")}>New setup</Controls.Button>
       {draft && (
         <>
-          <label>
+          <Controls.Field>
             Save as
-            <input value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
+            <Controls.Input value={name} onChange={(event) => setName(event.target.value)} />
+          </Controls.Field>
           {draft.instruments.map((binding, index) => (
             <fieldset className="grid gap-2 rounded border border-line p-3" key={binding.id}>
               <legend>{binding.id}</legend>
-              <label>
+              <Controls.Field>
                 Registered device
-                <select
+                <Controls.Select
                   value={binding.device_id}
                   onChange={(event) =>
                     setDraft({
@@ -115,11 +116,11 @@ export function SetupPanel({
                       {item.device.state === "retired" ? " · retired" : ""}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label>
+                </Controls.Select>
+              </Controls.Field>
+              <Controls.Field>
                 After successful work
-                <select
+                <Controls.Select
                   value={binding.success_action}
                   onChange={(event) =>
                     setDraft({
@@ -138,11 +139,11 @@ export function SetupPanel({
                   <option value="release">Leave final state</option>
                   <option value="restore_baseline">Restore initial state</option>
                   <option value="apply_safe_state">Apply device safe state</option>
-                </select>
-              </label>
-              <label>
+                </Controls.Select>
+              </Controls.Field>
+              <Controls.Field>
                 After failure
-                <select
+                <Controls.Select
                   value={binding.failure_action}
                   onChange={(event) =>
                     setDraft({
@@ -160,8 +161,8 @@ export function SetupPanel({
                 >
                   <option value="abort_and_release">Abort and release</option>
                   <option value="abort_then_safe_state">Abort and apply device safe state</option>
-                </select>
-              </label>
+                </Controls.Select>
+              </Controls.Field>
               <p>
                 Start:{" "}
                 {binding.run_start === "preserve"
@@ -183,13 +184,16 @@ export function SetupPanel({
           ))}
           <fieldset className="flex flex-wrap gap-2 border border-line p-3">
             <legend>Add device binding</legend>
-            <label>
+            <Controls.Field>
               Experiment alias
-              <input value={alias} onChange={(event) => setAlias(event.target.value)} />
-            </label>
-            <label>
+              <Controls.Input value={alias} onChange={(event) => setAlias(event.target.value)} />
+            </Controls.Field>
+            <Controls.Field>
               Device
-              <select value={deviceId} onChange={(event) => setDeviceId(event.target.value)}>
+              <Controls.Select
+                value={deviceId}
+                onChange={(event) => setDeviceId(event.target.value)}
+              >
                 <option value="">Choose a device</option>
                 {devices.data?.items
                   .filter((item) => item.device.state === "available")
@@ -198,9 +202,9 @@ export function SetupPanel({
                       {item.device.label}
                     </option>
                   ))}
-              </select>
-            </label>
-            <button
+              </Controls.Select>
+            </Controls.Field>
+            <Controls.Button
               disabled={
                 !alias.trim() ||
                 !deviceId ||
@@ -231,15 +235,15 @@ export function SetupPanel({
               }}
             >
               Add binding
-            </button>
+            </Controls.Button>
           </fieldset>
-          <button
+          <Controls.Button
             disabled={!name.trim() || !operator.trim() || save.isPending}
             onClick={() => save.mutate()}
           >
             Save setup
-          </button>
-          <button onClick={() => setDraft(undefined)}>Cancel editing</button>
+          </Controls.Button>
+          <Controls.Button onClick={() => setDraft(undefined)}>Cancel editing</Controls.Button>
           <p>
             Saving creates a named definition. Preparing an experiment resolves its current device
             connections; submitted work retains its exact snapshot.

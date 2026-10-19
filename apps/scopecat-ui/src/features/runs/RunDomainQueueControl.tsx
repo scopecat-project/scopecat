@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleDot, LoaderCircle, Plus } from "lucide-react";
@@ -117,8 +118,8 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
     <div className="mb-3 rounded-md border border-line bg-panel-soft p-3">
       <div className="mb-2.5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <strong className="text-[0.7rem]">Waveform &amp; adaptive scan</strong>
-          <p className="mt-1 mb-0 text-[0.61rem] leading-5 text-text-dim">
+          <strong className="text-xs">Waveform &amp; adaptive scan</strong>
+          <p className="mt-1 mb-0 text-xs leading-5 text-text-dim">
             Inspect compiled waveforms below, or extend the running scan with a compatible domain. A
             single value is simply a one-point scan.
           </p>
@@ -127,7 +128,7 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
           {(["snap", "free"] as const).map((item) => (
             <button
               className={classes(
-                "cursor-pointer rounded px-2.5 py-1.5 text-[0.61rem] font-bold text-text-dim",
+                "cursor-pointer rounded px-2.5 py-1.5 text-xs font-bold text-text-dim",
                 mode === item && "bg-panel-strong text-text",
               )}
               key={item}
@@ -145,10 +146,9 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
 
       <form onSubmit={submit}>
         <div className="mb-3 flex flex-wrap items-end gap-2.5">
-          <label className="grid gap-1 text-[0.59rem] font-bold text-text-dim">
+          <Controls.Field className="grid gap-1 text-xs font-bold text-text-dim">
             Apply to
-            <select
-              className="rounded-md border border-line bg-panel px-2.5 py-2 text-[0.66rem] text-text-soft"
+            <Controls.Select
               onChange={(event) => setScope(event.target.value as RegionScope)}
               value={scope}
             >
@@ -159,9 +159,9 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
               {!run.plan.adaptiveRegionsTruncated && (
                 <option value="selected">Selected regions</option>
               )}
-            </select>
-          </label>
-          <span className="pb-2 text-[0.59rem] text-text-dim">
+            </Controls.Select>
+          </Controls.Field>
+          <span className="pb-2 text-xs text-text-dim">
             {scope === "current"
               ? "The executor binds this scan to its current outer static point."
               : scope === "all"
@@ -169,7 +169,7 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
                 : "Choose explicit outer static regions below."}
           </span>
           {run.plan.adaptiveRegionsTruncated && (
-            <span className="w-full text-[0.57rem] text-text-dim">
+            <span className="w-full text-xs text-text-dim">
               The region catalog is sampled, so explicit selection is unavailable. Use the current
               region or all {run.plan.adaptiveRegionCount} regions.
             </span>
@@ -193,7 +193,7 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
         </div>
 
         {resolution.data && (
-          <p className="mt-2.5 mb-0 rounded border border-line bg-panel px-2.5 py-2 text-[0.59rem] text-text-dim">
+          <p className="mt-2.5 mb-0 rounded border border-line bg-panel px-2.5 py-2 text-xs text-text-dim">
             <strong className="text-text-soft">
               {resolution.data.total_point_count.toLocaleString()} points
             </strong>{" "}
@@ -221,7 +221,7 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
             )}
             Add scan
           </button>
-          <span className="text-[0.59rem] text-text-dim">
+          <span className="text-xs text-text-dim">
             {!active
               ? run.pointPlan.closed
                 ? "The adaptive point plan is closed."
@@ -231,7 +231,7 @@ export function RunDomainQueueControl({ run }: { run: ProjectRun }) {
                 : "Free values are compiled as entered, including off-grid coordinates."}
           </span>
           {(inputError || resolution.error || enqueue.error) && (
-            <span className="w-full text-[0.61rem] text-red" role="alert">
+            <span className="w-full text-xs text-red" role="alert">
               {inputError ?? errorMessage(resolution.error ?? enqueue.error)}
             </span>
           )}
@@ -258,26 +258,26 @@ function AxisEditor({
   return (
     <fieldset className="rounded-md border border-line bg-panel p-2.5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <legend className="text-[0.61rem] font-bold text-text-soft">
+        <legend className="text-xs font-bold text-text-soft">
           {spec.id} {spec.unit && <span className="font-medium text-text-dim">({spec.unit})</span>}
         </legend>
-        <select
+        <Controls.Select
           aria-label={`${spec.id} source`}
-          className="rounded border border-line bg-panel-soft px-2 py-1.5 text-[0.59rem] text-text-soft"
+          className="bg-panel-soft"
           onChange={(event) => onChange({ ...draft, kind: event.target.value as SourceKind })}
           value={draft.kind}
         >
           <option value="values">Values</option>
           {linear && <option value="range">Range</option>}
           {linear && <option value="around">Around</option>}
-        </select>
+        </Controls.Select>
       </div>
       {draft.kind === "values" ? (
-        <label className="grid gap-1 text-[0.57rem] font-bold text-text-dim">
+        <Controls.Field className="grid gap-1 text-xs font-bold text-text-dim">
           Comma-separated values
-          <input
+          <Controls.Input
             aria-label={`${spec.id} values`}
-            className="rounded-md border border-line bg-panel-soft px-2.5 py-2 text-[0.64rem] text-text-soft"
+            className="bg-panel-soft"
             list={spec.sampled_values.length > 0 ? `run-domain-${runId}-${spec.id}` : undefined}
             onChange={(event) => onChange({ ...draft, values: event.target.value })}
             placeholder="5.0, 5.1, 5.2"
@@ -292,7 +292,7 @@ function AxisEditor({
               ))}
             </datalist>
           )}
-        </label>
+        </Controls.Field>
       ) : draft.kind === "range" ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
           <AxisInput
@@ -344,15 +344,15 @@ function AxisInput({
   value: string;
 }) {
   return (
-    <label className="grid gap-1 text-[0.57rem] font-bold text-text-dim">
+    <Controls.Field className="grid gap-1 text-xs font-bold text-text-dim">
       {label}
-      <input
-        className="rounded-md border border-line bg-panel-soft px-2.5 py-2 text-[0.64rem] text-text-soft"
+      <Controls.Input
+        className="bg-panel-soft"
         inputMode="decimal"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />
-    </label>
+    </Controls.Field>
   );
 }
 
@@ -368,7 +368,7 @@ function RegionSelector({
   return (
     <div className="mb-3 grid gap-1.5 rounded-md border border-line bg-panel p-2.5">
       {run.plan.adaptiveRegions.map((region) => (
-        <label className="flex items-center gap-2 text-[0.59rem] text-text-soft" key={region.id}>
+        <Controls.Field className="flex items-center gap-2 text-xs text-text-soft" key={region.id}>
           <input
             aria-label={`Select ${region.id}`}
             checked={selected.includes(region.id)}
@@ -383,10 +383,10 @@ function RegionSelector({
           />
           <span className="font-bold">{region.id}</span>
           <span className="text-text-dim">{formatCoordinateMapping(region.coordinates)}</span>
-        </label>
+        </Controls.Field>
       ))}
       {run.plan.adaptiveRegionsTruncated && (
-        <span className="text-[0.57rem] text-text-dim">
+        <span className="text-xs text-text-dim">
           Showing {run.plan.adaptiveRegions.length} of {run.plan.adaptiveRegionCount} regions.
         </span>
       )}
@@ -399,7 +399,7 @@ function DomainQueue({ queue }: { queue: RunDomainQueue }) {
     <div className="mt-3 grid gap-1.5 border-t border-line pt-2.5">
       {queue.items.map((item) => (
         <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-panel px-2.5 py-2 text-[0.59rem]"
+          className="flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-panel px-2.5 py-2 text-xs"
           key={item.request.request_id}
         >
           <span className="truncate text-text-soft">

@@ -23,11 +23,11 @@ export function RunAttentionNotice({
     >
       <AlertTriangle className="flex-none text-yellow" size={19} aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <strong className="text-[0.77rem] text-[#fae4ad]">Operator attention required</strong>
-        <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
+        <strong className="text-sm text-yellow">Operator attention required</strong>
+        <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
           {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
         </p>
-        <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-[#c4b994]">
+        <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
           Inspect retained data and reconcile external state using the project workflow. Unknown
           hardware effects cannot be retried here. Closing this record does not establish that the
           hardware is safe.
@@ -36,7 +36,7 @@ export function RunAttentionNotice({
           <>
             <div className="mt-[11px] flex flex-wrap gap-[7px]">
               <button
-                className="inline-flex min-h-[31px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[rgb(255_140_136_/_35%)] bg-red-soft px-2.5 text-red hover:not-disabled:bg-panel-strong hover:not-disabled:text-text disabled:cursor-wait disabled:opacity-55"
+                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[rgb(255_140_136_/_35%)] bg-red-soft px-2.5 text-red hover:not-disabled:bg-panel-strong hover:not-disabled:text-text disabled:cursor-wait disabled:opacity-55"
                 type="button"
                 onClick={onResolve}
                 disabled={pending}
@@ -48,7 +48,7 @@ export function RunAttentionNotice({
           </>
         )}
         {error && (
-          <p className="mt-1 mb-0 text-[0.71rem] leading-normal text-red" role="status">
+          <p className="mt-1 mb-0 text-xs leading-normal text-red" role="status">
             {errorMessage(error)}
           </p>
         )}

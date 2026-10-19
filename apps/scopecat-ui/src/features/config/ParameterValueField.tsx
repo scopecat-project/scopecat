@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import type { ParameterEntity, ParameterScalarType } from "../../api-contract";
 import type { ParameterDraftAtom } from "./parameter-draft-api";
 import { secondaryButton } from "../../ui/styles";
@@ -48,14 +49,14 @@ export function ParameterValueField({
   );
   const selected = retained ? identity(retained) : value ? "retained-invalid" : "";
   return (
-    <label className="flex flex-wrap items-center gap-2">
+    <Controls.Field className="flex flex-wrap items-center gap-2">
       {displayLabel ? (
         <span className="w-full font-medium text-text-soft">{displayLabel}</span>
       ) : (
         label
       )}
       {type.type === "bool" ? (
-        <select
+        <Controls.Select
           aria-label={label}
           value={value?.text ?? ""}
           disabled={disabled}
@@ -66,9 +67,9 @@ export function ParameterValueField({
           <option value="">Unknown</option>
           <option value="true">true</option>
           <option value="false">false</option>
-        </select>
+        </Controls.Select>
       ) : type.type === "entity" ? (
-        <select
+        <Controls.Select
           aria-label={label}
           value={selected}
           disabled={disabled}
@@ -98,9 +99,9 @@ export function ParameterValueField({
               {item.id}
             </option>
           ))}
-        </select>
+        </Controls.Select>
       ) : (
-        <input
+        <Controls.Input
           aria-label={label}
           placeholder="Unknown"
           type="text"
@@ -117,7 +118,7 @@ export function ParameterValueField({
         />
       )}
       {type.type === "quantity" && (
-        <input
+        <Controls.Input
           aria-label={`${label} unit`}
           value={value?.unit ?? type.unit ?? ""}
           disabled={disabled || value === undefined}
@@ -135,6 +136,6 @@ export function ParameterValueField({
           Mark unknown
         </button>
       )}
-    </label>
+    </Controls.Field>
   );
 }

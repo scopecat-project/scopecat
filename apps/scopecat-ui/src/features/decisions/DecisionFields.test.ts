@@ -62,7 +62,7 @@ describe("nullable numeric decisions", () => {
       decisionConstraintError({ outcome: "Peak selected", frequency_mhz: 6600 }, metadata),
     ).toContain("between 6490 and 6510");
   });
-  it("keeps unsupported unions in JSON rather than treating them as a number", () => {
+  it("rejects unsupported unions rather than treating them as a number", () => {
     expect(
       decisionFields({
         type: "object",
@@ -70,4 +70,37 @@ describe("nullable numeric decisions", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+describe("numeric conditional controls", () => {
+  const fields = decisionFields({
+    type: "object",
+    fields: {
+      mode: { type: "int" },
+      detail: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+    },
+  })!;
+  const numericMetadata = {
+    field_constraints: {
+      detail: { required_when: { field: "mode", value: 1 }, empty_otherwise: true },
+    },
+  };
+  it("uses the normalized numeric choice for serialization and validation", () => {
+    const value = decisionFormValue(fields, { mode: "1", detail: "2" }, numericMetadata);
+    expect(value).toEqual({ mode: 1, detail: 2 });
+    expect(decisionValueError(fields, value)).toBeUndefined();
+    expect(decisionConstraintError(value, numericMetadata)).toBeUndefined();
+    expect(decisionFormValue(fields, { mode: "0", detail: "2" }, numericMetadata)).toEqual({
+      mode: 0,
+      detail: null,
+    });
+  });
+  it.each(["", " ", "-", "1e", "1.5", "invalid", null])(
+    "preserves dependent input for incomplete/invalid control %s",
+    (mode) => {
+      const value = decisionFormValue(fields, { mode, detail: "2" }, numericMetadata);
+      expect(value).toHaveProperty("detail", 2);
+      expect(decisionValueError(fields, value)).toBeDefined();
+    },
+  );
 });

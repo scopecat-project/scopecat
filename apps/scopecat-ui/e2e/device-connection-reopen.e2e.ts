@@ -8,7 +8,7 @@ type DeviceView = components["schemas"]["DeviceView"];
 
 test("connection test feedback follows the saved revision across editing and daemon restart", async ({
   page,
-}) => {
+}, testInfo) => {
   const root = await mkdtemp(join(tmpdir(), "scopecat-device-reopen-"));
   let daemon: ReturnType<typeof spawn>;
   let stopped: Promise<void>;
@@ -58,6 +58,29 @@ test("connection test feedback follows the saved revision across editing and dae
     await page.getByRole("button", { name: "Devices and drivers", exact: true }).click();
     await page.getByRole("button", { name: "Add device", exact: true }).click();
     const dialog = page.getByRole("dialog");
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const name = dialog.getByLabel("Device name");
+      await name.focus();
+      await expect(name).toHaveCSS("outline-width", "2px");
+      await expect(name).toHaveCSS("font-size", "14px");
+      expect(
+        await page.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await testInfo.attach(`device-dialog-${width}`, {
+        body: await page.screenshot({
+          fullPage: true,
+          ...(process.env.SCOPECAT_SCREENSHOTS
+            ? { path: `${process.env.SCOPECAT_SCREENSHOTS}/device-dialog-${width}.png` }
+            : {}),
+        }),
+        contentType: "image/png",
+      });
+    }
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: "Add device", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "Add device", exact: true }).click();
     await dialog.getByLabel("Device name").fill("Reopen virtual device");
     await dialog.getByLabel("Gain", { exact: true }).fill("-1");
     await dialog.getByRole("button", { name: "Save device", exact: true }).click();

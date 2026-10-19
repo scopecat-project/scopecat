@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
@@ -44,9 +45,9 @@ export function ConfigurationTemplatesPanel({
         Import a setup and independent parameters from an installed template. Registered device
         connections are reused and never overwritten by a template.
       </p>
-      <label>
+      <Controls.Field>
         Available template{" "}
-        <select
+        <Controls.Select
           aria-label="Available template"
           value={selected}
           disabled={imported.isPending}
@@ -62,8 +63,8 @@ export function ConfigurationTemplatesPanel({
               {item.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Controls.Select>
+      </Controls.Field>
       {templates.isPending && <p>Loading templates…</p>}
       {templates.data?.items.length === 0 && (
         <p>This adapter declares no configuration templates.</p>

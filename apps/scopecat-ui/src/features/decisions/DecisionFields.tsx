@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useId } from "react";
 
 type ScalarField = (
@@ -54,23 +55,66 @@ const scalar = (field: ScalarField, item: unknown) => {
 };
 
 // Raw text remains editing data until explicit form validation/submission.
-export function decisionFormValue(fields: Record<string, DecisionField>, value: unknown): unknown {
+export function decisionFormValue(
+  fields: Record<string, DecisionField>,
+  value: unknown,
+  metadata?: unknown,
+): unknown {
   if (!isRecord(value)) return value;
   return Object.fromEntries(
     Object.entries(value).map(([name, item]) => {
       const field = fields[name];
       return [
         name,
-        !field
-          ? item
-          : field.type === "array"
-            ? Array.isArray(item)
-              ? item.map((entry) => scalar(field.items, entry))
-              : item
-            : scalar(field, item),
+        field && inactiveField(name, field, value, metadata, fields)
+          ? null
+          : !field
+            ? item
+            : field.type === "array"
+              ? Array.isArray(item)
+                ? item.map((entry) => scalar(field.items, entry))
+                : item
+              : scalar(field, item),
       ];
     }),
   );
+}
+
+// The existing conditional-empty contract only hides nullable fields. Draft values remain
+// intact for switching back; command serialization explicitly clears inactive values.
+function inactiveField(
+  name: string,
+  field: DecisionField,
+  value: Record<string, unknown>,
+  metadata: unknown,
+  fields: Record<string, DecisionField>,
+): boolean {
+  if (
+    !("nullable" in field) ||
+    !field.nullable ||
+    !isRecord(metadata) ||
+    !isRecord(metadata.field_constraints)
+  )
+    return false;
+  const rule = metadata.field_constraints[name];
+  if (!isRecord(rule) || rule.empty_otherwise !== true || !isRecord(rule.required_when))
+    return false;
+  const condition = rule.required_when;
+  if (typeof condition.field !== "string" || !(condition.field in value)) return false;
+  const controller = fields[condition.field];
+  if (!controller || controller.type === "array") return false;
+  const selected = scalar(controller, value[condition.field]);
+  // Incomplete/invalid edits are not a different choice. Keep dependent input visible
+  // and intact until the controlling value is valid in the same schema as submission.
+  if (
+    selected === null ||
+    selected === undefined ||
+    (typeof selected === "string" && !selected.trim()) ||
+    !validScalar(controller, selected) ||
+    !validScalar(controller, condition.value)
+  )
+    return false;
+  return selected !== condition.value;
 }
 
 function validScalar(field: ScalarField, value: unknown): boolean {
@@ -137,13 +181,11 @@ function ScalarInput({
   onChange: (value: unknown) => void;
   id: string;
 }) {
-  const style = "rounded-md border border-line bg-bg p-3";
   if (field.type === "literal" || field.type === "bool") {
     const choices: unknown[] = field.type === "literal" ? field.values : [false, true];
     return (
-      <select
+      <Controls.Select
         id={id}
-        className={style}
         value={choices.includes(value) ? JSON.stringify(value) : ""}
         onChange={(event) =>
           onChange(event.target.value === "" ? null : JSON.parse(event.target.value))
@@ -155,22 +197,20 @@ function ScalarInput({
             {field.type === "bool" ? (choice ? "Yes" : "No") : String(choice)}
           </option>
         ))}
-      </select>
+      </Controls.Select>
     );
   }
   if (field.type === "string")
     return (
-      <textarea
+      <Controls.Textarea
         id={id}
-        className={style}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.target.value)}
       />
     );
   return (
-    <input
+    <Controls.Input
       id={id}
-      className={style}
       type="text"
       inputMode="decimal"
       value={typeof value === "number" || typeof value === "string" ? value : ""}
@@ -184,22 +224,25 @@ export function DecisionFields({
   value,
   onChange,
   labels = {},
+  metadata,
 }: {
   fields: Record<string, DecisionField>;
   value: Record<string, unknown>;
   onChange: (value: Record<string, unknown>) => void;
   labels?: Record<string, unknown>;
+  metadata?: unknown;
 }) {
   const prefix = useId();
   return (
     <div className="grid content-start gap-3">
       {Object.entries(fields).map(([name, field]) => {
+        if (inactiveField(name, field, value, metadata, fields)) return null;
         const label = typeof labels[name] === "string" ? labels[name] : name.replaceAll("_", " ");
         const id = `${prefix}-${name}`;
         if (field.type !== "array")
           return (
-            <div key={name} className="grid gap-1.5 text-[0.7rem]">
-              <label htmlFor={id}>{label}</label>
+            <div key={name} className="grid gap-1.5 text-xs">
+              <Controls.Field htmlFor={id}>{label}</Controls.Field>
               <ScalarInput
                 id={id}
                 field={field}
@@ -214,9 +257,9 @@ export function DecisionFields({
             <legend>{label}</legend>
             {items.map((item, index) => (
               <div key={index} className="grid gap-1">
-                <label htmlFor={`${id}-${index}`}>
+                <Controls.Field htmlFor={`${id}-${index}`}>
                   {label} {index + 1}
-                </label>
+                </Controls.Field>
                 <div className="flex gap-2">
                   <ScalarInput
                     id={`${id}-${index}`}
@@ -229,7 +272,7 @@ export function DecisionFields({
                       })
                     }
                   />
-                  <button
+                  <Controls.Button
                     type="button"
                     aria-label={`Remove ${label} ${index + 1}`}
                     onClick={() =>
@@ -237,7 +280,7 @@ export function DecisionFields({
                     }
                   >
                     Remove
-                  </button>
+                  </Controls.Button>
                 </div>
               </div>
             ))}

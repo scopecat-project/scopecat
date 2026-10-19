@@ -51,7 +51,17 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
   try {
     await writeFile(join(project, "scopecat.toml"), "[lab]\n");
     await writeFile(join(otherHome, "scopecat.toml"), "[lab]\n");
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const firstUrl = await endpoint();
     const procedure = uv(["python", "-c", SEED, project]);
     const context = await browser.newContext();
@@ -62,10 +72,30 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await b.goto(decisionUrl);
     await expect(a.getByLabel("frequency", { exact: true })).toBeVisible();
     await expect(b.getByLabel("frequency", { exact: true })).toBeVisible();
+    for (const width of [1280, 390]) {
+      await a.setViewportSize({ width, height: 900 });
+      expect(await a.evaluate<number>("document.documentElement.scrollWidth")).toBeLessThanOrEqual(
+        width,
+      );
+      await testInfo.attach(`decision-${width}`, {
+        body: await a.screenshot({
+          fullPage: true,
+          ...(process.env.SCOPECAT_SCREENSHOTS
+            ? { path: `${process.env.SCOPECAT_SCREENSHOTS}/decision-${width}.png` }
+            : {}),
+        }),
+        contentType: "image/png",
+      });
+    }
+    await a.setViewportSize({ width: 1280, height: 900 });
+    await a.getByLabel("rationale", { exact: true }).fill("first line");
+    await a.getByLabel("rationale", { exact: true }).press("Enter");
+    await expect(a.getByLabel("rationale", { exact: true })).toHaveValue("first line\n");
     await a.getByLabel("Recorded reviewer").fill("operator A");
     await a.getByLabel("frequency", { exact: true }).fill("1e");
     await a.getByLabel("rationale", { exact: true }).fill("unfinished useful reasoning");
     await expect(a.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await b.getByRole("button", { name: "Decision options" }).click();
     await b.getByLabel("Reasoning note (optional)").fill("window B conflicting note");
     await expect(b.getByText(/Your conflicting copy is retained/)).toBeVisible();
     await expect(b.getByRole("button", { name: "Record decision", exact: true })).toBeDisabled();
@@ -78,13 +108,23 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await a.goto(decisionUrl);
     await expect(a.getByLabel("frequency", { exact: true })).toHaveValue("1e");
     await context.close();
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     // Occupy the prior port to make origin change deterministic.
     await new Promise<void>((done, reject) => {
       blocker.once("error", reject);
       blocker.listen(Number(new URL(firstUrl).port), "127.0.0.1", done);
     });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const secondUrl = await endpoint();
     expect(secondUrl).not.toBe(firstUrl);
     const fresh = await browser.newContext();
@@ -108,12 +148,13 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
         }),
       { times: 1 },
     );
-    await reopened.getByRole("button", { name: "Record decision", exact: true }).click();
+    await reopened.getByLabel("frequency", { exact: true }).press("Enter");
     await expect(reopened.getByRole("alert")).toContainText("test submit failure");
     await reopened.reload();
     await expect(reopened.getByLabel("frequency", { exact: true })).toHaveValue("6.2");
-    await reopened.getByRole("button", { name: "Record decision", exact: true }).click();
+    await reopened.getByLabel("frequency", { exact: true }).press("Enter");
     await expect(reopened.getByText("Decision saved or no longer waiting")).toBeVisible();
+    await reopened.getByRole("button", { name: "Decision options" }).click();
     await reopened.getByRole("button", { name: "Recover saved Decision drafts" }).click();
     await expect(reopened.getByText(/history cannot submit a decision/)).toBeVisible();
     const runs = await reopened.request.get(`${secondUrl}/api/v1/runs`);
@@ -124,7 +165,17 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
       path: testInfo.outputPath("retained-completed-drafts.png"),
       fullPage: true,
     });
-    uv(["scopecat", "start", otherHome, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      otherHome,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const otherUrl = JSON.parse(
       await readFile(join(otherHome, ".scopecat/daemon.json"), "utf8"),
     ).base_url;
@@ -133,8 +184,8 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await fresh.close();
   } finally {
     blocker.close();
-    uv(["scopecat", "stop", project]);
-    uv(["scopecat", "stop", otherHome]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", otherHome]);
     await rm(project, { recursive: true, force: true });
     await rm(otherHome, { recursive: true, force: true });
   }

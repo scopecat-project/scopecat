@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import type { ScientificSelection } from "../launch/scientific-selection";
 import { createPortal } from "react-dom";
 import { ObjectParameterFields } from "./ObjectParameterFields";
@@ -212,15 +213,15 @@ export function ConfigWorkspace({
         </p>
       )}
       <header>
-        <h2>Experiment configuration</h2>
+        <h2 className="text-lg font-semibold leading-7">Experiment configuration</h2>
         <p>
           Setups bind registered devices. Parameter versions hold scientific inputs; neither changes
           another page's selection.
         </p>
-        <label>
+        <Controls.Field>
           Operator
-          <input value={operator} onChange={(event) => setOperator(event.target.value)} />
-        </label>
+          <Controls.Input value={operator} onChange={(event) => setOperator(event.target.value)} />
+        </Controls.Field>
       </header>
       <ConfigurationExchange
         operator={operator}
@@ -235,15 +236,15 @@ export function ConfigWorkspace({
         className="grid gap-3 rounded-lg border border-line bg-panel p-4"
         aria-label="Parameter versions"
       >
-        <h3>Working parameters and saved versions</h3>
-        <label>
+        <h3 className="text-base font-semibold leading-6">Working parameters and saved versions</h3>
+        <Controls.Field>
           Working parameter branch
-          <input
+          <Controls.Input
             list="working-parameter-branches"
             value={workingBranch}
             onChange={(event) => setWorkingBranch(event.target.value)}
           />
-        </label>
+        </Controls.Field>
         <datalist id="working-parameter-branches">
           {branchHeads.data?.items.map((item) => (
             <option key={item.name} value={item.name}>
@@ -251,12 +252,12 @@ export function ConfigWorkspace({
             </option>
           ))}
         </datalist>
-        <button
+        <Controls.Button
           disabled={!workingBranch.trim() || openWorking.isPending}
           onClick={() => openWorking.mutate()}
         >
           Open working table
-        </button>
+        </Controls.Button>
         <p>
           Continue this branch's working inputs. Using them for an experiment is explicit; saving a
           version is optional.
@@ -267,9 +268,9 @@ export function ConfigWorkspace({
           a parameter version does not validate a calibration. Drafts recover editing input
           separately.
         </p>
-        <label>
+        <Controls.Field>
           Saved parameter version
-          <select
+          <Controls.Select
             value={selected}
             onChange={async (event) => {
               const next = event.target.value;
@@ -282,8 +283,8 @@ export function ConfigWorkspace({
                 {item.id}
               </option>
             ))}
-          </select>
-        </label>
+          </Controls.Select>
+        </Controls.Field>
         {versions.error && <p role="alert">{errorMessage(versions.error)}</p>}
         {current && (
           <>
@@ -291,11 +292,11 @@ export function ConfigWorkspace({
               {current.actor}
               {current.note ? ` · ${current.note}` : ""}
             </p>
-            <div className="flex gap-3">
-              <button disabled={open.isPending} onClick={() => open.mutate(current)}>
+            <div className="flex flex-wrap items-end gap-3">
+              <Controls.Button disabled={open.isPending} onClick={() => open.mutate(current)}>
                 Edit a copy
-              </button>
-              <button
+              </Controls.Button>
+              <Controls.Button
                 onClick={() =>
                   onSelectConfiguration?.({
                     kind: "parameters",
@@ -305,7 +306,7 @@ export function ConfigWorkspace({
                 }
               >
                 Use for next experiment
-              </button>
+              </Controls.Button>
             </div>
           </>
         )}
@@ -531,21 +532,23 @@ function ParameterVersionEditor({
       {draft.error && <p role="alert">{draft.error}</p>}
       {actionError && <p role="alert">{actionError}</p>}
       {draft.status === "failed" && draft.hasUnsavedChanges && (
-        <button onClick={() => void draft.flush()}>Retry draft save</button>
+        <Controls.Button onClick={() => void draft.flush()}>Retry draft save</Controls.Button>
       )}
       {draft.conflict && (
         <>
-          <button onClick={async () => setReview(await readParameterDraft(initial.draft.draft_id))}>
+          <Controls.Button
+            onClick={async () => setReview(await readParameterDraft(initial.draft.draft_id))}
+          >
             Review current draft
-          </button>
+          </Controls.Button>
           {review && (
             <>
               <pre>{JSON.stringify(review.draft.input, null, 2)}</pre>
               <p>Current draft: {review.draft.state}</p>
               {review.draft.state === "saved" && (
-                <button onClick={() => void draft.resolve(review)}>
+                <Controls.Button onClick={() => void draft.resolve(review)}>
                   Keep my input after review
-                </button>
+                </Controls.Button>
               )}
             </>
           )}
@@ -558,12 +561,12 @@ function ParameterVersionEditor({
         </p>
       )}
       {completed && (
-        <button onClick={() => void openCompleted(completed)}>
+        <Controls.Button onClick={() => void openCompleted(completed)}>
           Open saved parameter checkpoint
-        </button>
+        </Controls.Button>
       )}
-      {closed && <button onClick={onCancel}>Close editor</button>}
-      {closed && <button onClick={() => void fork()}>Edit another copy</button>}
+      {closed && <Controls.Button onClick={onCancel}>Close editor</Controls.Button>}
+      {closed && <Controls.Button onClick={() => void fork()}>Edit another copy</Controls.Button>}
       <fieldset disabled={draft.busy || copying || closed} className="contents">
         {destination && (
           <ObjectParameterFields
@@ -628,7 +631,7 @@ function ParameterVersionEditor({
                         }}
                       />
                     ))}
-                    <button
+                    <Controls.Button
                       onClick={() =>
                         setValue(definition.id, {
                           id: definition.id,
@@ -638,11 +641,11 @@ function ParameterVersionEditor({
                       }
                     >
                       Remove row {index + 1}
-                    </button>
+                    </Controls.Button>
                   </div>
                 ))}
-                <div className="flex gap-3">
-                  <button
+                <div className="flex flex-wrap items-end gap-3">
+                  <Controls.Button
                     onClick={() =>
                       setValue(definition.id, {
                         id: definition.id,
@@ -652,18 +655,23 @@ function ParameterVersionEditor({
                     }
                   >
                     Add row
-                  </button>
-                  <button onClick={() => setValue(definition.id)}>Mark table unknown</button>
+                  </Controls.Button>
+                  <Controls.Button onClick={() => setValue(definition.id)}>
+                    Mark table unknown
+                  </Controls.Button>
                 </div>
               </fieldset>
             );
           })}
         </details>
-        <label>
+        <Controls.Field>
           Draft operator
-          <input value={operator} onChange={(event) => patch({ actor: event.target.value })} />
-        </label>
-        <button
+          <Controls.Input
+            value={operator}
+            onChange={(event) => patch({ actor: event.target.value })}
+          />
+        </Controls.Field>
+        <Controls.Button
           disabled={draft.conflict || !onSelectConfiguration}
           onClick={async () => {
             const frozen = await draft.capture();
@@ -682,7 +690,7 @@ function ParameterVersionEditor({
           {adoptionContext
             ? "Use working inputs, target and setup for next experiment"
             : "Use working inputs for next experiment"}
-        </button>
+        </Controls.Button>
         <p>
           {adoptionContext &&
             "This also selects the resolved target and setup shown above. The selected map object only filters the editor; it does not narrow the experiment target. "}
@@ -690,19 +698,19 @@ function ParameterVersionEditor({
           later edits automatically.
         </p>
         <ParameterDraftHistory base={base} onResume={onFork} />
-        <label>
+        <Controls.Field>
           Source or reason for changes
-          <input value={note} onChange={(event) => setNote(event.target.value)} />
-        </label>
-        <label>
+          <Controls.Input value={note} onChange={(event) => setNote(event.target.value)} />
+        </Controls.Field>
+        <Controls.Field>
           Named branch (optional)
-          <input
+          <Controls.Input
             list="parameter-branch-names"
             value={branch}
             disabled={!!initial.draft.working_branch}
             onChange={(event) => setBranch(event.target.value)}
           />
-        </label>
+        </Controls.Field>
         <datalist id="parameter-branch-names">
           {heads.data?.items.map((item) => (
             <option key={item.name} value={item.name}>
@@ -719,7 +727,7 @@ function ParameterVersionEditor({
                 : "Reading branch head…"}{" "}
             A concurrent update requires review before retrying.{" "}
             {head && <span> Latest read generation: {head.generation}. </span>}
-            <button
+            <Controls.Button
               onClick={async () => {
                 const requestedBranch = branch;
                 const result = await reviewedHead.refetch();
@@ -740,7 +748,7 @@ function ParameterVersionEditor({
               }}
             >
               Review latest branch head
-            </button>
+            </Controls.Button>
           </p>
         )}
         {branchReview && branchReview.branch === branch && (
@@ -751,7 +759,7 @@ function ParameterVersionEditor({
               Keep the entire working table against the reviewed branch head. Values are not merged
               automatically.
             </p>
-            <button
+            <Controls.Button
               onClick={() => {
                 if (branchRef.current === branchReview.branch)
                   patch({ branch_generation: branchReview.generation });
@@ -759,7 +767,7 @@ function ParameterVersionEditor({
               }}
             >
               Keep my table after branch review
-            </button>
+            </Controls.Button>
           </details>
         )}
         {(heads.error || (reviewedHead.error && !newBranch)) && (
@@ -767,11 +775,11 @@ function ParameterVersionEditor({
         )}
         <details>
           <summary>Save a parameter checkpoint</summary>
-          <label>
+          <Controls.Field>
             New version name
-            <input value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <button
+            <Controls.Input value={name} onChange={(event) => setName(event.target.value)} />
+          </Controls.Field>
+          <Controls.Button
             disabled={
               !name.trim() ||
               !operator.trim() ||
@@ -782,14 +790,14 @@ function ParameterVersionEditor({
             onClick={() => void finish(false)}
           >
             Save parameter version
-          </button>
+          </Controls.Button>
         </details>
-        <div className="flex gap-3">
-          <button onClick={onCancel}>Close editor</button>
-          <button onClick={() => void finish(true)}>Discard draft</button>
-          <button disabled={draft.conflict} onClick={() => void fork()}>
+        <div className="flex flex-wrap items-end gap-3">
+          <Controls.Button onClick={onCancel}>Close editor</Controls.Button>
+          <Controls.Button onClick={() => void finish(true)}>Discard draft</Controls.Button>
+          <Controls.Button disabled={draft.conflict} onClick={() => void fork()}>
             Edit another copy
-          </button>
+          </Controls.Button>
         </div>
       </fieldset>
     </section>
@@ -827,10 +835,10 @@ function ParameterDraftHistory({
             {item.input.name} · {item.state} · revision {item.revision}
           </summary>
           <pre>{JSON.stringify(item.input, null, 2)}</pre>
-          <button onClick={async () => onResume(await readParameterDraft(item.draft_id))}>
+          <Controls.Button onClick={async () => onResume(await readParameterDraft(item.draft_id))}>
             Open current draft
-          </button>
-          <button
+          </Controls.Button>
+          <Controls.Button
             onClick={async () =>
               onResume(
                 await startParameterDraft({
@@ -845,13 +853,13 @@ function ParameterDraftHistory({
             }
           >
             Edit a copy of these inputs
-          </button>
+          </Controls.Button>
         </details>
       ))}
       {history.data?.next_cursor && (
-        <button onClick={() => setBefore(history.data?.next_cursor ?? undefined)}>
+        <Controls.Button onClick={() => setBefore(history.data?.next_cursor ?? undefined)}>
           Older drafts
-        </button>
+        </Controls.Button>
       )}
     </details>
   );

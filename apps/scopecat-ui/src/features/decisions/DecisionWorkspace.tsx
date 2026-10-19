@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import * as Controls from "../../ui/Controls";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, CircleOff, FlaskConical, LoaderCircle, UserRound } from "lucide-react";
+import { Check, CircleOff, Ellipsis, FlaskConical, LoaderCircle } from "lucide-react";
 import type {
   ProcedureRun,
   ProcedureStepAttempt,
@@ -17,16 +18,31 @@ import {
   decisionConstraintError,
   decisionFormValue,
 } from "./DecisionFields";
-import { errorMessage, formatRelative } from "../../lib/presentation";
-import { classes, primaryButton } from "../../ui/styles";
+import { errorMessage, formatDateTime } from "../../lib/presentation";
+import { classes, iconButton, primaryButton } from "../../ui/styles";
 import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
 
+const DecisionOptions = createContext(false);
+
 export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: boolean }) {
+  const [options, setOptions] = useState(false);
   return (
-    <>
-      <DecisionDraftHistory />
+    <DecisionOptions value={options}>
+      <div className="mb-2 flex justify-end">
+        <button
+          type="button"
+          className={iconButton}
+          aria-label="Decision options"
+          title="Optional notes and draft recovery"
+          aria-expanded={options}
+          onClick={() => setOptions(!options)}
+        >
+          <Ellipsis size={18} />
+        </button>
+      </div>
       <DecisionWorkspaceBody daemonUnavailable={daemonUnavailable} />
-    </>
+      {options && <DecisionDraftHistory />}
+    </DecisionOptions>
   );
 }
 
@@ -63,7 +79,7 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   if (selectedId && !procedures.data.items.some((item) => item.procedure_run_id === selectedId)) {
     return (
       <section className="rounded-lg border border-line bg-panel p-5">
-        <h2>Decision saved or no longer waiting</h2>
+        <h2 className="text-lg font-semibold leading-7">Decision saved or no longer waiting</h2>
         <p>Open the task to see the recorded answer and choose when to continue.</p>
         <a
           className="text-accent underline"
@@ -97,45 +113,66 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   if (!selected) return null;
 
   return (
-    <div className="grid min-h-[680px] grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-lg border border-line bg-panel max-[900px]:grid-cols-1">
-      <aside className="border-r border-line bg-panel-soft p-2.5 max-[900px]:border-r-0 max-[900px]:border-b">
-        <div className="px-2 py-2">
-          <div className="mb-1 flex items-center gap-2 text-[0.66rem] font-extrabold tracking-[0.1em] text-accent uppercase">
-            <FlaskConical size={14} aria-hidden="true" />
-            Decisions
+    <div
+      className={classes(
+        "grid min-w-0 overflow-hidden rounded-lg border border-line bg-panel",
+        procedures.data.items.length > 1 &&
+          "grid-cols-[260px_minmax(0,1fr)] max-[900px]:grid-cols-1",
+      )}
+    >
+      {procedures.data.items.length > 1 && (
+        <aside className="border-r border-line bg-panel-soft p-2.5 max-[900px]:border-r-0 max-[900px]:border-b">
+          <div className="px-2 py-2">
+            <div className="mb-1 flex items-center gap-2 text-xs font-extrabold tracking-[0.1em] text-accent uppercase">
+              <FlaskConical size={14} aria-hidden="true" />
+              Decisions
+            </div>
+            <p className="m-0 text-xs leading-4 text-text-dim">
+              {procedures.data.items.length} experiment request
+              {procedures.data.items.length === 1 ? "" : "s"}
+            </p>
           </div>
-          <p className="m-0 text-[0.6rem] leading-4 text-text-dim">
-            {procedures.data.items.length} experiment request
-            {procedures.data.items.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="grid gap-1.5 max-[900px]:grid-cols-[repeat(auto-fit,minmax(210px,1fr))]">
-          {procedures.data.items.map((procedure) => (
-            <button
-              className={classes(
-                "grid cursor-pointer gap-1 rounded-md border border-transparent bg-transparent px-2.5 py-2.5 text-left text-text-soft hover:bg-panel",
-                procedure.procedure_run_id === selected.procedure_run_id &&
-                  "border-line-strong bg-panel",
-              )}
-              key={procedure.procedure_run_id}
-              onClick={() => setSelectedId(procedure.procedure_run_id)}
-              type="button"
-            >
-              <span className="truncate text-[0.68rem] font-bold">{procedure.definition.id}</span>
-              <span className="truncate font-mono text-[0.57rem] text-text-dim">
-                {procedure.procedure_run_id}
-              </span>
-            </button>
-          ))}
-        </div>
-      </aside>
+          <div className="grid gap-1.5 max-[900px]:grid-cols-[repeat(auto-fit,minmax(210px,1fr))]">
+            {procedures.data.items.map((procedure) => (
+              <button
+                className={classes(
+                  "grid cursor-pointer gap-1 rounded-md border border-transparent bg-transparent px-2.5 py-2.5 text-left text-text-soft hover:bg-panel",
+                  procedure.procedure_run_id === selected.procedure_run_id &&
+                    "border-line-strong bg-panel",
+                )}
+                key={procedure.procedure_run_id}
+                title={procedure.procedure_run_id}
+                onClick={() => setSelectedId(procedure.procedure_run_id)}
+                type="button"
+              >
+                <span className="truncate text-xs font-bold">{procedure.definition.id}</span>
+                <span className="text-xs text-text-dim">
+                  {procedure.created_at
+                    ? `Submitted ${formatDateTime(procedure.created_at)}`
+                    : "Submission time unavailable"}
+                </span>
+                {procedure.resolved_samples.length > 0 && (
+                  <span className="truncate text-xs text-text-soft">
+                    {procedure.resolved_samples.map((sample) => sample.sample_id).join(", ")}
+                  </span>
+                )}
+                {procedures.data.items.some(
+                  (other) =>
+                    other.procedure_run_id !== procedure.procedure_run_id &&
+                    other.definition.id === procedure.definition.id &&
+                    (other.created_at ? formatDateTime(other.created_at) : "") ===
+                      (procedure.created_at ? formatDateTime(procedure.created_at) : ""),
+                ) && (
+                  <span className="text-xs text-text-dim">
+                    Reference · {procedure.procedure_run_id.slice(-8)}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
       <main className="min-w-0 p-4 max-[680px]:p-2.5">
-        <header className="mb-3 rounded-md border border-line bg-panel-soft px-3.5 py-3">
-          <p className="m-0 text-[0.66rem] leading-5 text-text-dim">
-            Inspect the retained evidence and record one structured judgment. Then open the task and
-            choose when to continue with the recorded response.
-          </p>
-        </header>
         <DecisionCard
           key={selected.procedure_run_id}
           procedure={selected}
@@ -235,6 +272,7 @@ function DecisionEditor({
   onRecorded: () => void;
   initial: DecisionDraftView;
 }) {
+  const options = useContext(DecisionOptions);
   const request = step.interpretation_request;
   if (!request) throw new Error("waiting interpretation request is missing");
   const fields = decisionFields(request.structure);
@@ -248,7 +286,7 @@ function DecisionEditor({
       null,
       2,
     ),
-    use_json: !fields,
+    use_json: false,
   };
   const draft = useDecisionDraft(
     {
@@ -264,33 +302,20 @@ function DecisionEditor({
     initial,
     defaults,
   );
-  const {
-    actor,
-    actor_kind: actorKind,
-    note,
-    value_text: valueText,
-    use_json: requestedJson,
-  } = draft.input;
-  let useJson = requestedJson;
+  const { actor, note, value_text: valueText } = draft.input;
+  let formValue: unknown;
   try {
-    useJson ||= !isRecord(JSON.parse(valueText));
+    formValue = JSON.parse(valueText);
   } catch {
-    useJson = true;
+    /* Preserve malformed retained drafts. */
   }
+  const formUnavailable = !fields || !isRecord(formValue);
   const setActor = (text: string) => draft.edit({ ...draft.input, actor: text });
-  const setActorKind = (actor_kind: "human" | "ai" | "service") =>
-    draft.edit({ ...draft.input, actor_kind });
   const setNote = (text: string) => draft.edit({ ...draft.input, note: text });
-  const setValueText = (value_text: string) => draft.edit({ ...draft.input, value_text });
-  const setUseJson = (use_json: boolean) =>
-    draft.edit({
-      ...draft.input,
-      use_json,
-      value_text:
-        use_json && fields
-          ? JSON.stringify(decisionFormValue(fields, JSON.parse(valueText)), null, 2)
-          : valueText,
-    });
+  const setValueText = (value_text: string) => {
+    setParseError(undefined);
+    draft.edit({ ...draft.input, value_text, use_json: false });
+  };
   const [parseError, setParseError] = useState<string>();
   const queryClient = useQueryClient();
   const submit = useMutation({
@@ -308,16 +333,28 @@ function DecisionEditor({
     },
   });
 
+  const recording = useRef(false);
+  const composing = useRef(false);
+  const [committing, setCommitting] = useState(false);
   const record = async () => {
-    if (draft.invalid) return;
+    if (
+      formUnavailable ||
+      recording.current ||
+      submit.isPending ||
+      submit.isSuccess ||
+      draft.invalid ||
+      draft.discarding ||
+      draft.status === "conflict"
+    )
+      return;
     if (!actor.trim()) {
-      setParseError("Identify the person, agent, or service making this judgment.");
+      setParseError("Enter the name of the person making this judgment.");
       return;
     }
     let value: unknown;
     try {
       value = JSON.parse(valueText);
-      if (!useJson && fields) value = decisionFormValue(fields, value);
+      if (fields) value = decisionFormValue(fields, value, request.metadata);
     } catch (error) {
       setParseError(errorMessage(error));
       return;
@@ -343,214 +380,149 @@ function DecisionEditor({
       expected_step_revision: step.revision,
       request_hash: step.intent_hash,
       actor: actor.trim(),
-      actor_kind: actorKind,
+      actor_kind: "human",
       value,
       note,
     };
-    if ((await draft.flush()) && draft.isCurrent(draft.input)) submit.mutate(command);
+    recording.current = true;
+    setCommitting(true);
+    try {
+      if ((await draft.flush()) && draft.isCurrent(draft.input)) await submit.mutateAsync(command);
+    } catch {
+      // The mutation retains the server error; the draft stays editable for correction.
+    } finally {
+      recording.current = false;
+      setCommitting(false);
+    }
   };
 
   return (
-    <article className="rounded-lg border border-line bg-panel p-4">
-      <div
-        className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs"
-        aria-live="polite"
-      >
-        <p>
-          {draft.status === "saved"
-            ? draft.started
-              ? "Draft saved in application data"
-              : "No unsaved edits"
-            : draft.status === "saving"
-              ? "Saving draft…"
-              : draft.status === "unsaved"
-                ? "Draft not yet saved"
-                : draft.status === "conflict"
-                  ? "The current draft revision changed. Your conflicting copy is retained in draft history."
-                  : draft.discardFailed
-                    ? `Discard was not confirmed. Your text is still here; retry discard. ${draft.error ?? ""}`
-                    : `Draft save failed. Keep this window open and retry. ${draft.error ?? ""}`}
-        </p>
-        {draft.invalid && (
-          <p role="alert">
-            The request changed or is no longer waiting. Your input is retained, but cannot be
-            recorded against this baseline. Review the task; discard to start a fresh draft.
-          </p>
-        )}
-        {draft.status === "failed" && (
-          <button
-            type="button"
-            onClick={() => void (draft.discardFailed ? draft.discard() : draft.flush())}
-          >
-            {draft.discardFailed ? "Retry draft discard" : "Retry draft save"}
-          </button>
-        )}
-        {draft.status === "conflict" && (
-          <button type="button" onClick={() => void draft.resolve()}>
-            Use my copy as current draft
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={draft.discarding || draft.status === "saving" || submit.isPending}
-          onClick={() => void draft.discard()}
+    <article className="min-w-0 rounded-lg border border-line bg-panel p-4">
+      <header className="mb-4 space-y-2">
+        <a
+          className="text-sm text-text-dim underline"
+          href={`?procedure=${encodeURIComponent(procedure.procedure_run_id)}#launch`}
         >
-          Discard draft (keep recovery history)
-        </button>
-      </div>
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 text-[0.61rem] font-bold tracking-[0.08em] text-text-dim uppercase">
-            {procedure.definition.id} · {step.step_key}
-          </div>
-          <h2 className="m-0 text-[1rem] tracking-[-0.02em]">{request.title}</h2>
-          <p className="mt-1.5 mb-0 max-w-[900px] text-[0.7rem] leading-5 text-text-soft">
-            {request.instructions}
-          </p>
-        </div>
-        <div className="text-right font-mono text-[0.58rem] leading-5 text-text-dim">
-          <div>{request.schema_id}</div>
-          <div>waiting {step.updated_at ? formatRelative(step.updated_at) : "now"}</div>
-        </div>
+          {procedure.definition.id}
+        </a>
+        <h2 className="text-lg font-semibold leading-7">{request.title}</h2>
+        <p className="text-sm leading-6 text-text-soft">{request.instructions}</p>
       </header>
-
-      {step.inputs.length > 0 && (
-        <details className="mb-3 rounded-md border border-line bg-panel-soft p-2">
-          <summary className="cursor-pointer text-xs text-text-dim">
-            Evidence retained by this decision
-          </summary>
-          <div className="flex flex-wrap gap-2">
-            {step.inputs.map((input) => (
+      {draft.invalid && (
+        <Controls.Notice role="alert">
+          The request changed or is no longer waiting. Your input is retained, but cannot be
+          recorded against this baseline. Review the task; discard to start a fresh draft.
+        </Controls.Notice>
+      )}
+      {(draft.status === "failed" || draft.status === "conflict") && (
+        <div className="mb-3 space-y-2" role="alert">
+          <p>
+            {draft.status === "conflict"
+              ? "The current draft revision changed. Your conflicting copy is retained in draft history."
+              : draft.discardFailed
+                ? `Discard was not confirmed. Your text is still here; retry discard. ${draft.error ?? ""}`
+                : `Draft save failed. Keep this window open and retry. ${draft.error ?? ""}`}
+          </p>
+          <Controls.Button
+            type="button"
+            disabled={committing}
+            onClick={() => {
+              void (draft.status === "conflict"
+                ? draft.resolve()
+                : draft.discardFailed
+                  ? draft.discard()
+                  : draft.flush());
+            }}
+          >
+            {draft.status === "conflict"
+              ? "Use my copy as current draft"
+              : draft.discardFailed
+                ? "Retry draft discard"
+                : "Retry draft save"}
+          </Controls.Button>
+        </div>
+      )}
+      {step.inputs.some((input) => input.kind !== "analysis") && (
+        <div className="mb-4 flex flex-wrap gap-2" aria-label="Decision data">
+          {step.inputs
+            .filter((input) => input.kind !== "analysis")
+            .map((input) => (
               <EvidenceLink input={input} key={JSON.stringify(input)} />
             ))}
-          </div>
-        </details>
+        </div>
       )}
-
       <div
-        className={classes("grid items-start gap-4", analysisInputs.length > 0 && "xl:grid-cols-2")}
+        className={classes(
+          "grid items-start gap-4",
+          analysisInputs.length > 0 && "xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]",
+        )}
       >
         {analysisInputs.length > 0 && (
-          <div className="grid gap-3">
+          <div className="grid min-w-0 gap-3">
             {analysisInputs.map((input) => (
               <DecisionEvidence key={JSON.stringify(input)} input={input} />
             ))}
           </div>
         )}
-        <fieldset
-          disabled={draft.discarding || submit.isPending || submit.isSuccess}
-          className="grid min-w-0 gap-4"
+        {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Delegate IME Enter protection from the native form controls without adding a keyboard role to the form. */}
+        <form
+          aria-label="Record judgment"
+          className="min-w-0"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!composing.current) void record();
+          }}
+          onCompositionStart={() => {
+            composing.current = true;
+          }}
+          onCompositionEnd={() => {
+            composing.current = false;
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              (composing.current || event.nativeEvent.isComposing || event.keyCode === 229)
+            )
+              event.preventDefault();
+          }}
         >
-          <div className="grid content-start gap-3">
-            {fields && (
-              <button
-                type="button"
-                className="text-left text-xs text-accent"
-                onClick={() => {
-                  try {
-                    if (!isRecord(JSON.parse(valueText)))
-                      throw new Error("Judgment must be an object.");
-                    setUseJson(!useJson);
-                    setParseError(undefined);
-                  } catch (error) {
-                    setParseError(errorMessage(error));
-                  }
-                }}
-              >
-                {useJson ? "Use form" : "Edit JSON"}
-              </button>
-            )}
-            {!useJson && fields ? (
+          <fieldset
+            disabled={draft.discarding || committing || submit.isPending || submit.isSuccess}
+            className="grid min-w-0 gap-4"
+          >
+            {!formUnavailable && fields ? (
               <DecisionFields
                 fields={fields}
                 labels={
                   isRecord(request.metadata?.field_labels) ? request.metadata.field_labels : {}
                 }
-                value={JSON.parse(valueText)}
+                value={isRecord(formValue) ? formValue : {}}
+                metadata={request.metadata}
                 onChange={(value) => setValueText(JSON.stringify(value, null, 2))}
               />
             ) : (
-              <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
-                Structured judgment (JSON)
-                <textarea
-                  className="min-h-[220px] resize-y rounded-md border border-line bg-bg p-3 font-mono text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
-                  spellCheck={false}
-                  value={valueText}
-                  onChange={(event) => setValueText(event.target.value)}
-                />
-              </label>
+              <Controls.Notice role="alert">
+                {!fields
+                  ? "This request contains a response type the form does not support yet. Ask the workflow author to use supported fields or add a matching form control. Your draft is retained; this request cannot be submitted here."
+                  : "The saved response cannot be displayed as a form. Your draft is retained in recovery history. Review the request before discarding it and starting again."}
+              </Controls.Notice>
             )}
-          </div>
-          <div className="grid content-start gap-3">
-            <div className="grid gap-1.5 text-[0.64rem] text-text-dim">
-              <label className="grid gap-1.5 font-bold">
-                Recorded reviewer
-                <input
-                  className="rounded-md border border-line bg-bg px-3 py-2.5 text-[0.7rem] text-text outline-none focus:border-accent"
-                  placeholder="name, agent id, or service id"
-                  value={actor}
-                  onChange={(event) => setActor(event.target.value)}
-                />
-              </label>
-              <span className="font-normal leading-4 text-text-dim">
-                Name the lab operator, analysis agent, or service so this judgment can be traced
-                during later experiment review.
-              </span>
-            </div>
-            <div
-              className="grid grid-cols-3 gap-1 rounded-md border border-line bg-bg p-1"
-              role="group"
-            >
-              {(["human", "ai", "service"] as const).map((kind) => (
-                <button
-                  className={classes(
-                    "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-2 text-[0.62rem] font-bold capitalize text-text-dim",
-                    actorKind === kind && "bg-panel-strong text-text",
-                  )}
-                  key={kind}
-                  onClick={() => setActorKind(kind)}
-                  type="button"
-                >
-                  {kind === "human" ? <UserRound size={13} /> : <Bot size={13} />}
-                  {kind}
-                </button>
-              ))}
-            </div>
-            <label className="grid gap-1.5 text-[0.64rem] font-bold text-text-dim">
-              Reasoning note (optional)
-              <textarea
-                className="min-h-[90px] resize-y rounded-md border border-line bg-bg px-3 py-2.5 text-[0.68rem] leading-5 text-text outline-none focus:border-accent"
-                placeholder="Why this selection is experimentally credible"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
+            <Controls.Field>
+              Recorded reviewer
+              <Controls.Input
+                placeholder="Person’s name"
+                value={actor}
+                onChange={(event) => setActor(event.target.value)}
               />
-            </label>
-            <details className="rounded-md border border-line bg-panel-soft px-3 py-2 text-[0.62rem] text-text-dim">
-              <summary className="cursor-pointer font-bold text-text-soft">
-                Expected structure
-              </summary>
-              <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[0.58rem] leading-4">
-                {JSON.stringify(request.structure, null, 2)}
-              </pre>
-            </details>
-            {request.metadata && Object.keys(request.metadata).length > 0 && (
-              <details className="rounded-md border border-line bg-panel-soft px-3 py-2 text-[0.62rem] text-text-dim">
-                <summary className="cursor-pointer font-bold text-text-soft">
-                  Presentation hints
-                </summary>
-                <pre className="mt-2 overflow-auto whitespace-pre-wrap font-mono text-[0.58rem] leading-4">
-                  {JSON.stringify(request.metadata, null, 2)}
-                </pre>
-              </details>
-            )}
+            </Controls.Field>
             {(parseError || submit.isError) && (
-              <p className="m-0 text-[0.64rem] leading-5 text-red" role="alert">
+              <Controls.Notice role="alert">
                 {parseError ?? errorMessage(submit.error)}
-              </p>
+              </Controls.Notice>
             )}
             {submit.isSuccess && (
-              <p className="m-0 inline-flex items-center gap-1.5 text-[0.64rem] text-green">
-                <Check size={14} /> Decision recorded.{" "}
+              <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-accent">
+                <Check size={14} /> Decision recorded.
                 <a
                   className="underline"
                   href={`?procedure=${encodeURIComponent(procedure.procedure_run_id)}#launch`}
@@ -561,38 +533,76 @@ function DecisionEditor({
             )}
             <button
               className={primaryButton}
+              type="submit"
               disabled={
+                formUnavailable ||
+                committing ||
                 submit.isPending ||
                 submit.isSuccess ||
                 draft.invalid ||
-                draft.status === "conflict" ||
-                draft.status === "saving"
+                draft.status === "conflict"
               }
-              onClick={() => void record()}
-              type="button"
             >
-              {submit.isPending && <LoaderCircle className="animate-spin" size={14} />}
+              {(committing || submit.isPending) && (
+                <LoaderCircle className="animate-spin" size={14} />
+              )}
               Record decision
             </button>
-          </div>
-        </fieldset>
+            <p role="status" className="text-xs text-text-dim">
+              {draft.status === "saved"
+                ? draft.started
+                  ? "Draft saved in application data"
+                  : "No unsaved edits"
+                : draft.status === "saving"
+                  ? "Saving draft…"
+                  : draft.status === "unsaved"
+                    ? "Draft not yet saved"
+                    : ""}
+            </p>
+            {options && (
+              <section aria-label="Response options" className="border-t border-line pt-3 text-sm">
+                <div className="mt-3 grid gap-3">
+                  <Controls.Field>
+                    Reasoning note (optional)
+                    <Controls.Textarea
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      placeholder="Why this selection is experimentally credible"
+                    />
+                  </Controls.Field>
+                </div>
+              </section>
+            )}
+          </fieldset>
+        </form>
       </div>
+      {(options || draft.invalid) && (
+        <Controls.Button
+          type="button"
+          className="mt-4"
+          disabled={draft.discarding || draft.status === "saving" || committing || submit.isPending}
+          onClick={() => void draft.discard()}
+        >
+          Discard draft (keep recovery history)
+        </Controls.Button>
+      )}
     </article>
   );
 }
 
 function EvidenceLink({ input }: { input: ProcedureStepAttempt["inputs"][number] }) {
   const common =
-    "inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-2 font-mono text-[0.6rem] text-text-soft";
+    "inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-2 font-mono text-xs text-text-soft";
   if (input.kind === "run") {
     return (
       <a
         className={`${common} no-underline hover:border-line-strong hover:text-text`}
+        title={`Run ${input.run_id}`}
         href={`/?run=${encodeURIComponent(input.run_id)}#runs`}
         rel="noreferrer"
         target="_blank"
       >
-        run · {input.run_id}
+        Open measurement data
       </a>
     );
   }
@@ -619,9 +629,11 @@ function EvidenceLink({ input }: { input: ProcedureStepAttempt["inputs"][number]
   }
   if (input.kind === "parameter_publish") {
     return (
-      <span className={common}>
-        parameters · {input.branch.name} · generation {input.branch.generation} ·{" "}
-        {input.branch.revision.revision_id}
+      <span
+        className={common}
+        title={`Generation ${input.branch.generation} · ${input.branch.revision.revision_id}`}
+      >
+        Parameters · {input.branch.name}
       </span>
     );
   }
@@ -672,7 +684,7 @@ function WorkspaceMessage({
       {icon && <div className="mb-3 text-text-dim">{icon}</div>}
       <h2 className="m-0 text-[0.9rem]">{title}</h2>
       {detail && (
-        <p className="mt-2 mb-0 max-w-[560px] text-[0.68rem] leading-5 text-text-dim">{detail}</p>
+        <p className="mt-2 mb-0 max-w-[560px] text-xs leading-5 text-text-dim">{detail}</p>
       )}
     </div>
   );

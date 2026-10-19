@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import type { MethodResponse } from "openapi-fetch";
 import { apiClient, apiData } from "../../api-client";
@@ -77,7 +78,7 @@ export function CalibrationProfiles({
         is not used as capability policy.
       </p>
       {cursor !== null && (
-        <button
+        <Controls.Button
           type="button"
           disabled={pending}
           onClick={() => {
@@ -85,10 +86,10 @@ export function CalibrationProfiles({
           }}
         >
           {cursor === undefined ? "Load saved profiles" : "Load earlier profiles"}
-        </button>
+        </Controls.Button>
       )}
       {cursor !== undefined && (
-        <button
+        <Controls.Button
           type="button"
           disabled={pending}
           onClick={() => {
@@ -96,7 +97,7 @@ export function CalibrationProfiles({
           }}
         >
           Reload profiles
-        </button>
+        </Controls.Button>
       )}
       {cursor === null && profiles.length === 0 && (
         <p>
@@ -105,9 +106,9 @@ export function CalibrationProfiles({
         </p>
       )}
       {profiles.length > 0 && (
-        <label>
+        <Controls.Field>
           Capability profile
-          <select
+          <Controls.Select
             value={selected}
             disabled={pending}
             onChange={(event) => {
@@ -123,8 +124,8 @@ export function CalibrationProfiles({
                 {item.id}
               </option>
             ))}
-          </select>
-        </label>
+          </Controls.Select>
+        </Controls.Field>
       )}
       {profile && (
         <>
@@ -160,7 +161,7 @@ export function CalibrationProfiles({
               </li>
             ))}
           </ul>
-          <button
+          <Controls.Button
             type="button"
             disabled={pending}
             onClick={() => {
@@ -168,7 +169,7 @@ export function CalibrationProfiles({
             }}
           >
             Check saved profile
-          </button>
+          </Controls.Button>
         </>
       )}
       {pending && <p role="status">Reading saved capability policy…</p>}

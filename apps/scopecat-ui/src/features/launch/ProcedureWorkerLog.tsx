@@ -1,3 +1,4 @@
+import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -24,7 +25,7 @@ export function ProcedureWorkerLog({ procedureId }: { procedureId: string }) {
       {expanded && (
         <>
           <p>This execution's process output; it does not establish the measurement outcome.</p>
-          <button
+          <Controls.Button
             type="button"
             disabled={log.isFetching}
             onClick={() => {
@@ -32,7 +33,7 @@ export function ProcedureWorkerLog({ procedureId }: { procedureId: string }) {
             }}
           >
             Refresh worker output
-          </button>
+          </Controls.Button>
           {log.isFetching && <p role="status">Reading worker output…</p>}
           {log.error && <p role="alert">{log.error.message}</p>}
           {data && (

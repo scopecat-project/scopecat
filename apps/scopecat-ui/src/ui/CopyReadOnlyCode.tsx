@@ -1,3 +1,4 @@
+import * as Controls from "./Controls";
 import { useEffect, useRef, useState } from "react";
 import { readOnlyCode, type ReadOnlyCopyTarget } from "../lib/read-only-code";
 import { secondaryButton } from "./styles";
@@ -58,9 +59,7 @@ function CopyCode({
   }
 
   return (
-    <div
-      className={compact ? "grid min-w-0 gap-2 text-xs" : "mt-2 grid min-w-0 gap-2 text-[0.65rem]"}
-    >
+    <div className={compact ? "grid min-w-0 gap-2 text-xs" : "mt-2 grid min-w-0 gap-2 text-xs"}>
       <button
         className={secondaryButton}
         title={
@@ -94,9 +93,9 @@ function CopyCode({
           <p className="m-0 text-text-soft" role="status">
             Clipboard unavailable. Select and copy the {reference ? "reference" : "code"} below.
           </p>
-          <textarea
+          <Controls.Textarea
             aria-label={reference ? "Run reference" : "Read-only code"}
-            className="w-full min-w-0 rounded border border-line bg-panel p-2 font-mono text-text-soft"
+            className="w-full min-w-0 font-mono"
             readOnly
             rows={code.split("\n").length + 1}
             value={code}

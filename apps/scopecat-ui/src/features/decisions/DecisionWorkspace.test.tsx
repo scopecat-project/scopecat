@@ -67,13 +67,73 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("keeps numeric conditional input visible through editing and submits normalized values", async () => {
+    const step = waitingStep();
+    step.interpretation_request!.structure = {
+      type: "object",
+      fields: {
+        mode: { type: "int" },
+        detail: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+      },
+    };
+    step.interpretation_request!.response_template = { mode: 1, detail: 2 };
+    step.interpretation_request!.metadata = {
+      reviewer: "Reviewer",
+      field_constraints: {
+        detail: { required_when: { field: "mode", value: 1 }, empty_otherwise: true },
+      },
+    };
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    renderWorkspace();
+    const mode = await screen.findByLabelText("mode");
+    for (const text of ["1", "", "-", "1e", "1.5"]) {
+      fireEvent.change(mode, { target: { value: text } });
+      expect(screen.getByLabelText("detail")).toHaveValue("2");
+    }
+    fireEvent.change(mode, { target: { value: "0" } });
+    expect(screen.queryByLabelText("detail")).not.toBeInTheDocument();
+    fireEvent.change(mode, { target: { value: "1" } });
+    expect(screen.getByLabelText("detail")).toHaveValue("2");
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    await waitFor(() =>
+      expect(submitProcedureInput).toHaveBeenCalledWith(
+        expect.objectContaining({ value: { mode: 1, detail: 2 } }),
+        expect.anything(),
+      ),
+    );
+  });
+  it("distinguishes same-name waiting requests with visible context and selects the exact task", async () => {
+    const first = {
+      ...waitingProcedure(),
+      procedure_run_id: "task-aaaaaaaa",
+      created_at: "2026-10-19T08:00:00Z",
+    };
+    const second = { ...first, procedure_run_id: "task-bbbbbbbb" };
+    vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [first, second] });
+    renderWorkspace();
+    const choice = await screen.findByRole("button", {
+      name: /lab.readout-survey.*Submitted.*bbbbbbbb/,
+    });
+    expect(screen.getByRole("button", { name: /Reference.*aaaaaaaa/ })).toBeVisible();
+    fireEvent.click(choice);
+    await waitFor(() =>
+      expect(getProcedureSteps).toHaveBeenCalledWith(
+        second.procedure_run_id,
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(await screen.findByPlaceholderText("Person’s name")).toBeVisible();
+  });
   it("keeps decisions without analysis evidence full width", async () => {
     renderWorkspace();
     const field = await screen.findByLabelText("resonator");
     const layout = field.closest("fieldset")!.parentElement!;
     expect(layout).not.toHaveClass("xl:grid-cols-2");
     expect(layout.children).toHaveLength(1);
-    expect(screen.getByRole("link", { name: /readout-s21/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open measurement data" })).toBeInTheDocument();
   });
 
   it("renders the shipped nullable peak schema and blocks invalid combinations before recording", async () => {
@@ -103,12 +163,13 @@ describe("DecisionWorkspace", () => {
       items: [step],
     });
     renderWorkspace();
-    const frequency = await screen.findByLabelText("Peak frequency (MHz)");
-    expect(frequency).toHaveValue("");
+    await screen.findByLabelText("outcome");
+    expect(screen.queryByLabelText("Peak frequency (MHz)")).not.toBeInTheDocument();
     expect(screen.queryByText("Structured judgment (JSON)")).toBeNull();
     fireEvent.change(screen.getByLabelText("outcome"), {
       target: { value: JSON.stringify("Peak selected") },
     });
+    const frequency = screen.getByLabelText("Peak frequency (MHz)");
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter Peak frequency");
     fireEvent.change(frequency, { target: { value: "6600" } });
@@ -118,7 +179,14 @@ describe("DecisionWorkspace", () => {
     fireEvent.change(screen.getByLabelText("outcome"), {
       target: { value: JSON.stringify("No clear peak") },
     });
-    fireEvent.change(frequency, { target: { value: "" } });
+    expect(screen.queryByLabelText("Peak frequency (MHz)")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("outcome"), {
+      target: { value: JSON.stringify("Peak selected") },
+    });
+    expect(screen.getByLabelText("Peak frequency (MHz)")).toHaveValue("6600");
+    fireEvent.change(screen.getByLabelText("outcome"), {
+      target: { value: JSON.stringify("No clear peak") },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
@@ -149,31 +217,26 @@ describe("DecisionWorkspace", () => {
       items: [step],
     });
     renderWorkspace();
-    await screen.findByText("Evidence retained by this decision");
-    fireEvent.click(screen.getByText("Evidence retained by this decision"));
-    expect(screen.getByText("parameters · daily · generation 4 · joint-verified")).toBeVisible();
+    await screen.findByText("Parameters · daily");
+    expect(screen.getByText("Parameters · daily")).toBeVisible();
   });
 
   it("shows exact evidence and submits an identified structured judgment", async () => {
     renderWorkspace();
 
     expect(await screen.findByText("Select a physical readout resonator")).toBeVisible();
-    fireEvent.click(screen.getByText("Evidence retained by this decision"));
-    expect(screen.getByRole("link", { name: "run · readout-s21" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Open measurement data" })).toHaveAttribute(
       "href",
       "/?run=readout-s21#runs",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Edit JSON" }));
-    expect(screen.getByLabelText("Structured judgment (JSON)")).toHaveValue(
-      JSON.stringify({ resonator: "review this candidate", confidence: 0 }, null, 2),
-    );
-    fireEvent.change(screen.getByLabelText("Structured judgment (JSON)"), {
-      target: { value: '{"resonator":"r2","confidence":0.87}' },
-    });
+    expect(screen.queryByText("Expected structure")).not.toBeInTheDocument();
+    expect(screen.queryByText("Edit JSON")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
+    fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.87" } });
     fireEvent.change(screen.getByLabelText("Recorded reviewer"), {
       target: { value: "analysis-agent" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "ai" }));
+    fireEvent.click(screen.getByRole("button", { name: "Decision options" }));
     fireEvent.change(screen.getByLabelText("Reasoning note (optional)"), {
       target: { value: "isolated dip" },
     });
@@ -189,7 +252,7 @@ describe("DecisionWorkspace", () => {
           expected_step_revision: 2,
           request_hash: hash,
           actor: "analysis-agent",
-          actor_kind: "ai",
+          actor_kind: "human",
           value: { resonator: "r2", confidence: 0.87 },
           note: "isolated dip",
         },
@@ -316,6 +379,89 @@ describe("DecisionWorkspace", () => {
         expect.anything(),
       ),
     );
+  });
+
+  it("blocks unsupported response types without offering raw JSON or dropping fields", async () => {
+    const step = waitingStep();
+    step.interpretation_request!.structure = {
+      type: "object",
+      fields: {
+        accepted: { type: "bool" },
+        frequency: { type: "quantity" },
+      },
+    };
+    step.interpretation_request!.response_template = {
+      accepted: true,
+      frequency: { value: 6, unit: "GHz" },
+    };
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    renderWorkspace();
+    expect(await screen.findByRole("alert")).toHaveTextContent("form does not support yet");
+    expect(screen.getByRole("button", { name: "Record decision" })).toBeDisabled();
+    expect(screen.queryByText("Expected structure")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Decision options" }));
+    expect(screen.queryByText("Edit JSON")).not.toBeInTheDocument();
+    fireEvent.submit(screen.getByRole("form", { name: "Record judgment" }));
+    expect(submitProcedureInput).not.toHaveBeenCalled();
+  });
+
+  it("guards composition and duplicate form submission while saving the draft", async () => {
+    const save = vi.mocked(saveDecisionDraft).getMockImplementation()!;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(saveDecisionDraft).mockImplementation(async (command) => {
+      await gate;
+      return save(command);
+    });
+    renderWorkspace();
+    const reviewer = await screen.findByLabelText("Recorded reviewer");
+    fireEvent.change(reviewer, { target: { value: "Alice" } });
+    const form = screen.getByRole("form", { name: "Record judgment" });
+    fireEvent.compositionStart(reviewer);
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    });
+    reviewer.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    fireEvent.submit(form);
+    expect(submitProcedureInput).not.toHaveBeenCalled();
+    fireEvent.compositionEnd(reviewer);
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() => expect(saveDecisionDraft).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Record decision" })).toBeDisabled();
+    expect(submitProcedureInput).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(submitProcedureInput).mock.calls[0]![0]).toMatchObject({
+      expected_run_revision: 4,
+      expected_step_revision: 2,
+      request_hash: hash,
+      actor: "Alice",
+      value: { resonator: "review this candidate", confidence: 0 },
+    });
+  });
+
+  it("keeps the submitted input editable after a server conflict", async () => {
+    vi.mocked(submitProcedureInput).mockRejectedValue(
+      new Error("Request revision changed; review the current request."),
+    );
+    renderWorkspace();
+    const reviewer = await screen.findByLabelText("Recorded reviewer");
+    fireEvent.change(reviewer, { target: { value: "Alice" } });
+    fireEvent.submit(screen.getByRole("form", { name: "Record judgment" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Request revision changed");
+    expect(reviewer).toHaveValue("Alice");
+    expect(reviewer).toBeEnabled();
+    expect(screen.getByLabelText("confidence")).toHaveValue("0");
   });
 
   it("explains when no experiment is waiting", async () => {
