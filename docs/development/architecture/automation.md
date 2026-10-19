@@ -67,6 +67,21 @@ subject or setup; start a new procedure for a different setup. Explicit bindings
 are never repaired to fit the supplied configuration, and daemon admission still
 validates retained target/sample evidence and the parent's exact subject/setup.
 
+Procedures accept the same editable experiment request and scan expression as
+Notebook preparation:
+
+```python
+request = sweep(frequency=sc.Quantity(6500, "MHz")).sweep(frequency=frequencies)
+scan = context.run("scan", request, config=intent.config, setup=intent.setup)
+```
+
+Both boundaries normalize inputs and controls with the declaration's contract.
+Procedure execution still uses the durable step above; it does not call a
+Notebook prepared launch's `run()`, which would create a new acquisition.
+Changing a request does not mutate an already captured invocation. Replay must
+reconstruct the original inputs; changing them under the same step key conflicts.
+Existing invocation-based calls remain supported.
+
 The daemon derives a stable operation ID from the procedure run, step key, and
 attempt. A child run uses it as both the run submission ID and executor intent.
 Analysis uses a procedure-specific logical key and first reopens the exact `r1`

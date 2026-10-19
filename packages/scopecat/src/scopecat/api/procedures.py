@@ -27,7 +27,11 @@ from scopecat.api.procedure_planner import (
 )
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.api.run import RunHandle
-from scopecat.authoring.experiments import Experiment, ExperimentInvocation
+from scopecat.authoring.experiments import (
+    Experiment,
+    ExperimentInvocation,
+    ExperimentRequest,
+)
 from scopecat.automation import (
     AnalysisPublicationOutputRef,
     InterpretationActorKind,
@@ -125,7 +129,9 @@ from scopecat.records.scientific_scope import setup_content_hash
 from scopecat.records.setup import SetupRevisionRef
 from scopecat.runs.selectors import RunSelector
 
-type ExperimentSpec = ExperimentInvocation | Experiment[...]
+type ExperimentSpec = (
+    ExperimentInvocation | Experiment[...] | ExperimentRequest[object, object]
+)
 
 _ANALYSIS_STEP_INTENT_CODEC = "scopecat.procedure-analysis-step.v1"
 _VERIFIED_CANDIDATE_PUBLISH_STEP_INTENT_CODEC = (
@@ -430,7 +436,7 @@ class LabProcedureContext:
                 config_content_hash=config_content_hash(selected_config),
                 setup_content_hash=inherited.setup_content_hash,
             )
-        invocation = _experiment_invocation(experiment)
+        invocation = _experiment_invocation(experiment, config=selected_config)
         planned = self._runner._plan(  # pyright: ignore[reportPrivateUsage]
             invocation,
             plan_ref=self._durable.plan_ref,
@@ -1264,7 +1270,28 @@ class LabProcedureOperations:
         )
 
 
-def _experiment_invocation(experiment: ExperimentSpec) -> ExperimentInvocation:
+def _experiment_invocation(
+    experiment: ExperimentSpec, *, config: ConfigProfileSnapshot
+) -> ExperimentInvocation:
+    if isinstance(experiment, ExperimentRequest):
+        from scopecat.authoring.author_inputs import author_input_model
+        from scopecat.authoring.controls import edit_controls
+        from scopecat.authoring.request_inputs import capture_request_inputs
+
+        declaration = experiment.declaration
+        input_model = author_input_model(declaration, declaration.controls)
+        inputs, edits = capture_request_inputs(experiment, input_model)
+        invocation = declaration.bind(
+            **cast("dict[str, object]", input_model.model_validate(inputs).model_dump())
+        )
+        return edit_controls(
+            declaration.controls,
+            invocation,
+            config=config,
+            edits=edits,
+            scan_mode=experiment.scan_mode,
+            parameter_sweeps=experiment.parameter_sweeps,
+        )
     return experiment.bind() if isinstance(experiment, Experiment) else experiment
 
 

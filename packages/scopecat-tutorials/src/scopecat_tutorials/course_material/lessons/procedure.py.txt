@@ -144,11 +144,8 @@ def choose_peak(
 def survey(context: LabProcedureContext, intent: SurveyIntent) -> None:
     scan = context.run(
         "scan",
-        sweep.build(frequency=sc.Quantity(6500, "MHz")).with_axis(
-            sc.axis(
-                sweep.controls.fields[0].ref,
-                [sc.Quantity(6490 + index * 0.25, "MHz") for index in range(81)],
-            )
+        sweep(frequency=sc.Quantity(6500, "MHz")).sweep(
+            frequency=[sc.Quantity(6490 + index * 0.25, "MHz") for index in range(81)]
         ),
         config=intent.config,
         setup=intent.setup,

@@ -56,7 +56,8 @@ from scopecat.application.session_context import (
     SessionContextUpdate,
     SessionDefault,
 )
-from scopecat.authoring.experiments import Experiment, ExperimentRequest, Scan
+from scopecat.authoring.experiments import Experiment, ExperimentRequest
+from scopecat.authoring.request_inputs import capture_request_inputs
 from scopecat.automation.models import ProcedureRun, RunOutputRef
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
@@ -732,27 +733,7 @@ class AuthorProject(DaemonClient):
                     "reload the experiment module or explicitly select "
                     "its original revision"
                 )
-            values = draft.snapshot()
-            for control in declaration.controls.fields:
-                if control.id not in values:
-                    continue
-                value = values.pop(control.id)
-                if isinstance(value, Scan):
-                    if not control.scannable:
-                        raise ValueError(f"{control.id}: input is not scannable")
-                    edits[control.id] = ControlEdit(
-                        mode="scan",
-                        axis=AxisValuesSourceRecord(
-                            values=[control.normalize(item) for item in value.values]
-                        ),
-                    )
-                else:
-                    edits[control.id] = ControlEdit(
-                        mode="fixed", value=control.normalize(value)
-                    )
-            inputs = declaration.input_model.model_validate(values).model_dump(
-                mode="json"
-            )
+            inputs, edits = capture_request_inputs(draft, declaration.input_model)
         declared_inputs = {
             name: field.default
             for name, field in entry.request.properties.items()
