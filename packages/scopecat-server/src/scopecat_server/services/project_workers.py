@@ -21,6 +21,12 @@ from typing import Literal, cast
 
 import psutil
 from pydantic import BaseModel
+from scopecat.automation.wire import (
+    ProcedureInputContinueReceipt,
+    ProcedureStepInputSubmitCommand,
+    ProcedureStepInputSubmitReceipt,
+    ProcedureStepInputWaitReceipt,
+)
 from scopecat.daemon.procedure_views import (
     ProcedureDispatchView,
     ProcedureWorkerFailure,
@@ -169,8 +175,14 @@ class ProjectProcedureWorkers:
             if child is not None and code is not None and code != 0:
                 management = "paused"
                 failure = self._exit_failure(code)
+            input_retryable = management.startswith("input_retry:")
+            if management.startswith(("input:", "input_retry:")):
+                management = "paused"
+            elif management.startswith("input_continue:"):
+                management = "active"
             log_path = self._worker_dir(procedure_id) / "worker.log"
             return ProcedureDispatchView(
+                input_continuation_retryable=input_retryable,
                 management=cast("Literal['unmanaged', 'active', 'paused']", management),
                 worker_running=child is not None and code is None,
                 failure=failure,
@@ -205,13 +217,105 @@ class ProjectProcedureWorkers:
                 self._save()
             # The worker loop scans once per tick, not once per queued task stage.
 
-    def pause_for_input(self, procedure_id: str) -> None:
-        """Recording a judgment must not implicitly dispatch the next step."""
+    @staticmethod
+    def _input_identity(
+        step_key: str, attempt: int, revision: int, request_hash: str
+    ) -> str:
+        return sha256(
+            json.dumps([step_key, attempt, revision, request_hash]).encode()
+        ).hexdigest()
+
+    def wait_for_input(
+        self, record: Callable[[], ProcedureStepInputWaitReceipt]
+    ) -> ProcedureStepInputWaitReceipt:
+        """Serialize the durable handoff with answers and worker observations."""
         with self._lock:
+            receipt = record()
+            identity = receipt.run.procedure_run_id
             managed = self._load()
-            if procedure_id in managed:
-                managed[procedure_id] = "paused"
+            current = managed.get(identity, "unmanaged")
+            if receipt.run.state == "waiting_for_input" and (
+                current == "active" or current.startswith("input_continue:")
+            ):
+                request = receipt.step.interpretation_request
+                assert request is not None
+                token = self._input_identity(
+                    receipt.step.step_key,
+                    receipt.step.attempt,
+                    receipt.step.revision,
+                    request.request_hash,
+                )
+                managed[identity] = f"input:{token}"
                 self._save()
+            return receipt
+
+    def submit_input_and_continue(
+        self,
+        command: ProcedureStepInputSubmitCommand,
+        record: Callable[[], ProcedureStepInputSubmitReceipt],
+    ) -> ProcedureInputContinueReceipt:
+        """Only the exact input handoff may release its own pause.
+
+        Repeated answers can retry a dispatch failure, never a worker failure or
+        another question. Legacy/unmanaged pauses require explicit reconciliation.
+        """
+        with self._lock:
+            answer = record()
+            identity = command.procedure_run_id
+            token = self._input_identity(
+                command.step_key,
+                command.attempt,
+                command.expected_step_revision,
+                command.request_hash,
+            )
+            managed = self._load()
+            current = managed.get(identity, "unmanaged")
+            if current not in (
+                f"input:{token}",
+                f"input_retry:{token}",
+                f"input_continue:{token}",
+            ):
+                return ProcedureInputContinueReceipt(
+                    answer=answer,
+                    continuation="already_continued"
+                    if current == "active" or answer.run.state == "closed"
+                    else "blocked",
+                    dispatch_error=None
+                    if current == "active" or answer.run.state == "closed"
+                    else (
+                        "Answer saved; this task is no longer in that input wait. "
+                        "Review the task before continuing."
+                    ),
+                )
+            if answer.run.state != "ready" or answer.run.cancellation is not None:
+                return ProcedureInputContinueReceipt(
+                    answer=answer,
+                    continuation="blocked",
+                    dispatch_error="Answer saved; the task is not ready to continue.",
+                )
+            managed[identity] = f"input_continue:{token}"
+            self._save()
+            errors = self._tick()
+            error = errors.get(identity)
+            current = managed.get(identity, "unmanaged")
+            # _tick can observe failure of the worker that handed off the input.
+            blocked = current == "paused"
+            return ProcedureInputContinueReceipt(
+                answer=answer,
+                continuation="retryable"
+                if current.startswith("input_retry:")
+                else "blocked"
+                if blocked
+                else "queued",
+                dispatch_error=str(error)
+                if error is not None
+                else (
+                    "Answer saved; the previous worker failed. "
+                    "Review the task before continuing."
+                )
+                if blocked
+                else None,
+            )
 
     def retire_software(self, procedure_id: str) -> None:
         """Join an explicitly fenced software task, including after daemon restart.
@@ -283,18 +387,29 @@ class ProjectProcedureWorkers:
                 state = self.state(key)
                 if (
                     state == "ready"
-                    and managed[key] != "paused"
+                    and (
+                        managed[key] == "active"
+                        or managed[key].startswith("input_continue:")
+                    )
                     and key not in self._children
                 ):
                     if len(self._children) >= self.max_workers:
                         break
                     self._spawn(key)
+                    managed[key] = "active"
+                    (self._worker_dir(key) / "failure.json").unlink(missing_ok=True)
+                    self._save()
             except Exception as error:
                 # A broken workspace or one failed spawn must not prevent
                 # independent admitted procedures from reaching their workers.
                 if managed[key] == "paused":
                     continue
-                managed[key] = "paused"
+                managed[key] = (
+                    managed[key].replace("input_continue:", "input_retry:", 1)
+                    if managed[key].startswith("input_continue:")
+                    and key not in self._children
+                    else "paused"
+                )
                 self._record_failure(
                     key,
                     ProcedureWorkerFailure(

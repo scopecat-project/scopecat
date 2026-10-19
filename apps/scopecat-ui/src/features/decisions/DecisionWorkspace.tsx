@@ -1,7 +1,7 @@
 import * as Controls from "../../ui/Controls";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleOff, Ellipsis, FlaskConical, LoaderCircle } from "lucide-react";
+import { CircleOff, Ellipsis, FlaskConical, LoaderCircle } from "lucide-react";
 import type {
   ProcedureRun,
   ProcedureStepAttempt,
@@ -20,7 +20,13 @@ import {
 } from "./DecisionFields";
 import { errorMessage, formatDateTime } from "../../lib/presentation";
 import { classes, iconButton, primaryButton } from "../../ui/styles";
-import { getProcedureSteps, getWaitingProcedures, submitProcedureInput } from "./decision-api";
+import {
+  getProcedureSteps,
+  getDecisionProgress,
+  getWaitingProcedures,
+  submitProcedureInput,
+  type ProcedureInputContinueReceipt,
+} from "./decision-api";
 
 const DecisionOptions = createContext(false);
 
@@ -50,6 +56,10 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   const [selectedId, setSelectedId] = useState<string | undefined>(
     () => new URLSearchParams(window.location.search).get("procedure") ?? undefined,
   );
+  const [submitted, setSubmitted] = useState<{
+    command: ProcedureStepInputSubmitCommand;
+    receipt?: ProcedureInputContinueReceipt;
+  }>();
   const procedures = useQuery({
     queryKey: ["procedure-decisions"],
     queryFn: ({ signal }) => getWaitingProcedures(signal),
@@ -76,26 +86,43 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
       />
     );
   }
+  if (
+    submitted &&
+    (submitted.receipt?.continuation === "retryable" ||
+      submitted.receipt?.continuation === "blocked" ||
+      !procedures.data.items.some(
+        (item) => item.procedure_run_id === submitted.command.procedure_run_id,
+      ))
+  ) {
+    return (
+      <DecisionContinuation
+        submitted={submitted}
+        onUpdated={(receipt) => setSubmitted({ ...submitted, receipt })}
+        onDismiss={() => {
+          setSubmitted(undefined);
+          setSelectedId(undefined);
+        }}
+      />
+    );
+  }
   if (selectedId && !procedures.data.items.some((item) => item.procedure_run_id === selectedId)) {
     return (
       <section className="rounded-lg border border-line bg-panel p-5">
         <h2 className="text-lg font-semibold leading-7">Decision saved or no longer waiting</h2>
-        <p>Open the task to see the recorded answer and choose when to continue.</p>
+        <p>Open the task to check its answer and execution status.</p>
         <a
           className="text-accent underline"
           href={`?procedure=${encodeURIComponent(selectedId)}#launch`}
         >
-          Open task and continue
+          Open task
         </a>
-        {procedures.data.items.length > 0 && (
-          <button
-            type="button"
-            className="ml-4 text-accent underline"
-            onClick={() => setSelectedId(undefined)}
-          >
-            View other waiting decisions
-          </button>
-        )}
+        <button
+          type="button"
+          className="ml-4 text-accent underline"
+          onClick={() => setSelectedId(undefined)}
+        >
+          View waiting decisions
+        </button>
       </section>
     );
   }
@@ -176,7 +203,9 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
         <DecisionCard
           key={selected.procedure_run_id}
           procedure={selected}
-          onRecorded={() => {
+          onSubmitted={(command) => setSubmitted({ command })}
+          onRecorded={(receipt, command) => {
+            setSubmitted({ command, receipt });
             setSelectedId(selected.procedure_run_id);
             const url = new URL(window.location.href);
             url.searchParams.set("procedure", selected.procedure_run_id);
@@ -191,9 +220,14 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
 function DecisionCard({
   procedure,
   onRecorded,
+  onSubmitted,
 }: {
   procedure: ProcedureRun;
-  onRecorded: () => void;
+  onSubmitted: (command: ProcedureStepInputSubmitCommand) => void;
+  onRecorded: (
+    receipt: ProcedureInputContinueReceipt,
+    command: ProcedureStepInputSubmitCommand,
+  ) => void;
 }) {
   const steps = useQuery({
     queryKey: ["procedure-decision-steps", procedure.procedure_run_id],
@@ -227,6 +261,7 @@ function DecisionCard({
       procedure={procedure}
       step={step}
       onRecorded={onRecorded}
+      onSubmitted={onSubmitted}
     />
   );
 }
@@ -234,7 +269,11 @@ function DecisionCard({
 function DecisionForm(props: {
   procedure: ProcedureRun;
   step: ProcedureStepAttempt;
-  onRecorded: () => void;
+  onSubmitted: (command: ProcedureStepInputSubmitCommand) => void;
+  onRecorded: (
+    receipt: ProcedureInputContinueReceipt,
+    command: ProcedureStepInputSubmitCommand,
+  ) => void;
 }) {
   const target = {
     procedure_run_id: props.procedure.procedure_run_id,
@@ -265,11 +304,16 @@ function DecisionEditor({
   procedure,
   step,
   onRecorded,
+  onSubmitted,
   initial,
 }: {
   procedure: ProcedureRun;
   step: ProcedureStepAttempt;
-  onRecorded: () => void;
+  onSubmitted: (command: ProcedureStepInputSubmitCommand) => void;
+  onRecorded: (
+    receipt: ProcedureInputContinueReceipt,
+    command: ProcedureStepInputSubmitCommand,
+  ) => void;
   initial: DecisionDraftView;
 }) {
   const options = useContext(DecisionOptions);
@@ -320,8 +364,8 @@ function DecisionEditor({
   const queryClient = useQueryClient();
   const submit = useMutation({
     mutationFn: submitProcedureInput,
-    onSuccess: () => {
-      onRecorded();
+    onSuccess: (receipt, command) => {
+      onRecorded(receipt, command);
     },
     onSettled: async () => {
       await Promise.all([
@@ -387,7 +431,10 @@ function DecisionEditor({
     recording.current = true;
     setCommitting(true);
     try {
-      if ((await draft.flush()) && draft.isCurrent(draft.input)) await submit.mutateAsync(command);
+      if ((await draft.flush()) && draft.isCurrent(draft.input)) {
+        onSubmitted(command);
+        await submit.mutateAsync(command);
+      }
     } catch {
       // The mutation retains the server error; the draft stays editable for correction.
     } finally {
@@ -521,14 +568,8 @@ function DecisionEditor({
               </Controls.Notice>
             )}
             {submit.isSuccess && (
-              <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-accent">
-                <Check size={14} /> Decision recorded.
-                <a
-                  className="underline"
-                  href={`?procedure=${encodeURIComponent(procedure.procedure_run_id)}#launch`}
-                >
-                  Open task and continue
-                </a>
+              <p role="status">
+                Decision saved. {submit.data.dispatch_error ?? "Continuation requested."}
               </p>
             )}
             <button
@@ -546,7 +587,7 @@ function DecisionEditor({
               {(committing || submit.isPending) && (
                 <LoaderCircle className="animate-spin" size={14} />
               )}
-              Record decision
+              Submit and continue
             </button>
             <p role="status" className="text-xs text-text-dim">
               {draft.status === "saved"
@@ -687,5 +728,59 @@ function WorkspaceMessage({
         <p className="mt-2 mb-0 max-w-[560px] text-xs leading-5 text-text-dim">{detail}</p>
       )}
     </div>
+  );
+}
+
+function DecisionContinuation({
+  submitted,
+  onUpdated,
+  onDismiss,
+}: {
+  submitted: { command: ProcedureStepInputSubmitCommand; receipt?: ProcedureInputContinueReceipt };
+  onUpdated: (receipt: ProcedureInputContinueReceipt) => void;
+  onDismiss: () => void;
+}) {
+  const retry = useMutation({ mutationFn: submitProcedureInput, onSuccess: onUpdated });
+  const receipt = submitted.receipt;
+  const progress = useQuery({
+    queryKey: ["decision-continuation", submitted.command.procedure_run_id],
+    queryFn: ({ signal }) => getDecisionProgress(submitted.command.procedure_run_id, signal),
+    refetchInterval: 1_000,
+  });
+  const dispatch = progress.data?.dispatch;
+  const retryable = receipt?.continuation === "retryable" || dispatch?.input_continuation_retryable;
+
+  return (
+    <section className="rounded-lg border border-line bg-panel p-5 space-y-3">
+      <h2 className="text-lg font-semibold">
+        {receipt ? "Decision saved" : "Check decision submission"}
+      </h2>
+      <p role="status">
+        {dispatch?.failure?.message ??
+          receipt?.dispatch_error ??
+          (receipt
+            ? "Continuation requested. Open the task to follow its progress."
+            : "The task is no longer waiting. Retry the same submission to check its recorded answer and continuation.")}
+      </p>
+      {retry.isError && <p role="alert">{errorMessage(retry.error)}</p>}
+      {(!receipt || retryable) && (
+        <button
+          className={primaryButton}
+          disabled={retry.isPending}
+          onClick={() => retry.mutate(submitted.command)}
+        >
+          {retry.isPending ? "Retrying…" : "Retry continuation"}
+        </button>
+      )}
+      <a
+        className="text-accent underline"
+        href={`?procedure=${encodeURIComponent(submitted.command.procedure_run_id)}#launch`}
+      >
+        Open task
+      </a>
+      <button className="ml-4 text-accent underline" onClick={onDismiss}>
+        View waiting decisions
+      </button>
+    </section>
   );
 }

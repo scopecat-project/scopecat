@@ -44,6 +44,7 @@ class ProcedureDispatchView(BaseModel):
     """Observation of existing process management, not execution authority."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    input_continuation_retryable: bool = False
     management: Literal["unmanaged", "active", "paused"]
     worker_running: bool
     failure: ProcedureWorkerFailure | None = None

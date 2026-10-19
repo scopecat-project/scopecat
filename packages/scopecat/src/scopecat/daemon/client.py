@@ -18,6 +18,7 @@ from scopecat.automation import (
     ProcedureCancelReceipt,
     ProcedureCloseCommand,
     ProcedureCloseReceipt,
+    ProcedureInputContinueReceipt,
     ProcedureRun,
     ProcedureRunAttentionCommand,
     ProcedureRunAttentionReceipt,
@@ -1026,6 +1027,16 @@ class DaemonClient:
             self._procedure_step_path(command, "input/wait"),
             command,
             ProcedureStepInputWaitReceipt,
+        )
+
+    def submit_and_continue_procedure_input(
+        self,
+        command: ProcedureStepInputSubmitCommand,
+    ) -> ProcedureInputContinueReceipt:
+        return self._post_idempotent_model(
+            self._procedure_step_path(command, "input/continue"),
+            command,
+            ProcedureInputContinueReceipt,
         )
 
     def submit_procedure_step_input(

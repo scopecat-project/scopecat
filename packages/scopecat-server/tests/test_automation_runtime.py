@@ -615,7 +615,9 @@ def test_procedure_http_round_trip_persists_pages_and_fences(
             )
 
 
-@pytest.mark.parametrize("mode", ["answer", "cancel", "cancel_publishing"])
+@pytest.mark.parametrize(
+    "mode", ["answer", "continue", "cancel", "cancel_continue", "cancel_publishing"]
+)
 def test_procedure_http_round_trips_interpretation_input(
     tmp_path: Path,
     mode: str,
@@ -685,7 +687,7 @@ def test_procedure_http_round_trips_interpretation_input(
         assert waiting.run.state == "waiting_for_input"
         assert waiting.step.interpretation_request == request
 
-        if mode == "cancel":
+        if mode in {"cancel", "cancel_continue"}:
             command = ProcedureCancelCommand(
                 procedure_run_id=waiting.run.procedure_run_id,
                 expected_run_revision=waiting.run.revision,
@@ -698,7 +700,11 @@ def test_procedure_http_round_trips_interpretation_input(
                 closed.procedure_run_id, ProcedureStepAttemptListQuery()
             ).items == (waiting.step,)
             with pytest.raises(DaemonConflictError):
-                client.submit_procedure_step_input(
+                (
+                    client.submit_and_continue_procedure_input
+                    if mode == "cancel_continue"
+                    else client.submit_procedure_step_input
+                )(
                     ProcedureStepInputSubmitCommand(
                         procedure_run_id=closed.procedure_run_id,
                         expected_run_revision=closed.revision,
@@ -713,19 +719,29 @@ def test_procedure_http_round_trips_interpretation_input(
                 )
             return
 
-        answered = client.submit_procedure_step_input(
-            ProcedureStepInputSubmitCommand(
-                procedure_run_id=submitted.procedure_run_id,
-                expected_run_revision=waiting.run.revision,
-                step_key=waiting.step.step_key,
-                attempt=waiting.step.attempt,
-                expected_step_revision=waiting.step.revision,
-                request_hash=waiting.step.intent_hash,
-                actor="operator@example.test",
-                actor_kind="human",
-                value=schema.encode(_ResonatorSelection(resonator="r2")),
-            )
+        answer_command = ProcedureStepInputSubmitCommand(
+            procedure_run_id=submitted.procedure_run_id,
+            expected_run_revision=waiting.run.revision,
+            step_key=waiting.step.step_key,
+            attempt=waiting.step.attempt,
+            expected_step_revision=waiting.step.revision,
+            request_hash=waiting.step.intent_hash,
+            actor="operator@example.test",
+            actor_kind="human",
+            value=schema.encode(_ResonatorSelection(resonator="r2")),
         )
+        if mode == "continue":
+            result = client.submit_and_continue_procedure_input(answer_command)
+            assert result.continuation == "blocked"  # not a managed input handoff
+            assert result.dispatch_error is not None
+            assert client.submit_and_continue_procedure_input(answer_command) == result
+            with pytest.raises(DaemonConflictError):
+                client.submit_and_continue_procedure_input(
+                    answer_command.model_copy(update={"actor": "another-window"})
+                )
+            answered = result.answer
+        else:
+            answered = client.submit_procedure_step_input(answer_command)
 
         assert answered.run.state == "ready"
         assert schema.decode(answered.output.response.value) == _ResonatorSelection(
