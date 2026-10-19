@@ -1,11 +1,12 @@
 """Course cleanup never claims old work or settles unfinished tasks implicitly."""
 
+from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from scopecat.records.practice import NotebookPracticeClearCommand
+from scopecat.records.practice import NotebookPracticeClearCommand, PracticeScope
 
 from scopecat_server.services.data_cleanup import DataCleanupService
 from scopecat_server.services.notebook_practice import NotebookPracticeService
@@ -13,9 +14,11 @@ from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 
+type Course = tuple[SQLiteProjectStore, NotebookPracticeService, PracticeScope]
+
 
 @pytest.fixture
-def course(tmp_path: Path):
+def course(tmp_path: Path) -> Iterator[Course]:
     with closing(
         SQLiteProjectStore(SQLiteDatabase(tmp_path / "db"), tmp_path / "objects")
     ) as store:
@@ -26,7 +29,13 @@ def course(tmp_path: Path):
         yield store, service, scope
 
 
-def add_run(store, scope, identity, *, state="closed"):
+def add_run(
+    store: SQLiteProjectStore,
+    scope: PracticeScope | None,
+    identity: str,
+    *,
+    state: str = "closed",
+) -> None:
     with store.sqlite.write_transaction() as connection:
         connection.execute(
             "INSERT INTO runs(run_id,created_at,config_content_hash) VALUES "
@@ -49,7 +58,9 @@ def add_run(store, scope, identity, *, state="closed"):
             PracticeOwnership(connection).claim(scope.id, "run", identity)
 
 
-def test_empty_course_can_clear_without_changing_old_or_other_courses(course):
+def test_empty_course_can_clear_without_changing_old_or_other_courses(
+    course: Course,
+) -> None:
     store, service, scope = course
     other = service.enroll("source-two", Path("other"), "parameters")
     add_run(store, None, "ordinary")
@@ -73,7 +84,9 @@ def test_empty_course_can_clear_without_changing_old_or_other_courses(course):
 
 
 @pytest.mark.parametrize("state", ["queued", "leased", "attention_required"])
-def test_unfinished_run_blocks_cleanup_without_retiring_it(course, state):
+def test_unfinished_run_blocks_cleanup_without_retiring_it(
+    course: Course, state: str
+) -> None:
     store, service, scope = course
     add_run(store, scope, "unfinished", state=state)
     preview = service.preview(scope.id)
@@ -88,7 +101,9 @@ def test_unfinished_run_blocks_cleanup_without_retiring_it(course, state):
         assert PracticeOwnership(connection).get(scope.id).state == "active"
 
 
-def test_cleanup_fences_new_claims_and_retries_after_filesystem_failure(course):
+def test_cleanup_fences_new_claims_and_retries_after_filesystem_failure(
+    course: Course,
+) -> None:
     store, service, scope = course
     add_run(store, scope, "owned")
     command = NotebookPracticeClearCommand(preview=service.preview(scope.id))
@@ -108,7 +123,9 @@ def test_cleanup_fences_new_claims_and_retries_after_filesystem_failure(course):
         assert connection.execute("SELECT 1 FROM runs").fetchone() is None
 
 
-def test_external_reference_blocks_and_stale_preview_cannot_clear_new_content(course):
+def test_external_reference_blocks_and_stale_preview_cannot_clear_new_content(
+    course: Course,
+) -> None:
     store, service, scope = course
     add_run(store, scope, "owned")
     preview = service.preview(scope.id)
@@ -130,7 +147,9 @@ def test_external_reference_blocks_and_stale_preview_cannot_clear_new_content(co
 @pytest.mark.parametrize(
     "state", ["ready", "leased", "waiting_for_input", "attention_required"]
 )
-def test_paused_or_waiting_procedure_requires_normal_task_controls(course, state):
+def test_paused_or_waiting_procedure_requires_normal_task_controls(
+    course: Course, state: str
+) -> None:
     store, service, scope = course
     with store.sqlite.write_transaction() as connection:
         connection.execute(

@@ -129,10 +129,13 @@ class DataCleanupService:
                 if kind == "branch":
                     evidence.extend(
                         tuple(item)
-                        for item in connection.execute(
-                            "SELECT * FROM parameter_branch_commits WHERE "
-                            "name=? ORDER BY generation",
-                            (identity,),
+                        for item in cast(
+                            "list[sqlite3.Row]",
+                            connection.execute(
+                                "SELECT * FROM parameter_branch_commits WHERE "
+                                "name=? ORDER BY generation",
+                                (identity,),
+                            ).fetchall(),
                         )
                     )
                 if kind == "analysis" and row["run_id"] is not None:

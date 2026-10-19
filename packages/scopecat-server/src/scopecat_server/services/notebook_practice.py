@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
+from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
 from scopecat.records.data_cleanup import (
@@ -81,10 +82,13 @@ class NotebookPracticeService:
         runs = owners.resources(identity, "run")
         analyses: list[str] = []
         for record in owners.resources(identity, "analysis"):
-            row = connection.execute(
-                "SELECT run_id FROM analysis_publications WHERE record_id=?",
-                (record,),
-            ).fetchone()
+            row = cast(
+                "sqlite3.Row | None",
+                connection.execute(
+                    "SELECT run_id FROM analysis_publications WHERE record_id=?",
+                    (record,),
+                ).fetchone(),
+            )
             if row is None or row[0] not in runs:
                 analyses.append(record)
         return DataCleanupSelection(
