@@ -69,3 +69,47 @@ def test_paired_axes_and_consumed_parameter_overlay() -> None:
     )
     with pytest.raises(ValueError, match="does not consume"):
         compose_request_sweeps(invocation, mode="cartesian", parameters=unused)
+
+
+@pytest.mark.parametrize("mode", ["cartesian", "paired"])
+def test_procedure_request_preserves_scan_plan(mode: str) -> None:
+    from typing import Literal, cast
+
+    from scopecat_testkit.workflow_fixtures import load_config
+
+    from scopecat.api.procedures import _experiment_invocation
+    from scopecat.program.scans import GridSpec
+
+    request = probe().sweep(
+        x=[1, 2], y=[3, 4], mode=cast("Literal['cartesian', 'paired']", mode)
+    )
+    captured = _experiment_invocation(request, config=load_config())
+    expected = (
+        probe.build()
+        .with_axis(sc.axis(probe.controls.fields[0].ref, [1, 2]))
+        .with_axis(sc.axis(probe.controls.fields[1].ref, [3, 4]))
+    )
+    expected = compose_request_sweeps(
+        expected, mode=cast("Literal['cartesian', 'paired']", mode), parameters=()
+    )
+    assert captured.point_plan == expected.point_plan
+    assert isinstance(
+        captured.point_plan.domain, PointsSpec if mode == "paired" else GridSpec
+    )
+    request.values["x"] = sc.Scan([9, 10])
+    assert captured.point_plan == expected.point_plan
+
+
+def test_procedure_request_rejects_invalid_inputs_before_execution() -> None:
+    from scopecat_testkit.workflow_fixtures import load_config
+
+    from scopecat.api.procedures import _experiment_invocation
+
+    request = probe()
+    request.values["unknown"] = 1
+    with pytest.raises(ValueError, match="unknown"):
+        _experiment_invocation(request, config=load_config())
+    with pytest.raises(ValueError, match=r"same|length"):
+        _experiment_invocation(
+            probe().sweep(x=[1, 2], y=[3], mode="paired"), config=load_config()
+        )
