@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 from unittest.mock import Mock
 
+import psutil
 import pytest
 from filelock import FileLock
 from scripts import dev
@@ -329,3 +330,25 @@ def test_cached_payload_repairs_native_wheel_and_extraction(
     extracted.write_text("corrupt extraction")
     dev_resources.prepare_native_dependency(payload, cache)
     assert extracted.read_text() == "reviewed native host"
+
+
+def test_ui_handoff_tracks_backend_restart(tmp_path: Path):
+    from scopecat.application_instance import ApplicationInstance
+    from scopecat_server.development_ui import RECORD_NAME, DevelopmentUI
+
+    instance = ApplicationInstance(tmp_path)
+    (tmp_path / "scopecat.application.json").write_text(instance.declaration())
+    (tmp_path / "development.json").write_text(json.dumps({"source": "checkout"}))
+    runtime = Mock()
+    runtime.instance = instance
+    session = DesktopSession(runtime, threading.Event())
+    session.base_url = "http://127.0.0.1:8100"
+    session.ui_url = "http://127.0.0.1:8200"
+    dev.publish_ui(session, psutil.Process())
+    path = instance.runtime_binding.coordination_root / RECORD_NAME
+    before = DevelopmentUI.model_validate_json(path.read_bytes())
+    dev.publish_endpoint(tmp_path, "http://127.0.0.1:8101")
+    after = DevelopmentUI.model_validate_json(path.read_bytes())
+    assert after.backend == "http://127.0.0.1:8101"
+    assert after.ui == before.ui
+    assert after.owner_created == before.owner_created
