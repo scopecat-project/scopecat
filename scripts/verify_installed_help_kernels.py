@@ -238,6 +238,7 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
         try:
             NotebookClient(
                 notebook,
+                skip_cells_with_tag="scopecat-desktop-open",
                 kernel_name="scopecat-lab",
                 timeout=180,
                 startup_timeout=120,

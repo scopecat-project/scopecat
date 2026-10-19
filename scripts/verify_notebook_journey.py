@@ -160,6 +160,7 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             os.environ["JUPYTER_PATH"] = environment["JUPYTER_PATH"]
             client = NotebookClient(
                 evidence,
+                skip_cells_with_tag="scopecat-desktop-open",
                 kernel_name="scopecat-lab",
                 timeout=120,
                 resources={"metadata": {"path": str(source / "notebooks")}},
@@ -356,6 +357,7 @@ def verify_groups(
     def run_notebook(document: NotebookNode) -> None:
         NotebookClient(
             document,
+            skip_cells_with_tag="scopecat-desktop-open",
             kernel_name="scopecat-lab",
             timeout=120,
             resources={"metadata": {"path": str(source / "notebooks")}},

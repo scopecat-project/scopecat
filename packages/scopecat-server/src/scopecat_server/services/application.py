@@ -14,9 +14,11 @@ from scopecat.daemon.wire import (
     RunSubmission,
 )
 from scopecat.project_state import ProjectStateServices
+from scopecat.records.application_open import ApplicationOpenTarget
 from scopecat.runtime_binding import load_runtime_binding
 
 from scopecat_server.services.analysis_follow import AnalysisFollowRunner, AnalyzeGroup
+from scopecat_server.services.application_open import ApplicationOpenService
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
 from scopecat_server.services.calibration_profiles import CalibrationProfileService
 from scopecat_server.services.calibration_tasks import CalibrationTaskService
@@ -93,6 +95,9 @@ class DaemonApplication:
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.binding = load_runtime_binding(self.project_root)
+        self.application_open = ApplicationOpenService(
+            project_id, deployment_id, self._validate_open_target
+        )
         self.project_id = project_id
         self.deployment_id = deployment_id
         self._project_store = project_store
@@ -162,6 +167,29 @@ class DaemonApplication:
         self.record_collections = RecordCollectionStore(project_store.sqlite)
         self.experimental_batches = ExperimentalBatchStore(project_store.sqlite)
         self._lease_supervisor = lease_supervisor
+
+    def _validate_open_target(self, target: ApplicationOpenTarget) -> None:
+        if target.kind == "run":
+            self.runs.get_run(target.object_id)
+        elif target.kind == "procedure":
+            self.automation.get(target.object_id)
+        elif target.kind == "analysis":
+            if self.analyses.get(target.object_id).entry.id != target.object_id:
+                raise ValueError("Open requires an exact analysis record, not a key")
+        elif target.kind == "run_analysis":
+            assert target.owner_id is not None
+            if (
+                self.runs.get_run_analysis(target.owner_id, target.object_id).entry.id
+                != target.object_id
+            ):
+                raise ValueError("Open requires an exact run analysis record")
+        else:
+            assert target.owner_id is not None
+            if (
+                self.analyses.get_sample(target.owner_id, target.object_id).entry.id
+                != target.object_id
+            ):
+                raise ValueError("Open requires an exact sample analysis record")
 
     def start(self) -> None:
         self._lease_supervisor.start()

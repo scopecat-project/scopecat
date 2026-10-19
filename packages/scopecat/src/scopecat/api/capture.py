@@ -38,6 +38,7 @@ from scopecat.records.analysis import (
     ProjectAnalysisSubject,
     RunAnalysisSubject,
 )
+from scopecat.records.application_open import ApplicationOpenReceipt
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import ContentEntry
 from scopecat.records.parameter_change import ParameterChangeProposal
@@ -328,6 +329,15 @@ class CapturedRun:
 
 @dataclass(frozen=True)
 class _PublicationSource:
+    def _open_analysis(
+        self, analysis_id: str, *, timeout: float
+    ) -> ApplicationOpenReceipt:
+        _ = analysis_id, timeout
+        raise ValueError(
+            "This publication belongs to a portable file. "
+            "Import it into the application and reopen its publication first."
+        )
+
     capture: Capture
     subject: AnalysisSubject
 

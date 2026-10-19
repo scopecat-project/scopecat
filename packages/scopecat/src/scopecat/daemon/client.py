@@ -253,6 +253,15 @@ from scopecat.records.apparatus_history import (
     ApparatusObservationCreate,
     ApparatusObservationPage,
 )
+from scopecat.records.application_open import (
+    ApplicationOpenCommand,
+    ApplicationOpenReceipt,
+    DesktopHostLease,
+    DesktopHostRegistration,
+    DesktopHostStatus,
+    DesktopOpenAcknowledgement,
+    DesktopOpenBatch,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
@@ -412,6 +421,42 @@ class DaemonClient:
             timeout=timeout,
             transport=transport,
         )
+
+    def application_open_host(self) -> DesktopHostStatus:
+        return self._get_model(
+            f"{_API_PREFIX}/application-open/host", DesktopHostStatus
+        )
+
+    def open_application_object(
+        self, command: ApplicationOpenCommand
+    ) -> ApplicationOpenReceipt:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/application-open", command, ApplicationOpenReceipt
+        )
+
+    def register_desktop_host(
+        self, command: DesktopHostRegistration
+    ) -> DesktopHostLease:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/application-open/host/register", command, DesktopHostLease
+        )
+
+    def poll_desktop_open(self, lease: DesktopHostLease) -> DesktopOpenBatch:
+        return self._post_model(
+            f"{_API_PREFIX}/application-open/host/poll", lease, DesktopOpenBatch
+        )
+
+    def acknowledge_desktop_open(
+        self, command: DesktopOpenAcknowledgement
+    ) -> ApplicationOpenReceipt:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/application-open/host/acknowledge",
+            command,
+            ApplicationOpenReceipt,
+        )
+
+    def unregister_desktop_host(self, lease: DesktopHostLease) -> None:
+        self._post_response(f"{_API_PREFIX}/application-open/host/unregister", lease)
 
     @property
     def workspace_id(self) -> str:

@@ -6,11 +6,13 @@ import time
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
+from typing import Literal
 
 import httpx2
 from pydantic import BaseModel
 
 from scopecat.analysis.facts import AnalysisFactSchema
+from scopecat.api.application_open import open_in_application
 from scopecat.api.procedure_inputs import PendingProcedureInput
 from scopecat.application.launch import LaunchSubmission
 from scopecat.automation.definition import ProcedureDefinition
@@ -31,6 +33,10 @@ from scopecat.automation.wire import (
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.kernel.errors import SessionClosedError
+from scopecat.records.application_open import (
+    ApplicationOpenReceipt,
+    ApplicationOpenTarget,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +141,16 @@ class AuthorProcedure:
     @property
     def snapshot(self) -> ProcedureRun:
         return self.session.get_procedure(self.id)
+
+    def open(
+        self, *, view: Literal["task", "decision"] = "task", timeout: float = 5
+    ) -> ApplicationOpenReceipt:
+        """Open this retained task in its connected, running desktop."""
+        return open_in_application(
+            self.session,
+            ApplicationOpenTarget(kind="procedure", object_id=self.id, view=view),
+            timeout=timeout,
+        )
 
     def progress(self) -> ProcedureOperatorView:
         return self.session.procedure_progress(self.id)

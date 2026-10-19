@@ -18,6 +18,7 @@ from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
+from scopecat.api.application_open import open_in_application
 from scopecat.api.calibration_checks import LabCalibrationChecks
 from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.lab import LabClient
@@ -81,6 +82,10 @@ from scopecat.records.analysis_follow import (
     AnalysisFollowView,
 )
 from scopecat.records.analysis_grouping import AnalysisGrouping
+from scopecat.records.application_open import (
+    ApplicationOpenReceipt,
+    ApplicationOpenTarget,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisGroupReceipt,
     AuthorAnalysisReceipt,
@@ -1397,6 +1402,14 @@ class AuthorJob:
     @property
     def id(self) -> str:
         return self.snapshot.procedure_run_id
+
+    def open(self, *, timeout: float = 5) -> ApplicationOpenReceipt:
+        """Open the original admitted task; this never submits or recovers work."""
+        return open_in_application(
+            self.client,
+            ApplicationOpenTarget(kind="procedure", object_id=self.id),
+            timeout=timeout,
+        )
 
     def progress(self, *, cursor: int | None = None) -> ProcedureOperatorView:
         """Observe dispatch, the exact current step/run and bounded history.

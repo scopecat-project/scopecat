@@ -276,6 +276,15 @@ from scopecat.records.apparatus_history import (
     ApparatusObservationCreate,
     ApparatusObservationPage,
 )
+from scopecat.records.application_open import (
+    ApplicationOpenCommand,
+    ApplicationOpenReceipt,
+    DesktopHostLease,
+    DesktopHostRegistration,
+    DesktopHostStatus,
+    DesktopOpenAcknowledgement,
+    DesktopOpenBatch,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
@@ -1138,6 +1147,49 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureWorkerLog:
         application.automation.get(procedure_run_id)
         return project_workers.read_log(procedure_run_id, max_bytes)
+
+    @app.get(f"{_API_PREFIX}/application-open/host")
+    def desktop_host_status() -> DesktopHostStatus:
+        try:
+            return application.application_open.status()
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open")
+    def open_application_object(
+        command: ApplicationOpenCommand,
+    ) -> ApplicationOpenReceipt:
+        try:
+            return application.application_open.submit(command)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/register")
+    def register_desktop_host(command: DesktopHostRegistration) -> DesktopHostLease:
+        try:
+            return application.application_open.register(command)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/poll")
+    def poll_desktop_open(lease: DesktopHostLease) -> DesktopOpenBatch:
+        try:
+            return application.application_open.poll(lease)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/acknowledge")
+    def acknowledge_desktop_open(
+        command: DesktopOpenAcknowledgement,
+    ) -> ApplicationOpenReceipt:
+        try:
+            return application.application_open.acknowledge(command)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/unregister")
+    def unregister_desktop_host(lease: DesktopHostLease) -> None:
+        application.application_open.unregister(lease)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:
