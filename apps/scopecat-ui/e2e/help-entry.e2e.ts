@@ -13,7 +13,7 @@ test("prepared courses lead to the exact Notebook kernel and saved data", async 
       });
     const baseUrl = await startProject(project);
     await page.addInitScript(() => {
-      Object.assign(window, {
+      Object.assign(globalThis, {
         pywebview: {
           api: {
             set_window_title: async () => {},

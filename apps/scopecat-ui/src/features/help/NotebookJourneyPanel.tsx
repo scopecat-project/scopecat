@@ -273,13 +273,13 @@ function NotebookJourneyCourse({
       )}
       {journey && (
         <div className="grid gap-1 break-words">
-          <p>
-            {preparing
-              ? "Preparation is running. This folder will be available when it finishes."
-              : journey.ready
-                ? "Ready to open in VS Code."
+          {(preparing || !journey.ready) && (
+            <p>
+              {preparing
+                ? "Preparation is running. This folder will be available when it finishes."
                 : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
-          </p>
+            </p>
+          )}
           {(open.isError || !journey.ready) && (
             <>
               <p>
@@ -320,9 +320,7 @@ function NotebookJourneyCourse({
           {journey.ready && (
             <>
               <p>
-                Keep writing your own experiments in this ordinary author folder: edit source in
-                <code> src/my_experiment</code>, then construct a new request as shown in the
-                Notebook. Earlier runs keep their original source and parameters.
+                Continue editing <code>src/my_experiment</code> in this course’s code folder.
               </p>
               <p>
                 <a
@@ -331,10 +329,7 @@ function NotebookJourneyCourse({
                   onClick={navigateLink}
                 >
                   Manage this code folder in Settings
-                </a>{" "}
-                to check its registered Python or repair a missing local environment. For a separate
-                experiment folder, use Author code → New code folder there. No copying or publishing
-                step is needed to keep using this folder.
+                </a>
               </p>
             </>
           )}
