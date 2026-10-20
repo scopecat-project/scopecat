@@ -252,7 +252,10 @@ def test_worker_loads_manifest_file_and_supports_empty_project(
 def test_admission_survives_dispatch_failure(tmp_path: Path, routing: bool) -> None:
     from scopecat_server.services.project_workers import ProcedureDispatchError
 
-    automation = SimpleNamespace(get=Mock(return_value=SimpleNamespace(state="ready")))
+    automation = SimpleNamespace(
+        get=Mock(return_value=SimpleNamespace(state="ready")),
+        require_operator=Mock(),
+    )
     app = create_app(
         cast(
             "DaemonApplication",
