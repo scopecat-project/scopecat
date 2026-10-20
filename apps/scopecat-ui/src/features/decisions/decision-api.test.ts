@@ -16,6 +16,7 @@ it.each(["course-one", null])(
       expected_step_revision: 2,
       request_hash: hash,
       actor: "Alice",
+      note: "",
       actor_kind: "human" as const,
       value: { choice: true },
     };
