@@ -189,3 +189,94 @@ def test_shared_interpreter_link_and_target_block_before_data_request(
     assert link.read_text() == "shared interpreter"
     assert (course.directory / "notes.txt").read_text() == "my edits"
     assert current(runtime) == course
+
+
+@pytest.mark.parametrize("relation", ["ancestor", "descendant", "same"])
+def test_overlapping_registered_source_blocks_discard(registered_course, relation: str):
+    runtime, course, registry, preview, post = registered_course
+    other = {
+        "ancestor": course.directory.parent,
+        "descendant": course.directory / "other-source",
+        "same": course.directory,
+    }[relation]
+    other.mkdir(exist_ok=True)
+    original = LocalAuthorWorkspaces.model_validate_json(registry.read_bytes())
+    shared = LocalAuthorWorkspace(
+        id="other", name="Other", root=other, python=other / ".venv/bin/python"
+    )
+    registry.write_text(
+        original.model_copy(
+            update={"items": (*original.items, shared)}
+        ).model_dump_json()
+    )
+    before = registry.read_bytes()
+    with pytest.raises(ValueError, match="其他作者环境"):
+        cleanup.clear(
+            runtime,
+            "parameters",
+            NotebookPracticeClearCommand(preview=preview, files="discard"),
+        )
+    post.assert_not_called()
+    assert registry.read_bytes() == before
+    assert (course.directory / "notes.txt").read_text() == "my edits"
+    assert current(runtime) == course
+
+
+@pytest.mark.parametrize("replacement", ["directory", "symlink", "dangling-symlink"])
+def test_quarantine_retry_preserves_replacement_and_registration(
+    registered_course, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, replacement: str
+):
+    runtime, course, registry, preview, post = registered_course
+    remove = cleanup.shutil.rmtree
+    monkeypatch.setattr(cleanup.shutil, "rmtree", Mock(side_effect=OSError("busy")))
+    command = NotebookPracticeClearCommand(preview=preview, files="discard")
+    with pytest.raises(OSError, match="busy"):
+        cleanup.clear(runtime, "parameters", command)
+    quarantine = cleanup._quarantine(course)
+    if replacement == "directory":
+        course.directory.mkdir()
+        (course.directory / "replacement.txt").write_text("new source")
+    else:
+        target = tmp_path / "replacement-target"
+        if replacement == "symlink":
+            target.mkdir()
+            (target / "replacement.txt").write_text("new source")
+        course.directory.symlink_to(target, target_is_directory=True)
+    before = registry.read_bytes()
+    retained = current(runtime)
+    post.reset_mock()
+    remove_spy = Mock(wraps=remove)
+    monkeypatch.setattr(cleanup.shutil, "rmtree", remove_spy)
+    with pytest.raises(ValueError, match="替换"):
+        cleanup.clear(runtime, "parameters", command)
+    post.assert_not_called()
+    remove_spy.assert_not_called()
+    assert registry.read_bytes() == before
+    assert (quarantine / "notes.txt").read_text() == "my edits"
+    assert course.directory.exists() or course.directory.is_symlink()
+    assert current(runtime) == retained
+
+
+def test_replacement_during_removal_is_not_unregistered(
+    registered_course, monkeypatch: pytest.MonkeyPatch
+):
+    runtime, course, registry, preview, _ = registered_course
+    remove = cleanup.shutil.rmtree
+
+    def replace_source(path: Path) -> None:
+        remove(path)
+        course.directory.mkdir()
+        (course.directory / "replacement.txt").write_text("new source")
+
+    monkeypatch.setattr(cleanup.shutil, "rmtree", replace_source)
+    before = registry.read_bytes()
+    with pytest.raises(ValueError, match="替换"):
+        cleanup.clear(
+            runtime,
+            "parameters",
+            NotebookPracticeClearCommand(preview=preview, files="discard"),
+        )
+    assert registry.read_bytes() == before
+    assert (course.directory / "replacement.txt").read_text() == "new source"
+    retained = current(runtime)
+    assert retained is not None and not retained.cleared

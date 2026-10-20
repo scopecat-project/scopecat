@@ -55,9 +55,16 @@ def _quarantine(course: NotebookJourney) -> Path:
     )
 
 
+def _verify_original_absent(course: NotebookJourney) -> None:
+    if course.directory.exists() or course.directory.is_symlink():
+        raise ValueError("课程原路径已被替换或重新登记；未删除，请手动检查原目录")
+
+
 def _verify_registry(
     runtime: ApplicationRuntime, course: NotebookJourney
 ) -> LocalAuthorWorkspaces:
+    if _quarantine(course).exists():
+        _verify_original_absent(course)
     registry = LocalAuthorWorkspaces.model_validate_json(
         author_bindings_path(runtime.root).read_bytes()
     )
@@ -82,7 +89,10 @@ def _verify_registry(
     ]
     for item in registry.items:
         if item.id != course.workspace_id:
-            protected.append(item.root.resolve())
+            other_root = item.root.resolve()
+            if directory.is_relative_to(other_root):
+                raise ValueError("此目录仍属于其他作者环境；未删除")
+            protected.append(other_root)
             for interpreter in (item.python, *item.retained_pythons):
                 protected.extend((interpreter.absolute(), interpreter.resolve()))
     if any(path == directory or path.is_relative_to(directory) for path in protected):
@@ -172,6 +182,7 @@ def clear(
                 if quarantine.exists():
                     _verify_directory(course, quarantine)
                     shutil.rmtree(quarantine)
+                _verify_original_absent(course)
                 updated = registry.model_copy(
                     update={
                         "items": tuple(
