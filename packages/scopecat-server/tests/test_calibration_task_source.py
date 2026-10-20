@@ -347,3 +347,62 @@ def test_http_without_workspace_cannot_control_course_task(tmp_path: Path) -> No
             )
             assert response.status_code == 200, response.text
             assert response.json()["task"]["mode"] == "cancelled"
+
+
+@pytest.mark.parametrize("first_workspace", [None, "one"])
+def test_task_creation_replay_preserves_its_course_owner(
+    tmp_path: Path, first_workspace: str | None
+) -> None:
+    from fastapi.testclient import TestClient
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with _check_case(tmp_path) as (runtime, check, _):
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+        command = _task(check)
+        headers = {"X-Scopecat-Workspace": first_workspace} if first_workspace else {}
+        with TestClient(runtime.app()) as client:
+            first = client.post(
+                "/api/v1/calibration-tasks",
+                json=command.model_dump(mode="json"),
+                headers=headers,
+            )
+            assert first.status_code == 200, first.text
+            assert (
+                client.post(
+                    "/api/v1/calibration-tasks",
+                    json=command.model_dump(mode="json"),
+                    headers=headers,
+                ).json()
+                == first.json()
+            )
+            for workspace in (None, "one", "two"):
+                if workspace == first_workspace:
+                    continue
+                other = client.post(
+                    "/api/v1/calibration-tasks",
+                    json=command.model_dump(mode="json"),
+                    headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+                )
+                assert other.status_code == 409, other.text
+                assert "belongs to another" in other.text
+        with sqlite.read_transaction() as connection:
+            assert (
+                PracticeOwnership(connection).owner("calibration_task", command.task_id)
+                == first_workspace
+            )

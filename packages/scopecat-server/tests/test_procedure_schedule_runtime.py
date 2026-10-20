@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import httpx2
 import pytest
@@ -374,4 +375,78 @@ def test_registered_project_worker_materializes_its_course_schedule(
             assert (
                 transport.get(f"/api/v1/procedures/{other_id}").json()["state"]
                 == "ready"
+            )
+
+
+@pytest.mark.parametrize("first_workspace", [None, "one"])
+@pytest.mark.parametrize("resource", ["procedure", "schedule"])
+def test_http_procedure_replay_never_transfers_course_ownership(
+    tmp_path: Path,
+    first_workspace: str | None,
+    resource: Literal["procedure", "schedule"],
+) -> None:
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+        if resource == "procedure":
+            command = ProcedureSubmitCommand(
+                definition=_scheduled_worker_procedure.ref,
+                request_key="same-key",
+                intent={"output_run_id": "same-intent"},
+            ).model_dump(mode="json")
+            path, receipt, identity_key = (
+                "/api/v1/procedures",
+                "run",
+                "procedure_run_id",
+            )
+        else:
+            command = ProcedureScheduleCreateCommand(
+                schedule_id="same-key",
+                definition=_scheduled_worker_procedure.ref,
+                intent={"output_run_id": "same-intent"},
+                due_at=_PAST,
+            ).model_dump(mode="json")
+            path, receipt, identity_key = (
+                "/api/v1/procedure-schedules",
+                "schedule",
+                "schedule_id",
+            )
+        headers = {"X-Scopecat-Workspace": first_workspace} if first_workspace else {}
+        first = client.post(path, json=command, headers=headers)
+        assert first.status_code == 201, first.text
+        repeated = client.post(path, json=command, headers=headers)
+        assert repeated.status_code == 201, repeated.text
+        identity = first.json()[receipt][identity_key]
+        assert repeated.json()[receipt][identity_key] == identity
+        for workspace in (None, "one", "two"):
+            if workspace == first_workspace:
+                continue
+            other = client.post(
+                path,
+                json=command,
+                headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            )
+            assert other.status_code == 409, other.text
+            assert "belongs to another" in other.text
+        with sqlite.read_transaction() as connection:
+            assert (
+                PracticeOwnership(connection).owner(resource, identity)
+                == first_workspace
             )

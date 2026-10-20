@@ -639,6 +639,15 @@ class AutomationService:
             request_key,
         )
         if existing is not None:
+            if (
+                PracticeOwnership(connection).owner(
+                    "procedure", existing.procedure_run_id
+                )
+                != scope
+            ):
+                raise AutomationConflict(
+                    "procedure request key belongs to another practice or ordinary work"
+                )
             if existing.intent_hash != intent_hash:
                 raise AutomationConflict(
                     "procedure request key already has different intent"

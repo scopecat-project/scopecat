@@ -45,6 +45,7 @@ from scopecat_server.storage.sqlite.automation import (
 )
 from scopecat_server.storage.sqlite.calibration_tasks import CalibrationTaskStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class _StaleTaskPreparation(BackendConflict):
@@ -76,6 +77,7 @@ class CalibrationTaskService:
         with self._sqlite.read_transaction() as connection:
             existing = self._store.read(connection, specification.task_id)
             if existing is not None:
+                self._require_replay_owner(connection, specification)
                 if existing.specification != specification:
                     raise BackendConflict(
                         "task ID already has a different specification"
@@ -100,6 +102,7 @@ class CalibrationTaskService:
         with self._sqlite.write_transaction() as connection:
             task = self._store.read(connection, specification.task_id)
             if task is not None:
+                self._require_replay_owner(connection, specification)
                 if task.specification != specification:
                     raise BackendConflict(
                         "task ID already has a different specification"
@@ -110,6 +113,19 @@ class CalibrationTaskService:
                 )
                 self._store.insert(connection, task)
             return self._view(connection, task)
+
+    @staticmethod
+    def _require_replay_owner(
+        connection: sqlite3.Connection, specification: CalibrationTaskCreate
+    ) -> None:
+        owners = PracticeOwnership(connection)
+        scope = owners.workspace_scope(
+            specification.source.workspace_id if specification.source else None
+        )
+        if owners.owner("calibration_task", specification.task_id) != scope:
+            raise BackendConflict(
+                "task ID belongs to another practice or ordinary work"
+            )
 
     def get(self, task_id: str) -> CalibrationTaskView:
         with self._sqlite.read_transaction() as connection:
