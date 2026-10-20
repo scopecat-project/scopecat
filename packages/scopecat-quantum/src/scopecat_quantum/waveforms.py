@@ -139,6 +139,11 @@ class RealizedEventTiming:
     sample_rate_hz: int
     start_sample: int
     sample_count: int
+    correction_samples: int = 0
+
+    @property
+    def correction_seconds(self) -> Decimal:
+        return _sample_seconds(self.correction_samples, self.sample_rate_hz)
 
     @property
     def end_sample(self) -> int:
@@ -154,7 +159,11 @@ class RealizedEventTiming:
 
     @property
     def start_error_seconds(self) -> Decimal:
-        return self.realized_start_seconds - self.requested_start_seconds
+        return (
+            self.realized_start_seconds
+            - self.requested_start_seconds
+            - self.correction_seconds
+        )
 
     @property
     def duration_error_seconds(self) -> Decimal:
@@ -190,6 +199,7 @@ class SampledWaveformPlan:
     lane_count: int
     event_timings: tuple[RealizedEventTiming, ...]
     render_events: tuple[SampledRenderEvent, ...]
+    source_events: tuple[ScheduledPulseEvent, ...] | None = None
 
     def timing_for(self, event_id: PulseEventId) -> RealizedEventTiming:
         timings = self.timings_for(event_id)
@@ -283,6 +293,8 @@ def _same_render_structure(
         )
         and reference_event.timing.start_sample == candidate_event.timing.start_sample
         and reference_event.timing.sample_count == candidate_event.timing.sample_count
+        and reference_event.timing.correction_samples
+        == candidate_event.timing.correction_samples
         and reference_event.carrier_origin_seconds
         == candidate_event.carrier_origin_seconds
         and _replace_envelope_phase(
@@ -496,6 +508,7 @@ def plan_sampled_waveforms(
         lane_count=_lane_count(render_events),
         event_timings=timings,
         render_events=render_events,
+        source_events=program.events,
     )
 
 
@@ -820,6 +833,7 @@ class Float64ReferenceRenderer:
             timing = event.timing
             absolute_positions = (
                 timing.start_sample
+                - timing.correction_samples
                 + np.arange(timing.sample_count, dtype=np.float64)
                 + sample_offset
             ) / sample_rate_hz

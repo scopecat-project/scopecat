@@ -29,6 +29,7 @@ from scopecat_quantum.pulses import (
     FluxSignal,
     ReadoutSignal,
 )
+from scopecat_quantum.timing_corrections import TimingCorrectionSnapshot
 from scopecat_quantum.waveforms import RealizedEventTiming, TimingQuantizationMode
 
 from reference_lab.physical_policies import (
@@ -693,6 +694,7 @@ class ListModeTarget:
     output_bindings: tuple[IqOutputBinding, ...]
     acquisition_bindings: tuple[AcquisitionBinding, ...]
     timing_quantization: TimingQuantizationMode = "nearest"
+    timing_correction: TimingCorrectionSnapshot | None = None
     flux_correction: FluxCorrectionSnapshot | None = None
     flux_signals: tuple[FluxSignal, ...] = ()
     flux_outputs: tuple[AwgChannelId, ...] = ()
@@ -702,6 +704,24 @@ class ListModeTarget:
     _configuration_fingerprint: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        if self.timing_correction is not None:
+            timing = self.timing_correction
+            if timing.sample_rate_hz != self.sample_rate_hz:
+                raise ValueError("timing correction sample rate does not match target")
+            if timing.nonzero and self.timing_quantization != "strict":
+                raise ValueError(
+                    "nonzero timing correction requires strict target timing"
+                )
+            if timing.nonzero and self.flux_correction is not None:
+                raise ValueError(
+                    "nonzero timing correction with flux/FIR is unsupported"
+                )
+            configured = {
+                signal_key(b.signal)
+                for b in (*self.output_bindings, *self.acquisition_bindings)
+            }
+            if any(shift.signal not in configured for shift in timing.shifts):
+                raise ValueError("timing correction signal has no configured route")
         if self.flux_correction is not None:
             snapshot = self.flux_correction
             correction = snapshot.correction
@@ -924,6 +944,11 @@ class ListModeTarget:
             "target_id": self.id.value,
             "capability_fingerprint": self.capability_fingerprint,
             "acquisition_dsp_policy": self.acquisition_dsp_policy,
+            **(
+                {"timing_correction": self.timing_correction.model_dump(mode="json")}
+                if self.timing_correction is not None
+                else {}
+            ),
             "flux_correction": (
                 self.flux_correction.model_dump(mode="json")
                 if self.flux_correction is not None
@@ -1239,6 +1264,7 @@ class ListModeArtifact:
     host_state_requirements: ListModeHostStateRequirements
     entries: tuple[ListModeEntry, ...]
     phase_templates: tuple[AwgPhaseTemplate, ...] = ()
+    timing_correction: TimingCorrectionSnapshot | None = None
     flux_correction: FluxCorrectionSnapshot | None = None
 
     @property

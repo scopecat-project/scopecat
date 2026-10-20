@@ -49,6 +49,7 @@ from scopecat_quantum.targets import (
     TargetCompileEntry,
     TargetCompileRequest,
 )
+from scopecat_quantum.timing_corrections import apply_timing_corrections
 from scopecat_quantum.waveforms import (
     SAMPLED_WAVEFORM_SEMANTICS_ID,
     Float64ReferenceRenderer,
@@ -668,6 +669,7 @@ class ListModeTargetCompiler:
             host_state_requirements=host_state_requirements,
             entries=entries,
             phase_templates=phase_templates,
+            timing_correction=self.target.timing_correction,
             flux_correction=self.target.flux_correction,
         )
         self._artifact_cache.put(
@@ -780,6 +782,20 @@ class ListModeTargetCompiler:
                 )
             return None
 
+        if self.target.timing_correction is not None:
+            try:
+                waveform_plan = apply_timing_corrections(
+                    waveform_plan, program, self.target.timing_correction
+                )
+            except ValueError as error:
+                _entry_issue(
+                    issues,
+                    entry.id,
+                    code="list_mode_timing_correction_invalid",
+                    message=str(error),
+                )
+                return None
+
         if waveform_plan.sample_count > self.target.max_samples_per_entry:
             _entry_issue(
                 issues,
@@ -796,8 +812,9 @@ class ListModeTargetCompiler:
         acquisitions: list[DigitizerAcquisitionWindow] = []
         output_intervals: dict[AwgChannelId, list[tuple[int, int, str]]] = {}
         acquisition_intervals: dict[DemodulatorSlotId, list[tuple[int, int, str]]] = {}
-        for event in program.events:
-            timing = waveform_plan.timing_for(event.id)
+        for event, timing in zip(
+            program.events, waveform_plan.event_timings, strict=True
+        ):
             instruction = event.instruction
             match instruction:
                 case Play():
@@ -820,7 +837,10 @@ class ListModeTargetCompiler:
                         self.target,
                         placements_by_signal[signal_key(signal)],
                     )
-                    if isinstance(signal, DriveSignal):
+                    if isinstance(signal, DriveSignal) or (
+                        self.target.timing_correction is not None
+                        and self.target.timing_correction.nonzero
+                    ):
                         for channel_id in binding.channel_ids:
                             _claim_interval(
                                 intervals=output_intervals,
@@ -1711,6 +1731,11 @@ def _artifact_payload(
         "waveform_semantics_id": SAMPLED_WAVEFORM_SEMANTICS_ID,
         "max_result_chunk_bytes": target.max_result_chunk_bytes,
         "timing_quantization": target.timing_quantization,
+        **(
+            {"timing_correction": target.timing_correction.model_dump(mode="json")}
+            if target.timing_correction is not None
+            else {}
+        ),
         "source_entry_ids": [entry.id.value for entry in request.entries],
         "compilation_key": compilation_key_payload(compilation_key),
         "compilation_budget": compilation_budget_payload(compilation_budget),
@@ -1737,6 +1762,11 @@ def _artifact_payload(
                         "requested_start_seconds": str(timing.requested_start_seconds),
                         "requested_duration_seconds": str(
                             timing.requested_duration_seconds
+                        ),
+                        **(
+                            {"correction_samples": timing.correction_samples}
+                            if target.timing_correction is not None
+                            else {}
                         ),
                         "start_sample": timing.start_sample,
                         "sample_count": timing.sample_count,
