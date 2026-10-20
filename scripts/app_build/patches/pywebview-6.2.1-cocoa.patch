@@ -59,3 +59,27 @@
                  }
  
                  cookie = create_cookie(data)
+@@ -894,7 +885,8 @@
+ 
+     def evaluate_js(self, script, parse_json):
+         def eval():
+-            self.webview.evaluateJavaScript_completionHandler_(script, handler)
++            if not self.closed.is_set():
++                self.webview.evaluateJavaScript_completionHandler_(script, handler)
+ 
+         def handler(result, error):
+             if parse_json and result:
+@@ -913,7 +905,12 @@
+             result_semaphore = Semaphore(0)
+ 
+         AppHelper.callAfter(eval)
+-        JSResult.result_semaphore.acquire()
++        # WebKit may discard completion handlers when its window closes.
++        # Release bridge callers even after the Cocoa event loop has stopped;
++        # a live window still waits for its actual JavaScript result.
++        while not JSResult.result_semaphore.acquire(timeout=0.1):
++            if self.closed.is_set():
++                return None
+         return JSResult.result
+ 
+     def create_file_dialog(
