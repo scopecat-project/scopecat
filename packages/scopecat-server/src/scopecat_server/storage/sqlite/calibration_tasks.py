@@ -9,6 +9,8 @@ from scopecat.daemon.calibration_tasks import (
     CalibrationTaskRecord,
 )
 
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
 
 class CalibrationTaskStore:
     def read(
@@ -32,6 +34,12 @@ class CalibrationTaskStore:
     def insert(
         self, connection: sqlite3.Connection, task: CalibrationTaskRecord
     ) -> None:
+        source = task.specification.source
+        PracticeOwnership(connection).claim_created(
+            "calibration_task",
+            task.specification.task_id,
+            workspace_id=source.workspace_id if source else None,
+        )
         connection.execute(
             "INSERT INTO calibration_tasks(task_id, mode, record_json) "
             "VALUES (?, ?, ?)",
@@ -39,8 +47,15 @@ class CalibrationTaskStore:
         )
 
     def update(
-        self, connection: sqlite3.Connection, task: CalibrationTaskRecord
+        self,
+        connection: sqlite3.Connection,
+        task: CalibrationTaskRecord,
+        *,
+        worker: bool = False,
     ) -> None:
+        PracticeOwnership(connection).require_writer(
+            "calibration_task", task.specification.task_id, worker=worker
+        )
         connection.execute(
             "UPDATE calibration_tasks SET mode = ?, record_json = ? WHERE task_id = ?",
             (task.mode, task.model_dump_json(), task.specification.task_id),
@@ -64,11 +79,17 @@ class CalibrationTaskStore:
     def list(
         self, connection: sqlite3.Connection, query: CalibrationTaskListQuery
     ) -> CalibrationTaskPage:
-        where = "" if query.cursor is None else "WHERE sequence < ?"
+        where = (
+            "WHERE (SELECT scope_id FROM practice_resources p "
+            "WHERE p.kind='calibration_task' "
+            "AND p.resource_id=calibration_tasks.task_id) IS ? "
+            "AND (? IS NULL OR sequence < ?)"
+        )
         parameters = (
-            (query.limit + 1,)
-            if query.cursor is None
-            else (query.cursor, query.limit + 1)
+            PracticeOwnership(connection).workspace_scope(),
+            query.cursor,
+            query.cursor,
+            query.limit + 1,
         )
         rows = cast(
             "list[sqlite3.Row]",

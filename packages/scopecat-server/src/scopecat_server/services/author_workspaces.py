@@ -37,7 +37,15 @@ class AuthorWorkspaceServices:
     def _refresh(self) -> None:
         """Discover explicitly registered folders without replacing live services."""
         with self._load_lock:
-            for item in local_author_workspaces(self.root):
+            registered = local_author_workspaces(self.root)
+            identities = {item.id for item in registered}
+            for identity in tuple(self.services):
+                if identity not in identities:
+                    self.services.pop(identity).close()
+            for identity in tuple(self.unavailable):
+                if identity not in identities:
+                    del self.unavailable[identity]
+            for item in registered:
                 if item.id in self.services or item.id in self.unavailable:
                     continue
                 with self.store.sqlite.write_transaction() as connection:

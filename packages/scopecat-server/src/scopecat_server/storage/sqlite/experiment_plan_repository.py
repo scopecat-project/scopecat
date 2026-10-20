@@ -15,11 +15,16 @@ from scopecat.records.experiment_plan import (
     ExperimentPlanSave,
 )
 from scopecat.records.plan_ref import ExperimentPlanRef
+from scopecat.records.practice import PracticeResource
+from scopecat.records.scientific_selection import ParameterConfiguration
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
 
 if TYPE_CHECKING:
     from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
+
+
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class ExperimentPlanRepository:
@@ -58,6 +63,7 @@ class ExperimentPlanRepository:
 
     def list(self, *, plan_id: str | None = None) -> ExperimentPlanList:
         with self.store.sqlite.read_connection() as connection:
+            scope = PracticeOwnership(connection).workspace_scope()
             if plan_id is None:
                 rows = cast(
                     "list[sqlite3.Row]",
@@ -67,7 +73,11 @@ class ExperimentPlanRepository:
                         "FROM experiment_plan_revisions r "
                         "JOIN experiment_plan_heads h ON "
                         "h.plan_id=r.plan_id AND h.revision=r.revision "
-                        "WHERE h.hidden=0 ORDER BY r.plan_id"
+                        "WHERE h.hidden=0 AND "
+                        "(SELECT scope_id FROM practice_resources p "
+                        "WHERE p.kind='plan' "
+                        "AND p.resource_id=r.plan_id) IS ? ORDER BY r.plan_id",
+                        (scope,),
                     ).fetchall(),
                 )
             else:
@@ -76,8 +86,12 @@ class ExperimentPlanRepository:
                     connection.execute(
                         "SELECT plan_id,revision,content_hash "
                         "FROM experiment_plan_revisions "
-                        "WHERE plan_id=? ORDER BY revision DESC",
-                        (plan_id,),
+                        "WHERE plan_id=? AND "
+                        "(SELECT scope_id FROM practice_resources p "
+                        "WHERE p.kind='plan' "
+                        "AND p.resource_id=experiment_plan_revisions.plan_id) IS ? "
+                        "ORDER BY revision DESC",
+                        (plan_id, scope),
                     ).fetchall(),
                 )
         return ExperimentPlanList(
@@ -115,6 +129,25 @@ class ExperimentPlanRepository:
             from .data_cleanup import require_retained_references
 
             require_retained_references(connection, item.model_dump_json())
+            owners = PracticeOwnership(connection)
+            choice = command.definition.selection.configuration
+            assert (
+                isinstance(choice, ParameterConfiguration) and choice.setup is not None
+            )
+            resources: list[tuple[PracticeResource, str]] = [
+                ("source", command.definition.workspace_id),
+                ("parameters", choice.ref.revision_id),
+                ("setup", choice.setup.revision_id),
+            ]
+            if command.definition.source is not None:
+                resources.append(("run", command.definition.source.run_id))
+            if parent is not None:
+                resources.append(("plan", parent.plan_id))
+            scope = owners.require_admission(*resources)
+            if command.previous:
+                owners.require_writer("plan", plan_id)
+            elif scope is not None:
+                owners.claim(scope, "plan", plan_id)
             if command.previous:
                 cursor = connection.execute(
                     "UPDATE experiment_plan_heads SET revision=?, "
@@ -140,6 +173,7 @@ class ExperimentPlanRepository:
     def hide(self, ref: ExperimentPlanRef) -> None:
         self.get(ref)
         with self.store.sqlite.write_transaction() as connection:
+            PracticeOwnership(connection).require_writer("plan", ref.plan_id)
             cursor = connection.execute(
                 "UPDATE experiment_plan_heads SET hidden=1 WHERE "
                 "plan_id=? AND revision=?",

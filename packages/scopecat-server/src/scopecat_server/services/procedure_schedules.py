@@ -27,6 +27,7 @@ from scopecat_server.storage.sqlite.automation import (
     AutomationConflict,
     AutomationNotFound,
 )
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.procedure_schedules import (
     ProcedureScheduleConflict,
     ProcedureScheduleNotFound,
@@ -67,6 +68,15 @@ class ProcedureScheduleService:
             except ProcedureScheduleNotFound:
                 existing = None
             if existing is not None:
+                owners = PracticeOwnership(connection)
+                scope = owners.workspace_scope(
+                    command.source.workspace_id if command.source else None
+                )
+                if owners.owner("schedule", existing.schedule_id) != scope:
+                    raise ProcedureScheduleConflict(
+                        "procedure schedule ID belongs to another practice "
+                        "or ordinary work"
+                    )
                 if (
                     existing.definition != command.definition
                     or existing.intent != command.intent
@@ -131,6 +141,9 @@ class ProcedureScheduleService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_writer(
+                "schedule", command.schedule_id
+            )
             schedule = self._store.read_in_transaction(
                 connection,
                 command.schedule_id,
@@ -189,6 +202,9 @@ class ProcedureScheduleService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_writer(
+                "schedule", command.schedule_id
+            )
             schedule = self._store.read_in_transaction(
                 connection,
                 command.schedule_id,

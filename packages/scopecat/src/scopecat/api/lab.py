@@ -189,10 +189,17 @@ class LabClient:
         ) = None,
         operator: str = "operator",
         procedure_source: Callable[[], ProcedureSource] | None = None,
+        workspace_id: str | None = None,
     ) -> None:
         self._execution_setup = setup.ref if isinstance(setup, SetupRevision) else setup
         self._owns_client = isinstance(daemon, str)
-        self._client = DaemonClient(daemon) if isinstance(daemon, str) else daemon
+        if not isinstance(daemon, str) and workspace_id is not None:
+            raise ValueError("Select the workspace on the supplied DaemonClient")
+        self._client = (
+            DaemonClient(daemon, workspace_id=workspace_id)
+            if isinstance(daemon, str)
+            else daemon
+        )
         self._runs = RemoteRunOperations(self._client)
         self._analyses = RemoteProjectAnalysisOperations(self._client)
         self._config = LabConfigOperations(

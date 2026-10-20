@@ -199,3 +199,44 @@ it("scopes short numbers to a collection and retains that filter after renaming"
   fireEvent.click(await screen.findByRole("button", { name: "Open collection run #1" }));
   expect(open).toHaveBeenLastCalledWith("b-1");
 });
+
+it("filters this course by recorded ownership and removes the filter explicitly", async () => {
+  window.history.replaceState(null, "", "/?course=course-one#history");
+  const requests: URL[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      requests.push(url);
+      if (url.pathname === "/api/v1/practice/course-one")
+        return Response.json({ id: "course-one", lesson: "parameters", state: "active" });
+      if (url.pathname.endsWith("/preview"))
+        return Response.json({ record_count: 0, selection: { procedures: [], analyses: [] } });
+      return Response.json({ items: [] });
+    }),
+  );
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ResearchHistory projectId="app" daemonUnavailable={false} onOpenRun={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("Course: parameters");
+  expect(
+    requests.some(
+      (url) =>
+        url.pathname === "/api/v1/runs" && url.searchParams.get("practice_scope") === "course-one",
+    ),
+  ).toBe(true);
+  expect(screen.queryByText("Research project management")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show all Data" }));
+  await waitFor(() =>
+    expect(
+      requests.some(
+        (url) => url.pathname === "/api/v1/runs" && !url.searchParams.has("practice_scope"),
+      ),
+    ).toBe(true),
+  );
+  window.history.replaceState(null, "", "/");
+});

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from scopecat.automation import ProcedureSchedule, ProcedureScheduleState
 
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class ProcedureScheduleStoreError(RuntimeError):
@@ -88,7 +89,12 @@ class SQLiteProcedureScheduleStore:
             raise ValueError("procedure schedule page size must be between 1 and 500")
         if before is not None and before < 1:
             raise ValueError("procedure schedule cursor must be positive")
-        clauses: list[str] = []
+        clauses = [
+            (
+                "(SELECT scope_id FROM practice_resources p WHERE p.kind='schedule' "
+                "AND p.resource_id=procedure_schedules.schedule_id) IS ?"
+            )
+        ]
         parameters: list[str | int] = []
         if before is not None:
             clauses.append("sequence < ?")
@@ -108,7 +114,7 @@ class SQLiteProcedureScheduleStore:
                         ORDER BY sequence DESC
                         LIMIT ?
                         """,  # noqa: S608 - clauses are fixed internal fragments
-                        parameters,
+                        [PracticeOwnership(connection).workspace_scope(), *parameters],
                     )
                 )
             selected = rows[:limit]
@@ -140,11 +146,16 @@ class SQLiteProcedureScheduleStore:
         _require_traversal_pair(after, through_sequence)
         try:
             with self.sqlite.read_transaction() as connection:
+                scope = PracticeOwnership(connection).workspace_scope()
                 traversal_end = through_sequence
                 if traversal_end is None:
                     row = _one(
                         connection.execute(
-                            "SELECT MAX(sequence) AS sequence FROM procedure_schedules"
+                            "SELECT MAX(sequence) AS sequence FROM procedure_schedules "
+                            "WHERE (SELECT scope_id FROM practice_resources p "
+                            "WHERE p.kind='schedule' AND "
+                            "p.resource_id=procedure_schedules.schedule_id) IS ?",
+                            (scope,),
                         )
                     )
                     traversal_end = (
@@ -157,6 +168,9 @@ class SQLiteProcedureScheduleStore:
                         """
                         SELECT sequence, schedule_json FROM procedure_schedules
                         WHERE state = 'pending'
+                          AND (SELECT scope_id FROM practice_resources p
+                               WHERE p.kind='schedule'
+                                 AND p.resource_id=procedure_schedules.schedule_id) IS ?
                           AND due_at <= ?
                           AND (? IS NULL OR sequence > ?)
                           AND sequence <= ?
@@ -164,6 +178,7 @@ class SQLiteProcedureScheduleStore:
                         LIMIT ?
                         """,
                         (
+                            scope,
                             _timestamp(at),
                             after,
                             after,
@@ -210,6 +225,11 @@ class SQLiteProcedureScheduleStore:
                     schedule.model_dump_json(),
                 ),
             )
+            PracticeOwnership(connection).claim_created(
+                "schedule",
+                schedule.schedule_id,
+                workspace_id=schedule.source.workspace_id if schedule.source else None,
+            )
         except sqlite3.IntegrityError as error:
             raise ProcedureScheduleConflict(
                 "procedure schedule id or materialized run already exists"
@@ -222,6 +242,7 @@ class SQLiteProcedureScheduleStore:
         *,
         expected_revision: int,
     ) -> None:
+        PracticeOwnership(connection).require_writer("schedule", schedule.schedule_id)
         current = self.read_in_transaction(connection, schedule.schedule_id)
         if current.revision != expected_revision:
             raise ProcedureScheduleConflict("procedure schedule revision changed")

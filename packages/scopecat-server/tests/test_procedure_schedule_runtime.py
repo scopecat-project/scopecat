@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import httpx2
 import pytest
@@ -21,6 +22,7 @@ from scopecat.automation import (
     ProcedureScheduleListQuery,
     ProcedureScheduleMaterializeCommand,
     ProcedureStepAttemptListQuery,
+    ProcedureSubmitCommand,
     RunOutputRef,
     procedure,
 )
@@ -242,3 +244,431 @@ def _daemon_client(
         "http://testserver",
         transport=httpx2.MockTransport(send),
     )
+
+
+def test_registered_project_worker_materializes_its_course_schedule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.application.lab import LabApplication
+    from scopecat.author_workspaces import (
+        LocalAuthorWorkspace,
+        LocalAuthorWorkspaces,
+        author_bindings_path,
+    )
+    from scopecat.project import Project, open_project
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    root = tmp_path / "course-project"
+    root.mkdir()
+    (root / "scopecat.toml").write_text("[lab]\n")
+    bindings = author_bindings_path(root)
+    bindings.parent.mkdir(parents=True, exist_ok=True)
+    bindings.write_text(
+        LocalAuthorWorkspaces(
+            service_root=tmp_path / "service",
+            items=(
+                LocalAuthorWorkspace(
+                    id="course-source", name="Course", root=root, python=root / "python"
+                ),
+            ),
+        ).model_dump_json()
+    )
+    registry = ProcedureRegistry((_scheduled_worker_procedure,))
+
+    def application(_project: Project) -> LabApplication:
+        return LabApplication(procedures=registry)
+
+    monkeypatch.setattr(Project, "load_application", application)
+
+    def endpoint(_root: Path, *, explicit: str | None = None) -> str:
+        return explicit or "http://testserver"
+
+    monkeypatch.setattr("scopecat.daemon.endpoint.resolve_daemon_endpoint", endpoint)
+    with (
+        LocalDaemonRuntime(tmp_path / "service") as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            owners.save(
+                PracticeScope(
+                    id="course",
+                    title="Course",
+                    lesson="parameters",
+                    directory=str(root),
+                    kind="notebook",
+                    workspace_id="course-source",
+                )
+            )
+            owners.claim("course", "source", "course-source")
+            owners.save(
+                PracticeScope(
+                    id="other-course",
+                    title="Other",
+                    lesson="parameters",
+                    directory="other",
+                    kind="notebook",
+                    workspace_id="other-source",
+                )
+            )
+            owners.claim("other-course", "source", "other-source")
+        other = transport.post(
+            "/api/v1/procedures",
+            json=ProcedureSubmitCommand(
+                definition=_scheduled_worker_procedure.ref,
+                request_key="other-course",
+                intent={"output_run_id": "other-output"},
+            ).model_dump(mode="json"),
+            headers={"X-Scopecat-Workspace": "other-source"},
+        )
+        assert other.status_code == 201, other.text
+        other_id = other.json()["run"]["procedure_run_id"]
+        command = ProcedureScheduleCreateCommand(
+            schedule_id="course-schedule",
+            definition=_scheduled_worker_procedure.ref,
+            intent={"output_run_id": "course-output"},
+            due_at=_PAST,
+        )
+        response = transport.post(
+            "/api/v1/procedure-schedules",
+            json=command.model_dump(mode="json"),
+            headers={"X-Scopecat-Workspace": "course-source"},
+        )
+        assert response.status_code == 201, response.text
+        assert transport.get("/api/v1/procedure-schedules/due").json()["items"] == []
+        original_init = DaemonClient.__init__
+
+        def send(request: httpx2.Request) -> httpx2.Response:
+            response = transport.request(
+                request.method,
+                request.url.raw_path.decode(),
+                content=request.content,
+                headers=dict(request.headers),
+            )
+            return httpx2.Response(
+                response.status_code,
+                content=response.content,
+                headers=dict(response.headers),
+            )
+
+        def connected(
+            self: DaemonClient, base_url: str, *, workspace_id: str | None = None
+        ) -> None:
+            original_init(
+                self,
+                base_url,
+                workspace_id=workspace_id,
+                transport=httpx2.MockTransport(send),
+            )
+
+        monkeypatch.setattr(DaemonClient, "__init__", connected)
+        with open_project(root).connect("http://testserver") as lab:
+            cycle = ProjectAutomationWorker(lab.procedures).cycle()
+            assert cycle.schedules.materialized == 1
+            assert cycle.schedules.failures == 0 and cycle.schedules.conflicts == 0
+            assert cycle.procedures.dispatched == 1
+            schedule = lab.procedures.get_schedule("course-schedule")
+            assert schedule.state == "materialized"
+            assert (
+                transport.get(f"/api/v1/procedures/{other_id}").json()["state"]
+                == "ready"
+            )
+
+
+@pytest.mark.parametrize("first_workspace", [None, "one"])
+@pytest.mark.parametrize("resource", ["procedure", "schedule"])
+def test_http_procedure_replay_never_transfers_course_ownership(
+    tmp_path: Path,
+    first_workspace: str | None,
+    resource: Literal["procedure", "schedule"],
+) -> None:
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+        if resource == "procedure":
+            command = ProcedureSubmitCommand(
+                definition=_scheduled_worker_procedure.ref,
+                request_key="same-key",
+                intent={"output_run_id": "same-intent"},
+            ).model_dump(mode="json")
+            path, receipt, identity_key = (
+                "/api/v1/procedures",
+                "run",
+                "procedure_run_id",
+            )
+        else:
+            command = ProcedureScheduleCreateCommand(
+                schedule_id="same-key",
+                definition=_scheduled_worker_procedure.ref,
+                intent={"output_run_id": "same-intent"},
+                due_at=_PAST,
+            ).model_dump(mode="json")
+            path, receipt, identity_key = (
+                "/api/v1/procedure-schedules",
+                "schedule",
+                "schedule_id",
+            )
+        headers = {"X-Scopecat-Workspace": first_workspace} if first_workspace else {}
+        first = client.post(path, json=command, headers=headers)
+        assert first.status_code == 201, first.text
+        repeated = client.post(path, json=command, headers=headers)
+        assert repeated.status_code == 201, repeated.text
+        identity = first.json()[receipt][identity_key]
+        assert repeated.json()[receipt][identity_key] == identity
+        for workspace in (None, "one", "two"):
+            if workspace == first_workspace:
+                continue
+            other = client.post(
+                path,
+                json=command,
+                headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            )
+            assert other.status_code == 409, other.text
+            assert "belongs to another" in other.text
+        with sqlite.read_transaction() as connection:
+            assert (
+                PracticeOwnership(connection).owner(resource, identity)
+                == first_workspace
+            )
+
+
+@pytest.mark.parametrize("action", ["cancel", "materialize"])
+def test_schedule_operator_replay_requires_its_workspace(
+    tmp_path: Path, action: str
+) -> None:
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        schedule = runtime.application.procedure_schedules.create(
+            ProcedureScheduleCreateCommand(
+                schedule_id="operator-replay",
+                definition=_definition(),
+                intent={},
+                due_at=_PAST,
+            )
+        ).schedule
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+            owners.claim("one", "schedule", schedule.schedule_id)
+        if action == "cancel":
+            path = f"/api/v1/procedure-schedule-cancellations/{schedule.schedule_id}"
+            command = ProcedureScheduleCancelCommand(
+                schedule_id=schedule.schedule_id,
+                expected_schedule_revision=schedule.revision,
+                actor="operator",
+                reason="stop",
+            ).model_dump(mode="json")
+        else:
+            path = f"/api/v1/procedure-schedule-materializations/{schedule.schedule_id}"
+            command = ProcedureScheduleMaterializeCommand(
+                schedule_id=schedule.schedule_id,
+                expected_schedule_revision=schedule.revision,
+            ).model_dump(mode="json")
+        for workspace in (None, "two"):
+            response = client.post(
+                path,
+                json=command,
+                headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            )
+            assert response.status_code == 409, response.text
+        response = client.post(
+            path, json=command, headers={"X-Scopecat-Workspace": "one"}
+        )
+        assert response.status_code == 200, response.text
+        assert (
+            client.post(
+                path, json=command, headers={"X-Scopecat-Workspace": "one"}
+            ).json()
+            == response.json()
+        )
+        for workspace in (None, "two"):
+            replay = client.post(
+                path,
+                json=command,
+                headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            )
+            assert replay.status_code == 409, replay.text
+
+
+@pytest.mark.parametrize("workspace", [None, "one"])
+def test_source_less_managed_worker_uses_retained_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, workspace: str | None
+) -> None:
+    from scopecat.application.lab import LabApplication
+    from scopecat.project import Project
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server import launch_worker
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "scopecat.toml").write_text("[lab]\n")
+    registry = ProcedureRegistry((_scheduled_worker_procedure,))
+
+    def application(_project: Project) -> LabApplication:
+        return LabApplication(procedures=registry)
+
+    monkeypatch.setattr(Project, "load_application", application)
+
+    def endpoint(_root: Path) -> str:
+        return "http://testserver"
+
+    monkeypatch.setattr(launch_worker, "resolve_daemon_endpoint", endpoint)
+    with (
+        LocalDaemonRuntime(tmp_path / "service") as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+        for identity in (None, "one", "two"):
+            response = transport.post(
+                "/api/v1/procedure-schedules",
+                headers={"X-Scopecat-Workspace": identity} if identity else {},
+                json=ProcedureScheduleCreateCommand(
+                    schedule_id=identity or "ordinary",
+                    definition=_scheduled_worker_procedure.ref,
+                    intent={"output_run_id": "unused"},
+                    due_at=_PAST,
+                ).model_dump(mode="json"),
+            )
+            assert response.status_code == 201, response.text
+        submitted = transport.post(
+            "/api/v1/procedures",
+            headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            json=ProcedureSubmitCommand(
+                definition=_scheduled_worker_procedure.ref,
+                request_key="managed-parent",
+                intent={"output_run_id": "parent-output"},
+            ).model_dump(mode="json"),
+        )
+        assert submitted.status_code == 201, submitted.text
+        procedure_id = submitted.json()["run"]["procedure_run_id"]
+        assert submitted.json()["run"]["source"] is None
+        original_init = DaemonClient.__init__
+
+        def send(request: httpx2.Request) -> httpx2.Response:
+            response = transport.request(
+                request.method,
+                request.url.raw_path.decode(),
+                content=request.content,
+                headers=dict(request.headers),
+            )
+            return httpx2.Response(
+                response.status_code,
+                content=response.content,
+                headers=dict(response.headers),
+            )
+
+        def connected(
+            self: DaemonClient, base_url: str, *, workspace_id: str | None = None
+        ) -> None:
+            original_init(
+                self,
+                base_url,
+                workspace_id=workspace_id,
+                transport=httpx2.MockTransport(send),
+            )
+
+        monkeypatch.setattr(DaemonClient, "__init__", connected)
+        run = launch_worker.run_procedure
+        nested_ids: list[str] = []
+
+        def exercise(lab: LabClient, identity: str) -> None:
+            assert [
+                item.schedule_id for item in lab.procedures.list_schedules().items
+            ] == [workspace or "ordinary"]
+            nested_ids.append(
+                lab.procedures.submit(
+                    _scheduled_worker_procedure,
+                    _ScheduledWorkerIntent(output_run_id="nested-output"),
+                    request_key="nested-source-less",
+                ).id
+            )
+            lab.procedures.create_schedule(
+                _scheduled_worker_procedure,
+                _ScheduledWorkerIntent(output_run_id="nested-schedule-output"),
+                schedule_id="nested-schedule",
+                due_at=_PAST,
+            )
+            run(lab, identity)
+
+        monkeypatch.setattr(launch_worker, "run_procedure", exercise)
+        launch_worker.run_project_procedure(root, procedure_id)
+        assert runtime.application.automation.get(procedure_id).state == "closed"
+        assert runtime.application.automation.get(nested_ids[0]).source is None
+        with sqlite.read_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            assert owners.owner("procedure", nested_ids[0]) == workspace
+            assert owners.owner("schedule", "nested-schedule") == workspace
+            if workspace is not None:
+                assert nested_ids[0] in owners.resources(workspace, "procedure")
+                assert "nested-schedule" in owners.resources(workspace, "schedule")
+
+        # The launch callback is another worker boundary: its explicit request
+        # workspace must reach the borrowed daemon client as well.
+        from scopecat.application.launch import LaunchCatalog
+        from scopecat.records.launch_request import LaunchRequest
+
+        def preview(lab: LabClient, request: LaunchRequest) -> LaunchCatalog:
+            assert [
+                item.procedure_run_id for item in lab.procedures.list_runnable().items
+            ] == nested_ids
+            return LaunchCatalog(workspace_id=request.workspace_id)
+
+        result = launch_worker.launch(
+            LabApplication(procedures=registry, launch_provider=preview),
+            root,
+            None,
+            LaunchRequest(action="list", workspace_id=workspace or "ordinary"),
+        )
+        assert isinstance(result, LaunchCatalog)
+        assert result.workspace_id == (workspace or "ordinary")

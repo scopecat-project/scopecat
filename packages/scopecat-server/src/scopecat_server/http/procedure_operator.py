@@ -73,6 +73,7 @@ def read_procedure_operator(
         )
     return ProcedureOperatorView(
         procedure=procedure,
+        workspace_id=application.automation.operator_workspace_id(procedure_id),
         steps=steps,
         dispatch=dispatch,
         current_step=current_step,

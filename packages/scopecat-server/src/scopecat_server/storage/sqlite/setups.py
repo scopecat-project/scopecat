@@ -13,6 +13,7 @@ from scopecat.records.setup import (
 )
 
 from scopecat_server.storage.sqlite.devices import DeviceRepository
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class SQLiteSetupRepository:
@@ -35,9 +36,11 @@ class SQLiteSetupRepository:
         rows = cast(
             "list[sqlite3.Row]",
             self._connection.execute(
-                "SELECT record_json FROM setup_definitions d WHERE NOT EXISTS "
-                "(SELECT 1 FROM practice_resources p WHERE p.kind='setup_definition' "
-                "AND p.resource_id=d.definition_id) ORDER BY d.rowid DESC"
+                "SELECT record_json FROM setup_definitions d WHERE "
+                "(SELECT p.scope_id FROM practice_resources p WHERE "
+                "p.kind='setup_definition' "
+                "AND p.resource_id=d.definition_id) IS ? ORDER BY d.rowid DESC",
+                (PracticeOwnership(self._connection).workspace_scope(),),
             ).fetchall(),
         )
         definitions = (
@@ -61,9 +64,20 @@ class SQLiteSetupRepository:
                     "setup definition ID already has different content or provenance"
                 )
             return existing
+        if PracticeOwnership(self._connection).workspace_scope() is not None:
+            if (
+                definition.definition.instruments
+                or definition.definition.domain_target is not None
+            ):
+                raise ValueError("Practice permits software computation only")
+            if definition.definition.scenario is None:
+                raise ValueError("Practice requires an explicit software scenario")
         self._connection.execute(
             "INSERT INTO setup_definitions(definition_id, record_json) VALUES (?, ?)",
             (definition.id, definition.model_dump_json()),
+        )
+        PracticeOwnership(self._connection).claim_created(
+            "setup_definition", definition.id
         )
         return definition
 
@@ -112,9 +126,10 @@ class SQLiteSetupRepository:
         rows = cast(
             "list[sqlite3.Row]",
             self._connection.execute(
-                "SELECT record_json FROM setup_revisions s WHERE NOT EXISTS "
-                "(SELECT 1 FROM practice_resources p WHERE p.kind='setup' "
-                "AND p.resource_id=s.revision_id) ORDER BY s.rowid DESC"
+                "SELECT record_json FROM setup_revisions s WHERE "
+                "(SELECT p.scope_id FROM practice_resources p WHERE p.kind='setup' "
+                "AND p.resource_id=s.revision_id) IS ? ORDER BY s.rowid DESC",
+                (PracticeOwnership(self._connection).workspace_scope(),),
             ).fetchall(),
         )
         return tuple(
@@ -138,4 +153,5 @@ class SQLiteSetupRepository:
             "INSERT INTO setup_revisions(revision_id, record_json) VALUES (?, ?)",
             (revision.id, revision.model_dump_json()),
         )
+        PracticeOwnership(self._connection).claim_created("setup", revision.id)
         return revision

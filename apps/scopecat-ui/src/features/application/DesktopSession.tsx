@@ -40,6 +40,9 @@ export interface NotebookJourney {
   notebook: string;
   python: string;
   ready: boolean;
+  scope_id?: string | null;
+  cleared?: boolean;
+  cleanup_files?: "preserve" | "discard" | null;
 }
 
 export interface NotebookJourneyStatus {
@@ -48,6 +51,12 @@ export interface NotebookJourneyStatus {
 }
 
 interface DesktopAPI {
+  preview_notebook_cleanup?(topic: LessonTopic): Promise<{
+    preview: components["schemas"]["DataCleanupPreview"];
+    files_error: string | null;
+    files?: "preserve" | "discard" | null;
+  }>;
+  clear_notebook_course?(topic: LessonTopic, commandJson: string): Promise<NotebookJourney>;
   notebook_journey(topic?: LessonTopic): Promise<NotebookJourneyStatus>;
   prepare_notebook_journey(
     parent?: string,

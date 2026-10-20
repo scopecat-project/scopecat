@@ -3,6 +3,7 @@
 import sqlite3
 from collections.abc import Callable
 from contextlib import suppress
+from contextvars import copy_context
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
@@ -36,6 +37,7 @@ from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import config_content_hash
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.request_workspace import request_workspace
 from scopecat_server.services.automation import AutomationService
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
 from scopecat_server.storage.sqlite.automation import (
@@ -45,6 +47,7 @@ from scopecat_server.storage.sqlite.automation import (
 )
 from scopecat_server.storage.sqlite.calibration_tasks import CalibrationTaskStore
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class _StaleTaskPreparation(BackendConflict):
@@ -74,8 +77,12 @@ class CalibrationTaskService:
 
     def create(self, specification: CalibrationTaskCreate) -> CalibrationTaskView:
         with self._sqlite.read_transaction() as connection:
+            PracticeOwnership(connection).resolve_workspace(
+                specification.source.workspace_id if specification.source else None
+            )
             existing = self._store.read(connection, specification.task_id)
             if existing is not None:
+                self._require_replay_owner(connection, specification)
                 if existing.specification != specification:
                     raise BackendConflict(
                         "task ID already has a different specification"
@@ -100,6 +107,7 @@ class CalibrationTaskService:
         with self._sqlite.write_transaction() as connection:
             task = self._store.read(connection, specification.task_id)
             if task is not None:
+                self._require_replay_owner(connection, specification)
                 if task.specification != specification:
                     raise BackendConflict(
                         "task ID already has a different specification"
@@ -110,6 +118,19 @@ class CalibrationTaskService:
                 )
                 self._store.insert(connection, task)
             return self._view(connection, task)
+
+    @staticmethod
+    def _require_replay_owner(
+        connection: sqlite3.Connection, specification: CalibrationTaskCreate
+    ) -> None:
+        owners = PracticeOwnership(connection)
+        scope = owners.workspace_scope(
+            specification.source.workspace_id if specification.source else None
+        )
+        if owners.owner("calibration_task", specification.task_id) != scope:
+            raise BackendConflict(
+                "task ID belongs to another practice or ordinary work"
+            )
 
     def get(self, task_id: str) -> CalibrationTaskView:
         with self._sqlite.read_transaction() as connection:
@@ -122,6 +143,9 @@ class CalibrationTaskService:
     def dispatch(self, command: CalibrationTaskDispatch) -> CalibrationTaskView:
         prepared = self._prepare(command.task_id, command.stage_id)
         with self._sqlite.write_transaction() as connection:
+            PracticeOwnership(connection).require_writer(
+                "calibration_task", command.task_id
+            )
             task = self._read(connection, command.task_id)
             if command.stage_id not in task.specification.calls:
                 raise BackendConflict("task stage was not found")
@@ -141,6 +165,9 @@ class CalibrationTaskService:
 
     def control(self, command: CalibrationTaskControl) -> CalibrationTaskView:
         with self._sqlite.write_transaction() as connection:
+            PracticeOwnership(connection).require_writer(
+                "calibration_task", command.task_id
+            )
             task = self._read(connection, command.task_id)
             if task.last_control == command:
                 return self._view(connection, task)
@@ -196,7 +223,7 @@ class CalibrationTaskService:
                 if view.finalization.closure is None:
                     return view
                 task = task.model_copy(update={"mode": "finished"})
-                self._store.update(connection, task)
+                self._store.update(connection, task, worker=True)
                 return self._view(connection, task)
             if self._has_active_stage(view):
                 return view
@@ -223,10 +250,10 @@ class CalibrationTaskService:
                             )
                         finally:
                             connection.execute("RELEASE task_finalization")
-                        self._store.update(connection, task)
+                        self._store.update(connection, task, worker=True)
                         return self._view(connection, task)
                 task = task.model_copy(update={"mode": "finished"})
-                self._store.update(connection, task)
+                self._store.update(connection, task, worker=True)
                 return self._view(connection, task)
             for stage_id in view.progress.ready:
                 if stage_id in task.dispatch_errors:
@@ -254,7 +281,7 @@ class CalibrationTaskService:
                     task = updated
                 finally:
                     connection.execute("RELEASE task_stage")
-                self._store.update(connection, task)
+                self._store.update(connection, task, worker=True)
                 if stage_id not in task.dispatch_errors:
                     break
             return self._view(connection, task)
@@ -545,8 +572,22 @@ class CalibrationTaskService:
                 raise _StaleTaskPreparation(
                     "task or evidence changed during retained validation"
                 )
+        owners = PracticeOwnership(connection)
+        task_id = prepared.task.specification.task_id
+        workspace = owners.retained_workspace(
+            "calibration_task",
+            task_id,
+            prepared.task.specification.source.workspace_id
+            if prepared.task.specification.source
+            else None,
+        )
+        token = (
+            request_workspace.set(workspace)
+            if request_workspace not in copy_context()
+            else None
+        )
         try:
-            return self._automation.submit_in_transaction(
+            run = self._automation.submit_in_transaction(
                 connection,
                 definition=command.definition,
                 intent=command.intent,
@@ -555,8 +596,15 @@ class CalibrationTaskService:
                 source=command.source,
                 require_new=True,
             )
-        except (AutomationConflict, AutomationNotFound) as error:
+            owners.require_shared(
+                ("calibration_task", task_id), ("procedure", run.procedure_run_id)
+            )
+            return run
+        except (AutomationConflict, AutomationNotFound, ValueError) as error:
             raise BackendConflict(str(error)) from error
+        finally:
+            if token is not None:
+                request_workspace.reset(token)
 
     def _read(
         self, connection: sqlite3.Connection, task_id: str
@@ -643,5 +691,5 @@ class CalibrationTaskService:
         reason: Literal["deadline_elapsed", "repair_budget_exhausted"],
     ) -> CalibrationTaskView:
         task = task.model_copy(update={"mode": "finished", "stop_reason": reason})
-        self._store.update(connection, task)
+        self._store.update(connection, task, worker=True)
         return self._view(connection, task)

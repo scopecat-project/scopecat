@@ -8,6 +8,7 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
+    ExperimentPlanRevision,
     ExperimentPlanSave,
 )
 from scopecat.records.parameter_revision import ParameterRevisionRef
@@ -181,3 +182,77 @@ def _binding() -> ResolvedScientificBinding:
         config_content_hash="sha256:" + "2" * 64,
         setup_content_hash="sha256:" + "4" * 64,
     )
+
+
+def test_plan_catalog_and_history_are_scoped_to_current_course(tmp_path: Path):
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.request_workspace import request_workspace
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    store = SQLiteProjectStore(SQLiteDatabase(tmp_path / "db"), tmp_path / "objects")
+    store.bootstrap()
+    repository = ExperimentPlanRepository(store)
+    saved: dict[str, ExperimentPlanRevision] = {}
+    try:
+        for identity in ("ordinary", "one", "two"):
+            if identity != "ordinary":
+                with store.sqlite.write_transaction() as connection:
+                    owners = PracticeOwnership(connection)
+                    owners.save(
+                        PracticeScope(
+                            id=identity,
+                            title=identity,
+                            lesson="parameters",
+                            directory=identity,
+                            kind="notebook",
+                            workspace_id=identity,
+                        )
+                    )
+                    for kind in ("source", "parameters", "setup"):
+                        owners.claim(identity, kind, identity)
+            token = request_workspace.set(identity)
+            try:
+                saved[identity] = repository.save(
+                    ExperimentPlanSave(
+                        name=identity,
+                        saved_by="test",
+                        definition=ExperimentPlanDefinition(
+                            workspace_id=identity,
+                            experiment="signal",
+                            version="1",
+                            definition_hash="sha256:" + "1" * 64,
+                            selection=ScientificSelection(
+                                configuration=ParameterConfiguration(
+                                    setup=SetupRevisionRef(
+                                        revision_id=identity,
+                                        content_hash="sha256:" + "e" * 64,
+                                    ),
+                                    ref=ParameterRevisionRef(
+                                        revision_id=identity,
+                                        content_hash="sha256:" + "2" * 64,
+                                    ),
+                                )
+                            ),
+                            scientific_binding=_binding(),
+                        ),
+                    )
+                )
+            finally:
+                request_workspace.reset(token)
+        for identity in (None, "ordinary", "one", "two"):
+            token = request_workspace.set(identity)
+            try:
+                expected = identity or "ordinary"
+                assert repository.list().items == (saved[expected],)
+                for name, item in saved.items():
+                    assert repository.list(plan_id=item.ref.plan_id).items == (
+                        (item,) if name == expected else ()
+                    )
+                if identity is None:
+                    with pytest.raises(BackendConflict, match="another practice"):
+                        repository.hide(saved["one"].ref)
+            finally:
+                request_workspace.reset(token)
+    finally:
+        store.close()

@@ -7,40 +7,22 @@ import type { components } from "../../api-schema";
 type Scope = components["schemas"]["PracticeScope"];
 
 export function PracticePanel({ reachable }: { reachable: boolean }) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const catalog = useQuery({
     queryKey: ["practice"],
     queryFn: ({ signal }) => apiData(apiClient.GET("/api/v1/practice", { signal })),
     enabled: reachable,
   });
-  async function start() {
-    setPending(true);
-    setError("");
-    try {
-      await apiData(
-        apiClient.POST("/api/v1/practice", {
-          body: { request_key: requestKey, lesson: "manual-peaks" },
-        }),
-      );
-      setRequestKey(crypto.randomUUID());
-      await catalog.refetch();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setPending(false);
-    }
-  }
+  const practices = catalog.data?.items.filter((scope) => scope.kind !== "notebook");
+  if (!catalog.error && !practices?.length) return null;
   return (
     <section className="grid gap-3 rounded-lg border border-line bg-panel p-4">
-      <h3 className="font-semibold">Practice without devices</h3>
-      <p>Try reading a synthetic curve and recording a peak choice in Decisions.</p>
-      <Button type="button" disabled={!reachable || pending} onClick={() => void start()}>
-        {pending ? "Starting…" : "Start peak practice"}
-      </Button>
-      {(error || catalog.error) && <Notice role="alert">{error || catalog.error?.message}</Notice>}
-      {catalog.data?.items.map((scope) => (
+      <h3 className="font-semibold">Earlier peak practices</h3>
+      <p>
+        Continue or clean up an existing practice. Start new learning from the Notebook courses
+        above.
+      </p>
+      {catalog.error && <Notice role="alert">{catalog.error.message}</Notice>}
+      {practices?.map((scope) => (
         <PracticeCard key={scope.id} scope={scope} refresh={() => catalog.refetch()} />
       ))}
     </section>

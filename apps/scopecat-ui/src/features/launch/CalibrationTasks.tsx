@@ -12,9 +12,11 @@ type TaskView = MethodResponse<typeof apiClient, "get", "/api/v1/calibration-tas
 
 export function CalibrationTasks({
   projectId,
+  workspaceId,
   onProcedure,
 }: {
   projectId: string;
+  workspaceId?: string;
   onProcedure: (id: string) => void;
 }) {
   const [selected, setSelected] = useState(
@@ -22,13 +24,14 @@ export function CalibrationTasks({
   );
   const [expanded, setExpanded] = useState(Boolean(selected));
   const history = useInfiniteQuery({
-    queryKey: ["calibration-tasks", projectId],
+    queryKey: ["calibration-tasks", projectId, workspaceId],
     enabled: expanded,
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam, signal }) =>
       apiData(
         apiClient.GET("/api/v1/calibration-tasks", {
           params: { query: { limit: 20, cursor: pageParam } },
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
           signal,
         }),
       ),
@@ -88,7 +91,8 @@ export function CalibrationTasks({
           )}
           {selected && (
             <TaskDetail
-              key={`${projectId}:${selected}`}
+              key={`${projectId}:${workspaceId}:${selected}`}
+              workspaceId={workspaceId}
               taskId={selected}
               projectId={projectId}
               onProcedure={onProcedure}
@@ -103,10 +107,12 @@ export function CalibrationTasks({
 function TaskDetail({
   taskId,
   projectId,
+  workspaceId,
   onProcedure,
 }: {
   taskId: string;
   projectId: string;
+  workspaceId?: string;
   onProcedure: (id: string) => void;
 }) {
   const client = useQueryClient();
@@ -114,13 +120,14 @@ function TaskDetail({
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const queryKey = ["calibration-task", projectId, taskId];
+  const queryKey = ["calibration-task", projectId, workspaceId, taskId];
   const detail = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
       apiData(
         apiClient.GET("/api/v1/calibration-tasks/{task_id}", {
           params: { path: { task_id: taskId } },
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
           signal,
         }),
       ),
@@ -133,6 +140,7 @@ function TaskDetail({
     try {
       const result = await apiData(
         apiClient.POST("/api/v1/calibration-tasks/control", {
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
           body: {
             task_id: taskId,
             expected_revision: detail.data.task.control_revision,

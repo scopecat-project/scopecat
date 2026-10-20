@@ -162,6 +162,21 @@ class AutomationService:
         self._plans = plans
         self._checks = checks
 
+    def require_operator(self, procedure_id: str) -> None:
+        """Authorize an operator handoff before changing process management."""
+        with self._store.sqlite.read_connection() as connection:
+            PracticeOwnership(connection).require_operator("procedure", procedure_id)
+
+    def operator_workspace_id(self, procedure_id: str) -> str | None:
+        """Preserve course ownership and ordinary source identity independently."""
+        with self._store.sqlite.read_connection() as connection:
+            stored = self._store.read_run_in_transaction(connection, procedure_id)
+            return PracticeOwnership(connection).retained_workspace(
+                "procedure",
+                procedure_id,
+                stored.source.workspace_id if stored.source else None,
+            )
+
     def worker_state(self, procedure_id: str) -> str:
         with self._store.sqlite.read_connection() as connection:
             owners = PracticeOwnership(connection)
@@ -476,6 +491,9 @@ class AutomationService:
     def cancel(self, command: ProcedureCancelCommand) -> ProcedureCancelReceipt:
         """Close idle work or request a stop after the running step settles."""
         with _translate_store_errors(), self._store.write_transaction() as connection:
+            PracticeOwnership(connection).require_operator(
+                "procedure", command.procedure_run_id
+            )
             run = self._store.read_run_in_transaction(
                 connection, command.procedure_run_id
             )
@@ -615,7 +633,9 @@ class AutomationService:
     ) -> ProcedureRun:
         """Admit a run while participating in a caller-owned SQLite transaction."""
 
-        scope = procedure_scope(connection, expected_configuration)
+        scope = procedure_scope(
+            connection, expected_configuration, source.workspace_id if source else None
+        )
         if scope is not None and samples:
             raise AutomationConflict("Practice cannot use physical sample bindings")
         if not request_key.strip():
@@ -637,6 +657,15 @@ class AutomationService:
             request_key,
         )
         if existing is not None:
+            if (
+                PracticeOwnership(connection).owner(
+                    "procedure", existing.procedure_run_id
+                )
+                != scope
+            ):
+                raise AutomationConflict(
+                    "procedure request key belongs to another practice or ordinary work"
+                )
             if existing.intent_hash != intent_hash:
                 raise AutomationConflict(
                     "procedure request key already has different intent"
@@ -1291,6 +1320,9 @@ class AutomationService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_operator(
+                "procedure", command.procedure_run_id
+            )
             run = self._store.read_run_in_transaction(
                 connection,
                 command.procedure_run_id,
@@ -1528,6 +1560,9 @@ class AutomationService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_operator(
+                "procedure", procedure_run_id
+            )
             run = self._store.read_run_in_transaction(connection, procedure_run_id)
             current = self._store.read_step_attempt_in_transaction(
                 connection,

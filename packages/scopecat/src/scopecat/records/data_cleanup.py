@@ -22,6 +22,11 @@ class DataCleanupSelection(BaseModel):
     setup_definitions: tuple[str, ...] = ()
     parameters: tuple[str, ...] = ()
     captures: tuple[str, ...] = ()
+    branches: tuple[str, ...] = ()
+    plans: tuple[str, ...] = ()
+    schedules: tuple[str, ...] = ()
+    calibration_tasks: tuple[str, ...] = ()
+    calibration_profiles: tuple[str, ...] = ()
 
     @field_validator("*")
     @classmethod

@@ -97,3 +97,72 @@ def test_store_round_trips_pages_and_due_schedules_by_insertion_keyset(
     assert store.read(earlier.schedule_id) == cancelled
     assert store.list(state="cancelled").items == (cancelled,)
     assert store.due(at=offset_now + timedelta(hours=1)).items == (later, future)
+
+
+def test_course_due_and_catalog_traversal_never_visit_other_scopes(tmp_path: Path):
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.request_workspace import request_workspace
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    store = _store(tmp_path)
+    with store.write_transaction() as connection:
+        owners = PracticeOwnership(connection)
+        for identity in ("one", "two", "empty"):
+            owners.save(
+                PracticeScope(
+                    id=identity,
+                    title=identity,
+                    lesson="parameters",
+                    directory=identity,
+                    kind="notebook",
+                    workspace_id=identity,
+                )
+            )
+            owners.claim(identity, "source", identity)
+        for identity, scope in (
+            ("ordinary-1", None),
+            ("one-1", "one"),
+            ("two-1", "two"),
+            ("ordinary-2", None),
+            ("one-2", "one"),
+            ("two-2", "two"),
+        ):
+            store.insert_in_transaction(connection, _schedule(identity, due_at=_START))
+            if scope is not None:
+                owners.claim(scope, "schedule", identity)
+    for scope in (None, "one", "two", "empty"):
+        token = request_workspace.set(scope)
+        try:
+            prefix = scope or "ordinary"
+            expected = () if scope == "empty" else (f"{prefix}-1", f"{prefix}-2")
+            assert tuple(item.schedule_id for item in store.list().items) == tuple(
+                reversed(expected)
+            )
+            page = store.due(at=_START, limit=1)
+            if not expected:
+                assert page.items == () and page.next_cursor is None
+                continue
+            assert tuple(item.schedule_id for item in page.items) == expected[:1]
+            assert page.next_cursor is not None and page.through_sequence is not None
+            with store.write_transaction() as connection:
+                store.insert_in_transaction(
+                    connection, _schedule(f"{prefix}-late", due_at=_START)
+                )
+            rest = store.due(
+                at=_START,
+                limit=1,
+                after=page.next_cursor,
+                through_sequence=page.through_sequence,
+            )
+            assert tuple(item.schedule_id for item in rest.items) == expected[1:]
+            assert rest.next_cursor is None
+            catalog = store.list(limit=1)
+            assert catalog.items[0].schedule_id == f"{prefix}-late"
+            assert catalog.next_cursor is not None
+            older = store.list(limit=10, before=catalog.next_cursor)
+            assert tuple(item.schedule_id for item in older.items) == tuple(
+                reversed(expected)
+            )
+        finally:
+            request_workspace.reset(token)

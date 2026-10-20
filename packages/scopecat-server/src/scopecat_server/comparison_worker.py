@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from scopecat.application.comparison import ComparisonHandoff
+from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.endpoint import DAEMON_URL_ENV, resolve_daemon_endpoint
 from scopecat.project import load_project
 from scopecat.records.comparison import (
@@ -45,9 +46,12 @@ def compare(
             raise ValueError("Project has no retained-run comparison provider")
         result = ComparisonCatalog(workspace_id=request.workspace_id)
     else:
-        with application.connect(
-            resolve_daemon_endpoint(root), operator=request.actor
-        ) as lab:
+        with (
+            DaemonClient(
+                resolve_daemon_endpoint(root), workspace_id=request.workspace_id
+            ) as client,
+            application.connect(client, operator=request.actor) as lab,
+        ):
             result = application.comparison_provider(lab, request)
     if isinstance(result, ComparisonCatalog | ComparisonInspection):
         result = result.model_copy(

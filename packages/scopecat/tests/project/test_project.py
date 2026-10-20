@@ -578,3 +578,35 @@ def test_author_roots_normalize_local_subdirectories(tmp_path: Path) -> None:
     project = load_project(manifest)
     assert project.source_roots == ("src",)
     assert project.refresh_roots == ("src/authored",)
+
+
+def test_project_connection_uses_only_its_registered_workspace(tmp_path: Path) -> None:
+    from scopecat.author_workspaces import (
+        LocalAuthorWorkspace,
+        LocalAuthorWorkspaces,
+        author_bindings_path,
+    )
+
+    (tmp_path / "scopecat.toml").write_text("[lab]\n")
+    project = open_project(tmp_path)
+    path = author_bindings_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        LocalAuthorWorkspaces(
+            service_root=tmp_path / "service",
+            items=(
+                LocalAuthorWorkspace(
+                    id="course",
+                    name="Course",
+                    root=tmp_path,
+                    python=tmp_path / "python",
+                ),
+            ),
+        ).model_dump_json()
+    )
+    before = path.read_bytes()
+    with project.connect("http://daemon.local") as lab:
+        assert lab._client.workspace_id == "course"
+        assert lab._client._http.headers["X-Scopecat-Workspace"] == "course"
+    assert lab._client._http.is_closed
+    assert path.read_bytes() == before

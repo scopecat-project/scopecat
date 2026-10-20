@@ -38,6 +38,7 @@ class RunHistoryFilter(BaseModel):
     record_collection: str | None = None
     batch_id: str | None = None
     research_project: str | None = None
+    practice_scope: str | None = None
     working_point: str | None = None
     deployment_id: str | None = None
     created_after: datetime | None = None

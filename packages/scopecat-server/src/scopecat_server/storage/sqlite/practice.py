@@ -2,9 +2,13 @@
 
 import sqlite3
 from collections.abc import Iterator
+from contextvars import copy_context
 from typing import cast
 
 from scopecat.records.practice import PracticeResource, PracticeScope
+
+from scopecat_server.errors import BackendConflict
+from scopecat_server.request_workspace import request_workspace
 
 
 class PracticeOwnership:
@@ -40,6 +44,100 @@ class PracticeOwnership:
             (scope.id, scope.model_dump_json()),
         )
 
+    def retained_workspace(
+        self, kind: PracticeResource, resource_id: str, source_workspace: str | None
+    ) -> str | None:
+        """Restore an owned worker's context without adopting old ordinary work."""
+        owner = self.owner(kind, resource_id)
+        if owner is not None:
+            return self.get(owner).workspace_id
+        if (
+            source_workspace is not None
+            and self.owner("source", source_workspace) is None
+        ):
+            return source_workspace
+        return None
+
+    def resolve_workspace(self, workspace_id: str | None = None) -> str | None:
+        """An explicit source cannot replace the identity of an ordinary/A/B request.
+
+        HTTP binds this variable even without a header (ordinary work). Daemon
+        work with no request context may instead use its retained source identity.
+        """
+        requested = request_workspace.get()
+        if (
+            workspace_id is not None
+            and request_workspace in copy_context()
+            and workspace_id != requested
+        ):
+            raise BackendConflict("Source workspace differs from the request workspace")
+        return workspace_id if workspace_id is not None else requested
+
+    def workspace_scope(self, workspace_id: str | None = None) -> str | None:
+        """Resolve an explicitly registered course, never infer from resource names."""
+        workspace = self.resolve_workspace(workspace_id)
+        if workspace is None:
+            return None
+        return self.owner("source", workspace)
+
+    def claim_created(
+        self,
+        kind: PracticeResource,
+        resource_id: str,
+        *,
+        workspace_id: str | None = None,
+    ) -> None:
+        """Call in the creating transaction, after excluding pre-existing records."""
+        from .data_cleanup import require_retained_resource
+
+        require_retained_resource(self.connection, kind, resource_id)
+        scope = self.workspace_scope(workspace_id)
+        existing = self.owner(kind, resource_id)
+        if existing is not None:
+            self.require_active(existing)
+            if existing != scope:
+                raise ValueError(
+                    "A retained practice identity cannot become ordinary work"
+                )
+        if scope is not None:
+            self.claim(scope, kind, resource_id)
+
+    def require_writer(
+        self, kind: PracticeResource, resource_id: str, *, worker: bool = False
+    ) -> None:
+        """Reject cross-owner writes; worker is only for daemon task advancement."""
+        owner = self.owner(kind, resource_id)
+        scope = self.workspace_scope()
+        if not worker and owner != scope:
+            raise BackendConflict(
+                "This resource belongs to another practice or ordinary work"
+            )
+        if owner is not None:
+            try:
+                self.require_active(owner)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+
+    def require_operator(self, kind: PracticeResource, resource_id: str) -> None:
+        """Fence course operators while preserving the built-in peak practice UI.
+
+        Peak practice predates author workspaces and has no source identity. Its
+        ordinary operator interface remains valid; registered notebook courses
+        always require their exact workspace, including idempotent replays.
+        """
+        owner = self.owner(kind, resource_id)
+        if (
+            owner is not None
+            and self.get(owner).kind == "peak"
+            and self.workspace_scope() is None
+        ):
+            try:
+                self.require_active(owner)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
+            return
+        self.require_writer(kind, resource_id)
+
     def require_active(self, scope_id: str) -> None:
         if self.get(scope_id).state != "active":
             raise ValueError(
@@ -67,6 +165,29 @@ class PracticeOwnership:
         owner = next(iter(owners), None)
         if owner is not None:
             self.require_active(owner)
+        return owner
+
+    def require_admission(self, *resources: tuple[PracticeResource, str]) -> str | None:
+        """Match retained input owners to a bound request, including ordinary None.
+
+        Internal admission has no request context. The legacy peak practice has
+        no author workspace and keeps its ordinary interface. Lease advancement
+        continues to use require_shared, independently of operator identity.
+        """
+        try:
+            owner = self.require_shared(*resources)
+        except ValueError as error:
+            raise BackendConflict(str(error)) from error
+        if resources and request_workspace in copy_context():
+            requested = self.workspace_scope()
+            if owner != requested and not (
+                owner is not None
+                and requested is None
+                and self.get(owner).kind == "peak"
+            ):
+                raise BackendConflict(
+                    "Retained resource owner differs from the request workspace"
+                )
         return owner
 
     def claim(self, scope_id: str, kind: PracticeResource, resource_id: str) -> None:

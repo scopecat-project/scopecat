@@ -74,6 +74,7 @@ from scopecat_server.storage.sqlite.execution import (
     SQLiteRecoveryGroups,
     SQLiteRunCoverage,
 )
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
@@ -374,6 +375,7 @@ class ExecutorService:
         )
         try:
             with self._control.write_transaction() as connection:
+                PracticeOwnership(connection).require_operator("run", run_id)
                 current = self._control.get_run_in_transaction(connection, run_id)
                 snapshot = self._runs.read_snapshot_in_transaction(connection, run_id)
                 if current.state == "closed":

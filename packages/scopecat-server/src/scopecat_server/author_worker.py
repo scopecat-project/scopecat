@@ -147,13 +147,18 @@ def analyze(
         AnalysisDefinition,
         AnalysisFunctionDefinition,
     )
+    from scopecat.daemon.client import DaemonClient
     from scopecat.daemon.endpoint import resolve_daemon_endpoint
 
     from scopecat_server.author_analysis import analyze as analyze_run
 
-    with application.connect(
-        resolve_daemon_endpoint(project.workspace_root), operator="author-analysis"
-    ) as lab:
+    with (
+        DaemonClient(
+            resolve_daemon_endpoint(project.workspace_root),
+            workspace_id=request.workspace_id,
+        ) as client,
+        application.connect(client, operator="author-analysis") as lab,
+    ):
         module_name, separator, name = request.analysis.partition(":")
         if not separator or not module_name or not name:
             raise ValueError("analysis must use module:name")

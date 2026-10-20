@@ -53,7 +53,19 @@ def connected_client() -> Mock:
 
 
 @pytest.mark.parametrize("lost_transport", [False, True])
-def test_timeout_retry_uses_same_command_and_host(lost_transport: bool) -> None:
+def test_timeout_retry_uses_same_command_and_host(
+    lost_transport: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    elapsed = 0.0
+
+    def sleep(duration: float) -> None:
+        nonlocal elapsed
+        elapsed += duration
+
+    monkeypatch.setattr(
+        "scopecat.api.application_open.time",
+        SimpleNamespace(monotonic=lambda: elapsed, sleep=sleep),
+    )
     client = connected_client()
     target = ApplicationOpenTarget(kind="run", object_id="measurement")
     if lost_transport:

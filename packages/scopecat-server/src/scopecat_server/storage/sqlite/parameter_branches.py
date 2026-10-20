@@ -5,6 +5,8 @@ from typing import cast
 
 from scopecat.records.parameter_branch import ParameterBranch
 
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
 
 class ParameterBranchRepository:
     def __init__(self, connection: sqlite3.Connection) -> None:
@@ -29,10 +31,17 @@ class ParameterBranchRepository:
             self.connection.execute(
                 "SELECT c.record_json FROM parameter_branch_commits AS c "
                 "JOIN (SELECT name, MAX(generation) AS generation "
-                "FROM parameter_branch_commits WHERE (? IS NULL OR name > ?) "
+                "FROM parameter_branch_commits b WHERE (? IS NULL OR name > ?) "
+                "AND (SELECT scope_id FROM practice_resources p WHERE p.kind='branch' "
+                "AND p.resource_id=b.name) IS ? "
                 "GROUP BY name ORDER BY name LIMIT ?) AS h "
                 "ON c.name = h.name AND c.generation = h.generation ORDER BY c.name",
-                (after, after, limit),
+                (
+                    after,
+                    after,
+                    PracticeOwnership(self.connection).workspace_scope(),
+                    limit,
+                ),
             ).fetchall(),
         )
         return tuple(
@@ -68,6 +77,14 @@ class ParameterBranchRepository:
         return ParameterBranch.model_validate_json(cast("str", row[0]))
 
     def append(self, branch: ParameterBranch, intent: str) -> None:
+        owners = PracticeOwnership(self.connection)
+        if branch.generation == 1:
+            owners.claim_created("branch", branch.name)
+        else:
+            owners.require_writer("branch", branch.name)
+        owners.require_admission(
+            ("branch", branch.name), ("parameters", branch.revision.revision_id)
+        )
         self.connection.execute(
             "INSERT INTO parameter_branch_commits "
             "(name, generation, revision_id, record_json, intent_hash) "

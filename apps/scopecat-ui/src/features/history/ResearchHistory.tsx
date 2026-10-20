@@ -9,6 +9,8 @@ import { useState } from "react";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
 import { DataCleanupHistory } from "./DataCleanup";
 import { ImportedCaptures } from "./ImportedCaptures";
+import { CourseData } from "./CourseData";
+import { useLocationUrl } from "../../lib/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
@@ -25,6 +27,7 @@ export function ResearchHistory({
   projectId: string;
 }) {
   const cache = useQueryClient();
+  const course = useLocationUrl().searchParams.get("course") ?? undefined;
   const [selected, setSelected] = useState<Project>();
   const [name, setName] = useState("");
   const [collection, setCollection] = useState<string>();
@@ -78,15 +81,17 @@ export function ResearchHistory({
     enabled: !!selected && !daemonUnavailable,
   });
   const collectionNames = useRecordCollectionNames(projectId, !daemonUnavailable);
-  const filters = {
-    record_collection: collection,
-    research_project: allRuns ? undefined : selected?.id,
-    sample_id: sample || undefined,
-    working_point: workingPoint || undefined,
-    deployment_id: bench || undefined,
-    created_after: after ? new Date(after).toISOString() : undefined,
-    created_before: before ? new Date(before).toISOString() : undefined,
-  };
+  const filters = course
+    ? { practice_scope: course }
+    : {
+        record_collection: collection,
+        research_project: allRuns ? undefined : selected?.id,
+        sample_id: sample || undefined,
+        working_point: workingPoint || undefined,
+        deployment_id: bench || undefined,
+        created_after: after ? new Date(after).toISOString() : undefined,
+        created_before: before ? new Date(before).toISOString() : undefined,
+      };
   const runs = useInfiniteQuery({
     queryKey: ["research", "runs", projectId, filters],
     initialPageParam: undefined as number | undefined,
@@ -148,130 +153,140 @@ export function ResearchHistory({
   return (
     <section className={pageContent} aria-label="Data">
       <h2 className={pageTitle}>Data</h2>
+      {course && <CourseData scopeId={course} unavailable={daemonUnavailable} />}
 
       {error && <Notice role="alert">{error.message}</Notice>}
-      <div className={`${detailCard} flex flex-wrap items-start gap-3`}>
-        <div className="min-w-0 flex-1 basis-80">
-          <ScopeCatalog
-            compact
-            kind="collection"
-            owner={projectId}
-            value={collection}
-            onChange={setCollection}
-            emptyLabel="All collections"
-            selectLabel="Record collection filter"
-            disabled={daemonUnavailable}
-            available={!daemonUnavailable}
-          />
-        </div>
-        {collection && (
-          <CollectionRunLookup
-            key={JSON.stringify([projectId, collection])}
+      {!course && (
+        <>
+          <div className={`${detailCard} flex flex-wrap items-start gap-3`}>
+            <div className="min-w-0 flex-1 basis-80">
+              <ScopeCatalog
+                compact
+                kind="collection"
+                owner={projectId}
+                value={collection}
+                onChange={setCollection}
+                emptyLabel="All collections"
+                selectLabel="Record collection filter"
+                disabled={daemonUnavailable}
+                available={!daemonUnavailable}
+              />
+            </div>
+            {collection && (
+              <CollectionRunLookup
+                key={JSON.stringify([projectId, collection])}
+                projectId={projectId}
+                collection={collection}
+                collectionName={collection ? collectionNames.get(collection) : undefined}
+                unavailable={daemonUnavailable}
+                onOpenRun={onOpenRun}
+              />
+            )}
+            {!collection && (
+              <span className="text-xs text-text-dim">
+                Choose a collection to find a short number.
+              </span>
+            )}
+          </div>
+          <RunIdLookup
+            key={projectId}
             projectId={projectId}
-            collection={collection}
-            collectionName={collection ? collectionNames.get(collection) : undefined}
             unavailable={daemonUnavailable}
+            names={collectionNames}
             onOpenRun={onOpenRun}
           />
-        )}
-        {!collection && (
-          <span className="text-xs text-text-dim">Choose a collection to find a short number.</span>
-        )}
-      </div>
-      <RunIdLookup
-        key={projectId}
-        projectId={projectId}
-        unavailable={daemonUnavailable}
-        names={collectionNames}
-        onOpenRun={onOpenRun}
-      />
-      <ActionRow className={detailCard}>
-        <Field>
-          Research project{" "}
-          <Select
-            aria-label="Research project"
-            value={selected?.id ?? ""}
-            onChange={(event) => {
-              const project = projects.data?.pages
-                .flatMap((page) => page.items)
-                .find((item) => item.id === event.target.value);
-              setSelected(project);
-              setName(project?.name ?? "");
-            }}
-          >
-            <option value="">All projects</option>
-            {projects.data?.pages
-              .flatMap((page) => page.items)
-              .map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-          </Select>
-        </Field>
-        {projects.hasNextPage && (
-          <Button onClick={() => void projects.fetchNextPage()}>More projects</Button>
-        )}
+          <ActionRow className={detailCard}>
+            <Field>
+              Research project{" "}
+              <Select
+                aria-label="Research project"
+                value={selected?.id ?? ""}
+                onChange={(event) => {
+                  const project = projects.data?.pages
+                    .flatMap((page) => page.items)
+                    .find((item) => item.id === event.target.value);
+                  setSelected(project);
+                  setName(project?.name ?? "");
+                }}
+              >
+                <option value="">All projects</option>
+                {projects.data?.pages
+                  .flatMap((page) => page.items)
+                  .map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+            {projects.hasNextPage && (
+              <Button onClick={() => void projects.fetchNextPage()}>More projects</Button>
+            )}
 
-        <Field>
-          Sample{" "}
-          <Select
-            aria-label="Sample"
-            value={sample}
-            onChange={(event) => setSample(event.target.value)}
-          >
-            <option value="">All samples</option>
-            {samples.data?.pages
-              .flatMap((page) => page.items)
-              .map((item) => (
-                <option key={item.record.id} value={item.record.id}>
-                  {item.revision.content.display_name} ({item.record.id})
-                </option>
-              ))}
-          </Select>
-        </Field>
-        {samples.hasNextPage && (
-          <Button onClick={() => void samples.fetchNextPage()}>More samples</Button>
-        )}
-        <Field>
-          From (local time){" "}
-          <Input
-            type="datetime-local"
-            value={after}
-            onChange={(event) => setAfter(event.target.value)}
-          />
-        </Field>
-        <Field>
-          Before (local time){" "}
-          <Input
-            type="datetime-local"
-            value={before}
-            onChange={(event) => setBefore(event.target.value)}
-          />
-        </Field>
-      </ActionRow>
-      <details className={detailCard}>
-        <summary className="cursor-pointer">
-          Advanced source filters{workingPoint || bench ? " · active" : ""}
-        </summary>
-        <p className="text-sm text-text-dim">
-          Exact working-point context ID and deployment ID; these do not describe scientific
-          conditions.
-        </p>
-        <div className="mt-2 flex flex-wrap gap-3">
-          <Field>
-            Working point{" "}
-            <Input value={workingPoint} onChange={(event) => setWorkingPoint(event.target.value)} />
-          </Field>
-          <Field>
-            Bench deployment{" "}
-            <Input value={bench} onChange={(event) => setBench(event.target.value)} />
-          </Field>
-        </div>
-      </details>
+            <Field>
+              Sample{" "}
+              <Select
+                aria-label="Sample"
+                value={sample}
+                onChange={(event) => setSample(event.target.value)}
+              >
+                <option value="">All samples</option>
+                {samples.data?.pages
+                  .flatMap((page) => page.items)
+                  .map((item) => (
+                    <option key={item.record.id} value={item.record.id}>
+                      {item.revision.content.display_name} ({item.record.id})
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+            {samples.hasNextPage && (
+              <Button onClick={() => void samples.fetchNextPage()}>More samples</Button>
+            )}
+            <Field>
+              From (local time){" "}
+              <Input
+                type="datetime-local"
+                value={after}
+                onChange={(event) => setAfter(event.target.value)}
+              />
+            </Field>
+            <Field>
+              Before (local time){" "}
+              <Input
+                type="datetime-local"
+                value={before}
+                onChange={(event) => setBefore(event.target.value)}
+              />
+            </Field>
+          </ActionRow>
+          <details className={detailCard}>
+            <summary className="cursor-pointer">
+              Advanced source filters{workingPoint || bench ? " · active" : ""}
+            </summary>
+            <p className="text-sm text-text-dim">
+              Exact working-point context ID and deployment ID; these do not describe scientific
+              conditions.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <Field>
+                Working point{" "}
+                <Input
+                  value={workingPoint}
+                  onChange={(event) => setWorkingPoint(event.target.value)}
+                />
+              </Field>
+              <Field>
+                Bench deployment{" "}
+                <Input value={bench} onChange={(event) => setBench(event.target.value)} />
+              </Field>
+            </div>
+          </details>
+        </>
+      )}
       <div className={detailCard}>
         <h3 className={sectionTitle}>Retained runs</h3>
-        {allRuns && selected && (
+        {!course && allRuns && selected && (
           <Notice role="status">Showing runs across all projects for association.</Notice>
         )}
         {daemonUnavailable ? (
@@ -346,83 +361,93 @@ export function ResearchHistory({
           </Button>
         )}
       </div>
-      <ImportedCaptures unavailable={daemonUnavailable} projectId={projectId} />
-      <details
-        className={detailCard}
-        open={managing}
-        onToggle={(event) => {
-          const open = event.currentTarget.open;
-          setManaging(open);
-        }}
-      >
-        <summary className="cursor-pointer font-semibold">Research project management</summary>
-        <p className="text-sm text-text-dim">Manage {selected?.name ?? "a research project"}.</p>
-        <form
-          className="mt-3 flex flex-wrap gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate({
-              id: selected?.id ?? crypto.randomUUID(),
-              expected: selected?.revision ?? 0,
-            });
-          }}
-        >
-          <Field>
-            Project name{" "}
-            <Input required value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          <Button variant="primary" disabled={pending || !name.trim()}>
-            {selected ? "Rename project" : "Create project"}
-          </Button>
-        </form>
-        {selected && (
-          <div className="mt-3 space-y-2">
-            <p>Associated samples (membership does not automatically add their runs):</p>
-            {members.data?.pages
-              .flatMap((page) => page.ids)
-              .map((id) => (
-                <div key={id} className="flex gap-2">
-                  <Button onClick={() => setSample(id)}>{id}</Button>
-                  <Button
-                    disabled={pending}
-                    onClick={() =>
-                      associate.mutate({ kind: "samples", identity: id, present: false })
-                    }
-                  >
-                    Remove sample association
-                  </Button>
-                </div>
-              ))}
-            {members.hasNextPage && (
-              <Button onClick={() => void members.fetchNextPage()}>More associated samples</Button>
-            )}
-          </div>
-        )}
-        {selected && sample && (
-          <Button
-            disabled={pending}
-            onClick={() => associate.mutate({ kind: "samples", identity: sample, present: true })}
+      {!course && (
+        <>
+          <ImportedCaptures unavailable={daemonUnavailable} projectId={projectId} />
+          <details
+            className={detailCard}
+            open={managing}
+            onToggle={(event) => {
+              const open = event.currentTarget.open;
+              setManaging(open);
+            }}
           >
-            Associate sample
-          </Button>
-        )}
-        {selected && (
-          <label>
-            <input
-              type="checkbox"
-              checked={allRuns}
-              onChange={(event) => setAllRuns(event.target.checked)}
-            />{" "}
-            Show runs outside this project to associate
-          </label>
-        )}
-      </details>
-      <details className={detailCard}>
-        <summary className="cursor-pointer font-semibold">Data cleanup</summary>
-        <div className="mt-3 space-y-4">
-          <DataCleanupHistory />
-        </div>
-      </details>
+            <summary className="cursor-pointer font-semibold">Research project management</summary>
+            <p className="text-sm text-text-dim">
+              Manage {selected?.name ?? "a research project"}.
+            </p>
+            <form
+              className="mt-3 flex flex-wrap gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                save.mutate({
+                  id: selected?.id ?? crypto.randomUUID(),
+                  expected: selected?.revision ?? 0,
+                });
+              }}
+            >
+              <Field>
+                Project name{" "}
+                <Input required value={name} onChange={(event) => setName(event.target.value)} />
+              </Field>
+              <Button variant="primary" disabled={pending || !name.trim()}>
+                {selected ? "Rename project" : "Create project"}
+              </Button>
+            </form>
+            {!course && selected && (
+              <div className="mt-3 space-y-2">
+                <p>Associated samples (membership does not automatically add their runs):</p>
+                {members.data?.pages
+                  .flatMap((page) => page.ids)
+                  .map((id) => (
+                    <div key={id} className="flex gap-2">
+                      <Button onClick={() => setSample(id)}>{id}</Button>
+                      <Button
+                        disabled={pending}
+                        onClick={() =>
+                          associate.mutate({ kind: "samples", identity: id, present: false })
+                        }
+                      >
+                        Remove sample association
+                      </Button>
+                    </div>
+                  ))}
+                {members.hasNextPage && (
+                  <Button onClick={() => void members.fetchNextPage()}>
+                    More associated samples
+                  </Button>
+                )}
+              </div>
+            )}
+            {selected && sample && (
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  associate.mutate({ kind: "samples", identity: sample, present: true })
+                }
+              >
+                Associate sample
+              </Button>
+            )}
+            {!course && selected && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={allRuns}
+                  onChange={(event) => setAllRuns(event.target.checked)}
+                />{" "}
+                Show runs outside this project to associate
+              </label>
+            )}
+          </details>
+          <details className={detailCard}>
+            <summary className="cursor-pointer font-semibold">Data cleanup</summary>
+            <div className="mt-3 space-y-4">
+              <DataCleanupHistory />
+            </div>
+          </details>
+        </>
+      )}
     </section>
   );
 }

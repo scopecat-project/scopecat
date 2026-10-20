@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from scopecat.automation.definition import RegisteredProcedure
     from scopecat.automation.intervals import RegisteredProcedureSchedule
     from scopecat.automation.models import ProcedureSource
+    from scopecat.daemon.client import DaemonClient
     from scopecat.planning.system import ExperimentSystemBuilder
 
 
@@ -102,10 +103,11 @@ class LabApplication:
 
     def connect(
         self,
-        daemon: str,
+        daemon: str | DaemonClient,
         *,
         operator: str = "operator",
         procedure_source: Callable[[], ProcedureSource] | None = None,
+        workspace_id: str | None = None,
     ) -> LabClient:
         """Connect notebook code while retaining locally authored closures."""
 
@@ -118,6 +120,7 @@ class LabApplication:
             procedure_schedules=self.procedure_schedules,
             operator=operator,
             procedure_source=procedure_source,
+            workspace_id=workspace_id,
         )
 
 

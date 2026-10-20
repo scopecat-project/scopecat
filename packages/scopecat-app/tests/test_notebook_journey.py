@@ -8,8 +8,25 @@ from unittest.mock import Mock
 import pytest
 from pydantic import TypeAdapter
 
+from scopecat.records.practice import PracticeScope
 from scopecat_app import notebook_journey as journey
 from scopecat_tutorials.lessons import TOPICS, LessonTopic
+
+
+@pytest.fixture(autouse=True)
+def enrolled_course(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        journey,
+        "enroll_course",
+        lambda _runtime, _workspace, topic: PracticeScope(
+            id=f"course-{topic}",
+            title=topic,
+            lesson=topic,
+            directory="source",
+            kind="notebook",
+            workspace_id="source",
+        ),
+    )
 
 
 def test_other_window_observes_preparation_failure_and_retry(

@@ -3,19 +3,25 @@
 import json
 from pathlib import Path
 
+import httpx2
 import pytest
 from nbclient import NotebookClient
 from nbformat import read, v4, write
 from testing.app_support.project import create_project
 from testing.app_support.verify_editing import _cell_index
 
+from scopecat.author_workspaces import author_workspace_id
 from scopecat_app.application_runtime import ApplicationRuntime
 from scopecat_app.notebook import kernel_command
 from scopecat_server.lifecycle import start_project, stop_project
 
 
+@pytest.mark.parametrize("enrolled", [False, True])
 def test_managed_task_calibration_shipped_kernel(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, author_kernel_python: Path
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    author_kernel_python: Path,
+    enrolled: bool,
 ):
     root = create_project(tmp_path / "作者代码", topic="task-calibration").parent
     material = (
@@ -61,11 +67,24 @@ def test_managed_task_calibration_shipped_kernel(
         ]
     )
     try:
-        start_project(application, timeout=120)
+        endpoint = start_project(application, timeout=120)
+        scope_id = None
+        if enrolled:
+            response = httpx2.post(
+                endpoint.base_url + "/api/v1/notebook-practice",
+                json={
+                    "workspace_id": author_workspace_id(root),
+                    "lesson": "task-calibration",
+                },
+                timeout=30,
+                trust_env=False,
+            )
+            assert response.status_code == 200, response.text
+            scope_id = response.json()["id"]
         for name, document in (("managed-task", notebook), ("reopened-task", reopen)):
             if name == "reopened-task":
                 stop_project(application)
-                start_project(application, timeout=120)
+                endpoint = start_project(application, timeout=120)
             try:
                 NotebookClient(
                     document,
@@ -81,6 +100,26 @@ def test_managed_task_calibration_shipped_kernel(
         assert evidence["disconnect_state"] == "leased"
         assert evidence["reconnect_mode"] == "running"
         assert len(evidence["run_ids"]) == 12
+        if scope_id is not None:
+            response = httpx2.get(
+                endpoint.base_url + f"/api/v1/notebook-practice/{scope_id}/preview",
+                timeout=30,
+                trust_env=False,
+            )
+            assert response.status_code == 200, response.text
+            preview = response.json()
+            assert set(preview["selection"]["runs"]) == set(evidence["run_ids"])
+            assert preview["selection"]["branches"]
+            assert preview["selection"]["calibration_tasks"]
+            assert not preview["blockers"], preview
+            response = httpx2.post(
+                endpoint.base_url + f"/api/v1/notebook-practice/{scope_id}/clear",
+                json={"preview": preview, "files": "preserve"},
+                timeout=30,
+                trust_env=False,
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["state"] == "cleared"
     finally:
         stop_project(application)
 

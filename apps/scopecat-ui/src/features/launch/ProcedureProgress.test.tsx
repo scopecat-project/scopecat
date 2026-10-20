@@ -414,3 +414,30 @@ it("opens retained result links in place and preserves modified-click behavior",
   expect(window.location.search).toBe("?procedure=p1");
   expect(window.location.hash).toBe("#launch");
 });
+
+it("cancels a retained course procedure with its source workspace", async () => {
+  const data = view();
+  data.workspace_id = "course-one";
+  data.procedure.source = null;
+  const headers: (string | null)[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      if (request.method === "POST") {
+        headers.push(request.headers.get("X-Scopecat-Workspace"));
+        return Response.json({ run: data.procedure });
+      }
+      return Response.json(data);
+    }),
+  );
+  mount();
+  fireEvent.change(await screen.findByLabelText("Cancellation actor"), {
+    target: { value: "Alice" },
+  });
+  fireEvent.change(screen.getByLabelText("Cancellation reason"), {
+    target: { value: "Stop course" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel procedure" }));
+  await screen.findByRole("button", { name: "Cancel procedure" });
+  expect(headers).toEqual(["course-one"]);
+});

@@ -63,6 +63,7 @@ from scopecat_server.storage.sqlite.parameter_branches import ParameterBranchRep
 from scopecat_server.storage.sqlite.parameter_revisions import (
     ParameterRevisionRepository,
 )
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
 from ..errors import BackendConflict, BackendNotFound
@@ -235,6 +236,12 @@ class ConfigService:
                     source_run_id=command.run_id,
                     proposal_id=command.proposal_id,
                 )
+                scope = PracticeOwnership(connection).require_admission(
+                    ("branch", command.name),
+                    ("parameters", command.base.revision_id),
+                    ("run", command.run_id),
+                    ("analysis", command.verification.analysis_record_id),
+                )
                 revision = revisions.save(
                     ParameterRevision(
                         id=command.revision_id,
@@ -245,7 +252,8 @@ class ConfigService:
                         ),
                         actor=command.actor,
                         note=command.note,
-                    )
+                    ),
+                    practice_scope=scope,
                 )
                 published = ParameterBranch(
                     name=head.name,

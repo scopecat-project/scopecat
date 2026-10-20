@@ -39,6 +39,19 @@ def require_retained_resource(
 def delete_selected_records(
     connection: sqlite3.Connection, selection: DataCleanupSelection
 ) -> None:
+    for table, column, identities in (
+        ("procedure_schedules", "schedule_id", selection.schedules),
+        ("calibration_tasks", "task_id", selection.calibration_tasks),
+        ("calibration_profiles", "profile_id", selection.calibration_profiles),
+        ("parameter_branch_commits", "name", selection.branches),
+        ("experiment_plan_revisions", "plan_id", selection.plans),
+        ("experiment_plan_heads", "plan_id", selection.plans),
+    ):
+        for identity in identities:
+            connection.execute(
+                f"DELETE FROM {table} WHERE {column}=?",  # noqa: S608 - fixed schema identifiers
+                (identity,),
+            )
     for capture in selection.captures:
         connection.execute(
             "DELETE FROM imported_run_identities WHERE capture_hash=?", (capture,)

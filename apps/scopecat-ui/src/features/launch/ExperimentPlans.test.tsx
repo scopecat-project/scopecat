@@ -380,7 +380,7 @@ it("preserves a registered target through reopening, preview, submission and pla
     }),
     binding: targetPlan.definition.scientific_binding,
   };
-  const posted: { path: string; body: Record<string, unknown> }[] = [];
+  const posted: { path: string; body: Record<string, unknown>; workspace: string | null }[] = [];
   const resolutions: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -401,7 +401,11 @@ it("preserves a registered target through reopening, preview, submission and pla
         });
       }
       if (request.method === "POST") {
-        posted.push({ path, body: await request.json() });
+        posted.push({
+          path,
+          body: await request.json(),
+          workspace: request.headers.get("X-Scopecat-Workspace"),
+        });
         if (path.endsWith("/preview"))
           return reply({
             experiment_id: "signal",
@@ -464,10 +468,46 @@ it("preserves a registered target through reopening, preview, submission and pla
   await waitFor(() =>
     expect(posted.some((item) => item.path.endsWith("/experiment-plans"))).toBe(true),
   );
+  expect(posted.find((item) => item.path.endsWith("/experiment-plans"))!.workspace).toBe("legacy");
   expect(
     posted.find((item) => item.path.endsWith("/experiment-plans"))!.body.definition,
   ).toMatchObject({
     selection: targetPlan.definition.selection,
     scientific_binding: reviewed.binding,
   });
+});
+
+it("keeps course plan catalogs, history and hiding in the active workspace", async () => {
+  const seen: { method: string; path: string; workspace: string | null }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      if (url.pathname.includes("experiment-plans")) {
+        const workspace = request.headers.get("X-Scopecat-Workspace");
+        seen.push({ method: request.method, path: url.pathname + url.search, workspace });
+        if (request.method === "POST") return reply({});
+        return reply({ items: workspace === "legacy" ? [first] : [] });
+      }
+      return reply({ items: [], activation: null });
+    }),
+  );
+  setup(true);
+  await screen.findByRole("button", { name: "Open First plan r1" });
+  fireEvent.click(screen.getByRole("button", { name: "History and compare" }));
+  await waitFor(() =>
+    expect(
+      seen.some((item) => item.path.includes("plan_id=a") && item.workspace === "legacy"),
+    ).toBe(true),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Back to named plans" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Delete First plan" }));
+  await waitFor(() =>
+    expect(
+      seen.some(
+        (item) =>
+          item.method === "POST" && item.path.endsWith("/hide") && item.workspace === "legacy",
+      ),
+    ).toBe(true),
+  );
 });

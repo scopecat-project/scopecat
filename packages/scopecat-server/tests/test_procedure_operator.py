@@ -140,6 +140,8 @@ def _application(root: Path, *, attempt: int = 1) -> tuple[DaemonApplication, Mo
                     )
                 ),
                 automation=SimpleNamespace(
+                    require_operator=Mock(),
+                    operator_workspace_id=Mock(return_value=None),
                     get=Mock(return_value=procedure),
                     running_step=Mock(return_value=step),
                     step_attempts=Mock(

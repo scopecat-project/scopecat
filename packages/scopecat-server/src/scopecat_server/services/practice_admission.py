@@ -13,6 +13,7 @@ from scopecat.records.run import (
     ParameterRunConfigSource,
 )
 
+from scopecat_server.request_workspace import request_workspace
 from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
@@ -39,7 +40,10 @@ def run_scope(connection: sqlite3.Connection, submission: RunSubmission) -> str 
         resources.append(("parameters", source.parameters.revision_id))
     elif isinstance(source, AnalysisCandidateRunConfigSource):
         resources.append(("run", source.source_run_id))
-    scope = PracticeOwnership(connection).require_shared(*resources)
+    workspace = request_workspace.get()
+    if workspace is not None:
+        resources.append(("source", workspace))
+    scope = PracticeOwnership(connection).require_admission(*resources)
     if scope is not None:
         require_practice_setup(connection, submission.execution_setup.revision_id)
         if (
@@ -53,13 +57,24 @@ def run_scope(connection: sqlite3.Connection, submission: RunSubmission) -> str 
 
 
 def procedure_scope(
-    connection: sqlite3.Connection, fence: ProcedureConfigurationFence | None
+    connection: sqlite3.Connection,
+    fence: ProcedureConfigurationFence | None,
+    workspace_id: str | None = None,
 ) -> str | None:
-    if not isinstance(fence, SetupRevisionFence):
-        return None
-    scope = PracticeOwnership(connection).require_shared(
-        ("setup", fence.revision.revision_id)
-    )
+    owners = PracticeOwnership(connection)
+    workspace = owners.resolve_workspace(workspace_id)
+    resources: list[tuple[PracticeResource, str]] = []
+    if workspace is not None:
+        resources.append(("source", workspace))
+    if isinstance(fence, SetupRevisionFence):
+        resources.append(("setup", fence.revision.revision_id))
+    scope = owners.require_admission(*resources)
     if scope is not None:
-        require_practice_setup(connection, fence.revision.revision_id)
+        if not isinstance(fence, SetupRevisionFence):
+            if owners.get(scope).kind == "peak":
+                raise ValueError(
+                    "Practice requires an explicit retained software setup"
+                )
+        else:
+            require_practice_setup(connection, fence.revision.revision_id)
     return scope

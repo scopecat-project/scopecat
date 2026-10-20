@@ -5,6 +5,8 @@ from typing import cast
 
 from scopecat.records.parameter_revision import ParameterRevision
 
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
 
 class ParameterRevisionRepository:
     def __init__(self, connection: sqlite3.Connection) -> None:
@@ -26,16 +28,20 @@ class ParameterRevisionRepository:
         rows = cast(
             "list[sqlite3.Row]",
             self.connection.execute(
-                "SELECT record_json FROM parameter_revisions r WHERE NOT EXISTS "
-                "(SELECT 1 FROM practice_resources p WHERE p.kind='parameters' "
-                "AND p.resource_id=r.revision_id) ORDER BY r.rowid DESC"
+                "SELECT record_json FROM parameter_revisions r WHERE "
+                "(SELECT p.scope_id FROM practice_resources p WHERE "
+                "p.kind='parameters' "
+                "AND p.resource_id=r.revision_id) IS ? ORDER BY r.rowid DESC",
+                (PracticeOwnership(self.connection).workspace_scope(),),
             ).fetchall(),
         )
         return tuple(
             ParameterRevision.model_validate_json(cast("str", row[0])) for row in rows
         )
 
-    def save(self, revision: ParameterRevision) -> ParameterRevision:
+    def save(
+        self, revision: ParameterRevision, *, practice_scope: str | None = None
+    ) -> ParameterRevision:
         try:
             existing = self.get(revision.id)
         except KeyError:
@@ -52,4 +58,9 @@ class ParameterRevisionRepository:
             "INSERT INTO parameter_revisions(revision_id, record_json) VALUES (?, ?)",
             (revision.id, revision.model_dump_json()),
         )
+        owners = PracticeOwnership(self.connection)
+        if practice_scope is None:
+            owners.claim_created("parameters", revision.id)
+        else:
+            owners.claim(practice_scope, "parameters", revision.id)
         return revision

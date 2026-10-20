@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { type LessonTopic, useDesktopAvailable } from "../application/DesktopSession";
 import { navigate, navigateLink, useLocationUrl } from "../../lib/navigation";
+import { NotebookCleanup } from "./NotebookCleanup";
 
 const lessons: Record<LessonTopic, { title: string; goal: string; description: string }> = {
   parameters: {
@@ -151,6 +152,7 @@ function NotebookJourneyCourse({
   }, []);
   const stillSelected = () => active.current && lessonAt(new URL(window.location.href)) === topic;
   const [parent, setParent] = useState<string>();
+  const [clearing, setClearing] = useState(false);
   const status = useQuery({
     queryKey: ["notebook-journey", topic],
     queryFn: () => native!.notebook_journey(topic),
@@ -193,7 +195,7 @@ function NotebookJourneyCourse({
     previousPhase.current = phase;
   }, [phase, preparationFailed, resetPreparation]);
   const preparing = prepare.isPending || status.data?.state === "preparing";
-  const busy = preparing || open.isPending || choose.isPending;
+  const busy = preparing || open.isPending || choose.isPending || clearing;
   useEffect(() => {
     onBusyChange(busy);
     return () => onBusyChange(false);
@@ -212,11 +214,13 @@ function NotebookJourneyCourse({
                 ? "Status unavailable"
                 : status.isPending
                   ? "Checking preparation…"
-                  : journey?.ready
-                    ? "Ready to continue"
-                    : journey
-                      ? "Preparation unfinished"
-                      : "Not prepared"}
+                  : journey?.cleared
+                    ? "Course cleared"
+                    : journey?.ready
+                      ? "Ready to continue"
+                      : journey
+                        ? "Preparation unfinished"
+                        : "Not prepared"}
         </span>
       </div>
       <p>{lessons[topic].description} Uses synthetic data; no devices are needed.</p>
@@ -235,11 +239,13 @@ function NotebookJourneyCourse({
             >
               {preparing
                 ? "Preparing Notebook…"
-                : journey?.ready
-                  ? `Continue ${topic} Notebook`
-                  : journey
-                    ? "Retry preparation"
-                    : `Start ${topic} Notebook`}
+                : journey?.cleared
+                  ? "Start a new course"
+                  : journey?.ready
+                    ? `Continue ${topic} Notebook`
+                    : journey
+                      ? "Retry preparation"
+                      : `Start ${topic} Notebook`}
             </Button>
             {!journey && status.isSuccess && !preparing && (
               <Button disabled={busy} onClick={() => choose.mutate()}>
@@ -277,7 +283,9 @@ function NotebookJourneyCourse({
             <p>
               {preparing
                 ? "Preparation is running. This folder will be available when it finishes."
-                : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
+                : journey.cleared
+                  ? "Course cleared. Preparing again creates a new folder."
+                  : "Preparation unfinished. Retry uses the same folder and keeps your edits."}
             </p>
           )}
           {(open.isError || !journey.ready) && (
@@ -295,9 +303,23 @@ function NotebookJourneyCourse({
               Python kernel: <code className="break-all">{journey.python}</code>
             </p>
           )}
-          <a className="underline" href="#history" onClick={navigateLink}>
-            Find saved results in Data
+          <a
+            className="underline"
+            href={
+              journey.scope_id
+                ? `?course=${encodeURIComponent(journey.scope_id)}#history`
+                : "#history"
+            }
+            onClick={navigateLink}
+          >
+            {journey.scope_id ? "View this course in Data" : "Find saved results in Data"}
           </a>
+          <NotebookCleanup
+            topic={topic}
+            journey={journey}
+            disabled={busy}
+            onBusyChange={setClearing}
+          />
           <details>
             <summary>Repair Notebook environments</summary>
             <p>

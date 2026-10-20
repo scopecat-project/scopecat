@@ -60,6 +60,7 @@ class ProcedureChildRunView(BaseModel):
 class ProcedureOperatorView(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     procedure: ProcedureRun
+    workspace_id: str | None = None
     steps: ProcedureStepAttemptPage
     dispatch: ProcedureDispatchView
     current_step: ProcedureStepAttempt | None

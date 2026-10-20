@@ -22,6 +22,11 @@ def selection_resources(selection: DataCleanupSelection) -> Iterator[tuple[str, 
         ("setup_definition", selection.setup_definitions),
         ("parameters", selection.parameters),
         ("capture", selection.captures),
+        ("branch", selection.branches),
+        ("plan", selection.plans),
+        ("schedule", selection.schedules),
+        ("calibration_task", selection.calibration_tasks),
+        ("calibration_profile", selection.calibration_profiles),
     ):
         for identity in values:
             yield kind, identity
@@ -42,9 +47,12 @@ def retained_dependencies(
     connection: sqlite3.Connection,
     objects: ImmutableObjectStore,
     selection: DataCleanupSelection,
+    *,
+    source_ids: tuple[str, ...] = (),
 ) -> tuple[DataCleanupBlocker, ...]:
     selected = set(selection_resources(selection))
     identities = {identity for _, identity in selected}
+    identities.update(source_ids)
     blockers: dict[str, DataCleanupBlocker] = {}
 
     def inspect(owner: str, content: str | bytes) -> None:
@@ -105,5 +113,6 @@ def retained_dependencies(
             "SELECT plan_id, revision, digest FROM experiment_plan_revisions"
         ),
     ):
-        inspect(f"plan:{row[0]}@{row[1]}", objects.read(cast("str", row[2])))
+        if ("plan", row[0]) not in selected:
+            inspect(f"plan:{row[0]}@{row[1]}", objects.read(cast("str", row[2])))
     return tuple(blockers[key] for key in sorted(blockers))

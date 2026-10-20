@@ -1157,6 +1157,7 @@ def _two_step_context_factory(
 def _daemon_client(
     transport: TestClient,
     *,
+    workspace_id: str | None = None,
     lose_procedure_release_responses: int = 0,
     release_commands: list[ProcedureWorkerLeaseReleaseCommand] | None = None,
     request_log: list[tuple[str, str]] | None = None,
@@ -1195,6 +1196,7 @@ def _daemon_client(
     return DaemonClient(
         "http://testserver",
         transport=httpx2.MockTransport(send),
+        workspace_id=workspace_id,
     )
 
 
@@ -1342,3 +1344,145 @@ def test_running_cancellation_settles_current_step_without_starting_next(
         if outcome == "success":
             assert steps[0].output == RunOutputRef(run_id="first-child")
             assert final.closure is not None and final.closure.actor == "operator"
+
+
+@pytest.mark.parametrize("action", ["cancel", "input", "retry", "dispatch"])
+def test_course_procedure_operator_requires_its_workspace(
+    tmp_path: Path, action: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    dispatched: list[str] = []
+
+    def capture_dispatch(_self: ProjectProcedureWorkers, identity: str) -> None:
+        dispatched.append(identity)
+
+    monkeypatch.setattr(ProjectProcedureWorkers, "dispatch", capture_dispatch)
+    with (
+        LocalDaemonRuntime(tmp_path) as runtime,
+        TestClient(runtime.app()) as transport,
+        _daemon_client(transport) as worker,
+    ):
+        run = _submit(worker, "operator-owner")
+        # Retain a real owner before worker transitions: lease-token paths remain usable
+        # without an operator workspace; human actions require that workspace.
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+            owners.claim("one", "procedure", run.procedure_run_id)
+        if action == "dispatch":
+            command = run.procedure_run_id
+            method = "dispatch_project_procedure"
+        elif action == "cancel":
+            command = ProcedureCancelCommand(
+                procedure_run_id=run.procedure_run_id,
+                expected_run_revision=run.revision,
+                actor="operator",
+                reason="stop",
+            )
+            method = "cancel_procedure"
+        else:
+            acquired = worker.acquire_procedure_worker_lease(
+                ProcedureWorkerLeaseAcquireCommand(
+                    procedure_run_id=run.procedure_run_id,
+                    worker_id="trusted-worker",
+                    expected_run_revision=run.revision,
+                )
+            )
+            schema = AnalysisFactSchema(
+                "tests.operator-selection.v1", _ResonatorSelection
+            )
+            request = InterpretationRequest(
+                title="Select",
+                instructions="Select resonator",
+                schema_id=schema.id,
+                schema_hash=schema.schema_hash,
+                structure=schema.structure,
+                response_template={"resonator": "r1"},
+            )
+            begun = worker.begin_procedure_step(
+                ProcedureStepBeginCommand(
+                    procedure_run_id=run.procedure_run_id,
+                    lease_token=acquired.lease.lease_token,
+                    expected_run_revision=acquired.run.revision,
+                    step_key="decision",
+                    operation="interpretation",
+                    intent_hash=request.request_hash,
+                )
+            )
+            if action == "input":
+                waiting = worker.wait_procedure_step_input(
+                    ProcedureStepInputWaitCommand(
+                        procedure_run_id=run.procedure_run_id,
+                        lease_token=acquired.lease.lease_token,
+                        expected_run_revision=begun.run.revision,
+                        step_key="decision",
+                        attempt=begun.step.attempt,
+                        expected_step_revision=begun.step.revision,
+                        request=request,
+                    )
+                )
+                command = ProcedureStepInputSubmitCommand(
+                    procedure_run_id=run.procedure_run_id,
+                    expected_run_revision=waiting.run.revision,
+                    step_key="decision",
+                    attempt=waiting.step.attempt,
+                    expected_step_revision=waiting.step.revision,
+                    request_hash=request.request_hash,
+                    actor="operator",
+                    actor_kind="human",
+                    value={"resonator": "r1"},
+                )
+                method = "submit_procedure_step_input"
+            else:
+                waiting = worker.require_procedure_step_attention(
+                    ProcedureStepAttentionCommand(
+                        procedure_run_id=run.procedure_run_id,
+                        lease_token=acquired.lease.lease_token,
+                        expected_run_revision=begun.run.revision,
+                        step_key="decision",
+                        attempt=begun.step.attempt,
+                        expected_step_revision=begun.step.revision,
+                        reason="inspect",
+                    )
+                )
+                command = ProcedureStepAttentionRetryCommand(
+                    procedure_run_id=run.procedure_run_id,
+                    expected_run_revision=waiting.run.revision,
+                    step_key="decision",
+                    attempt=waiting.step.attempt,
+                    expected_step_revision=waiting.step.revision,
+                )
+                method = "retry_procedure_step_attention"
+        operator = transport.get(f"/api/v1/procedures/{run.procedure_run_id}/operator")
+        assert operator.json()["workspace_id"] == "one"
+        assert operator.json()["procedure"]["source"] is None
+        before = worker.get_procedure(run.procedure_run_id)
+        for workspace in (None, "two"):
+            with (
+                _daemon_client(transport, workspace_id=workspace) as other,
+                pytest.raises(DaemonConflictError, match="belongs to another"),
+            ):
+                getattr(other, method)(command)
+            assert worker.get_procedure(run.procedure_run_id) == before
+            assert dispatched == []
+        with _daemon_client(transport, workspace_id="one") as owner:
+            receipt = getattr(owner, method)(command)
+            assert getattr(owner, method)(command) == receipt
+        with pytest.raises(DaemonConflictError, match="belongs to another"):
+            getattr(worker, method)(command)

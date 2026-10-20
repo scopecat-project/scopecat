@@ -49,11 +49,11 @@ function fixture(): View {
     },
   };
 }
-function mount(onProcedure = vi.fn()) {
+function mount(onProcedure = vi.fn(), workspaceId?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <CalibrationTasks projectId="lab" onProcedure={onProcedure} />
+      <CalibrationTasks projectId="lab" workspaceId={workspaceId} onProcedure={onProcedure} />
     </QueryClientProvider>,
   );
   return onProcedure;
@@ -250,4 +250,32 @@ it("loads history only when expanded and paginates retained tasks", async () => 
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "Load earlier tasks" })).not.toBeInTheDocument(),
   );
+});
+
+it("carries the selected course workspace through task history and controls", async () => {
+  window.history.replaceState(null, "", "/?task=round%2F1#launch");
+  const view = fixture();
+  const seen: { method: string; workspace: string | null }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      seen.push({ method: request.method, workspace: request.headers.get("X-Scopecat-Workspace") });
+      if (request.method === "POST")
+        return Response.json({ ...view, task: { ...view.task, mode: "cancelled" } });
+      return Response.json(
+        new URL(request.url).pathname.endsWith("calibration-tasks")
+          ? { items: [view.task], next_cursor: null }
+          : view,
+      );
+    }),
+  );
+  mount(undefined, "course-source");
+  await screen.findByRole("button", { name: "Cancel remaining stages" });
+  fireEvent.change(screen.getByLabelText("Task operator"), { target: { value: "tester" } });
+  fireEvent.change(screen.getByLabelText("Task control reason"), {
+    target: { value: "finish course" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel remaining stages" }));
+  await waitFor(() => expect(seen.some((item) => item.method === "POST")).toBe(true));
+  expect(seen.every((item) => item.workspace === "course-source")).toBe(true);
 });
