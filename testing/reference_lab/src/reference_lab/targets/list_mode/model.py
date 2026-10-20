@@ -10,6 +10,8 @@ from typing import Literal, cast, override
 import numpy as np
 from numpy.typing import NDArray
 from scopecat.kernel.content_identity import sha256_json_hash
+from scopecat.records.parameter_revision import ParameterRevisionRef
+from scopecat.records.setup import SetupRevisionRef
 from scopecat_quantum._ids import (
     AcquisitionSlotId,
     PulseEventId,
@@ -20,9 +22,11 @@ from scopecat_quantum._ids import (
     TargetCompilerId,
     TargetId,
 )
+from scopecat_quantum.flux import FluxCorrectionSnapshot, flux_signal_id
 from scopecat_quantum.pulses import (
     AcquireSignal,
     DriveSignal,
+    FluxSignal,
     ReadoutSignal,
 )
 from scopecat_quantum.waveforms import RealizedEventTiming, TimingQuantizationMode
@@ -55,10 +59,13 @@ type OutputSignal = DriveSignal | ReadoutSignal
 
 
 def signal_key(
-    signal: OutputSignal | AcquireSignal,
+    signal: OutputSignal | AcquireSignal | FluxSignal,
 ) -> tuple[str, str, str]:
     """Return a canonical hardware-independent key for one logical signal."""
 
+    if isinstance(signal, FluxSignal):
+        kind, _, owner = flux_signal_id(signal).partition(":")
+        return ("flux", kind, owner)
     if isinstance(signal, DriveSignal):
         return ("drive", "qubit", signal.owner.value)
     owner_kind = "qubit" if isinstance(signal.owner, QubitId) else "readout_line"
@@ -678,10 +685,67 @@ class ListModeTarget:
     output_bindings: tuple[IqOutputBinding, ...]
     acquisition_bindings: tuple[AcquisitionBinding, ...]
     timing_quantization: TimingQuantizationMode = "nearest"
+    flux_correction: FluxCorrectionSnapshot | None = None
+    flux_signals: tuple[FluxSignal, ...] = ()
+    flux_outputs: tuple[AwgChannelId, ...] = ()
+    setup_revision: SetupRevisionRef | None = None
+    parameter_revision: ParameterRevisionRef | None = None
     _capability_fingerprint: str = field(init=False, repr=False)
     _configuration_fingerprint: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        if self.flux_correction is not None:
+            snapshot = self.flux_correction
+            correction = snapshot.correction
+            if (
+                self.setup_revision != snapshot.setup_revision
+                or self.parameter_revision != snapshot.parameter_revision
+            ):
+                raise ValueError("flux correction revisions do not match active target")
+            if (
+                correction.input_signals
+                != tuple(map(flux_signal_id, self.flux_signals))
+                or correction.output_ids
+                != tuple(f"{c.instrument_id}:{c.value}" for c in self.flux_outputs)
+                or len(set(self.flux_outputs)) != len(self.flux_outputs)
+            ):
+                raise ValueError(
+                    "flux correction axes do not match physical target routes"
+                )
+            if self.timing_quantization != "strict":
+                raise ValueError("flux v1 requires strict target timing")
+            if correction.sample_rate_hz != self.sample_rate_hz:
+                raise ValueError("flux correction sample rate does not match target")
+            # The retained list-mode device contract has no qualified baseline
+            # hold outside records. Bound this fixture to zero physical DC.
+            if any(correction.baseline_v):
+                raise ValueError("list-mode flux v1 supports zero DC baseline only")
+            outputs = {o.channel_id: o for o in self.preparation.outputs}
+            if any(
+                c not in outputs
+                or not math.isfinite(outputs[c].amplitude_v)
+                or outputs[c].amplitude_v <= 0
+                or not outputs[c].output_enabled
+                for c in self.flux_outputs
+            ):
+                raise ValueError(
+                    "flux outputs require enabled finite positive voltage scales"
+                )
+            selected_offsets = {
+                r.channel_id: r.offset_v
+                for group in self.host_state_policy.coupling_groups
+                if set(group.activation_channels) & set(self.flux_outputs)
+                for r in group.output_offsets
+            }
+            if any(selected_offsets.get(c) != 0 for c in self.flux_outputs):
+                raise ValueError("flux outputs require reviewed zero hardware offsets")
+            if any(
+                set(b.channel_ids) & set(self.flux_outputs)
+                for b in self.output_bindings
+            ):
+                raise ValueError("flux outputs cannot share IQ routes")
+        elif self.flux_outputs or self.flux_signals:
+            raise ValueError("flux routes require an explicit correction snapshot")
         canonical_outputs = tuple(
             sorted(
                 self.output_bindings,
@@ -732,6 +796,21 @@ class ListModeTarget:
         placements = tuple(
             sorted(
                 (
+                    *(
+                        ListModeSignalPlacement(
+                            signal=signal_key(signal),
+                            endpoints=tuple(
+                                ListModePhysicalEndpoint(
+                                    kind="waveform_output",
+                                    instrument_id=c.instrument_id,
+                                    channel_id=c.value,
+                                    component_path=c.component_path,
+                                )
+                                for c in self.flux_outputs
+                            ),
+                        )
+                        for signal in self.flux_signals
+                    ),
                     *(
                         ListModeSignalPlacement(
                             signal=signal_key(binding.signal),
@@ -809,6 +888,15 @@ class ListModeTarget:
             "target_id": self.id.value,
             "capability_fingerprint": self.capability_fingerprint,
             "acquisition_dsp_policy": self.acquisition_dsp_policy,
+            "flux_correction": (
+                self.flux_correction.model_dump(mode="json")
+                if self.flux_correction is not None
+                else None
+            ),
+            "flux_outputs": [
+                [c.instrument_id, c.value, list(c.component_path)]
+                for c in self.flux_outputs
+            ],
             "output_bindings": [
                 {
                     "signal": signal_key(binding.signal),
@@ -1115,6 +1203,7 @@ class ListModeArtifact:
     host_state_requirements: ListModeHostStateRequirements
     entries: tuple[ListModeEntry, ...]
     phase_templates: tuple[AwgPhaseTemplate, ...] = ()
+    flux_correction: FluxCorrectionSnapshot | None = None
 
     @property
     def instrument_ids(self) -> tuple[str, ...]:
