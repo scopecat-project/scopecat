@@ -6,6 +6,7 @@ from typing import cast
 
 from scopecat.records.practice import PracticeResource, PracticeScope
 
+from scopecat_server.errors import BackendConflict
 from scopecat_server.request_workspace import request_workspace
 
 
@@ -73,16 +74,21 @@ class PracticeOwnership:
         if scope is not None:
             self.claim(scope, kind, resource_id)
 
-    def require_writer(self, kind: PracticeResource, resource_id: str) -> None:
-        """Reject ordinary/cross-course mutations; never adopt an existing record."""
+    def require_writer(
+        self, kind: PracticeResource, resource_id: str, *, worker: bool = False
+    ) -> None:
+        """Reject cross-owner writes; worker is only for daemon task advancement."""
         owner = self.owner(kind, resource_id)
         scope = self.workspace_scope()
-        if request_workspace.get() is not None and owner != scope:
-            raise ValueError(
+        if not worker and owner != scope:
+            raise BackendConflict(
                 "This resource belongs to another practice or ordinary work"
             )
         if owner is not None:
-            self.require_active(owner)
+            try:
+                self.require_active(owner)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
 
     def require_active(self, scope_id: str) -> None:
         if self.get(scope_id).state != "active":

@@ -63,6 +63,7 @@ class ExperimentPlanRepository:
 
     def list(self, *, plan_id: str | None = None) -> ExperimentPlanList:
         with self.store.sqlite.read_connection() as connection:
+            scope = PracticeOwnership(connection).workspace_scope()
             if plan_id is None:
                 rows = cast(
                     "list[sqlite3.Row]",
@@ -72,7 +73,11 @@ class ExperimentPlanRepository:
                         "FROM experiment_plan_revisions r "
                         "JOIN experiment_plan_heads h ON "
                         "h.plan_id=r.plan_id AND h.revision=r.revision "
-                        "WHERE h.hidden=0 ORDER BY r.plan_id"
+                        "WHERE h.hidden=0 AND "
+                        "(SELECT scope_id FROM practice_resources p "
+                        "WHERE p.kind='plan' "
+                        "AND p.resource_id=r.plan_id) IS ? ORDER BY r.plan_id",
+                        (scope,),
                     ).fetchall(),
                 )
             else:
@@ -81,8 +86,12 @@ class ExperimentPlanRepository:
                     connection.execute(
                         "SELECT plan_id,revision,content_hash "
                         "FROM experiment_plan_revisions "
-                        "WHERE plan_id=? ORDER BY revision DESC",
-                        (plan_id,),
+                        "WHERE plan_id=? AND "
+                        "(SELECT scope_id FROM practice_resources p "
+                        "WHERE p.kind='plan' "
+                        "AND p.resource_id=experiment_plan_revisions.plan_id) IS ? "
+                        "ORDER BY revision DESC",
+                        (plan_id, scope),
                     ).fetchall(),
                 )
         return ExperimentPlanList(

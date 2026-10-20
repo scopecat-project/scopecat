@@ -9,6 +9,7 @@ from scopecat.records.parameter_revision import (
 )
 from scopecat.records.practice import PracticeScope
 
+from scopecat_server.errors import BackendConflict
 from scopecat_server.request_workspace import request_workspace
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 from scopecat_server.storage.sqlite.parameter_revisions import (
@@ -100,13 +101,45 @@ def test_course_context_does_not_transfer_between_registered_sources(tmp_path: P
                 owners.claim(identity, "branch", identity)
             with workspace("one"):
                 owners.require_writer("branch", "one")
-                with pytest.raises(ValueError, match="another practice"):
+                with pytest.raises(BackendConflict, match="another practice"):
                     owners.require_writer("branch", "two")
-                with pytest.raises(ValueError, match="another practice"):
+                with pytest.raises(BackendConflict, match="another practice"):
                     owners.require_writer("branch", "ordinary")
             with (
                 workspace("ordinary"),
-                pytest.raises(ValueError, match="another practice"),
+                pytest.raises(BackendConflict, match="another practice"),
             ):
                 owners.require_writer("branch", "one")
             assert owners.workspace_scope() is None
+
+
+def test_no_workspace_is_ordinary_and_worker_writes_still_require_active_scope(
+    tmp_path: Path,
+):
+    with closing(
+        SQLiteProjectStore(SQLiteDatabase(tmp_path / "db"), tmp_path / "objects")
+    ) as store:
+        store.bootstrap()
+        with store.sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            scope = PracticeScope(
+                id="course",
+                title="Course",
+                lesson="parameters",
+                directory="course",
+                kind="notebook",
+                workspace_id="course-source",
+            )
+            owners.save(scope)
+            owners.claim(scope.id, "source", "course-source")
+            for kind in ("branch", "plan", "schedule", "calibration_task"):
+                owners.claim(scope.id, kind, "owned")
+                with pytest.raises(BackendConflict, match="another practice"):
+                    owners.require_writer(kind, "owned")
+                owners.require_writer(kind, "ordinary")
+                with workspace("course-source"):
+                    owners.require_writer(kind, "owned")
+                owners.require_writer(kind, "owned", worker=True)
+            owners.save(scope.model_copy(update={"state": "cleaning"}))
+            with pytest.raises(BackendConflict, match="fenced"):
+                owners.require_writer("calibration_task", "owned", worker=True)

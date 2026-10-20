@@ -196,7 +196,7 @@ class CalibrationTaskService:
                 if view.finalization.closure is None:
                     return view
                 task = task.model_copy(update={"mode": "finished"})
-                self._store.update(connection, task)
+                self._store.update(connection, task, worker=True)
                 return self._view(connection, task)
             if self._has_active_stage(view):
                 return view
@@ -223,10 +223,10 @@ class CalibrationTaskService:
                             )
                         finally:
                             connection.execute("RELEASE task_finalization")
-                        self._store.update(connection, task)
+                        self._store.update(connection, task, worker=True)
                         return self._view(connection, task)
                 task = task.model_copy(update={"mode": "finished"})
-                self._store.update(connection, task)
+                self._store.update(connection, task, worker=True)
                 return self._view(connection, task)
             for stage_id in view.progress.ready:
                 if stage_id in task.dispatch_errors:
@@ -254,7 +254,7 @@ class CalibrationTaskService:
                     task = updated
                 finally:
                     connection.execute("RELEASE task_stage")
-                self._store.update(connection, task)
+                self._store.update(connection, task, worker=True)
                 if stage_id not in task.dispatch_errors:
                     break
             return self._view(connection, task)
@@ -643,5 +643,5 @@ class CalibrationTaskService:
         reason: Literal["deadline_elapsed", "repair_budget_exhausted"],
     ) -> CalibrationTaskView:
         task = task.model_copy(update={"mode": "finished", "stop_reason": reason})
-        self._store.update(connection, task)
+        self._store.update(connection, task, worker=True)
         return self._view(connection, task)

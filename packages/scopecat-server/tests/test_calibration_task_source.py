@@ -291,3 +291,51 @@ def test_advance_does_not_revalidate_ready_stages_while_work_is_active(
         for _ in range(3):
             assert tasks.advance(spec.task_id) == admitted
         assert len(validated) == 2
+
+
+def test_http_without_workspace_cannot_control_course_task(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with _check_case(tmp_path) as (runtime, check, _):
+        tasks = runtime.application.calibration_tasks
+        specification = _task(check)
+        created = tasks.create(specification)
+        with tasks._sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            owners.save(
+                PracticeScope(
+                    id="course",
+                    title="Course",
+                    lesson="parameters",
+                    directory="course",
+                    kind="notebook",
+                    workspace_id="course-source",
+                )
+            )
+            owners.claim("course", "source", "course-source")
+            owners.claim("course", "calibration_task", specification.task_id)
+        command = CalibrationTaskControl(
+            task_id=specification.task_id,
+            expected_revision=created.task.control_revision,
+            action="cancel",
+            actor="test",
+            reason="course control",
+        )
+        with TestClient(runtime.app()) as client:
+            response = client.post(
+                "/api/v1/calibration-tasks/control",
+                json=command.model_dump(mode="json"),
+            )
+            assert response.status_code == 409, response.text
+            assert "another practice" in response.text
+            assert tasks.get(specification.task_id).task == created.task
+            response = client.post(
+                "/api/v1/calibration-tasks/control",
+                json=command.model_dump(mode="json"),
+                headers={"X-Scopecat-Workspace": "course-source"},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["task"]["mode"] == "cancelled"

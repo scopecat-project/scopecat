@@ -6,7 +6,11 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from scopecat.records.practice import NotebookPracticeClearCommand, PracticeScope
+from scopecat.records.practice import (
+    NotebookPracticeClearCommand,
+    PracticeResource,
+    PracticeScope,
+)
 
 from scopecat_server.services.data_cleanup import DataCleanupService
 from scopecat_server.services.notebook_practice import NotebookPracticeService
@@ -168,3 +172,26 @@ def test_paused_or_waiting_procedure_requires_normal_task_controls(
             scope.id, NotebookPracticeClearCommand(preview=preview), settle=settle
         )
     settle.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", ["run", "analysis"])
+def test_unpublished_course_reservations_can_be_reclaimed(
+    course: Course, kind: PracticeResource
+):
+    store, service, scope = course
+    with store.sqlite.write_transaction() as connection:
+        PracticeOwnership(connection).claim(scope.id, kind, "unpublished")
+    preview = service.preview(scope.id)
+    assert not preview.blockers
+    assert preview.record_count == 1
+    # Ordinary cleanup still cannot use a missing record as an authority.
+    assert service.cleanup.preview(preview.selection).blockers
+    result = service.clear(
+        scope.id, NotebookPracticeClearCommand(preview=preview), settle=Mock()
+    )
+    assert result.state == "cleared"
+    with (
+        store.sqlite.write_transaction() as connection,
+        pytest.raises(ValueError, match="fenced"),
+    ):
+        PracticeOwnership(connection).claim(scope.id, kind, "unpublished")

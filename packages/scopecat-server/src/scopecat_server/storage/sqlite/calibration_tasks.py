@@ -47,10 +47,14 @@ class CalibrationTaskStore:
         )
 
     def update(
-        self, connection: sqlite3.Connection, task: CalibrationTaskRecord
+        self,
+        connection: sqlite3.Connection,
+        task: CalibrationTaskRecord,
+        *,
+        worker: bool = False,
     ) -> None:
         PracticeOwnership(connection).require_writer(
-            "calibration_task", task.specification.task_id
+            "calibration_task", task.specification.task_id, worker=worker
         )
         connection.execute(
             "UPDATE calibration_tasks SET mode = ?, record_json = ? WHERE task_id = ?",

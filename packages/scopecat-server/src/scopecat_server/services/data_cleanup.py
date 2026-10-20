@@ -117,7 +117,7 @@ class DataCleanupService:
                     (identity,),
                 ).fetchone(),
             )
-            if row is None and not clearing_practice:
+            if row is None and not clearing_practice and not course_cleanup:
                 blockers.append(
                     DataCleanupBlocker(
                         owner=f"{kind}:{identity}",
