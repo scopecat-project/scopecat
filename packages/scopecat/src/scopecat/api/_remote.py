@@ -27,6 +27,7 @@ from scopecat.analysis.service import (
     MeasurementAnalysisInput,
     SavedAnalysis,
 )
+from scopecat.api.application_open import open_in_application
 from scopecat.control.models import RunExecutionSegmentPage
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import (
@@ -54,6 +55,10 @@ from scopecat.daemon.wire import (
     RunDomainJobTransitionPage,
 )
 from scopecat.records.analysis import AnalysisExecution
+from scopecat.records.application_open import (
+    ApplicationOpenReceipt,
+    ApplicationOpenTarget,
+)
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import ContentEntry
 from scopecat.records.metadata import validate_json_metadata
@@ -75,6 +80,18 @@ class RemoteRunOperations:
     """Run handle storage operations owned by one daemon transport."""
 
     client: DaemonClient
+
+    def open(
+        self, run_id: str, *, analysis_id: str | None = None, timeout: float = 5
+    ) -> ApplicationOpenReceipt:
+        target = (
+            ApplicationOpenTarget(kind="run", object_id=run_id)
+            if analysis_id is None
+            else ApplicationOpenTarget(
+                kind="run_analysis", object_id=analysis_id, owner_id=run_id
+            )
+        )
+        return open_in_application(self.client, target, timeout=timeout)
 
     def load_snapshot(self, run_id: str) -> RunSnapshot:
         return self.client.get_run(run_id).snapshot

@@ -254,6 +254,15 @@ from scopecat.records.apparatus_history import (
     ApparatusObservationCreate,
     ApparatusObservationPage,
 )
+from scopecat.records.application_open import (
+    ApplicationOpenCommand,
+    ApplicationOpenReceipt,
+    DesktopHostLease,
+    DesktopHostRegistration,
+    DesktopHostStatus,
+    DesktopOpenAcknowledgement,
+    DesktopOpenBatch,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
     AuthorAnalysisRequest,
@@ -413,6 +422,49 @@ class DaemonClient:
             timeout=timeout,
             transport=transport,
         )
+
+    def application_open_host(
+        self, *, timeout: float | None = None
+    ) -> DesktopHostStatus:
+        return self._get_model(
+            f"{_API_PREFIX}/application-open/host", DesktopHostStatus, timeout=timeout
+        )
+
+    def open_application_object(
+        self, command: ApplicationOpenCommand, *, timeout: float | None = None
+    ) -> ApplicationOpenReceipt:
+        # The caller owns the deadline and retains the command on uncertainty.
+        response = self._request(
+            "POST",
+            f"{_API_PREFIX}/application-open",
+            json=command.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        return ApplicationOpenReceipt.model_validate_json(response.content)
+
+    def register_desktop_host(
+        self, command: DesktopHostRegistration
+    ) -> DesktopHostLease:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/application-open/host/register", command, DesktopHostLease
+        )
+
+    def poll_desktop_open(self, lease: DesktopHostLease) -> DesktopOpenBatch:
+        return self._post_model(
+            f"{_API_PREFIX}/application-open/host/poll", lease, DesktopOpenBatch
+        )
+
+    def acknowledge_desktop_open(
+        self, command: DesktopOpenAcknowledgement
+    ) -> ApplicationOpenReceipt:
+        return self._post_idempotent_model(
+            f"{_API_PREFIX}/application-open/host/acknowledge",
+            command,
+            ApplicationOpenReceipt,
+        )
+
+    def unregister_desktop_host(self, lease: DesktopHostLease) -> None:
+        self._post_response(f"{_API_PREFIX}/application-open/host/unregister", lease)
 
     @property
     def workspace_id(self) -> str:
@@ -579,8 +631,8 @@ class DaemonClient:
             f"{_API_PREFIX}/author-revisions/analyze", request, AuthorAnalysisReceipt
         )
 
-    def health(self) -> DaemonHealth:
-        return self._get_model(f"{_API_PREFIX}/health", DaemonHealth)
+    def health(self, *, timeout: float | None = None) -> DaemonHealth:
+        return self._get_model(f"{_API_PREFIX}/health", DaemonHealth, timeout=timeout)
 
     def create_review(
         self,

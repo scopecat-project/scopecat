@@ -14,6 +14,7 @@ from scopecat.analysis.service import (
     SavedAnalysis,
 )
 from scopecat.api._remote import analysis_input_payload, analysis_output_payload
+from scopecat.api.application_open import open_in_application
 from scopecat.api.published_analysis import PublishedAnalysis
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.views import (
@@ -29,6 +30,10 @@ from scopecat.records.analysis import (
     AnalysisExecution,
     ProjectAnalysisSubject,
     SampleAnalysisSubject,
+)
+from scopecat.records.application_open import (
+    ApplicationOpenReceipt,
+    ApplicationOpenTarget,
 )
 from scopecat.records.content import ContentEntry
 from scopecat.records.parameter_change import ParameterChangeProposal
@@ -83,6 +88,20 @@ class RemoteProjectAnalysisOperations:
             executions=tuple(executions),
             outputs=tuple(outputs),
         )
+
+    def _open_analysis(
+        self, analysis_id: str, *, timeout: float
+    ) -> ApplicationOpenReceipt:
+        target = (
+            ApplicationOpenTarget(
+                kind="sample_analysis",
+                object_id=analysis_id,
+                owner_id=self.subject.sample_id,
+            )
+            if isinstance(self.subject, SampleAnalysisSubject)
+            else ApplicationOpenTarget(kind="analysis", object_id=analysis_id)
+        )
+        return open_in_application(self.client, target, timeout=timeout)
 
     def published_analysis(self, selector: str) -> PublishedAnalysis:
         return PublishedAnalysis(source=self, view=self.view(selector))

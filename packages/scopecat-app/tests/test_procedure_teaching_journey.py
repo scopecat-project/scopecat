@@ -193,7 +193,22 @@ assert task.output("scan").run_id == next(
 assert task.snapshot.closure.status == "succeeded"
 session.close()
 '''))
-start_project(project, timeout=60)
+from threading import Event, Thread
+from unittest.mock import Mock
+from scopecat_app.desktop_objects import DesktopObjectOpener
+from scopecat_app.desktop_session import DesktopSession
+endpoint = start_project(project, timeout=60)
+closing = Event()
+desktop = DesktopSession(Mock(), closing)
+desktop.connected(endpoint.base_url)
+opened = []
+opener = DesktopObjectOpener(desktop, opened.append)
+opener.pump()
+def pump():
+    while not closing.wait(0.05):
+        opener.pump()
+thread = Thread(target=pump)
+thread.start()
 try:
     NotebookClient(
         document,
@@ -201,7 +216,12 @@ try:
         kernel_name="scopecat-lab",
         resources={"metadata": {"path": str(root / "notebooks")}},
     ).execute()
+    assert len(opened) == 1
+    assert opened[0].kind == "procedure" and opened[0].view == "decision"
 finally:
+    closing.set()
+    thread.join(timeout=5)
+    opener.close()
     nbformat.write(document, root / "notebooks/verified-procedure.ipynb")
     stop_project(project)
 """
