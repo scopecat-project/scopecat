@@ -112,6 +112,20 @@ def _inspect_list_mode_artifact_base(
         ),
         facts=(
             CompiledInspectionFact("semantics_id", artifact.waveform_semantics_id),
+            *(
+                (
+                    CompiledInspectionFact(
+                        "flux_correction_snapshot",
+                        artifact.flux_correction.model_dump(mode="json"),
+                    ),
+                    CompiledInspectionFact(
+                        "flux_correction_fingerprint",
+                        artifact.flux_correction.fingerprint,
+                    ),
+                )
+                if artifact.flux_correction is not None
+                else ()
+            ),
             CompiledInspectionFact(
                 "sample_rate_hz", artifact.sample_rate_hz, unit="Hz"
             ),
