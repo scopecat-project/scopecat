@@ -81,6 +81,7 @@ from scopecat.automation import (
 )
 from scopecat.automation.calibration_tasks import CalibrationTaskProgress
 from scopecat.automation.wire import (
+    ProcedureInputContinueReceipt,
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
@@ -2339,10 +2340,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.step_key,
             command.attempt,
         )
-        receipt = application.automation.wait_step_input(command)
-        if receipt.run.state == "waiting_for_input":
-            project_workers.pause_for_input(procedure_run_id)
-        return receipt
+        return project_workers.wait_for_input(
+            lambda: application.automation.wait_step_input(command)
+        )
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/attempts/{{attempt}}/resources/wait"
@@ -2465,6 +2465,28 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.attempt,
         )
         return application.automation.submit_step_input(command)
+
+    @app.post(
+        f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/"
+        "attempts/{attempt}/input/continue"
+    )
+    def submit_and_continue_procedure_input(
+        procedure_run_id: str,
+        step_key: str,
+        attempt: Annotated[int, ApiPath(ge=1)],
+        command: ProcedureStepInputSubmitCommand,
+    ) -> ProcedureInputContinueReceipt:
+        _require_procedure_step_identity(
+            procedure_run_id,
+            step_key,
+            attempt,
+            command.procedure_run_id,
+            command.step_key,
+            command.attempt,
+        )
+        return project_workers.submit_input_and_continue(
+            command, lambda: application.automation.submit_step_input(command)
+        )
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/"

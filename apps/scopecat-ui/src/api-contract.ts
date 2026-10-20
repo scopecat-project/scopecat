@@ -159,3 +159,6 @@ export type TableParameterType = Extract<ParameterValueType, { shape: "table" }>
 export type TableParameterValue = Extract<StoredParameterValue, { shape: "table" }>;
 
 export type ConfigurationTemplateImportResult = PostResponse<"/api/v1/setup/template-imports">;
+
+export type ProcedureInputContinueReceipt =
+  PostResponse<"/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/input/continue">;

@@ -151,6 +151,10 @@ _OPERATIONS = {
         ),
         "post",
     ),
+    (
+        "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/input/continue",
+        "post",
+    ),
     ("/api/v1/reviews", "get"),
     ("/api/v1/reviews/{session_id}", "get"),
     ("/api/v1/reviews/{session_id}/compile", "post"),

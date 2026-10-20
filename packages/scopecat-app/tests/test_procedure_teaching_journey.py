@@ -83,14 +83,14 @@ try:
             if outcome == "Peak selected":
                 # Python bypasses UI hints; the procedure still checks meaning.
                 answer = ns["PeakChoice"](outcome, 6600)
-                receipt = pending.respond(answer, actor="learner")
-                assert pending.respond(answer, actor="learner") == receipt
-                assert task.snapshot.state == "ready"
-                assert task.progress().dispatch.management == "paused"
-                task.resume()
+                receipt = pending.respond_and_continue(answer, actor="learner")
+                repeated = pending.respond_and_continue(answer, actor="learner")
+                assert repeated.answer.output == receipt.answer.output
                 assert task.wait(timeout=60).state == "waiting_for_input"
                 try:
-                    pending.respond(ns["PeakChoice"](outcome, 6500), actor="learner")
+                    pending.respond_and_continue(
+                        ns["PeakChoice"](outcome, 6500), actor="learner"
+                    )
                 except DaemonConflictError:
                     pass
                 else:
@@ -131,10 +131,9 @@ try:
                 ] == ["choose-2"]
                 run("procedure-answer")
             else:
-                ns["receipt"] = pending.respond(
+                ns["receipt"] = pending.respond_and_continue(
                     ns["PeakChoice"](outcome, None), actor="learner"
                 )
-            assert task.snapshot.state == "ready"
             run("procedure-continue")
             assert ns["result"].closure.status == "succeeded"
             assert task.output("scan").run_id == scan

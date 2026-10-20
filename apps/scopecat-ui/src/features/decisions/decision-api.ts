@@ -1,8 +1,8 @@
 import type {
   ProcedureRunPage,
+  ProcedureInputContinueReceipt,
   ProcedureStepAttemptPage,
   ProcedureStepInputSubmitCommand,
-  ProcedureStepInputSubmitReceipt,
 } from "../../api-contract";
 import { apiClient, apiData } from "../../api-client";
 
@@ -32,10 +32,10 @@ export async function getProcedureSteps(
 
 export async function submitProcedureInput(
   command: ProcedureStepInputSubmitCommand,
-): Promise<ProcedureStepInputSubmitReceipt> {
+): Promise<ProcedureInputContinueReceipt> {
   return apiData(
     apiClient.POST(
-      "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/input",
+      "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/input/continue",
       {
         params: {
           path: {
@@ -70,5 +70,16 @@ export function saveDecisionDraft(command: DecisionDraftSave) {
 export function getDecisionDraftHistory(before?: number) {
   return apiData(
     apiClient.GET("/api/v1/decision-drafts", { params: { query: { before, limit: 25 } } }),
+  );
+}
+
+export type { ProcedureInputContinueReceipt } from "../../api-contract";
+
+export async function getDecisionProgress(procedureRunId: string, signal?: AbortSignal) {
+  return apiData(
+    apiClient.GET("/api/v1/procedures/{procedure_run_id}/operator", {
+      params: { path: { procedure_run_id: procedureRunId } },
+      signal,
+    }),
   );
 }

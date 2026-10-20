@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -477,6 +477,14 @@ class ProcedureStepInputSubmitReceipt(_WireModel):
         if self.step.output != self.output:
             raise ValueError("procedure input receipt output must match its step")
         return self
+
+
+class ProcedureInputContinueReceipt(_WireModel):
+    """The answer is durable even when continuation could not be scheduled."""
+
+    answer: ProcedureStepInputSubmitReceipt
+    continuation: Literal["queued", "already_continued", "blocked", "retryable"]
+    dispatch_error: str | None = None
 
 
 class ProcedureStepAttentionRetryCommand(_WireModel):
