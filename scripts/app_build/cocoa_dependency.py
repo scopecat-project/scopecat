@@ -1,7 +1,8 @@
 """Reproducible, version-locked Cocoa repair for Darwin delivery wheels.
 
 This is a build-time dependency transformation, never a runtime monkeypatch.
-The upstream license is retained. Source development still uses the upstream wheel.
+The upstream license is retained. The native source host and packaged host use
+the same repaired wheel.
 """
 
 from __future__ import annotations
@@ -17,12 +18,12 @@ from pathlib import Path
 from scripts.app_build.dependency_wheel import write_wheel
 
 UPSTREAM_VERSION = "6.2.1"
-VERSION = "6.2.1+scopecat.1"
+VERSION = "6.2.1+scopecat.2"
 UPSTREAM_SHA256 = "9d07275f53894ab4d5e2e0e996227193e7187dec276d9b624dccbce029216b46"
 SOURCE_SHA256 = "27a5e95be0816f0bba7bed910eeda11b92de4598419a275f9346023e24ba27af"
-PATCH_SHA256 = "01b5f91c4eaa9e16537eff465b03567a2062e9f68c8001fb7575fb7ac2b08456"
-RESULT_SHA256 = "2fe47f99c36beb0bc5d156b3006321ff94c0f101d4fffc1ff49a5d2bad5abd39"
-WHEEL_SHA256 = "69e66d40be74245e21569a8f83e98dd1b4013cd703233da19f78942bd0f976a9"
+PATCH_SHA256 = "2d49791f7a236d748a679475d228c1a4e1984d63ea259253f35473bce9cc8014"
+RESULT_SHA256 = "af84442e09b10f943b700e3081ff7682869c85ac27e6784c9b1e76fed13a50ee"
+WHEEL_SHA256 = "0e4067847e2276d707a650fe8cd2b3cddc44026f3bc72b9664658de24c1117ed"
 COCOA = "webview/platforms/cocoa.py"
 
 
@@ -76,7 +77,10 @@ def patch_wheel(wheels: Path) -> Path:
                 "upstream_cocoa_sha256": SOURCE_SHA256,
                 "patch_sha256": PATCH_SHA256,
                 "cocoa_sha256": RESULT_SHA256,
-                "scope": "Darwin packaged host; private store shared per host",
+                "scope": (
+                    "Darwin native hosts; shared private store and "
+                    "closed-window JS cancellation"
+                ),
             },
             sort_keys=True,
             indent=2,
