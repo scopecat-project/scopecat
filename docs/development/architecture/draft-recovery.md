@@ -81,6 +81,13 @@ retained the upstream wheel; its later approved repair is described below. The p
 on combined candidate `4aee5825dbe374f469bc0f1be1e9a981908086c1` in
 [run 37436328157](https://github.com/scopecat-project/scopecat/actions/runs/37436328157).
 
+The current native source and packaged hosts both use the verified repaired wheel.
+Revision `6.2.1+scopecat.2` also releases pending JavaScript evaluations when their
+window closes: WebKit can discard the completion callback during teardown.
+Live windows still wait for the real result. This prevents bridge threads from
+holding Python shutdown open; it does not force-stop application work or alter
+the historical qualification above.
+
 The patch holds one `nonPersistentDataStore` strongly in the Cocoa host class,
 sets it on the configuration before constructing each private WKWebView, and
 sets `self.datastore` from the constructed WebView's actual configuration. It
