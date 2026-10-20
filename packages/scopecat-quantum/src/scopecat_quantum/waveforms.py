@@ -423,14 +423,21 @@ def plan_sampled_waveforms(
     *,
     bindings: tuple[SampledOutputBinding, ...],
     grid: SampleGrid,
+    output_signals: frozenset[PlaySignal] | None = None,
 ) -> SampledWaveformPlan:
     """Resolve exact boundaries, output bindings, and phase frames.
 
     Every unique absolute boundary is quantized once.  Adjacent events therefore
     share the same integer boundary and cannot acquire a rounding gap or overlap.
+    An explicit output selection projects rendering only: all original event
+    boundaries, event timings, record origin and duration remain authoritative.
     """
 
-    resolved_events = resolve_waveform_events(program.events)
+    resolved_events = tuple(
+        event
+        for event in resolve_waveform_events(program.events)
+        if output_signals is None or event.signal in output_signals
+    )
     issues: list[WaveformPlanningIssue] = []
     binding_by_signal = _resolve_bindings(bindings, resolved_events, issues=issues)
 

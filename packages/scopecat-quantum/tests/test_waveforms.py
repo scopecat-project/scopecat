@@ -1347,3 +1347,38 @@ def test_final_lane_peak_is_measured_after_additive_accumulation() -> None:
 
     np.testing.assert_allclose(rendered.buffers[0], (1.2, 1.2))
     assert rendered.lane_peaks == pytest.approx((1.2, 0.0))
+
+
+def test_output_projection_retains_complete_record_timing_and_origin() -> None:
+    program = schedule(
+        PulseProgram(
+            PulseProgramId("projection"),
+            Parallel(
+                (
+                    Play(
+                        PulseEventId("selected"),
+                        DRIVE_Q0,
+                        Constant(Quantity(2, "ns"), Quantity(0.2, "arb")),
+                    ),
+                    Play(
+                        PulseEventId("other"),
+                        READOUT_Q1,
+                        Constant(Quantity(8, "ns"), Quantity(0.5, "arb")),
+                    ),
+                )
+            ),
+        )
+    )
+    bindings = (SampledOutputBinding(DRIVE_Q0, 0, 1, 0, IDENTITY_IQ),)
+    grid = SampleGrid(1_000_000_000, timing=TimingQuantizationPolicy("strict"))
+    plan = plan_sampled_waveforms(
+        program, bindings=bindings, grid=grid, output_signals=frozenset((DRIVE_Q0,))
+    )
+    assert plan.sample_count == 8 and plan.time_origin_seconds == 0
+    assert {t.event_id.value for t in plan.event_timings} == {"selected", "other"}
+    assert [e.event_id.value for e in plan.render_events] == ["selected"]
+    np.testing.assert_allclose(
+        Float64ReferenceRenderer().render(plan).buffers[0], (0.2, 0.2, 0, 0, 0, 0, 0, 0)
+    )
+    with pytest.raises(WaveformPlanningError, match="has no sampled-output binding"):
+        plan_sampled_waveforms(program, bindings=bindings, grid=grid)
