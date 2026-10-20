@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Iterator
+from contextvars import copy_context
 from typing import cast
 
 from scopecat.records.practice import PracticeResource, PracticeScope
@@ -43,11 +44,24 @@ class PracticeOwnership:
             (scope.id, scope.model_dump_json()),
         )
 
+    def resolve_workspace(self, workspace_id: str | None = None) -> str | None:
+        """An explicit source cannot replace the identity of an ordinary/A/B request.
+
+        HTTP binds this variable even without a header (ordinary work). Daemon
+        work with no request context may instead use its retained source identity.
+        """
+        requested = request_workspace.get()
+        if (
+            workspace_id is not None
+            and request_workspace in copy_context()
+            and workspace_id != requested
+        ):
+            raise BackendConflict("Source workspace differs from the request workspace")
+        return workspace_id if workspace_id is not None else requested
+
     def workspace_scope(self, workspace_id: str | None = None) -> str | None:
         """Resolve an explicitly registered course, never infer from resource names."""
-        workspace = (
-            workspace_id if workspace_id is not None else request_workspace.get()
-        )
+        workspace = self.resolve_workspace(workspace_id)
         if workspace is None:
             return None
         return self.owner("source", workspace)

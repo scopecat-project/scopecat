@@ -40,8 +40,17 @@ class CalibrationProfileStore:
     def list(
         self, connection: sqlite3.Connection, limit: int, cursor: int | None
     ) -> CalibrationProfilePage:
-        where = "" if cursor is None else "WHERE sequence < ?"
-        parameters = (limit + 1,) if cursor is None else (cursor, limit + 1)
+        scope = PracticeOwnership(connection).workspace_scope()
+        where = (
+            "WHERE (SELECT scope_id FROM practice_resources "
+            "WHERE kind='calibration_profile' "
+            "AND resource_id=calibration_profiles.profile_id) IS ?"
+        )
+        if cursor is not None:
+            where += " AND sequence < ?"
+        parameters = (
+            (scope, limit + 1) if cursor is None else (scope, cursor, limit + 1)
+        )
         rows = cast(
             "list[sqlite3.Row]",
             connection.execute(

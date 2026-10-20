@@ -75,6 +75,9 @@ class CalibrationTaskService:
 
     def create(self, specification: CalibrationTaskCreate) -> CalibrationTaskView:
         with self._sqlite.read_transaction() as connection:
+            PracticeOwnership(connection).resolve_workspace(
+                specification.source.workspace_id if specification.source else None
+            )
             existing = self._store.read(connection, specification.task_id)
             if existing is not None:
                 self._require_replay_owner(connection, specification)

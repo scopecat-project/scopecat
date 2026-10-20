@@ -61,13 +61,13 @@ def procedure_scope(
     fence: ProcedureConfigurationFence | None,
     workspace_id: str | None = None,
 ) -> str | None:
-    workspace = workspace_id or request_workspace.get()
+    owners = PracticeOwnership(connection)
+    workspace = owners.resolve_workspace(workspace_id)
     resources: list[tuple[PracticeResource, str]] = []
     if workspace is not None:
         resources.append(("source", workspace))
     if isinstance(fence, SetupRevisionFence):
         resources.append(("setup", fence.revision.revision_id))
-    owners = PracticeOwnership(connection)
     scope = owners.require_shared(*resources)
     if scope is not None:
         if not isinstance(fence, SetupRevisionFence):
