@@ -130,6 +130,20 @@ def _inspect_list_mode_artifact_base(
                 "sample_rate_hz", artifact.sample_rate_hz, unit="Hz"
             ),
             CompiledInspectionFact("timing_quantization", artifact.timing_quantization),
+            *(
+                (
+                    CompiledInspectionFact(
+                        "timing_correction_snapshot",
+                        artifact.timing_correction.model_dump(mode="json"),
+                    ),
+                    CompiledInspectionFact(
+                        "timing_correction_fingerprint",
+                        artifact.timing_correction.fingerprint,
+                    ),
+                )
+                if artifact.timing_correction is not None
+                else ()
+            ),
             CompiledInspectionFact("repetitions", artifact.repetitions),
             CompiledInspectionFact(
                 "device_snapshot_fingerprint",
@@ -733,6 +747,8 @@ def _point_realization_fingerprint(
             "event_timings": [
                 {
                     "event_id": pulse_event_identity_payload(timing.event_id),
+                    "correction_samples": timing.correction_samples,
+                    "correction_seconds": str(timing.correction_seconds),
                     "requested_start_seconds": str(timing.requested_start_seconds),
                     "requested_duration_seconds": str(
                         timing.requested_duration_seconds
