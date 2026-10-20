@@ -61,6 +61,9 @@ export function ProcedureProgress({
       await apiData(
         apiClient.POST("/api/v1/procedures/{procedure_run_id}/cancel", {
           params: { path: { procedure_run_id: procedureId } },
+          headers: run?.source?.workspace_id
+            ? { "X-Scopecat-Workspace": run.source.workspace_id }
+            : undefined,
           body: {
             procedure_run_id: procedureId,
             expected_run_revision: run.revision,
@@ -83,6 +86,9 @@ export function ProcedureProgress({
       const receipt = await apiData(
         apiClient.POST("/api/v1/procedures/{procedure_run_id}/dispatch", {
           params: { path: { procedure_run_id: procedureId } },
+          headers: run?.source?.workspace_id
+            ? { "X-Scopecat-Workspace": run.source.workspace_id }
+            : undefined,
         }),
       );
       if (receipt.dispatch_error) setError(receipt.dispatch_error);

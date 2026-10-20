@@ -86,6 +86,9 @@ describe("DecisionWorkspace", () => {
         },
       },
     } as Awaited<ReturnType<typeof getDecisionProgress>>);
+    const course = waitingProcedure();
+    course.source = { workspace_id: "course-one", code_revision: { content_hash: hash } };
+    vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [course] });
     renderWorkspace();
     await screen.findByLabelText("resonator");
     fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
@@ -96,6 +99,8 @@ describe("DecisionWorkspace", () => {
     expect(await screen.findByText("Queued environment unavailable")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry continuation" }));
     await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(submitProcedureInput).mock.calls[0]![1]).toBe("course-one");
+    expect(vi.mocked(submitProcedureInput).mock.calls[1]![1]).toBe("course-one");
     expect(vi.mocked(submitProcedureInput).mock.calls[1]![0]).toEqual(
       vi.mocked(submitProcedureInput).mock.calls[0]![0],
     );
@@ -182,7 +187,7 @@ describe("DecisionWorkspace", () => {
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({ value: { mode: 1, detail: 2 } }),
-        expect.anything(),
+        undefined,
       ),
     );
   });
@@ -274,7 +279,7 @@ describe("DecisionWorkspace", () => {
         expect.objectContaining({
           value: { outcome: "No clear peak", frequency_mhz: null },
         }),
-        expect.anything(),
+        undefined,
       ),
     );
   });
@@ -337,7 +342,7 @@ describe("DecisionWorkspace", () => {
           value: { resonator: "r2", confidence: 0.87 },
           note: "isolated dip",
         },
-        expect.anything(),
+        undefined,
       ),
     );
     expect(screen.getByText(/Decision saved/)).toBeVisible();
@@ -375,7 +380,7 @@ describe("DecisionWorkspace", () => {
           expected_step_revision: 2,
           request_hash: hash,
         }),
-        expect.anything(),
+        undefined,
       ),
     );
   });
@@ -423,7 +428,7 @@ describe("DecisionWorkspace", () => {
           value: { outcome: "selected", frequencies: [6500.25] },
           actor: "Alice",
         }),
-        expect.anything(),
+        undefined,
       ),
     );
     expect(await screen.findByRole("link", { name: "Open task" })).toHaveAttribute(
@@ -457,7 +462,7 @@ describe("DecisionWorkspace", () => {
         expect.objectContaining({
           value: { outcome: "no_peak", frequencies: [] },
         }),
-        expect.anything(),
+        undefined,
       ),
     );
   });

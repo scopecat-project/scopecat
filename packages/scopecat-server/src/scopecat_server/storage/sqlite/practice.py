@@ -90,6 +90,23 @@ class PracticeOwnership:
             except ValueError as error:
                 raise BackendConflict(str(error)) from error
 
+    def require_operator(self, kind: PracticeResource, resource_id: str) -> None:
+        """Fence course operators while preserving the built-in peak practice UI.
+
+        Peak practice predates author workspaces and has no source identity. Its
+        ordinary operator interface remains valid; registered notebook courses
+        always require their exact workspace, including idempotent replays.
+        """
+        owner = self.owner(kind, resource_id)
+        if (
+            owner is not None
+            and self.get(owner).kind == "peak"
+            and self.workspace_scope() is None
+        ):
+            self.require_writer(kind, resource_id, worker=True)
+            return
+        self.require_writer(kind, resource_id)
+
     def require_active(self, scope_id: str) -> None:
         if self.get(scope_id).state != "active":
             raise ValueError(

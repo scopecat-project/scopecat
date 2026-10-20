@@ -4429,3 +4429,61 @@ def test_setup_save_rejects_unknown_route_instrument(tmp_path: Path) -> None:
                 )
             )
         assert [item.id for item in runtime.application.setup.list()] == [current.id]
+
+
+@pytest.mark.parametrize("leased", [False, True])
+def test_course_run_cancellation_requires_its_workspace(
+    tmp_path: Path, leased: bool
+) -> None:
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with (
+        LocalDaemonRuntime(
+            tmp_path, bootstrap_config=_config(), instrument_endpoint=signal_endpoint()
+        ) as runtime,
+        TestClient(runtime.app()) as client,
+    ):
+        admission = runtime.application.submit_run(
+            _submission(runtime, "course-cancel")
+        )
+        if leased:
+            runtime.application.executor.start_executor(
+                admission.run_id, ExecutorStartRequest(executor_id="worker")
+            )
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+            owners.claim("one", "run", admission.run_id)
+        path = f"/api/v1/runs/{admission.run_id}/cancel"
+        for workspace in (None, "two"):
+            response = client.post(
+                path, headers={"X-Scopecat-Workspace": workspace} if workspace else {}
+            )
+            assert response.status_code == 409, response.text
+            assert not runtime.application.executor.run_cancellation(
+                admission.run_id
+            ).requested
+        response = client.post(path, headers={"X-Scopecat-Workspace": "one"})
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == (
+            "cancel_requested" if leased else "cancelled"
+        )
+        assert client.post(path).status_code == 409  # replay also needs authority
+        assert (
+            client.post(path, headers={"X-Scopecat-Workspace": "one"}).json()
+            == response.json()
+        )

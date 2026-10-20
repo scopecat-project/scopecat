@@ -32,6 +32,7 @@ export async function getProcedureSteps(
 
 export async function submitProcedureInput(
   command: ProcedureStepInputSubmitCommand,
+  workspaceId?: string,
 ): Promise<ProcedureInputContinueReceipt> {
   return apiData(
     apiClient.POST(
@@ -45,6 +46,7 @@ export async function submitProcedureInput(
           },
         },
         body: command,
+        headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
       },
     ),
   );

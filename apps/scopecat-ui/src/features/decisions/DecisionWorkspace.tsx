@@ -59,6 +59,7 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   const [submitted, setSubmitted] = useState<{
     command: ProcedureStepInputSubmitCommand;
     receipt?: ProcedureInputContinueReceipt;
+    workspaceId?: string;
   }>();
   const procedures = useQuery({
     queryKey: ["procedure-decisions"],
@@ -203,9 +204,11 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
         <DecisionCard
           key={selected.procedure_run_id}
           procedure={selected}
-          onSubmitted={(command) => setSubmitted({ command })}
+          onSubmitted={(command) =>
+            setSubmitted({ command, workspaceId: selected.source?.workspace_id })
+          }
           onRecorded={(receipt, command) => {
-            setSubmitted({ command, receipt });
+            setSubmitted({ command, receipt, workspaceId: selected.source?.workspace_id });
             setSelectedId(selected.procedure_run_id);
             const url = new URL(window.location.href);
             url.searchParams.set("procedure", selected.procedure_run_id);
@@ -363,7 +366,8 @@ function DecisionEditor({
   const [parseError, setParseError] = useState<string>();
   const queryClient = useQueryClient();
   const submit = useMutation({
-    mutationFn: submitProcedureInput,
+    mutationFn: (command: ProcedureStepInputSubmitCommand) =>
+      submitProcedureInput(command, procedure.source?.workspace_id),
     onSuccess: (receipt, command) => {
       onRecorded(receipt, command);
     },
@@ -736,11 +740,19 @@ function DecisionContinuation({
   onUpdated,
   onDismiss,
 }: {
-  submitted: { command: ProcedureStepInputSubmitCommand; receipt?: ProcedureInputContinueReceipt };
+  submitted: {
+    command: ProcedureStepInputSubmitCommand;
+    receipt?: ProcedureInputContinueReceipt;
+    workspaceId?: string;
+  };
   onUpdated: (receipt: ProcedureInputContinueReceipt) => void;
   onDismiss: () => void;
 }) {
-  const retry = useMutation({ mutationFn: submitProcedureInput, onSuccess: onUpdated });
+  const retry = useMutation({
+    mutationFn: (command: ProcedureStepInputSubmitCommand) =>
+      submitProcedureInput(command, submitted.workspaceId),
+    onSuccess: onUpdated,
+  });
   const receipt = submitted.receipt;
   const progress = useQuery({
     queryKey: ["decision-continuation", submitted.command.procedure_run_id],

@@ -476,6 +476,9 @@ class AutomationService:
     def cancel(self, command: ProcedureCancelCommand) -> ProcedureCancelReceipt:
         """Close idle work or request a stop after the running step settles."""
         with _translate_store_errors(), self._store.write_transaction() as connection:
+            PracticeOwnership(connection).require_operator(
+                "procedure", command.procedure_run_id
+            )
             run = self._store.read_run_in_transaction(
                 connection, command.procedure_run_id
             )
@@ -1302,6 +1305,9 @@ class AutomationService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_operator(
+                "procedure", command.procedure_run_id
+            )
             run = self._store.read_run_in_transaction(
                 connection,
                 command.procedure_run_id,
@@ -1539,6 +1545,9 @@ class AutomationService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_operator(
+                "procedure", procedure_run_id
+            )
             run = self._store.read_run_in_transaction(connection, procedure_run_id)
             current = self._store.read_step_attempt_in_transaction(
                 connection,
