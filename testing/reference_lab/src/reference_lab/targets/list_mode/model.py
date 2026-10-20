@@ -871,8 +871,6 @@ class ListModeTarget:
 
     @property
     def supported_envelopes(self) -> tuple[str, ...]:
-        if self.flux_correction is not None:
-            return ("constant", "gaussian", "cosine_flat_top")
         return (
             "constant",
             "gaussian",
@@ -883,7 +881,11 @@ class ListModeTarget:
 
     def _capability_payload(self) -> dict[str, object]:
         return {
-            "schema": "reference_lab.list_mode_target.capabilities.v11",
+            "schema": (
+                "reference_lab.list_mode_target.capabilities.v12"
+                if self.flux_correction is not None
+                else "reference_lab.list_mode_target.capabilities.v11"
+            ),
             "target_id": self.id.value,
             "sample_rate_hz": self.sample_rate_hz,
             "timing_quantization": self.timing_quantization,
@@ -898,8 +900,21 @@ class ListModeTarget:
             "max_abs_amplitude": float(self.max_abs_amplitude).hex(),
             "digitizer_result_representation": (self.digitizer_result_representation),
             "supported_envelopes": list(self.supported_envelopes),
+            **(
+                {
+                    "flux_supported_envelopes": [
+                        "constant",
+                        "gaussian",
+                        "cosine_flat_top",
+                    ]
+                }
+                if self.flux_correction is not None
+                else {}
+            ),
             "output_realization": (
-                "flux_static_fir_v1" if self.flux_correction is not None else "iq_v1"
+                "iq_and_flux_static_fir_v1"
+                if self.flux_correction is not None
+                else "iq_v1"
             ),
         }
 

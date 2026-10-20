@@ -1,9 +1,9 @@
 # Flux correction foundation
 
 The native `scopecat_quantum.flux` model is the first software slice of
-[#1135](https://github.com/scopecat-project/scopecat/issues/1135). It consumes
-explicitly selected known coefficients; it does not measure or fit them and does
-not establish hardware qualification. There is no Bosing dependency or API.
+[#1135](https://github.com/scopecat-project/scopecat/issues/1135). The model and
+mixed-record adapter consume explicitly selected known coefficients. They do not
+measure or fit them, or establish hardware qualification. There is no Bosing dependency or API.
 
 ## Numerical contract
 
@@ -29,10 +29,12 @@ fed through a zero-state filter. No clipping, automatic matrix inversion, gain
 normalization, delay cancellation or assumed physical line model occurs.
 
 The bounded v1 implementation accepts whole finite, strict-grid scheduled
-flux-only records with real unmodulated Constant, Gaussian or CosineFlatTop
+flux records with real unmodulated Constant, Gaussian or CosineFlatTop
 plays in `V`, zero phase, and flux delays. Unknown axes, off-grid boundaries,
-other units, complex/frequency-shifted envelopes, IQ/acquisition instructions,
-IIR fields and unknown configuration fields are rejected. Absent logical inputs
+other units, complex/frequency-shifted flux envelopes, IIR fields and unknown
+configuration fields are rejected. The native flux planner rejects IQ/acquisition
+instructions by default; its explicit `allow_mixed_record=True` projection is
+used by the enclosing mixed-record target described below. Absent logical inputs
 are zero deltas; all declared physical outputs remain reserved and materialized,
 including outputs activated only by compensation or baseline.
 
@@ -78,8 +80,8 @@ storage.
 
 ## Retained list-mode integration
 
-The reference laboratory's existing list-mode compiler previously accepted only
-IQ output routes. It now has an explicit opt-in flux-only path. A lab constructs
+The reference laboratory's list-mode compiler has an explicit opt-in flux path
+that can share a complete record with existing IQ/readout/acquisition work. A lab constructs
 `ListModeTarget` with `flux_correction`, matching active `setup_revision` and
 `parameter_revision`, ordered `flux_signals`, and ordered `flux_outputs`.
 Output IDs use `instrument_id:channel_id`; complete endpoint component paths
@@ -101,13 +103,50 @@ preview nonzero baselines without implying that a device can execute them.
 Nonzero physical DC operation requires a later explicit idle/hold/offset and
 settling contract, using the existing DC ramp/settle/readback primitives.
 
-The compiler disables IQ phase-template factoring for flux records. Full tails
+The compiler disables IQ phase-template factoring for batches containing flux
+plays; IQ-only batches can still use the existing factoring path. Full tails
 participate in budgets; all correction outputs participate in preparation,
 resource footprint, placement routes and AWG programs. The resolved snapshot is
 retained on the artifact and in inspection facts. Coefficients, provenance and
 voltage scales participate in configuration and cache identities. Execution
 consumes the artifact, never re-resolves a current parameter revision. Pure
 output execution also handles empty acquisition arrays in result fingerprints.
+
+### Mixed-record adapter contract
+
+This extension requires no new line model: it composes two disjoint output
+projections of the same canonical scheduled program and one strict sample grid.
+`plan_sampled_waveforms(output_signals=...)` restricts rendering while retaining
+all original boundaries, event timings, schedule origin and full record duration.
+The native flux projection uses this same boundary; it does not reschedule a
+filtered subprogram or restart filtering around each pulse.
+
+The complete record is the common body length, even if the last flux play ends
+earlier. The existing FIR tail plus baseline guard extends only its final
+boundary. IQ buffers are zero-padded to that length; existing IQ carrier phases,
+mixer calibration, readout envelopes, acquisition start/count, demodulation,
+normalization, result addresses and shot counts are unchanged. No acquisition
+window is moved into or lengthened by the FIR tail. A device may capture a longer
+raw segment to accommodate the record, but its authored DSP windows remain exact.
+This does not promise physically identical measured IQ in the presence of flux;
+that is a physical experiment, not a compiler assumption.
+
+The compiler appends corrected/scaled flux lanes to the existing IQ lane map,
+retaining zero-duration IQ routes as coordinates without activating their empty
+outputs. It checks the final combined buffers, padded sample/memory budgets and
+the union of IQ resources, acquisition resources, existing IQ offset guards and
+all compensation outputs. The existing disjoint IQ/flux route, reviewed zero
+flux hardware offset, setup/parameter revision and clock/rate checks still apply.
+An IQ-only entry in a mixed batch has no flux buffers or extra tail and does not
+trigger the flux AWG. All flux-bearing entries retain the selected snapshot; no
+coefficient is resolved again during preview or execution.
+
+Known-coefficient tests compare a readout record before/after adding flux:
+bitwise-equal IQ prefixes and zero tails, exact acquisition timings and result
+addresses, preserved DRAG/signed-IF realization, compensation-only outputs,
+snapshot/cache changes and repeated entries. Tests also decode the actual AWG
+and digitizer command payloads and compare them with artifact preview buffers
+and unchanged acquisition windows, using only the recording executor.
 
 Evidence is numerical and simulated: independent difference equations, known
 coefficients, strict-grid rejection, tail/limit checks, snapshot reconstruction,

@@ -35,6 +35,7 @@ from scopecat_quantum.pulses import (
     Acquire,
     Delay,
     DriveSignal,
+    FluxSignal,
     Play,
     ReadoutSignal,
     ScheduledPulseProgram,
@@ -565,7 +566,7 @@ class ListModeTargetCompiler:
         if layout is None:
             compact = (
                 _compile_phase_template_sweep(plans)
-                if self.target.flux_correction is None
+                if all(plan.flux_plan is None for plan in plans)
                 else None
             )
             if compact is None:
@@ -677,6 +678,59 @@ class ListModeTargetCompiler:
         timings.artifact += perf_counter() - started
         return artifact
 
+    def _plan_flux_part(
+        self,
+        entry: TargetCompileEntry,
+        *,
+        decision: ListModePlacementDecision,
+        issues: list[TargetCompilationIssue],
+    ) -> FluxWaveformPlan | None:
+        program = _scheduled_program(entry)
+        flux_events = tuple(
+            event
+            for event in program.events
+            if isinstance(event.instruction.signal, FluxSignal)
+        )
+        if not flux_events:
+            return None
+        snapshot = self.target.flux_correction
+        if snapshot is None:
+            _entry_issue(
+                issues,
+                entry.id,
+                code="list_mode_flux_plan_invalid",
+                message="flux requires an explicit correction snapshot",
+            )
+            return None
+        try:
+            expected_endpoints = tuple(
+                ListModePhysicalEndpoint(
+                    kind="waveform_output",
+                    instrument_id=c.instrument_id,
+                    channel_id=c.value,
+                    component_path=c.component_path,
+                )
+                for c in self.target.flux_outputs
+            )
+            placements = {p.signal: p for p in decision.placements}
+            if any(
+                placements[signal_key(event.instruction.signal)].endpoints
+                != expected_endpoints
+                for event in flux_events
+            ):
+                raise ValueError("flux placement does not match correction output axes")
+            return plan_flux_waveforms(
+                program,
+                snapshot=snapshot,
+                sample_rate_hz=self.target.sample_rate_hz,
+                allow_mixed_record=True,
+            )
+        except ValueError as error:
+            _entry_issue(
+                issues, entry.id, code="list_mode_flux_plan_invalid", message=str(error)
+            )
+            return None
+
     def _plan_program(
         self,
         entry: TargetCompileEntry,
@@ -685,51 +739,9 @@ class ListModeTargetCompiler:
         issues: list[TargetCompilationIssue],
     ) -> _PlannedProgram | None:
         program = _scheduled_program(entry)
-        if self.target.flux_correction is not None:
-            try:
-                expected_endpoints = tuple(
-                    ListModePhysicalEndpoint(
-                        kind="waveform_output",
-                        instrument_id=c.instrument_id,
-                        channel_id=c.value,
-                        component_path=c.component_path,
-                    )
-                    for c in self.target.flux_outputs
-                )
-                placements = {p.signal: p for p in decision.placements}
-                if any(
-                    placements[signal_key(event.instruction.signal)].endpoints
-                    != expected_endpoints
-                    for event in program.events
-                ):
-                    raise ValueError(
-                        "flux placement does not match correction output axes"
-                    )
-                flux_plan = plan_flux_waveforms(
-                    program,
-                    snapshot=self.target.flux_correction,
-                    sample_rate_hz=self.target.sample_rate_hz,
-                )
-                waveform_plan = flux_plan.sampled
-                if waveform_plan.sample_count > self.target.max_samples_per_entry:
-                    raise ValueError(
-                        "flux record including FIR tail exceeds sample limit"
-                    )
-            except ValueError as error:
-                _entry_issue(
-                    issues,
-                    entry.id,
-                    code="list_mode_flux_plan_invalid",
-                    message=str(error),
-                )
-                return None
-            return _PlannedProgram(
-                waveform_plan=waveform_plan,
-                lane_channels=self.target.flux_outputs,
-                active_lanes=tuple(range(len(self.target.flux_outputs))),
-                acquisitions=(),
-                flux_plan=flux_plan,
-            )
+        flux_plan = self._plan_flux_part(entry, decision=decision, issues=issues)
+        if issues:
+            return None
         placements_by_signal = {
             placement.signal: placement for placement in decision.placements
         }
@@ -748,7 +760,16 @@ class ListModeTargetCompiler:
                         mode=self.target.timing_quantization
                     ),
                 ),
+                output_signals=frozenset(
+                    binding.signal for binding in sampled_bindings
+                ),
             )
+            if flux_plan is not None:
+                waveform_plan = replace(
+                    waveform_plan,
+                    sample_count=flux_plan.sampled.sample_count,
+                    lane_count=len(lane_channels),
+                )
         except WaveformPlanningError as error:
             for planning_issue in error.issues:
                 _entry_issue(
@@ -767,7 +788,7 @@ class ListModeTargetCompiler:
                 message=(
                     f"program {program.id.value!r} requires "
                     f"{waveform_plan.sample_count} "
-                    f"samples; target entry limit is "
+                    f"samples including any FIR tail; target entry limit is "
                     f"{self.target.max_samples_per_entry}"
                 ),
             )
@@ -781,8 +802,7 @@ class ListModeTargetCompiler:
             match instruction:
                 case Play():
                     signal = instruction.signal
-                    if not isinstance(signal, DriveSignal | ReadoutSignal):
-                        _unsupported_issue(issues, entry.id, event.id.value)
+                    if isinstance(signal, FluxSignal):
                         continue
                     if instruction.envelope.amplitude.unit not in {"arb", "ratio"}:
                         _entry_capability_issue(
@@ -873,9 +893,21 @@ class ListModeTargetCompiler:
         )
         return _PlannedProgram(
             waveform_plan=waveform_plan,
-            lane_channels=lane_channels,
-            active_lanes=active_lanes,
+            lane_channels=lane_channels
+            + (self.target.flux_outputs if flux_plan is not None else ()),
+            active_lanes=active_lanes
+            + (
+                tuple(
+                    range(
+                        len(lane_channels),
+                        len(lane_channels) + len(self.target.flux_outputs),
+                    )
+                )
+                if flux_plan is not None
+                else ()
+            ),
             acquisitions=tuple(acquisitions),
+            flux_plan=flux_plan,
         )
 
     def _render_entry(
@@ -884,10 +916,10 @@ class ListModeTargetCompiler:
         *,
         issues: list[TargetCompilationIssue],
     ) -> ListModeEntry:
-        if self.target.flux_correction is not None:
-            assert plan.flux_plan is not None
+        rendered = Float64ReferenceRenderer().render(plan.waveform_plan)
+        if plan.flux_plan is not None:
             try:
-                rendered = render_flux_waveforms(plan.flux_plan)
+                flux_rendered = render_flux_waveforms(plan.flux_plan)
             except ValueError as error:
                 raise TargetCompilationError(
                     (
@@ -902,23 +934,20 @@ class ListModeTargetCompiler:
             scales = {
                 o.channel_id: o.amplitude_v for o in self.target.preparation.outputs
             }
-            buffers = tuple(
+            flux_buffers = tuple(
                 buffer / scales[channel]
                 for channel, buffer in zip(
-                    plan.lane_channels, rendered.buffers, strict=True
+                    self.target.flux_outputs, flux_rendered.buffers, strict=True
                 )
             )
-            for buffer in buffers:
+            for buffer in flux_buffers:
                 buffer.flags.writeable = False
             rendered = replace(
                 rendered,
-                buffers=buffers,
-                lane_peaks=tuple(
-                    float(max(abs(buffer), default=0)) for buffer in buffers
-                ),
+                buffers=rendered.buffers + flux_buffers,
+                lane_peaks=rendered.lane_peaks
+                + tuple(float(max(abs(buffer), default=0)) for buffer in flux_buffers),
             )
-        else:
-            rendered = Float64ReferenceRenderer().render(plan.waveform_plan)
         for lane in plan.active_lanes:
             peak_magnitude = rendered.lane_peaks[lane]
             if (
@@ -1573,19 +1602,6 @@ def _entry_capability_issue(
         code=code,
         message=message,
         entry_id=entry_id,
-    )
-
-
-def _unsupported_issue(
-    issues: list[TargetCompilationIssue],
-    entry_id: TargetCompileEntryId,
-    event_id: str,
-) -> None:
-    _entry_capability_issue(
-        issues,
-        entry_id,
-        code="list_mode_operation_unsupported",
-        message=f"event {event_id!r} is unsupported by list mode",
     )
 
 

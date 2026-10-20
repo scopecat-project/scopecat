@@ -161,12 +161,16 @@ def plan_flux_waveforms(
     *,
     snapshot: FluxCorrectionSnapshot,
     sample_rate_hz: int,
+    allow_mixed_record: bool = False,
 ) -> FluxWaveformPlan:
     """Plan a complete strict-grid flux-only record, including the reserved tail.
 
     Only unmodulated real Constant/Gaussian/CosineFlatTop plays in volts and
     delays are supported. Full records are independently initialized/repeated;
     window/segment rendering and shared-state concatenation are unsupported.
+    ``allow_mixed_record`` projects only flux outputs from the same complete
+    record; its other outputs/acquisitions remain the enclosing target's work.
+    All event boundaries and the complete record duration still use this grid.
     """
     correction = snapshot.correction
     if sample_rate_hz != correction.sample_rate_hz:
@@ -174,6 +178,8 @@ def plan_flux_waveforms(
     signals: dict[str, FluxSignal] = {}
     for event in program.events:
         instruction = event.instruction
+        if allow_mixed_record and not isinstance(instruction.signal, FluxSignal):
+            continue
         if isinstance(instruction, Delay) and isinstance(
             instruction.signal, FluxSignal
         ):
@@ -203,6 +209,7 @@ def plan_flux_waveforms(
         program,
         bindings=bindings,
         grid=SampleGrid(sample_rate_hz, timing=TimingQuantizationPolicy("strict")),
+        output_signals=frozenset(signals.values()),
     )
     return FluxWaveformPlan(
         sampled=replace(
