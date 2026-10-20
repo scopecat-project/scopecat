@@ -173,3 +173,39 @@ def test_flux_coefficients_and_provenance_invalidate_caches() -> None:
     assert old.compilation_key.value != new.compilation_key.value
     assert old.artifact_fingerprint != new.artifact_fingerprint
     assert old.flux_correction == frozen
+
+
+def test_flux_rejects_conflicting_offset_policies_and_nonzero_dc() -> None:
+    target = flux_target()
+    original = target.host_state_policy.coupling_groups[0]
+    conflict = replace(
+        original,
+        id="conflicting",
+        output_offsets=(OutputOffsetRequirement(target.flux_outputs[0], 0.1),),
+    )
+    with pytest.raises(ValueError, match="zero hardware offsets"):
+        replace(
+            target,
+            host_state_policy=replace(
+                target.host_state_policy, coupling_groups=(conflict, original)
+            ),
+        )
+    assert target.flux_correction is not None
+    correction = FluxCorrection.model_validate(
+        {
+            **target.flux_correction.correction.model_dump(),
+            "baseline_v": (0.1, 0),
+        }
+    )
+    with pytest.raises(ValueError, match="zero DC baseline"):
+        replace(
+            target, flux_correction=replace_snapshot(target.flux_correction, correction)
+        )
+
+
+def replace_snapshot(
+    snapshot: FluxCorrectionSnapshot, correction: FluxCorrection
+) -> FluxCorrectionSnapshot:
+    return FluxCorrectionSnapshot.model_validate(
+        {**snapshot.model_dump(), "correction": correction}
+    )

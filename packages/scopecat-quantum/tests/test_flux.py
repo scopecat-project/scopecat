@@ -235,3 +235,26 @@ def test_off_grid_and_complex_envelope_rejection() -> None:
             plan_flux_waveforms(
                 scheduled, snapshot=frozen, sample_rate_hz=1_000_000_000
             )
+
+
+def test_qubit_and_coupler_with_same_name_have_distinct_axes() -> None:
+    from scopecat_quantum._ids import CouplerId
+    from scopecat_quantum.flux import flux_signal_id
+
+    assert flux_signal_id(FluxSignal(CouplerId("q0"))) == "coupler:q0"
+    assert flux_signal_id(Q0) == "qubit:q0"
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"implementation": "hardware"},
+        {"iir_sos": ((1, 0, 0, 1, 0, 0),)},
+        {"delta_unit": "Hz"},
+    ],
+)
+def test_unsupported_filter_modes_and_units_are_not_silently_accepted(
+    fields: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        FluxCorrection.model_validate({**correction().model_dump(), **fields})

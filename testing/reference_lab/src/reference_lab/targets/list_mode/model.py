@@ -239,7 +239,15 @@ class ListModeProgramPlacement:
 
     @property
     def logical_qubit_ids(self) -> tuple[str, ...]:
-        return tuple(sorted({event.signal.signal[2] for event in self.events}))
+        return tuple(
+            sorted(
+                {
+                    event.signal.signal[2]
+                    for event in self.events
+                    if event.signal.signal[1] == "qubit"
+                }
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -737,7 +745,15 @@ class ListModeTarget:
                 if set(group.activation_channels) & set(self.flux_outputs)
                 for r in group.output_offsets
             }
-            if any(selected_offsets.get(c) != 0 for c in self.flux_outputs):
+            conflicting_offsets = any(
+                r.channel_id in self.flux_outputs and r.offset_v != 0
+                for group in self.host_state_policy.coupling_groups
+                if set(group.activation_channels) & set(self.flux_outputs)
+                for r in group.output_offsets
+            )
+            if conflicting_offsets or any(
+                selected_offsets.get(c) != 0 for c in self.flux_outputs
+            ):
                 raise ValueError("flux outputs require reviewed zero hardware offsets")
             if any(
                 set(b.channel_ids) & set(self.flux_outputs)
@@ -855,6 +871,8 @@ class ListModeTarget:
 
     @property
     def supported_envelopes(self) -> tuple[str, ...]:
+        if self.flux_correction is not None:
+            return ("constant", "gaussian", "cosine_flat_top")
         return (
             "constant",
             "gaussian",
@@ -865,7 +883,7 @@ class ListModeTarget:
 
     def _capability_payload(self) -> dict[str, object]:
         return {
-            "schema": "reference_lab.list_mode_target.capabilities.v10",
+            "schema": "reference_lab.list_mode_target.capabilities.v11",
             "target_id": self.id.value,
             "sample_rate_hz": self.sample_rate_hz,
             "timing_quantization": self.timing_quantization,
@@ -880,11 +898,14 @@ class ListModeTarget:
             "max_abs_amplitude": float(self.max_abs_amplitude).hex(),
             "digitizer_result_representation": (self.digitizer_result_representation),
             "supported_envelopes": list(self.supported_envelopes),
+            "output_realization": (
+                "flux_static_fir_v1" if self.flux_correction is not None else "iq_v1"
+            ),
         }
 
     def _configuration_payload(self) -> dict[str, object]:
         return {
-            "schema": "reference_lab.list_mode_target.configuration.v3",
+            "schema": "reference_lab.list_mode_target.configuration.v4",
             "target_id": self.id.value,
             "capability_fingerprint": self.capability_fingerprint,
             "acquisition_dsp_policy": self.acquisition_dsp_policy,
