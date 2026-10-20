@@ -139,9 +139,11 @@ class ExperimentPlanRepository:
                 ("parameters", choice.ref.revision_id),
                 ("setup", choice.setup.revision_id),
             ]
+            if command.definition.source is not None:
+                resources.append(("run", command.definition.source.run_id))
             if parent is not None:
                 resources.append(("plan", parent.plan_id))
-            scope = owners.require_shared(*resources)
+            scope = owners.require_admission(*resources)
             if command.previous:
                 owners.require_writer("plan", plan_id)
             elif scope is not None:

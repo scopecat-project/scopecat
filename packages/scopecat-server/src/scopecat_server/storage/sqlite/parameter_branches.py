@@ -82,7 +82,7 @@ class ParameterBranchRepository:
             owners.claim_created("branch", branch.name)
         else:
             owners.require_writer("branch", branch.name)
-        owners.require_shared(
+        owners.require_admission(
             ("branch", branch.name), ("parameters", branch.revision.revision_id)
         )
         self.connection.execute(

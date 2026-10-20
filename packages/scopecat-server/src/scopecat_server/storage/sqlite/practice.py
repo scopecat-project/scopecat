@@ -44,6 +44,20 @@ class PracticeOwnership:
             (scope.id, scope.model_dump_json()),
         )
 
+    def retained_workspace(
+        self, kind: PracticeResource, resource_id: str, source_workspace: str | None
+    ) -> str | None:
+        """Restore an owned worker's context without adopting old ordinary work."""
+        owner = self.owner(kind, resource_id)
+        if owner is not None:
+            return self.get(owner).workspace_id
+        if (
+            source_workspace is not None
+            and self.owner("source", source_workspace) is None
+        ):
+            return source_workspace
+        return None
+
     def resolve_workspace(self, workspace_id: str | None = None) -> str | None:
         """An explicit source cannot replace the identity of an ordinary/A/B request.
 
@@ -160,7 +174,10 @@ class PracticeOwnership:
         no author workspace and keeps its ordinary interface. Lease advancement
         continues to use require_shared, independently of operator identity.
         """
-        owner = self.require_shared(*resources)
+        try:
+            owner = self.require_shared(*resources)
+        except ValueError as error:
+            raise BackendConflict(str(error)) from error
         if resources and request_workspace in copy_context():
             requested = self.workspace_scope()
             if owner != requested and not (

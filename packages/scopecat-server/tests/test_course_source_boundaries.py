@@ -48,7 +48,7 @@ def case(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Case]:
     service.mkdir()
     (service / "scopecat.toml").write_text("[lab]\n")
     with (
-        _check_case(service) as (runtime, check, _),
+        _check_case(service) as (runtime, check, child),
         TestClient(runtime.app()) as client,
     ):
         # Code execution validation is outside this identity matrix; real author
@@ -95,6 +95,9 @@ def case(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Case]:
         from scopecat.records.practice import PracticeCreateCommand
         from scopecat.records.setup import SetupRevisionRef
 
+        from scopecat_server.storage.sqlite.parameter_revisions import (
+            ParameterRevisionRepository,
+        )
         from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
 
         peak = runtime.application.practice.create(
@@ -110,6 +113,65 @@ def case(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Case]:
                 setup = base.model_copy(update={"id": "owned-fence-" + owner})
                 repository.save_revision(setup)
                 PracticeOwnership(connection).claim(owner, "setup", setup.id)
+                parameters = (
+                    ParameterRevisionRepository(connection)
+                    .get("practice:" + peak.id)
+                    .model_copy(update={"id": "owned-parameters-" + owner})
+                )
+                ParameterRevisionRepository(connection).save(parameters)
+                PracticeOwnership(connection).claim(owner, "parameters", parameters.id)
+        from scopecat.config.scientific_binding import bind_scientific_evidence
+        from scopecat.daemon.wire import ParameterResolveCommand
+        from scopecat.records.run_request import RunRequest
+
+        with sqlite.read_transaction() as connection:
+            setup = SQLiteSetupRepository(connection).read_revision("owned-fence-one")
+            parameters = ParameterRevisionRepository(connection).get(
+                "owned-parameters-one"
+            )
+        resolved = runtime.application.config.resolve_parameters(
+            ParameterResolveCommand(parameters=parameters.ref, setup=setup.ref)
+        )
+        binding = bind_scientific_evidence(
+            catalog_id=runtime.application.project_id,
+            config=resolved.config,
+            samples=(),
+            sample_revisions={},
+        )
+        from scopecat.daemon.wire import ExecutorStartRequest, TerminalRunCommitCommand
+        from scopecat.kernel.run_outcome import RunOutcome
+
+        admitted = runtime.application.submit_run(
+            child.model_copy(
+                update={
+                    "submission_id": "analysis-fixture",
+                    "execution_setup": setup.ref,
+                    "config": resolved.config,
+                    "config_source": resolved.config_source,
+                    "scientific_binding": binding,
+                    "request": RunRequest(experiment_id="check"),
+                    "plan": child.plan.model_copy(
+                        update={
+                            "point_count": 0,
+                            "initial_point_count": 0,
+                            "point_limit": 0,
+                        }
+                    ),
+                }
+            )
+        )
+        lease = runtime.application.executor.start_executor(
+            admitted.run_id, ExecutorStartRequest(executor_id="configuration-fixture")
+        )
+        runtime.application.executor.commit_terminal(
+            admitted.run_id,
+            TerminalRunCommitCommand(
+                lease_id=lease.lease_id,
+                outcome=RunOutcome(
+                    run_id=admitted.run_id, result="succeeded", certainty="known"
+                ),
+            ),
+        )
         yield runtime, client, check, sources
 
 
@@ -469,4 +531,318 @@ def test_bound_ordinary_source_less_procedure_cannot_borrow_course_setup(
                 "procedure", internal.run.procedure_run_id
             )
             == "one"
+        )
+
+
+@pytest.mark.parametrize("request_identity", [None, "one", "two"])
+@pytest.mark.parametrize("replay", [False, True])
+def test_project_analysis_admission_matches_request_owner(
+    case: Case, request_identity: str | None, replay: bool
+) -> None:
+    from scopecat.daemon.wire import (
+        AnalysisFactOutputPayload,
+        AnalysisSaveCommand,
+        ConfigurationAnalysisInputPayload,
+    )
+    from scopecat.records.analysis import (
+        CONFIGURATION_ANALYSIS_INPUT_CODEC,
+        AnalysisFact,
+    )
+    from scopecat.runs.refs import CONFIG_PROFILE_SNAPSHOT_REF
+    from scopecat.sdk.compute import PYTHON_JSON_CODEC
+
+    runtime, client, _, _ = case
+    run = runtime.application.runs.find_run_by_submission_id("analysis-fixture")
+    assert run is not None
+    view = runtime.application.runs.get_run_config(run.run_id)
+    command = AnalysisSaveCommand(
+        title="Owner policy",
+        analysis_key="owned-analysis-" + uuid4().hex,
+        inputs=(
+            ConfigurationAnalysisInputPayload(
+                id="configuration",
+                run_id=run.run_id,
+                target=CONFIG_PROFILE_SNAPSHOT_REF,
+                content_hash=view.config_content_hash,
+                codec=CONFIGURATION_ANALYSIS_INPUT_CODEC,
+                role="configuration",
+            ),
+        ),
+        outputs=(
+            AnalysisFactOutputPayload(
+                kind="fact",
+                id="result",
+                title="Result",
+                content=AnalysisFact(
+                    schema_id="tests.owner.v1",
+                    schema_codec="scopecat.analysis-fact-schema.v1",
+                    schema_hash=_HASH,
+                    codec=PYTHON_JSON_CODEC,
+                    value={"ok": True},
+                ),
+            ),
+        ),
+    )
+    payload = command.model_dump(mode="json")
+    if replay:
+        seeded = client.post(
+            "/api/v1/analyses", json=payload, headers={"X-Scopecat-Workspace": "one"}
+        )
+        assert seeded.status_code == 201, seeded.text
+    sqlite = runtime.application.calibration_tasks._sqlite
+    with sqlite.read_transaction() as connection:
+        before = PracticeOwnership(connection).resources("one", "analysis")
+    response = client.post(
+        "/api/v1/analyses",
+        json=payload,
+        headers={"X-Scopecat-Workspace": request_identity} if request_identity else {},
+    )
+    if request_identity != "one":
+        assert response.status_code == 409, response.text
+        with sqlite.read_transaction() as connection:
+            assert PracticeOwnership(connection).resources("one", "analysis") == before
+    else:
+        assert response.status_code == 201, response.text
+        repeated = client.post(
+            "/api/v1/analyses", json=payload, headers={"X-Scopecat-Workspace": "one"}
+        )
+        assert repeated.status_code == 201, repeated.text
+        assert repeated.json() == response.json()
+        with sqlite.read_transaction() as connection:
+            assert (
+                PracticeOwnership(connection).owner(
+                    "analysis", response.json()["record"]["id"]
+                )
+                == "one"
+            )
+
+
+@pytest.mark.parametrize("request_identity", [None, "one", "two"])
+@pytest.mark.parametrize("copy", [False, True])
+def test_plan_creation_and_copy_match_request_owner(
+    case: Case, request_identity: str | None, copy: bool
+) -> None:
+    from scopecat.config.scientific_binding import bind_scientific_evidence
+    from scopecat.daemon.wire import ParameterResolveCommand
+    from scopecat.records.experiment_plan import (
+        ExperimentPlanDefinition,
+        ExperimentPlanSave,
+    )
+    from scopecat.records.scientific_selection import (
+        ParameterConfiguration,
+        ScientificSelection,
+    )
+
+    from scopecat_server.storage.sqlite.parameter_revisions import (
+        ParameterRevisionRepository,
+    )
+    from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
+
+    runtime, client, _, _ = case
+    sqlite = runtime.application.calibration_tasks._sqlite
+    with sqlite.read_transaction() as connection:
+        setup = SQLiteSetupRepository(connection).read_revision("owned-fence-one")
+        parameters = ParameterRevisionRepository(connection).get("owned-parameters-one")
+    resolved = runtime.application.config.resolve_parameters(
+        ParameterResolveCommand(parameters=parameters.ref, setup=setup.ref)
+    )
+    binding = bind_scientific_evidence(
+        catalog_id=runtime.application.project_id,
+        config=resolved.config,
+        samples=(),
+        sample_revisions={},
+    )
+    command = ExperimentPlanSave(
+        name="Owner policy",
+        saved_by="test",
+        definition=ExperimentPlanDefinition(
+            workspace_id="one",
+            experiment="signal",
+            version="1",
+            definition_hash=_HASH,
+            selection=ScientificSelection(
+                configuration=ParameterConfiguration(
+                    setup=setup.ref, ref=parameters.ref
+                )
+            ),
+            scientific_binding=binding,
+        ),
+    )
+    if copy:
+        parent = runtime.application.plans.save(command)
+        command = command.model_copy(update={"copied_from": parent.ref})
+    with sqlite.read_transaction() as connection:
+        before = PracticeOwnership(connection).resources("one", "plan")
+    response = client.post(
+        "/api/v1/experiment-plans",
+        json=command.model_dump(mode="json"),
+        headers={"X-Scopecat-Workspace": request_identity} if request_identity else {},
+    )
+    if request_identity != "one":
+        assert response.status_code == 409, response.text
+        with sqlite.read_transaction() as connection:
+            assert PracticeOwnership(connection).resources("one", "plan") == before
+    else:
+        assert response.status_code == 200, response.text
+        with sqlite.read_transaction() as connection:
+            assert (
+                PracticeOwnership(connection).owner(
+                    "plan", response.json()["ref"]["plan_id"]
+                )
+                == "one"
+            )
+
+
+@pytest.mark.parametrize("foreign_inputs", [False, True])
+def test_internal_task_stage_keeps_retained_task_owner(
+    case: Case, monkeypatch: pytest.MonkeyPatch, foreign_inputs: bool
+) -> None:
+    from scopecat.daemon.calibration_tasks import CalibrationTaskControl
+    from scopecat.records.calibration_check import CalibrationScope
+    from scopecat.records.measurement_context import MeasurementContext
+
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
+    from scopecat_server.storage.sqlite.parameter_revisions import (
+        ParameterRevisionRepository,
+    )
+    from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
+
+    runtime, client, ordinary_check, _ = case
+
+    def manage(_self: ProjectProcedureWorkers, _identity: str) -> None:
+        pass  # This case validates stage admission, not executing authored code.
+
+    monkeypatch.setattr(ProjectProcedureWorkers, "manage", manage)
+    sqlite = runtime.application.calibration_tasks._sqlite
+    selected = ordinary_check
+    if not foreign_inputs:
+        with sqlite.read_transaction() as connection:
+            setup = SQLiteSetupRepository(connection).read_revision("owned-fence-one")
+            parameters = ParameterRevisionRepository(connection).get(
+                "owned-parameters-one"
+            )
+        retained = runtime.application.runs.find_run_by_submission_id(
+            "analysis-fixture"
+        )
+        assert retained is not None and retained.snapshot.scientific_binding is not None
+        binding = retained.snapshot.scientific_binding
+        selected = ordinary_check.model_copy(
+            update={
+                "setup": setup.ref,
+                "context": MeasurementContext(
+                    parameters.ref,
+                    binding.subject,
+                    binding.setup_content_hash,
+                    binding.scenario,
+                ),
+                "scope": CalibrationScope("synthetic", ("subject",), "software", "1"),
+            }
+        )
+    specification = _task(selected).model_copy(
+        update={"task_id": "task-stage-owner-" + uuid4().hex}
+    )
+    if not foreign_inputs:
+        specification = specification.model_copy(
+            update={
+                "calls": {
+                    key: call.model_copy(update={"samples": ()})
+                    for key, call in specification.calls.items()
+                }
+            }
+        )
+    created = client.post(
+        "/api/v1/calibration-tasks",
+        json=specification.model_dump(mode="json"),
+        headers={"X-Scopecat-Workspace": "one"},
+    )
+    assert created.status_code == 200, created.text
+    start = client.post(
+        "/api/v1/calibration-tasks/control",
+        json=CalibrationTaskControl(
+            task_id=specification.task_id,
+            expected_revision=created.json()["task"]["control_revision"],
+            action="start",
+            actor="test",
+            reason="owner replay",
+        ).model_dump(mode="json"),
+        headers={"X-Scopecat-Workspace": "one"},
+    )
+    assert start.status_code == 200, start.text
+    assert request_workspace not in copy_context()
+    view = runtime.application.calibration_tasks.advance(specification.task_id)
+    if foreign_inputs:
+        assert not view.task.executions
+        assert view.task.dispatch_errors
+    else:
+        assert view.task.executions
+        with sqlite.read_transaction() as connection:
+            for identity in view.task.executions.values():
+                assert (
+                    PracticeOwnership(connection).owner("procedure", identity) == "one"
+                )
+
+
+@pytest.mark.parametrize("kind", ["analysis", "attachment"])
+@pytest.mark.parametrize("request_identity", [None, "one", "two"])
+@pytest.mark.parametrize("replay", [False, True])
+def test_run_owned_publication_matches_request_owner(
+    case: Case, kind: str, request_identity: str | None, replay: bool
+) -> None:
+    from scopecat.daemon.wire import (
+        AnalysisFactOutputPayload,
+        AnalysisSaveCommand,
+        RunAttachmentCommand,
+    )
+    from scopecat.records.analysis import AnalysisFact
+    from scopecat.sdk.compute import PYTHON_JSON_CODEC
+
+    runtime, client, _, _ = case
+    run = runtime.application.runs.find_run_by_submission_id("analysis-fixture")
+    assert run is not None
+    if kind == "analysis":
+        payload = AnalysisSaveCommand(
+            title="Run owner",
+            analysis_key="run-policy-" + uuid4().hex,
+            outputs=(
+                AnalysisFactOutputPayload(
+                    kind="fact",
+                    id="result",
+                    title="Result",
+                    content=AnalysisFact(
+                        schema_id="tests.owner.v1",
+                        schema_codec="scopecat.analysis-fact-schema.v1",
+                        schema_hash=_HASH,
+                        codec=PYTHON_JSON_CODEC,
+                        value=True,
+                    ),
+                ),
+            ),
+        ).model_dump(mode="json")
+        path = f"/api/v1/runs/{run.run_id}/analyses"
+    else:
+        payload = RunAttachmentCommand(
+            key="note-" + uuid4().hex, text="Owner policy"
+        ).model_dump(mode="json")
+        path = f"/api/v1/runs/{run.run_id}/attachments"
+    if replay:
+        seeded = client.post(
+            path, json=payload, headers={"X-Scopecat-Workspace": "one"}
+        )
+        assert seeded.status_code == 201, seeded.text
+    before = runtime.application.runs.list_run_contents(run.run_id).items
+    response = client.post(
+        path,
+        json=payload,
+        headers={"X-Scopecat-Workspace": request_identity} if request_identity else {},
+    )
+    if request_identity != "one":
+        assert response.status_code == 409, response.text
+        assert runtime.application.runs.list_run_contents(run.run_id).items == before
+    else:
+        assert response.status_code == 201, response.text
+        assert (
+            client.post(
+                path, json=payload, headers={"X-Scopecat-Workspace": "one"}
+            ).json()
+            == response.json()
         )

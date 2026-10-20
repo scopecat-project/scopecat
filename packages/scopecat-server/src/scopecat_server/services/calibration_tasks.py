@@ -3,6 +3,7 @@
 import sqlite3
 from collections.abc import Callable
 from contextlib import suppress
+from contextvars import copy_context
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
@@ -36,6 +37,7 @@ from scopecat.records.candidate_input import AnalysisCandidateRunConfigSource
 from scopecat.records.config import config_content_hash
 
 from scopecat_server.errors import BackendConflict, BackendNotFound
+from scopecat_server.request_workspace import request_workspace
 from scopecat_server.services.automation import AutomationService
 from scopecat_server.services.calibration_checks import CalibrationCheckQueries
 from scopecat_server.storage.sqlite.automation import (
@@ -570,8 +572,22 @@ class CalibrationTaskService:
                 raise _StaleTaskPreparation(
                     "task or evidence changed during retained validation"
                 )
+        owners = PracticeOwnership(connection)
+        task_id = prepared.task.specification.task_id
+        workspace = owners.retained_workspace(
+            "calibration_task",
+            task_id,
+            prepared.task.specification.source.workspace_id
+            if prepared.task.specification.source
+            else None,
+        )
+        token = (
+            request_workspace.set(workspace)
+            if request_workspace not in copy_context()
+            else None
+        )
         try:
-            return self._automation.submit_in_transaction(
+            run = self._automation.submit_in_transaction(
                 connection,
                 definition=command.definition,
                 intent=command.intent,
@@ -580,8 +596,15 @@ class CalibrationTaskService:
                 source=command.source,
                 require_new=True,
             )
-        except (AutomationConflict, AutomationNotFound) as error:
+            owners.require_shared(
+                ("calibration_task", task_id), ("procedure", run.procedure_run_id)
+            )
+            return run
+        except (AutomationConflict, AutomationNotFound, ValueError) as error:
             raise BackendConflict(str(error)) from error
+        finally:
+            if token is not None:
+                request_workspace.reset(token)
 
     def _read(
         self, connection: sqlite3.Connection, task_id: str

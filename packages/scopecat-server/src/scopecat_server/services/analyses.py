@@ -65,7 +65,11 @@ from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 from ..errors import BackendConflict, BackendNotFound
 from .interpretation_evidence import validate_interpretation
-from .runs import analysis_input_from_payload, analysis_output_from_payload
+from .runs import (
+    analysis_input_from_payload,
+    analysis_input_owners,
+    analysis_output_from_payload,
+)
 from .samples import SampleService
 
 
@@ -282,12 +286,11 @@ class AnalysisService:
                 validate_interpretation=self._validate_interpretation,
             )
             input_run_ids: set[str] = set()
-            input_owners: list[tuple[PracticeResource, str]] = []
+            input_owners: list[tuple[PracticeResource, str]] = list(
+                analysis_input_owners(command.inputs)
+            )
             for input_ref in inputs:
                 if isinstance(input_ref, InterpretationAnalysisInput):
-                    input_owners.append(
-                        ("procedure", input_ref.source.procedure_run_id)
-                    )
                     continue
                 if isinstance(
                     input_ref, MeasurementAnalysisInput | ConfigurationAnalysisInput
@@ -295,10 +298,6 @@ class AnalysisService:
                     input_run_ids.add(input_ref.run_id)
                     continue
                 subject = input_ref.source.subject
-                if not isinstance(subject, RunAnalysisSubject):
-                    input_owners.append(
-                        ("analysis", input_ref.source.analysis_record_id)
-                    )
                 if isinstance(subject, RunAnalysisSubject):
                     input_run_ids.add(subject.run_id)
                 else:
@@ -312,22 +311,22 @@ class AnalysisService:
                     )
             if isinstance(command.subject, SampleAnalysisSubject):
                 self._require_sample_input_runs(command.subject, input_run_ids)
-            if prepared.publication is not None:
-                input_owners.extend(("run", run_id) for run_id in input_run_ids)
-                with self._control.write_transaction() as connection:
-                    ownership = PracticeOwnership(connection)
-                    from scopecat_server.request_workspace import request_workspace
+            input_owners.extend(("run", run_id) for run_id in input_run_ids)
+            with self._control.write_transaction() as connection:
+                ownership = PracticeOwnership(connection)
+                from scopecat_server.request_workspace import request_workspace
 
-                    workspace = request_workspace.get()
-                    if workspace is not None:
-                        input_owners.append(("source", workspace))
-                    owner = ownership.require_shared(*input_owners)
-                    if owner is not None:
-                        if isinstance(command.subject, SampleAnalysisSubject):
-                            raise BackendConflict(
-                                "Practice cannot publish sample analyses"
-                            )
-                        ownership.claim(owner, "analysis", prepared.saved.record.id)
+                workspace = request_workspace.get()
+                if workspace is not None:
+                    input_owners.append(("source", workspace))
+                owner = ownership.require_admission(*input_owners)
+                if prepared.publication is None:
+                    ownership.require_admission(("analysis", prepared.saved.record.id))
+                elif owner is not None:
+                    if isinstance(command.subject, SampleAnalysisSubject):
+                        raise BackendConflict("Practice cannot publish sample analyses")
+                    ownership.claim(owner, "analysis", prepared.saved.record.id)
+            if prepared.publication is not None:
                 publication = self._repository.prepare_publication(prepared.publication)
                 with self._control.write_transaction() as connection:
                     from scopecat_server.storage.sqlite.data_cleanup import (
@@ -335,7 +334,7 @@ class AnalysisService:
                     )
 
                     require_retained_references(connection, command.model_dump_json())
-                    _ = PracticeOwnership(connection).require_shared(
+                    _ = PracticeOwnership(connection).require_admission(
                         ("analysis", prepared.saved.record.id)
                     )
                     created = self._repository.publish_prepared_in_transaction(

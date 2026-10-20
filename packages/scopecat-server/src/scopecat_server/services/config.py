@@ -236,7 +236,7 @@ class ConfigService:
                     source_run_id=command.run_id,
                     proposal_id=command.proposal_id,
                 )
-                scope = PracticeOwnership(connection).require_shared(
+                scope = PracticeOwnership(connection).require_admission(
                     ("branch", command.name),
                     ("parameters", command.base.revision_id),
                     ("run", command.run_id),

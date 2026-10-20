@@ -88,7 +88,7 @@ from scopecat.measurements.entity_selection import (
     bind_entity_selection,
 )
 from scopecat.project_state import ProjectStateServices
-from scopecat.records.analysis import AnalysisRecord
+from scopecat.records.analysis import AnalysisRecord, RunAnalysisSubject
 from scopecat.records.content import ContentEntry
 from scopecat.records.costs import RunCompilationCost, RunMeasuredCosts
 from scopecat.records.measurement import (
@@ -98,6 +98,7 @@ from scopecat.records.measurement import (
     MeasurementRecord,
 )
 from scopecat.records.measurement_recording import MeasurementDatasetAppend
+from scopecat.records.practice import PracticeResource
 from scopecat.records.research_project import RunHistoryFilter
 from scopecat.runs.attachments import attach_run_artifact
 from scopecat.runs.data import (
@@ -124,6 +125,7 @@ from scopecat_server.storage.sqlite.execution import (
     SQLiteMeasurementDatasetRepository,
     SQLiteRunCoverage,
 )
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 from scopecat_server.storage.sqlite.record_collections import address_in_transaction
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
@@ -135,6 +137,25 @@ if TYPE_CHECKING:
     import pyarrow as pa
     from scopecat.analysis.service import AnalysisInput, AnalysisOutput
     from scopecat.measurements.traces import MeasurementTraceProjection
+
+
+def analysis_input_owners(
+    inputs: Sequence[AnalysisInputPayload],
+) -> tuple[tuple[PracticeResource, str], ...]:
+    """Retained resource identities carried by the existing analysis input codecs."""
+    resources: list[tuple[PracticeResource, str]] = []
+    for item in inputs:
+        if isinstance(
+            item, ConfigurationAnalysisInputPayload | MeasurementAnalysisInputPayload
+        ):
+            resources.append(("run", item.run_id))
+        elif isinstance(item, InterpretationAnalysisInputPayload):
+            resources.append(("procedure", item.source.procedure_run_id))
+        elif isinstance(item.source.subject, RunAnalysisSubject):
+            resources.append(("run", item.source.subject.run_id))
+        else:
+            resources.append(("analysis", item.source.analysis_record_id))
+    return tuple(resources)
 
 
 def analysis_input_from_payload(item: AnalysisInputPayload) -> AnalysisInput:
@@ -702,7 +723,13 @@ class RunService:
             for item in command.outputs
             if isinstance(item, AnalysisParameterProposalOutputPayload)
         )
+        resources: tuple[tuple[PracticeResource, str], ...] = (
+            ("run", run_id),
+            *analysis_input_owners(command.inputs),
+        )
         with self._analysis_publication_lock, self._config_errors():
+            with self._control.read_transaction() as connection:
+                PracticeOwnership(connection).require_admission(*resources)
             prepared = prepare_analysis(
                 services=self._services,
                 run_id=run_id,
@@ -726,6 +753,7 @@ class RunService:
                 )
             publication = self._runs.prepare_analysis_publication(prepared.publication)
             with self._control.write_transaction() as connection:
+                PracticeOwnership(connection).require_admission(*resources)
                 from scopecat_server.storage.sqlite.data_cleanup import (
                     require_retained_references,
                 )
@@ -861,7 +889,8 @@ class RunService:
             if command.content_base64 is None
             else b64decode(command.content_base64, validate=True)
         )
-        with self._config_errors():
+        with self._config_errors(), self._runs.sqlite.writer_guard() as connection:
+            PracticeOwnership(connection).require_admission(("run", run_id))
             artifact = attach_run_artifact(
                 services=self._services,
                 run_id=run_id,
