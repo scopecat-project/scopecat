@@ -32,8 +32,11 @@ export async function getProcedureSteps(
 
 export async function submitProcedureInput(
   command: ProcedureStepInputSubmitCommand,
-  workspaceId?: string,
 ): Promise<ProcedureInputContinueReceipt> {
+  // Course ownership can exist without an authored ProcedureSource. The
+  // retained operator view is authoritative and survives continuation retries.
+  const operator = await getDecisionProgress(command.procedure_run_id);
+  const ownerWorkspace = operator.workspace_id;
   return apiData(
     apiClient.POST(
       "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/input/continue",
@@ -46,7 +49,7 @@ export async function submitProcedureInput(
           },
         },
         body: command,
-        headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
+        headers: ownerWorkspace ? { "X-Scopecat-Workspace": ownerWorkspace } : undefined,
       },
     ),
   );

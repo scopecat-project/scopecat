@@ -39,6 +39,7 @@ export function ProcedureProgress({
   });
   const view = progress.data?.pages[0];
   const run = view?.procedure;
+  const workspaceId = view?.workspace_id;
   const steps = progress.data?.pages.flatMap((page) => page.steps.items) ?? [];
   const children = new Map(
     progress.data?.pages.flatMap((page) =>
@@ -61,9 +62,7 @@ export function ProcedureProgress({
       await apiData(
         apiClient.POST("/api/v1/procedures/{procedure_run_id}/cancel", {
           params: { path: { procedure_run_id: procedureId } },
-          headers: run?.source?.workspace_id
-            ? { "X-Scopecat-Workspace": run.source.workspace_id }
-            : undefined,
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
           body: {
             procedure_run_id: procedureId,
             expected_run_revision: run.revision,
@@ -86,9 +85,7 @@ export function ProcedureProgress({
       const receipt = await apiData(
         apiClient.POST("/api/v1/procedures/{procedure_run_id}/dispatch", {
           params: { path: { procedure_run_id: procedureId } },
-          headers: run?.source?.workspace_id
-            ? { "X-Scopecat-Workspace": run.source.workspace_id }
-            : undefined,
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
         }),
       );
       if (receipt.dispatch_error) setError(receipt.dispatch_error);

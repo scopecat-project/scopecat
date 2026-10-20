@@ -1136,6 +1136,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def dispatch_procedure(
         procedure_id: str, *, explicit: bool = False
     ) -> LaunchSubmission:
+        application.automation.require_operator(procedure_id)
         view = read_procedure_operator(application, project_workers, procedure_id)
         if view.dispatch_blocked_reason is not None:
             if explicit:

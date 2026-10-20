@@ -450,3 +450,76 @@ def test_http_procedure_replay_never_transfers_course_ownership(
                 PracticeOwnership(connection).owner(resource, identity)
                 == first_workspace
             )
+
+
+@pytest.mark.parametrize("action", ["cancel", "materialize"])
+def test_schedule_operator_replay_requires_its_workspace(
+    tmp_path: Path, action: str
+) -> None:
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with LocalDaemonRuntime(tmp_path) as runtime, TestClient(runtime.app()) as client:
+        schedule = runtime.application.procedure_schedules.create(
+            ProcedureScheduleCreateCommand(
+                schedule_id="operator-replay",
+                definition=_definition(),
+                intent={},
+                due_at=_PAST,
+            )
+        ).schedule
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+            owners.claim("one", "schedule", schedule.schedule_id)
+        if action == "cancel":
+            path = f"/api/v1/procedure-schedule-cancellations/{schedule.schedule_id}"
+            command = ProcedureScheduleCancelCommand(
+                schedule_id=schedule.schedule_id,
+                expected_schedule_revision=schedule.revision,
+                actor="operator",
+                reason="stop",
+            ).model_dump(mode="json")
+        else:
+            path = f"/api/v1/procedure-schedule-materializations/{schedule.schedule_id}"
+            command = ProcedureScheduleMaterializeCommand(
+                schedule_id=schedule.schedule_id,
+                expected_schedule_revision=schedule.revision,
+            ).model_dump(mode="json")
+        for workspace in (None, "two"):
+            response = client.post(
+                path,
+                json=command,
+                headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            )
+            assert response.status_code == 409, response.text
+        response = client.post(
+            path, json=command, headers={"X-Scopecat-Workspace": "one"}
+        )
+        assert response.status_code == 200, response.text
+        assert (
+            client.post(
+                path, json=command, headers={"X-Scopecat-Workspace": "one"}
+            ).json()
+            == response.json()
+        )
+        for workspace in (None, "two"):
+            replay = client.post(
+                path,
+                json=command,
+                headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+            )
+            assert replay.status_code == 409, replay.text

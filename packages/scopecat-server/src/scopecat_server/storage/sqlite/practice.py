@@ -103,7 +103,10 @@ class PracticeOwnership:
             and self.get(owner).kind == "peak"
             and self.workspace_scope() is None
         ):
-            self.require_writer(kind, resource_id, worker=True)
+            try:
+                self.require_active(owner)
+            except ValueError as error:
+                raise BackendConflict(str(error)) from error
             return
         self.require_writer(kind, resource_id)
 

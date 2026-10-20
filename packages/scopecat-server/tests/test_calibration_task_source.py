@@ -347,6 +347,21 @@ def test_http_without_workspace_cannot_control_course_task(tmp_path: Path) -> No
             )
             assert response.status_code == 200, response.text
             assert response.json()["task"]["mode"] == "cancelled"
+            assert (
+                client.post(
+                    "/api/v1/calibration-tasks/control",
+                    json=command.model_dump(mode="json"),
+                ).status_code
+                == 409
+            )
+            assert (
+                client.post(
+                    "/api/v1/calibration-tasks/control",
+                    json=command.model_dump(mode="json"),
+                    headers={"X-Scopecat-Workspace": "course-source"},
+                ).json()
+                == response.json()
+            )
 
 
 @pytest.mark.parametrize("first_workspace", [None, "one"])
@@ -406,3 +421,47 @@ def test_task_creation_replay_preserves_its_course_owner(
                 PracticeOwnership(connection).owner("calibration_task", command.task_id)
                 == first_workspace
             )
+
+
+def test_task_dispatch_replay_requires_its_workspace(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    with _check_case(tmp_path) as (runtime, check, _):
+        tasks = runtime.application.calibration_tasks
+        specification = _task(check)
+        tasks.create(specification)
+        command = CalibrationTaskDispatch(task_id=specification.task_id, stage_id="a")
+        admitted = tasks.dispatch(command)
+        with tasks._sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            for identity in ("one", "two"):
+                owners.save(
+                    PracticeScope(
+                        id=identity,
+                        title=identity,
+                        lesson="parameters",
+                        directory=identity,
+                        kind="notebook",
+                        workspace_id=identity,
+                    )
+                )
+                owners.claim(identity, "source", identity)
+            owners.claim("one", "calibration_task", specification.task_id)
+        with TestClient(runtime.app()) as client:
+            for workspace in (None, "two"):
+                response = client.post(
+                    "/api/v1/calibration-tasks/dispatch",
+                    json=command.model_dump(mode="json"),
+                    headers={"X-Scopecat-Workspace": workspace} if workspace else {},
+                )
+                assert response.status_code == 409, response.text
+                assert tasks.get(specification.task_id) == admitted
+            response = client.post(
+                "/api/v1/calibration-tasks/dispatch",
+                json=command.model_dump(mode="json"),
+                headers={"X-Scopecat-Workspace": "one"},
+            )
+            assert response.status_code == 200, response.text

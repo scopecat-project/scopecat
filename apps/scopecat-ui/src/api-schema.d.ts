@@ -10065,6 +10065,8 @@ export interface components {
             dispatch_blocked_reason: string | null;
             procedure: components["schemas"]["ProcedureRun"];
             steps: components["schemas"]["ProcedureStepAttemptPage"];
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /**
          * ProcedureRecoverySource

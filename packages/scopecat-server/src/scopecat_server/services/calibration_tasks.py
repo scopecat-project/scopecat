@@ -138,6 +138,9 @@ class CalibrationTaskService:
     def dispatch(self, command: CalibrationTaskDispatch) -> CalibrationTaskView:
         prepared = self._prepare(command.task_id, command.stage_id)
         with self._sqlite.write_transaction() as connection:
+            PracticeOwnership(connection).require_writer(
+                "calibration_task", command.task_id
+            )
             task = self._read(connection, command.task_id)
             if command.stage_id not in task.specification.calls:
                 raise BackendConflict("task stage was not found")
@@ -157,6 +160,9 @@ class CalibrationTaskService:
 
     def control(self, command: CalibrationTaskControl) -> CalibrationTaskView:
         with self._sqlite.write_transaction() as connection:
+            PracticeOwnership(connection).require_writer(
+                "calibration_task", command.task_id
+            )
             task = self._read(connection, command.task_id)
             if task.last_control == command:
                 return self._view(connection, task)

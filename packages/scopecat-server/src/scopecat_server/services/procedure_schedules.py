@@ -141,6 +141,9 @@ class ProcedureScheduleService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_writer(
+                "schedule", command.schedule_id
+            )
             schedule = self._store.read_in_transaction(
                 connection,
                 command.schedule_id,
@@ -199,6 +202,9 @@ class ProcedureScheduleService:
             _translate_store_errors(),
             self._store.write_transaction() as connection,
         ):
+            PracticeOwnership(connection).require_writer(
+                "schedule", command.schedule_id
+            )
             schedule = self._store.read_in_transaction(
                 connection,
                 command.schedule_id,

@@ -162,6 +162,18 @@ class AutomationService:
         self._plans = plans
         self._checks = checks
 
+    def require_operator(self, procedure_id: str) -> None:
+        """Authorize an operator handoff before changing process management."""
+        with self._store.sqlite.read_connection() as connection:
+            PracticeOwnership(connection).require_operator("procedure", procedure_id)
+
+    def operator_workspace_id(self, procedure_id: str) -> str | None:
+        """Read retained course context independently of optional authored source."""
+        with self._store.sqlite.read_connection() as connection:
+            owners = PracticeOwnership(connection)
+            owner = owners.owner("procedure", procedure_id)
+            return owners.get(owner).workspace_id if owner is not None else None
+
     def worker_state(self, procedure_id: str) -> str:
         with self._store.sqlite.read_connection() as connection:
             owners = PracticeOwnership(connection)

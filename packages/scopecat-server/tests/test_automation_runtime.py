@@ -1346,14 +1346,21 @@ def test_running_cancellation_settles_current_step_without_starting_next(
             assert final.closure is not None and final.closure.actor == "operator"
 
 
-@pytest.mark.parametrize("action", ["cancel", "input", "retry"])
+@pytest.mark.parametrize("action", ["cancel", "input", "retry", "dispatch"])
 def test_course_procedure_operator_requires_its_workspace(
-    tmp_path: Path, action: str
+    tmp_path: Path, action: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from scopecat.records.practice import PracticeScope
 
+    from scopecat_server.services.project_workers import ProjectProcedureWorkers
     from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
+    dispatched: list[str] = []
+
+    def capture_dispatch(_self: ProjectProcedureWorkers, identity: str) -> None:
+        dispatched.append(identity)
+
+    monkeypatch.setattr(ProjectProcedureWorkers, "dispatch", capture_dispatch)
     with (
         LocalDaemonRuntime(tmp_path) as runtime,
         TestClient(runtime.app()) as transport,
@@ -1378,7 +1385,10 @@ def test_course_procedure_operator_requires_its_workspace(
                 )
                 owners.claim(identity, "source", identity)
             owners.claim("one", "procedure", run.procedure_run_id)
-        if action == "cancel":
+        if action == "dispatch":
+            command = run.procedure_run_id
+            method = "dispatch_project_procedure"
+        elif action == "cancel":
             command = ProcedureCancelCommand(
                 procedure_run_id=run.procedure_run_id,
                 expected_run_revision=run.revision,
@@ -1459,6 +1469,9 @@ def test_course_procedure_operator_requires_its_workspace(
                     expected_step_revision=waiting.step.revision,
                 )
                 method = "retry_procedure_step_attention"
+        operator = transport.get(f"/api/v1/procedures/{run.procedure_run_id}/operator")
+        assert operator.json()["workspace_id"] == "one"
+        assert operator.json()["procedure"]["source"] is None
         before = worker.get_procedure(run.procedure_run_id)
         for workspace in (None, "two"):
             with (
@@ -1467,6 +1480,7 @@ def test_course_procedure_operator_requires_its_workspace(
             ):
                 getattr(other, method)(command)
             assert worker.get_procedure(run.procedure_run_id) == before
+            assert dispatched == []
         with _daemon_client(transport, workspace_id="one") as owner:
             receipt = getattr(owner, method)(command)
             assert getattr(owner, method)(command) == receipt

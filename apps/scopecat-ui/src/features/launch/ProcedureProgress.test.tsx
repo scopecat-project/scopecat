@@ -417,10 +417,8 @@ it("opens retained result links in place and preserves modified-click behavior",
 
 it("cancels a retained course procedure with its source workspace", async () => {
   const data = view();
-  data.procedure.source = {
-    workspace_id: "course-one",
-    code_revision: { content_hash: `sha256:${"1".repeat(64)}` },
-  };
+  data.workspace_id = "course-one";
+  data.procedure.source = null;
   const headers: (string | null)[] = [];
   vi.stubGlobal(
     "fetch",

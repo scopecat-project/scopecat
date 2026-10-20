@@ -132,7 +132,14 @@ def test_no_workspace_is_ordinary_and_worker_writes_still_require_active_scope(
             )
             owners.save(scope)
             owners.claim(scope.id, "source", "course-source")
-            for kind in ("branch", "plan", "schedule", "calibration_task"):
+            for kind in (
+                "branch",
+                "plan",
+                "schedule",
+                "calibration_task",
+                "run",
+                "procedure",
+            ):
                 owners.claim(scope.id, kind, "owned")
                 with pytest.raises(BackendConflict, match="another practice"):
                     owners.require_writer(kind, "owned")
@@ -140,6 +147,25 @@ def test_no_workspace_is_ordinary_and_worker_writes_still_require_active_scope(
                 with workspace("course-source"):
                     owners.require_writer(kind, "owned")
                 owners.require_writer(kind, "owned", worker=True)
+                if kind in {"run", "procedure"}:
+                    with pytest.raises(BackendConflict, match="another practice"):
+                        owners.require_operator(kind, "owned")
+                    with workspace("course-source"):
+                        owners.require_operator(kind, "owned")
             owners.save(scope.model_copy(update={"state": "cleaning"}))
             with pytest.raises(BackendConflict, match="fenced"):
                 owners.require_writer("calibration_task", "owned", worker=True)
+            with workspace("course-source"):
+                for kind in (
+                    "branch",
+                    "plan",
+                    "schedule",
+                    "calibration_task",
+                    "run",
+                    "procedure",
+                ):
+                    with pytest.raises(BackendConflict, match="fenced"):
+                        owners.require_writer(kind, "owned")
+                    if kind in {"run", "procedure"}:
+                        with pytest.raises(BackendConflict, match="fenced"):
+                            owners.require_operator(kind, "owned")
