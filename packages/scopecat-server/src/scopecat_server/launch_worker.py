@@ -90,6 +90,7 @@ def run_project_procedure(root: Path, procedure_id: str) -> None:
             with practice_application().connect(resolve_daemon_endpoint(root)) as lab:
                 run_procedure(lab, procedure_id)
             return
+        worker_workspace = client.procedure_progress(procedure_id).workspace_id
     record_timing("source_restore_start", procedure_id=procedure_id)
     project = (
         revision_project(root, stored.source.code_revision)
@@ -107,7 +108,7 @@ def run_project_procedure(root: Path, procedure_id: str) -> None:
     with (
         DaemonClient(
             resolve_daemon_endpoint(root),
-            workspace_id=stored.source.workspace_id if stored.source else None,
+            workspace_id=worker_workspace,
         ) as worker_client,
         application.connect(
             worker_client,
@@ -132,9 +133,12 @@ def launch(
             raise ValueError("project has no experiment preview provider")
     else:
         report_stage("launch provider")
-        with application.connect(
-            resolve_daemon_endpoint(root), operator=request.actor
-        ) as lab:
+        with (
+            DaemonClient(
+                resolve_daemon_endpoint(root), workspace_id=request.workspace_id
+            ) as launch_client,
+            application.connect(launch_client, operator=request.actor) as lab,
+        ):
             provider = application.launch_provider
             if isinstance(provider, AuthorLaunchProvider):
                 provider = provider.resolve(lab, workspace_id=request.workspace_id)
