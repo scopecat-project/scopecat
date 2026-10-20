@@ -89,7 +89,12 @@ class SQLiteProcedureScheduleStore:
             raise ValueError("procedure schedule page size must be between 1 and 500")
         if before is not None and before < 1:
             raise ValueError("procedure schedule cursor must be positive")
-        clauses: list[str] = []
+        clauses = [
+            (
+                "(SELECT scope_id FROM practice_resources p WHERE p.kind='schedule' "
+                "AND p.resource_id=procedure_schedules.schedule_id) IS ?"
+            )
+        ]
         parameters: list[str | int] = []
         if before is not None:
             clauses.append("sequence < ?")
@@ -109,7 +114,7 @@ class SQLiteProcedureScheduleStore:
                         ORDER BY sequence DESC
                         LIMIT ?
                         """,  # noqa: S608 - clauses are fixed internal fragments
-                        parameters,
+                        [PracticeOwnership(connection).workspace_scope(), *parameters],
                     )
                 )
             selected = rows[:limit]
@@ -141,11 +146,16 @@ class SQLiteProcedureScheduleStore:
         _require_traversal_pair(after, through_sequence)
         try:
             with self.sqlite.read_transaction() as connection:
+                scope = PracticeOwnership(connection).workspace_scope()
                 traversal_end = through_sequence
                 if traversal_end is None:
                     row = _one(
                         connection.execute(
-                            "SELECT MAX(sequence) AS sequence FROM procedure_schedules"
+                            "SELECT MAX(sequence) AS sequence FROM procedure_schedules "
+                            "WHERE (SELECT scope_id FROM practice_resources p "
+                            "WHERE p.kind='schedule' AND "
+                            "p.resource_id=procedure_schedules.schedule_id) IS ?",
+                            (scope,),
                         )
                     )
                     traversal_end = (
@@ -158,6 +168,9 @@ class SQLiteProcedureScheduleStore:
                         """
                         SELECT sequence, schedule_json FROM procedure_schedules
                         WHERE state = 'pending'
+                          AND (SELECT scope_id FROM practice_resources p
+                               WHERE p.kind='schedule'
+                                 AND p.resource_id=procedure_schedules.schedule_id) IS ?
                           AND due_at <= ?
                           AND (? IS NULL OR sequence > ?)
                           AND sequence <= ?
@@ -165,6 +178,7 @@ class SQLiteProcedureScheduleStore:
                         LIMIT ?
                         """,
                         (
+                            scope,
                             _timestamp(at),
                             after,
                             after,

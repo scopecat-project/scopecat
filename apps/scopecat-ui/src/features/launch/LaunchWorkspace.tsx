@@ -256,8 +256,9 @@ export function LaunchWorkspace({
       </section>
       {projectId && (
         <CalibrationTasks
-          key={`calibration:${projectId}`}
+          key={`calibration:${projectId}:${workspaceId}`}
           projectId={projectId}
+          workspaceId={workspaceId}
           onProcedure={admitted}
         />
       )}

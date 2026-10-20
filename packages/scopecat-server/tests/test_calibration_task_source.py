@@ -325,6 +325,14 @@ def test_http_without_workspace_cannot_control_course_task(tmp_path: Path) -> No
             reason="course control",
         )
         with TestClient(runtime.app()) as client:
+            assert client.get("/api/v1/calibration-tasks").json()["items"] == []
+            owned = client.get(
+                "/api/v1/calibration-tasks",
+                headers={"X-Scopecat-Workspace": "course-source"},
+            ).json()["items"]
+            assert [item["specification"]["task_id"] for item in owned] == [
+                specification.task_id
+            ]
             response = client.post(
                 "/api/v1/calibration-tasks/control",
                 json=command.model_dump(mode="json"),

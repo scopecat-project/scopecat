@@ -79,11 +79,17 @@ class CalibrationTaskStore:
     def list(
         self, connection: sqlite3.Connection, query: CalibrationTaskListQuery
     ) -> CalibrationTaskPage:
-        where = "" if query.cursor is None else "WHERE sequence < ?"
+        where = (
+            "WHERE (SELECT scope_id FROM practice_resources p "
+            "WHERE p.kind='calibration_task' "
+            "AND p.resource_id=calibration_tasks.task_id) IS ? "
+            "AND (? IS NULL OR sequence < ?)"
+        )
         parameters = (
-            (query.limit + 1,)
-            if query.cursor is None
-            else (query.cursor, query.limit + 1)
+            PracticeOwnership(connection).workspace_scope(),
+            query.cursor,
+            query.cursor,
+            query.limit + 1,
         )
         rows = cast(
             "list[sqlite3.Row]",
