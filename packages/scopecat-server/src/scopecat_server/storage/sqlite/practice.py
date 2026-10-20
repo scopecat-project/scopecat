@@ -153,6 +153,26 @@ class PracticeOwnership:
             self.require_active(owner)
         return owner
 
+    def require_admission(self, *resources: tuple[PracticeResource, str]) -> str | None:
+        """Match retained input owners to a bound request, including ordinary None.
+
+        Internal admission has no request context. The legacy peak practice has
+        no author workspace and keeps its ordinary interface. Lease advancement
+        continues to use require_shared, independently of operator identity.
+        """
+        owner = self.require_shared(*resources)
+        if resources and request_workspace in copy_context():
+            requested = self.workspace_scope()
+            if owner != requested and not (
+                owner is not None
+                and requested is None
+                and self.get(owner).kind == "peak"
+            ):
+                raise BackendConflict(
+                    "Retained resource owner differs from the request workspace"
+                )
+        return owner
+
     def claim(self, scope_id: str, kind: PracticeResource, resource_id: str) -> None:
         self.require_active(scope_id)
         existing = self.owner(kind, resource_id)

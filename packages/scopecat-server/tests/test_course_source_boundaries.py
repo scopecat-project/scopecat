@@ -76,8 +76,13 @@ def case(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Case]:
                     "INSERT INTO author_workspaces(workspace_id,name) VALUES (?,?)",
                     (identity, identity),
                 )
+        with sqlite.write_transaction() as connection:
+            connection.execute(
+                "INSERT INTO author_workspaces(workspace_id,name) VALUES (?,?)",
+                ("ordinary", "Ordinary"),
+            )
         sources: dict[str, ProcedureSource] = {}
-        for identity in ("one", "two"):
+        for identity in ("one", "two", "ordinary"):
             project = initialize_project(root / identity)
             register_author_workspace(
                 service, project.root, identity=identity, python=Path(sys.executable)
@@ -87,6 +92,24 @@ def case(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Case]:
             sources[identity] = ProcedureSource(
                 workspace_id=identity, code_revision=author.baseline.manifest.ref
             )
+        from scopecat.records.practice import PracticeCreateCommand
+        from scopecat.records.setup import SetupRevisionRef
+
+        from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
+
+        peak = runtime.application.practice.create(
+            PracticeCreateCommand(request_key="fence-fixture")
+        )
+        assert peak.procedure_id is not None
+        peak_run = runtime.application.automation.get(peak.procedure_id)
+        ref = SetupRevisionRef.model_validate(peak_run.intent["setup"])
+        with sqlite.write_transaction() as connection:
+            repository = SQLiteSetupRepository(connection)
+            base = repository.read_revision(ref.revision_id)
+            for owner in ("one", "two"):
+                setup = base.model_copy(update={"id": "owned-fence-" + owner})
+                repository.save_revision(setup)
+                PracticeOwnership(connection).claim(owner, "setup", setup.id)
         yield runtime, client, check, sources
 
 
@@ -269,4 +292,181 @@ def test_profile_catalog_pages_never_cross_course_owners(case: Case) -> None:
             []
             if workspace == "empty"
             else [f"{workspace or 'ordinary'}-{index}" for index in reversed(range(3))]
+        )
+
+
+@pytest.mark.parametrize("resource", ["procedure", "schedule", "calibration_task"])
+def test_named_ordinary_source_stays_ordinary_and_requires_matching_request(
+    case: Case, resource: Resource
+) -> None:
+    runtime, client, check, sources = case
+    path, payload = command(resource, check, sources["ordinary"])
+    response = client.post(
+        path, json=payload, headers={"X-Scopecat-Workspace": "ordinary"}
+    )
+    assert response.status_code == (200 if resource == "calibration_task" else 201), (
+        response.text
+    )
+    assert (
+        client.post(
+            path, json=payload, headers={"X-Scopecat-Workspace": "ordinary"}
+        ).json()
+        == response.json()
+    )
+    identity = (
+        str(response.json()["run"]["procedure_run_id"])
+        if resource == "procedure"
+        else retained_id(resource, payload)
+    )
+    for mismatch in (None, "one", "two"):
+        assert (
+            client.post(
+                path,
+                json=payload,
+                headers={"X-Scopecat-Workspace": mismatch} if mismatch else {},
+            ).status_code
+            == 409
+        )
+    with runtime.application.calibration_tasks._sqlite.read_transaction() as connection:
+        assert PracticeOwnership(connection).owner(resource, identity) is None
+
+
+def test_managed_ordinary_source_worker_preserves_source_request_identity(
+    case: Case, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx2
+    from scopecat.api.lab import LabClient
+    from scopecat.application.lab import LabApplication
+    from scopecat.automation import ProcedureRegistry
+    from scopecat.daemon.client import DaemonClient
+    from scopecat.project import Project, open_project
+    from scopecat.records.author_revision import AuthorRevisionRef
+
+    from scopecat_server import launch_worker
+
+    from .test_procedure_schedule_runtime import (
+        _scheduled_worker_procedure,
+        _ScheduledWorkerIntent,
+    )
+
+    runtime, transport, _, sources = case
+    registered = sources["ordinary"]
+    root = runtime.application.author_workspaces.get("ordinary").root
+    response = transport.post(
+        "/api/v1/procedures",
+        headers={"X-Scopecat-Workspace": "ordinary"},
+        json=ProcedureSubmitCommand(
+            definition=_scheduled_worker_procedure.ref,
+            request_key="ordinary-managed-" + uuid4().hex,
+            intent={"output_run_id": "ordinary-parent-output"},
+            source=registered,
+        ).model_dump(mode="json"),
+    )
+    assert response.status_code == 201, response.text
+    parent = response.json()["run"]["procedure_run_id"]
+    registry = ProcedureRegistry((_scheduled_worker_procedure,))
+
+    def application(_project: Project) -> LabApplication:
+        return LabApplication(procedures=registry)
+
+    def revision(path: Path, _ref: AuthorRevisionRef) -> Project:
+        return open_project(path)
+
+    def endpoint(_root: Path) -> str:
+        return "http://testserver"
+
+    monkeypatch.setattr(Project, "load_application", application)
+    monkeypatch.setattr(launch_worker, "revision_project", revision)
+    monkeypatch.setattr(launch_worker, "resolve_daemon_endpoint", endpoint)
+    original_init = DaemonClient.__init__
+
+    def send(request: httpx2.Request) -> httpx2.Response:
+        result = transport.request(
+            request.method,
+            request.url.raw_path.decode(),
+            content=request.content,
+            headers=dict(request.headers),
+        )
+        return httpx2.Response(
+            result.status_code, content=result.content, headers=dict(result.headers)
+        )
+
+    def connected(
+        self: DaemonClient, base_url: str, *, workspace_id: str | None = None
+    ) -> None:
+        original_init(
+            self,
+            base_url,
+            workspace_id=workspace_id,
+            transport=httpx2.MockTransport(send),
+        )
+
+    monkeypatch.setattr(DaemonClient, "__init__", connected)
+    run = launch_worker.run_procedure
+    nested: list[str] = []
+
+    def exercise(lab: LabClient, identity: str) -> None:
+        nested.append(
+            lab.procedures.submit(
+                _scheduled_worker_procedure,
+                _ScheduledWorkerIntent(output_run_id="ordinary-child-output"),
+                request_key="ordinary-nested-" + uuid4().hex,
+            ).id
+        )
+        run(lab, identity)
+
+    monkeypatch.setattr(launch_worker, "run_procedure", exercise)
+    launch_worker.run_project_procedure(root, parent)
+    assert runtime.application.automation.get(parent).state == "closed"
+    assert runtime.application.automation.get(nested[0]).source == registered
+    with runtime.application.calibration_tasks._sqlite.read_transaction() as connection:
+        assert PracticeOwnership(connection).owner("procedure", parent) is None
+        assert PracticeOwnership(connection).owner("procedure", nested[0]) is None
+
+
+@pytest.mark.parametrize("replay", [False, True])
+def test_bound_ordinary_source_less_procedure_cannot_borrow_course_setup(
+    case: Case, replay: bool
+) -> None:
+    from scopecat.records.configuration_fence import SetupRevisionFence
+
+    from scopecat_server.storage.sqlite.setups import SQLiteSetupRepository
+
+    runtime, client, _, _ = case
+    with runtime.application.calibration_tasks._sqlite.read_transaction() as connection:
+        setup = SQLiteSetupRepository(connection).read_revision("owned-fence-one")
+    command = ProcedureSubmitCommand(
+        definition=_DEFINITION,
+        request_key="borrow-fence-" + uuid4().hex,
+        intent={},
+        expected_configuration=SetupRevisionFence(revision=setup.ref),
+    )
+    payload = command.model_dump(mode="json")
+    if replay:
+        seeded = client.post(
+            "/api/v1/procedures", json=payload, headers={"X-Scopecat-Workspace": "one"}
+        )
+        assert seeded.status_code == 201, seeded.text
+    refused = client.post("/api/v1/procedures", json=payload)
+    assert refused.status_code == 409, refused.text
+    matching = client.post(
+        "/api/v1/procedures", json=payload, headers={"X-Scopecat-Workspace": "one"}
+    )
+    assert matching.status_code == 201, matching.text
+    assert (
+        client.post(
+            "/api/v1/procedures", json=payload, headers={"X-Scopecat-Workspace": "one"}
+        ).json()
+        == matching.json()
+    )
+    assert request_workspace not in copy_context()
+    internal = runtime.application.automation.submit(
+        command.model_copy(update={"request_key": "internal-fence-" + uuid4().hex})
+    )
+    with runtime.application.calibration_tasks._sqlite.read_transaction() as connection:
+        assert (
+            PracticeOwnership(connection).owner(
+                "procedure", internal.run.procedure_run_id
+            )
+            == "one"
         )

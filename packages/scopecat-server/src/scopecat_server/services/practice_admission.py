@@ -43,7 +43,7 @@ def run_scope(connection: sqlite3.Connection, submission: RunSubmission) -> str 
     workspace = request_workspace.get()
     if workspace is not None:
         resources.append(("source", workspace))
-    scope = PracticeOwnership(connection).require_shared(*resources)
+    scope = PracticeOwnership(connection).require_admission(*resources)
     if scope is not None:
         require_practice_setup(connection, submission.execution_setup.revision_id)
         if (
@@ -68,7 +68,7 @@ def procedure_scope(
         resources.append(("source", workspace))
     if isinstance(fence, SetupRevisionFence):
         resources.append(("setup", fence.revision.revision_id))
-    scope = owners.require_shared(*resources)
+    scope = owners.require_admission(*resources)
     if scope is not None:
         if not isinstance(fence, SetupRevisionFence):
             if owners.get(scope).kind == "peak":

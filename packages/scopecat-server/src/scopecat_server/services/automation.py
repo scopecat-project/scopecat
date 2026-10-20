@@ -168,11 +168,21 @@ class AutomationService:
             PracticeOwnership(connection).require_operator("procedure", procedure_id)
 
     def operator_workspace_id(self, procedure_id: str) -> str | None:
-        """Read retained course context independently of optional authored source."""
+        """Preserve course ownership and ordinary source identity independently."""
         with self._store.sqlite.read_connection() as connection:
             owners = PracticeOwnership(connection)
             owner = owners.owner("procedure", procedure_id)
-            return owners.get(owner).workspace_id if owner is not None else None
+            if owner is not None:
+                return owners.get(owner).workspace_id
+            stored = self._store.read_run_in_transaction(connection, procedure_id)
+            if (
+                stored.source is not None
+                and owners.owner("source", stored.source.workspace_id) is None
+            ):
+                # Ordinary authored work still needs its matching source identity.
+                # Never adopt old ordinary work into a subsequently enrolled course.
+                return stored.source.workspace_id
+            return None
 
     def worker_state(self, procedure_id: str) -> str:
         with self._store.sqlite.read_connection() as connection:
