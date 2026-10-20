@@ -21,6 +21,7 @@ from scopecat.automation import (
     ProcedureScheduleListQuery,
     ProcedureScheduleMaterializeCommand,
     ProcedureStepAttemptListQuery,
+    ProcedureSubmitCommand,
     RunOutputRef,
     procedure,
 )
@@ -302,6 +303,28 @@ def test_registered_project_worker_materializes_its_course_schedule(
                 )
             )
             owners.claim("course", "source", "course-source")
+            owners.save(
+                PracticeScope(
+                    id="other-course",
+                    title="Other",
+                    lesson="parameters",
+                    directory="other",
+                    kind="notebook",
+                    workspace_id="other-source",
+                )
+            )
+            owners.claim("other-course", "source", "other-source")
+        other = transport.post(
+            "/api/v1/procedures",
+            json=ProcedureSubmitCommand(
+                definition=_scheduled_worker_procedure.ref,
+                request_key="other-course",
+                intent={"output_run_id": "other-output"},
+            ).model_dump(mode="json"),
+            headers={"X-Scopecat-Workspace": "other-source"},
+        )
+        assert other.status_code == 201, other.text
+        other_id = other.json()["run"]["procedure_run_id"]
         command = ProcedureScheduleCreateCommand(
             schedule_id="course-schedule",
             definition=_scheduled_worker_procedure.ref,
@@ -348,3 +371,7 @@ def test_registered_project_worker_materializes_its_course_schedule(
             assert cycle.procedures.dispatched == 1
             schedule = lab.procedures.get_schedule("course-schedule")
             assert schedule.state == "materialized"
+            assert (
+                transport.get(f"/api/v1/procedures/{other_id}").json()["state"]
+                == "ready"
+            )

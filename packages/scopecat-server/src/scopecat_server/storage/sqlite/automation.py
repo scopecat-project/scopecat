@@ -19,6 +19,7 @@ from scopecat.automation import (
 
 from scopecat_server.storage.sqlite.calibration_checks import index_check
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
+from scopecat_server.storage.sqlite.practice import PracticeOwnership
 
 
 class AutomationStoreError(RuntimeError):
@@ -196,7 +197,6 @@ class SQLiteAutomationStore:
             parameters.extend(
                 (definition.id, definition.version, definition.fingerprint)
             )
-        parameters.extend((_timestamp(at), limit + 1))
         try:
             with self.sqlite.read_connection() as connection:
                 rows = _all(
@@ -221,6 +221,9 @@ class SQLiteAutomationStore:
                                runs.state = 'leased'
                                AND leases.expires_at <= ?
                            ))
+                           AND (SELECT scope_id FROM practice_resources p
+                                WHERE p.kind='procedure'
+                                  AND p.resource_id=runs.procedure_run_id) IS ?
                            AND (
                              json_extract(runs.run_json,
                                '$.resource_wait.run_id') IS NULL
@@ -246,7 +249,12 @@ class SQLiteAutomationStore:
                         ORDER BY runs.sequence ASC
                         LIMIT ?
                         """,  # noqa: S608 - VALUES placeholders are generated internally
-                        parameters,
+                        [
+                            *parameters,
+                            _timestamp(at),
+                            PracticeOwnership(connection).workspace_scope(),
+                            limit + 1,
+                        ],
                     )
                 )
             selected = rows[:limit]
