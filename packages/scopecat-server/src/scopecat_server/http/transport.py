@@ -81,6 +81,7 @@ from scopecat.automation import (
 )
 from scopecat.automation.calibration_tasks import CalibrationTaskProgress
 from scopecat.automation.wire import (
+    ProcedureInputContinueReceipt,
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
 )
@@ -277,6 +278,15 @@ from scopecat.records.apparatus_history import (
     ApparatusObservation,
     ApparatusObservationCreate,
     ApparatusObservationPage,
+)
+from scopecat.records.application_open import (
+    ApplicationOpenCommand,
+    ApplicationOpenReceipt,
+    DesktopHostLease,
+    DesktopHostRegistration,
+    DesktopHostStatus,
+    DesktopOpenAcknowledgement,
+    DesktopOpenBatch,
 )
 from scopecat.records.author_revision import (
     AuthorAnalysisReceipt,
@@ -1189,6 +1199,49 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     ) -> ProcedureWorkerLog:
         application.automation.get(procedure_run_id)
         return project_workers.read_log(procedure_run_id, max_bytes)
+
+    @app.get(f"{_API_PREFIX}/application-open/host")
+    def desktop_host_status() -> DesktopHostStatus:
+        try:
+            return application.application_open.status()
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open")
+    def open_application_object(
+        command: ApplicationOpenCommand,
+    ) -> ApplicationOpenReceipt:
+        try:
+            return application.application_open.submit(command)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/register")
+    def register_desktop_host(command: DesktopHostRegistration) -> DesktopHostLease:
+        try:
+            return application.application_open.register(command)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/poll")
+    def poll_desktop_open(lease: DesktopHostLease) -> DesktopOpenBatch:
+        try:
+            return application.application_open.poll(lease)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/acknowledge")
+    def acknowledge_desktop_open(
+        command: DesktopOpenAcknowledgement,
+    ) -> ApplicationOpenReceipt:
+        try:
+            return application.application_open.acknowledge(command)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post(f"{_API_PREFIX}/application-open/host/unregister")
+    def unregister_desktop_host(lease: DesktopHostLease) -> None:
+        application.application_open.unregister(lease)
 
     @app.get(f"{_API_PREFIX}/health")
     def health() -> DaemonHealth:
@@ -2388,10 +2441,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.step_key,
             command.attempt,
         )
-        receipt = application.automation.wait_step_input(command)
-        if receipt.run.state == "waiting_for_input":
-            project_workers.pause_for_input(procedure_run_id)
-        return receipt
+        return project_workers.wait_for_input(
+            lambda: application.automation.wait_step_input(command)
+        )
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/attempts/{{attempt}}/resources/wait"
@@ -2514,6 +2566,28 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             command.attempt,
         )
         return application.automation.submit_step_input(command)
+
+    @app.post(
+        f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/"
+        "attempts/{attempt}/input/continue"
+    )
+    def submit_and_continue_procedure_input(
+        procedure_run_id: str,
+        step_key: str,
+        attempt: Annotated[int, ApiPath(ge=1)],
+        command: ProcedureStepInputSubmitCommand,
+    ) -> ProcedureInputContinueReceipt:
+        _require_procedure_step_identity(
+            procedure_run_id,
+            step_key,
+            attempt,
+            command.procedure_run_id,
+            command.step_key,
+            command.attempt,
+        )
+        return project_workers.submit_input_and_continue(
+            command, lambda: application.automation.submit_step_input(command)
+        )
 
     @app.post(
         f"{_API_PREFIX}/procedures/{{procedure_run_id}}/steps/{{step_key:path}}/"

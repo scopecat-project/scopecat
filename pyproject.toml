@@ -498,6 +498,7 @@ integration_paths = [
   "packages/scopecat-app/tests/test_entry.py",
   "packages/scopecat-app/tests/test_first_run_journey.py",
   "packages/scopecat-app/tests/test_desktop_session.py",
+  "packages/scopecat-app/tests/test_desktop_objects.py",
   "packages/scopecat-app/tests/test_desktop_backup.py",
   "packages/scopecat-app/tests/test_desktop_platform.py",
   "packages/scopecat-app/tests/test_installed_tools.py",

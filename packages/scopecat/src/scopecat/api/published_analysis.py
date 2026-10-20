@@ -30,6 +30,7 @@ from scopecat.records.analysis import (
     AnalysisTableRecordOutput,
     AnalysisTableView,
 )
+from scopecat.records.application_open import ApplicationOpenReceipt
 from scopecat.records.author_revision import AuthorAnalysisGroupReceipt
 from scopecat.records.content import ContentEntry
 from scopecat.records.parameter_change import ParameterChangeProposal
@@ -43,6 +44,10 @@ from scopecat.sdk.compute import PYTHON_JSON_CODEC
 
 
 class _PublishedAnalysisSource(Protocol):
+    def _open_analysis(
+        self, analysis_id: str, *, timeout: float
+    ) -> ApplicationOpenReceipt: ...
+
     def _analysis_artifact_entry(
         self,
         analysis_id: str,
@@ -147,6 +152,10 @@ class PublishedAnalysis:
 
     source: _PublishedAnalysisSource
     view: AnalysisPublicationView
+
+    def open(self, *, timeout: float = 5) -> ApplicationOpenReceipt:
+        """Open this exact publication, preserving its run/sample/project owner."""
+        return self.source._open_analysis(self.id, timeout=timeout)  # pyright: ignore[reportPrivateUsage]
 
     @property
     def id(self) -> str:

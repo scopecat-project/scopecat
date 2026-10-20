@@ -10,8 +10,9 @@ another application, a Python environment or a notebook kernel.
    choose **Review curve and enter frequency**.
 3. Inspect the curve in Decisions. Select **Peak selected** and enter a frequency
    in MHz, or choose **No clear peak** / **Unsure** and leave the frequency empty.
-4. Record your answer, then explicitly continue the task. A practice choice is
-   not a published calibration.
+4. Choose **Submit and continue**. If the answer is saved but continuation is
+   blocked, open the task to inspect its pause or failure; do not submit a new scan.
+   A practice choice is not a published calibration.
 
 You can close the page and return through Help. The existing task retains its
 scan and decision; opening it does not measure again. Start a new practice when
@@ -75,7 +76,7 @@ table are suggested knowledge, not a requirement to import another lesson's runs
 | **Edit and refresh experiments** (`refresh`) — continue authoring | The first lesson's request, preview and run cycle | Save an edit, distinguish old and new requests, add an experiment from the supplied source, and reopen an exact run. |
 | **Mean IQ and typed results** (`compute`) — optional calculation | Scan points, shots and basic NumPy arrays | Compare per-shot IQ with its mean, read typed rows, and reopen the chosen mean run. Recognize that averaging removes the shot distribution. |
 | **Grouped analysis and history** (`groups`) — optional analysis | Scans and retained run IDs | Analyze two amplitude groups across 42 frequency-scan points; add a third group for 63 points; reopen the saved analysis by its publication ID. |
-| **Procedures and human decisions** (`procedure`) — optional workflow | The basic scan and Python functions | Submit a synthetic procedure, inspect its curve, answer the captured typed question, explicitly resume and reopen its retained history. |
+| **Procedures and human decisions** (`procedure`) — optional workflow | The basic scan and Python functions | Submit a synthetic procedure, inspect its curve, submit the captured typed answer and continue, then reopen its retained history. |
 | **Parameter calibration and recovery** (`calibration`) — advanced adoption | Saved parameter branches, measurements and analysis; reading Python functions | Trace a fitted candidate through fresh verification to publication; compare acceptance with rejection that leaves its branch unchanged. Health checks and capability reports are a later extension. |
 | **Joint calibration and coupled checks** (`joint-calibration`) — advanced composition | Candidate, verification and publication concepts from calibration | Explain why individually accepted corrections can fail together, inspect the coupled decision and required target coverage, and find the original procedure again. |
 | **Background calibration and publication** (`task-calibration`) — advanced tasks | Joint verification and parameter branch versions | Inspect accepted, scientifically rejected and branch-conflict tasks; distinguish passed stages, final verification and an actual publication receipt. |

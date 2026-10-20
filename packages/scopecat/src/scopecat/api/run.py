@@ -47,6 +47,7 @@ from scopecat.measurements.datasets import (
 )
 from scopecat.measurements.interop import ProjectionSchema
 from scopecat.records.analysis import AnalysisExecution
+from scopecat.records.application_open import ApplicationOpenReceipt
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import ContentEntry
 from scopecat.records.measurement import MeasurementDatasetSchema
@@ -66,6 +67,10 @@ from scopecat.runs.selectors import RunSelector, selected_run_id
 
 
 class RunOperations(Protocol):
+    def open(
+        self, run_id: str, *, analysis_id: str | None = None, timeout: float = 5
+    ) -> ApplicationOpenReceipt: ...
+
     """Storage-neutral operations used by run and data handles."""
 
     def load_snapshot(self, run_id: str) -> RunSnapshot: ...
@@ -223,6 +228,17 @@ class RunHandle:
 
     session: RunSession
     id: str
+
+    def open(self, *, timeout: float = 5) -> ApplicationOpenReceipt:
+        """Open this exact measurement in its connected, running desktop."""
+        return self.session.run_operations.open(self.id, timeout=timeout)
+
+    def _open_analysis(
+        self, analysis_id: str, *, timeout: float
+    ) -> ApplicationOpenReceipt:
+        return self.session.run_operations.open(
+            self.id, analysis_id=analysis_id, timeout=timeout
+        )
 
     @property
     def snapshot(self) -> RunSnapshot:

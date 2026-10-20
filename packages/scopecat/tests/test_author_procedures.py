@@ -346,3 +346,18 @@ def test_legacy_response_reuses_typed_validation_without_dispatch() -> None:
             actor="operator",
         )
     client.submit_procedure_step_input.assert_called_once()
+
+
+def test_typed_submit_and_continue_retries_the_captured_answer_without_dispatch():
+    run, step, schema = _pending_states()
+    client = Mock(spec=DaemonClient)
+    pending = PendingProcedureInput(client, run, step, schema)
+    pending.respond(_Answer(True), actor="reviewer")
+    command = client.submit_procedure_step_input.call_args.args[0]
+    receipt = pending.respond_and_continue(_Answer(True), actor="reviewer")
+    assert receipt is client.submit_and_continue_procedure_input.return_value
+    assert client.submit_and_continue_procedure_input.call_args.args[0] == command
+    pending.respond_and_continue(_Answer(True), actor="reviewer")
+    assert client.submit_and_continue_procedure_input.call_args.args[0] == command
+    client.dispatch_project_procedure.assert_not_called()
+    client.get_procedure.assert_not_called()

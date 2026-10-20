@@ -12,6 +12,7 @@ from scopecat.automation import (
     ProcedureStepOutputRef,
 )
 from scopecat.automation.wire import (
+    ProcedureInputContinueReceipt,
     ProcedureStepInputSubmitCommand,
     ProcedureStepInputSubmitReceipt,
 )
@@ -80,19 +81,47 @@ class PendingProcedureInput[ValueT]:
         note: str = "",
     ) -> ProcedureStepInputSubmitReceipt:
         """Answer the captured request without rereading, rebinding or resuming."""
+        return self._session.submit_procedure_step_input(
+            self._response_command(value, actor=actor, actor_kind=actor_kind, note=note)
+        )
+
+    def respond_and_continue(
+        self,
+        value: ValueT,
+        *,
+        actor: str,
+        actor_kind: InterpretationActorKind = "human",
+        note: str = "",
+    ) -> ProcedureInputContinueReceipt:
+        """Save this exact answer and continue only its normal input wait.
+
+        Inspect continuation/dispatch_error: an answer can be saved even when
+        dispatch fails. Repeat this same call to retry scheduling, without a new
+        answer or acquisition. Faults, cancellation and other pauses stay blocked.
+        """
+        return self._session.submit_and_continue_procedure_input(
+            self._response_command(value, actor=actor, actor_kind=actor_kind, note=note)
+        )
+
+    def _response_command(
+        self,
+        value: ValueT,
+        *,
+        actor: str,
+        actor_kind: InterpretationActorKind,
+        note: str,
+    ) -> ProcedureStepInputSubmitCommand:
         request = self._step.interpretation_request
         assert request is not None
-        return self._session.submit_procedure_step_input(
-            ProcedureStepInputSubmitCommand(
-                procedure_run_id=self._run.procedure_run_id,
-                expected_run_revision=self._run.revision,
-                step_key=self._step.step_key,
-                attempt=self._step.attempt,
-                expected_step_revision=self._step.revision,
-                request_hash=request.request_hash,
-                actor=actor,
-                actor_kind=actor_kind,
-                value=self._schema.encode(value),
-                note=note,
-            )
+        return ProcedureStepInputSubmitCommand(
+            procedure_run_id=self._run.procedure_run_id,
+            expected_run_revision=self._run.revision,
+            step_key=self._step.step_key,
+            attempt=self._step.attempt,
+            expected_step_revision=self._step.revision,
+            request_hash=request.request_hash,
+            actor=actor,
+            actor_kind=actor_kind,
+            value=self._schema.encode(value),
+            note=note,
         )

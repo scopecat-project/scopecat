@@ -1818,6 +1818,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/input/continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit And Continue Procedure Input */
+        post: operations["submit_and_continue_procedure_input_api_v1_procedures__procedure_run_id__steps__step_key__attempts__attempt__input_continue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures/{procedure_run_id}/worker-log": {
         parameters: {
             query?: never;
@@ -10005,6 +10022,11 @@ export interface components {
          */
         ProcedureDispatchView: {
             failure?: components["schemas"]["ProcedureWorkerFailure"] | null;
+            /**
+             * Input Continuation Retryable
+             * @default false
+             */
+            input_continuation_retryable: boolean;
             /** Log Path */
             log_path?: string | null;
             /**
@@ -10014,6 +10036,20 @@ export interface components {
             management: "unmanaged" | "active" | "paused";
             /** Worker Running */
             worker_running: boolean;
+        };
+        /**
+         * ProcedureInputContinueReceipt
+         * @description The answer is durable even when continuation could not be scheduled.
+         */
+        ProcedureInputContinueReceipt: {
+            answer: components["schemas"]["ProcedureStepInputSubmitReceipt"];
+            /**
+             * Continuation
+             * @enum {string}
+             */
+            continuation: "queued" | "already_continued" | "blocked" | "retryable";
+            /** Dispatch Error */
+            dispatch_error?: string | null;
         };
         "ProcedureIntent-Output": {
             [key: string]: components["schemas"]["pydantic__types__JsonValue"];
@@ -16687,6 +16723,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureStepInputSubmitReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_and_continue_procedure_input_api_v1_procedures__procedure_run_id__steps__step_key__attempts__attempt__input_continue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attempt: number;
+                procedure_run_id: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcedureStepInputSubmitCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureInputContinueReceipt"];
                 };
             };
             /** @description Validation Error */

@@ -6,6 +6,7 @@ import os
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, SupportsFloat, Unpack, overload, override
 from uuid import uuid4
@@ -18,6 +19,7 @@ from scopecat.analysis.facts import ordinary_result_schema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._remote import RemoteRunOperations
 from scopecat.api.apparatus_history import LabApparatusOperations
+from scopecat.api.application_open import open_in_application
 from scopecat.api.calibration_checks import LabCalibrationChecks
 from scopecat.api.devices import LabDeviceOperations
 from scopecat.api.lab import LabClient
@@ -82,6 +84,10 @@ from scopecat.records.analysis_follow import (
     AnalysisFollowView,
 )
 from scopecat.records.analysis_grouping import AnalysisGrouping
+from scopecat.records.application_open import (
+    ApplicationOpenReceipt,
+    ApplicationOpenTarget,
+)
 from scopecat.records.author_revision import (
     AuthorAnalysisGroupReceipt,
     AuthorAnalysisReceipt,
@@ -1378,6 +1384,24 @@ class AuthorJob:
     @property
     def id(self) -> str:
         return self.snapshot.procedure_run_id
+
+    def open(self, *, timeout: float = 5) -> ApplicationOpenReceipt:
+        """Open the original admitted task; this never submits or recovers work."""
+        if not isfinite(timeout) or timeout < 0:
+            raise ValueError("open timeout must be finite and non-negative")
+        if timeout == 0:
+            raise TimeoutError("Task lookup timed out; no open request sent")
+        deadline = time.monotonic() + timeout
+        snapshot = self.recover(timeout=timeout)
+        if snapshot is None:
+            raise AuthorSubmissionUncertain(self)
+        return open_in_application(
+            self.client,
+            ApplicationOpenTarget(
+                kind="procedure", object_id=snapshot.procedure_run_id
+            ),
+            timeout=max(0, deadline - time.monotonic()),
+        )
 
     def progress(self, *, cursor: int | None = None) -> ProcedureOperatorView:
         """Observe dispatch, the exact current step/run and bounded history.

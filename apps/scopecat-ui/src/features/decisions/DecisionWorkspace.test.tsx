@@ -1,17 +1,15 @@
+import type { ProcedureInputContinueReceipt } from "./decision-api";
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  ProcedureRun,
-  ProcedureStepAttempt,
-  ProcedureStepInputSubmitReceipt,
-} from "../../api-contract";
+import type { ProcedureRun, ProcedureStepAttempt } from "../../api-contract";
 import { DecisionWorkspace } from "./DecisionWorkspace";
 import {
   getProcedureSteps,
+  getDecisionProgress,
   getWaitingProcedures,
   submitProcedureInput,
   readDecisionDraft,
@@ -22,6 +20,7 @@ import {
 
 vi.mock("./decision-api", () => ({
   getProcedureSteps: vi.fn(),
+  getDecisionProgress: vi.fn(),
   getWaitingProcedures: vi.fn(),
   submitProcedureInput: vi.fn(),
   readDecisionDraft: vi.fn(),
@@ -33,6 +32,9 @@ const hash = `sha256:${"1".repeat(64)}`;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getDecisionProgress).mockResolvedValue({
+    dispatch: { management: "active", worker_running: false },
+  } as Awaited<ReturnType<typeof getDecisionProgress>>);
   let saved: DecisionDraftView = { draft: null, head_revision: 0, validity: "current" };
   vi.mocked(readDecisionDraft).mockImplementation(async () => saved);
   vi.mocked(getDecisionDraftHistory).mockResolvedValue({ items: [] });
@@ -59,7 +61,7 @@ beforeEach(() => {
     procedure_run_id: "procedure-1",
     items: [waitingStep()],
   });
-  vi.mocked(submitProcedureInput).mockResolvedValue({} as ProcedureStepInputSubmitReceipt);
+  vi.mocked(submitProcedureInput).mockResolvedValue({} as ProcedureInputContinueReceipt);
 });
 
 afterEach(() => {
@@ -67,6 +69,85 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("offers exact continuation retry when queued dispatch fails later", async () => {
+    vi.mocked(submitProcedureInput).mockResolvedValue({
+      continuation: "queued",
+      dispatch_error: null,
+    } as ProcedureInputContinueReceipt);
+    vi.mocked(getDecisionProgress).mockResolvedValue({
+      dispatch: {
+        management: "paused",
+        worker_running: false,
+        input_continuation_retryable: true,
+        failure: {
+          kind: "dispatch",
+          message: "Queued environment unavailable",
+          observed_at: "2026-10-19T00:00:00Z",
+        },
+      },
+    } as Awaited<ReturnType<typeof getDecisionProgress>>);
+    renderWorkspace();
+    await screen.findByLabelText("resonator");
+    fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
+    fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.9" } });
+    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "Alice" } });
+    vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    expect(await screen.findByText("Queued environment unavailable")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Retry continuation" }));
+    await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(submitProcedureInput).mock.calls[1]![0]).toEqual(
+      vi.mocked(submitProcedureInput).mock.calls[0]![0],
+    );
+  });
+
+  it("retains a saved answer after leaving the waiting list and retries exactly that continuation", async () => {
+    vi.mocked(submitProcedureInput)
+      .mockResolvedValueOnce({
+        continuation: "retryable",
+        dispatch_error: "Execution environment unavailable",
+      } as ProcedureInputContinueReceipt)
+      .mockResolvedValueOnce({
+        continuation: "queued",
+        dispatch_error: null,
+      } as ProcedureInputContinueReceipt);
+    renderWorkspace();
+    await screen.findByLabelText("resonator");
+    fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
+    fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.9" } });
+    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "Alice" } });
+    vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    expect(await screen.findByText("Execution environment unavailable")).toBeVisible();
+    const original = vi.mocked(submitProcedureInput).mock.calls[0]![0];
+    fireEvent.click(screen.getByRole("button", { name: "Retry continuation" }));
+    await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(submitProcedureInput).mock.calls[1]![0]).toEqual(original);
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Retry continuation" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("link", { name: "Open task" })).toHaveAttribute(
+      "href",
+      "?procedure=procedure-1#launch",
+    );
+  });
+
+  it("shows a saved but blocked continuation without offering an unlock retry", async () => {
+    vi.mocked(submitProcedureInput).mockResolvedValue({
+      continuation: "blocked",
+      dispatch_error: "Task was paused; review the task",
+    } as ProcedureInputContinueReceipt);
+    renderWorkspace();
+    await screen.findByLabelText("resonator");
+    fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
+    fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.9" } });
+    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "Alice" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    expect(await screen.findByText("Task was paused; review the task")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Retry continuation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save only/i })).not.toBeInTheDocument();
+  });
+
   it("keeps numeric conditional input visible through editing and submits normalized values", async () => {
     const step = waitingStep();
     step.interpretation_request!.structure = {
@@ -97,7 +178,7 @@ describe("DecisionWorkspace", () => {
     expect(screen.queryByLabelText("detail")).not.toBeInTheDocument();
     fireEvent.change(mode, { target: { value: "1" } });
     expect(screen.getByLabelText("detail")).toHaveValue("2");
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({ value: { mode: 1, detail: 2 } }),
@@ -170,10 +251,10 @@ describe("DecisionWorkspace", () => {
       target: { value: JSON.stringify("Peak selected") },
     });
     const frequency = screen.getByLabelText("Peak frequency (MHz)");
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter Peak frequency");
     fireEvent.change(frequency, { target: { value: "6600" } });
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("between 6490 and 6510");
     expect(submitProcedureInput).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("outcome"), {
@@ -187,7 +268,7 @@ describe("DecisionWorkspace", () => {
     fireEvent.change(screen.getByLabelText("outcome"), {
       target: { value: JSON.stringify("No clear peak") },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -240,7 +321,7 @@ describe("DecisionWorkspace", () => {
     fireEvent.change(screen.getByLabelText("Reasoning note (optional)"), {
       target: { value: "isolated dip" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
 
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
@@ -259,7 +340,7 @@ describe("DecisionWorkspace", () => {
         expect.anything(),
       ),
     );
-    expect(screen.getByText(/Decision recorded/)).toBeVisible();
+    expect(screen.getByText(/Decision saved/)).toBeVisible();
     await waitFor(() => expect(getWaitingProcedures).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(getProcedureSteps).toHaveBeenCalledTimes(2));
   });
@@ -285,7 +366,7 @@ describe("DecisionWorkspace", () => {
       target: { value: "Confirmation differs; reject" },
     });
     fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "operator" } });
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -322,7 +403,7 @@ describe("DecisionWorkspace", () => {
     expect(screen.queryByLabelText("Structured judgment (JSON)")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add Peak frequency (MHz)" }));
     expect(screen.getByLabelText("Peak frequency (MHz) 1")).toHaveValue("");
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     expect(submitProcedureInput).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Peak frequency (MHz) 1"), {
       target: { value: "6500.25" },
@@ -335,7 +416,7 @@ describe("DecisionWorkspace", () => {
     vi.mocked(getWaitingProcedures).mockResolvedValue({
       items: [{ ...waitingProcedure(), procedure_run_id: "procedure-2" }],
     });
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -345,11 +426,11 @@ describe("DecisionWorkspace", () => {
         expect.anything(),
       ),
     );
-    expect(await screen.findByRole("link", { name: "Open task and continue" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Open task" })).toHaveAttribute(
       "href",
       "?procedure=procedure-1#launch",
     );
-    expect(screen.getByRole("button", { name: "View other waiting decisions" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "View waiting decisions" })).toBeVisible();
     expect(localStorage.length).toBe(0);
   });
 
@@ -370,7 +451,7 @@ describe("DecisionWorkspace", () => {
     });
     renderWorkspace();
     await screen.findByLabelText("outcome");
-    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -400,7 +481,7 @@ describe("DecisionWorkspace", () => {
     });
     renderWorkspace();
     expect(await screen.findByRole("alert")).toHaveTextContent("form does not support yet");
-    expect(screen.getByRole("button", { name: "Record decision" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Submit and continue" })).toBeDisabled();
     expect(screen.queryByText("Expected structure")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Decision options" }));
     expect(screen.queryByText("Edit JSON")).not.toBeInTheDocument();
@@ -437,7 +518,7 @@ describe("DecisionWorkspace", () => {
     fireEvent.submit(form);
     fireEvent.submit(form);
     await waitFor(() => expect(saveDecisionDraft).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("button", { name: "Record decision" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Submit and continue" })).toBeDisabled();
     expect(submitProcedureInput).not.toHaveBeenCalled();
     release();
     await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(1));

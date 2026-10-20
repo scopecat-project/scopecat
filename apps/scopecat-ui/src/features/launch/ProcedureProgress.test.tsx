@@ -31,7 +31,7 @@ function view(overrides: Partial<ProcedureOperatorView> = {}): ProcedureOperator
       created_at: NOW,
       updated_at: NOW,
     },
-    dispatch: { management: "paused", worker_running: false },
+    dispatch: { management: "paused", input_continuation_retryable: false, worker_running: false },
     current_step: null,
     current_child: null,
     child_runs: [],
@@ -69,7 +69,13 @@ it("reopens a paused admission and explicitly dispatches the same procedure", as
         return Response.json({ procedure_id: "p1", dispatch_error: null });
       }
       return Response.json(
-        view({ dispatch: { management: dispatched ? "active" : "paused", worker_running: false } }),
+        view({
+          dispatch: {
+            management: dispatched ? "active" : "paused",
+            input_continuation_retryable: false,
+            worker_running: false,
+          },
+        }),
       );
     }),
   );
@@ -92,6 +98,7 @@ it("shows retained worker diagnostics separately from execution status", async (
         view({
           dispatch: {
             management: "paused",
+            input_continuation_retryable: false,
             worker_running: false,
             failure: {
               kind: "dispatch",
@@ -141,7 +148,11 @@ it("shows an uncertain current child as attention even when its parent is ready 
     vi.fn(async () =>
       Response.json({
         ...view({
-          dispatch: { management: "active", worker_running: false },
+          dispatch: {
+            management: "active",
+            input_continuation_retryable: false,
+            worker_running: false,
+          },
           dispatch_blocked_reason: "A child run has an unknown outcome; inspect retained evidence.",
         }),
         current_child: {

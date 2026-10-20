@@ -112,7 +112,7 @@ def choose_peak(
                 "Enter a frequency in MHz between "
                 f"{MIN_FREQUENCY_MHZ} and {MAX_FREQUENCY_MHZ}, "
                 "or choose No clear peak / Unsure and leave it empty. "
-                "Record your answer and explicitly resume the procedure to finish. "
+                "Submit your answer and continue the procedure to finish. "
                 "Completion records your judgment, "
                 "not its correctness or a published calibration. " + problem
             ),

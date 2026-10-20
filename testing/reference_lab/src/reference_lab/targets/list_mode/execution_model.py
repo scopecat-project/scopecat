@@ -197,10 +197,12 @@ def run_fingerprint(
                     "shot_start": chunk.shot_start,
                     "shot_count": chunk.shot_count,
                     "values_sha256": hashlib.sha256(
-                        memoryview(chunk.values).cast("B")
+                        memoryview(chunk.values).cast("B") if chunk.values.size else b""
                     ).hexdigest(),
                     "available_sha256": hashlib.sha256(
                         memoryview(chunk.available).cast("B")
+                        if chunk.available.size
+                        else b""
                     ).hexdigest(),
                 }
                 for chunk in results.chunks

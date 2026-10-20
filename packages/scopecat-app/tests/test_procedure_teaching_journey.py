@@ -83,14 +83,14 @@ try:
             if outcome == "Peak selected":
                 # Python bypasses UI hints; the procedure still checks meaning.
                 answer = ns["PeakChoice"](outcome, 6600)
-                receipt = pending.respond(answer, actor="learner")
-                assert pending.respond(answer, actor="learner") == receipt
-                assert task.snapshot.state == "ready"
-                assert task.progress().dispatch.management == "paused"
-                task.resume()
+                receipt = pending.respond_and_continue(answer, actor="learner")
+                repeated = pending.respond_and_continue(answer, actor="learner")
+                assert repeated.answer.output == receipt.answer.output
                 assert task.wait(timeout=60).state == "waiting_for_input"
                 try:
-                    pending.respond(ns["PeakChoice"](outcome, 6500), actor="learner")
+                    pending.respond_and_continue(
+                        ns["PeakChoice"](outcome, 6500), actor="learner"
+                    )
                 except DaemonConflictError:
                     pass
                 else:
@@ -131,10 +131,9 @@ try:
                 ] == ["choose-2"]
                 run("procedure-answer")
             else:
-                ns["receipt"] = pending.respond(
+                ns["receipt"] = pending.respond_and_continue(
                     ns["PeakChoice"](outcome, None), actor="learner"
                 )
-            assert task.snapshot.state == "ready"
             run("procedure-continue")
             assert ns["result"].closure.status == "succeeded"
             assert task.output("scan").run_id == scan
@@ -194,7 +193,22 @@ assert task.output("scan").run_id == next(
 assert task.snapshot.closure.status == "succeeded"
 session.close()
 '''))
-start_project(project, timeout=60)
+from threading import Event, Thread
+from unittest.mock import Mock
+from scopecat_app.desktop_objects import DesktopObjectOpener
+from scopecat_app.desktop_session import DesktopSession
+endpoint = start_project(project, timeout=60)
+closing = Event()
+desktop = DesktopSession(Mock(), closing)
+desktop.connected(endpoint.base_url)
+opened = []
+opener = DesktopObjectOpener(desktop, opened.append)
+opener.pump()
+def pump():
+    while not closing.wait(0.05):
+        opener.pump()
+thread = Thread(target=pump)
+thread.start()
 try:
     NotebookClient(
         document,
@@ -202,7 +216,12 @@ try:
         kernel_name="scopecat-lab",
         resources={"metadata": {"path": str(root / "notebooks")}},
     ).execute()
+    assert len(opened) == 1
+    assert opened[0].kind == "procedure" and opened[0].view == "decision"
 finally:
+    closing.set()
+    thread.join(timeout=5)
+    opener.close()
     nbformat.write(document, root / "notebooks/verified-procedure.ipynb")
     stop_project(project)
 """

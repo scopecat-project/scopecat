@@ -16,12 +16,14 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from filelock import FileLock, Timeout
 
+from scopecat.records.application_open import ApplicationOpenTarget
 from scopecat.records.practice import NotebookPracticeClearCommand
 from scopecat_tutorials.lessons import LessonTopic
 
 from .application_runtime import ApplicationRuntime
 from .bundle import managed_path
 from .data_reset import UnsupportedDataSpace, reset_store
+from .desktop_objects import DesktopObjectOpener, object_location
 from .desktop_platform import (
     hide_window,
     install_reopen_handler,
@@ -683,7 +685,31 @@ class DesktopWindows:
         with self._lock:
             return self._views[-1]
 
-    def create(self, run_id: str | None = None) -> DesktopView:
+    def open_target(self, target: ApplicationOpenTarget) -> None:
+        page = self._session.page_url
+        if page is None:
+            raise ValueError(
+                "Application is not connected; reconnect it before opening"
+            )
+        location = object_location(page, target)
+        with self._lock:
+            view = next(
+                (
+                    view
+                    for view in self._views
+                    if view.window.get_current_url() == location
+                ),
+                None,
+            )
+            if view is None:
+                view = self.create(target=target)
+        if not view.loaded.wait(5):
+            raise TimeoutError("The requested window has not finished loading")
+        show_window(view.window)
+
+    def create(
+        self, run_id: str | None = None, *, target: ApplicationOpenTarget | None = None
+    ) -> DesktopView:
         import webview
 
         with self._lock:
@@ -695,6 +721,10 @@ class DesktopWindows:
                 location = urlunsplit(
                     (base.scheme, base.netloc, "/", urlencode({"run": run_id}), "")
                 )
+            if target is not None:
+                if location is None:
+                    raise ValueError("Application is not connected")
+                location = object_location(location, target)
             api = DesktopAPI(
                 self._session, lambda: window, self._prepare, self.new_window
             )
@@ -855,6 +885,7 @@ def run(
         session = session or DesktopSession(runtime, closing)
         session.prepare_reset = prepare_reset
         windows = DesktopWindows(session, prepare or configure)
+        opener = DesktopObjectOpener(session, windows.open_target)
         first = windows.create()
         window, api, loaded = first.window, first.api, first.loaded
 
@@ -908,6 +939,7 @@ def run(
                 logging.getLogger(__name__).exception("Application startup failed")
                 window.load_html(_recovery(error, can_reset=prepare_reset is not None))
             while not closing.wait(0.5):
+                opener.pump()
                 try:
                     session.poll_exit()
                 except Exception as error:
@@ -985,5 +1017,6 @@ def run(
             if stop_tray is not None:
                 stop_tray()
             closing.set()
+            opener.close()
     finally:
         lock.release()

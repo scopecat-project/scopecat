@@ -48,6 +48,33 @@ revision and the preview's manual-state fence. Editing the workspace afterwards
 does not alter `checked`. Running after a relevant laboratory change may require
 a new preview. Saving a named parameter version does not publish a shared default.
 
+## Open retained objects in the desktop
+
+With the connected application desktop running, call `job.open()` to inspect the
+admitted task or `run.open()` to inspect its measurement. A procedure handle also
+supports `task.open(view="decision")`. A published analysis supports
+`publication.open()` and retains its exact project, run or sample owner. These
+calls request a native window and wait for the host's acknowledgement; they do
+not submit work or launch an application. The host chooses its installed or
+development UI address, so notebook code does not construct URLs.
+
+If the desktop is unavailable, open that application's desktop and retry. If an
+opening times out, retain the exception's request and wait on the same request:
+
+```python
+from scopecat.api.application_open import ApplicationOpenTimeout
+
+try:
+    run.open()
+except ApplicationOpenTimeout as error:
+    error.request.wait(timeout=10)
+```
+
+Do not issue a new `open()` merely to retry an uncertain request. Requests expire
+after one minute and cannot replay into a restarted host; inspect existing windows
+before making a fresh request after expiry or a host change. Portable analysis
+files must first be imported into the application before opening there.
+
 ## Refresh shared code and compiler code
 
 Keep ordinary laboratory Python modules under the project's declared

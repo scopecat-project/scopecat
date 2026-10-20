@@ -37,6 +37,7 @@ from scopecat.measurements.datasets import (
 from scopecat.measurements.paging import project_measurement_page
 from scopecat.project_state import ProjectStateServices
 from scopecat.records.analysis import AnalysisExecution, AnalysisRecord
+from scopecat.records.application_open import ApplicationOpenReceipt
 from scopecat.records.config import ConfigProfileSnapshot
 from scopecat.records.content import ContentEntry
 from scopecat.records.parameter_change import ParameterChangeProposal
@@ -70,6 +71,12 @@ from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 @dataclass(frozen=True, slots=True)
 class ServiceRunOperations:
     services: ProjectStateServices
+
+    def open(
+        self, run_id: str, *, analysis_id: str | None = None, timeout: float = 5
+    ) -> ApplicationOpenReceipt:
+        _ = run_id, analysis_id, timeout
+        raise ValueError("In-process test sessions have no connected desktop")
 
     def load_snapshot(self, run_id: str) -> RunSnapshot:
         return self.services.runs.read_snapshot(run_id)
