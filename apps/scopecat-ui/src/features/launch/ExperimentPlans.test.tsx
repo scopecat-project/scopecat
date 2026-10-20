@@ -380,7 +380,7 @@ it("preserves a registered target through reopening, preview, submission and pla
     }),
     binding: targetPlan.definition.scientific_binding,
   };
-  const posted: { path: string; body: Record<string, unknown> }[] = [];
+  const posted: { path: string; body: Record<string, unknown>; workspace: string | null }[] = [];
   const resolutions: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -401,9 +401,11 @@ it("preserves a registered target through reopening, preview, submission and pla
         });
       }
       if (request.method === "POST") {
-        if (path.endsWith("/experiment-plans"))
-          expect(request.headers.get("X-Scopecat-Workspace")).toBe("legacy");
-        posted.push({ path, body: await request.json() });
+        posted.push({
+          path,
+          body: await request.json(),
+          workspace: request.headers.get("X-Scopecat-Workspace"),
+        });
         if (path.endsWith("/preview"))
           return reply({
             experiment_id: "signal",
@@ -466,6 +468,7 @@ it("preserves a registered target through reopening, preview, submission and pla
   await waitFor(() =>
     expect(posted.some((item) => item.path.endsWith("/experiment-plans"))).toBe(true),
   );
+  expect(posted.find((item) => item.path.endsWith("/experiment-plans"))!.workspace).toBe("legacy");
   expect(
     posted.find((item) => item.path.endsWith("/experiment-plans"))!.body.definition,
   ).toMatchObject({
