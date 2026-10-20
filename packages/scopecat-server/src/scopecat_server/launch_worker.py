@@ -104,11 +104,17 @@ def run_project_procedure(root: Path, procedure_id: str) -> None:
         assert stored.source is not None
         return stored.source
 
-    with application.connect(
-        resolve_daemon_endpoint(root),
-        operator="console-worker",
-        procedure_source=procedure_source if stored.source is not None else None,
-    ) as lab:
+    with (
+        DaemonClient(
+            resolve_daemon_endpoint(root),
+            workspace_id=stored.source.workspace_id if stored.source else None,
+        ) as worker_client,
+        application.connect(
+            worker_client,
+            operator="console-worker",
+            procedure_source=procedure_source if stored.source is not None else None,
+        ) as lab,
+    ):
         run_procedure(lab, procedure_id)
     record_timing("procedure_return", procedure_id=procedure_id)
 

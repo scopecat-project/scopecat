@@ -8,6 +8,7 @@ from scopecat.kernel.quantity import Quantity
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.experiment_plan import (
     ExperimentPlanDefinition,
+    ExperimentPlanRevision,
     ExperimentPlanSave,
 )
 from scopecat.records.parameter_revision import ParameterRevisionRef
@@ -192,7 +193,7 @@ def test_plan_catalog_and_history_are_scoped_to_current_course(tmp_path: Path):
     store = SQLiteProjectStore(SQLiteDatabase(tmp_path / "db"), tmp_path / "objects")
     store.bootstrap()
     repository = ExperimentPlanRepository(store)
-    saved = {}
+    saved: dict[str, ExperimentPlanRevision] = {}
     try:
         for identity in ("ordinary", "one", "two"):
             if identity != "ordinary":

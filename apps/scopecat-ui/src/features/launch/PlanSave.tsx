@@ -34,6 +34,7 @@ export function PlanSave({
         throw new Error("Save plans from a named parameter context, not an unaccepted candidate.");
       const saved = await apiData<PlanRevision>(
         apiClient.POST("/api/v1/experiment-plans", {
+          headers: { "X-Scopecat-Workspace": preview.workspace_id },
           body: {
             name,
             saved_by: draft.actor,

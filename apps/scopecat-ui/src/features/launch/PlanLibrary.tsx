@@ -7,7 +7,7 @@ import { useLaunchDraft } from "./LaunchDraft";
 import { planDifferences, type PlanRevision } from "./experiment-plans";
 
 export function PlanLibrary({ initializing = false }: { initializing?: boolean } = {}) {
-  const { projectId, draft, openPlan, isCurrent } = useLaunchDraft();
+  const { projectId, workspaceId, draft, openPlan, isCurrent } = useLaunchDraft();
   const cache = useQueryClient();
   const [history, setHistory] = useState<string>();
   const [selected, setSelected] = useState<PlanRevision>();
@@ -21,11 +21,14 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
     };
   }, []);
   const plans = useQuery({
-    queryKey: ["experiment-plans", projectId, history],
+    queryKey: ["experiment-plans", projectId, workspaceId, history],
     enabled: Boolean(projectId),
     queryFn: () =>
       apiData(
-        apiClient.GET("/api/v1/experiment-plans", { params: { query: { plan_id: history } } }),
+        apiClient.GET("/api/v1/experiment-plans", {
+          params: { query: { plan_id: history } },
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
+        }),
       ),
   });
   async function open(plan: PlanRevision) {
@@ -80,7 +83,12 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
   }, []);
   async function hide(plan: PlanRevision) {
     try {
-      await apiData(apiClient.POST("/api/v1/experiment-plans/hide", { body: plan.ref }));
+      await apiData(
+        apiClient.POST("/api/v1/experiment-plans/hide", {
+          body: plan.ref,
+          headers: workspaceId ? { "X-Scopecat-Workspace": workspaceId } : undefined,
+        }),
+      );
       await cache.invalidateQueries({ queryKey: ["experiment-plans", projectId] });
     } catch (caught) {
       if (alive.current) setError(caught instanceof Error ? caught.message : String(caught));
