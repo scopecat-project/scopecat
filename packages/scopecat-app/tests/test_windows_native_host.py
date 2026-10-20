@@ -16,6 +16,43 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def test_development_host_reads_and_renames_long_author_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    source = tmp_path / "checkout"
+    source.mkdir()
+    monkeypatch.setattr(
+        dev_host_windows, "development_home", lambda _: tmp_path / "cache"
+    )
+    executable = dev_host_windows.build_host(source)
+    directory = tmp_path / ("author-" + "a" * 40) / ("resources-" + "b" * 40)
+    wheel = directory / ("scopecat-" + "c" * 80 + ".whl")
+    directory.mkdir(parents=True)
+    wheel.write_bytes(b"retained wheel")
+    assert len(str(wheel)) > 260
+    probe = """
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+wheel = next(root.glob("*.whl"))
+assert wheel.is_file(), str(wheel)
+assert wheel.read_bytes() == b"retained wheel"
+staged = root / ("source-" + "d" * 80)
+staged.mkdir()
+(staged / "signal.py").write_text("VALUE = 1")
+destination = root / ("author-" + "e" * 80)
+staged.rename(destination)
+assert (destination / "signal.py").read_text() == "VALUE = 1"
+"""
+    result = subprocess.run(  # noqa: S603 - compiled host, disposable author files
+        [str(executable), "-E", "-B", "-c", probe, str(directory)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_host_preserves_process_identity_and_python_subprocesses(tmp_path: Path):
     app = tmp_path / "Relocated 中文 app"
     python = app / "resources/python"

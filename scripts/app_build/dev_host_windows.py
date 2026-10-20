@@ -89,6 +89,7 @@ def build_host(source: Path) -> Path:
     if not library.is_file():
         raise ValueError("The Windows source host requires Python's python3.dll.")
     template = Path(__file__).with_suffix(".c")
+    manifest = Path(__file__).with_suffix(".manifest")
     configuration = Path(sys.prefix) / "pyvenv.cfg"
     identity: dict[str, object] = {
         "source": str(source.resolve()),
@@ -101,6 +102,7 @@ def build_host(source: Path) -> Path:
         "library_sha256": file_hash(library),
         "configuration": file_hash(configuration) if configuration.is_file() else None,
         "template": file_hash(template),
+        "manifest": file_hash(manifest),
         "builder": file_hash(Path(__file__)),
         "compiler": file_hash(Path(compiler)),
         "environment": {
@@ -150,6 +152,8 @@ def build_host(source: Path) -> Path:
                         "shell32.lib",
                         "/link",
                         "/SUBSYSTEM:CONSOLE",
+                        "/MANIFEST:EMBED",
+                        f"/MANIFESTINPUT:{manifest}",
                     ],
                     check=True,
                     env=environment,
