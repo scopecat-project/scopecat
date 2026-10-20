@@ -107,6 +107,7 @@ class LabApplication:
         *,
         operator: str = "operator",
         procedure_source: Callable[[], ProcedureSource] | None = None,
+        workspace_id: str | None = None,
     ) -> LabClient:
         """Connect notebook code while retaining locally authored closures."""
 
@@ -119,6 +120,7 @@ class LabApplication:
             procedure_schedules=self.procedure_schedules,
             operator=operator,
             procedure_source=procedure_source,
+            workspace_id=workspace_id,
         )
 
 

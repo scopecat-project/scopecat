@@ -242,3 +242,109 @@ def _daemon_client(
         "http://testserver",
         transport=httpx2.MockTransport(send),
     )
+
+
+def test_registered_project_worker_materializes_its_course_schedule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat.application.lab import LabApplication
+    from scopecat.author_workspaces import (
+        LocalAuthorWorkspace,
+        LocalAuthorWorkspaces,
+        author_bindings_path,
+    )
+    from scopecat.project import Project, open_project
+    from scopecat.records.practice import PracticeScope
+
+    from scopecat_server.storage.sqlite.practice import PracticeOwnership
+
+    root = tmp_path / "course-project"
+    root.mkdir()
+    (root / "scopecat.toml").write_text("[lab]\n")
+    bindings = author_bindings_path(root)
+    bindings.parent.mkdir(parents=True, exist_ok=True)
+    bindings.write_text(
+        LocalAuthorWorkspaces(
+            service_root=tmp_path / "service",
+            items=(
+                LocalAuthorWorkspace(
+                    id="course-source", name="Course", root=root, python=root / "python"
+                ),
+            ),
+        ).model_dump_json()
+    )
+    registry = ProcedureRegistry((_scheduled_worker_procedure,))
+
+    def application(_project: Project) -> LabApplication:
+        return LabApplication(procedures=registry)
+
+    monkeypatch.setattr(Project, "load_application", application)
+
+    def endpoint(_root: Path, *, explicit: str | None = None) -> str:
+        return explicit or "http://testserver"
+
+    monkeypatch.setattr("scopecat.daemon.endpoint.resolve_daemon_endpoint", endpoint)
+    with (
+        LocalDaemonRuntime(tmp_path / "service") as runtime,
+        TestClient(runtime.app()) as transport,
+    ):
+        sqlite = runtime.application.calibration_tasks._sqlite
+        with sqlite.write_transaction() as connection:
+            owners = PracticeOwnership(connection)
+            owners.save(
+                PracticeScope(
+                    id="course",
+                    title="Course",
+                    lesson="parameters",
+                    directory=str(root),
+                    kind="notebook",
+                    workspace_id="course-source",
+                )
+            )
+            owners.claim("course", "source", "course-source")
+        command = ProcedureScheduleCreateCommand(
+            schedule_id="course-schedule",
+            definition=_scheduled_worker_procedure.ref,
+            intent={"output_run_id": "course-output"},
+            due_at=_PAST,
+        )
+        response = transport.post(
+            "/api/v1/procedure-schedules",
+            json=command.model_dump(mode="json"),
+            headers={"X-Scopecat-Workspace": "course-source"},
+        )
+        assert response.status_code == 201, response.text
+        assert transport.get("/api/v1/procedure-schedules/due").json()["items"] == []
+        original_init = DaemonClient.__init__
+
+        def send(request: httpx2.Request) -> httpx2.Response:
+            response = transport.request(
+                request.method,
+                request.url.raw_path.decode(),
+                content=request.content,
+                headers=dict(request.headers),
+            )
+            return httpx2.Response(
+                response.status_code,
+                content=response.content,
+                headers=dict(response.headers),
+            )
+
+        def connected(
+            self: DaemonClient, base_url: str, *, workspace_id: str | None = None
+        ) -> None:
+            original_init(
+                self,
+                base_url,
+                workspace_id=workspace_id,
+                transport=httpx2.MockTransport(send),
+            )
+
+        monkeypatch.setattr(DaemonClient, "__init__", connected)
+        with open_project(root).connect("http://testserver") as lab:
+            cycle = ProjectAutomationWorker(lab.procedures).cycle()
+            assert cycle.schedules.materialized == 1
+            assert cycle.schedules.failures == 0 and cycle.schedules.conflicts == 0
+            assert cycle.procedures.dispatched == 1
+            schedule = lab.procedures.get_schedule("course-schedule")
+            assert schedule.state == "materialized"

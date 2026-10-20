@@ -190,7 +190,17 @@ class Project:
                 application,
                 build_experiment_system=build_experiment_system,
             )
+        from scopecat.author_workspaces import local_author_workspaces
         from scopecat.automation.models import ProcedureSource
+
+        workspace_id = next(
+            (
+                item.id
+                for item in local_author_workspaces(self.workspace_root)
+                if item.root == self.workspace_root.resolve()
+            ),
+            None,
+        )
 
         def procedure_source() -> ProcedureSource:
             with self.authoring(endpoint) as author:
@@ -206,6 +216,7 @@ class Project:
             endpoint,
             operator=operator,
             procedure_source=procedure_source if self.source_roots else None,
+            workspace_id=workspace_id,
         )
 
 
