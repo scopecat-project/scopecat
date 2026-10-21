@@ -140,7 +140,15 @@ def resolve(
             raise ValueError(
                 "离线缓存没有所需 Python；请联网准备或明确选择已有 Python"
             ) from None
-        run([uv, "python", "install", request, "--no-bin", "--no-registry"])
+        try:
+            run([uv, "python", "install", request, "--no-bin", "--no-registry"])
+        except ValueError as error:
+            raise ValueError(
+                f"无法获取所需的独立 Python {request}。请检查下载错误；"
+                "可通过应用 CLI 的 --python 或 UV_PYTHON 明确选择已有的兼容独立解释器，"
+                "不要使用应用内部 Python。原环境保留，不会自动改用其他版本。\n"
+                f"{error}"
+            ) from error
         found = run(command)
     return check(runtime, workspace, Path(found))
 

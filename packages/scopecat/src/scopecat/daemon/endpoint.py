@@ -97,7 +97,10 @@ def resolve_daemon_endpoint(
     record = read_daemon_endpoint_record(root, target=target)
     if record is None:
         raise DaemonEndpointError(
-            f"no daemon endpoint for {root}; start it with 'scopecat start'"
+            f"no daemon endpoint for {root}; open the registered Scopecat application "
+            "and reconnect with sc.notebook(). If this folder is not registered, "
+            "add it in Settings → Author code first. For a standalone service, "
+            "run 'scopecat start' from its service directory."
         )
     if (
         record.data_root.resolve() != binding.data_root
@@ -105,7 +108,8 @@ def resolve_daemon_endpoint(
         or record.record_path != daemon_record_path(root, target=target)
     ):
         raise DaemonEndpointError(
-            f"daemon record belongs to another project binding: {record.project_root}"
+            f"daemon record belongs to another project binding: {record.project_root}; "
+            "check the selected application and author registration before reconnecting"
         )
     verify_daemon_binding(record.base_url, root, target=target)
     return record.base_url
@@ -142,9 +146,17 @@ def verify_daemon_binding(
             or Path(health.data_root).resolve() != binding.data_root
             or Path(health.deployment_root).resolve() != binding.deployment_root
         ):
-            raise DaemonEndpointError("daemon endpoint belongs to another binding")
+            raise DaemonEndpointError(
+                "daemon endpoint belongs to another binding; check the explicit "
+                "daemon URL, SCOPECAT_DAEMON_URL and selected application, then "
+                "close the session and reconnect explicitly"
+            )
     except (httpx2.HTTPError, ValueError) as error:
-        raise DaemonEndpointError(f"cannot verify daemon binding: {error}") from error
+        raise DaemonEndpointError(
+            f"cannot verify daemon binding: {error}; open the selected application "
+            "and check its version and author registration, then close the session "
+            "and reconnect with sc.notebook()"
+        ) from error
 
 
 __all__ = [
