@@ -4,6 +4,7 @@ import json
 import shutil
 import tomllib
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -139,6 +140,14 @@ def build_tools(monkeypatch: pytest.MonkeyPatch) -> BuildCalls:
                 )
                 wheel.writestr(f"{module}/__init__.py", "# installed bytes\n")
 
+    @contextmanager
+    def prepare(_repository, destination):
+        assert not (destination.parent / "wheels").exists()
+        destination.mkdir()
+        (destination / "runtime.json").write_text('{"python":"prepared"}')
+        yield destination / "prepared-python"
+
+    monkeypatch.setattr(delivery.toolchain, "prepare", prepare)
     monkeypatch.setattr(delivery, "run", run)
     monkeypatch.setattr(delivery.shutil, "which", lambda _: None)
     monkeypatch.setattr(
@@ -196,6 +205,11 @@ def test_recipe_build_uses_locked_lab_and_public_toolchain(
     assert cwd == tmp_path / "public"
     assert {"--require-hashes", "--no-deps", "--only-binary=:all:"} <= set(download)
     assert "--no-build-isolation" in download
+    for command in [*builds, download]:
+        assert command[command.index("--python") + 1] == str(
+            result / "toolchain/prepared-python"
+        )
+        assert "--no-python-downloads" in command
     assert "--no-binary=proxy-tools" in download
     assert (result / "build.lock").read_bytes() == (tmp_path / "uv.lock").read_bytes()
     assert (

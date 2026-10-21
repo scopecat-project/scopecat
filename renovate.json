@@ -27,25 +27,76 @@
   "packageRules": [
     {
       "description": "Update locked Python quality tools within their declared ranges",
-      "matchManagers": ["pep621"],
-      "matchPackageNames": ["ruff", "basedpyright"],
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchPackageNames": [
+        "ruff",
+        "basedpyright"
+      ],
       "rangeStrategy": "update-lockfile"
     },
     {
       "description": "将 Python uv CLI 与规范化的 uv-build 包更新放在同一组审查",
-      "matchManagers": ["pep621"],
-      "matchPackageNames": ["uv", "uv-build"],
-      "groupName": "uv toolchain"
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchPackageNames": [
+        "uv",
+        "uv-build"
+      ],
+      "groupName": "Python build toolchain",
+      "automerge": false
+    },
+    {
+      "description": "Propose current-minor Python patches independently of newer minors",
+      "matchManagers": [
+        "pyenv"
+      ],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Review exact Python patch updates with the uv runtime catalog and native packaging acceptance",
+      "matchManagers": [
+        "pyenv"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "Python build toolchain",
+      "automerge": false
+    },
+    {
+      "description": "Keep Python minor and major upgrades separate from patch supply maintenance",
+      "matchManagers": [
+        "pyenv"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "groupName": null,
+      "automerge": false
     },
     {
       "description": "Override config:best-practices dev-only pinning by pinning all npm dependencies except peer dependencies",
-      "matchManagers": ["npm"],
-      "extends": [":pinAllExceptPeerDependencies"]
+      "matchManagers": [
+        "npm"
+      ],
+      "extends": [
+        ":pinAllExceptPeerDependencies"
+      ]
     },
     {
       "description": "Keep npm dependency updates on the project-wide 3-day minimum release age",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["major", "minor", "patch"],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
       "minimumReleaseAge": "3 days"
     },
     {

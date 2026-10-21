@@ -19,6 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.app_build.package_versions import stamp
 from scripts.app_build.release_identity import read_source_identity
+from scripts.app_build.toolchain import prepare
+from uv import find_uv_bin
 
 
 class Arguments(Protocol):
@@ -60,30 +62,34 @@ def build(
             stream.extractall(source, filter="data")
         identity = read_source_identity(source / "release.toml", release=release)
         packages: dict[str, str] = {}
-        for directory in PACKAGES:
-            project = source / directory / "pyproject.toml"
-            content = project.read_text()
-            metadata = cast("dict[str, dict[str, str]]", tomllib.loads(content))[
-                "project"
-            ]
-            version = identity.python_package_version(
-                commit, timestamp, release=release
-            )
-            stamp(project, version)
-            subprocess.run(
-                [
-                    "uv",
-                    "build",
-                    "--wheel",
-                    "--no-sources",
-                    "--out-dir",
-                    str(destination),
-                    str(project.parent),
-                ],
-                check=True,
-                cwd=source,
-            )
-            packages[metadata["name"]] = version
+        with prepare(source, root / "toolchain") as python:
+            for directory in PACKAGES:
+                project = source / directory / "pyproject.toml"
+                content = project.read_text()
+                metadata = cast("dict[str, dict[str, str]]", tomllib.loads(content))[
+                    "project"
+                ]
+                version = identity.python_package_version(
+                    commit, timestamp, release=release
+                )
+                stamp(project, version)
+                subprocess.run(
+                    [
+                        find_uv_bin(),
+                        "build",
+                        "--wheel",
+                        "--python",
+                        str(python),
+                        "--no-python-downloads",
+                        "--no-sources",
+                        "--out-dir",
+                        str(destination),
+                        str(project.parent),
+                    ],
+                    check=True,
+                    cwd=source,
+                )
+                packages[metadata["name"]] = version
         ui = source / "apps/scopecat-ui"
         subprocess.run(["pnpm", "install", "--frozen-lockfile"], cwd=ui, check=True)
         ui_project = ui / "package.json"

@@ -106,44 +106,32 @@ def test_wheel_delivery_uses_installed_uv_without_host_path(
     assert all(command[0] == str(uv) for command in commands)
 
 
-def test_toolchain_build_ignores_managed_aliases_and_preserves_input(
+def test_toolchain_reuses_prepared_archive_without_supply_lookup(
     delivery: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    from types import SimpleNamespace
-
     from scripts.app_build import toolchain
 
+    add_toolchain(delivery)
     before = (delivery / bundle.MANIFEST).read_bytes()
-    commands = []
-    relative = "python.exe" if os.name == "nt" else "bin/python3"
-
-    def run(command, **_kwargs):
-        commands.append(command)
-        if command[1:3] == ["python", "install"]:
-            managed = Path(command[command.index("--install-dir") + 1])
-            root = managed / "cpython-exact-version"
-            python = root / relative
-            python.parent.mkdir(parents=True)
-            python.write_bytes(b"portable python")
-            if os.name != "nt":
-                (managed / "cpython-minor-alias").symlink_to(
-                    root, target_is_directory=True
-                )
-            return SimpleNamespace(returncode=0)
-        portable = Path(command[0]).parents[0 if os.name == "nt" else 1]
-        return SimpleNamespace(
-            stdout=json.dumps([toolchain.platform.python_version(), str(portable)])
-        )
-
-    monkeypatch.setattr(toolchain.subprocess, "run", run)
+    monkeypatch.setattr(
+        toolchain.subprocess,
+        "run",
+        lambda *_a, **_k: pytest.fail("late runtime lookup"),
+    )
     output = toolchain.build(delivery, tmp_path / "packaged")
+    assert (output / bundle.MANIFEST).read_bytes() == before
     assert (delivery / bundle.MANIFEST).read_bytes() == before
-    assert not (delivery / "toolchain").exists()
-    assert bundle.verify_bundle(output)["files"]["toolchain/python.tar"]
-    assert (output / "toolchain/LICENSE-MIT").is_file()
-    assert "--no-bin" in commands[0] and "--no-registry" in commands[0]
-    with tarfile.open(output / "toolchain/python.tar") as archive:
-        assert all(not member.issym() for member in archive.getmembers())
+    assert (output / "toolchain/python.tar").read_bytes() == (
+        delivery / "toolchain/python.tar"
+    ).read_bytes()
+
+
+def test_toolchain_rejects_unprepared_delivery(delivery, tmp_path):
+    from scripts.app_build import toolchain
+
+    with pytest.raises(ValueError, match="rebuild the delivery"):
+        toolchain.build(delivery, tmp_path / "packaged")
+    assert not (tmp_path / "packaged").exists()
 
 
 def test_installer_rejects_other_platform(delivery: Path, tmp_path: Path):

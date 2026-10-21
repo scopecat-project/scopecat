@@ -19,6 +19,33 @@ The source host rebuilds missing/corrupt native wheel caches on startup and repa
 its extracted dependency cache from the verified wheel. The [host decision](desktop-product.md#technology-decision)
 retains CPython, pywebview and the existing web UI.
 
+## Exact build runtime
+
+`.python-version` is the single exact CPython patch/variant baseline for CI and
+packaging. Build entry points reject host patch or variant drift. The current
+3.15.0 baseline is supplied by locked uv 0.13.1; no minor or free-threaded fallback
+is permitted. SDK support and author recovery/default policies are unchanged.
+
+Delivery preparation obtains a clean uv-managed runtime before building wheels
+or preparing dependencies. Explicit `--python` paths and disabled implicit Python
+downloads bind those steps to that same relocated base. Its pristine archive is
+created before dependencies are installed; no development venv is copied. Native
+assembly reuses that archive and installs the locked wheels offline. The retained
+`app_build.toolchain` CLI copies a prepared delivery; old wheel-only deliveries
+must be rebuilt before native packaging, rather than selecting another runtime late.
+
+`toolchain/runtime.json` records the exact uv catalog URL/key, distribution BUILD,
+platform/architecture/variant, uv version and SHA-256 of the portable archive.
+The same metadata survives in the native manifest's `build_tools.portable_python`.
+The archive hash identifies the retained relocated runtime, not the upstream
+compressed download. uv checks downloads using its pinned catalog. A locked cache beneath the uv cache
+directory retains the pristine archive and file hashes, keyed by tool bytes, lock,
+version and target; every reuse verifies hashes and probes a fresh extraction.
+Custom catalog/mirror overrides are rejected during acquisition.
+Supply failures report the requested identity before GUI/dependency preparation.
+Updates require Windows native installer/relocation/import acceptance and existing
+Mac packaging/libpython checks; author import smoke alone is insufficient.
+
 ## Maintained installation entries
 
 | Installation / acceptance owner | Included entry and boundary |
