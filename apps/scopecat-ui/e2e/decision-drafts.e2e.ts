@@ -227,7 +227,10 @@ test("Settings operator is shared across windows and retained after uncertain De
         await decision.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
       await testInfo.attach(`operator-decision-${width}`, {
-        body: await decision.screenshot({ fullPage: true }),
+        body: await decision.screenshot({
+          fullPage: true,
+          path: testInfo.outputPath(`operator-${width}.png`),
+        }),
         contentType: "image/png",
       });
     }
