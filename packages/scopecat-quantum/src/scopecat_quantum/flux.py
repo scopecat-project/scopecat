@@ -1,8 +1,8 @@
 """Explicit whole-record flux correction before device scaling/quantization.
 
 This is a selected correction, never a measured response or an automatic inverse.
-The v1 model acts on real voltage deltas about an independently reviewed physical
-DC baseline: y[o,n] = baseline[o] + FIR[o](sum_i C[o,i] * x[i,n]).
+The model acts on real voltage deltas about an independently reviewed physical
+DC baseline: y[o,n] = baseline[o] + FIR[o](IIR[o](sum_i C[o,i] * x[i,n])).
 It makes no assertion that this factorization describes every physical line.
 """
 
@@ -20,6 +20,7 @@ from scopecat.records.parameter import ScalarParameterValue
 from scopecat.records.parameter_revision import ParameterRevision, ParameterRevisionRef
 from scopecat.records.setup import SetupRevisionRef
 
+from scopecat_quantum.iir import SosIir
 from scopecat_quantum.pulses import (
     Constant,
     CosineFlatTop,
@@ -52,17 +53,33 @@ def flux_signal_id(signal: FluxSignal) -> str:
     return f"{kind}:{signal.owner.value}"
 
 
+class IirTailPolicy(BaseModel):
+    """Explicit IIR cutoff after zero-input samples, certified before truncation.
+
+    The bound is in final output volts, including FIR L1 gain. FIR then drains
+    completely and adds its usual baseline guard. Failure to settle is an error.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    zero_input_samples: Annotated[int, Field(strict=True, ge=0)]
+    max_residual_v: Annotated[Finite, Field(gt=0)]
+
+
 class FluxCorrection(BaseModel):
     """Immutable coefficients in ordered input/output coordinates, all in volts.
 
     Rows are physical outputs, columns are logical flux deltas. Coefficients and
     FIR taps are dimensionless. FIR tap k multiplies input n-k; explicit leading
-    zero taps represent delay. Zero delta history, complete FIR tail plus one
-    baseline guard sample, no carried state, no implicit latency compensation.
+    zero taps represent delay. Each complete shot starts at zero delta history.
+    V1 drains the complete FIR tail plus a baseline guard. V2 adds ordered IIR
+    sections before FIR and an explicit certified IIR cutoff policy. No implicit
+    latency compensation or state carried between shots.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    semantics_id: Literal["scopecat.flux.static-fir.v1"] = "scopecat.flux.static-fir.v1"
+    semantics_id: Literal[
+        "scopecat.flux.static-fir.v1", "scopecat.flux.static-iir-fir.v2"
+    ] = "scopecat.flux.static-fir.v1"
     implementation: Literal["software"] = "software"
     delta_unit: Literal["V"] = "V"
     input_reference_plane: AxisId
@@ -74,6 +91,14 @@ class FluxCorrection(BaseModel):
     fir_taps: tuple[tuple[Finite, ...], ...]
     baseline_v: tuple[Finite, ...]
     max_abs_voltage_v: tuple[Annotated[Finite, Field(gt=0)], ...]
+
+    # Omitted v1 fields stay omitted in serialized historical snapshots.
+    iir_filters: tuple[SosIir, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    iir_tail: IirTailPolicy | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_axes(self) -> FluxCorrection:
@@ -96,11 +121,27 @@ class FluxCorrection(BaseModel):
             for b, limit in zip(self.baseline_v, self.max_abs_voltage_v, strict=True)
         ):
             raise ValueError("DC baseline exceeds physical voltage limit")
+        if self.semantics_id == "scopecat.flux.static-fir.v1":
+            if self.iir_filters is not None or self.iir_tail is not None:
+                raise ValueError("IIR requires explicit static-iir-fir.v2 semantics")
+        elif (
+            self.iir_filters is None
+            or len(self.iir_filters) != no
+            or self.iir_tail is None
+            or any(f.sample_rate_hz != self.sample_rate_hz for f in self.iir_filters)
+        ):
+            raise ValueError(
+                "IIR requires one filter per output, matching sample rate and tail"
+            )
+        elif any(self.baseline_v):
+            raise ValueError("IIR v2 requires zero DC baseline")
         return self
 
     @property
     def tail_samples(self) -> int:
-        return max(map(len, self.fir_taps))
+        return max(map(len, self.fir_taps)) + (
+            self.iir_tail.zero_input_samples if self.iir_tail is not None else 0
+        )
 
 
 class FluxCorrectionSnapshot(BaseModel):
@@ -131,7 +172,7 @@ def resolve_flux_correction(
 ) -> FluxCorrectionSnapshot:
     """Freeze an explicitly selected JSON string cell from accepted parameters.
 
-    Store this small v1 coefficient payload in an ordinary string parameter;
+    Store this small coefficient payload in an ordinary string parameter;
     there is no independent active-calibration store or hidden lookup at render.
     """
     value = parameters.parameters.get(parameter_id)
@@ -255,6 +296,25 @@ def render_flux_waveforms(
         mixed = np.asarray(correction.correction_matrix, dtype=np.float64) @ np.asarray(
             ideal.buffers, dtype=np.float64
         )
+        if correction.iir_filters is not None:
+            assert correction.iir_tail is not None
+            cutoff = body_end + correction.iir_tail.zero_input_samples
+            for o, iir in enumerate(correction.iir_filters):
+                filtered, state = iir.filter_chunk(mixed[o, :cutoff])
+                residual = iir.remaining_output_bound(state) * sum(
+                    abs(tap) for tap in correction.fir_taps[o]
+                )
+                if (
+                    not math.isfinite(residual)
+                    or residual > correction.iir_tail.max_residual_v
+                ):
+                    raise ValueError(
+                        "IIR tail exceeds explicit residual voltage tolerance"
+                    )
+                mixed[o, :cutoff] = filtered
+                # Deliberate, certified approximation under the selected policy.
+                # The FIR drains fully from this cutoff; no hidden end clipping.
+                mixed[o, cutoff:] = 0
         buffers = tuple(
             np.convolve(cast("NDArray[np.float64]", mixed[o]), taps, mode="full")[
                 : plan.sample_count

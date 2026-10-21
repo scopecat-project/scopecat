@@ -258,3 +258,110 @@ def test_unsupported_filter_modes_and_units_are_not_silently_accepted(
 ) -> None:
     with pytest.raises(ValidationError):
         FluxCorrection.model_validate({**correction().model_dump(), **fields})
+
+
+def iir_correction(**changes: object) -> FluxCorrection:
+    from scopecat_quantum.iir import SosIir
+
+    iir = SosIir(sample_rate_hz=1_000_000_000, sections=((1, 0, 0, 1, -0.5, 0),))
+    return FluxCorrection.model_validate(
+        {
+            **correction().model_dump(),
+            "semantics_id": "scopecat.flux.static-iir-fir.v2",
+            "baseline_v": (0, 0),
+            "iir_filters": (iir, iir),
+            "iir_tail": {"zero_input_samples": 40, "max_residual_v": 1e-10},
+            **changes,
+        }
+    )
+
+
+def test_iir_fir_full_chain_tail_reset_and_snapshot() -> None:
+    from scopecat_quantum.iir import SosIir
+
+    iir = SosIir(sample_rate_hz=1_000_000_000, sections=((0, 1, 0, 1, -0.3, 0),))
+    c = iir_correction(iir_filters=(iir, iir))
+    frozen = snapshot(c)
+    plan = plan_flux_waveforms(
+        program(), snapshot=frozen, sample_rate_hz=c.sample_rate_hz
+    )
+    rendered = render_flux_waveforms(plan)
+    assert plan.sampled.sample_count == 3 + 40 + 3
+    for o in range(2):
+        raw = np.zeros(43)
+        raw[:3] = np.array([0.4, 0.4, -0.4]) * c.correction_matrix[o][0]
+        # Explicit independent first-order delay recurrence.
+        filtered = np.zeros(43)
+        for n in range(1, 43):
+            filtered[n] = raw[n - 1] + 0.3 * filtered[n - 1]
+        expected = np.convolve(filtered, c.fir_taps[o])
+        expected = np.pad(expected, (0, 46 - len(expected)))
+        np.testing.assert_allclose(rendered.buffers[o], expected, atol=1e-16)
+        assert rendered.buffers[o][-1] == 0
+    assert rendered.buffers[0][0] == 0  # causal delay is not silently canceled
+    np.testing.assert_array_equal(render_flux_waveforms(plan).buffers, rendered.buffers)
+    restored = FluxCorrectionSnapshot.model_validate_json(frozen.model_dump_json())
+    assert restored.fingerprint == frozen.fingerprint
+    assert snapshot(iir_correction()).fingerprint != frozen.fingerprint
+    assert "iir_filters" not in correction().model_dump()
+    assert "iir_tail" not in correction().model_dump()
+
+
+def test_iir_with_optional_identity_fir_and_tail_rejection() -> None:
+    c = iir_correction(fir_taps=((1,), (1,)))
+    plan = plan_flux_waveforms(
+        program(), snapshot=snapshot(c), sample_rate_hz=c.sample_rate_hz
+    )
+    assert render_flux_waveforms(plan).buffers[0][0] == 0.4
+    c = iir_correction(iir_tail={"zero_input_samples": 0, "max_residual_v": 1e-15})
+    plan = plan_flux_waveforms(
+        program(), snapshot=snapshot(c), sample_rate_hz=c.sample_rate_hz
+    )
+    with pytest.raises(ValueError, match="tail exceeds"):
+        render_flux_waveforms(plan)
+
+
+def test_iir_tail_check_includes_fir_gain() -> None:
+    c = iir_correction(
+        fir_taps=((100,), (1,)),
+        max_abs_voltage_v=(100, 100),
+        iir_tail={"zero_input_samples": 0, "max_residual_v": 0.5},
+    )
+    plan = plan_flux_waveforms(
+        program(), snapshot=snapshot(c), sample_rate_hz=c.sample_rate_hz
+    )
+    with pytest.raises(ValueError, match="tail exceeds"):
+        render_flux_waveforms(plan)
+
+
+def test_iir_combined_amplitude_and_nonfinite_rejected() -> None:
+    c = iir_correction(max_abs_voltage_v=(0.1, 0.1))
+    plan = plan_flux_waveforms(
+        program(), snapshot=snapshot(c), sample_rate_hz=c.sample_rate_hz
+    )
+    with pytest.raises(ValueError, match="physical voltage limit"):
+        render_flux_waveforms(plan)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"semantics_id": "scopecat.flux.static-fir.v1"},
+        {"iir_filters": ()},
+        {"iir_tail": None},
+        {"iir_tail": {"zero_input_samples": -1, "max_residual_v": 1e-6}},
+        {"iir_tail": {"zero_input_samples": 1, "max_residual_v": 0}},
+        {"baseline_v": (0.1, 0)},
+    ],
+)
+def test_iir_contract_rejections(changes: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        iir_correction(**changes)
+
+
+def test_iir_filter_sample_rate_rejected() -> None:
+    from scopecat_quantum.iir import SosIir
+
+    bad = SosIir(sample_rate_hz=1, sections=((1, 0, 0, 1, 0, 0),))
+    with pytest.raises(ValidationError, match="matching sample rate"):
+        iir_correction(iir_filters=(bad, bad))
