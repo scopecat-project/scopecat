@@ -542,3 +542,26 @@ def test_worker_context_overrides_inherited_default(
     assert environment["SCOPECAT_APPLICATION_ROOT"] == str(tmp_path / "selected")
     assert "SCOPECAT_DAEMON_URL" not in environment
     assert "SCOPECAT_APPLICATION_ROOT" not in author_worker_environment(None)
+
+
+def test_notebook_pin_requires_lifetime_protocol(tmp_path: Path) -> None:
+    import httpx2
+    from scopecat.daemon.client import DaemonClient
+
+    health = {
+        "status": "ok",
+        "project_id": "space",
+        "deployment_id": "deployment",
+        "project_name": "app",
+        "project_root": str(tmp_path),
+        "data_root": str(tmp_path / "data"),
+        "deployment_root": str(tmp_path / "state"),
+        "author_workspaces": {str(tmp_path): "author"},
+    }
+    transport = httpx2.MockTransport(lambda _: httpx2.Response(200, json=health))
+    with DaemonClient(
+        "http://localhost", workspace_id="author", transport=transport
+    ) as client:
+        with pytest.raises(ValueError, match="incompatible service"):
+            client.pin_session(project_id="space", source_root=tmp_path)
+        assert client.session_project_id is None

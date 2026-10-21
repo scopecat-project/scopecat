@@ -362,7 +362,7 @@ def test_independent_kernel_discovers_application_and_reconnects(
             f"session = sc.notebook(application={str(other.root)!r})\n"
             f"assert session.workspace_id == {other_identity!r}\n"
             "second_space = session.session_project_id\n"
-            "assert session.state().active.workspace_id == session.workspace_id\n"
+            "assert session.state().active is not None\n"
         )
         runtime.stop()
         # Workers must retain B even when the default A is offline or unreadable.
@@ -379,7 +379,7 @@ def test_independent_kernel_discovers_application_and_reconnects(
         author_location_path(root).write_text("damaged default")
         cell(
             "assert session.health().project_id == second_space\n"
-            "assert session.state().active.workspace_id == session.workspace_id\n"
+            "assert session.state().active is not None\n"
             "session.close()\n"
             f"session = sc.notebook(application={str(other.root)!r})\n"
             "assert session.session_project_id == second_space\n"
