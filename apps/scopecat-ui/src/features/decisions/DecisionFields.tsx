@@ -82,7 +82,7 @@ export function decisionFormValue(
 
 // The existing conditional-empty contract only hides nullable fields. Draft values remain
 // intact for switching back; command serialization explicitly clears inactive values.
-function inactiveField(
+export function inactiveField(
   name: string,
   field: DecisionField,
   value: Record<string, unknown>,

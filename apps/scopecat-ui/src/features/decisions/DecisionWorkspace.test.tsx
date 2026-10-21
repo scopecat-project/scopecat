@@ -18,6 +18,20 @@ import {
   type DecisionDraftView,
 } from "./decision-api";
 
+vi.mock("./DecisionEvidence", () => ({
+  DecisionEvidence: ({
+    disabled,
+    onPick,
+  }: {
+    disabled: boolean;
+    onPick: (value: number) => boolean;
+  }) => (
+    <button disabled={disabled} onClick={() => onPick(6500)}>
+      Pick evidence point
+    </button>
+  ),
+}));
+
 vi.mock("./decision-api", () => ({
   getProcedureSteps: vi.fn(),
   getDecisionProgress: vi.fn(),
@@ -75,6 +89,61 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("fills only an active declared field and rejects a stale request without submitting", async () => {
+    const step = waitingStep();
+    step.inputs = [
+      { kind: "analysis", subject: { kind: "run", run_id: "r" }, analysis_record_id: "a" },
+    ];
+    step.interpretation_request!.structure = {
+      type: "object",
+      fields: {
+        outcome: { type: "literal", values: ["selected", "unsure"] },
+        frequency: { type: "union", variants: [{ type: "float" }, { type: "null" }] },
+      },
+    };
+    step.interpretation_request!.response_template = { outcome: "unsure", frequency: null };
+    step.interpretation_request!.metadata = {
+      point_binding: {
+        input: 0,
+        output: "trace",
+        layer: "data",
+        column: "frequency",
+        field: "frequency",
+        unit: "MHz",
+      },
+      field_constraints: {
+        frequency: {
+          required_when: { field: "outcome", value: "selected" },
+          empty_otherwise: true,
+        },
+      },
+    };
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [step],
+    });
+    const client = renderWorkspace();
+    expect(await screen.findByRole("button", { name: "Pick evidence point" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("outcome"), {
+      target: { value: JSON.stringify("selected") },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pick evidence point" }));
+    expect(screen.getByLabelText("frequency")).toHaveValue("6500");
+    expect(submitProcedureInput).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "6500.25" } });
+    vi.mocked(getProcedureSteps).mockResolvedValue({
+      procedure_run_id: "procedure-1",
+      items: [{ ...step, revision: step.revision + 1 }],
+    });
+    await client.invalidateQueries({ queryKey: ["procedure-decision-steps", "procedure-1"] });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Pick evidence point" })).toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pick evidence point" }));
+    expect(screen.getByLabelText("frequency")).toHaveValue("6500.25");
+    expect(submitProcedureInput).not.toHaveBeenCalled();
+  });
+
   it("snapshots the default operator before an untouched template's uncertain submission", async () => {
     vi.mocked(readDecisionDraft).mockResolvedValueOnce({
       draft: null,
@@ -611,6 +680,7 @@ function renderWorkspace({ daemonUnavailable = false } = {}) {
       <DecisionWorkspace daemonUnavailable={daemonUnavailable} />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 function waitingProcedure(): ProcedureRun {

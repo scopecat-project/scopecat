@@ -1,3 +1,10 @@
+import { useState } from "react";
+import {
+  bindingProblem,
+  boundPointValue,
+  type PointBinding,
+  type FigurePoint,
+} from "./point-binding";
 import { useQuery } from "@tanstack/react-query";
 import type { ProcedureStepAttempt } from "../../api-contract";
 import { errorMessage } from "../../lib/presentation";
@@ -15,7 +22,18 @@ import { isRecord } from "./DecisionFields";
 
 type Evidence = Extract<ProcedureStepAttempt["inputs"][number], { kind: "analysis" }>;
 
-export function DecisionEvidence({ input }: { input: Evidence }) {
+export function DecisionEvidence({
+  input,
+  binding,
+  disabled = false,
+  onPick,
+}: {
+  input: Evidence;
+  binding?: PointBinding;
+  disabled?: boolean;
+  onPick?: (value: number) => boolean;
+}) {
+  const [selected, setSelected] = useState<FigurePoint>();
   const { subject, analysis_record_id: id } = input;
   const analysis = useQuery({
     queryKey: ["decision-evidence", subject, id],
@@ -37,7 +55,17 @@ export function DecisionEvidence({ input }: { input: Evidence }) {
       <h3 className="text-sm">{analysis.data?.title ?? id}</h3>
       {analysis.isPending && <p>Loading evidence…</p>}
       {analysis.isError && <p role="alert">Evidence unavailable: {errorMessage(analysis.error)}</p>}
-      {analysis.data && (
+      {analysis.data && analysis.data.id !== id && (
+        <p role="alert">
+          The evidence identity changed. Reload the exact request before selecting.
+        </p>
+      )}
+      {binding &&
+        analysis.data &&
+        !analysis.data.outputs.some(
+          (output) => output.id === binding.output && output.kind === "figure",
+        ) && <p role="alert">The declared figure is unavailable.</p>}
+      {analysis.data && analysis.data.id === id && (
         <>
           {analysis.data.outputs
             .filter((output) => output.kind === "fact")
@@ -75,10 +103,29 @@ export function DecisionEvidence({ input }: { input: Evidence }) {
             .map((output) => (
               <section key={output.id} className="min-w-0">
                 <h4 className="text-sm font-semibold">{output.title}</h4>
+                {binding?.output === output.id && bindingProblem(binding, output) && (
+                  <p role="alert">{bindingProblem(binding, output)}</p>
+                )}
+                {binding?.output === output.id && !bindingProblem(binding, output) && (
+                  <p className="text-xs text-text-dim">
+                    {disabled
+                      ? "Select the applicable judgment before picking a point."
+                      : `Click one plotted point to fill ${binding.field}${binding.unit ? ` (${binding.unit})` : ""}; then adjust and submit.`}
+                  </p>
+                )}
                 <AnalysisOutputView
                   output={output}
                   getArtifactDownload={download}
                   showMetadata={false}
+                  selectedPoint={!disabled && binding?.output === output.id ? selected : undefined}
+                  onPoint={
+                    !disabled && binding?.output === output.id && !bindingProblem(binding, output)
+                      ? (point) => {
+                          const value = boundPointValue(binding, output, point);
+                          if (value !== undefined && onPick?.(value)) setSelected(point);
+                        }
+                      : undefined
+                  }
                 />
               </section>
             ))}

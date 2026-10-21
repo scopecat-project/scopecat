@@ -13,6 +13,7 @@ export function EChart({
   pointCount,
   seriesLabels,
   seriesCount,
+  onPoint,
 }: {
   ariaLabel: string;
   height: number;
@@ -20,6 +21,7 @@ export function EChart({
   pointCount: number;
   seriesLabels: string[];
   seriesCount: number;
+  onPoint?: (point: { seriesId: string; dataIndex: number }) => void;
 }) {
   const descriptionId = useId();
 
@@ -27,7 +29,7 @@ export function EChart({
     <>
       <div aria-describedby={descriptionId} aria-label={ariaLabel} role="img">
         <Suspense fallback={<div aria-hidden="true" style={{ height }} />}>
-          <EChartRuntime height={height} option={option} />
+          <EChartRuntime height={height} option={option} onPoint={onPoint} />
         </Suspense>
       </div>
       <span className="sr-only" id={descriptionId}>

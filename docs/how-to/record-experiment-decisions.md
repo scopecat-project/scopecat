@@ -130,6 +130,40 @@ field can declare `minimum`, `maximum`, `required_when: {field, value}` and
 hints do not enforce scientific validity for Python or other clients; validate
 meaning inside the procedure and retain a new question when correction is needed.
 
+## Fill a numeric draft from one evidence point
+
+An interpretation request can opt into a single explicit point binding in its
+existing presentation metadata. For the synthetic procedure lesson, the second
+input is the retained analysis publication; its `trace` figure has a `data` layer
+plotting the `frequency` column in MHz:
+
+```python
+metadata={
+    "point_binding": {
+        "input": 1,  # zero-based index in this request's inputs
+        "output": "trace",
+        "layer": "data",
+        "column": "frequency",
+        "field": "frequency_mhz",
+        "unit": "MHz",
+    },
+}
+```
+
+Declare every property, including `unit` (`None` for a unitless column). The
+field must be a supported numeric response field, and the column must be an
+axis of the declared layer with the exact declared unit. Names and labels never
+infer a binding or unit conversion. Invalid declarations leave the ordinary
+manual form available and explain why point selection is unavailable.
+
+Choose the applicable judgment first if the field is conditional, then click
+one displayed point. The editor highlights it and fills only that draft field
+from the retained preview data. Adjust the value before **Submit and continue**;
+clicking never submits or resumes work. Selection uses the exact analysis input
+and the current request version. A stale request, conflicting draft or different
+evidence record cannot receive a point. Only displayed preview points are
+selectable; multi-point selection and drag boundaries are not supported.
+
 ## 在普通作者会话中回答已查看的问题
 
 先取得待答对象，再检查问题和证据；不要等输入完答案才重新选择“最新问题”。
