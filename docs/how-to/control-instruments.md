@@ -117,6 +117,23 @@ manual sessions share its ownership, even when experiments give it different
 logical names. Retire a device from the device page when it is no longer used;
 its execution records remain available.
 
+## 在设备页发现与调用能力
+
+设备页按驱动已有契约展示属性、operation 和 acquisition。查看页面或展开帮助不会连接
+设备或发送设备命令。没有声明能力时，先查驱动文档或版本；不要靠 Connect 探索未声明的功能。
+
+- **Invoke** 调用指定 operation。普通类型参数仍需填完整，且本页必须持有可用会话。
+- 需要 **payload** 的 operation 仍显示名称与说明，但不提供 Invoke 或 payload 编辑器。
+  展开“如何准备与调用”，按契约在作者 Python 程序中准备 payload，使用已有类型化客户端
+  或实验准备流程。页面提供上方 `lab.devices.open(...)` 工作流和下方作者准备流程的链接。
+- **Collect** 调用指定 acquisition。它可能发起新采集，也可能只收集既有执行结果，
+  以该项契约说明为准。没有说明时先查驱动文档；按钮名和方法名不能证明采集时序。
+  Collect 不会自动准备 payload 或替你调用另一个 operation。
+
+切换到 Python 或实验前，先结束页面手动会话，等待其他运行完成清理。设备占用、隔离、
+连接不可用和正在交互时的保护仍然适用；查看能力不会获得设备控制权。
+此页没有新增持续输出调试动作，也不承诺 Disconnect 或退出后归零。
+
 ## Update driver source while the application is running
 
 Save your driver changes, finish device sessions and wait for affected experiments

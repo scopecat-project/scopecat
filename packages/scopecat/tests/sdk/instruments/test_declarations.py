@@ -337,6 +337,39 @@ def test_payload_operation_arguments_compile_without_python_wrappers() -> None:
     assert upload.arguments[0].value_type.atom == Payload(schema_id="test.payload/v1")
 
 
+def test_prepared_capability_guidance_survives_compilation() -> None:
+    @result_schema
+    class Results:
+        signal = scalar_result(dtype="float64")
+
+    @instrument_interface("test.prepared/v1")
+    class PreparedInterface(Protocol):
+        @operation(description="Prepare the payload in the author program first.")
+        def execute(
+            self,
+            program: Annotated[bytes, argument(payload_schema_id="test.program/v1")],
+        ) -> None: ...
+
+        @acquisition(
+            results=Results,
+            description="Read existing results; do not start a new execution.",
+        )
+        def sample(self) -> None: ...
+
+    spec = compile_interface(PreparedInterface).spec
+    assert (
+        spec.operations[0].description
+        == "Prepare the payload in the author program first."
+    )
+    assert spec.operations[0].arguments[0].value_type.atom == Payload(
+        schema_id="test.program/v1"
+    )
+    assert (
+        spec.acquisitions[0].description
+        == "Read existing results; do not start a new execution."
+    )
+
+
 def test_literal_properties_compile_choices() -> None:
     @instrument_interface("test.mode/v1")
     class Mode(Protocol):

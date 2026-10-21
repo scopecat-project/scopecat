@@ -212,7 +212,7 @@ function InterfaceEndpoint({
   onOperationEdit: (target: InstrumentOperationTarget) => void;
 }) {
   const properties = member.properties ?? [];
-  const operations = guiSafeOperations(member.operations ?? []);
+  const operations = member.operations ?? [];
   const hasLocalControls =
     properties.length > 0 || operations.length > 0 || (member.acquisitions ?? []).length > 0;
   return (
@@ -258,6 +258,9 @@ function InterfaceEndpoint({
               {operations.map((operation) => {
                 const target = { interfaceId, componentPath, operation };
                 const key = operationKey(target);
+                if (requiresPayload(operation)) {
+                  return <PreparedOperation key={operation.id} operation={operation} />;
+                }
                 return (
                   <OperationControl
                     key={operation.id}
@@ -298,6 +301,12 @@ function InterfaceEndpoint({
         </section>
       )}
 
+      {!hasLocalControls && (member.components ?? []).length === 0 && (
+        <p className="px-[13px] py-2 text-xs text-text-dim">
+          {componentPath.length > rootDepth && <code>{componentPath.join(" / ")} — </code>}
+          此接口未声明属性、operation 或 acquisition。请查看驱动文档或检查驱动版本。
+        </p>
+      )}
       {(member.components ?? []).map((child) => (
         <InterfaceEndpoint
           key={child.id}
@@ -567,9 +576,11 @@ function AcquisitionControl({
           <strong className="text-xs text-text-soft">
             {acquisition.label ?? titleCase(acquisition.id)}
           </strong>
-          {acquisition.description && (
-            <p className={controlDescription}>{acquisition.description}</p>
-          )}
+          <p className={controlDescription}>
+            {acquisition.description
+              ? `采集契约：${acquisition.description}`
+              : "此 acquisition 未说明是否发起新采集或收集既有结果；调用前请查阅驱动文档。"}
+          </p>
         </div>
         {results.length > 0 && (
           <div className="grid max-w-80 flex-none justify-items-end gap-1.5">
@@ -718,10 +729,52 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
   );
 }
 
-function guiSafeOperations(operations: InstrumentOperation[]): InstrumentOperation[] {
-  return operations.filter(
-    (operation) =>
-      !(operation.arguments ?? []).some((argument) => argument.value_type.type === "payload"),
+function requiresPayload(operation: InstrumentOperation): boolean {
+  return (operation.arguments ?? []).some((argument) => argument.value_type.type === "payload");
+}
+
+function PreparedOperation({ operation }: { operation: InstrumentOperation }) {
+  return (
+    <section className="border-t border-line px-3 py-2.5">
+      <strong className="text-xs text-text-soft">
+        {operation.label ?? titleCase(operation.id)}
+      </strong>
+      {operation.description && <p className={controlDescription}>{operation.description}</p>}
+      <p className={controlDescription}>
+        需要作者工作流：此 operation 需要已准备的 payload，本面板不能直接 Invoke。
+      </p>
+      <details className="mt-2 text-xs text-text-dim">
+        <summary className="cursor-pointer">如何准备与调用</summary>
+        <p className={controlDescription}>
+          在作者 Python 程序中按驱动契约准备 payload，再通过已有的类型化客户端或实验准备流程调用。
+          使用 Python 手动会话前，先结束本页会话并等待其他运行释放设备；资源 lease 检查仍然适用。
+        </p>
+        <AuthorWorkflowLinks />
+      </details>
+    </section>
+  );
+}
+
+export function AuthorWorkflowLinks() {
+  return (
+    <p className="flex flex-wrap gap-3 text-xs">
+      <a
+        className="text-accent underline"
+        href="https://scopecat-project.github.io/scopecat/how-to/control-instruments/#use-a-configured-device-now"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Python 设备会话（lab.devices.open）
+      </a>
+      <a
+        className="text-accent underline"
+        href="https://scopecat-project.github.io/scopecat/how-to/control-instruments/#return-from-manual-work-to-an-experiment"
+        target="_blank"
+        rel="noreferrer"
+      >
+        作者程序准备与提交
+      </a>
+    </p>
   );
 }
 

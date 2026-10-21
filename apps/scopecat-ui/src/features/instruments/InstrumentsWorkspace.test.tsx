@@ -792,6 +792,101 @@ describe("instrument workspace", () => {
     expect(applyInstrumentState).not.toHaveBeenCalled();
   });
 
+  it.each(["available", "active", "quarantined", "unavailable"] as const)(
+    "keeps payload-only nested capabilities discoverable without I/O when %s",
+    async (availability) => {
+      const view = instrumentWithOperations();
+      const original = view.description!.interfaces![0]!;
+      const payload = original.operations!.find((operation) => operation.id === "upload_waveform")!;
+      view.availability = availability;
+      view.owner_kind = availability === "active" ? "run" : null;
+      view.description!.interfaces = [
+        {
+          id: original.id,
+          label: "Program device",
+          components: [{ id: "channel", label: "Program channel", operations: [payload] }],
+        },
+      ];
+      mockInventory({
+        setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+        problems: [],
+        items: [view],
+      });
+      renderWorkspace();
+      expect(await screen.findByText("Upload waveform")).toBeVisible();
+      expect(screen.getByText("Program channel")).toBeVisible();
+      fireEvent.click(screen.getByText("如何准备与调用"));
+      expect(screen.getByText(/在作者 Python 程序中按驱动契约准备 payload/)).toBeVisible();
+      expect(screen.getAllByRole("link", { name: /Python 设备会话/ })[0]).toHaveAttribute(
+        "href",
+        "https://scopecat-project.github.io/scopecat/how-to/control-instruments/#use-a-configured-device-now",
+      );
+      expect(screen.queryByRole("button", { name: /Invoke/ })).not.toBeInTheDocument();
+      expect(openInstrumentSession).not.toHaveBeenCalled();
+      expect(readInstrumentState).not.toHaveBeenCalled();
+      expect(invokeInstrumentOperation).not.toHaveBeenCalled();
+      expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
+      expect(applyInstrumentState).not.toHaveBeenCalled();
+      expect(testDeviceConnection).not.toHaveBeenCalled();
+      const reasons = {
+        available: /本页尚未连接/,
+        active: /设备正被占用/,
+        quarantined: /设备状态不确定/,
+        unavailable: /设备不可用。请先处理/,
+      };
+      expect(screen.getByText(reasons[availability])).toBeVisible();
+    },
+  );
+
+  it.each([false, true])(
+    "explains empty capability declarations (interface present: %s)",
+    async (hasInterface) => {
+      const view = instrument();
+      view.description!.interfaces = hasInterface
+        ? [{ id: "test.empty/v1", label: "Empty interface" }]
+        : [];
+      mockInventory({
+        setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+        problems: [],
+        items: [view],
+      });
+      renderWorkspace();
+      expect(
+        await screen.findByText(hasInterface ? /此接口未声明属性/ : /此设备未声明交互能力/),
+      ).toBeVisible();
+      expect(openInstrumentSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["sample", "仅收集上一次执行的结果；请先通过作者程序完成执行。"],
+    ["collect_previous", "发起一次新采集并返回结果。"],
+    ["execute", undefined],
+  ])(
+    "uses acquisition descriptions without inferring behavior from %s",
+    async (id, description) => {
+      const view = instrument();
+      const acquisition = view.description!.interfaces![0]!.acquisitions![0]!;
+      acquisition.id = id!;
+      acquisition.description = description;
+      mockInventory({
+        setup: { revision_id: "lab-default", content_hash: "sha256:active" },
+        problems: [],
+        items: [view],
+      });
+      renderWorkspace();
+      expect(
+        await screen.findByText(
+          description ? `采集契约：${description}` : /此 acquisition 未说明是否发起新采集/,
+        ),
+      ).toBeVisible();
+      expect(screen.getByRole("button", { name: "Collect" })).toBeDisabled();
+      expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
+      expect(invokeInstrumentOperation).not.toHaveBeenCalled();
+      expect(openInstrumentSession).not.toHaveBeenCalled();
+    },
+  );
+
   it("fills typed operation arguments locally and invokes once outside staged apply", async () => {
     const withOperations = instrumentWithOperations();
     mockInventory({
@@ -807,7 +902,7 @@ describe("instrument workspace", () => {
 
     await screen.findByText("Configure trigger");
     expect(screen.getByRole("button", { name: "Invoke Configure trigger" })).toBeDisabled();
-    expect(screen.queryByText("Upload waveform")).not.toBeInTheDocument();
+    expect(screen.getByText("Upload waveform")).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Invoke Upload waveform" }),
     ).not.toBeInTheDocument();
@@ -815,6 +910,10 @@ describe("instrument workspace", () => {
     expect(screen.queryByText("waveform/v1")).not.toBeInTheDocument();
 
     await connectInstrument();
+    expect(screen.getByText("Upload waveform")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Invoke Upload waveform" }),
+    ).not.toBeInTheDocument();
     fireEvent.change(await screen.findByRole("combobox", { name: /Enable correction/ }), {
       target: { value: "true" },
     });
