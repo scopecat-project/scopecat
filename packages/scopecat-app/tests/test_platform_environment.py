@@ -24,7 +24,9 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path: Path):
     # Qualify the runner's installed interpreter explicitly: this checks isolated
     # environments and native imports, not uv's release-dependent download catalog.
     # A newly released setup-python patch may not yet have a managed uv build.
-    base_python = Path(sys.executable)
+    # The pytest venv represents the application. Its underlying runner Python
+    # is outside that venv, including Windows where python.exe is not a symlink.
+    base_python = Path(getattr(sys, "_base_executable", sys.executable))
     root = Path(__file__).resolve().parents[3]
     payload = tmp_path / "payload"
     wheels = payload / "wheels"
