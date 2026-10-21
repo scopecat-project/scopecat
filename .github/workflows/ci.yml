@@ -115,6 +115,12 @@ jobs:
         run: >-
           uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0
           packages/scopecat-app/tests/test_windows_native_host.py
+      - name: Check Windows author application discovery
+        if: runner.os == 'Windows'
+        run: >-
+          uv run --locked --no-default-groups --group platform-smoke pytest
+          -c pyproject.toml -q -n 0
+          packages/scopecat-server/tests/test_application_locator.py
       - name: Verify release projection and target names
         run: >-
           uv run --locked --no-default-groups --group platform-smoke pytest -q -n 0

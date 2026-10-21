@@ -60,7 +60,7 @@ class AuthorWorkspaceServices:
                     self.unavailable[item.id] = str(error)
 
     def _load(self, item: LocalAuthorWorkspace) -> AuthorRevisionService:
-        binding = load_runtime_binding(item.root)
+        binding = load_runtime_binding(item.root, target=self.root)
         if (binding.data_root, binding.deployment_root) != (
             self.binding.data_root,
             self.binding.deployment_root,
@@ -72,6 +72,7 @@ class AuthorWorkspaceServices:
             item.root,
             self.store,
             workspace_id=item.id,
+            application_root=self.root,
             workers=self.workers,
             python=item.python,
         )

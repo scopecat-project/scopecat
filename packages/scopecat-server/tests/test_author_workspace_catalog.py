@@ -71,7 +71,8 @@ def test_catalog_reports_qualified_rejected_and_retained_unbound_sources_readonl
     rejected = qualified.model_copy(
         update={
             "id": "rejected",
-            "name": "Wrong environment",
+            "name": "Unavailable source",
+            "root": tmp_path / "missing-source",
             "python": tmp_path / "missing-python",
         }
     )

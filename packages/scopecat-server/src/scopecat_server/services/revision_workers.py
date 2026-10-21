@@ -27,6 +27,7 @@ from scopecat_server.retained_request import (
 )
 from scopecat_server.validation_process import terminate_validation_process_tree
 from scopecat_server.worker_diagnostics import diagnostic_excerpt
+from scopecat_server.worker_environment import author_worker_environment
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class AuthorWorkerBinding:
 
     workspace: Path
     python: Path
+    application_root: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,7 @@ class _Worker:
                     else ["--validate-serve", str(code_root), revision]
                 ),
             ],
+            env=author_worker_environment(binding.application_root),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self.stderr,

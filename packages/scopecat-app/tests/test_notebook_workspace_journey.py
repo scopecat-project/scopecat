@@ -277,3 +277,119 @@ def test_unregistered_workspace_keeps_kernel_hint(
         )
     with pytest.raises(RuntimeError, match="Select Kernel"):
         notebook_module.notebook(root)
+
+
+def test_independent_kernel_discovers_application_and_reconnects(
+    tmp_path: Path, author_kernel_python: Path
+) -> None:
+    """An editor-launched kernel needs neither an injected URL nor four paths."""
+    import os
+
+    from scopecat_app.application_runtime import ApplicationRuntime
+
+    root = tmp_path / "author"
+    create_project(root)
+    before = {str(path.relative_to(root)) for path in root.rglob("*")}
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>application</html>")
+    runtime = ApplicationRuntime(tmp_path / "application")
+    runtime.configure(static_dir=gui)
+    identity = runtime.register_source(root, python=author_kernel_python)
+    assert {str(path.relative_to(root)) for path in root.rglob("*")} == before
+    assert not (root / "scopecat.runtime.toml").exists()
+    manager = KernelManager(kernel_name="python3")
+    assert manager.kernel_spec is not None
+    manager.kernel_spec.argv = [
+        str(author_kernel_python),
+        "-m",
+        "ipykernel_launcher",
+        "-f",
+        "{connection_file}",
+    ]
+    environment = dict(os.environ)
+    for name in (
+        "SCOPECAT_DAEMON_URL",
+        "SCOPECAT_APPLICATION_ROOT",
+        "PYTHONPATH",
+        "PYTHONHOME",
+    ):
+        environment.pop(name, None)
+    from scopecat.application_locator import author_location_path
+
+    saved_default = author_location_path(root).read_bytes()
+    other = ApplicationRuntime(tmp_path / "other-application")
+    other.configure(static_dir=gui)
+    other_identity = other.register_source(root, python=author_kernel_python)
+    assert other.source(root) == other_identity
+    assert author_location_path(root).read_bytes() == saved_default
+    runtime.start()
+    other.start()
+    try:
+        manager.start_kernel(cwd=str(root), env=environment)
+        client = manager.blocking_client()
+        client.start_channels()
+        client.wait_for_ready(timeout=30)
+
+        def cell(code: str) -> None:
+            response = client.execute_interactive(code, timeout=120)
+            assert response["content"]["status"] == "ok", response
+
+        cell(
+            "import scopecat as sc\n"
+            "session = sc.notebook()\n"
+            f"assert session.workspace_id == {identity!r}\n"
+            "revision = session.state().active\n"
+            "session.close()\n"
+        )
+        runtime.stop()
+        cell(
+            "try:\n"
+            "    sc.notebook()\n"
+            "except RuntimeError:\n"
+            "    pass\n"
+            "else:\n"
+            "    raise AssertionError('offline application must fail')\n"
+        )
+        runtime.start()
+        cell(
+            "session = sc.notebook()\n"
+            f"assert session.workspace_id == {identity!r}\n"
+            "assert session.state().active == revision\n"
+            "session.close()\n"
+        )
+        cell(
+            f"session = sc.notebook(application={str(other.root)!r})\n"
+            f"assert session.workspace_id == {other_identity!r}\n"
+            "second_space = session.session_project_id\n"
+            "assert session.state().active is not None\n"
+        )
+        runtime.stop()
+        # Workers must retain B even when the default A is offline or unreadable.
+        cell(
+            "from my_experiment.teaching import teaching_rabi\n"
+            "from my_experiment.setup import open_parameters\n"
+            "params = open_parameters(session)\n"
+            "prepared = session.prepare(teaching_rabi(), parameters=params)\n"
+            "job = prepared.run()\n"
+            "job.wait(timeout=60)\n"
+            "assert job.result().measurements()\n"
+        )
+        # Default preference changes never redirect the already-open session.
+        author_location_path(root).write_text("damaged default")
+        cell(
+            "assert session.health().project_id == second_space\n"
+            "assert session.state().active is not None\n"
+            "session.close()\n"
+            f"session = sc.notebook(application={str(other.root)!r})\n"
+            "assert session.session_project_id == second_space\n"
+            "session.close()\n"
+        )
+        author_location_path(root).write_bytes(saved_default)
+        client.stop_channels()
+    finally:
+        if manager.has_kernel:
+            manager.shutdown_kernel(now=True)
+        runtime.stop()
+        other.stop()
+    assert not (root / ".scopecat").exists()

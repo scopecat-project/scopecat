@@ -150,9 +150,11 @@ class AuthorProject(DaemonClient):
         from scopecat.author_workspaces import author_workspace_id
 
         identity = (
-            author_workspace_id(project_root)
+            workspace_id
+            if workspace_id is not None
+            else author_workspace_id(project_root)
             if project_root is not None
-            else workspace_id
+            else None
         )
         if identity is None:
             raise ValueError(
@@ -487,11 +489,16 @@ class AuthorProject(DaemonClient):
     def reopen(self, receipt: str | Path) -> AuthorJob:
         """Read a saved job receipt; recovery is read-only and never resubmits."""
         path = Path(receipt).resolve()
-        return AuthorJob(
-            self,
-            path,
-            LaunchRequest.model_validate_json(path.read_text(encoding="utf-8")),
-        )
+        request = LaunchRequest.model_validate_json(path.read_text(encoding="utf-8"))
+        if self.session_project_id is not None and (
+            self.receipts is None
+            or not path.is_relative_to(self.receipts)
+            or request.workspace_id != self.workspace_id
+        ):
+            raise ValueError(
+                "Receipt does not belong to this session's store and source"
+            )
+        return AuthorJob(self, path, request)
 
     @override
     def _request(
@@ -1364,6 +1371,11 @@ class AuthorJob:
 
     def reconnect(self, session: AuthorProject) -> AuthorJob:
         """Attach this receipt to a new open session without submission."""
+        if (
+            self.client.session_project_id != session.session_project_id
+            or self.client.workspace_id != session.workspace_id
+        ):
+            raise ValueError("Cannot reconnect a job to another data space or source")
         return session.reopen(self.receipt)
 
     def recover(self, *, timeout: float | None = None) -> ProcedureRun | None:

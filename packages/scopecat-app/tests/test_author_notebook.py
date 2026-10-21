@@ -31,6 +31,7 @@ def laboratory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Laboratory:
     )
     store = SimpleNamespace(
         home=home,
+        root=home / "instance",
         lock=FileLock(home / "services.lock"),
         installation=lambda: service,
         source=lambda root: "source-id" if root == source else None,
@@ -56,6 +57,7 @@ def test_launch_keeps_user_python_when_application_changes(
 
     def start(command, *, cwd, env):
         assert cwd == source
+        assert env["SCOPECAT_APPLICATION_ROOT"] == str(home / "instance")
         assert command[:4] == [python, "-I", "-m", "jupyterlab"]
         assert "--no-browser" in command
         assert not {"PYTHONPATH", "PYTHONHOME", "SCOPECAT_DAEMON_URL"} & env.keys()

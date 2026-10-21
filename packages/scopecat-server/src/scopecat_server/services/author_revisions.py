@@ -47,9 +47,11 @@ class AuthorRevisionService:
         store: SQLiteProjectStore,
         *,
         workspace_id: str,
+        application_root: Path | None = None,
         workers: RevisionWorkers | None = None,
         python: Path | None = None,
     ) -> None:
+        self.application_root = application_root
         self.python = python or Path(sys.executable).absolute()
         self.workspace_id = workspace_id
         self._bindings: dict[str, AuthorWorkerBinding] = {}
@@ -92,7 +94,7 @@ class AuthorRevisionService:
         )
 
     def _interpreters(self) -> tuple[Path, ...]:
-        for item in local_author_workspaces(self.root):
+        for item in local_author_workspaces(self.root, target=self.application_root):
             if item.id == self.workspace_id:
                 return (item.python, *item.retained_pythons)
         return (self.python,)
@@ -101,7 +103,8 @@ class AuthorRevisionService:
         python = self._interpreters()[0]
         bundle = capture(self.root, python)
         self._bindings.setdefault(
-            bundle.manifest.ref.content_hash, AuthorWorkerBinding(self.root, python)
+            bundle.manifest.ref.content_hash,
+            AuthorWorkerBinding(self.root, python, self.application_root),
         )
         return bundle
 
@@ -111,7 +114,9 @@ class AuthorRevisionService:
 
     @property
     def worker_binding(self) -> AuthorWorkerBinding:
-        return AuthorWorkerBinding(self.root, self._interpreters()[0])
+        return AuthorWorkerBinding(
+            self.root, self._interpreters()[0], self.application_root
+        )
 
     def binding_for(self, ref: AuthorRevisionRef) -> AuthorWorkerBinding:
         if ref.content_hash in self._bindings:
@@ -125,7 +130,7 @@ class AuthorRevisionService:
             except (OSError, ValueError) as error:
                 failures.append(str(error))
                 continue
-            binding = AuthorWorkerBinding(self.root, python)
+            binding = AuthorWorkerBinding(self.root, python, self.application_root)
             self._bindings[ref.content_hash] = binding
             return binding
         raise ValueError(
@@ -245,7 +250,11 @@ class AuthorRevisionService:
                 raise AuthorValidationCancelled("Author preparation cancelled")
             progress("materializing captured source")
             code_root = materialize_sources(
-                bundle, load_runtime_binding(self.root).materialization_root / "code"
+                bundle,
+                load_runtime_binding(
+                    self.root, target=self.application_root
+                ).materialization_root
+                / "code",
             )
             self.workers.publish_validated(
                 self.binding_for(bundle.manifest.ref),

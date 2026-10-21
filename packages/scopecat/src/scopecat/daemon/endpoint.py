@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from scopecat.application_locator import read_author_location, read_data_identity
 from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.health import DaemonHealth
 from scopecat.runtime_binding import load_runtime_binding
@@ -49,18 +50,23 @@ class DaemonEndpointRecord(BaseModel):
         return (self.state_root or self.data_root) / DAEMON_RECORD_NAME
 
 
-def daemon_record_path(project_root: str | Path) -> Path:
+def daemon_record_path(
+    project_root: str | Path, *, target: str | Path | None = None
+) -> Path:
     """Return the single dynamic endpoint record for ``project_root``."""
 
-    return load_runtime_binding(project_root).coordination_root / DAEMON_RECORD_NAME
+    return (
+        load_runtime_binding(project_root, target=target).coordination_root
+        / DAEMON_RECORD_NAME
+    )
 
 
 def read_daemon_endpoint_record(
-    project_root: str | Path,
+    project_root: str | Path, *, target: str | Path | None = None
 ) -> DaemonEndpointRecord | None:
     """Read a project's endpoint record without guessing a fallback address."""
 
-    path = daemon_record_path(project_root)
+    path = daemon_record_path(project_root, target=target)
     try:
         return DaemonEndpointRecord.model_validate_json(
             path.read_text(encoding="utf-8")
@@ -77,17 +83,18 @@ def resolve_daemon_endpoint(
     project_root: str | Path,
     *,
     explicit: str | None = None,
+    target: str | Path | None = None,
 ) -> str:
     """Resolve explicit, environment, then project-record endpoint priority."""
 
     root = Path(project_root).resolve()
-    binding = load_runtime_binding(root)
+    binding = load_runtime_binding(root, target=target)
     endpoint = explicit or environ.get(DAEMON_URL_ENV)
     if endpoint is not None:
-        verify_daemon_binding(endpoint, root)
+        verify_daemon_binding(endpoint, root, target=target)
         return endpoint
 
-    record = read_daemon_endpoint_record(root)
+    record = read_daemon_endpoint_record(root, target=target)
     if record is None:
         raise DaemonEndpointError(
             f"no daemon endpoint for {root}; start it with 'scopecat start'"
@@ -95,27 +102,42 @@ def resolve_daemon_endpoint(
     if (
         record.data_root.resolve() != binding.data_root
         or record.deployment_root.resolve() != binding.deployment_root
-        or record.record_path != daemon_record_path(root)
+        or record.record_path != daemon_record_path(root, target=target)
     ):
         raise DaemonEndpointError(
             f"daemon record belongs to another project binding: {record.project_root}"
         )
-    verify_daemon_binding(record.base_url, root)
+    verify_daemon_binding(record.base_url, root, target=target)
     return record.base_url
 
 
-def verify_daemon_binding(endpoint: str, root: Path) -> None:
+def verify_daemon_binding(
+    endpoint: str, root: Path, *, target: str | Path | None = None
+) -> None:
     """Check explicit endpoint overrides against the local workspace binding."""
-    binding = load_runtime_binding(root)
+    binding = load_runtime_binding(root, target=target)
     try:
         with httpx2.Client(timeout=5, trust_env=False) as client:
             response = client.get(f"{endpoint.rstrip('/')}/api/v1/health")
             response.raise_for_status()
             health = DaemonHealth.model_validate(response.json())
+        selected = target or environ.get("SCOPECAT_APPLICATION_ROOT")
+        location = read_author_location(
+            root, Path(selected).resolve() if selected else None
+        )
+        expected_identity = (
+            location.project_id
+            if location is not None
+            else read_data_identity(binding.data_root)
+            if selected
+            else None
+        )
         if (
-            (
+            (expected_identity is not None and health.project_id != expected_identity)
+            or (
                 Path(health.project_root).resolve() != root
-                and health.author_workspaces.get(str(root)) != author_workspace_id(root)
+                and health.author_workspaces.get(str(root))
+                != author_workspace_id(root, target=target)
             )
             or Path(health.data_root).resolve() != binding.data_root
             or Path(health.deployment_root).resolve() != binding.deployment_root

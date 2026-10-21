@@ -35,6 +35,8 @@ from scopecat.daemon.procedure_views import (
 from scopecat.kernel.interaction_timing import record_timing
 from scopecat.runtime_binding import load_runtime_binding
 
+from scopecat_server.worker_environment import author_worker_environment
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -444,6 +446,9 @@ class ProjectProcedureWorkers:
                     procedure_id,
                     str(log_path.parent / "process.json"),
                 ],
+                env=author_worker_environment(
+                    self.root() if root != self.root() else None
+                ),
                 stdin=subprocess.PIPE,
                 stdout=log,
                 stderr=log,

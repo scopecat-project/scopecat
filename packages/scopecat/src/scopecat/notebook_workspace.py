@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from collections.abc import Callable
+from dataclasses import replace
 from html import escape
 from pathlib import Path
 from threading import get_ident
@@ -13,15 +15,19 @@ from typing import Protocol, cast, override
 
 import scopecat.authoring.experiments as declarations
 from scopecat.application.author_project import AuthorProject
-from scopecat.author_workspaces import local_author_workspaces, service_workspace_root
+from scopecat.application_locator import read_author_location, read_data_identity
+from scopecat.author_workspaces import (
+    author_workspace_id,
+    local_author_workspaces,
+)
 from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import (
     read_daemon_endpoint_record,
     resolve_daemon_endpoint,
 )
-from scopecat.project import Project, open_project
+from scopecat.project import Project, SourceExecutionContext, open_project
 from scopecat.records.author_revision import AuthorRevisionRef
-from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
+from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, load_runtime_binding
 
 
 class ShellEvents(Protocol):
@@ -67,14 +73,20 @@ def _module_owned(module: ModuleType, root: Path, cache: Path) -> bool:
 
 
 def notebook(
-    start: str | Path = ".", *, live: bool = True, daemon: str | None = None
+    start: str | Path = ".",
+    *,
+    live: bool = True,
+    daemon: str | None = None,
+    application: str | Path | None = None,
 ) -> NotebookSession:
     """Open/reuse the kernel's default workspace without starting an experiment.
 
     Close the existing session before selecting a different project. A shared
     kernel shares this workspace; it is not scoped to a Notebook document.
     """
-    return NotebookSession.open(start, live=live, daemon=daemon)
+    return NotebookSession.open(
+        start, live=live, daemon=daemon, application=application
+    )
 
 
 class NotebookSession(AuthorProject):
@@ -82,19 +94,30 @@ class NotebookSession(AuthorProject):
 
     @classmethod
     def open(
-        cls, start: str | Path, *, live: bool, daemon: str | None
+        cls,
+        start: str | Path,
+        *,
+        live: bool,
+        daemon: str | None,
+        application: str | Path | None = None,
     ) -> NotebookSession:
         global _workspace
         shell = _shell()
         project = open_project(start)
+        target = application or os.environ.get("SCOPECAT_APPLICATION_ROOT")
+        if target is None:
+            location = read_author_location(project.root)
+            target = location.application if location else None
+        binding = load_runtime_binding(project.root, target=target)
         environment = project.root / ".venv"
         registered = any(
-            item.root == project.root for item in local_author_workspaces(project.root)
+            item.root == project.root
+            for item in local_author_workspaces(project.root, target=target)
         )
         if registered:
-            service_root = service_workspace_root(project.root)
+            service_root = Path(target).resolve() if target else project.root
             if (service_root / APPLICATION_INSTANCE_NAME).is_file():
-                record = read_daemon_endpoint_record(project.root)
+                record = read_daemon_endpoint_record(project.root, target=target)
                 if record is not None and record.python is not None:
                     # Resolve directory aliases, not the executable symlink:
                     # independent venvs may share the same underlying binary.
@@ -131,9 +154,17 @@ class NotebookSession(AuthorProject):
             raise ValueError(
                 "Close the active Notebook workspace before switching projects."
             )
-        endpoint = resolve_daemon_endpoint(project.root, explicit=daemon)
+        endpoint = resolve_daemon_endpoint(project.root, explicit=daemon, target=target)
+        identity = author_workspace_id(project.root, target=target)
+        project = replace(
+            project, execution=SourceExecutionContext(binding, identity, None)
+        )
         if _workspace is not None and not _workspace.is_closed:
-            if _workspace.base_url != endpoint.rstrip("/"):
+            if (
+                _workspace.base_url != endpoint.rstrip("/")
+                or _workspace.workspace_id != identity
+                or _workspace._binding != binding
+            ):
                 raise ValueError(
                     "Close the active Notebook workspace before changing its service."
                 )
@@ -142,6 +173,10 @@ class NotebookSession(AuthorProject):
             return _workspace
         session = cls(project, endpoint, shell, live=live)
         try:
+            session.pin_session(
+                project_id=read_data_identity(binding.data_root),
+                source_root=project.root,
+            )
             session._default_request_revision()
             shell.events.register("pre_run_cell", session._before_cell)
         except BaseException:
@@ -160,7 +195,9 @@ class NotebookSession(AuthorProject):
             receipts=project.runtime_binding.data_root / "author-jobs",
             project_root=project.root,
             source_project=project,
+            workspace_id=project.execution.workspace_id if project.execution else None,
         )
+        self._binding = project.runtime_binding
         self.live_enabled = live
         self._shell = shell
         self._thread = get_ident()

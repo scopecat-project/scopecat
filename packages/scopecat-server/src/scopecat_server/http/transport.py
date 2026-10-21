@@ -18,7 +18,7 @@ from pathlib import Path, PurePosixPath
 from threading import Event
 from typing import Annotated, Literal, cast, override
 from urllib.parse import quote
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psutil
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -460,6 +460,7 @@ from scopecat_server.worker_diagnostics import (
     diagnostic_excerpt,
     worker_server_timing,
 )
+from scopecat_server.worker_environment import author_worker_environment
 
 from .._startup_diagnostics import shutdown_stage
 from ..command_payloads import (
@@ -477,6 +478,7 @@ from .data_exchange import data_exchange_router
 _API_PREFIX = "/api/v1"
 _ARROW_STREAM_MEDIA_TYPE = "application/vnd.apache.arrow.stream"
 _ARROW_FILE_MEDIA_TYPE = "application/vnd.apache.arrow.file"
+
 _MEASUREMENT_ACTIVE_HEADER = "X-Scopecat-Measurement-Active"
 _MEASUREMENT_DURABLE_COUNT_HEADER = "X-Scopecat-Durable-Record-Count"
 _MEASUREMENT_RECEIVED_COUNT_HEADER = "X-Scopecat-Received-Record-Count"
@@ -580,15 +582,37 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
 
+    instance_id = uuid4().hex
+
     @app.middleware("http")
     async def registered_workspace_context(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         from scopecat_server.request_workspace import request_workspace
 
+        expected_instance = request.headers.get("X-Scopecat-Instance-ID")
+        if expected_instance is not None:
+            health = application.health()
+            if (
+                expected_instance != instance_id
+                or request.headers.get("X-Scopecat-Project-ID") != health.project_id
+                or request.headers.get("X-Scopecat-Workspace")
+                not in health.author_workspaces.values()
+            ):
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": (
+                            "Notebook target or service lifetime changed; "
+                            "close and explicitly reconnect"
+                        )
+                    },
+                )
         token = request_workspace.set(request.headers.get("X-Scopecat-Workspace"))
         try:
-            return await call_next(request)
+            response = await call_next(request)
+            response.headers["X-Scopecat-Instance-ID"] = instance_id
+            return response
         finally:
             request_workspace.reset(token)
 
@@ -974,6 +998,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         "scopecat_server.launch_worker",
                         str(service.root),
                     ],
+                    env=author_worker_environment(application.project_root),
                     input=command.model_dump_json(),
                     capture_output=True,
                     encoding="utf-8",
@@ -1071,6 +1096,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         "scopecat_server.comparison_worker",
                         str(authors(command.workspace_id).root),
                     ],
+                    env=author_worker_environment(application.project_root),
                     input=command.model_dump_json(),
                     capture_output=True,
                     encoding="utf-8",

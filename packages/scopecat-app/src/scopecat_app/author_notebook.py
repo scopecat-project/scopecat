@@ -49,6 +49,7 @@ def launch_notebook(
             )
             for name in ("PYTHONHOME", "PYTHONPATH", "SCOPECAT_DAEMON_URL"):
                 env.pop(name, None)
+            env["SCOPECAT_APPLICATION_ROOT"] = str(store.root)
             checked = subprocess.run(  # noqa: S603 - registered interpreter, fixed probe
                 [
                     str(python),
