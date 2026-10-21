@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 import * as Controls from "../../ui/Controls";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,6 +26,14 @@ import {
   retryTransientInstrumentMutation,
 } from "./instrument-api";
 
+type OpenAttempt = {
+  key: string;
+  id: string;
+  setup: InstrumentSession["setup"];
+  operation: string;
+  actor?: string;
+};
+
 type ConfigTarget = { kind: "add" } | { kind: "edit"; deviceId: string };
 export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable: boolean }) {
   const queryClient = useQueryClient();
@@ -33,7 +42,7 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
   const sessionRef = useRef<InstrumentSession | undefined>(undefined);
   const [sessionError, setSessionError] = useState<string>();
   const [configTarget, setConfigTarget] = useState<ConfigTarget>();
-  const openAttempt = useRef<{ key: string; operation: string } | undefined>(undefined);
+  const openAttempt = useRef<OpenAttempt | undefined>(undefined);
   const devicesQuery = useQuery({
     queryKey: ["devices"],
     queryFn: ({ signal }) => getDevices(signal),
@@ -79,15 +88,10 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     refresh();
   };
   const connect = useMutation({
-    mutationFn: ({
-      id,
-      setup,
-      operation,
-    }: {
-      id: string;
-      setup: InstrumentSession["setup"];
-      operation: string;
-    }) => openInstrumentSession(id, "local-operator", setup, operation),
+    mutationFn: async (command: OpenAttempt) => {
+      command.actor ??= (await readOperatorSettings()).operator;
+      return openInstrumentSession(command.id, command.actor, command.setup, command.operation);
+    },
     retry: retryTransientInstrumentMutation,
     retryDelay: 250,
     onSuccess: (opened) => {
@@ -116,8 +120,10 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     onError: (error) => setSessionError(errorMessage(error)),
   });
   const probe = useMutation({
-    mutationFn: (device: DeviceView) =>
-      testDeviceConnection(device, createInstrumentCommandId("test")),
+    mutationFn: async (device: DeviceView) => {
+      const actor = (await readOperatorSettings()).operator;
+      return testDeviceConnection(device, createInstrumentCommandId("test"), actor);
+    },
     onSettled: refresh,
   });
   const probeError =
@@ -200,12 +206,13 @@ export function InstrumentsWorkspace({ daemonUnavailable }: { daemonUnavailable:
     if (!revision || !selectedId) return;
     const key = `${revision.id}:${selectedId}`;
     if (openAttempt.current?.key !== key)
-      openAttempt.current = { key, operation: createInstrumentCommandId("open") };
-    connect.mutate({
-      id: selectedId,
-      setup: { revision_id: revision.id, content_hash: revision.content_hash },
-      operation: openAttempt.current.operation,
-    });
+      openAttempt.current = {
+        key,
+        id: selectedId,
+        setup: { revision_id: revision.id, content_hash: revision.content_hash },
+        operation: createInstrumentCommandId("open"),
+      };
+    connect.mutate(openAttempt.current);
   };
   const busy = connect.isPending || close.isPending || probe.isPending;
   const owned =

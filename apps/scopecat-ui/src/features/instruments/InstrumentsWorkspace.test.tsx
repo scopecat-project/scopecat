@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
@@ -73,6 +74,7 @@ vi.mock("./instrument-api", async (importOriginal) => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   vi.mocked(getDriverSource).mockResolvedValue({ active: null });
   mockInventory({
     setup: { revision_id: "lab-default", content_hash: "sha256:active" },
@@ -1316,6 +1318,7 @@ describe("instrument workspace", () => {
   });
 
   it("replays a save after its committed response is lost and blocks duplicate clicks", async () => {
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "Alice" });
     const registered = registeredDevice(
       instrument({
         driver_id: "keysight.pna",
@@ -1337,8 +1340,10 @@ describe("instrument workspace", () => {
     const save = within(dialog).getByRole("button", { name: "Save device" });
     fireEvent.click(save);
     fireEvent.click(save);
-    expect(saveDevice).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(saveDevice).toHaveBeenCalledTimes(1));
     const committed = vi.mocked(saveDevice).mock.calls[0]![0];
+    expect(committed.actor).toBe("Alice");
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });
     vi.mocked(saveDevice).mockImplementation(async (command) => {
       if (JSON.stringify(command) !== JSON.stringify(committed)) {
         throw new ApiError("device connection changed; reload and review before saving", 409);
@@ -1410,6 +1415,7 @@ describe("instrument workspace", () => {
     expect(testDeviceConnection).toHaveBeenCalledWith(
       registeredDevice(instrument()),
       expect.any(String),
+      "local-operator",
     );
     expect(saveDevice).not.toHaveBeenCalled();
   });
@@ -1443,7 +1449,11 @@ describe("instrument workspace", () => {
     // Failures belonging to the new version must still be shown.
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
-    expect(testDeviceConnection).toHaveBeenLastCalledWith(updated, expect.any(String));
+    expect(testDeviceConnection).toHaveBeenLastCalledWith(
+      updated,
+      expect.any(String),
+      "local-operator",
+    );
   });
 
   it("shows quarantined ownership and the operator resolution action", async () => {
@@ -2147,3 +2157,22 @@ function mockInventory(view: Awaited<ReturnType<typeof getInstruments>>) {
   vi.mocked(getDevices).mockResolvedValue({ items: view.items.map(registeredDevice) });
   return vi.mocked(getInstruments).mockResolvedValue(view);
 }
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "local-operator" })),
+}));
+
+it("keeps the original session-open actor when retrying after Settings changes", async () => {
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "Alice" });
+  vi.mocked(openInstrumentSession).mockRejectedValueOnce(new Error("Open response lost"));
+  renderWorkspace();
+  fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
+  await screen.findByText("Open response lost");
+  expect(vi.mocked(openInstrumentSession).mock.calls[0]![1]).toBe("Alice");
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });
+  await connectInstrument();
+  expect(vi.mocked(openInstrumentSession).mock.calls[1]).toEqual(
+    vi.mocked(openInstrumentSession).mock.calls[0],
+  );
+  expect(readOperatorSettings).toHaveBeenCalledTimes(1);
+});

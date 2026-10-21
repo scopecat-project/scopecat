@@ -69,7 +69,7 @@ function Probe() {
       </button>
       <button
         onClick={async () => {
-          state.select(entry);
+          await state.select(entry);
           state.update((current) => ({
             ...current,
             selection: {
@@ -183,7 +183,7 @@ it("clears an unrelated sample and resolved context when importing inputs withou
     ),
   );
   fireEvent.click(screen.getByText("Import"));
-  expect(screen.getByLabelText("Context")).toBeEmptyDOMElement();
+  await waitFor(() => expect(screen.getByLabelText("Context")).toBeEmptyDOMElement());
   expect(screen.getByLabelText("Sample")).toBeEmptyDOMElement();
   expect(screen.getByLabelText("Source")).toHaveTextContent("sha256:fit");
 });

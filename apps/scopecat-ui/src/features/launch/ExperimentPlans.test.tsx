@@ -134,7 +134,7 @@ function Harness({
   const context = useLaunchDraft();
   const select = context.select;
   useEffect(() => {
-    if (initialize) select(entry);
+    if (initialize) void select(entry);
   }, [select, initialize]);
   return (
     <>
@@ -251,7 +251,7 @@ it("opening another plan resets the save name, keeps current actor and preserves
     expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key"),
   );
   fireEvent.click(screen.getByText("Open first"));
-  expect(screen.getByLabelText("Plan name")).toHaveValue("First plan");
+  await waitFor(() => expect(screen.getByLabelText("Plan name")).toHaveValue("First plan"));
   fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Unsaved name" } });
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
@@ -259,7 +259,7 @@ it("opening another plan resets the save name, keeps current actor and preserves
     ),
   );
   fireEvent.click(screen.getByText("Open second"));
-  expect(screen.getByLabelText("Plan name")).toHaveValue("Second plan");
+  await waitFor(() => expect(screen.getByLabelText("Plan name")).toHaveValue("Second plan"));
   expect(screen.getByLabelText("Current operator")).toHaveTextContent("operator");
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
 });
@@ -335,6 +335,7 @@ it("an open started without a draft cannot replace the subsequently selected cat
   fireEvent.click(screen.getByText("Open First plan r1"));
   await waitFor(() => expect(finish).toBeDefined());
   fireEvent.click(screen.getByText("Select current catalog"));
+  await waitFor(() => expect(screen.getByLabelText("Current draft")).toHaveTextContent("default"));
   fireEvent.click(screen.getByText("Edit while opening"));
   await act(async () => {
     finish!(reply({ entries: [entry] }));
@@ -441,7 +442,9 @@ it("preserves a registered target through reopening, preview, submission and pla
   setup();
   fireEvent.click(screen.getByText("Select previous batch"));
   fireEvent.click(screen.getByText("Open target"));
-  expect(screen.getByLabelText("Selected registered target")).toHaveTextContent("revision 3");
+  expect(await screen.findByLabelText("Selected registered target")).toHaveTextContent(
+    "revision 3",
+  );
   expect(screen.getByLabelText("Sample ID")).toBeDisabled();
   await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));

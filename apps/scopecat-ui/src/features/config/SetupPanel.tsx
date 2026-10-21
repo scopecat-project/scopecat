@@ -1,5 +1,5 @@
 import * as Controls from "../../ui/Controls";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api-schema";
 import { errorMessage } from "../../lib/presentation";
@@ -9,9 +9,13 @@ import { getSetupDefinitions, saveSetupDefinition, type SetupDefinition } from "
 
 export function SetupPanel({
   operator,
+  resolveOperator,
+  operatorOverride,
   onSelectConfiguration,
 }: {
   operator: string;
+  resolveOperator?: () => Promise<string>;
+  operatorOverride?: string;
   onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
   const cache = useQueryClient();
@@ -29,12 +33,21 @@ export function SetupPanel({
     await cache.invalidateQueries({ queryKey: ["setup-definitions"] });
     await cache.invalidateQueries({ queryKey: ["setup-revisions"] });
   };
+  const attempt = useRef<{ key: string; actor: string } | undefined>(undefined);
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!draft) throw new Error("Choose a setup to edit.");
-      return saveSetupDefinition(draft, name.trim(), operator);
+      const key = JSON.stringify({
+        draft,
+        name: name.trim(),
+        actor: resolveOperator ? (operatorOverride ?? null) : operator,
+      });
+      if (attempt.current?.key !== key)
+        attempt.current = { key, actor: resolveOperator ? await resolveOperator() : operator };
+      return saveSetupDefinition(draft, name.trim(), attempt.current.actor);
     },
     onSuccess: async (saved) => {
+      attempt.current = undefined;
       setSelected(saved.resolution.definition_id);
       setDraft(undefined);
       setName("");
@@ -64,6 +77,7 @@ export function SetupPanel({
       </p>
       <ConfigurationTemplatesPanel
         actor={operator}
+        resolveOperator={resolveOperator}
         onSelectConfiguration={onSelectConfiguration}
         onImported={async (result) => {
           setSelected(result.setup.resolution.definition_id);

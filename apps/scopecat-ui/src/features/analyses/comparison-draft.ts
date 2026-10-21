@@ -30,7 +30,7 @@ export function useComparisonDraft(projectId: string | undefined) {
       parameters: {},
       selected: sameSpace ? (query.get("comparison-analysis") ?? "") : "",
       reason: "",
-      actor: "operator",
+      actor: "",
     };
     const valid =
       stored?.projectId === projectId &&
@@ -46,6 +46,7 @@ export function useComparisonDraft(projectId: string | undefined) {
           : typeof stored.draft[key] === "string",
       );
     return {
+      restored: Boolean(valid),
       id: valid ? (stored.id as string) : crypto.randomUUID(),
       draft: valid ? (stored.draft as Draft) : defaults,
     };
@@ -64,5 +65,5 @@ export function useComparisonDraft(projectId: string | undefined) {
     },
     [projectId, entry.id],
   );
-  return { draft: entry.draft, previewKey, saveDraft };
+  return { draft: entry.draft, restored: entry.restored, previewKey, saveDraft };
 }

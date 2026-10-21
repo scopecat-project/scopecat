@@ -1,3 +1,4 @@
+import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import type { ScientificSelection } from "../launch/scientific-selection";
 import { createPortal } from "react-dom";
@@ -61,7 +62,12 @@ export function ConfigWorkspace({
   ) => void;
 }) {
   const cache = useQueryClient();
-  const [operator, setOperator] = useState("local-operator");
+  const {
+    actor: operator,
+    setActor: setOperator,
+    freshSnapshot: resolveOperator,
+    overridden: operatorOverridden,
+  } = useOperatorInput();
   const [selected, setSelected] = useState("");
   const [editing, setEditing] = useState<{ base: ParameterRevision; view: ParameterDraftView }>();
   const [objectContext, setObjectContext] = useState<ObjectParameterContext>();
@@ -125,7 +131,7 @@ export function ConfigWorkspace({
         const view = await startParameterDraft({
           draft_id: crypto.randomUUID(),
           base: head.revision,
-          actor: operator,
+          actor: await resolveOperator(),
           working_branch: head.name,
           branch_generation: head.generation,
         });
@@ -163,7 +169,7 @@ export function ConfigWorkspace({
       const view = await startParameterDraft({
         draft_id: crypto.randomUUID(),
         base: head.revision,
-        actor: operator,
+        actor: await resolveOperator(),
         working_branch: head.name,
         branch_generation: head.generation,
       });
@@ -180,7 +186,7 @@ export function ConfigWorkspace({
         working_branch: "",
         draft_id: crypto.randomUUID(),
         base: { revision_id: base.id, content_hash: base.content_hash },
-        actor: operator,
+        actor: await resolveOperator(),
       }),
     }),
     onSuccess: async (next) => {
@@ -221,13 +227,20 @@ export function ConfigWorkspace({
       </header>
       <ConfigurationExchange
         operator={operator}
+        resolveOperator={resolveOperator}
+        operatorOverride={operatorOverridden ? operator : undefined}
         onCreated={async (revision) => {
           await cache.invalidateQueries({ queryKey: ["parameter-revisions"] });
           await cache.invalidateQueries({ queryKey: ["parameter-branches"] });
           setSelected(revision);
         }}
       />
-      <SetupPanel operator={operator} onSelectConfiguration={onSelectConfiguration} />
+      <SetupPanel
+        operator={operator}
+        resolveOperator={resolveOperator}
+        operatorOverride={operatorOverridden ? operator : undefined}
+        onSelectConfiguration={onSelectConfiguration}
+      />
       <section
         className="grid gap-3 rounded-lg border border-line bg-panel p-4"
         aria-label="Parameter versions"

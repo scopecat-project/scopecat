@@ -39,7 +39,7 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-function renderPanel() {
+function renderPanel(resolveOperator?: () => Promise<string>) {
   render(
     <QueryClientProvider
       client={
@@ -51,7 +51,7 @@ function renderPanel() {
         })
       }
     >
-      <SetupPanel operator="operator" />
+      <SetupPanel operator="operator" resolveOperator={resolveOperator} />
     </QueryClientProvider>,
   );
 }
@@ -94,4 +94,22 @@ it("starts an empty definition and preserves the draft when saving fails", async
   fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Device connection changed");
   expect(screen.getByLabelText("Save as")).toHaveValue("diagnostic");
+});
+
+it("retains setup attribution for an uncertain retry of the same named revision", async () => {
+  const resolve = vi.fn(async () => "Alice");
+  vi.mocked(saveSetupDefinition).mockRejectedValue(new Error("Response lost"));
+  renderPanel(resolve);
+  fireEvent.click(screen.getByRole("button", { name: "New setup" }));
+  fireEvent.change(screen.getByLabelText("Save as"), { target: { value: "my-setup" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+  await screen.findByRole("alert");
+  resolve.mockResolvedValue("Bob");
+  fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+  await waitFor(() => expect(saveSetupDefinition).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(saveSetupDefinition).mock.calls[1]).toEqual(
+    vi.mocked(saveSetupDefinition).mock.calls[0],
+  );
+  expect(vi.mocked(saveSetupDefinition).mock.calls[0]![2]).toBe("Alice");
+  expect(resolve).toHaveBeenCalledTimes(1);
 });

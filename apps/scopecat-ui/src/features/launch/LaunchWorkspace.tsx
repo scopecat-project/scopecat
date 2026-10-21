@@ -9,7 +9,7 @@ import {
 } from "../../ui/styles";
 import { LaunchRecoveryPanel } from "./LaunchRecoveryPanel";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { navigate, useLocationUrl, type NavigationOptions } from "../../lib/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiData } from "../../api-client";
@@ -107,19 +107,45 @@ export function LaunchWorkspace({
       );
   }, [unavailable, draft, update]);
   useEffect(() => {
-    if (entry && !handoff && sourceAvailable) select(entry, false, workspaceId);
+    if (entry && !handoff && sourceAvailable) void select(entry, false, workspaceId);
   }, [entry, select, handoff, sourceAvailable, workspaceId]);
   const handoffTarget = handoff
     ? catalog.data?.entries.find((item) => item.id === handoff.request.experiment)
     : undefined;
   const handoffUnavailable = handoff && catalog.isSuccess && !handoffTarget;
+  const importer = useRef({ importHandoff, onHandoffImported });
+  useEffect(() => {
+    importer.current = { importHandoff, onHandoffImported };
+  }, [importHandoff, onHandoffImported]);
+  const [handoffRetry, setHandoffRetry] = useState(0);
+  const [handoffFailed, setHandoffFailed] = useState(false);
   useEffect(() => {
     if (!handoff || !handoffTarget) return;
-    importHandoff(handoffTarget, handoff);
-    onHandoffImported?.();
-  }, [handoff, handoffTarget, importHandoff, onHandoffImported]);
+    let active = true;
+    void importer.current.importHandoff(handoffTarget, handoff).then((accepted) => {
+      if (!active) return;
+      if (accepted) {
+        setHandoffFailed(false);
+        importer.current.onHandoffImported?.();
+      } else setHandoffFailed(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [handoff, handoffTarget, handoffRetry]);
   return (
     <section className={classes(pageContent, "max-w-6xl mx-auto")}>
+      {handoffFailed && (
+        <button
+          type="button"
+          onClick={() => {
+            setHandoffFailed(false);
+            setHandoffRetry((value) => value + 1);
+          }}
+        >
+          Retry importing inputs
+        </button>
+      )}
       <header>
         <p className={eyebrow}>Experiment workbench</p>
         <h2 className={pageTitle}>Experiments</h2>

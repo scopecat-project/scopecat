@@ -1,3 +1,4 @@
+import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
 import { ReturnToPreparation } from "./ReturnToPreparation";
@@ -20,7 +21,7 @@ export function ProcedureProgress({
   procedureId: string;
   projectId?: string;
 }) {
-  const [cancelActor, setCancelActor] = useState("");
+  const { actor: cancelActor, setActor: setCancelActor } = useOperatorInput();
   const [cancelReason, setCancelReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");

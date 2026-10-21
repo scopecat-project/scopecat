@@ -14,6 +14,8 @@ export function installLaunchRecoveryRoutes() {
   const attempts: unknown[] = [];
   vi.stubGlobal("fetch", async (request: Request) => {
     const path = new URL(request.url).pathname;
+    if (path.endsWith("/operator-settings"))
+      return Response.json({ revision: 0, operator: "operator" });
     if (path.endsWith("/launch-drafts/read")) {
       const target = await request.json();
       return Response.json({ head: drafts.get(JSON.stringify(target)) ?? null });

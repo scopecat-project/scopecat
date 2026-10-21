@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
 
@@ -39,7 +39,7 @@ function mount() {
   );
 }
 afterEach(cleanup);
-it("keeps an explicit owner before any draft and rejects old-owner catalog callbacks", () => {
+it("keeps an explicit owner before any draft and rejects old-owner catalog callbacks", async () => {
   mount();
   const oldSelect = state.select;
   const oldIsCurrent = state.isCurrent;
@@ -47,14 +47,14 @@ it("keeps an explicit owner before any draft and rejects old-owner catalog callb
   expect(state.workspaceId).toBe("workspace-B");
   expect(state.draft).toBeUndefined();
   expect(oldIsCurrent(undefined)).toBe(false);
-  act(() => oldSelect(entry));
+  await act(async () => oldSelect(entry));
   expect(state.draft).toBeUndefined();
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.workspaceId).toBe("workspace-B");
 });
-it("switches identical declarations without retaining old inputs or code but preserves measurement choices", () => {
+it("switches identical declarations without retaining old inputs or code but preserves measurement choices", async () => {
   mount();
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   act(() =>
     state.update((draft) => ({
       ...draft,
@@ -80,17 +80,17 @@ it("switches identical declarations without retaining old inputs or code but pre
   expect(state.draft?.codeRevision).toBeUndefined();
   expect(state.draft?.requestKey).toBeUndefined();
   expect(state.draft?.pending).toBe(false);
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.workspaceId).toBe("workspace-B");
   expect(state.draft?.values).toEqual({ note: "fresh" });
   expect(state.draft?.selection).toEqual(original.selection);
   expect(state.draft?.actor).toBe("Ada");
   expect(state.draft?.collection).toBe("archive");
 });
-it("retains the exact workspace and pinned code during declaration refresh until explicit current-source choice", () => {
+it("retains the exact workspace and pinned code during declaration refresh until explicit current-source choice", async () => {
   mount();
   act(() => state.selectWorkspace("workspace-B"));
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   act(() =>
     state.update((draft) => ({
       ...draft,
@@ -98,7 +98,7 @@ it("retains the exact workspace and pinned code during declaration refresh until
       codeRevision: { content_hash: "sha256:pinned" },
     })),
   );
-  act(() => state.select({ ...entry, description: "updated declaration" }));
+  await act(async () => state.select({ ...entry, description: "updated declaration" }));
   expect(state.draft?.workspaceId).toBe("workspace-B");
   expect(state.draft?.codeRevision).toEqual({ content_hash: "sha256:pinned" });
   expect(state.draft?.values.note).toBe("reviewed");
@@ -107,14 +107,14 @@ it("retains the exact workspace and pinned code during declaration refresh until
   expect(state.draft?.codeRevision).toBeUndefined();
   expect(state.draft?.experiment).toBe("rabi");
   expect(state.draft?.values.note).toBe("reviewed");
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.workspaceId).toBe("workspace-B");
 });
 
-it("invalidates same-definition current-source preview keys only for the refreshed owner", () => {
+it("invalidates same-definition current-source preview keys only for the refreshed owner", async () => {
   mount();
   act(() => state.selectWorkspace("workspace-B"));
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   act(() =>
     state.update((draft) => ({
       ...draft,
@@ -141,7 +141,7 @@ it("invalidates same-definition current-source preview keys only for the refresh
   expect(state.draft?.requestKey).toBe("pinned-request");
 });
 
-it("selects an exact saved configuration before a draft without changing lab defaults", () => {
+it("selects an exact saved configuration before a draft without changing lab defaults", async () => {
   mount();
   const ref = { revision_id: "imported-config", content_hash: "sha256:imported" };
   act(() =>
@@ -153,7 +153,7 @@ it("selects an exact saved configuration before a draft without changing lab def
     }),
   );
   expect(state.draft).toBeUndefined();
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.selection.configuration).toEqual({
     kind: "parameters",
     overrides: [],
@@ -163,7 +163,7 @@ it("selects an exact saved configuration before a draft without changing lab def
   act(() => state.selectConfiguration({ kind: "unselected" }));
   expect(state.draft?.selection.configuration).toEqual({ kind: "unselected" });
 });
-it("selects independent parameters with an exact setup before opening an experiment", () => {
+it("selects independent parameters with an exact setup before opening an experiment", async () => {
   mount();
   const choice = {
     kind: "parameters" as const,
@@ -172,13 +172,13 @@ it("selects independent parameters with an exact setup before opening an experim
     setup: { revision_id: "bench", content_hash: "sha256:setup" },
   };
   act(() => state.selectConfiguration(choice));
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.selection.configuration).toEqual(choice);
 });
 
-it("changes only a running draft's parameter selection and invalidates its old preview", () => {
+it("changes only a running draft's parameter selection and invalidates its old preview", async () => {
   mount();
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   act(() =>
     state.update((draft) => ({
       ...draft,
@@ -217,7 +217,7 @@ it("changes only a running draft's parameter selection and invalidates its old p
   expect(state.draft?.selection.configuration.kind).toBe("parameters");
 });
 
-it("keeps adopted inputs through source refresh but detaches a historical handoff", () => {
+it("keeps adopted inputs through source refresh but detaches a historical handoff", async () => {
   mount();
   const choice = {
     kind: "parameters" as const,
@@ -227,13 +227,13 @@ it("keeps adopted inputs through source refresh but detaches a historical handof
   };
   const origin = { draft_id: "working", revision: 7 };
   act(() => state.selectConfiguration(choice, origin));
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.workingInput).toEqual(origin);
   act(() => state.selectCurrentSource());
-  act(() => state.select(entry));
+  await act(async () => state.select(entry));
   expect(state.draft?.workingInput).toEqual(origin);
   const selection = state.draft!.selection;
-  act(() =>
+  await act(async () =>
     state.importHandoff(entry, {
       kind: "handoff",
       source_run: "retained",
@@ -256,3 +256,7 @@ it("keeps adopted inputs through source refresh but detaches a historical handof
   expect(state.draft?.handoff?.source_run).toBe("retained");
   expect(state.draft?.workingInput).toBeUndefined();
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 0, operator: "operator" })),
+}));

@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
@@ -64,6 +65,7 @@ const base: ParameterRevision = {
 let generation = 3;
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   generation = 3;
   draftView = {
     head_revision: 1,
@@ -482,3 +484,5 @@ it("cancels an object opening if the editor owner changes during its branch read
   });
   expect(screen.getByLabelText("frequency", { exact: true })).toHaveValue("4.8");
 });
+
+vi.mock("../application/OperatorSettings", () => ({ readOperatorSettings: vi.fn() }));

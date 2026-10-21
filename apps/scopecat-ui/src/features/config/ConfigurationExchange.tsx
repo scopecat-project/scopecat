@@ -51,9 +51,13 @@ function download(blob: Blob, name: string) {
 
 export function ConfigurationExchange({
   operator,
+  resolveOperator,
+  operatorOverride,
   onCreated,
 }: {
   operator: string;
+  resolveOperator?: () => Promise<string>;
+  operatorOverride?: string;
   onCreated: (revision: string) => Promise<void>;
 }) {
   const cache = useQueryClient();
@@ -90,7 +94,7 @@ export function ConfigurationExchange({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const loading = useRef(0);
-  const operation = useRef<{ intent: string; id: string } | undefined>(undefined);
+  const operation = useRef<{ intent: string; id: string; actor: string } | undefined>(undefined);
   const sourceState = useQuery({
     queryKey: ["exchange-source-state", workspace],
     enabled: !!workspace,
@@ -168,12 +172,21 @@ export function ConfigurationExchange({
         include_setup: includeSetup,
         bindings: mapped,
       };
-      const intent = JSON.stringify(fields);
-      if (operation.current?.intent !== intent)
-        operation.current = { intent, id: crypto.randomUUID() };
+      const intent = JSON.stringify({
+        ...fields,
+        actor: resolveOperator ? (operatorOverride ?? null) : operator,
+      });
+      if (operation.current?.intent !== intent) {
+        fields.actor = resolveOperator ? await resolveOperator() : operator;
+        operation.current = {
+          intent,
+          id: crypto.randomUUID(),
+          actor: fields.actor,
+        };
+      }
       return apiData(
         apiClient.POST("/api/v1/configuration-exchange/derive", {
-          body: { ...fields, operation_id: operation.current.id },
+          body: { ...fields, actor: operation.current.actor, operation_id: operation.current.id },
         }),
       );
     },

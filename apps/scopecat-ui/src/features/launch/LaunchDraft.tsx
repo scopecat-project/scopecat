@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 import {
   useLaunchRecovery,
   attemptHistory,
@@ -58,6 +59,7 @@ export interface LaunchDraft {
   controls: ControlDrafts;
   collection?: string;
   actor: string;
+  defaultActor?: string;
   revision: number;
   preview?: LaunchPreview;
   requestKey?: string;
@@ -91,9 +93,9 @@ interface DraftContext {
     subject?: ScientificSelection["subject"],
   ) => void;
   draft: LaunchDraft | undefined;
-  openPlan: (plan: PlanRevision, entry: LaunchCatalogEntry) => void;
-  importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => void;
-  select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => void;
+  openPlan: (plan: PlanRevision, entry: LaunchCatalogEntry) => Promise<void>;
+  importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => Promise<boolean>;
+  select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => Promise<void>;
   update: (change: DraftUpdate) => void;
   isCurrent: (revision: number | undefined) => boolean;
   attempt: SubmissionAttempt | undefined;
@@ -190,12 +192,19 @@ function ProjectDraft({
   children: ReactNode;
 }) {
   const [draft, setDraftState] = useState<LaunchDraft>();
+  const [operatorError, setOperatorError] = useState<string>();
+  const operatorSelection = useRef(0);
+  const operatorPending = useRef(false);
   const latest = useRef(draft);
   const preparationToken = useRef<symbol | undefined>(undefined);
   // Admission continuations must observe edits synchronously, before a React effect
   // can run or a late preview/receipt response can continue the old intent.
   const setDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>((change) => {
     const next = typeof change === "function" ? change(latest.current) : change;
+    if (next !== latest.current) {
+      operatorSelection.current += 1;
+      operatorPending.current = false;
+    }
     if (
       next?.revision !== latest.current?.revision ||
       next?.workspaceId !== latest.current?.workspaceId
@@ -305,13 +314,37 @@ function ProjectDraft({
     );
   };
   const select = useCallback(
-    (entry: LaunchCatalogEntry, reset = false, owner = workspaceId) => {
+    async (entry: LaunchCatalogEntry, reset = false, owner = workspaceId) => {
       if (
         latest.current?.experiment &&
         latest.current.experiment !== entry.id &&
         !mayLeaveRef.current()
       )
         return;
+      const original = latest.current;
+      const generation = ++operatorSelection.current;
+      operatorPending.current = false;
+      preparationToken.current = undefined;
+      if (!reset && original?.workspaceId === owner && original.definition === definitionKey(entry))
+        return;
+      let operator: string;
+      operatorPending.current = true;
+      try {
+        operator =
+          original &&
+          (original.actor !== original.defaultActor ||
+            (!reset && original.workspaceId === owner && original.experiment === entry.id))
+            ? original.actor
+            : (await readOperatorSettings()).operator;
+      } catch (error) {
+        if (generation === operatorSelection.current) setOperatorError(String(error));
+        return;
+      } finally {
+        if (generation === operatorSelection.current) operatorPending.current = false;
+      }
+      if (!alive.current || generation !== operatorSelection.current || latest.current !== original)
+        return;
+      setOperatorError(undefined);
       setDraft((current) => {
         if (currentWorkspace.current !== owner) return current;
         if (!reset && current?.workspaceId === owner && current.definition === definitionKey(entry))
@@ -330,7 +363,8 @@ function ProjectDraft({
             : defaultSelection());
         next.workingInput = current ? current.workingInput : selectedWorkingInput;
         next.collection = current?.collection;
-        next.actor = current?.actor ?? "operator";
+        next.actor = operator;
+        next.defaultActor = original?.actor !== original?.defaultActor ? undefined : operator;
         if (!reset && current?.workspaceId === owner && current.experiment === entry.id) {
           next.values = { ...next.values, ...current.values };
           next.controls = { ...next.controls, ...current.controls };
@@ -463,7 +497,7 @@ function ProjectDraft({
       value={{
         projectId,
         beginPreparation: () => {
-          if (preparationToken.current || submitting.current) return;
+          if (operatorPending.current || preparationToken.current || submitting.current) return;
           const token = Symbol("launch preparation");
           preparationToken.current = token;
           const input = latest.current;
@@ -591,16 +625,39 @@ function ProjectDraft({
         attempt,
         submit,
         checkSubmission,
-        openPlan: (plan, entry) => {
+        openPlan: async (plan, entry) => {
           if (!mayLeave()) return;
           if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id)) return;
           if (!alive.current) return;
           const current = latest.current;
+          const generation = ++operatorSelection.current;
+          operatorPending.current = true;
+          preparationToken.current = undefined;
+          let operator: string;
+          try {
+            operator =
+              current && current.actor !== current.defaultActor
+                ? current.actor
+                : (await readOperatorSettings()).operator;
+          } catch (error) {
+            setOperatorError(String(error));
+            return;
+          } finally {
+            if (generation === operatorSelection.current) operatorPending.current = false;
+          }
+          if (
+            !alive.current ||
+            latest.current !== current ||
+            generation !== operatorSelection.current
+          )
+            return;
+          setOperatorError(undefined);
           const next = initialDraft(
             entry,
             (current?.revision ?? 0) + 1,
             plan.definition.workspace_id,
           );
+          next.defaultActor = current?.actor !== current?.defaultActor ? undefined : operator;
           next.workingInput = undefined;
           next.collection = current?.collection;
           const d = plan.definition;
@@ -615,7 +672,7 @@ function ProjectDraft({
             inputs: d.inputs,
             control_edits: d.control_edits,
             selection: normalizeSelection(d.selection),
-            actor: current?.actor ?? "operator",
+            actor: operator,
           });
           currentWorkspace.current = d.workspace_id;
           setWorkspaceId(d.workspace_id);
@@ -628,19 +685,42 @@ function ProjectDraft({
             codeRevision: d.code_revision,
             workspaceId: d.workspace_id,
             handoff: undefined,
-            notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${current?.actor ?? "operator"}. Start will prepare these saved inputs again.`,
+            notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${operator}. Start will prepare these saved inputs again.`,
           });
         },
-        importHandoff: (entry, handoff) => {
-          if (!mayLeave()) return;
-          if (!recovery.keepExplicitInput(handoff.request.workspace_id, entry.id)) return;
-          if (!alive.current) return;
+        importHandoff: async (entry, handoff) => {
+          if (!mayLeave()) return false;
+          if (!recovery.keepExplicitInput(handoff.request.workspace_id, entry.id)) return false;
+          if (!alive.current) return false;
           const current = latest.current;
+          const generation = ++operatorSelection.current;
+          operatorPending.current = true;
+          preparationToken.current = undefined;
+          let operator: string;
+          try {
+            operator =
+              current && current.actor !== current.defaultActor
+                ? current.actor
+                : (await readOperatorSettings()).operator;
+          } catch (error) {
+            setOperatorError(String(error));
+            return false;
+          } finally {
+            if (generation === operatorSelection.current) operatorPending.current = false;
+          }
+          if (
+            !alive.current ||
+            latest.current !== current ||
+            generation !== operatorSelection.current
+          )
+            return false;
+          setOperatorError(undefined);
           const next = initialDraft(
             entry,
             (current?.revision ?? 0) + 1,
             handoff.request.workspace_id,
           );
+          next.defaultActor = current?.actor !== current?.defaultActor ? undefined : operator;
           next.workingInput = undefined;
           next.collection = current?.collection;
           try {
@@ -650,22 +730,36 @@ function ProjectDraft({
               throw new Error("This draft has no author source. Select code and preview again.");
             currentWorkspace.current = owner;
             setWorkspaceId(owner);
-            setDraft({ ...imported, workspaceId: owner, actor: current?.actor ?? "operator" });
+            setDraft({ ...imported, workspaceId: owner, actor: operator });
+            return true;
           } catch (error) {
             setDraft({
               ...(current ?? next),
               error: error instanceof Error ? error.message : String(error),
             });
+            return false;
           }
         },
         select,
-        update: (change) => setDraft((current) => (current ? change(current) : current)),
+        update: (change) =>
+          setDraft((current) => {
+            if (!current) return current;
+            const next = change(current);
+            return next.actor !== current.actor ? { ...next, defaultActor: undefined } : next;
+          }),
         isCurrent: (revision) =>
+          !operatorPending.current &&
           alive.current &&
           currentWorkspace.current === workspaceId &&
           latest.current?.revision === revision,
       }}
     >
+      {operatorError && (
+        <p role="alert">
+          Default operator could not be read. Check Settings and select the operation again.{" "}
+          {operatorError}
+        </p>
+      )}
       {children}
     </Context>
   );

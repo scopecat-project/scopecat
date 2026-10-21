@@ -707,3 +707,7 @@ it("keeps internal failures ordinary even when their text mentions unsupported c
     screen.queryByRole("region", { name: "Rejected preview scenario" }),
   ).not.toBeInTheDocument();
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "operator" })),
+}));

@@ -51,9 +51,14 @@ test("Start prepares internally while cancelled and edited preparations never ac
       base_url: string;
     };
     prepareAuthorContexts(uv, project);
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Browser operator");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
+    await expect(page.locator('input[aria-label="Operator"]')).toHaveValue("Browser operator");
     let previewRequests = 0;
     page.on("request", (request) => {
       if (request.url().endsWith("/experiment-launcher/preview")) previewRequests += 1;
