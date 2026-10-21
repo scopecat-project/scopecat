@@ -12,21 +12,26 @@ from scopecat.application_locator import read_author_location
 from scopecat.runtime_binding import load_runtime_binding
 
 
-def author_bindings_path(root: Path) -> Path:
-    return load_runtime_binding(root).coordination_root / "author-workspaces.json"
+def author_bindings_path(root: Path, *, target: str | Path | None = None) -> Path:
+    return (
+        load_runtime_binding(root, target=target).coordination_root
+        / "author-workspaces.json"
+    )
 
 
-def local_author_workspaces(root: Path) -> tuple[LocalAuthorWorkspace, ...]:
-    path = author_bindings_path(root)
+def local_author_workspaces(
+    root: Path, *, target: str | Path | None = None
+) -> tuple[LocalAuthorWorkspace, ...]:
+    path = author_bindings_path(root, target=target)
     if not path.is_file():
         return ()
     return LocalAuthorWorkspaces.model_validate_json(path.read_bytes()).items
 
 
-def author_workspace_id(root: Path) -> str:
+def author_workspace_id(root: Path, *, target: str | Path | None = None) -> str:
     """Resolve an already registered local identity, never register on connection."""
     root = root.resolve()
-    for item in local_author_workspaces(root):
+    for item in local_author_workspaces(root, target=target):
         if item.root == root:
             return item.id
     raise ValueError(

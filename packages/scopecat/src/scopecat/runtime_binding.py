@@ -40,7 +40,11 @@ class RuntimeBinding:
 
 
 def load_runtime_binding(
-    root: str | Path, *, application: bool = True, discover: bool = True
+    root: str | Path,
+    *,
+    application: bool = True,
+    discover: bool = True,
+    target: str | Path | None = None,
 ) -> RuntimeBinding:
     """Resolve local paths without importing code, creating state or connecting."""
     workspace = Path(root).resolve()
@@ -48,7 +52,7 @@ def load_runtime_binding(
         return application_binding(workspace, read_application_layout(workspace))
     located = None
     if discover:
-        located = _locate_author_binding(workspace)
+        located = _locate_author_binding(workspace, target=target)
     path = workspace / RUNTIME_BINDING_NAME
     try:
         document = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -141,26 +145,23 @@ def application_binding(
     )
 
 
-def _locate_author_binding(workspace: Path) -> RuntimeBinding | None:
-    """Resolve a persisted association, validating both sides without writing."""
-    location = read_author_location(workspace)
+def _locate_author_binding(
+    workspace: Path, *, target: str | Path | None = None
+) -> RuntimeBinding | None:
+    """Select an explicit target or saved default, never infer ownership."""
+    override = target or os.environ.get("SCOPECAT_APPLICATION_ROOT") or None
+    selected = Path(override).resolve() if override is not None else None
+    location = read_author_location(workspace, selected)
     if location is not None and location.pending:
         raise RuntimeBindingError(
-            "Author registration is incomplete; "
-            "register again with the same application"
+            "Author registration is incomplete; register again with this application"
         )
-    override = os.environ.get("SCOPECAT_APPLICATION_ROOT") or None
-    if location is None and override is None:
+    if location is None and selected is None:
         return None
-    if override:
-        target = Path(override).resolve()
-    else:
+    if selected is None:
         assert location is not None
-        target = location.application
-    if location is not None and target != location.application:
-        raise RuntimeBindingError(
-            "Explicit application conflicts with registered author owner"
-        )
+        selected = location.application
+    target = selected
     if not target.is_dir():
         raise RuntimeBindingError(
             "Registered application is unavailable; restore or explicitly reconnect it"

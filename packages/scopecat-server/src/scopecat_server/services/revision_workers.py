@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import tempfile
 import threading
@@ -40,6 +41,7 @@ class AuthorWorkerBinding:
 
     workspace: Path
     python: Path
+    application_root: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,11 @@ class _Worker:
         self.stderr: TextIO = (Path(self._diagnostics.name) / "stderr.log").open(
             "w+", encoding="utf-8"
         )
+        environment = dict(os.environ)
+        environment.pop("SCOPECAT_DAEMON_URL", None)
+        environment.pop("SCOPECAT_APPLICATION_ROOT", None)
+        if binding.application_root is not None:
+            environment["SCOPECAT_APPLICATION_ROOT"] = str(binding.application_root)
         self.process: subprocess.Popen[str] = subprocess.Popen(  # noqa: S603 - fixed internal worker, no shell
             [
                 str(binding.python),
@@ -73,6 +80,7 @@ class _Worker:
                     else ["--validate-serve", str(code_root), revision]
                 ),
             ],
+            env=environment,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self.stderr,

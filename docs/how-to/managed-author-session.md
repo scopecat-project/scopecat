@@ -23,14 +23,35 @@ association because it names the data instance, not its executable or version.
 The association pins the existing scientific `project_id` and author registration
 ID; its application path is only a local address. Replacing data at that same
 address fails the identity check. Explicit registration may initialize an empty
-selected application using the normal store bootstrap under ownership locks;
+selected application using the normal store bootstrap under writer locks;
 Notebook discovery never initializes a store.
 
-Interrupted registration leaves a pending owner record. Repeat registration with
-the same application to finish it; a different application cannot claim it.
+Source registration is local to each data space. The same author directory can be
+explicitly registered with another application. Its first registration establishes
+a default target; later registrations do not silently change that preference.
+Per-target receipts pin each registration independently. An interrupted write
+blocks only that target until registration with it is repeated. Existing format-1
+default locators remain readable; re-registration adds a target receipt without
+changing the old scientific identity. If that old default is unreadable and no
+target receipt exists, restore it before upgrading the association: its prior
+identity cannot safely be guessed. A target with its own valid receipt remains
+usable even when an unrelated default is damaged.
+
+For an explicitly registered alternative, use `sc.notebook(application="/path/to/application")`.
+An application-launched Notebook inherits that application's target. Neither choice
+rewrites the saved default. A saved default is a client preference, not exclusive
+ownership of the author directory.
+
+A session captures its data space, author identity and current service lifetime.
+Requests are checked before server dispatch; changing the default or reusing the
+same service address cannot redirect an existing session. Uncertain writes are
+not automatically replayed by a pinned session. A service without this lifetime
+check is rejected: update the application before connecting with this Notebook API.
 
 After an application restart, close the old session and call `sc.notebook()` again
-to read its current endpoint. Retained jobs can use `job.reconnect(session)`.
+to read its current endpoint. Retained jobs can use `job.reconnect(session)` for the same data space and source.
+Old receipt files remain readable inside that store's receipt directory; they are
+not portable cross-space reconnection credentials.
 If the application is stopped, unavailable or its registration conflicts, the
 call fails: it never selects another running/default application or creates a
 new data store. Start the associated application and retry. A moved author folder
@@ -39,8 +60,11 @@ recovery rather than silently changing the association.
 
 Advanced callers may pass `daemon=` to `sc.notebook()` or use
 `SCOPECAT_DAEMON_URL`; both still verify the registered owner. Development kernels
-can use `SCOPECAT_APPLICATION_ROOT` for an exact registered instance. This override
-must agree with any persistent association. Without registration or inherited
+can use `SCOPECAT_APPLICATION_ROOT` for an exact registered target. An explicit
+`application=` argument takes priority over inherited context, which takes priority
+over the saved default. A target still needs a unique source registration and
+matching scientific identity; a missing/offline default does not block a valid
+explicit alternative. Without registration or inherited
 configuration, reopening an editor does not guess a development worktree.
 
 The locator directory is `%LOCALAPPDATA%/Scopecat/author-locations` on Windows,
@@ -55,8 +79,9 @@ association only when all effective runtime locations and settings match the
 selected owner; the original file stays untouched. Custom or conflicting bindings
 must be resolved deliberately. Registration never moves scientific data, deletes
 old lock files, or takes over an active independent runtime. This connection
-change does not migrate old scientific store formats or automatically transfer
-an author between applications.
+change does not migrate old scientific store formats or merge data spaces.
+A conflicting legacy runtime file must be deliberately resolved before selecting
+another target; explicit selection does not bypass that constraint.
 
 This API guide is for an already prepared laboratory author folder. Its maintainer
 supplies the execution environment, parameter branch and registered experiments;

@@ -1,4 +1,4 @@
-"""Read-only discovery of an explicitly registered local application owner."""
+"""Local default preferences and receipts for explicitly registered targets."""
 
 from __future__ import annotations
 
@@ -55,18 +55,39 @@ def author_location_path(workspace: Path) -> Path:
     return locator_home() / (hashlib.sha256(key.encode("utf-8")).hexdigest() + ".json")
 
 
-def read_author_location(workspace: Path) -> AuthorLocation | None:
+def author_target_path(workspace: Path, application: Path) -> Path:
+    key = os.path.normcase(str(application.resolve()))
+    return author_location_path(workspace).with_suffix("") / (
+        hashlib.sha256(key.encode("utf-8")).hexdigest() + ".json"
+    )
+
+
+def read_author_location(
+    workspace: Path, application: Path | None = None
+) -> AuthorLocation | None:
+    path = author_location_path(workspace)
+    if application is not None:
+        target_path = author_target_path(workspace, application)
+        if target_path.exists():
+            path = target_path
+        else:
+            previous = read_author_location(workspace)
+            return (
+                previous if previous and previous.application == application else None
+            )
     try:
-        location = AuthorLocation.model_validate_json(
-            author_location_path(workspace).read_bytes()
-        )
+        location = AuthorLocation.model_validate_json(path.read_bytes())
     except FileNotFoundError:
         return None
     except (OSError, ValidationError) as error:
         raise RuntimeBindingError(
             f"Cannot read author application locator: {error}"
         ) from error
-    if location.workspace != workspace or not location.application.is_absolute():
+    if (
+        location.workspace != workspace
+        or not location.application.is_absolute()
+        or (application is not None and location.application != application)
+    ):
         raise RuntimeBindingError(
             "Author application locator has a conflicting workspace"
         )

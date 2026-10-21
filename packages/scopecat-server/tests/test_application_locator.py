@@ -45,19 +45,25 @@ def test_registration_leaves_source_tree_untouched(tmp_path: Path) -> None:
     assert not (root / ".scopecat").exists()
 
 
-def test_conflicting_owner_and_missing_application_fail_closed(tmp_path: Path) -> None:
+def test_multiple_targets_keep_default_and_missing_default_fails_closed(
+    tmp_path: Path,
+) -> None:
     owner = application(tmp_path / "app")
     other = application(tmp_path / "other")
     root = author(tmp_path / "author")
     register_author_workspace(owner.root, root)
     saved = author_location_path(root).read_bytes()
-    with pytest.raises(ValueError, match="another application"):
-        register_author_workspace(other.root, root)
+    second = register_author_workspace(other.root, root)
+    assert author_workspace_id(root, target=other.root) == second.id
     assert author_location_path(root).read_bytes() == saved
     owner.root.rename(tmp_path / "offline")
     with pytest.raises(RuntimeBindingError, match="unavailable"):
         load_runtime_binding(root)
     assert not owner.root.exists()
+    assert (
+        load_runtime_binding(root, target=other.root).data_root
+        == other.runtime_binding.data_root
+    )
     assert not (root / ".scopecat").exists()
 
 
@@ -86,7 +92,7 @@ def test_explicit_worktree_override_requires_registration_and_agreement(
     root = author(tmp_path / "author")
     register_author_workspace(owner.root, root)
     monkeypatch.setenv("SCOPECAT_APPLICATION_ROOT", str(other.root))
-    with pytest.raises(RuntimeBindingError, match="conflicts"):
+    with pytest.raises(RuntimeBindingError, match="Cannot verify"):
         load_runtime_binding(root)
     monkeypatch.setenv("SCOPECAT_APPLICATION_ROOT", str(owner.root))
     assert author_workspace_id(root)
@@ -218,8 +224,9 @@ def test_interrupted_registration_retains_owner_fence_and_can_resume(
     assert pending is not None and pending.pending
     with pytest.raises(RuntimeBindingError, match="incomplete"):
         load_runtime_binding(root)
-    with pytest.raises(ValueError, match="another application"):
-        register_author_workspace(other.root, root)
+    alternative = register_author_workspace(other.root, root)
+    assert author_workspace_id(root, target=other.root) == alternative.id
+    assert read_author_location(root) == pending
     resumed = register_author_workspace(owner.root, root)
     assert resumed.id == pending.workspace_id
     assert author_workspace_id(root) == resumed.id
@@ -348,3 +355,177 @@ def test_initial_owner_registration_preserves_existing_ownership_locks(
         path.touch()
     register_author_workspace(owner.root, root)
     assert all(path.exists() for path in paths)
+
+
+def test_explicit_target_survives_corrupt_default_and_retains_identity(
+    tmp_path: Path,
+) -> None:
+    import sqlite3
+
+    owner = application(tmp_path / "app")
+    other = application(tmp_path / "other")
+    root = author(tmp_path / "author")
+    register_author_workspace(owner.root, root)
+    register_author_workspace(other.root, root)
+    author_location_path(root).write_text("invalid default")
+    assert (
+        load_runtime_binding(root, target=other.root).data_root
+        == other.runtime_binding.data_root
+    )
+    with pytest.raises(RuntimeBindingError, match="Cannot read"):
+        load_runtime_binding(root)
+    with sqlite3.connect(other.runtime_binding.data_root / "control.sqlite3") as db:
+        db.execute("UPDATE project_identity SET identity = 'replacement'")
+    with pytest.raises(RuntimeBindingError, match="identity has changed"):
+        load_runtime_binding(root, target=other.root)
+
+
+def test_pinned_requests_reject_restarted_service_before_dispatch(
+    tmp_path: Path,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from scopecat_server.http.transport import create_app
+    from scopecat_server.runtime import LocalDaemonRuntime
+
+    owner = application(tmp_path / "app")
+    root = author(tmp_path / "author")
+    entry = register_author_workspace(owner.root, root)
+    with LocalDaemonRuntime(owner.root) as runtime:
+        first = TestClient(create_app(runtime.application))
+        response = first.get("/api/v1/health")
+        headers = {
+            "X-Scopecat-Instance-ID": response.headers["X-Scopecat-Instance-ID"],
+            "X-Scopecat-Project-ID": response.json()["project_id"],
+            "X-Scopecat-Workspace": entry.id,
+        }
+        assert first.get("/api/v1/health", headers=headers).status_code == 200
+        # A write to a nonexistent route would be 404 if it reached dispatch.
+        assert (
+            first.post(
+                "/not-dispatched", headers={**headers, "X-Scopecat-Project-ID": "other"}
+            ).status_code
+            == 409
+        )
+        second = TestClient(create_app(runtime.application))
+        assert second.post("/not-dispatched", headers=headers).status_code == 409
+        assert (
+            second.get("/api/v1/health").json()["project_id"]
+            == headers["X-Scopecat-Project-ID"]
+        )
+
+
+def test_pinned_client_does_not_replay_uncertain_write() -> None:
+    import httpx2
+    from scopecat.daemon.client import DaemonClient
+    from scopecat.records.launch_request import LaunchRequest
+
+    writes = 0
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        nonlocal writes
+        writes += 1
+        raise httpx2.ReadError("uncertain", request=request)
+
+    with DaemonClient(
+        "http://localhost", transport=httpx2.MockTransport(respond)
+    ) as client:
+        client.session_project_id = "pinned"
+        with pytest.raises(httpx2.ReadError, match="uncertain"):
+            client._post_idempotent_response(
+                "/write", LaunchRequest(action="list", workspace_id="author")
+            )
+    assert writes == 1
+
+
+@pytest.mark.parametrize("failure", ["registry", "receipt"])
+def test_alternative_registration_failure_does_not_block_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    from scopecat.application_locator import author_target_path, read_author_location
+
+    owner = application(tmp_path / "app")
+    other = application(tmp_path / "other")
+    root = author(tmp_path / "author")
+    first = register_author_workspace(owner.root, root)
+    saved = author_location_path(root).read_bytes()
+    receipt = author_target_path(root, other.root)
+    registry = author_bindings_path(other.root)
+    replace_path = Path.replace
+    writes = 0
+
+    def interrupt(path: Path, target: Path) -> Path:
+        nonlocal writes
+        if target == receipt:
+            writes += 1
+        if (failure == "registry" and target == registry) or (
+            failure == "receipt" and target == receipt and writes == 2
+        ):
+            raise OSError("interrupted target")
+        return replace_path(path, target)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "replace", interrupt)
+        with pytest.raises(OSError, match="interrupted"):
+            register_author_workspace(other.root, root)
+    pending = read_author_location(root, other.root)
+    assert pending is not None and pending.pending
+    assert author_workspace_id(root) == first.id
+    with pytest.raises(RuntimeBindingError, match="incomplete"):
+        load_runtime_binding(root, target=other.root)
+    assert register_author_workspace(other.root, root).id == pending.workspace_id
+    assert author_location_path(root).read_bytes() == saved
+
+
+def test_pinned_job_reconnect_requires_same_store_source_and_receipt_root(
+    tmp_path: Path,
+) -> None:
+    from scopecat.application.author_project import AuthorJob, AuthorProject
+    from scopecat.records.launch_request import LaunchRequest
+
+    with (
+        AuthorProject(
+            "http://localhost", workspace_id="author", receipts=tmp_path / "a"
+        ) as first,
+        AuthorProject(
+            "http://localhost", workspace_id="author", receipts=tmp_path / "a"
+        ) as restarted,
+        AuthorProject(
+            "http://localhost", workspace_id="author", receipts=tmp_path / "b"
+        ) as other,
+    ):
+        first.session_project_id = restarted.session_project_id = "space-a"
+        other.session_project_id = "space-b"
+        job = AuthorJob.retain(
+            first,
+            tmp_path / "a/job.json",
+            LaunchRequest(action="list", workspace_id="author"),
+        )
+        first.close()
+        assert job.reconnect(restarted).request == job.request
+        with pytest.raises(ValueError, match="another data space"):
+            job.reconnect(other)
+        with pytest.raises(ValueError, match="does not belong"):
+            other.reopen(job.receipt)
+
+
+def test_concurrent_target_registration_serializes_default_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from uuid import uuid4
+
+    owner = application(tmp_path / "app")
+    other = application(tmp_path / "other")
+    root = author(tmp_path / "author")
+
+    def during_first_commit():
+        with pytest.raises(ValueError, match="busy"):
+            register_author_workspace(other.root, root)
+        return uuid4()
+
+    with monkeypatch.context() as patch:
+        patch.setattr("scopecat_server.author_registration.uuid4", during_first_commit)
+        first = register_author_workspace(owner.root, root)
+    second = register_author_workspace(other.root, root)
+    assert author_workspace_id(root) == first.id
+    assert author_workspace_id(root, target=other.root) == second.id

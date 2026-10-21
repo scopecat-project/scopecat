@@ -12,6 +12,7 @@ from filelock import FileLock, Timeout
 from scopecat.application_locator import (
     AuthorLocation,
     author_location_path,
+    author_target_path,
     read_author_location,
     read_data_identity,
 )
@@ -55,15 +56,13 @@ def register_author_workspace(
     try:
         with ExitStack() as locks:
             locks.enter_context(FileLock(locator.with_suffix(".lock"), timeout=0))
-            previous_location = read_author_location(project.root)
-            if (
-                previous_location is not None
-                and previous_location.application != owner.root
-            ):
-                raise ValueError(
-                    "Workspace already belongs to another application; "
-                    "explicit transfer is required"
-                )
+            default_location = read_author_location(project.root)
+            previous_location = read_author_location(project.root, owner.root)
+            update_default = (
+                default_location is None or default_location.application == owner.root
+            )
+            receipt = author_target_path(project.root, owner.root)
+            receipt.parent.mkdir(parents=True, exist_ok=True)
             candidates = {
                 binding.coordination_root / "author-workspaces.lock",
             }
@@ -77,9 +76,12 @@ def register_author_workspace(
                 locks.enter_context(FileLock(path, timeout=0, preserve_lock_file=True))
             binding.coordination_root.mkdir(parents=True, exist_ok=True)
             entries = list(local_author_workspaces(owner.root))
-            previous = next(
-                (item for item in entries if item.root == project.root), None
-            )
+            matches = [item for item in entries if item.root == project.root]
+            if len(matches) > 1:
+                raise ValueError(
+                    "Author is not uniquely registered with this service workspace"
+                )
+            previous = matches[0] if matches else None
             if previous_location is not None and (
                 (previous is None and not previous_location.pending)
                 or (
@@ -178,7 +180,7 @@ def register_author_workspace(
                 encoding="utf-8",
             )
             association = None
-            temporary_locator = locator.with_suffix(".tmp")
+            temporary_locator = receipt.with_suffix(".tmp")
             if project.root != owner.root:
                 association = AuthorLocation(
                     workspace=project.root,
@@ -186,21 +188,28 @@ def register_author_workspace(
                     workspace_id=selected.id,
                     project_id=project_id,
                 )
-                # Publish an owner fence before the registry. Interrupted commits
-                # cannot let a second application claim this author directory.
+                # Fence this target transaction; other registered targets remain usable.
                 temporary_locator.write_text(
                     association.model_copy(update={"pending": True}).model_dump_json(
                         indent=2
                     ),
                     encoding="utf-8",
                 )
-                temporary_locator.replace(locator)
+                if update_default:
+                    default_tmp = locator.with_suffix(".tmp")
+                    default_tmp.write_bytes(temporary_locator.read_bytes())
+                    default_tmp.replace(locator)
+                temporary_locator.replace(receipt)
             temporary.replace(path)
             if association is not None:
                 temporary_locator.write_text(
                     association.model_dump_json(indent=2), encoding="utf-8"
                 )
-                temporary_locator.replace(locator)
+                temporary_locator.replace(receipt)
+                if update_default:
+                    default_tmp = locator.with_suffix(".tmp")
+                    default_tmp.write_bytes(receipt.read_bytes())
+                    default_tmp.replace(locator)
             return selected
     except Timeout as error:
         raise ValueError(

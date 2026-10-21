@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -432,6 +433,9 @@ class ProjectProcedureWorkers:
         log_path = self._worker_dir(procedure_id) / "worker.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         record_timing("procedure_dispatch", procedure_id=procedure_id)
+        environment = dict(os.environ)
+        environment.pop("SCOPECAT_DAEMON_URL", None)
+        environment["SCOPECAT_APPLICATION_ROOT"] = str(self.root())
         with log_path.open("ab") as log:
             self._children[procedure_id] = subprocess.Popen(  # noqa: S603 - fixed interpreter and module; no shell
                 [
@@ -444,6 +448,7 @@ class ProjectProcedureWorkers:
                     procedure_id,
                     str(log_path.parent / "process.json"),
                 ],
+                env=environment,
                 stdin=subprocess.PIPE,
                 stdout=log,
                 stderr=log,

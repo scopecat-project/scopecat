@@ -18,7 +18,7 @@ from pathlib import Path, PurePosixPath
 from threading import Event
 from typing import Annotated, Literal, cast, override
 from urllib.parse import quote
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psutil
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -580,15 +580,37 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         max_body_bytes=max_command_body_bytes,
     )
 
+    instance_id = uuid4().hex
+
     @app.middleware("http")
     async def registered_workspace_context(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         from scopecat_server.request_workspace import request_workspace
 
+        expected_instance = request.headers.get("X-Scopecat-Instance-ID")
+        if expected_instance is not None:
+            health = application.health()
+            if (
+                expected_instance != instance_id
+                or request.headers.get("X-Scopecat-Project-ID") != health.project_id
+                or request.headers.get("X-Scopecat-Workspace")
+                not in health.author_workspaces.values()
+            ):
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": (
+                            "Notebook target or service lifetime changed; "
+                            "close and explicitly reconnect"
+                        )
+                    },
+                )
         token = request_workspace.set(request.headers.get("X-Scopecat-Workspace"))
         try:
-            return await call_next(request)
+            response = await call_next(request)
+            response.headers["X-Scopecat-Instance-ID"] = instance_id
+            return response
         finally:
             request_workspace.reset(token)
 

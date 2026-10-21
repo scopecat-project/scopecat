@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Buffer, Callable, Iterable, Iterator
+from pathlib import Path
 from types import TracebackType
 from typing import Literal, Self, cast
 from urllib.parse import quote
@@ -415,12 +416,35 @@ class DaemonClient:
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
         self._workspace_id = workspace_id
+        self.session_project_id: str | None = None
         self.base_url = base_url.rstrip("/")
         self._http = httpx2.Client(
             base_url=self.base_url,
             headers={"X-Scopecat-Workspace": workspace_id} if workspace_id else {},
             timeout=timeout,
             transport=transport,
+        )
+
+    def pin_session(self, *, project_id: str, source_root: Path) -> None:
+        """Bind subsequent requests to one verified service lifetime, without retry."""
+        response = self._request("GET", f"{_API_PREFIX}/health")
+        health = DaemonHealth.model_validate(response.json())
+        instance = response.headers.get("X-Scopecat-Instance-ID")
+        if (
+            not instance
+            or health.project_id != project_id
+            or health.author_workspaces.get(str(source_root)) != self.workspace_id
+        ):
+            raise ValueError(
+                "Cannot pin Notebook session: incompatible service or changed target; "
+                "update the application and explicitly reconnect"
+            )
+        self.session_project_id = project_id
+        self._http.headers.update(
+            {
+                "X-Scopecat-Project-ID": project_id,
+                "X-Scopecat-Instance-ID": instance,
+            }
         )
 
     def application_open_host(
@@ -3082,6 +3106,8 @@ class DaemonClient:
         try:
             return self._post_response(path, body)
         except httpx2.TransportError:
+            if self.session_project_id is not None:
+                raise
             return self._post_response(path, body)
 
     def _put_payload_content(
@@ -3109,6 +3135,8 @@ class DaemonClient:
                 headers=request_headers,
             )
         except httpx2.TransportError:
+            if self.session_project_id is not None:
+                raise
             request_content = (
                 content
                 if isinstance(content, bytes)
@@ -3131,6 +3159,8 @@ class DaemonClient:
         try:
             response = self._request("POST", path)
         except httpx2.TransportError:
+            if self.session_project_id is not None:
+                raise
             response = self._request("POST", path)
         return model.model_validate_json(response.content)
 

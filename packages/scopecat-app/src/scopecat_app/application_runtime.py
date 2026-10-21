@@ -24,7 +24,7 @@ from scopecat.author_workspaces import (
 from scopecat.daemon.endpoint import DaemonEndpointRecord
 from scopecat.daemon.health import ApplicationActivity
 from scopecat.project import open_project
-from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME
+from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, load_runtime_binding
 from scopecat_server.lifecycle import DaemonStatus, inspect_daemon, stop_project
 
 from .author_resources import read_resources
@@ -387,10 +387,10 @@ class ApplicationRuntime:
         self.require_ready()
         project = open_project(workspace, resolve_adapter=False)
         owner = self.instance.runtime_binding
-        binding = project.runtime_binding
+        binding = load_runtime_binding(project.root, target=self.root)
         if (binding.data_root, binding.deployment_root) != (
             owner.data_root,
             owner.deployment_root,
         ):
             raise ValueError("作者目录未绑定此应用；请先登记源码目录")
-        return author_workspace_id(project.root)
+        return author_workspace_id(project.root, target=self.root)
