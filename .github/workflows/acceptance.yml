@@ -98,6 +98,8 @@ jobs:
         shell: bash
         run: |
           uv run --locked --group delivery pytest -v -n 0 \
+            packages/scopecat-app/tests/test_build_runtime.py \
+            packages/scopecat-app/tests/test_delivery_recipe.py \
             packages/scopecat-app/tests/test_acceptance_workspaces.py \
             packages/scopecat-app/tests/test_native_windows_probe.py \
             packages/scopecat-app/tests/test_cocoa_dependency.py \
