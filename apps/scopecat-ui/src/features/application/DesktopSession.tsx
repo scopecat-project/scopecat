@@ -247,10 +247,17 @@ export function DesktopSession() {
               Quitting stops this work and releases devices. Background mode keeps Scopecat
               available from the menu bar or system tray. Saved records and code are retained.
             </Dialog.Description>
+            <p>
+              Unfinished does not always mean executing. Workflows waiting for review or attention,
+              paused workflows, and uncertain device state can still prevent automatic quit. Choose
+              Cancel to return to your work and review what needs attention.
+            </p>
             {progress && <p role="status">{progress}</p>}
             {waiting && (
               <p role="status">
-                Waiting for work to finish. Close this dialog to cancel automatic quit.
+                Automatic quit is enabled. Waiting does not answer reviews, resolve faults, or
+                resume paused workflows. Close this dialog to cancel automatic quit and return to
+                your work.
               </p>
             )}
             {error && <p role="alert">{error}</p>}

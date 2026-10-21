@@ -43,14 +43,17 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
   fireEvent.keyDown(window, { key: "q", ctrlKey: true });
   const waitButton = await screen.findByRole("button", { name: "Quit when work finishes" });
   expect(screen.getByText(/Unfinished work: 1 file operation/)).toBeInTheDocument();
+  expect(screen.getByText(/Unfinished does not always mean executing/)).toHaveTextContent(
+    "Choose Cancel to return to your work",
+  );
   await waitFor(() => expect(waitButton).toBeEnabled());
   fireEvent.click(waitButton);
-  await screen.findByText(/Waiting for work to finish/);
+  await screen.findByText(/Automatic quit is enabled/);
   wait_for_idle.mockRejectedValueOnce(new Error("Could not cancel automatic quit"));
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not cancel");
   expect(screen.getByRole("dialog")).toBeInTheDocument();
-  expect(screen.getByText(/Waiting for work to finish/)).toBeInTheDocument();
+  expect(screen.getByText(/Automatic quit is enabled/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(wait_for_idle.mock.calls).toEqual([[true], [false], [false]]);
