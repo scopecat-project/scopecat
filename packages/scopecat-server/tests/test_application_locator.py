@@ -332,3 +332,19 @@ def test_missing_database_in_existing_owner_never_initializes_new_space(
         register_author_workspace(owner.root, second)
     assert not (owner.runtime_binding.data_root / "control.sqlite3").exists()
     assert not author_location_path(second).exists()
+
+
+def test_initial_owner_registration_preserves_existing_ownership_locks(
+    tmp_path: Path,
+) -> None:
+    owner = application(tmp_path / "app")
+    root = author(tmp_path / "author")
+    paths = (
+        owner.runtime_binding.deployment_root / "deployment.lock",
+        owner.runtime_binding.data_root / "daemon.lock",
+    )
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    register_author_workspace(owner.root, root)
+    assert all(path.exists() for path in paths)

@@ -216,8 +216,14 @@ def _registration_data_identity(binding: RuntimeBinding) -> str:
     database = binding.data_root / "control.sqlite3"
     if not database.exists():
         with (
-            FileLock(binding.deployment_root / "deployment.lock", timeout=0),
-            FileLock(binding.data_root / "daemon.lock", timeout=0),
+            FileLock(
+                binding.deployment_root / "deployment.lock",
+                timeout=0,
+                preserve_lock_file=True,
+            ),
+            FileLock(
+                binding.data_root / "daemon.lock", timeout=0, preserve_lock_file=True
+            ),
         ):
             # Another starter may have initialized the store before we took locks.
             if not database.exists():
