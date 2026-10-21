@@ -25,7 +25,11 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
       export_run: vi.fn(),
       save_captured_artifact: vi.fn(),
       wait_for_idle,
-      request_exit: vi.fn().mockResolvedValue({ file_operations: 1 }),
+      request_exit: vi.fn().mockResolvedValue({
+        file_operations: 1,
+        background_operations: 1,
+        background_attention: 1,
+      }),
       exit: vi.fn(),
       status: vi.fn(),
       retry: vi.fn(),
@@ -43,6 +47,9 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
   fireEvent.keyDown(window, { key: "q", ctrlKey: true });
   const waitButton = await screen.findByRole("button", { name: "Quit when work finishes" });
   expect(screen.getByText(/Unfinished work: 1 file operation/)).toBeInTheDocument();
+  expect(screen.getByText(/Unfinished work:/)).toHaveTextContent(
+    "1 active background round, 1 unresolved background issue",
+  );
   expect(screen.getByText(/Unfinished does not always mean executing/)).toHaveTextContent(
     "Choose Cancel to return to your work",
   );

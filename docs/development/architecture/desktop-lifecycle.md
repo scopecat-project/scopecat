@@ -60,3 +60,18 @@ headless process tests. Hardware acceptance follows software lifecycle acceptanc
 The [native window probe](../native-window-acceptance.md) runs in the manual
 distribution profile. [Editing recovery and store isolation](draft-recovery.md)
 share this lifecycle without changing close or Quit behavior.
+
+Idle shutdown also fences daemon-owned analysis-follow and calibration advancement
+rounds. An admitted round remains active through discovery, execution and final
+persistence. A shutdown decision and the next round's admission share one lock;
+accepted shutdown prevents another round, while a busy or rejected request or an
+error before acceptance leaves admission open. Running analysis subscriptions remain
+persisted and resume through
+their existing bounded scan policy. An unresolved analysis follow requiring
+attention blocks idle shutdown; no result is retried or marked complete for exit.
+The Quit dialog distinguishes active background rounds from background attention.
+
+This is a safety prerequisite for bounded drain, not the complete drain contract:
+ordinary admission, human-input waits, all pending schedules and running calibration
+tasks still use their existing conservative idle rules. The wait action does not
+yet defer future schedules or classify procedure scope.

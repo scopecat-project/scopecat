@@ -33,6 +33,8 @@ class ApplicationActivity(BaseModel):
     requests: int = 0
     calibration_tasks: int = 0
     scheduled_workflows: int = 0
+    background_operations: int = 0
+    background_attention: int = 0
 
     @property
     def busy(self) -> bool:
@@ -43,6 +45,8 @@ class ApplicationActivity(BaseModel):
             or self.requests
             or self.calibration_tasks
             or self.scheduled_workflows
+            or self.background_operations
+            or self.background_attention
         )
 
 

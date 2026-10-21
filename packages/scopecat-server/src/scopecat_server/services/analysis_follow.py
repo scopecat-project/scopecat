@@ -19,6 +19,8 @@ from scopecat_server.storage.sqlite.analysis_follow import AnalysisFollowReposit
 from scopecat_server.storage.sqlite.measurement_slices import freeze_measurement_slice
 from scopecat_server.storage.sqlite.run_repository import SQLiteRunRepository
 
+from .background_rounds import BackgroundRounds
+
 _LOG = logging.getLogger(__name__)
 type AnalyzeGroup = Callable[
     [AuthorAnalysisRequest, float, Event], AuthorAnalysisReceipt
@@ -33,10 +35,13 @@ class AnalysisFollowRunner:
         repository: AnalysisFollowRepository,
         runs: SQLiteRunRepository,
         analyze: AnalyzeGroup,
+        *,
+        rounds: BackgroundRounds | None = None,
     ) -> None:
         self.repository = repository
         self.runs = runs
         self._analyze = analyze
+        self._rounds = rounds or BackgroundRounds()
         self._stop = Event()
         self._lock = Lock()
         self._active: tuple[str, Event] | None = None
@@ -88,13 +93,21 @@ class AnalysisFollowRunner:
             for identity in self.repository.running():
                 if self._stop.is_set():
                     return
-                try:
-                    self.advance(identity)
-                except Exception as error:
-                    _LOG.exception("Group analysis failed: %s", identity)
-                    self.repository.set_state(identity, "attention", str(error))
+                with self._rounds.round() as admitted:
+                    if not admitted:
+                        return
+                    try:
+                        self._advance(identity)
+                    except Exception as error:
+                        _LOG.exception("Group analysis failed: %s", identity)
+                        self.repository.set_state(identity, "attention", str(error))
 
     def advance(self, identity: str) -> None:
+        with self._rounds.round() as admitted:
+            if admitted:
+                self._advance(identity)
+
+    def _advance(self, identity: str) -> None:
         view = self.repository.get(identity)
         if view.state != "running":
             return
