@@ -7,10 +7,14 @@ export function AnalysisOutputView({
   output,
   getArtifactDownload,
   showMetadata = true,
+  onPoint,
+  selectedPoint,
 }: {
   output: AnalysisOutput;
   getArtifactDownload: AnalysisArtifactDownloader;
   showMetadata?: boolean;
+  onPoint?: (point: { seriesId: string; dataIndex: number }) => void;
+  selectedPoint?: { seriesId: string; dataIndex: number };
 }) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string>();
@@ -51,6 +55,8 @@ export function AnalysisOutputView({
         content={output.content}
         title={output.title}
         showMetadata={showMetadata}
+        onPoint={onPoint}
+        selectedPoint={selectedPoint}
       />
     );
   } else if (output.kind === "dataset") {
@@ -209,17 +215,24 @@ function AnalysisFigureView({
   content,
   title,
   showMetadata,
+  onPoint,
+  selectedPoint,
 }: {
   content: FigureContent;
   title: string;
   showMetadata: boolean;
+  onPoint?: (point: { seriesId: string; dataIndex: number }) => void;
+  selectedPoint?: { seriesId: string; dataIndex: number };
 }) {
   const first = content.layers[0]!.preview;
   const series = content.layers.flatMap((layer) => layer.preview.series);
   const pointCount = series.reduce((total, item) => total + item.x.length, 0);
   const xLabel = analysisAxisLabel(first.x_axis);
   const yLabel = analysisAxisLabel(first.y_axis);
-  const option = useMemo(() => analysisFigureOption(content), [content]);
+  const option = useMemo(
+    () => analysisFigureOption(content, selectedPoint),
+    [content, selectedPoint],
+  );
   return (
     <figure className="m-0 p-[9px]" data-testid="analysis-figure">
       <figcaption className="mb-1.5 text-xs text-text-dim">
@@ -228,6 +241,7 @@ function AnalysisFigureView({
       <EChart
         ariaLabel={`${title}: ${yLabel} by ${xLabel}`}
         height={270}
+        onPoint={onPoint}
         option={option}
         pointCount={pointCount}
         seriesLabels={series.map((item) => item.label ?? item.id)}

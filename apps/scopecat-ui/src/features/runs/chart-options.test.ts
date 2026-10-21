@@ -294,9 +294,9 @@ describe("run chart ECharts options", () => {
     });
     const series = optionSeries(option);
     expect(series).toMatchObject([
-      { id: "measured/data", type: "scatter" },
-      { id: "fit/data", type: "line" },
-      { id: "fit/data/uncertainty", type: "custom", silent: true },
+      { id: JSON.stringify(["measured", "data", "data"]), type: "scatter" },
+      { id: JSON.stringify(["fit", "data", "data"]), type: "line" },
+      { id: JSON.stringify(["fit", "data", "uncertainty"]), type: "custom", silent: true },
     ]);
     expect(series[2]?.data).toEqual(
       style === "band"

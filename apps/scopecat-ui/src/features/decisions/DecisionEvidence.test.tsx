@@ -100,3 +100,14 @@ function renderEvidence(input: Parameters<typeof DecisionEvidence>[0]["input"]) 
     </QueryClientProvider>,
   );
 }
+
+it("rejects a response with a different immutable evidence identity", async () => {
+  vi.mocked(getRunAnalysis).mockResolvedValue({ ...publication, id: "another-publication" });
+  renderEvidence({
+    kind: "analysis",
+    analysis_record_id: "fit-r1",
+    subject: { kind: "run", run_id: "run-1" },
+  });
+  expect(await screen.findByRole("alert")).toHaveTextContent("evidence identity changed");
+  expect(screen.queryByRole("table", { name: "Proposed parameter changes" })).toBeNull();
+});

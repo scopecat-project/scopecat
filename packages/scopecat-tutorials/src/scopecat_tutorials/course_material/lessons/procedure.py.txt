@@ -107,8 +107,8 @@ def choose_peak(
             title="Choose a peak frequency",
             instructions=(
                 "Find the highest point of the upward peak (not a dip). "
-                "Hover over the curve to read its horizontal coordinate, "
-                "then type the frequency; clicking does not fill it. "
+                "Choose Peak selected, then click one plotted point to fill the frequency. "
+                "You can adjust the value before submitting. "
                 "Enter a frequency in MHz between "
                 f"{MIN_FREQUENCY_MHZ} and {MAX_FREQUENCY_MHZ}, "
                 "or choose No clear peak / Unsure and leave it empty. "
@@ -120,6 +120,10 @@ def choose_peak(
             inputs=(scan, plotted),
             response_template=PeakChoice("Unsure", None),
             metadata={
+                "point_binding": {
+                    "input": 1, "output": "trace", "layer": "data",
+                    "column": "frequency", "field": "frequency_mhz", "unit": "MHz",
+                },
                 "field_labels": {
                     "outcome": "Your judgment",
                     "frequency_mhz": "Peak frequency (MHz)",

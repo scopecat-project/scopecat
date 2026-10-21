@@ -1,3 +1,4 @@
+import { pointBinding } from "./point-binding";
 import * as Controls from "../../ui/Controls";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import {
   decisionValueError,
   decisionConstraintError,
   decisionFormValue,
+  inactiveField,
 } from "./DecisionFields";
 import { errorMessage, formatDateTime } from "../../lib/presentation";
 import { classes, iconButton, primaryButton } from "../../ui/styles";
@@ -320,7 +322,10 @@ function DecisionEditor({
   const request = step.interpretation_request;
   if (!request) throw new Error("waiting interpretation request is missing");
   const fields = decisionFields(request.structure);
-  const analysisInputs = step.inputs.filter((input) => input.kind === "analysis");
+  const analysisInputs = step.inputs
+    .map((input, index) => ({ input, index }))
+    .filter(({ input }) => input.kind === "analysis");
+  const binding = pointBinding(request.metadata, request.structure);
   const defaults = {
     actor:
       initial.default_operator ||
@@ -502,6 +507,14 @@ function DecisionEditor({
             ))}
         </div>
       )}
+      {request.metadata &&
+        "point_binding" in request.metadata &&
+        (!binding || step.inputs[binding.input]?.kind !== "analysis") && (
+          <Controls.Notice role="alert">
+            Chart selection declaration is unsupported. Complete the form manually or ask the
+            workflow author to correct the binding.
+          </Controls.Notice>
+        )}
       <div
         className={classes(
           "grid items-start gap-4",
@@ -510,9 +523,63 @@ function DecisionEditor({
       >
         {analysisInputs.length > 0 && (
           <div className="grid min-w-0 gap-3">
-            {analysisInputs.map((input) => (
-              <DecisionEvidence key={JSON.stringify(input)} input={input} />
-            ))}
+            {analysisInputs.map(
+              ({ input, index }) =>
+                input.kind === "analysis" && (
+                  <DecisionEvidence
+                    key={JSON.stringify(input)}
+                    input={input}
+                    binding={binding?.input === index ? binding : undefined}
+                    disabled={
+                      draft.invalid ||
+                      draft.discarding ||
+                      committing ||
+                      submit.isPending ||
+                      submit.isSuccess ||
+                      draft.status === "conflict" ||
+                      !fields ||
+                      !isRecord(formValue) ||
+                      Boolean(
+                        binding &&
+                        fields[binding.field] &&
+                        inactiveField(
+                          binding.field,
+                          fields[binding.field]!,
+                          formValue,
+                          request.metadata,
+                          fields,
+                        ),
+                      )
+                    }
+                    onPick={(value) => {
+                      if (
+                        !binding ||
+                        binding.input !== index ||
+                        !fields ||
+                        !isRecord(formValue) ||
+                        !draft.isCurrent(draft.input) ||
+                        recording.current ||
+                        draft.status === "conflict" ||
+                        draft.discarding ||
+                        inactiveField(
+                          binding.field,
+                          fields[binding.field]!,
+                          formValue,
+                          request.metadata,
+                          fields,
+                        )
+                      )
+                        return false;
+                      if (fields[binding.field]?.type === "int" && !Number.isInteger(value))
+                        return false;
+                      setValueText(
+                        JSON.stringify({ ...formValue, [binding.field]: value }, null, 2),
+                      );
+                      return true;
+                    }}
+                  />
+                ),
+            )}
           </div>
         )}
         {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Delegate IME Enter protection from the native form controls without adding a keyboard role to the form. */}

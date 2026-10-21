@@ -22,7 +22,15 @@ use([
   VisualMapContinuousComponent,
 ]);
 
-export function EChartRuntime({ height, option }: { height: number; option: EChartsCoreOption }) {
+export function EChartRuntime({
+  height,
+  option,
+  onPoint,
+}: {
+  height: number;
+  option: EChartsCoreOption;
+  onPoint?: (point: { seriesId: string; dataIndex: number }) => void;
+}) {
   const elementRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
   const heightRef = useRef(height);
@@ -59,6 +67,26 @@ export function EChartRuntime({ height, option }: { height: number; option: ECha
   useEffect(() => {
     chartRef.current?.setOption(option, { notMerge: true });
   }, [option]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !onPoint) return;
+    const click = (event: unknown) => {
+      if (
+        typeof event !== "object" ||
+        event === null ||
+        !("seriesId" in event) ||
+        !("dataIndex" in event)
+      )
+        return;
+      if (typeof event.seriesId === "string" && typeof event.dataIndex === "number")
+        onPoint({ seriesId: event.seriesId, dataIndex: event.dataIndex });
+    };
+    chart.on("click", click);
+    return () => {
+      chart.off("click", click);
+    };
+  }, [onPoint]);
 
   useEffect(() => {
     heightRef.current = height;

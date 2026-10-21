@@ -1,3 +1,4 @@
+import { analysisSeriesId } from "./analysis-series-id";
 import type {
   CustomSeriesRenderItem,
   CustomSeriesOption,
@@ -51,7 +52,10 @@ export function analysisAxisLabel(
   return axis.unit ? `${axis.label} (${axis.unit})` : axis.label;
 }
 
-export function analysisFigureOption(content: AnalysisFigureContent): EChartsCoreOption {
+export function analysisFigureOption(
+  content: AnalysisFigureContent,
+  selectedPoint?: { seriesId: string; dataIndex: number },
+): EChartsCoreOption {
   const first = content.layers[0]!.preview;
   const entries = content.layers.flatMap((layer) =>
     layer.preview.series.map((series) => ({ layer, series })),
@@ -64,10 +68,19 @@ export function analysisFigureOption(content: AnalysisFigureContent): EChartsCor
   const plotted: (LineSeriesOption | ScatterSeriesOption | CustomSeriesOption)[] = [];
   entries.forEach(({ layer, series }, index) => {
     const color = SERIES_COLORS[index % SERIES_COLORS.length];
-    const id = `${layer.id}/${series.id}`;
+    const id = analysisSeriesId(layer.id, series.id);
     const name = labels[index];
     plotted.push({
-      data: series.x.map((x, i) => [x, series.y[i]!]),
+      data: series.x.map((x, i) =>
+        selectedPoint?.seriesId === id && selectedPoint.dataIndex === i
+          ? {
+              value: [x, series.y[i]!],
+              symbol: "circle",
+              symbolSize: 13,
+              itemStyle: { color: "#facc15", borderColor: "#fff", borderWidth: 2 },
+            }
+          : [x, series.y[i]!],
+      ),
       id,
       name,
       itemStyle: { color },
@@ -96,7 +109,7 @@ export function analysisFigureOption(content: AnalysisFigureContent): EChartsCor
       plotted.push({
         type: "custom",
         clip: true,
-        id: `${id}/uncertainty`,
+        id: analysisSeriesId(layer.id, series.id, "uncertainty"),
         name,
         data,
         silent: true,
