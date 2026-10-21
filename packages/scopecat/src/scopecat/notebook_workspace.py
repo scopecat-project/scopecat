@@ -154,11 +154,11 @@ class NotebookSession(AuthorProject):
             raise ValueError(
                 "Close the active Notebook workspace before switching projects."
             )
+        endpoint = resolve_daemon_endpoint(project.root, explicit=daemon, target=target)
         identity = author_workspace_id(project.root, target=target)
         project = replace(
             project, execution=SourceExecutionContext(binding, identity, None)
         )
-        endpoint = resolve_daemon_endpoint(project.root, explicit=daemon, target=target)
         if _workspace is not None and not _workspace.is_closed:
             if (
                 _workspace.base_url != endpoint.rstrip("/")

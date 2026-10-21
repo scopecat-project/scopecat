@@ -446,7 +446,9 @@ class ProjectProcedureWorkers:
                     procedure_id,
                     str(log_path.parent / "process.json"),
                 ],
-                env=author_worker_environment(self.root()),
+                env=author_worker_environment(
+                    self.root() if root != self.root() else None
+                ),
                 stdin=subprocess.PIPE,
                 stdout=log,
                 stderr=log,

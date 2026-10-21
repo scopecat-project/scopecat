@@ -57,6 +57,7 @@ def test_reuse_isolation_eviction_and_failure(tmp_path: Path) -> None:
         stderr: TextIO,
         encoding: str,
         creationflags: int,
+        env: dict[str, str],
     ) -> subprocess.Popen[str]:
         # Preserve the real pipe/encoding/diagnostics protocol, replace project code.
         child = real_spawn(
@@ -66,6 +67,7 @@ def test_reuse_isolation_eviction_and_failure(tmp_path: Path) -> None:
             stderr=stderr,
             encoding=encoding,
             creationflags=creationflags,
+            env=env,
         )
         children.append(child)
         return child
