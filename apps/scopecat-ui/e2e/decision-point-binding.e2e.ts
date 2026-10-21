@@ -62,6 +62,7 @@ test("synthetic sweep point fills a draft, allows adjustment and explicitly cont
       const selected = page.getByTestId("analysis-figure").locator('svg path[fill="#facc15"]');
       if (await selected.count()) await selected.click();
       else await points.nth(40).click();
+      await page.mouse.move(0, 0);
       await expect(frequency).toHaveValue("6500");
       await expect(
         page.getByTestId("analysis-figure").locator('svg path[fill="#facc15"]'),
