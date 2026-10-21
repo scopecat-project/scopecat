@@ -30,6 +30,7 @@ import {
 } from "./instrument-api";
 import {
   AvailabilityBadge,
+  AuthorWorkflowLinks,
   configuredDefaultsReceiptMessage,
   DeviceStateCard,
   filterDrafts,
@@ -470,6 +471,28 @@ function InstrumentInspectorContent({
             </div>
           </div>
 
+          <div className="text-xs leading-normal text-text-dim">
+            <p>
+              Invoke 调用 operation；Collect 调用 acquisition，可能发起新采集，也可能读取既有结果。
+              请以各项契约说明为准；Collect 不会自动替你准备 payload 或调用另一个 operation。
+              查看能力或展开帮助不会连接设备或发送设备命令。
+            </p>
+            <p>
+              {connected
+                ? interactionDisabled
+                  ? "当前交互尚未结束，请等待完成后继续。"
+                  : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先 Disconnect。"
+                : instrument.availability === "active"
+                  ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再 Connect。"
+                  : instrument.availability === "quarantined"
+                    ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
+                    : instrument.availability === "unavailable"
+                      ? "设备不可用。请先处理上方驱动或连接配置问题。"
+                      : "本页尚未连接。确认设备与调用前提后，点击 Connect 获取手动会话。"}
+            </p>
+            <AuthorWorkflowLinks />
+          </div>
+
           {(description.interfaces ?? []).length > 0 ||
           (description.device_schemas ?? []).length > 0 ? (
             <div className="grid gap-2.5">
@@ -517,7 +540,7 @@ function InstrumentInspectorContent({
             <InspectorEmpty
               icon={<CircleOff />}
               title="No interactive interfaces"
-              detail="This device does not declare interactive properties, operations, or acquisitions."
+              detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
             />
           )}
 
