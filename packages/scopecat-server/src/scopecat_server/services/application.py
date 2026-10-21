@@ -54,6 +54,7 @@ from .launch_recovery import LaunchRecoveryService
 from .leases import OwnershipLeaseSupervisor
 from .manual_previews import ManualPreviewService
 from .notebook_practice import NotebookPracticeService
+from .operator_settings import OperatorSettingsService
 from .parameter_drafts import ParameterDraftService
 from .point_plans import RunPointPlanService
 from .practice import PracticeService
@@ -143,6 +144,7 @@ class DaemonApplication:
         self.reviews = reviews
         self.automation = automation
         self.launch_recovery = LaunchRecoveryService(project_store.sqlite)
+        self.operator_settings = OperatorSettingsService(self.binding.data_root)
         self.decision_drafts = DecisionDraftService(project_store.sqlite)
         self.parameter_drafts = ParameterDraftService(project_store.sqlite, config)
         self.data_cleanup = DataCleanupService(project_store)

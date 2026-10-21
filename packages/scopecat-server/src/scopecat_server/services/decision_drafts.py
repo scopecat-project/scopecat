@@ -10,6 +10,7 @@ from scopecat_server.decision_drafts import (
     DecisionDraftView,
 )
 from scopecat_server.errors import BackendNotFound
+from scopecat_server.services.operator_settings import OperatorSettingsService
 from scopecat_server.storage.sqlite import decision_drafts as drafts
 from scopecat_server.storage.sqlite.automation import (
     AutomationNotFound,
@@ -86,4 +87,9 @@ class DecisionDraftService:
             draft=draft,
             head_revision=0 if current is None else current.revision,
             validity=validity,
+            default_operator=(
+                draft.input.actor
+                if draft is not None and draft.state == "saved"
+                else OperatorSettingsService(self._database.path.parent).read().operator
+            ),
         )

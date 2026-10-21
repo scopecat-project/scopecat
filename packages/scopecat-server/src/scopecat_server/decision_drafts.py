@@ -48,6 +48,7 @@ class DecisionDraft(DraftModel):
 
 
 class DecisionDraftView(DraftModel):
+    default_operator: str = ""
     draft: DecisionDraft | None
     head_revision: int
     validity: Literal["current", "baseline_changed", "no_longer_waiting"]

@@ -13,13 +13,19 @@ const input = {
   value_text: "{}",
   use_json: true,
 };
-const initial: DecisionDraftView = { draft: null, head_revision: 0, validity: "current" };
+const initial: DecisionDraftView = {
+  default_operator: "",
+  draft: null,
+  head_revision: 0,
+  validity: "current",
+};
 function receipt(
   command: DecisionDraftSave,
   revision = 1,
   state: "saved" | "conflict" | "discarded" = "saved",
 ): DecisionDraftView {
   return {
+    default_operator: "",
     draft: {
       target,
       baseline: command.baseline,
@@ -179,3 +185,18 @@ it("preserves input after discard failure and retries discard explicitly", async
   expect(vi.mocked(saveDecisionDraft).mock.calls[1]![0].discard).toBe(true);
   expect(result.current.discardFailed).toBe(false);
 });
+
+it.each(["Bob", ""])(
+  "explicit discard starts with the newly returned operator setting %s",
+  async (operator) => {
+    vi.mocked(saveDecisionDraft).mockImplementation(async (command) => ({
+      ...receipt(command, 1, "discarded"),
+      default_operator: operator,
+    }));
+    const { result } = renderHook(() =>
+      useDecisionDraft(target, baseline, initial, { ...input, actor: "Alice" }),
+    );
+    await act(() => result.current.discard());
+    expect(result.current.input.actor).toBe(operator);
+  },
+);

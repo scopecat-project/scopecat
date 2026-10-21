@@ -322,7 +322,9 @@ function DecisionEditor({
   const fields = decisionFields(request.structure);
   const analysisInputs = step.inputs.filter((input) => input.kind === "analysis");
   const defaults = {
-    actor: typeof request.metadata?.reviewer === "string" ? request.metadata.reviewer : "",
+    actor:
+      initial.default_operator ||
+      (typeof request.metadata?.reviewer === "string" ? request.metadata.reviewer : ""),
     actor_kind: "human" as const,
     note: "",
     value_text: JSON.stringify(
@@ -431,6 +433,8 @@ function DecisionEditor({
     recording.current = true;
     setCommitting(true);
     try {
+      // An untouched template must also retain its actor before an uncertain send.
+      draft.edit(draft.input);
       if ((await draft.flush()) && draft.isCurrent(draft.input)) {
         onSubmitted(command);
         await submit.mutateAsync(command);

@@ -159,11 +159,11 @@ export function useDecisionDraft(
       current.revision = view.head_revision;
       current.baseline = baseline;
       current.acknowledged = current.generation;
-      current.input = defaults;
+      current.input = { ...defaults, actor: view.default_operator };
       current.conflict = false;
       current.valid = view.validity === "current";
       if (current.alive) {
-        setInput(defaults);
+        setInput(current.input);
         setValidity(view.validity);
         setStarted(false);
       }

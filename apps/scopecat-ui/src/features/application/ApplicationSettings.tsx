@@ -1,3 +1,4 @@
+import { OperatorSettings } from "./OperatorSettings";
 import { ActionRow, Notice, Button, Field, Input, Select } from "../../ui/Controls";
 import { pageTitle, sectionTitle, pageContent, classes } from "../../ui/styles";
 import { useEffect, useState } from "react";
@@ -78,6 +79,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       <h2 id="application-settings-heading" className={pageTitle}>
         Application settings
       </h2>
+      <OperatorSettings />
       {operation.error && <Notice role="alert">{errorMessage(operation.error)}</Notice>}
       {picker.error && <Notice role="alert">{errorMessage(picker.error)}</Notice>}
       {operation.data && <Notice role="status">{operation.data}</Notice>}

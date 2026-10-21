@@ -188,3 +188,84 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await rm(otherHome, { recursive: true, force: true });
   }
 });
+
+test("Settings operator is shared across windows and retained after uncertain Decision submission", async ({
+  browser,
+}, testInfo) => {
+  test.setTimeout(120000);
+  const project = await mkdtemp(join(tmpdir(), "scopecat-operator-e2e-"));
+  let context;
+  try {
+    await writeFile(join(project, "scopecat.toml"), "[lab]\n");
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
+    const endpoint = async () =>
+      JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")).base_url as string;
+    const url = await endpoint();
+    const procedure = uv(["python", "-c", SEED, project]);
+    context = await browser.newContext();
+    const settings = await context.newPage();
+    await settings.goto(`${url}/#settings`);
+    await settings.getByLabel("Operator name").fill("Alice");
+    await settings.getByRole("button", { name: "Save operator" }).click();
+    await expect(settings.getByText("Operator saved", { exact: true })).toBeVisible();
+    const decision = await context.newPage();
+    await decision.goto(`${url}/?procedure=${procedure}#decisions`);
+    await expect(decision.getByLabel("Recorded reviewer")).toHaveValue("Alice");
+    for (const width of [1280, 390]) {
+      await decision.setViewportSize({ width, height: 900 });
+      expect(
+        await decision.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await testInfo.attach(`operator-decision-${width}`, {
+        body: await decision.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
+    await decision.route("**/attempts/1/input/continue", (route) => route.abort("failed"));
+    await decision.getByRole("button", { name: "Submit and continue" }).click();
+    await expect(decision.getByRole("alert")).toContainText("local daemon did not respond");
+    const draftResponse = await decision.request.post(`${url}/api/v1/decision-drafts/read`, {
+      data: { procedure_run_id: procedure, step_key: "select/peak", attempt: 1 },
+    });
+    expect((await draftResponse.json()).draft.input.actor).toBe("Alice");
+    await settings.getByLabel("Operator name").fill("Bob");
+    await settings.getByRole("button", { name: "Save operator" }).click();
+    await expect(settings.getByText("Operator saved", { exact: true })).toBeVisible();
+    await context.close();
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
+    context = await browser.newContext();
+    const reopened = await context.newPage();
+    const reopenedUrl = await endpoint();
+    await reopened.goto(`${reopenedUrl}/?procedure=${procedure}#decisions`);
+    await expect(reopened.getByLabel("Recorded reviewer")).toHaveValue("Alice");
+    const defaults = await reopened.request.get(`${reopenedUrl}/api/v1/operator-settings`);
+    expect((await defaults.json()).operator).toBe("Bob");
+    const runs = await reopened.request.get(`${reopenedUrl}/api/v1/runs`);
+    expect((await runs.json()).items).toHaveLength(0);
+  } finally {
+    await context?.close();
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
+    await rm(project, { recursive: true, force: true });
+  }
+});

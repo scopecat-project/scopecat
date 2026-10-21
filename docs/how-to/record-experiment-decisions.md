@@ -66,9 +66,19 @@ def continue_survey(
 
 The first execution stops in `waiting_for_input` and releases its worker lease.
 Open **Decisions** in the project console, inspect the request and its named
-evidence, identify the judging human, AI, or service, and record JSON matching
-the displayed structure. An optional `response_template` is validated against
-that structure and becomes the editor's starting value; use it to reduce
+evidence, complete the supported form and choose **Submit and continue**. GUI
+judgments are recorded as human; AI and service callers declare their source
+through the API.
+
+Set **Settings → Default operator** once for new Decision drafts in this data
+space. The server shares the setting across windows and ports, including after
+restart. A saved draft and an uncertain submission retain their original name;
+changing Settings does not rewrite them. Explicitly discarding a draft starts
+with the current setting. The name remains editable attribution, not a login or
+permission. Other operation forms retain their existing operator controls.
+Application backups include this setting.
+
+An optional `response_template` is validated against the response structure and becomes the editor's starting value; use it to reduce
 transcription without presenting it as an accepted decision. The recorded actor
 is provenance supplied by the answering client, rather than an authenticated
 account identity. The same operation is available from Python:
