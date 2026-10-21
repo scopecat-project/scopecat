@@ -336,6 +336,56 @@ def test_idle_shutdown_fences_mutations_and_waits_for_existing_requests() -> Non
     assert client.post("/changing").status_code == 503
 
 
+def test_idle_shutdown_waits_for_background_writes_and_preserves_failed_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scopecat.daemon.health import ApplicationActivity
+
+    from scopecat_server.http import transport
+    from scopecat_server.services.background_rounds import BackgroundRounds
+
+    class IdleApplication(FakeApplication):
+        def activity(self) -> ApplicationActivity:
+            return ApplicationActivity()
+
+    rounds = BackgroundRounds()
+    monkeypatch.setattr(transport, "BackgroundRounds", lambda: rounds)
+    client = TestClient(
+        _create_test_app(
+            IdleApplication(),
+            request_shutdown=lambda token: token == "valid",  # noqa: S105 - test token
+        )
+    )
+    headers = {"X-Scopecat-Shutdown-Token": "valid"}
+    with rounds.round() as admitted:
+        assert admitted
+        assert (
+            client.get("/api/v1/application-activity").json()["background_operations"]
+            == 1
+        )
+        assert (
+            client.post(
+                "/api/v1/shutdown?only_if_idle=true", headers=headers
+            ).status_code
+            == 409
+        )
+    assert (
+        client.post(
+            "/api/v1/shutdown?only_if_idle=true",
+            headers={"X-Scopecat-Shutdown-Token": "invalid"},
+        ).status_code
+        == 403
+    )
+    with rounds.round() as admitted:
+        assert admitted
+    assert (
+        client.post("/api/v1/shutdown?only_if_idle=true", headers=headers).status_code
+        == 202
+    )
+    with rounds.round() as admitted:
+        assert not admitted
+
+
 def test_run_submission_and_backend_error_mapping() -> None:
     backend = FakeApplication()
     client = TestClient(_create_test_app(backend))

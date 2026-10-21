@@ -34,6 +34,7 @@ from scopecat.records.calibration_check import CalibrationCheckResult
 from scopecat.sdk.compute import PYTHON_JSON_CODEC
 
 from scopecat_server import BackendConflict, LocalDaemonRuntime
+from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
@@ -321,7 +322,26 @@ def test_finalization_handoff_recovery_and_rejection(
     with LocalDaemonRuntime(root) as restarted:
         assert restarted.application.calibration_tasks.advance("round") == bound
         workers = Mock(spec=ProjectProcedureWorkers)
-        CalibrationTaskRunner(restarted.application.calibration_tasks, workers).tick()
+        stopped_rounds = BackgroundRounds()
+        assert stopped_rounds.stop(lambda: None, only_if_idle=True)
+        CalibrationTaskRunner(
+            restarted.application.calibration_tasks, workers, rounds=stopped_rounds
+        ).tick()
+        workers.manage.assert_not_called()
+        assert restarted.application.calibration_tasks.get("round") == bound
+        rounds = BackgroundRounds()
+
+        def handoff(_identity: str) -> None:
+            assert rounds.active == 1
+            assert not rounds.stop(
+                lambda: pytest.fail("cannot quit during worker handoff"),
+                only_if_idle=True,
+            )
+
+        workers.manage.side_effect = handoff
+        CalibrationTaskRunner(
+            restarted.application.calibration_tasks, workers, rounds=rounds
+        ).tick()
         workers.manage.assert_called_once_with(bound.finalization.procedure_run_id)
     archive = tmp_path / "snapshot"
     restored = tmp_path / "restored"

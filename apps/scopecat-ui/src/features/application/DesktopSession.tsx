@@ -100,6 +100,8 @@ interface ApplicationActivity {
   requests: number;
   calibration_tasks: number;
   scheduled_workflows: number;
+  background_operations: number;
+  background_attention: number;
 }
 
 function describeWork(work: ApplicationActivity): string {
@@ -111,6 +113,8 @@ function describeWork(work: ApplicationActivity): string {
     ["requests", "change"],
     ["calibration_tasks", "calibration task"],
     ["scheduled_workflows", "scheduled workflow"],
+    ["background_operations", "active background round"],
+    ["background_attention", "unresolved background issue"],
   ];
   return labels
     .filter(([key]) => (work[key] ?? 0) > 0)

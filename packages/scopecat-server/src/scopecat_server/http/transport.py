@@ -446,6 +446,7 @@ from scopecat_server.retained_request import (
     ComparisonCall,
     ProcedureValidationCall,
 )
+from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
 from scopecat_server.services.project_workers import (
     ProcedureDispatchError,
@@ -530,6 +531,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     )
 
     retained_workers = RevisionWorkers("scopecat_server.retained_worker")
+    background_rounds = BackgroundRounds()
 
     def analyze_follow(
         command: AuthorAnalysisRequest, timeout: float, cancelled: Event
@@ -545,13 +547,15 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
     @cache
     def follow_runner():
-        return application.analysis_follow_runner(analyze_follow)
+        return application.analysis_follow_runner(
+            analyze_follow, rounds=background_rounds
+        )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         application.calibration_tasks.validate_call = validate_task_call
         task_runner = CalibrationTaskRunner(
-            application.calibration_tasks, project_workers
+            application.calibration_tasks, project_workers, rounds=background_rounds
         )
         project_workers.start()
         task_runner.start()
@@ -1308,7 +1312,12 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
 
         @app.get(f"{_API_PREFIX}/application-activity", include_in_schema=False)
         def application_activity():
-            return application.activity().model_copy(update={"requests": changing})
+            return application.activity().model_copy(
+                update={
+                    "requests": changing,
+                    "background_operations": background_rounds.active,
+                }
+            )
 
         @app.post(DAEMON_SHUTDOWN_PATH, include_in_schema=False, status_code=202)
         async def shutdown_daemon(
@@ -1320,17 +1329,24 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         ) -> None:
             nonlocal stopping
             async with lifecycle_lock:
-                if (
-                    not stopping
-                    and only_if_idle
-                    and (changing or application.activity().busy)
-                ):
+
+                def accept() -> None:
+                    if (
+                        not stopping
+                        and only_if_idle
+                        and (changing or application.activity().busy)
+                    ):
+                        raise HTTPException(
+                            status_code=409, detail="Application has active work"
+                        )
+                    if not request_shutdown(token):
+                        raise HTTPException(
+                            status_code=403, detail="invalid shutdown token"
+                        )
+
+                if not background_rounds.stop(accept, only_if_idle=only_if_idle):
                     raise HTTPException(
-                        status_code=409, detail="Application has active work"
-                    )
-                if not request_shutdown(token):
-                    raise HTTPException(
-                        status_code=403, detail="invalid shutdown token"
+                        status_code=409, detail="Background work is finishing"
                     )
                 stopping = True
                 shutdown_accepted.set()

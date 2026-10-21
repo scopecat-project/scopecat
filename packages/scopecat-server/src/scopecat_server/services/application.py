@@ -41,6 +41,7 @@ from .admission import AdmissionService
 from .analyses import AnalysisService
 from .author_workspaces import AuthorWorkspaceServices
 from .automation import AutomationService
+from .background_rounds import BackgroundRounds
 from .config import ConfigService
 from .configuration_exchange import ConfigurationExchangeService
 from .data_cleanup import DataCleanupService
@@ -198,13 +199,16 @@ class DaemonApplication:
     def start(self) -> None:
         self._lease_supervisor.start()
 
-    def analysis_follow_runner(self, analyze: AnalyzeGroup) -> AnalysisFollowRunner:
+    def analysis_follow_runner(
+        self, analyze: AnalyzeGroup, *, rounds: BackgroundRounds | None = None
+    ) -> AnalysisFollowRunner:
         return AnalysisFollowRunner(
             self.analysis_follows,
             SQLiteRunRepository(
                 self._project_store.sqlite, self._project_store.objects.root
             ),
             analyze,
+            rounds=rounds,
         )
 
     def close(self) -> None:
@@ -249,6 +253,13 @@ class DaemonApplication:
     def activity(self) -> ApplicationActivity:
         with self._project_store.sqlite.read_transaction() as connection:
             return ApplicationActivity(
+                background_attention=cast(
+                    "int",
+                    connection.execute(
+                        "SELECT count(*) FROM analysis_follows "
+                        "WHERE state = 'attention'"
+                    ).fetchone()[0],
+                ),
                 calibration_tasks=cast(
                     "int",
                     connection.execute(

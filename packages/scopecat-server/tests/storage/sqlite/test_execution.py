@@ -1661,8 +1661,10 @@ def test_measurement_slice_waits_for_fixed_points_and_survives_later_acquisition
     ) == list(first.records)
 
 
+@pytest.mark.parametrize("quit_between_groups", [False, True])
 def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
     tmp_path: Path,
+    quit_between_groups: bool,
 ) -> None:
     from threading import Event
 
@@ -1688,6 +1690,7 @@ def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
     from scopecat.runs.repository import RunContentPublication
 
     from scopecat_server.services.analysis_follow import AnalysisFollowRunner
+    from scopecat_server.services.background_rounds import BackgroundRounds
     from scopecat_server.storage.sqlite.analysis_follow import AnalysisFollowRepository
 
     runs = _runs(tmp_path)
@@ -1765,12 +1768,17 @@ def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
     )
     repository.create(command)
     seen: list[str] = []
+    rounds = BackgroundRounds()
 
     def analyze(
         request: AuthorAnalysisRequest, timeout: float, cancelled: Event
     ) -> AuthorAnalysisReceipt:
         assert request.measurement_slice is not None
         assert timeout == 60 and not cancelled.is_set()
+        assert rounds.active == 1
+        assert not rounds.stop(
+            lambda: pytest.fail("cannot quit during publication"), only_if_idle=True
+        )
         seen.append(request.measurement_slice)
         return AuthorAnalysisReceipt(
             code_revision=ref,
@@ -1784,7 +1792,7 @@ def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
             ),
         )
 
-    runner = AnalysisFollowRunner(repository, runs, analyze)
+    runner = AnalysisFollowRunner(repository, runs, analyze, rounds=rounds)
     runner.advance(command.id)
     assert not seen
     for index in range(2):
@@ -1813,6 +1821,16 @@ def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
         _commit_append(runs, measurements, append)
         runner.advance(command.id)
         assert len(seen) == index + 1
+        if quit_between_groups and index == 0:
+            before = repository.page(command.id)
+            assert rounds.stop(lambda: None, only_if_idle=True)
+            runner.advance(command.id)
+            assert repository.page(command.id) == before
+            assert before.follow.state == "running"
+            rounds = BackgroundRounds()
+            runner = AnalysisFollowRunner(
+                AnalysisFollowRepository(runs.sqlite), runs, analyze, rounds=rounds
+            )
     runner.advance(command.id)
     assert repository.get(command.id).state == "completed"
     reopened = AnalysisFollowRepository(runs.sqlite)
@@ -1827,5 +1845,5 @@ def test_live_follow_waits_for_commit_and_reconnects_without_reexecution(
         "succeeded",
     ]
     assert reopened.create(command).finished_count == 2
-    AnalysisFollowRunner(reopened, runs, analyze).advance(command.id)
+    AnalysisFollowRunner(reopened, runs, analyze, rounds=rounds).advance(command.id)
     assert len(seen) == 2
