@@ -415,7 +415,8 @@ def write_author_scaffold(root: Path) -> None:
             "project = sc.open_project(Path(__file__).resolve().parents[1])\n"
             "_ = project.load_application()\n"
             "author = project.authoring()",
-            "author = sc.notebook(Path(__file__).resolve().parents[1])",
+            "author = sc.notebook(Path(__file__).resolve().parents[1])\n"
+            "print(author)  # 核对数据目标、作者目录及当前 Python/框架来源。",
         )
         .replace("resolve_daemon_endpoint(project.root)", "author.base_url")
     )

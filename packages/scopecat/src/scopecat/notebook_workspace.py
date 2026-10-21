@@ -8,6 +8,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import replace
 from html import escape
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from threading import get_ident
 from types import ModuleType
@@ -205,6 +206,14 @@ class NotebookSession(AuthorProject):
         self._refresh_error: str | None = None
         self._selecting = False
         self._registered = False
+        self._kernel_python = f"{sys.executable} (Python {sys.version.split()[0]})"
+        try:
+            framework_version = version("scopecat")
+        except PackageNotFoundError:
+            framework_version = "unknown"
+        self._kernel_framework = (
+            f"scopecat {framework_version} — {Path(__file__).parent}"
+        )
 
     def _ensure_current(self) -> None:
         from scopecat.application.author_imports import (
@@ -341,7 +350,13 @@ class NotebookSession(AuthorProject):
             science.batch.id if science.batch.kind == "declared" else "unspecified"
         )
         return (
-            f"Scopecat Notebook ({mode}, {status})\nProject: {self.project_root}\n"
+            f"Scopecat Notebook ({mode}, {status})\n"
+            f"Author directory / 作者目录: {self.project_root}\n"
+            f"Data / 数据: {self._binding.data_root}\n"
+            f"Data identity / 数据身份: {self.session_project_id}\n"
+            f"Author identity / 作者身份: {self.workspace_id}\n"
+            f"Kernel / 当前内核: {self._kernel_python}\n"
+            f"Framework / 框架来源: {self._kernel_framework}\n"
             f"Source: {revision}\n"
             f"Subject: {subject_label}\n"
             f"Batch: {batch_label}\n"

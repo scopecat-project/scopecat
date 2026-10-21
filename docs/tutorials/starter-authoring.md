@@ -13,8 +13,32 @@ Framework contributors can use the [source development launcher](../development/
 It starts blank; create or register an author folder in Settings before following this guide.
 The separate `scopecat init` starter remains available through the
 [CLI reference](../reference/cli.md#project-lifecycle); it is not required for the
-desktop lesson above. Use the endpoint recorded for the selected application,
-rather than copying a historical port number.
+desktop lesson above. The Connect cell uses `sc.notebook(...)` to discover the
+registered application; you do not need to copy a port number.
+
+## 连接前后核对什么
+
+Connect 单元格显示作者目录、已绑定的数据目录与数据身份、作者身份，
+以及当前 kernel 的 Python 和 Scopecat 版本／来源。再次执行 `print(author)` 只读
+已有会话信息，不发起采集，也不重新选择应用；它不是应用在线状态检查。
+这些信息不含连接令牌，但路径可能包含用户名或实验名称，公开分享前请自行隐去。
+Settings 中的执行 Python 是后台实验环境；Notebook 摘要显示的是当前交互内核。
+
+- **应用离线**：打开原来登记的 Scopecat 应用，再连接；不要另外启动作者目录中的数据空间。
+- **目录未登记**：在目标应用的 **Settings → Author code → Use existing folder**
+  登记目录并明确执行 Python，再从独立作者 kernel 连接。
+- **应用重启／旧 session**：先 `author.close()`，再运行 Connect。
+  从 Data 的只读代码或已保存 receipt 找回原结果，不要用 Submit 找回结果。
+- **错误 kernel／版本不兼容**：选择作者环境；必要时在 Settings 重建客户端，
+  关闭旧 kernel 后重新选择。应用自用 Python 不是作者 kernel。
+- **目标或旧 binding 冲突**：先核对原登记与 `scopecat.runtime.toml`，保留原文件和数据。
+  不要删除登记记录来绕过身份校验，也不要把旧任务接到其他数据空间。
+
+同一作者目录可以登记到多个应用。普通独立 kernel 使用已保存的默认关联；
+应用启动的 kernel 继承该应用上下文。需要另一个**已登记**目标时，关闭旧会话后
+显式使用 `sc.notebook(author_directory, application=application_home)`；
+`application_home` 是应用的数据实例位置，不是 exe、安装目录或 Python 路径。
+显式参数优先于继承上下文，继承上下文优先于保存的默认关联；离线或冲突不会自动改接其他应用。
 
 ## Your editable files
 
@@ -133,9 +157,9 @@ execution environment through the existing application workflow for new source.
 Start with Help's **Parameters and scans** lesson, then create the separate
 Settings author folder described above. Run its synthetic three-point scan once
 and keep its receipt. The ordinary template uses `sc.notebook(...)`, the existing
-unified session entry; select the correct application through the supported
-registration/connection workflow. Application identity and locator improvements
-are tracked separately in [#1127](https://github.com/scopecat-project/scopecat/issues/1127).
+unified session entry. Registration now saves the application association outside
+the source folder, so an independently opened kernel can find it without a runtime
+file or copied port. Use the connection checks above before editing or acquiring.
 
 | Keep the learned workflow | Replace for the laboratory |
 | --- | --- |

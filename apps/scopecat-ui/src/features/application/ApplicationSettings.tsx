@@ -127,12 +127,11 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       {native && (
         <>
           <section className={section}>
-            <h3 className={sectionTitle}>Author code</h3>
+            <h3 className={sectionTitle}>作者代码 · Author code</h3>
             <p>
-              Create a folder with a device-free example, or add existing Scopecat code. The
-              notebook environment is for interactive editing in VS Code. A separate background
-              environment validates and runs experiments. Both use this application's shared data;
-              neither is the application's own Python.
+              创建不需要设备的合成示例目录，或添加已有 Scopecat 代码。Notebook 环境用于在 VS Code
+              交互编辑；独立的后台环境负责验证与执行实验。两者都使用本应用的数据，均不是应用自用的
+              Python。连接后可用 print(session) 核对数据身份、作者目录及当前内核来源。
             </p>
             <ActionRow>
               <Button disabled={busy} onClick={() => setCreating(true)}>
@@ -161,9 +160,9 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   />
                 </Field>
                 <p>
-                  Prepares a notebook environment and a separate background execution environment
-                  for the new folder. Existing files are not replaced; no device connection or
-                  measurement is started.
+                  为新目录准备 Notebook
+                  环境和独立的后台执行环境。保留已有文件，不连接设备或发起采集。
+                  合成示例转为真实实验时，需要按实验职责替换 setup、参数、驱动与依赖，不能只改地址。
                 </p>
                 <Button
                   disabled={busy || !parent || !name.trim()}
@@ -216,8 +215,8 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                       />
                     </Field>
                     <p className="text-sm text-text-dim">
-                      Use the Python environment for background validation and execution.
-                      Registering an existing folder does not install packages.
+                      填写用于后台验证与执行的 Python 路径。登记已有目录不会安装依赖；Notebook
+                      内核另行准备和选择。
                     </p>
                     <Button
                       disabled={busy || !source.trim() || !interpreter.trim()}
@@ -229,24 +228,24 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                 )}
                 {selected && (
                   <Notice role="status">
-                    Code folder registered. Open it in VS Code.
+                    作者目录已登记，请在 VS Code 中打开。
                     {selected.python ? (
                       <>
                         {" "}
-                        Select its .venv for Python or notebook cells. Start with{" "}
-                        <code>notebooks/02_edit_scan.py</code> in a new example folder.
+                        为 Python 或 Notebook 选择该目录的 .venv。新示例从{" "}
+                        <code>notebooks/02_edit_scan.py</code> 开始，逐个运行单元格。
                       </>
                     ) : (
-                      <> Create its notebook environment below.</>
+                      <> 请先在下方创建 Notebook 环境。</>
                     )}
                   </Notice>
                 )}
                 <p>
-                  Create a local Python environment for this folder, then select its .venv in VS
-                  Code. It includes the Scopecat Python API and a notebook kernel. Install your own
-                  analysis packages there with pip; this does not change the application. Declare
-                  packages needed by background experiments in pyproject.toml, then prepare their
-                  execution environment. Existing tasks keep their original environment.
+                  创建本目录的 Python 环境后，在 VS Code 中选择其 .venv；其中包含 Scopecat API 和
+                  Notebook 内核。依赖声明放在
+                  pyproject.toml；修改后明确重建客户端并准备后台执行环境。 标准工具重建方法见
+                  author-environments/README.md，保留 requirements-client.txt 及其来源目录。临时 pip
+                  安装不会写入此锁；已有任务保留原执行环境。
                 </p>
                 <Button
                   disabled={busy || !selected || !!selected.python}
@@ -265,13 +264,12 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   {selected && (
                     <div className="mt-3 grid gap-3">
                       <p>
-                        Configured background execution interpreter:{" "}
-                        <code>{selected.execution_python}</code>. This is a saved configuration, not
-                        a running or health status.
+                        已配置的后台执行 Python：<code>{selected.execution_python}</code>
+                        。这是保存的配置，不表示进程正在运行或环境可用。
                       </p>
                       {selected.python && (
                         <p>
-                          Notebook interpreter: <code>{selected.python}</code>
+                          Notebook Python：<code>{selected.python}</code>
                         </p>
                       )}
                       <Field>
@@ -293,9 +291,9 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   )}
                   <h4 className="mt-3 font-semibold">Repair notebook environment</h4>
                   <p>
-                    To repair local Python, close its terminals and notebook kernels first.
-                    Rebuilding preserves the previous environment separately and keeps your source
-                    files.
+                    修复本地 Python 前，先关闭该环境的终端和 Notebook
+                    kernel。重建会另存旧环境并保留源码。 完成后重新选择
+                    kernel，显式连接原应用；不要重新提交实验来找回结果。
                   </p>
                   <Button
                     disabled={busy || !selected}
