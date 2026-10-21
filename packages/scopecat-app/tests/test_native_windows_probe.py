@@ -1,6 +1,7 @@
 """Probe failure handling and real SDK gate contracts; not native UI evidence."""
 
 import json
+import os
 import subprocess
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
@@ -551,11 +552,23 @@ def test_window_diagnostics_unavailable_does_not_replace_acceptance_failure(
 def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, fail):
     from scripts.verify_native_application import AUTHOR_NOTEBOOK_CHECK
 
+    foreign = tmp_path / "foreign-build-venv"
+    site = foreign / (
+        "Lib/site-packages"
+        if sys.platform == "win32"
+        else (
+            f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+        )
+    )
+    site.mkdir(parents=True)
+    (site / "foreign_virtualenv_marker.py").write_text("# must not be imported")
     notebooks = tmp_path / "notebooks"
     notebooks.mkdir()
     (notebooks / "02_edit_scan.py").write_text(
         "from IPython import get_ipython\n"
         "assert get_ipython() is not None\n"
+        "from importlib.util import find_spec\n"
+        "assert find_spec('foreign_virtualenv_marker') is None\n"
         "# %% Next cell sees the same notebook namespace.\n"
         "from types import SimpleNamespace\n"
         "run = SimpleNamespace(id='retained-run')\n"
@@ -563,6 +576,7 @@ def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, 
     )
     result = subprocess.run(  # noqa: S603 - owned acceptance probe and fixture
         [sys.executable, "-I", "-c", AUTHOR_NOTEBOOK_CHECK, str(tmp_path)],
+        env=dict(os.environ, VIRTUAL_ENV=str(foreign)),
         capture_output=True,
         text=True,
         check=False,

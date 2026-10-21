@@ -20,8 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.app_build.macos_signing import verify as verify_signature
 
 AUTHOR_NOTEBOOK_CHECK = r"""
-import json, re, sys
+import json, os, re, sys
 from pathlib import Path
+# IPython otherwise prepends the inherited build venv even with Python -I.
+os.environ.pop("VIRTUAL_ENV", None)
 from IPython.core.interactiveshell import InteractiveShell
 root = Path(sys.argv[1])
 notebook = root / "notebooks/02_edit_scan.py"
