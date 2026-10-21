@@ -176,6 +176,32 @@ def test_offline_missing_python_never_downloads(
     assert len(calls) == 1 and "find" in calls[0]
 
 
+def test_unavailable_python_download_explains_explicit_choice_without_fallback(
+    selection: Selection, monkeypatch: pytest.MonkeyPatch
+):
+    runtime, source, resource = selection
+    retained = source / ".venv" / "retained.txt"
+    retained.parent.mkdir()
+    retained.write_text("existing client")
+    calls = []
+
+    def missing(command):
+        calls.append(command)
+        raise ValueError("No download found for request")
+
+    monkeypatch.setattr(author_python, "run", missing)
+    with pytest.raises(
+        ValueError, match=r"无法获取所需的独立 Python 3\.14\.7"
+    ) as failure:
+        author_python.resolve(runtime, source, resource)
+    assert "--python" in str(failure.value)
+    assert "UV_PYTHON" in str(failure.value)
+    assert "No download found" in str(failure.value)
+    assert [command[2] for command in calls] == ["find", "install"]
+    assert calls[1][3:] == ["3.14.7", "--no-bin", "--no-registry"]
+    assert retained.read_text() == "existing client"
+
+
 def test_workspace_pin_overrides_recipe_and_latest_is_rejected(
     selection: Selection, monkeypatch: pytest.MonkeyPatch
 ):

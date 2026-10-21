@@ -188,21 +188,27 @@ scopecat register-workspace /path/to/second --service /path/to/service
 ```
 
 Replace the two paths with your source directories; quote paths containing spaces.
-The command writes the second workspace's local runtime binding and returns its
-stable workspace ID. It refuses to redirect a workspace with its own scientific
+The command saves a per-user application association and returns the registered
+workspace ID without writing runtime paths into the author folder. The first
+association remains the default; registering another application does not replace
+it. It refuses to redirect a workspace with its own scientific
 store or a conflicting explicit binding. Keep starting, stopping and snapshotting the shared deployment from its service
 workspace.
 
 Open each codebase normally from its notebook:
 
 ```python
-from scopecat.project import open_project
+import scopecat as sc
 
-project = open_project()
-session = project.authoring()
+session = sc.notebook()
+print(session)  # Captured data/source identities and current client Python/framework.
 ```
 
-The source location selects its registered owner automatically. Refresh updates
+The saved association selects the registered application. An explicit
+`sc.notebook(application="/path/to/service")` selects another registered target
+after closing the old session; it does not transfer existing jobs or data.
+Application-launched kernels inherit that application's context. Explicit target
+overrides inherited context, which overrides the saved default. Refresh updates
 only that owner's publication head; prepared work and saved plans retain their
 exact source. Both sessions share the service's data and may select the same record
 collection. They do not need separate daemons. The workbench currently defaults to

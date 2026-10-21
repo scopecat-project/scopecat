@@ -40,8 +40,10 @@ def test_registration_leaves_source_tree_untouched(tmp_path: Path) -> None:
     assert author_workspace_id(root) == registered.id
     assert load_runtime_binding(root) == replace(owner.runtime_binding, workspace=root)
     assert register_author_workspace(owner.root, root).id == registered.id
-    with pytest.raises(DaemonEndpointError, match="no daemon endpoint"):
+    with pytest.raises(DaemonEndpointError, match="no daemon endpoint") as failure:
         resolve_daemon_endpoint(root)
+    assert "open the registered Scopecat application" in str(failure.value)
+    assert "Settings → Author code" in str(failure.value)
     assert not (root / ".scopecat").exists()
 
 

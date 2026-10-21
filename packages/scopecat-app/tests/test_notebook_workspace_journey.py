@@ -81,6 +81,7 @@ def test_notebook_workspace_cells(
             message = str(result.error_in_exec)
             assert "execution dependency scopecat==" in message
             assert "does not accept installed 0.1.99" in message
+            assert "Select a compatible author kernel" in message
         cell("""
 import scopecat as sc
 session = sc.notebook(root)
@@ -380,6 +381,21 @@ def test_independent_kernel_discovers_application_and_reconnects(
         cell(
             "assert session.health().project_id == second_space\n"
             "assert session.state().active is not None\n"
+            "from unittest.mock import patch\n"
+            "from pathlib import Path\n"
+            "import sys\n"
+            "with patch.object(session._http, 'request', "
+            "side_effect=AssertionError('display must not connect')):\n"
+            "    summary = repr(session)\n"
+            "    assert second_space in summary\n"
+            f"    assert {str(other.root / 'data')!r} in summary\n"
+            f"    assert {str(root)!r} in summary\n"
+            f"    assert {other_identity!r} in summary\n"
+            "    assert sys.executable in summary\n"
+            "    assert str(Path(sc.__file__).parent) in summary\n"
+            "    assert session.base_url not in summary\n"
+            "    assert 'shutdown_token' not in summary\n"
+            "    assert session._repr_html_().startswith('<pre>')\n"
             "session.close()\n"
             f"session = sc.notebook(application={str(other.root)!r})\n"
             "assert session.session_project_id == second_space\n"

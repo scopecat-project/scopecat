@@ -112,7 +112,10 @@ def load_runtime_binding(
         or binding.settings_file != located.settings_file
     ):
         raise RuntimeBindingError(
-            "Legacy runtime binding conflicts with registered application"
+            "Legacy runtime binding conflicts with registered application; "
+            "compare scopecat.runtime.toml with the intended application's "
+            "registration and correct the conflict before reconnecting. "
+            "Do not delete the binding or move data to bypass this check."
         )
     return binding
 
@@ -173,7 +176,8 @@ def _locate_author_binding(
         )
     except (OSError, ValueError) as error:
         raise RuntimeBindingError(
-            f"Cannot verify registered application: {error}"
+            f"Cannot verify registered application: {error}; check the selected "
+            "application and add this folder in Settings → Author code if unregistered"
         ) from error
     entries = [item for item in registry.items if item.root == workspace]
     if (
@@ -187,5 +191,9 @@ def _locate_author_binding(
         )
     project_id = read_data_identity(binding.data_root)
     if location is not None and project_id != location.project_id:
-        raise RuntimeBindingError("Registered application data identity has changed")
+        raise RuntimeBindingError(
+            "Registered application data identity has changed; restore the original "
+            "data/application or explicitly register the intended target. "
+            "Do not reconnect old jobs to a different data store."
+        )
     return replace(binding, workspace=workspace)

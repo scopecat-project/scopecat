@@ -178,7 +178,13 @@ def require_import_environment(manifest: AuthorRevisionManifest) -> None:
     from scopecat.execution_environment import author_packages
 
     _require_installed_authors(manifest)
-    packages = author_packages(manifest.import_requirements)
+    try:
+        packages = author_packages(manifest.import_requirements)
+    except ValueError as error:
+        raise ValueError(
+            f"{error}. Select a compatible author kernel; use Settings → Author code "
+            "to prepare/rebuild its client environment, then restart the kernel."
+        ) from error
     # Pre-stable Scopecat declarations share the recorded API. Third-party
     # packages follow their declared compatibility ranges in the client, while
     # execution/recovery below still requires the complete recorded environment.
@@ -187,7 +193,10 @@ def require_import_environment(manifest: AuthorRevisionManifest) -> None:
             expected = manifest.packages[name]
             if actual != expected:
                 raise ValueError(
-                    f"author imports require {name}=={expected}; found {actual}"
+                    f"author imports require {name}=={expected}; found {actual}. "
+                    "Select a compatible author kernel; use Settings → Author code "
+                    "to prepare/rebuild its client environment, "
+                    "then restart the kernel."
                 )
 
 

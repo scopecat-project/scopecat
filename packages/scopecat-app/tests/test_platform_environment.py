@@ -21,6 +21,12 @@ from scopecat_app.bundle import MANIFEST, file_hash, inventory, target_identity
 def test_prepared_execution_python_imports_pyarrow(tmp_path: Path):
     # Keep pytest's normal OS temp root and descriptive test directory. In #871
     # a nested content-hash environment broke Windows DLL loading at this depth.
+    # Qualify the runner's installed interpreter explicitly: this checks isolated
+    # environments and native imports, not uv's release-dependent download catalog.
+    # A newly released setup-python patch may not yet have a managed uv build.
+    # The pytest venv represents the application. Its underlying runner Python
+    # is outside that venv, including Windows where python.exe is not a symlink.
+    base_python = Path(getattr(sys, "_base_executable", sys.executable))
     root = Path(__file__).resolve().parents[3]
     payload = tmp_path / "payload"
     wheels = payload / "wheels"
@@ -88,7 +94,7 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path: Path):
     )
     (source / "src").mkdir()
     (source / "src/experiment.py").write_text("import pyarrow\n", encoding="utf-8")
-    python = prepare_execution_environment(runtime, source)
+    python = prepare_execution_environment(runtime, source, python=base_python)
     result = subprocess.run(  # noqa: S603 - owned uv/interpreter and fixed arguments
         [
             str(python),
@@ -106,13 +112,13 @@ def test_prepared_execution_python_imports_pyarrow(tmp_path: Path):
     prefix, arrow_version = json.loads(result.stdout)
     assert Path(prefix) == python.parent.parent
     assert arrow_version
-    assert prepare_execution_environment(runtime, source) == python
+    assert prepare_execution_environment(runtime, source, python=base_python) == python
 
-    client = create_client_environment(runtime, source)
+    client = create_client_environment(runtime, source, python=base_python)
     subprocess.run(  # noqa: S603 - real independent client qualification
         [str(client), "-I", "-c", "import scopecat, ipykernel, pyarrow, pip"],
         check=True,
     )
     assert client != python
-    assert create_client_environment(runtime, source) == client
+    assert create_client_environment(runtime, source, python=base_python) == client
     assert not (source / ".scopecat-python").exists()
