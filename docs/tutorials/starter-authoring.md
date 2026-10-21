@@ -31,6 +31,9 @@ Settings 中的执行 Python 是后台实验环境；Notebook 摘要显示的是
   从 Data 的只读代码或已保存 receipt 找回原结果，不要用 Submit 找回结果。
 - **错误 kernel／版本不兼容**：选择作者环境；必要时在 Settings 重建客户端，
   关闭旧 kernel 后重新选择。应用自用 Python 不是作者 kernel。
+- **Python 下载版本不可用**：先核对下载错误。若当前下载源没有所需构建，
+  可通过[应用 CLI 的 `--python` 或 `UV_PYTHON`](../how-to/maintain-application.md)
+  明确选择已有兼容的独立 Python；仍会校验版本与归属，不会自动降级或借用应用解释器。
 - **目标或旧 binding 冲突**：先核对原登记与 `scopecat.runtime.toml`，保留原文件和数据。
   不要删除登记记录来绕过身份校验，也不要把旧任务接到其他数据空间。
 
