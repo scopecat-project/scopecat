@@ -42,6 +42,7 @@ def test_interrupted_client_preparation_preserves_retry(
     installer = Mock(side_effect=install)
     monkeypatch.setattr(environments, "_install_client", installer)
     monkeypatch.setattr(environments, "check", lambda _r, _w, p: p)
+    monkeypatch.setattr(environments, "_retain_client_requirements", Mock())
     ensurepip = Mock(side_effect=interrupted if stage == "ensurepip" else None)
     monkeypatch.setattr(
         environments, "_run", lambda c: ensurepip(c) if "ensurepip" in c else None
@@ -223,6 +224,7 @@ def test_online_newer_dependency_cannot_override_delivery_lock(
     wheel(wheels, "scopecat", "1", ("schema-runtime>=1",))
     wheel(wheels, "scopecat-server", "1", ("scopecat==1",))
     wheel(wheels, "schema-runtime", "1")
+    wheel(wheels, "ipykernel", "1")
     wheel(index / "schema-runtime", "schema-runtime", "2")
     (bundle / environments.MANIFEST).write_text("verified delivery fixture")
     constraints = bundle / "requirements.lock"
@@ -270,6 +272,63 @@ def test_online_newer_dependency_cannot_override_delivery_lock(
             text=True,
         )
         assert "schema-runtime==2" in available.read_text()
+        # The client lock is independently rebuildable after relocation and
+        # without the application's wheel paths or original virtual environment.
+        import shutil
+
+        client = tmp_path / "client"
+        client.mkdir()
+        shutil.copy2(declaration, client / "pyproject.toml")
+        venv = client / ".venv"
+        environments._run(
+            [find_uv_bin(), "venv", "--python", sys.executable, str(venv)]
+        )
+        requirements = environments._install_client(
+            find_uv_bin(), bundle, client, venv, offline=False
+        )
+        environments._retain_client_requirements(
+            bundle, client, requirements, environments.environment_python(venv)
+        )
+        shutil.rmtree(venv)
+        relocated = tmp_path / "relocated author"
+        client.rename(relocated)
+        lock = relocated / "requirements-client.txt"
+        assert str(bundle) not in lock.read_text()
+        saved = lock.read_bytes()
+        subprocess.run(  # noqa: S603 - test-owned interpreter and lock
+            [find_uv_bin(), "venv", "--python", sys.executable, ".venv"],
+            cwd=relocated,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(  # noqa: S603 - test-owned interpreter and lock
+            [
+                find_uv_bin(),
+                "pip",
+                "sync",
+                "--python",
+                ".venv",
+                "--require-hashes",
+                "requirements-client.txt",
+            ],
+            cwd=relocated,
+            check=True,
+            capture_output=True,
+        )
+        assert lock.read_bytes() == saved
+        result = subprocess.check_output(  # noqa: S603 - fixture packages
+            [
+                str(environments.environment_python(relocated / ".venv")),
+                "-I",
+                "-c",
+                (
+                    "import scopecat, ipykernel, schema_runtime; "
+                    "print(schema_runtime.VERSION)"
+                ),
+            ],
+            text=True,
+        )
+        assert result.strip() == "1"
         python = environments.prepare_execution_environment(runtime, source)
         result = subprocess.check_output(  # noqa: S603 - test-owned interpreter
             [
