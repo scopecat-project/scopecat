@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,6 +28,7 @@ const selection = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   vi.mocked(getDriverSource).mockResolvedValue({ active: selection });
 });
 afterEach(cleanup);
@@ -70,6 +72,7 @@ it("only activates on explicit submission and refreshes device and driver views"
 });
 
 it("keeps the selected source visible and retries an uncertain result with the same request", async () => {
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "Alice" });
   vi.mocked(updateDriverSource)
     .mockRejectedValueOnce(new ApiError("Connection lost"))
     .mockImplementation(async (request) => ({ ...selection, request }));
@@ -81,6 +84,8 @@ it("keeps the selected source visible and retries an uncertain result with the s
   expect(screen.getByText("Active driver source: /lab/source")).toBeVisible();
   await waitFor(() => expect(button).toBeEnabled());
   expect(updateDriverSource).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(updateDriverSource).mock.calls[0]![0].actor).toBe("Alice");
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });
   fireEvent.click(button);
   await screen.findByRole("status");
   expect(vi.mocked(updateDriverSource).mock.calls[1]).toEqual(
@@ -114,3 +119,7 @@ it("requires the current manual session to be released", async () => {
   expect(screen.getByRole("button", { name: "Update from source" })).toBeDisabled();
   expect(updateDriverSource).not.toHaveBeenCalled();
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "local-operator" })),
+}));

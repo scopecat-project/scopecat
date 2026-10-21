@@ -481,6 +481,7 @@ it("ignores a late preview after selecting another experiment in the same projec
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   fireEvent.change(screen.getByLabelText("Experiment"), { target: { value: "first" } });
+  await waitFor(() => expect(screen.getByLabelText("Experiment")).toHaveValue("first"));
   fireEvent.change(await screen.findByLabelText("Note"), { target: { value: "different draft" } });
   await act(async () => {
     previewResponse?.(Response.json(preview()));
@@ -729,7 +730,7 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
   view.rerender(<Harness projectId="project-b" />);
   await selectPrepared();
   expect(screen.getByLabelText("Sample ID")).toHaveValue("");
-  expect(screen.getByLabelText("Operator")).toHaveValue("Alice");
+  await waitFor(() => expect(screen.getByLabelText("Operator")).toHaveValue("Alice"));
   expect(screen.getByText(/exact registered target retained/)).toBeVisible();
 });
 

@@ -1,3 +1,4 @@
+import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import { useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -116,7 +117,7 @@ function TaskDetail({
   onProcedure: (id: string) => void;
 }) {
   const client = useQueryClient();
-  const [actor, setActor] = useState("");
+  const { actor, setActor } = useOperatorInput();
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");

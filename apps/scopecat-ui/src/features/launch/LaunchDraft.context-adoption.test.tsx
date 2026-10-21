@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
 import { objectContext } from "../config/object-parameters.fixtures";
@@ -80,15 +80,17 @@ function mount() {
 function read() {
   return JSON.parse(screen.getByTestId("draft").textContent);
 }
-function click(name: string) {
-  fireEvent.click(screen.getByRole("button", { name }));
+async function click(name: string) {
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name }));
+  });
 }
 afterEach(cleanup);
 
-it("uses an explicitly adopted map context before the first experiment is selected", () => {
+it("uses an explicitly adopted map context before the first experiment is selected", async () => {
   mount();
-  click("Adopt map context");
-  click("Select experiment");
+  await click("Adopt map context");
+  await click("Select experiment");
   expect(read().selection).toMatchObject({
     subject: target,
     configuration: { ...configuration, setup: context.resolution.setup },
@@ -96,11 +98,11 @@ it("uses an explicitly adopted map context before the first experiment is select
   expect(read().workingInput).toEqual({ draft_id: "table-a", revision: 3 });
   expect(read().preview).toBeUndefined();
 });
-it("replaces an existing context only on explicit context adoption and clears its preview", () => {
+it("replaces an existing context only on explicit context adoption and clears its preview", async () => {
   mount();
-  click("Select experiment");
-  click("Choose other context");
-  click("Adopt map context");
+  await click("Select experiment");
+  await click("Choose other context");
+  await click("Adopt map context");
   expect(read().selection).toMatchObject({
     subject: target,
     configuration: { setup: context.resolution.setup },
@@ -108,12 +110,12 @@ it("replaces an existing context only on explicit context adoption and clears it
   expect(read().preview).toBeUndefined();
   expect(read().requestKey).toBeUndefined();
 });
-it("adopting newer parameters preserves the subsequently chosen target and setup", () => {
+it("adopting newer parameters preserves the subsequently chosen target and setup", async () => {
   mount();
-  click("Adopt map context");
-  click("Select experiment");
-  click("Choose other context");
-  click("Adopt newer parameters");
+  await click("Adopt map context");
+  await click("Select experiment");
+  await click("Choose other context");
+  await click("Adopt newer parameters");
   expect(read().selection).toMatchObject({
     subject: { kind: "sample", sample_id: "other-chip" },
     configuration: { setup: { revision_id: "other-setup" } },
@@ -121,3 +123,7 @@ it("adopting newer parameters preserves the subsequently chosen target and setup
   expect(read().workingInput.revision).toBe(4);
   expect(read().preview).toBeUndefined();
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 0, operator: "operator" })),
+}));

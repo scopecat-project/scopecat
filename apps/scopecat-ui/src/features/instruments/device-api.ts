@@ -45,14 +45,14 @@ export function retireDevice(device: DeviceView) {
     }),
   );
 }
-export function testDeviceConnection(device: DeviceView, operationId: string) {
+export function testDeviceConnection(device: DeviceView, operationId: string, actor: string) {
   return apiData(
     apiClient.POST("/api/v1/devices/{device_id}/connection-tests", {
       params: { path: { device_id: device.device.id } },
       body: {
         expected_head: device.device.head,
         operation_id: operationId,
-        actor: "local-operator",
+        actor,
       },
     }),
   );

@@ -75,7 +75,11 @@ space. The server shares the setting across windows and ports, including after
 restart. A saved draft and an uncertain submission retain their original name;
 changing Settings does not rewrite them. Explicitly discarding a draft starts
 with the current setting. The name remains editable attribution, not a login or
-permission. Other operation forms retain their existing operator controls.
+permission. New experiment, configuration, device, comparison, candidate-adoption,
+calibration-task and cancellation forms also snapshot this setting. An explicit
+operator edit remains the form’s attribution; recovered inputs and uncertain
+commands keep their original name and operation identity. API callers continue
+to supply their own attribution and human/automation source.
 Application backups include this setting.
 
 An optional `response_template` is validated against the response structure and becomes the editor's starting value; use it to reduce

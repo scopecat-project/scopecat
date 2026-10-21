@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,14 +26,15 @@ export function DriverSourcePanel({
   const path = directory ?? source.data?.active?.request.source_root ?? "";
   const update = useMutation({
     retry: false,
-    mutationFn: () => {
-      attempt.current ??= {
-        operation_id: createInstrumentCommandId("driver-source"),
-        source_root: path.trim(),
-        expected_previous: source.data?.active?.request.operation_id ?? null,
-        actor: "local-operator",
-        ...(python.trim() ? { python: python.trim() } : {}),
-      };
+    mutationFn: async () => {
+      if (!attempt.current)
+        attempt.current = {
+          operation_id: createInstrumentCommandId("driver-source"),
+          source_root: path.trim(),
+          expected_previous: source.data?.active?.request.operation_id ?? null,
+          actor: (await readOperatorSettings()).operator,
+          ...(python.trim() ? { python: python.trim() } : {}),
+        };
       return updateDriverSource(attempt.current);
     },
     onSuccess: () => {

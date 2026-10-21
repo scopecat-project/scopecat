@@ -1,3 +1,4 @@
+import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import { DecisionRuns } from "./DecisionRuns";
 import type { MethodResponse } from "openapi-fetch";
@@ -92,7 +93,7 @@ function ComparisonPage({
   const client = useQueryClient();
   const sources = useAuthorWorkspaces(projectId);
   const names = useRecordCollectionNames(projectId, Boolean(projectId));
-  const { draft, saveDraft, previewKey } = useComparisonDraft(projectId);
+  const { draft, restored, saveDraft, previewKey } = useComparisonDraft(projectId);
   const [workspaceId, setWorkspaceId] = useState(() => draft.workspaceId);
   const availableSources = sources.data?.items.filter((source) => source.available) ?? [];
   if (!workspaceId && availableSources.length === 1 && availableSources[0])
@@ -115,7 +116,11 @@ function ComparisonPage({
   const [parameters, setParameters] = useState<Record<string, string>>(draft.parameters);
   const [selected, setSelected] = useState(() => draft.selected);
   const [reason, setReason] = useState(draft.reason);
-  const [actor, setActor] = useState(draft.actor);
+  const {
+    actor,
+    setActor,
+    ready: operatorReady,
+  } = useOperatorInput(restored ? draft.actor : undefined);
   const mutationKey = ["comparison-operation", projectId];
   const pending = useIsMutating({ mutationKey }) > 0;
   const operation = useMutation({
@@ -128,6 +133,7 @@ function ComparisonPage({
   });
   const [error, setError] = useState("");
   useEffect(() => {
+    if (!operatorReady) return;
     saveDraft({
       workspaceId,
       primary,
@@ -142,6 +148,7 @@ function ComparisonPage({
     });
     client.setQueryData(previewKey, inspection ?? null);
   }, [
+    operatorReady,
     workspaceId,
     primary,
     secondary,

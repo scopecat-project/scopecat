@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
@@ -147,7 +148,6 @@ export function InstrumentConfigDialog({
         device_id: deviceId,
         label: label.trim(),
         expected_head: device?.device.head ?? null,
-        actor: "local-operator",
         note,
         connection: content,
       };
@@ -155,7 +155,11 @@ export function InstrumentConfigDialog({
       if (attempt.current?.key !== key) {
         attempt.current = {
           key,
-          command: { ...input, revision_id: createInstrumentCommandId("connection") },
+          command: {
+            ...input,
+            actor: (await readOperatorSettings()).operator,
+            revision_id: createInstrumentCommandId("connection"),
+          },
         };
       }
       connectionSaveStarted.current = true;

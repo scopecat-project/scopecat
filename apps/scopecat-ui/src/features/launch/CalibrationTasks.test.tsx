@@ -279,3 +279,7 @@ it("carries the selected course workspace through task history and controls", as
   await waitFor(() => expect(seen.some((item) => item.method === "POST")).toBe(true));
   expect(seen.every((item) => item.workspace === "course-source")).toBe(true);
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "operator" })),
+}));

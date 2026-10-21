@@ -441,3 +441,7 @@ it("cancels a retained course procedure with its source workspace", async () => 
   await screen.findByRole("button", { name: "Cancel procedure" });
   expect(headers).toEqual(["course-one"]);
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "operator" })),
+}));

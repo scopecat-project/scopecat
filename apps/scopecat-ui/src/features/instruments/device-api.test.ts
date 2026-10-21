@@ -49,7 +49,7 @@ it("renames without a new connection and tests the reviewed device head", async 
     .mockResolvedValueOnce(Response.json({ status: "connected" }));
   vi.stubGlobal("fetch", fetch);
   expect(await renameDevice(device, "Readout")).toEqual({ ...device, device: renamed });
-  await testDeviceConnection(device, "test-retry");
+  await testDeviceConnection(device, "test-retry", "local-operator");
   expect(requestPath(fetch.mock.calls[0]![0])).toBe("/api/v1/devices/vna/name");
   expect(await requestJson(fetch.mock.calls[0]![0])).toEqual({ label: "Readout" });
   expect(await requestJson(fetch.mock.calls[1]![0])).toEqual({

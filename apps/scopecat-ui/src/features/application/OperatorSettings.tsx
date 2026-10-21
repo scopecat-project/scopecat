@@ -24,9 +24,9 @@ export function OperatorSettings() {
     <section className="grid min-w-0 gap-3 rounded-lg border border-line bg-panel p-4">
       <h3 className="font-semibold">Default operator</h3>
       <p className="text-sm text-text-soft">
-        Attribution for new Decision drafts in this data space, shared across windows. Existing
-        drafts and retries keep their recorded operator. This name is editable attribution, not a
-        login.
+        Default attribution for new operation forms in this data space, shared across windows.
+        Existing drafts and retries keep their recorded operator. This name is editable attribution,
+        not a login.
       </p>
       {settings.isPending && <p>Loading operator…</p>}
       {settings.error && <Notice role="alert">{errorMessage(settings.error)}</Notice>}

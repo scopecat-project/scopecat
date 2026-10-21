@@ -55,7 +55,7 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
         throw new Error(
           "The saved definition is unavailable. Its plan and history remain readable; restore its supported author revision before reopening.",
         );
-      if (current()) openPlan(plan, entry);
+      if (current()) await openPlan(plan, entry);
     } catch (caught) {
       if (current()) setError(caught instanceof Error ? caught.message : String(caught));
     }

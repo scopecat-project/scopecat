@@ -60,7 +60,7 @@ it("keeps unsaved input reachable when switching is attempted after a failed sav
       : persisted(request),
   );
   mount();
-  act(() => state.select(entry, false, "legacy"));
+  await act(async () => state.select(entry, false, "legacy"));
   await waitFor(() =>
     expect(state.recovery.status).toBe("Experiment input saved in application data."),
   );
@@ -71,7 +71,7 @@ it("keeps unsaved input reachable when switching is attempted after a failed sav
     ),
   );
   await waitFor(() => expect(state.recovery.status).toContain("not confirmed saved"));
-  act(() => state.select({ ...entry, id: "other" }, false, "legacy"));
+  await act(async () => state.select({ ...entry, id: "other" }, false, "legacy"));
   expect(state.draft?.experiment).toBe("signal");
   expect(state.draft?.values.raw).toBe("invalid but valuable");
   act(() => state.selectWorkspace("other-source"));
@@ -83,12 +83,12 @@ it("keeps unsaved input reachable when switching is attempted after a failed sav
   await waitFor(() =>
     expect(state.recovery.status).toBe("Experiment input saved in application data."),
   );
-  act(() => state.select({ ...entry, id: "other" }, false, "legacy"));
+  await act(async () => state.select({ ...entry, id: "other" }, false, "legacy"));
   await waitFor(() => expect(state.draft?.experiment).toBe("other"));
   await waitFor(() =>
     expect(state.recovery.status).toBe("Experiment input saved in application data."),
   );
-  act(() => state.select(entry, false, "legacy"));
+  await act(async () => state.select(entry, false, "legacy"));
   await waitFor(() => expect(state.draft?.values.raw).toBe("invalid but valuable"));
 });
 const attempt = (sequence: number): AttemptRecord => ({
@@ -164,7 +164,7 @@ it("never submits before its immutable original request is acknowledged, includi
     return persisted(request);
   });
   mount();
-  act(() => state.select(entry, false, "legacy"));
+  await act(async () => state.select(entry, false, "legacy"));
   await waitFor(() =>
     expect(state.recovery.status).toBe("Experiment input saved in application data."),
   );
@@ -241,7 +241,7 @@ it.each(["flush", "retain"] as const)(
       return persisted(request);
     });
     mount();
-    act(() => state.select(entry, false, "legacy"));
+    await act(async () => state.select(entry, false, "legacy"));
     await waitFor(() =>
       expect(state.recovery.status).toBe("Experiment input saved in application data."),
     );
@@ -288,7 +288,7 @@ it.each(["receipt", "edit", "unmount"] as const)(
       return persisted(request);
     });
     const view = mount();
-    act(() => state.select(entry, false, "legacy"));
+    await act(async () => state.select(entry, false, "legacy"));
     await waitFor(() =>
       expect(state.recovery.status).toBe("Experiment input saved in application data."),
     );
@@ -315,3 +315,63 @@ it.each(["receipt", "edit", "unmount"] as const)(
     );
   },
 );
+
+it("a late default lookup cannot replace the user's later selection of the current experiment", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  await waitFor(() => expect(state.recovery.ready).toBe(true));
+  const transport = globalThis.fetch;
+  let finish!: (response: Response) => void;
+  vi.stubGlobal("fetch", (request: Request) =>
+    request.url.endsWith("/operator-settings")
+      ? new Promise<Response>((resolve) => {
+          finish = resolve;
+        })
+      : transport(request),
+  );
+  let selecting: unknown;
+  act(() => {
+    selecting = state.select({ ...entry, id: "other" }, false, "legacy");
+  });
+  await waitFor(() => expect(finish).toBeDefined());
+  expect(state.isCurrent(state.draft?.revision)).toBe(false);
+  expect(state.beginPreparation()).toBeUndefined();
+  await act(async () => state.select(entry, false, "legacy"));
+  await act(async () => {
+    finish(Response.json({ revision: 2, operator: "Bob" }));
+    await selecting;
+  });
+  expect(state.draft?.experiment).toBe("signal");
+  expect(state.draft?.actor).toBe("operator");
+});
+
+it("refreshes automatic defaults for a new draft but retains an explicit edit back to the old name", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  const transport = globalThis.fetch;
+  let operator = "Alice";
+  vi.stubGlobal("fetch", (request: Request) =>
+    request.url.endsWith("/operator-settings")
+      ? Promise.resolve(Response.json({ revision: 1, operator }))
+      : transport(request),
+  );
+  mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  expect(state.draft?.actor).toBe("Alice");
+  operator = "Bob";
+  await act(async () => state.select(entry, true, "legacy"));
+  expect(state.draft?.actor).toBe("Bob");
+  act(() => state.update((draft) => ({ ...draft, actor: "Alice" })));
+  act(() => state.update((draft) => ({ ...draft, actor: "Bob" })));
+  operator = "Carol";
+  await act(async () => state.select(entry, true, "legacy"));
+  expect(state.draft?.actor).toBe("Bob");
+});

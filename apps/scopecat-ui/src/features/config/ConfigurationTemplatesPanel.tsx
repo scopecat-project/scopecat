@@ -15,10 +15,12 @@ import {
 
 export function ConfigurationTemplatesPanel({
   actor,
+  resolveOperator,
   onImported,
   onSelectConfiguration,
 }: {
   actor: string;
+  resolveOperator?: () => Promise<string>;
   onImported: (result: ConfigurationTemplateImportResult) => Promise<void>;
   onSelectConfiguration?: (choice: components["schemas"]["ConfigurationChoice-Input"]) => void;
 }) {
@@ -29,7 +31,14 @@ export function ConfigurationTemplatesPanel({
   const [selected, setSelected] = useState("");
   const [command, setCommand] = useState<ConfigurationTemplateImportCommand>();
   const imported = useMutation({
-    mutationFn: importConfigurationTemplate,
+    mutationFn: async (input: ConfigurationTemplateImportCommand) => {
+      const next = command ?? {
+        ...input,
+        actor: resolveOperator ? await resolveOperator() : input.actor,
+      };
+      setCommand(next);
+      return importConfigurationTemplate(next);
+    },
     onSuccess: (result) => onImported(result),
   });
   const candidate = templates.data?.items.find((item) => item.id === selected);
@@ -84,7 +93,6 @@ export function ConfigurationTemplatesPanel({
                 actor: actor.trim(),
                 note: "",
               };
-              setCommand(next);
               imported.mutate(next);
             }}
           >

@@ -287,3 +287,7 @@ const addressedRun = (runId: string, collection: string) =>
     status: "succeeded",
     address: { run_id: runId, collection_id: collection, number: 1 },
   }) as ProjectRun;
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "operator" })),
+}));

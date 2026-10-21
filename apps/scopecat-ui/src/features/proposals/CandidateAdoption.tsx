@@ -1,3 +1,4 @@
+import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import { useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -93,7 +94,7 @@ function AdoptionReview({
   const [name, setName] = useState(attempt?.name ?? "");
   const [head, setHead] = useState<api.Branch>();
   const [decision, setDecision] = useState("");
-  const [actor, setActor] = useState(attempt?.actor ?? "local-operator");
+  const { actor, setActor } = useOperatorInput(attempt?.actor);
   const [note, setNote] = useState(attempt?.note ?? "");
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);

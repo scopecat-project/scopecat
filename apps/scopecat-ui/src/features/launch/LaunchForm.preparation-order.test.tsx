@@ -68,8 +68,9 @@ function Form() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    current.select(entry);
-    current.selectConfiguration(configuration, { draft_id: "table-a", revision: 3 });
+    void current.select(entry).then(() => {
+      current.selectConfiguration(configuration, { draft_id: "table-a", revision: 3 });
+    });
   }, [current]);
   return current.draft ? <LaunchForm entry={entry} catalogReady onAdmitted={() => {}} /> : null;
 }

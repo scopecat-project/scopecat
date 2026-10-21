@@ -63,18 +63,21 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-function mount() {
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({
-          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-        })
-      }
-    >
-      <ConfigurationExchange operator="receiver" onCreated={async () => {}} />
-    </QueryClientProvider>,
+function mount(operator = "receiver", resolveOperator?: () => Promise<string>) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const component = (name: string) => (
+    <QueryClientProvider client={client}>
+      <ConfigurationExchange
+        operator={name}
+        resolveOperator={resolveOperator}
+        onCreated={async () => {}}
+      />
+    </QueryClientProvider>
   );
+  const view = render(component(operator));
+  return (name: string) => view.rerender(component(name));
 }
 async function upload() {
   const file = new File([JSON.stringify(document)], "configuration.json", {
@@ -132,4 +135,20 @@ it("retries an unknown network outcome with the same operation identity", async 
   await screen.findByText(/Created parameter branch/);
   expect(attempts).toHaveLength(2);
   expect(attempts[1]).toBe(attempts[0]);
+});
+
+it("retains the derive actor when another operation refreshes the shared automatic default", async () => {
+  const resolve = vi.fn(async () => "Alice");
+  const changeDisplayedDefault = mount("Alice", resolve);
+  await upload();
+  fireEvent.click(screen.getByRole("button", { name: "Create my copy" }));
+  await screen.findByRole("alert");
+  expect(JSON.parse(attempts[0]!).actor).toBe("Alice");
+  resolve.mockResolvedValue("Bob");
+  changeDisplayedDefault("Bob");
+  failDerive = false;
+  fireEvent.click(screen.getByRole("button", { name: "Create my copy" }));
+  await screen.findByText(/Created parameter branch/);
+  expect(attempts[1]).toBe(attempts[0]);
+  expect(resolve).toHaveBeenCalledTimes(1);
 });

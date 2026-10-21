@@ -1,3 +1,4 @@
+import { readOperatorSettings } from "../application/OperatorSettings";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -45,6 +46,7 @@ const proposal = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "local-operator" });
   sessionStorage.clear();
   vi.mocked(getHealth).mockResolvedValue({
     status: "ok",
@@ -267,3 +269,7 @@ it("rechecks current space before recovery and preserves the request on a server
   expect(api.publish).toHaveBeenLastCalledWith(JSON.parse(saved!).command, "space-a");
   expect(sessionStorage.getItem(sessionStorage.key(0)!)).toBe(saved);
 });
+
+vi.mock("../application/OperatorSettings", () => ({
+  readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "local-operator" })),
+}));
