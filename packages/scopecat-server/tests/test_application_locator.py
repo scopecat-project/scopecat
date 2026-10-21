@@ -278,3 +278,52 @@ def test_endpoint_must_match_data_identity_and_author_registration(
     health["author_workspaces"] = {str(root): "different-author"}
     with pytest.raises(DaemonEndpointError, match="another binding"):
         resolve_daemon_endpoint(root, explicit="http://localhost:9000")
+
+
+def test_explicit_application_without_locator_still_checks_health_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx2
+
+    owner = application(tmp_path / "app")
+    root = author(tmp_path / "author")
+    registered = register_author_workspace(owner.root, root)
+    author_location_path(root).unlink()
+    monkeypatch.setenv("SCOPECAT_APPLICATION_ROOT", str(owner.root))
+    health = {
+        "status": "ok",
+        "project_id": "wrong-space",
+        "deployment_id": "deployment",
+        "project_name": "app",
+        "project_root": str(owner.root),
+        "data_root": str(owner.runtime_binding.data_root),
+        "deployment_root": str(owner.runtime_binding.deployment_root),
+        "author_workspaces": {str(root): registered.id},
+    }
+    client = httpx2.Client
+    transport = httpx2.MockTransport(lambda _: httpx2.Response(200, json=health))
+    monkeypatch.setattr(
+        "scopecat.daemon.endpoint.httpx2.Client",
+        lambda **kwargs: client(transport=transport, **kwargs),
+    )
+    with pytest.raises(DaemonEndpointError, match="another binding"):
+        resolve_daemon_endpoint(root, explicit="http://localhost:9000")
+
+
+@pytest.mark.parametrize("remnant", ["registry", "objects"])
+def test_missing_database_in_existing_owner_never_initializes_new_space(
+    tmp_path: Path, remnant: str
+) -> None:
+    owner = application(tmp_path / "app")
+    first = author(tmp_path / "first")
+    second = author(tmp_path / "second")
+    if remnant == "registry":
+        register_author_workspace(owner.root, first)
+        database = owner.runtime_binding.data_root / "control.sqlite3"
+        database.rename(tmp_path / "preserved.sqlite3")
+    else:
+        (owner.runtime_binding.data_root / "objects").mkdir(parents=True)
+    with pytest.raises(ValueError, match="database is missing"):
+        register_author_workspace(owner.root, second)
+    assert not (owner.runtime_binding.data_root / "control.sqlite3").exists()
+    assert not author_location_path(second).exists()

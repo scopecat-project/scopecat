@@ -220,6 +220,19 @@ def _registration_data_identity(binding: RuntimeBinding) -> str:
         ):
             # Another starter may have initialized the store before we took locks.
             if not database.exists():
+                harmless = {"deployment.lock", "daemon.lock", "author-workspaces.lock"}
+                if (
+                    (binding.coordination_root / "author-workspaces.json").exists()
+                    or (binding.deployment_root / "deployment-id").exists()
+                    or any(
+                        item.name not in harmless
+                        for item in binding.data_root.iterdir()
+                    )
+                ):
+                    raise ValueError(
+                        "Application database is missing from an existing owner; "
+                        "restore its data before registration"
+                    )
                 store = SQLiteProjectStore(
                     SQLiteDatabase(database), binding.data_root / "objects"
                 )

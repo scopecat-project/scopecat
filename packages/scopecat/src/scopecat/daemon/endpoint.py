@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from scopecat.application_locator import read_author_location
+from scopecat.application_locator import read_author_location, read_data_identity
 from scopecat.author_workspaces import author_workspace_id
 from scopecat.daemon.health import DaemonHealth
 from scopecat.runtime_binding import load_runtime_binding
@@ -114,8 +114,15 @@ def verify_daemon_binding(endpoint: str, root: Path) -> None:
             response.raise_for_status()
             health = DaemonHealth.model_validate(response.json())
         location = read_author_location(root)
+        expected_identity = (
+            location.project_id
+            if location is not None
+            else read_data_identity(binding.data_root)
+            if environ.get("SCOPECAT_APPLICATION_ROOT")
+            else None
+        )
         if (
-            (location is not None and health.project_id != location.project_id)
+            (expected_identity is not None and health.project_id != expected_identity)
             or (
                 Path(health.project_root).resolve() != root
                 and health.author_workspaces.get(str(root)) != author_workspace_id(root)
