@@ -77,7 +77,7 @@ test("synthetic sweep point fills a draft, allows adjustment and explicitly cont
       expect(
         await page.evaluate<number>("document.documentElement.scrollWidth"),
       ).toBeLessThanOrEqual(width);
-      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.evaluate("window.scrollTo(0, 0)");
       await testInfo.attach(`selected-${width}`, {
         body: await page.screenshot({
           fullPage: true,

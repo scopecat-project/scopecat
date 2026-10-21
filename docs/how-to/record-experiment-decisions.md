@@ -138,7 +138,7 @@ input is the retained analysis publication; its `trace` figure has a `data` laye
 plotting the `frequency` column in MHz:
 
 ```python
-metadata={
+metadata = {
     "point_binding": {
         "input": 1,  # zero-based index in this request's inputs
         "output": "trace",
