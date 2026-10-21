@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import numpy as np
 import pytest
@@ -14,15 +15,17 @@ def reference(
     sections: tuple[SosSection, ...], x: NDArray[np.float64]
 ) -> NDArray[np.float64]:
     """Independent direct-form I recurrence, not scipy/production DF-II."""
-    y = list(x)
+    y = cast("list[float]", x.tolist())
     for b0, b1, b2, _, a1, a2 in sections:
-        u, y = y, []
+        u = y
+        filtered: list[float] = []
         for n, value in enumerate(u):
-            y.append(
+            filtered.append(
                 b0 * value
-                + (b1 * u[n - 1] - a1 * y[n - 1] if n >= 1 else 0)
-                + (b2 * u[n - 2] - a2 * y[n - 2] if n >= 2 else 0)
+                + (b1 * u[n - 1] - a1 * filtered[n - 1] if n >= 1 else 0)
+                + (b2 * u[n - 2] - a2 * filtered[n - 2] if n >= 2 else 0)
             )
+        y = filtered
     return np.asarray(y)
 
 

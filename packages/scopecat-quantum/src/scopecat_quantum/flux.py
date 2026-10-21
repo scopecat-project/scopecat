@@ -53,6 +53,10 @@ def flux_signal_id(signal: FluxSignal) -> str:
     return f"{kind}:{signal.owner.value}"
 
 
+def _is_none(value: object) -> bool:
+    return value is None
+
+
 class IirTailPolicy(BaseModel):
     """Explicit IIR cutoff after zero-input samples, certified before truncation.
 
@@ -93,12 +97,8 @@ class FluxCorrection(BaseModel):
     max_abs_voltage_v: tuple[Annotated[Finite, Field(gt=0)], ...]
 
     # Omitted v1 fields stay omitted in serialized historical snapshots.
-    iir_filters: tuple[SosIir, ...] | None = Field(
-        default=None, exclude_if=lambda value: value is None
-    )
-    iir_tail: IirTailPolicy | None = Field(
-        default=None, exclude_if=lambda value: value is None
-    )
+    iir_filters: tuple[SosIir, ...] | None = Field(default=None, exclude_if=_is_none)
+    iir_tail: IirTailPolicy | None = Field(default=None, exclude_if=_is_none)
 
     @model_validator(mode="after")
     def validate_axes(self) -> FluxCorrection:

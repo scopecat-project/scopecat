@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 from scopecat.sdk.instruments.execution import RunHardwareInvoke
 from scopecat_quantum.flux import FluxCorrection
 from scopecat_quantum.iir import inverse_exponential_sos
@@ -71,7 +72,7 @@ def test_iir_mixed_record_retained_upload_iq_acquisition_reset_and_identity() ->
         np.testing.assert_array_equal(first.samples, second.samples)
     runtime, instruments = InstrumentListModeRuntime(), _RecordingInstrumentExecutor()
     runtime.prepare(artifact, execution_id="iir-simulation", instruments=instruments)
-    uploaded = {}
+    uploaded: dict[tuple[str, tuple[str, ...]], NDArray[np.float64]] = {}
     for batch in instruments.batches:
         for action in batch.actions:
             if isinstance(action, RunHardwareInvoke):

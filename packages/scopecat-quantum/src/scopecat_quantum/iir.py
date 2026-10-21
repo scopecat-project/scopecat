@@ -87,7 +87,14 @@ class SosIir(BaseModel):
         if not np.all(np.isfinite(y)) or not np.all(np.isfinite(delays)):
             raise ValueError("IIR computation produced nonfinite samples/state")
         return y, SosState(
-            self.fingerprint, tuple((float(d[0]), float(d[1])) for d in delays)
+            self.fingerprint,
+            tuple(
+                (
+                    float(cast("np.float64", delays[j, 0])),
+                    float(cast("np.float64", delays[j, 1])),
+                )
+                for j in range(len(self.sections))
+            ),
         )
 
     def remaining_output_bound(self, state: SosState) -> float:
@@ -135,7 +142,7 @@ class SosIir(BaseModel):
                 or np.min(np.linalg.eigvalsh(residual)) < 0.5
             ):
                 raise ValueError("IIR tail certificate is numerically ill-conditioned")
-            scale = float(np.max(np.abs(z)))
+            scale = float(cast("np.float64", np.max(np.abs(z))))
             normalized = z / scale
             energy = float(normalized @ certificate @ normalized)
         except np.linalg.LinAlgError as exc:
@@ -159,8 +166,7 @@ def inverse_exponential_sos(
         not math.isfinite(amplitude)
         or not math.isfinite(tau_seconds)
         or tau_seconds <= 0
-        or isinstance(sample_rate_hz, bool)
-        or not isinstance(sample_rate_hz, int)
+        or type(sample_rate_hz) is not int
         or sample_rate_hz <= 0
     ):
         raise ValueError(
