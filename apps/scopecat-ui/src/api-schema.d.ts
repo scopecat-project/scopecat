@@ -1408,6 +1408,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operator-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Operator Settings */
+        get: operations["read_operator_settings_api_v1_operator_settings_get"];
+        /** Save Operator Settings */
+        put: operations["save_operator_settings_api_v1_operator_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parameter-drafts": {
         parameters: {
             query?: never;
@@ -5809,6 +5827,11 @@ export interface components {
         };
         /** DecisionDraftView */
         DecisionDraftView: {
+            /**
+             * Default Operator
+             * @default
+             */
+            default_operator: string;
             draft: components["schemas"]["DecisionDraft"] | null;
             /** Head Revision */
             head_revision: number;
@@ -9009,6 +9032,19 @@ export interface components {
         };
         /** @enum {string} */
         OperatorRegionScope: "current" | "selected" | "all";
+        /** OperatorSettings */
+        OperatorSettings: {
+            /**
+             * Operator
+             * @default
+             */
+            operator: string;
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+        };
         ParameterAtomValue: components["schemas"]["scopecat__kernel__quantity__Quantity"] | components["schemas"]["EntityRef"] | boolean | number | string;
         /** ParameterBranch */
         ParameterBranch: {
@@ -15892,6 +15928,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataCleanupPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_operator_settings_api_v1_operator_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSettings"];
+                };
+            };
+        };
+    };
+    save_operator_settings_api_v1_operator_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSettings"];
                 };
             };
             /** @description Validation Error */

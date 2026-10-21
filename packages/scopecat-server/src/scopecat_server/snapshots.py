@@ -28,6 +28,7 @@ from scopecat.records.sample import SampleRevision
 from scopecat.records.sample_artifact import is_owned_sample_artifact_uri
 from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, RUNTIME_BINDING_NAME
 
+from scopecat_server.services.operator_settings import OPERATOR_SETTINGS_FILE
 from scopecat_server.storage.sqlite.object_store import ImmutableObjectStore
 from scopecat_server.storage.sqlite.project_store import (
     inspect_project_schema,
@@ -149,6 +150,13 @@ def create_snapshot(
                 if relative.name.endswith(".tmp") and relative.name.startswith("."):
                     continue
                 _copy(data_root / "objects" / relative, objects / relative)
+            operator_settings = data_root / OPERATOR_SETTINGS_FILE
+            if operator_settings.is_symlink():
+                raise SnapshotError("operator settings must be a regular data file")
+            if operator_settings.is_file():
+                _copy(
+                    operator_settings, captured / data_relative / OPERATOR_SETTINGS_FILE
+                )
             receipts = data_root / "author-jobs"
             if receipts.exists():
                 for relative in _files(receipts):
@@ -424,6 +432,7 @@ def _allowed_path(path: PurePosixPath, *, application: bool = False) -> bool:
     return (
         path.is_relative_to(PurePosixPath(".scopecat/author-jobs"))
         or path.is_relative_to(PurePosixPath(".scopecat/practice"))
+        or path == PurePosixPath(".scopecat", OPERATOR_SETTINGS_FILE)
         or path == PurePosixPath(_DATABASE)
         or (path.is_relative_to(PurePosixPath(_OBJECTS)) and len(path.parts) in {4, 7})
     )

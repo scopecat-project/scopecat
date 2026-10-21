@@ -35,12 +35,18 @@ beforeEach(() => {
   vi.mocked(getDecisionProgress).mockResolvedValue({
     dispatch: { management: "active", worker_running: false },
   } as Awaited<ReturnType<typeof getDecisionProgress>>);
-  let saved: DecisionDraftView = { draft: null, head_revision: 0, validity: "current" };
+  let saved: DecisionDraftView = {
+    default_operator: "",
+    draft: null,
+    head_revision: 0,
+    validity: "current",
+  };
   vi.mocked(readDecisionDraft).mockImplementation(async () => saved);
   vi.mocked(getDecisionDraftHistory).mockResolvedValue({ items: [] });
   vi.mocked(saveDecisionDraft).mockImplementation(async (command) => {
     const revision = saved.head_revision + 1;
     saved = {
+      default_operator: "",
       draft: {
         revision,
         target: command.target,
@@ -69,6 +75,42 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it("snapshots the default operator before an untouched template's uncertain submission", async () => {
+    vi.mocked(readDecisionDraft).mockResolvedValueOnce({
+      draft: null,
+      head_revision: 0,
+      validity: "current",
+      default_operator: "Alice",
+    });
+    vi.mocked(submitProcedureInput).mockRejectedValue(new Error("Connection lost"));
+    renderWorkspace();
+    expect(await screen.findByLabelText("Recorded reviewer")).toHaveValue("Alice");
+    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(1));
+    const command = vi.mocked(saveDecisionDraft).mock.calls[0]![0];
+    expect(command.input.actor).toBe("Alice");
+    expect(command.input.actor_kind).toBe("human");
+    expect(vi.mocked(saveDecisionDraft).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(submitProcedureInput).mock.invocationCallOrder[0]!,
+    );
+    cleanup();
+    vi.mocked(readDecisionDraft).mockResolvedValue({
+      default_operator: "Bob",
+      head_revision: 1,
+      validity: "current",
+      draft: {
+        revision: 1,
+        target: command.target,
+        baseline: command.baseline,
+        input: command.input,
+        state: "saved",
+        created_at: "2026-10-21T00:00:00Z",
+      },
+    });
+    renderWorkspace();
+    expect(await screen.findByLabelText("Recorded reviewer")).toHaveValue("Alice");
+  });
+
   it("offers exact continuation retry when queued dispatch fails later", async () => {
     vi.mocked(submitProcedureInput).mockResolvedValue({
       continuation: "queued",

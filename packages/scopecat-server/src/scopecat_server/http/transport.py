@@ -448,6 +448,7 @@ from scopecat_server.retained_request import (
 )
 from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.operator_settings import OperatorSettings
 from scopecat_server.services.project_workers import (
     ProcedureDispatchError,
     ProjectProcedureWorkers,
@@ -2574,6 +2575,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         draft_id: UUID, command: ParameterDraftCommit
     ) -> ParameterDraftView:
         return application.parameter_drafts.commit(draft_id, command)
+
+    @app.get(f"{_API_PREFIX}/operator-settings")
+    def read_operator_settings() -> OperatorSettings:
+        return application.operator_settings.read()
+
+    @app.put(f"{_API_PREFIX}/operator-settings")
+    def save_operator_settings(command: OperatorSettings) -> OperatorSettings:
+        return application.operator_settings.save(command)
 
     @app.get(f"{_API_PREFIX}/decision-drafts")
     def decision_draft_history(

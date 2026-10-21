@@ -215,9 +215,66 @@ def test_current_backup_includes_saved_conflicting_and_discarded_drafts(tmp_path
         )
     )
     history = service.history()
+    from scopecat_server.services.operator_settings import (
+        OperatorSettings,
+        OperatorSettingsService,
+    )
+
+    OperatorSettingsService(store.database.parent).save(
+        OperatorSettings(operator="Ada")
+    )
     store.close()
     create_snapshot(load_project(root / "scopecat.toml"), tmp_path / "backup")
     restore_snapshot(tmp_path / "backup", tmp_path / "restored")
     restored = make_store(tmp_path / "restored" / ".scopecat")
     assert DecisionDraftService(restored.sqlite).history() == history
+    assert OperatorSettingsService(restored.database.parent).read().operator == "Ada"
     restored.close()
+
+
+def test_operator_setting_is_shared_and_does_not_rewrite_retained_actor(tmp_path: Path):
+    from scopecat_server.errors import BackendConflict
+    from scopecat_server.services.operator_settings import (
+        OperatorSettings,
+        OperatorSettingsService,
+    )
+
+    store = make_store(tmp_path / "one")
+    command = seed(store)
+    first_window = OperatorSettingsService(store.database.parent)
+    second_window = OperatorSettingsService(store.database.parent)
+    assert first_window.read() == OperatorSettings()
+    alice = first_window.save(OperatorSettings(operator=" Alice "))
+    assert second_window.read() == alice
+    service = DecisionDraftService(store.sqlite)
+    assert service.read(command.target).default_operator == "Alice"
+    command = command.model_copy(
+        update={"input": command.input.model_copy(update={"actor": "Alice"})}
+    )
+    service.save(command)
+    second_window.save(OperatorSettings(operator="Bob", revision=alice.revision))
+    with pytest.raises(BackendConflict):
+        first_window.save(OperatorSettings(operator="Carol", revision=alice.revision))
+    store.close()
+    reopened = make_store(tmp_path / "one")
+    view = DecisionDraftService(reopened.sqlite).read(command.target)
+    assert OperatorSettingsService(reopened.database.parent).read().operator == "Bob"
+    assert view.default_operator == "Alice"
+    assert view.draft is not None and view.draft.input.actor == "Alice"
+    assert view.draft.input.actor_kind == "human"
+    assert OperatorSettingsService(tmp_path / "other").read().operator == ""
+    reopened.close()
+
+
+def test_saved_draft_recovery_does_not_depend_on_optional_settings(tmp_path: Path):
+    store = make_store(tmp_path)
+    command = seed(store)
+    service = DecisionDraftService(store.sqlite)
+    first = service.save(command)
+    (tmp_path / "operator-settings.json").write_text("interrupted external edit")
+    assert service.read(command.target).draft == first.draft
+    saved = service.save(
+        command.model_copy(update={"expected_revision": first.head_revision})
+    )
+    assert saved.draft is not None and saved.draft.input == command.input
+    store.close()
