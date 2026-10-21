@@ -545,3 +545,33 @@ def test_window_diagnostics_unavailable_does_not_replace_acceptance_failure(
     assert "secret" not in path.read_text()
     # An unwritable diagnostic target must also leave the caller running.
     probe.WindowDiagnostics(tmp_path).record("cannot_write")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, fail):
+    from scripts.verify_native_application import AUTHOR_NOTEBOOK_CHECK
+
+    notebooks = tmp_path / "notebooks"
+    notebooks.mkdir()
+    (notebooks / "02_edit_scan.py").write_text(
+        "from IPython import get_ipython\n"
+        "assert get_ipython() is not None\n"
+        "# %% Next cell sees the same notebook namespace.\n"
+        "from types import SimpleNamespace\n"
+        "run = SimpleNamespace(id='retained-run')\n"
+        + ("raise ValueError('notebook execution failed')\n" if fail else "")
+    )
+    result = subprocess.run(  # noqa: S603 - owned acceptance probe and fixture
+        [sys.executable, "-I", "-c", AUTHOR_NOTEBOOK_CHECK, str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    receipt = tmp_path / "saved-run.json"
+    if fail:
+        assert result.returncode != 0
+        assert "notebook execution failed" in result.stdout + result.stderr
+        assert not receipt.exists()
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(receipt.read_text()) == {"run_id": "retained-run"}
