@@ -13,7 +13,11 @@ from typing import Protocol, cast, override
 
 import scopecat.authoring.experiments as declarations
 from scopecat.application.author_project import AuthorProject
-from scopecat.author_workspaces import local_author_workspaces, service_workspace_root
+from scopecat.author_workspaces import (
+    author_workspace_id,
+    local_author_workspaces,
+    service_workspace_root,
+)
 from scopecat.authoring.experiments import Experiment
 from scopecat.daemon.endpoint import (
     read_daemon_endpoint_record,
@@ -133,7 +137,9 @@ class NotebookSession(AuthorProject):
             )
         endpoint = resolve_daemon_endpoint(project.root, explicit=daemon)
         if _workspace is not None and not _workspace.is_closed:
-            if _workspace.base_url != endpoint.rstrip("/"):
+            if _workspace.base_url != endpoint.rstrip(
+                "/"
+            ) or _workspace.workspace_id != author_workspace_id(project.root):
                 raise ValueError(
                     "Close the active Notebook workspace before changing its service."
                 )

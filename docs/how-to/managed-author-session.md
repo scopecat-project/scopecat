@@ -6,6 +6,58 @@ code, create or select a folder in **Settings → Author code**, then choose its
 in your editor. Keep Scopecat open; registered folders connect to its application service
 and share application-owned data. No per-folder daemon startup is needed.
 
+For an ordinary Notebook, use the shared session entry from the author folder:
+
+```python
+import scopecat as sc
+
+session = sc.notebook()
+```
+
+Registration stores the author-to-application association in per-user local
+metadata, outside your source folder. An independently launched VS Code kernel
+can therefore find the same application without inherited launcher variables.
+New registration does not write `scopecat.runtime.toml` or create `.scopecat`
+locks in an otherwise fresh author folder. Application updates keep this
+association because it names the data instance, not its executable or version.
+The association pins the existing scientific `project_id` and author registration
+ID; its application path is only a local address. Replacing data at that same
+address fails the identity check. Explicit registration may initialize an empty
+selected application using the normal store bootstrap under ownership locks;
+Notebook discovery never initializes a store.
+
+Interrupted registration leaves a pending owner record. Repeat registration with
+the same application to finish it; a different application cannot claim it.
+
+After an application restart, close the old session and call `sc.notebook()` again
+to read its current endpoint. Retained jobs can use `job.reconnect(session)`.
+If the application is stopped, unavailable or its registration conflicts, the
+call fails: it never selects another running/default application or creates a
+new data store. Start the associated application and retry. A moved author folder
+requires explicit registration; moving an application requires deliberate owner
+recovery rather than silently changing the association.
+
+Advanced callers may pass `daemon=` to `sc.notebook()` or use
+`SCOPECAT_DAEMON_URL`; both still verify the registered owner. Development kernels
+can use `SCOPECAT_APPLICATION_ROOT` for an exact registered instance. This override
+must agree with any persistent association. Without registration or inherited
+configuration, reopening an editor does not guess a development worktree.
+
+The locator directory is `%LOCALAPPDATA%/Scopecat/author-locations` on Windows,
+`~/Library/Application Support/Scopecat/author-locations` on macOS, and
+`$XDG_DATA_HOME/Scopecat/author-locations` (default `~/.local/share`) on Linux.
+`SCOPECAT_LOCATOR_HOME` selects an absolute directory for isolated development or
+tests; all participating processes must use the same value. Do not copy these
+machine-local records into a portable author template.
+
+Existing explicit runtime files remain readable. Explicit registration adds an
+association only when all effective runtime locations and settings match the
+selected owner; the original file stays untouched. Custom or conflicting bindings
+must be resolved deliberately. Registration never moves scientific data, deletes
+old lock files, or takes over an active independent runtime. This connection
+change does not migrate old scientific store formats or automatically transfer
+an author between applications.
+
 This API guide is for an already prepared laboratory author folder. Its maintainer
 supplies the execution environment, parameter branch and registered experiments;
 use the existing-folder preparation in [application maintenance](maintain-application.md#author-folders).

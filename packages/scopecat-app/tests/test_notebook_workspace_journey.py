@@ -277,3 +277,81 @@ def test_unregistered_workspace_keeps_kernel_hint(
         )
     with pytest.raises(RuntimeError, match="Select Kernel"):
         notebook_module.notebook(root)
+
+
+def test_independent_kernel_discovers_application_and_reconnects(
+    tmp_path: Path, author_kernel_python: Path
+) -> None:
+    """An editor-launched kernel needs neither an injected URL nor four paths."""
+    import os
+
+    from scopecat_app.application_runtime import ApplicationRuntime
+
+    root = tmp_path / "author"
+    create_project(root)
+    before = {str(path.relative_to(root)) for path in root.rglob("*")}
+    gui = tmp_path / "gui"
+    gui.mkdir()
+    (gui / "index.html").write_text("<html>application</html>")
+    runtime = ApplicationRuntime(tmp_path / "application")
+    runtime.configure(static_dir=gui)
+    identity = runtime.register_source(root, python=author_kernel_python)
+    assert {str(path.relative_to(root)) for path in root.rglob("*")} == before
+    assert not (root / "scopecat.runtime.toml").exists()
+    manager = KernelManager(kernel_name="python3")
+    assert manager.kernel_spec is not None
+    manager.kernel_spec.argv = [
+        str(author_kernel_python),
+        "-m",
+        "ipykernel_launcher",
+        "-f",
+        "{connection_file}",
+    ]
+    environment = dict(os.environ)
+    for name in (
+        "SCOPECAT_DAEMON_URL",
+        "SCOPECAT_APPLICATION_ROOT",
+        "PYTHONPATH",
+        "PYTHONHOME",
+    ):
+        environment.pop(name, None)
+    runtime.start()
+    try:
+        manager.start_kernel(cwd=str(root), env=environment)
+        client = manager.blocking_client()
+        client.start_channels()
+        client.wait_for_ready(timeout=30)
+
+        def cell(code: str) -> None:
+            response = client.execute_interactive(code, timeout=120)
+            assert response["content"]["status"] == "ok", response
+
+        cell(
+            "import scopecat as sc\n"
+            "session = sc.notebook()\n"
+            f"assert session.workspace_id == {identity!r}\n"
+            "revision = session.state().active\n"
+            "session.close()\n"
+        )
+        runtime.stop()
+        cell(
+            "try:\n"
+            "    sc.notebook()\n"
+            "except RuntimeError:\n"
+            "    pass\n"
+            "else:\n"
+            "    raise AssertionError('offline application must fail')\n"
+        )
+        runtime.start()
+        cell(
+            "session = sc.notebook()\n"
+            f"assert session.workspace_id == {identity!r}\n"
+            "assert session.state().active == revision\n"
+            "session.close()\n"
+        )
+        client.stop_channels()
+    finally:
+        if manager.has_kernel:
+            manager.shutdown_kernel(now=True)
+        runtime.stop()
+    assert not (root / ".scopecat").exists()

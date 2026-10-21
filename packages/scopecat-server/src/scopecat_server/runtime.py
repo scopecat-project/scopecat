@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI
 from filelock import FileLock, Timeout
 from scopecat.application.bootstrap import LabBootstrap
+from scopecat.application_locator import author_location_path
 from scopecat.author_workspaces import service_workspace_root
 from scopecat.config.resolution import validate_config_profile
 from scopecat.project import load_bootstrap_factory
@@ -96,32 +97,37 @@ class LocalDaemonRuntime:
                 "instrument_backend_spec and instrument_endpoint cannot be combined"
             )
         self.project_root = Path(project_root).resolve()
-        if service_workspace_root(self.project_root) != self.project_root:
-            raise ValueError(
-                "Start the deployment from its service workspace, not "
-                "a registered author workspace"
+        # Registration and startup serialize before deciding whether source still
+        # owns an independent runtime. This fence lives outside authored source.
+        locator = author_location_path(self.project_root)
+        locator.parent.mkdir(parents=True, exist_ok=True)
+        with FileLock(locator.with_suffix(".lock"), timeout=0):
+            if service_workspace_root(self.project_root) != self.project_root:
+                raise ValueError(
+                    "Start the deployment from its service workspace, not "
+                    "a registered author workspace"
+                )
+            self.project_root.mkdir(parents=True, exist_ok=True)
+            self.binding = load_runtime_binding(self.project_root)
+            self.state_dir = self.binding.data_root
+            self.state_dir.mkdir(parents=True, exist_ok=True)
+            self.state_dir.chmod(0o700)
+            self.binding.deployment_root.mkdir(parents=True, exist_ok=True)
+            self._deployment_lock = FileLock(
+                self.binding.deployment_root / "deployment.lock"
             )
-        self.project_root.mkdir(parents=True, exist_ok=True)
-        self.binding = load_runtime_binding(self.project_root)
-        self.state_dir = self.binding.data_root
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.state_dir.chmod(0o700)
-        self.binding.deployment_root.mkdir(parents=True, exist_ok=True)
-        self._deployment_lock = FileLock(
-            self.binding.deployment_root / "deployment.lock"
-        )
-        self._owner_lock = FileLock(self.state_dir / "daemon.lock")
-        try:
-            # This lock establishes one process owner; SQLite remains the only
-            # concurrency mechanism inside that process boundary.
-            self._deployment_lock.acquire(timeout=0)
-            self._owner_lock.acquire(timeout=0)
-        except Timeout as error:
-            self._deployment_lock.release()
-            raise RuntimeError(
-                "project already has a running daemon or deployment owner: "
-                f"{self.project_root}"
-            ) from error
+            self._owner_lock = FileLock(self.state_dir / "daemon.lock")
+            try:
+                # This lock establishes one process owner; SQLite remains the only
+                # concurrency mechanism inside that process boundary.
+                self._deployment_lock.acquire(timeout=0)
+                self._owner_lock.acquire(timeout=0)
+            except Timeout as error:
+                self._deployment_lock.release()
+                raise RuntimeError(
+                    "project already has a running daemon or deployment owner: "
+                    f"{self.project_root}"
+                ) from error
         database = self.state_dir / "control.sqlite3"
         objects = self.state_dir / "objects"
         project_bootstrap: LabBootstrap | None = None
