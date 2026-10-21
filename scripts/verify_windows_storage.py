@@ -123,8 +123,10 @@ def exercise():
             wait(lambda: js(first, "document.querySelector(" + json.dumps(selector)
                             + ")?.value") == fixture["actor"],
                  "draft restored in restarted native UI")
-            assert fixture["target"]["procedure_run_id"] in js(
-                first, "document.body.textContent")
+            selected = js(
+                first, "new URL(document.querySelector('article header a').href)"
+                ".searchParams.get('procedure')")
+            assert selected == fixture["target"]["procedure_run_id"]
             assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
             checks.append("exact application draft and real form recover after restart")
 

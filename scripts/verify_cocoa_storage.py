@@ -201,8 +201,10 @@ def exercise():
                 ),
                 "draft restored in restarted native UI",
             )
-            assert fixture["target"]["procedure_run_id"] in js(
-                first, "document.body.textContent")
+            selected = js(
+                first, "new URL(document.querySelector('article header a').href)"
+                ".searchParams.get('procedure')")
+            assert selected == fixture["target"]["procedure_run_id"]
             assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
             checks.append(
                 "application draft and real form recover after host/service restart"
