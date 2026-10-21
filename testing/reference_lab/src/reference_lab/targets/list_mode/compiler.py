@@ -804,7 +804,7 @@ class ListModeTargetCompiler:
                 message=(
                     f"program {program.id.value!r} requires "
                     f"{waveform_plan.sample_count} "
-                    f"samples including any FIR tail; target entry limit is "
+                    f"samples including any IIR/FIR tail; target entry limit is "
                     f"{self.target.max_samples_per_entry}"
                 ),
             )

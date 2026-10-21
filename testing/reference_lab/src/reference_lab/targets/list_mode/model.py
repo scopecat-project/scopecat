@@ -714,7 +714,7 @@ class ListModeTarget:
                 )
             if timing.nonzero and self.flux_correction is not None:
                 raise ValueError(
-                    "nonzero timing correction with flux/FIR is unsupported"
+                    "nonzero timing correction with flux/FIR/IIR is unsupported"
                 )
             configured = {
                 signal_key(b.signal)
