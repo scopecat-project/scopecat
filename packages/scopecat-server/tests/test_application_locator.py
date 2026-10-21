@@ -32,7 +32,7 @@ def author(root: Path) -> Path:
 
 def test_registration_leaves_source_tree_untouched(tmp_path: Path) -> None:
     owner = application(tmp_path / "app")
-    root = author(tmp_path / "author")
+    root = author(tmp_path / "作者 folder")
     before = capture_sources(open_project(root)).manifest
     registered = register_author_workspace(owner.root, root)
     assert sorted(path.name for path in root.iterdir()) == ["scopecat.toml"]
