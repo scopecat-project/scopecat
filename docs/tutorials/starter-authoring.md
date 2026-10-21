@@ -89,3 +89,72 @@ Use [managed author sessions](../how-to/managed-author-session.md) for parameter
 workspaces and saved plans, or choose another [Notebook lesson](teaching-sandboxes.md).
 Device and quantum extension authors can follow the
 [extension guides](../extensions/index.md).
+
+## Rebuild this folder's client environment
+
+After **Settings → Author code** prepares the local environment, keep
+`requirements-client.txt` and `author-environments/` with your source. The lock
+names its source snapshot: framework wheels copied from the selected delivery,
+`client.in` (Scopecat and ipykernel inputs), `delivery-constraints.txt`,
+`delivery.json` (delivery/source provenance), and `python.json` (Python version,
+ABI and binary identity). `pyproject.toml` declares additional experiment
+requirements; it is not by itself the complete client environment.
+
+Close the Notebook. From the author directory, create a venv with the matching
+Python version/ABI recorded in `python.json`, then install the exact client lock:
+
+```sh
+uv venv --python <matching-python> .venv
+uv pip sync --python .venv --require-hashes requirements-client.txt
+```
+
+On Windows this creates `.venv/Scripts/python.exe`; choose that interpreter/kernel
+when reopening the Notebook. These commands do not activate a shell environment
+or install into the application. A different OS/ABI needs its own preparation;
+this lock is not a cross-platform or fully offline distribution. Registry packages
+need network access or a populated cache. Custom indexes and third-party local
+sources remain explicit prerequisites. Retaining the framework wheels allows the
+folder to move without retaining the original application installation path.
+
+To change dependencies, edit `pyproject.toml`, then explicitly prepare/rebuild in
+Settings. Preparation checks the selected delivery constraints and retains a new
+client lock; incompatible requirements fail rather than upgrading shared framework
+dependencies. If you own a `uv.lock`, update it deliberately first: stale locks
+are rejected. Ad hoc pip installs are not represented by the saved lock. Keep a
+copy of the previous lock when you need to reproduce that client later.
+
+This rebuild affects the editable client only. Published experiments retain fixed
+source and application-owned execution environments; changing the client does not
+replace their dependencies or reinterpret old results. Prepare and select the
+execution environment through the existing application workflow for new source.
+
+## From the lesson to a first real experiment
+
+Start with Help's **Parameters and scans** lesson, then create the separate
+Settings author folder described above. Run its synthetic three-point scan once
+and keep its receipt. The ordinary template uses `sc.notebook(...)`, the existing
+unified session entry; select the correct application through the supported
+registration/connection workflow. Application identity and locator improvements
+are tracked separately in [#1127](https://github.com/scopecat-project/scopecat/issues/1127).
+
+| Keep the learned workflow | Replace for the laboratory |
+| --- | --- |
+| Requests, explicit scans, prepare/preview, submit, wait, receipt reopen | The analytic response function with a supported acquisition/driver implementation |
+| Parameter workspaces, units, saved branches and analysis publications | Scientific parameter schema, units, limits, scan range, timing, averaging and calibration assumptions |
+| Experiment/analysis API structure | `configuration.py`'s synthetic setup: real topology, instrument registry, routing, capabilities and lifecycle policy |
+| Editable source and declared dependencies | Required adapters, SDK versions, native drivers and site-specific prerequisites in the appropriate client/execution environments |
+
+Changing an address cannot turn this synthetic response into a physical
+measurement. Review the setup and driver contract with the equipment owner,
+validate units and small bounded scan inputs, and preview before explicit
+acquisition. Choose device exit/failure policy according to the actual equipment;
+this lesson does not supply a laboratory default. Keep private addresses,
+credentials, SDKs and site parameters outside the public source repository.
+After the first intended acquisition, record its receipt and reopen the same
+result; do not submit again merely to find it.
+
+The bounded Windows user observation remains **unperformed**. Record the app
+version, Python/ABI, selected environment lock, assistance needed and concrete
+blockers while a target user rebuilds, edits, runs, then exits and reopens the exact
+result/source using the existing recovery workflow. Automated Linux rebuild and
+kernel checks do not establish this observation or real-device compatibility.

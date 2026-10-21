@@ -408,6 +408,17 @@ def write_author_scaffold(root: Path) -> None:
             "notebooks/02_edit_scan.py",
         )
     }
+    selected["notebooks/02_edit_scan.py"] = (
+        selected["notebooks/02_edit_scan.py"]
+        .replace("from scopecat.daemon.endpoint import resolve_daemon_endpoint\n", "")
+        .replace(
+            "project = sc.open_project(Path(__file__).resolve().parents[1])\n"
+            "_ = project.load_application()\n"
+            "author = project.authoring()",
+            "author = sc.notebook(Path(__file__).resolve().parents[1])",
+        )
+        .replace("resolve_daemon_endpoint(project.root)", "author.base_url")
+    )
     selected["scopecat.toml"] = (
         '[authors]\nmodules = ["scopecat_lab.authored"]\ndependencies = []\n'
         'source_roots = ["src"]\n'
@@ -447,6 +458,9 @@ def initial_setup() -> ExecutableSetupSnapshot:
         "or notebook kernel. If .venv is missing, create its local Python environment "
         "in Scopecat Settings first. You can install analysis packages there with pip; "
         "the application has its own environment. "
+        "Environment preparation retains requirements-client.txt and "
+        "author-environments/ alongside your editable source; keep both for "
+        "standard-tool rebuilds (see author-environments/README.md). "
         "After registration, open Scopecat and run "
         "notebooks/02_edit_scan.py cell by cell. "
         "Preview first; submitting again creates another run. Saved records belong to "

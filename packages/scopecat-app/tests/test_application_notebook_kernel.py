@@ -13,13 +13,19 @@ import pytest
 from testing.app_support.project import create_project
 
 from scopecat_app.application_runtime import ApplicationRuntime
+from scopecat_server.scaffold import write_author_scaffold
 
 
+@pytest.mark.parametrize("starter", [False, True])
 def test_registered_notebook_rejects_application_but_accepts_external_kernel(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, starter: bool
 ) -> None:
     monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
-    root = create_project(tmp_path / "author", topic="parameters").parent
+    root = tmp_path / "author"
+    if starter:
+        write_author_scaffold(root)
+    else:
+        create_project(root, topic="parameters")
     retained = root / ".venv/retained.txt"
     retained.parent.mkdir()
     retained.write_text("previous environment", encoding="utf-8")
@@ -55,6 +61,16 @@ def test_registered_notebook_rejects_application_but_accepts_external_kernel(
         f"session = sc.notebook({str(root)!r}); "
         "print('author connected'); session.close()"
     )
+    if starter:
+        template = root / "notebooks/02_edit_scan.py"
+        connect = template.read_text().split("# %% Preview:")[0]
+        code = (
+            "from IPython.core.interactiveshell import InteractiveShell; "
+            "InteractiveShell.instance(); "
+            f"__file__ = {str(template)!r}; "
+            f"exec({connect!r}); "
+            "print('author connected'); author.close()"
+        )
     try:
         runtime.start()
         wrong = subprocess.run(

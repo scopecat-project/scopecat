@@ -97,9 +97,12 @@ def create_client_environment(
                 str(environment),
             ]
         )
-        _install_client(uv, bundle, workspace, environment, offline=offline)
+        requirements = _install_client(
+            uv, bundle, workspace, environment, offline=offline
+        )
         python = environment_python(environment)
         _run([str(python), "-m", "ensurepip"])
+        _retain_client_requirements(bundle, workspace, requirements, python)
     except BaseException:
         # Cancellation must not leave a partial interpreter available for reuse.
         # Restore the user's previous environment before propagating the interrupt.
@@ -114,7 +117,8 @@ def create_client_environment(
             '[project]\nname = "scopecat-experiments"\nversion = "0.1.0"\n'
             'requires-python = ">=3.14"\ndependencies = []\n\n'
             "# Add dependencies needed by background experiments here.\n"
-            "# Local pip installs affect only this folder, not the application.\n",
+            "# Client framework/kernel inputs and exact lock: requirements-client.txt\n"
+            "# See author-environments/README.md for standard-tool rebuilds.\n",
             encoding="utf-8",
         )
     return python
@@ -254,7 +258,7 @@ def _framework_requirements(bundle: Path, *, server: bool) -> str:
 
 def _install_client(
     uv: str, bundle: Path, workspace: Path, environment: Path, *, offline: bool
-) -> None:
+) -> str:
     with tempfile.TemporaryDirectory(prefix="scopecat-client-") as temporary:
         requested = Path(temporary) / "client.in"
         requested.write_text(
@@ -310,6 +314,8 @@ def _install_client(
                 str(workspace),
                 "--python",
                 str(python),
+                "--find-links",
+                (bundle / "wheels").as_uri(),
                 "--link-mode",
                 "copy",
                 "--require-hashes",
@@ -318,6 +324,84 @@ def _install_client(
                 *(["--offline"] if offline else []),
             ]
         )
+
+        return lock.read_text(encoding="utf-8")
+
+
+def _retain_client_requirements(
+    bundle: Path, workspace: Path, requirements: str, python: Path
+) -> None:
+    """Retain a standard pip lock and its local wheel sources outside the venv.
+
+    Each preparation owns an immutable source directory. Old locks remain usable
+    when a later preparation selects another delivery; nothing changes execution
+    environment selection or already published source.
+    """
+    python_identity = identity(python)
+    key = sha256_json_hash(
+        {
+            "requirements": requirements,
+            "delivery": file_hash(bundle / MANIFEST),
+            "python": python_identity,
+        }
+    ).split(":")[-1]
+    relative = Path("author-environments") / key
+    destination = workspace / relative
+    destination.mkdir(parents=True, exist_ok=True)
+    wheels = destination / "wheels"
+    wheels.mkdir(exist_ok=True)
+    for wheel in (bundle / "wheels").glob("*.whl"):
+        shutil.copy2(wheel, wheels / wheel.name)
+        requirements = requirements.replace(
+            f"{wheel.name.split('-')[0].replace('_', '-')} @ {wheel.as_uri()}",
+            (relative / "wheels" / wheel.name).as_posix(),
+        )
+    shutil.copy2(bundle / MANIFEST, destination / "delivery.json")
+    shutil.copy2(bundle / "requirements.lock", destination / "delivery-constraints.txt")
+    (destination / "python.json").write_text(
+        json.dumps(python_identity, indent=2) + "\n", encoding="utf-8"
+    )
+    (destination / "client.in").write_text(
+        "".join(
+            (relative / "wheels" / wheel.name).as_posix() + "\n"
+            for wheel in wheels.glob("scopecat-*.whl")
+        )
+        + "ipykernel\n",
+        encoding="utf-8",
+    )
+    requirements = (
+        "# Generated client lock; run from the author directory.\n"
+        "# uv pip sync --python .venv --require-hashes requirements-client.txt\n"
+        f"# Sources and delivery constraints: {relative.as_posix()}\n"
+        f"--find-links {relative.as_posix()}/wheels\n" + requirements
+    )
+    (destination / "requirements-client.txt").write_text(requirements, encoding="utf-8")
+    (workspace / "author-environments" / "README.md").write_text(
+        "# Rebuild the author client\n\n"
+        "Keep this directory and requirements-client.txt with your source. "
+        "The selected snapshot is named in that lock. It contains client.in "
+        "(framework/kernel inputs), delivery-constraints.txt, delivery.json "
+        "(source provenance), python.json (version/ABI) and framework wheels.\n\n"
+        "From the author directory, use the same Python version and ABI as "
+        "python.json. Stop the Notebook before replacing its environment.\n\n"
+        "```sh\nuv venv --python <matching-python> .venv\n"
+        "uv pip sync --python .venv --require-hashes requirements-client.txt\n```\n\n"
+        "Registry dependencies require network access or a populated cache. "
+        "This is a target-specific client lock, not a universal offline bundle. "
+        "Custom indexes and local third-party sources remain explicit prerequisites. "
+        "Do not run uv sync from pyproject.toml alone: it describes experiment "
+        "dependencies, while client.in adds the framework and Notebook kernel.\n\n"
+        "After changing experiment dependencies in pyproject.toml, explicitly "
+        "prepare/rebuild the environment in Settings to resolve a new client lock "
+        "against the selected delivery. An existing uv.lock must first be updated "
+        "deliberately; stale locks are rejected. Local pip installs are not retained "
+        "in this lock. Application-owned execution environments and published "
+        "source remain separate; rebuilding this client does not migrate old runs.\n",
+        encoding="utf-8",
+    )
+    pending = workspace / ".requirements-client.tmp"
+    pending.write_text(requirements, encoding="utf-8")
+    pending.replace(workspace / "requirements-client.txt")
 
 
 def _declaration(
