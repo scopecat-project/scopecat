@@ -123,6 +123,7 @@ describe("DecisionWorkspace", () => {
       items: [step],
     });
     const client = renderWorkspace();
+    await waitFor(() => expect(readDecisionDraft).toHaveBeenCalled());
     expect(await screen.findByRole("button", { name: "Pick evidence point" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("outcome"), {
       target: { value: JSON.stringify("selected") },
