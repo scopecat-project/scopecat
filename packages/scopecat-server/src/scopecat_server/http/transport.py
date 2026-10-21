@@ -460,6 +460,7 @@ from scopecat_server.worker_diagnostics import (
     diagnostic_excerpt,
     worker_server_timing,
 )
+from scopecat_server.worker_environment import author_worker_environment
 
 from .._startup_diagnostics import shutdown_stage
 from ..command_payloads import (
@@ -477,6 +478,7 @@ from .data_exchange import data_exchange_router
 _API_PREFIX = "/api/v1"
 _ARROW_STREAM_MEDIA_TYPE = "application/vnd.apache.arrow.stream"
 _ARROW_FILE_MEDIA_TYPE = "application/vnd.apache.arrow.file"
+
 _MEASUREMENT_ACTIVE_HEADER = "X-Scopecat-Measurement-Active"
 _MEASUREMENT_DURABLE_COUNT_HEADER = "X-Scopecat-Durable-Record-Count"
 _MEASUREMENT_RECEIVED_COUNT_HEADER = "X-Scopecat-Received-Record-Count"
@@ -996,6 +998,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         "scopecat_server.launch_worker",
                         str(service.root),
                     ],
+                    env=author_worker_environment(application.project_root),
                     input=command.model_dump_json(),
                     capture_output=True,
                     encoding="utf-8",
@@ -1093,6 +1096,7 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                         "scopecat_server.comparison_worker",
                         str(authors(command.workspace_id).root),
                     ],
+                    env=author_worker_environment(application.project_root),
                     input=command.model_dump_json(),
                     capture_output=True,
                     encoding="utf-8",

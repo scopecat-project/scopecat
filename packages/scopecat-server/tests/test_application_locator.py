@@ -529,3 +529,16 @@ def test_concurrent_target_registration_serializes_default_selection(
     second = register_author_workspace(other.root, root)
     assert author_workspace_id(root) == first.id
     assert author_workspace_id(root, target=other.root) == second.id
+
+
+def test_worker_context_overrides_inherited_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scopecat_server.worker_environment import author_worker_environment
+
+    monkeypatch.setenv("SCOPECAT_DAEMON_URL", "http://wrong")
+    monkeypatch.setenv("SCOPECAT_APPLICATION_ROOT", str(tmp_path / "default"))
+    environment = author_worker_environment(tmp_path / "selected")
+    assert environment["SCOPECAT_APPLICATION_ROOT"] == str(tmp_path / "selected")
+    assert "SCOPECAT_DAEMON_URL" not in environment
+    assert "SCOPECAT_APPLICATION_ROOT" not in author_worker_environment(None)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import tempfile
 import threading
@@ -28,6 +27,7 @@ from scopecat_server.retained_request import (
 )
 from scopecat_server.validation_process import terminate_validation_process_tree
 from scopecat_server.worker_diagnostics import diagnostic_excerpt
+from scopecat_server.worker_environment import author_worker_environment
 
 
 @dataclass(frozen=True)
@@ -63,11 +63,6 @@ class _Worker:
         self.stderr: TextIO = (Path(self._diagnostics.name) / "stderr.log").open(
             "w+", encoding="utf-8"
         )
-        environment = dict(os.environ)
-        environment.pop("SCOPECAT_DAEMON_URL", None)
-        environment.pop("SCOPECAT_APPLICATION_ROOT", None)
-        if binding.application_root is not None:
-            environment["SCOPECAT_APPLICATION_ROOT"] = str(binding.application_root)
         self.process: subprocess.Popen[str] = subprocess.Popen(  # noqa: S603 - fixed internal worker, no shell
             [
                 str(binding.python),
@@ -80,7 +75,7 @@ class _Worker:
                     else ["--validate-serve", str(code_root), revision]
                 ),
             ],
-            env=environment,
+            env=author_worker_environment(binding.application_root),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=self.stderr,
