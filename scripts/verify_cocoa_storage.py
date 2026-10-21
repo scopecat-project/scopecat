@@ -190,7 +190,7 @@ def exercise():
             # Its service may have a new port; recovery must come from application data.
             query = urlencode({"procedure": fixture["target"]["procedure_run_id"]})
             first.load_url(base_url + "/?" + query + "#decisions")
-            selector = 'input[placeholder="name, agent id, or service id"]'
+            selector = 'input[placeholder="Person\u2019s name"]'
             wait(
                 lambda: (
                     js(
@@ -369,6 +369,7 @@ def verify(app: Path, home: Path) -> None:
             (resources / "bootstrap.py").write_text(
                 "import sys\n"
                 f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
+                f"sys.path.insert(1, {str(Path(__file__).resolve().parents[1])!r})\n"
                 f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, "
                 f"{origin!r}, {base_url!r}]\n" + HOST,
                 encoding="utf-8",

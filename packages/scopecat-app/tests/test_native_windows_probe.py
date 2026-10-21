@@ -386,6 +386,30 @@ def test_windows_storage_cookie_or_marker_loss_fails(
         windows_storage_probe.require_observation(observed, "C", "C")
 
 
+def test_storage_bootstrap_imports_build_evidence_after_relocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    windows_storage_probe: WindowsStorageProbe,
+):
+    monkeypatch.setattr(
+        windows_storage_probe,
+        "HOST",
+        "from scripts.app_build.windows_dependency import WINFORMS_SHA256\n"
+        "from scripts.app_build.cocoa_dependency import RESULT_SHA256\n"
+        "assert len(WINFORMS_SHA256) == len(RESULT_SHA256) == 64\n"
+        "Path(sys.argv[2], 'imported').touch()\n",
+    )
+    script = tmp_path / "Relocated application" / "resources" / "bootstrap.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        windows_storage_probe.host_bootstrap("A", tmp_path, "unused", "unused")
+    )
+    subprocess.run(  # noqa: S603 - isolated build-evidence import check
+        [sys.executable, "-I", "-B", str(script)], cwd=tmp_path, check=True
+    )
+    assert (tmp_path / "imported").exists()
+
+
 def test_windows_storage_bootstrap_retains_early_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
