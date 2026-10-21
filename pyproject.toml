@@ -463,6 +463,7 @@ fast_paths = [
   "packages/scopecat-instruments/tests",
   "packages/scopecat-quantum/tests",
   "packages/scopecat-app/tests/test_test_tiers.py",
+  "packages/scopecat-app/tests/test_build_runtime.py",
   "packages/scopecat-app/tests/test_dev.py",
   "packages/scopecat-app/tests/test_dev_host.py",
   "packages/scopecat-app/tests/test_preview.py",

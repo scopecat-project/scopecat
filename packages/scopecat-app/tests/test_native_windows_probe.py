@@ -1,6 +1,7 @@
 """Probe failure handling and real SDK gate contracts; not native UI evidence."""
 
 import json
+import os
 import subprocess
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
@@ -385,6 +386,30 @@ def test_windows_storage_cookie_or_marker_loss_fails(
         windows_storage_probe.require_observation(observed, "C", "C")
 
 
+def test_storage_bootstrap_imports_build_evidence_after_relocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    windows_storage_probe: WindowsStorageProbe,
+):
+    monkeypatch.setattr(
+        windows_storage_probe,
+        "HOST",
+        "from scripts.app_build.windows_dependency import WINFORMS_SHA256\n"
+        "from scripts.app_build.cocoa_dependency import RESULT_SHA256\n"
+        "assert len(WINFORMS_SHA256) == len(RESULT_SHA256) == 64\n"
+        "Path(sys.argv[2], 'imported').touch()\n",
+    )
+    script = tmp_path / "Relocated application" / "resources" / "bootstrap.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        windows_storage_probe.host_bootstrap("A", tmp_path, "unused", "unused")
+    )
+    subprocess.run(  # noqa: S603 - isolated build-evidence import check
+        [sys.executable, "-I", "-B", str(script)], cwd=tmp_path, check=True
+    )
+    assert (tmp_path / "imported").exists()
+
+
 def test_windows_storage_bootstrap_retains_early_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -545,3 +570,46 @@ def test_window_diagnostics_unavailable_does_not_replace_acceptance_failure(
     assert "secret" not in path.read_text()
     # An unwritable diagnostic target must also leave the caller running.
     probe.WindowDiagnostics(tmp_path).record("cannot_write")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_native_author_probe_runs_ipython_cells_and_propagates_errors(tmp_path, fail):
+    from scripts.verify_native_application import AUTHOR_NOTEBOOK_CHECK
+
+    foreign = tmp_path / "foreign-build-venv"
+    site = foreign / (
+        "Lib/site-packages"
+        if sys.platform == "win32"
+        else (
+            f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+        )
+    )
+    site.mkdir(parents=True)
+    (site / "foreign_virtualenv_marker.py").write_text("# must not be imported")
+    notebooks = tmp_path / "notebooks"
+    notebooks.mkdir()
+    (notebooks / "02_edit_scan.py").write_text(
+        "from IPython import get_ipython\n"
+        "assert get_ipython() is not None\n"
+        "from importlib.util import find_spec\n"
+        "assert find_spec('foreign_virtualenv_marker') is None\n"
+        "# %% Next cell sees the same notebook namespace.\n"
+        "from types import SimpleNamespace\n"
+        "run = SimpleNamespace(id='retained-run')\n"
+        + ("raise ValueError('notebook execution failed')\n" if fail else "")
+    )
+    result = subprocess.run(  # noqa: S603 - owned acceptance probe and fixture
+        [sys.executable, "-I", "-c", AUTHOR_NOTEBOOK_CHECK, str(tmp_path)],
+        env=dict(os.environ, VIRTUAL_ENV=str(foreign)),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    receipt = tmp_path / "saved-run.json"
+    if fail:
+        assert result.returncode != 0
+        assert "notebook execution failed" in result.stdout + result.stderr
+        assert not receipt.exists()
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(receipt.read_text()) == {"run_id": "retained-run"}

@@ -566,9 +566,7 @@ def probe(home: Path) -> None:
                     # Generate the draft through the real React form, then unmount
                     # it so its effect cannot rewrite a cleared store during creation.
                     reviewer = "native-window-reviewer"
-                    reviewer_selector = (
-                        'input[placeholder="name, agent id, or service id"]'
-                    )
+                    reviewer_selector = 'input[placeholder="Person\u2019s name"]'
                     reviewer_value = (
                         "document.querySelector("
                         + json.dumps(reviewer_selector)

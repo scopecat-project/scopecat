@@ -19,6 +19,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.app_build.macos_signing import verify as verify_signature
 
+AUTHOR_NOTEBOOK_CHECK = r"""
+import json, os, re, sys
+from pathlib import Path
+# IPython otherwise prepends the inherited build venv even with Python -I.
+os.environ.pop("VIRTUAL_ENV", None)
+from IPython.core.interactiveshell import InteractiveShell
+root = Path(sys.argv[1])
+notebook = root / "notebooks/02_edit_scan.py"
+shell = InteractiveShell.instance()
+shell.user_ns["__file__"] = str(notebook)
+for cell in re.split(r"(?m)^# %%.*\n", notebook.read_text(encoding="utf-8")):
+    shell.run_cell(cell).raise_error()
+(root / "saved-run.json").write_text(
+    json.dumps({"run_id": shell.user_ns["run"].id}))
+"""
+
 RUNTIME_CHECK = r"""
 import json, os, subprocess, sys, threading
 from pathlib import Path
@@ -73,13 +89,8 @@ import pip
     with httpx2.Client(trust_env=False) as http:
         assert http.get(record.base_url + "/api/v1/health").json()["status"] == "ok"
         assert http.get(record.base_url + "/").status_code == 200
-    subprocess.run([str(client), "-I", "-c", '''
-import json, runpy, sys
-from pathlib import Path
-root = Path(sys.argv[1])
-result = runpy.run_path(str(root / "notebooks/02_edit_scan.py"))
-(root / "saved-run.json").write_text(json.dumps({"run_id": result["run"].id}))
-''', str(workspace)], cwd=workspace, check=True)
+    subprocess.run([str(client), "-I", "-c", sys.argv[2], str(workspace)],
+                   cwd=workspace, check=True)
 finally:
     runtime.stop()
 assert runtime.status().state == "stopped"
@@ -423,7 +434,15 @@ def _verify(
         installation = cast("dict[str, str]", console_state["installation"])
         assert Path(installation["python"]).resolve() == python
     _ = subprocess.run(  # noqa: S603 - fixed packaged runtime
-        [str(python), "-I", "-B", "-c", RUNTIME_CHECK, str(home)],
+        [
+            str(python),
+            "-I",
+            "-B",
+            "-c",
+            RUNTIME_CHECK,
+            str(home),
+            AUTHOR_NOTEBOOK_CHECK,
+        ],
         env=dict(environment, UV_OFFLINE="0", UV_PYTHON_DOWNLOADS="automatic"),
         check=True,
     )

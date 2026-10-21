@@ -19,7 +19,7 @@ from uuid import uuid4
 
 from filelock import FileLock, Timeout
 from packaging.utils import canonicalize_name
-from scripts.app_build import cocoa_dependency, windows_dependency
+from scripts.app_build import cocoa_dependency, toolchain, windows_dependency
 from scripts.app_build.package_versions import PACKAGES as FIRST_PARTY
 from scripts.app_build.package_versions import staged_project
 from scripts.app_build.preview import Preview, read_preview, unpack_gui
@@ -28,6 +28,7 @@ from scripts.app_build.release_identity import (
     read_release,
     read_source_identity,
 )
+from uv import find_uv_bin
 
 from scopecat.kernel.content_identity import sha256_content_hash, sha256_json_hash
 from scopecat_app.bundle import (
@@ -375,208 +376,228 @@ def build_delivery(
             ).strip():
                 raise ValueError("正式发布要求 public 和实验室锁定仓库工作目录均干净")
     destination.mkdir(parents=True, exist_ok=False)
-    pnpm = shutil.which("pnpm")
-    preview_metadata = _prepare_gui(
-        destination, public, gui, public_artifacts or preview, pnpm
-    )
-    wheels = destination / "wheels"
-    wheels.mkdir()
-    # Export the reviewed repository lock, excluding locally built distributions.
-    # Download exact third-party artifacts without another dependency resolution.
-    dependency_lock = destination / "dependencies.lock"
-    run(
-        [
-            "uv",
-            "export",
-            "--locked",
-            *(
-                ["--no-default-groups", "--group"]
-                if plan.include_project
-                else ["--only-group"]
-            ),
-            plan.dependency_group,
-            "--no-emit-local",
-            *[
-                argument
-                for name in sorted(local_names)
-                for argument in ("--no-emit-package", name)
-            ],
-            "--format",
-            "requirements-txt",
-            "--output-file",
-            str(dependency_lock),
-        ],
-        cwd=repository,
-    )
-    package_version = _package_version(public, public_artifacts, release=release)
-    for package in () if public_artifacts is not None else plan.packages:
-        first_party = bool(_package_names((package,)) & FIRST_PARTY)
-        with staged_project(
-            package, package_version if first_party else None
-        ) as staged:
-            run(
-                [
-                    "uv",
-                    "build",
-                    "--wheel",
-                    "--no-sources",
-                    "--build-constraints",
-                    dependency_lock.as_uri(),
-                    "--out-dir",
-                    str(wheels),
-                    str(staged),
-                ],
-                cwd=repository,
-            )
-    run(
-        [
-            "uv",
-            "run",
-            "--isolated",
-            "--locked",
-            "--only-group",
-            "delivery-build",
-            "python",
-            "-m",
-            "pip",
-            "wheel",
-            "--no-deps",
-            "--require-hashes",
-            "--only-binary=:all:",
-            *(
-                ["--no-binary=" + ",".join(plan.source_builds)]
-                if plan.source_builds
-                else []
-            ),
-            "--no-build-isolation",
-            "--wheel-dir",
-            str(wheels),
-            "-r",
-            str(dependency_lock),
-        ],
-        cwd=public or repository,
-    )
-    if public_artifacts is not None:
-        assert preview_metadata is not None
-        _copy_public_wheels(public_artifacts, wheels, preview_metadata, local_names)
-    patch_wheel = {
-        "darwin": cocoa_dependency.patch_wheel,
-        "win32": windows_dependency.patch_wheel,
-    }.get(sys.platform)
-    if patch_wheel is not None and any(wheels.glob("pywebview-*.whl")):
-        _ = patch_wheel(wheels)
-    selected_wheels = _unique_wheels(wheels)
-    if preview_metadata is not None:
-        _check_preview_wheels(preview_metadata, selected_wheels)
-    if missing := local_names - selected_wheels.keys():
-        raise ValueError(f"local package wheels missing: {sorted(missing)}")
-    if "scopecat-app" not in selected_wheels:
-        raise ValueError("交付缺少 scopecat-app wheel")
-    identity, channel = _public_identity(preview_metadata, public, release=release)
-    release_version = (
-        identity.version if channel == "release" else f"{identity.version}-dev"
-    )
-    _ = shutil.copyfile(repository / "uv.lock", destination / "build.lock")
-    runtime: dict[str, object] = {}
-    requirements: list[str] = []
-    for wheel in sorted(wheels.glob("*.whl")):
-        name, version = wheel_metadata(wheel)
-        requirements.append(f"{name}=={version} --hash=sha256:{file_hash(wheel)}")
-        for module, package_name in MODULES.items():
-            if name.replace("_", "-").lower() != package_name:
-                continue
-            with zipfile.ZipFile(wheel) as archive:
-                files = {
-                    item: sha256_content_hash(archive.read(item))
-                    for item in archive.namelist()
-                    if item.startswith(module + "/")
-                    and not item.endswith("/")
-                    and not item.endswith((".pyc", ".pyo"))
-                }
-            runtime[module] = {
-                "distribution": package_name,
-                "version": version,
-                "content_hash": sha256_json_hash(files),
-            }
-    if set(runtime) != set(MODULES):
-        raise ValueError("交付缺少科学软件 wheel")
-    _ = (destination / "requirements.lock").write_text(
-        "\n".join(sorted(requirements)) + "\n", encoding="utf-8"
-    )
-    (destination / "install.py").write_text(
-        standalone_installer(public or Path(__file__).resolve().parents[2]),
-        encoding="utf-8",
-    )
-    files = inventory(destination, ("gui", "wheels"))
-    files.update(
-        {
-            name: file_hash(destination / name)
-            for name in (
-                "requirements.lock",
-                "dependencies.lock",
-                "build.lock",
-                "install.py",
-            )
-        }
-    )
-    sources = {
-        name: subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],  # noqa: S607 - standard maintainer tool
-            cwd=repo,
-            text=True,
-        ).strip()
-        for name, repo in sources_repositories
-    }
-    for name, repo in sources_repositories:
-        if subprocess.check_output(
-            ["git", "status", "--porcelain"],  # noqa: S607 - standard maintainer tool
-            cwd=repo,
-            text=True,
-        ).strip():
-            sources[name] += "+dirty"
-    if preview_metadata is not None:
-        sources["public"] = preview_metadata["commit"]
-    _ = (destination / MANIFEST).write_text(
-        json.dumps(
-            {
-                "format": 1,
-                "release_version": release_version,
-                "public_version": identity.version,
-                "build_number": identity.build_number,
-                "channel": channel,
-                "release_kind": "release" if release else "development",
-                "build_id": sha256_json_hash(
-                    {"sources": sources, "files": files, "target": target_identity()}
-                ),
-                "build_tools": {
-                    "python": sys.version,
-                    "uv": subprocess.check_output(
-                        ["uv", "--version"],  # noqa: S607 - standard maintainer tool
-                        text=True,
-                    ).strip(),
-                    "pnpm": "prebuilt GUI"
-                    if pnpm is None
-                    else subprocess.check_output(  # noqa: S603 - fixed tool commands
-                        [pnpm, "--version"],
-                        text=True,
-                    ).strip(),
-                },
-                "target": target_identity(),
-                "sources": sources,
-                "recipe_sha256": file_hash(recipe.resolve())
-                if recipe is not None
-                else None,
-                "runtime": runtime,
-                "files": files,
-            },
-            ensure_ascii=False,
-            indent=2,
+    with toolchain.prepare(
+        public or Path(__file__).resolve().parents[2], destination / "toolchain"
+    ) as python:
+        pnpm = shutil.which("pnpm")
+        preview_metadata = _prepare_gui(
+            destination, public, gui, public_artifacts or preview, pnpm
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    print(f"已构建 {len(requirements)} 个 wheels; 安装验证通过前不要交付", flush=True)
-    return destination
+        wheels = destination / "wheels"
+        wheels.mkdir()
+        # Export the reviewed repository lock, excluding locally built distributions.
+        # Download exact third-party artifacts without another dependency resolution.
+        dependency_lock = destination / "dependencies.lock"
+        run(
+            [
+                find_uv_bin(),
+                "export",
+                "--locked",
+                *(
+                    ["--no-default-groups", "--group"]
+                    if plan.include_project
+                    else ["--only-group"]
+                ),
+                plan.dependency_group,
+                "--no-emit-local",
+                *[
+                    argument
+                    for name in sorted(local_names)
+                    for argument in ("--no-emit-package", name)
+                ],
+                "--format",
+                "requirements-txt",
+                "--output-file",
+                str(dependency_lock),
+            ],
+            cwd=repository,
+        )
+        package_version = _package_version(public, public_artifacts, release=release)
+        for package in () if public_artifacts is not None else plan.packages:
+            first_party = bool(_package_names((package,)) & FIRST_PARTY)
+            with staged_project(
+                package, package_version if first_party else None
+            ) as staged:
+                run(
+                    [
+                        find_uv_bin(),
+                        "build",
+                        "--wheel",
+                        "--python",
+                        str(python),
+                        "--no-python-downloads",
+                        "--no-sources",
+                        "--build-constraints",
+                        dependency_lock.as_uri(),
+                        "--out-dir",
+                        str(wheels),
+                        str(staged),
+                    ],
+                    cwd=repository,
+                )
+        run(
+            [
+                find_uv_bin(),
+                "run",
+                "--isolated",
+                "--python",
+                str(python),
+                "--no-python-downloads",
+                "--locked",
+                "--only-group",
+                "delivery-build",
+                "python",
+                "-m",
+                "pip",
+                "wheel",
+                "--no-deps",
+                "--require-hashes",
+                "--only-binary=:all:",
+                *(
+                    ["--no-binary=" + ",".join(plan.source_builds)]
+                    if plan.source_builds
+                    else []
+                ),
+                "--no-build-isolation",
+                "--wheel-dir",
+                str(wheels),
+                "-r",
+                str(dependency_lock),
+            ],
+            cwd=public or repository,
+        )
+        if public_artifacts is not None:
+            assert preview_metadata is not None
+            _copy_public_wheels(public_artifacts, wheels, preview_metadata, local_names)
+        patch_wheel = {
+            "darwin": cocoa_dependency.patch_wheel,
+            "win32": windows_dependency.patch_wheel,
+        }.get(sys.platform)
+        if patch_wheel is not None and any(wheels.glob("pywebview-*.whl")):
+            _ = patch_wheel(wheels)
+        selected_wheels = _unique_wheels(wheels)
+        if preview_metadata is not None:
+            _check_preview_wheels(preview_metadata, selected_wheels)
+        if missing := local_names - selected_wheels.keys():
+            raise ValueError(f"local package wheels missing: {sorted(missing)}")
+        if "scopecat-app" not in selected_wheels:
+            raise ValueError("交付缺少 scopecat-app wheel")
+        identity, channel = _public_identity(preview_metadata, public, release=release)
+        release_version = (
+            identity.version if channel == "release" else f"{identity.version}-dev"
+        )
+        _ = shutil.copyfile(repository / "uv.lock", destination / "build.lock")
+        runtime: dict[str, object] = {}
+        requirements: list[str] = []
+        for wheel in sorted(wheels.glob("*.whl")):
+            name, version = wheel_metadata(wheel)
+            requirements.append(f"{name}=={version} --hash=sha256:{file_hash(wheel)}")
+            for module, package_name in MODULES.items():
+                if name.replace("_", "-").lower() != package_name:
+                    continue
+                with zipfile.ZipFile(wheel) as archive:
+                    files = {
+                        item: sha256_content_hash(archive.read(item))
+                        for item in archive.namelist()
+                        if item.startswith(module + "/")
+                        and not item.endswith("/")
+                        and not item.endswith((".pyc", ".pyo"))
+                    }
+                runtime[module] = {
+                    "distribution": package_name,
+                    "version": version,
+                    "content_hash": sha256_json_hash(files),
+                }
+        if set(runtime) != set(MODULES):
+            raise ValueError("交付缺少科学软件 wheel")
+        _ = (destination / "requirements.lock").write_text(
+            "\n".join(sorted(requirements)) + "\n", encoding="utf-8"
+        )
+        (destination / "install.py").write_text(
+            standalone_installer(public or Path(__file__).resolve().parents[2]),
+            encoding="utf-8",
+        )
+        files = inventory(destination, ("gui", "wheels", "toolchain"))
+        files.update(
+            {
+                name: file_hash(destination / name)
+                for name in (
+                    "requirements.lock",
+                    "dependencies.lock",
+                    "build.lock",
+                    "install.py",
+                )
+            }
+        )
+        sources = {
+            name: subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],  # noqa: S607 - standard maintainer tool
+                cwd=repo,
+                text=True,
+            ).strip()
+            for name, repo in sources_repositories
+        }
+        for name, repo in sources_repositories:
+            if subprocess.check_output(
+                ["git", "status", "--porcelain"],  # noqa: S607 - standard maintainer tool
+                cwd=repo,
+                text=True,
+            ).strip():
+                sources[name] += "+dirty"
+        if preview_metadata is not None:
+            sources["public"] = preview_metadata["commit"]
+        _ = (destination / MANIFEST).write_text(
+            json.dumps(
+                {
+                    "format": 1,
+                    "release_version": release_version,
+                    "public_version": identity.version,
+                    "build_number": identity.build_number,
+                    "channel": channel,
+                    "release_kind": "release" if release else "development",
+                    "build_id": sha256_json_hash(
+                        {
+                            "sources": sources,
+                            "files": files,
+                            "target": target_identity(),
+                        }
+                    ),
+                    "build_tools": {
+                        "python": sys.version,
+                        "portable_python": json.loads(
+                            (destination / "toolchain/runtime.json").read_text(
+                                encoding="utf-8"
+                            )
+                        ),
+                        "uv": subprocess.check_output(  # noqa: S603 - owned uv
+                            [find_uv_bin(), "--version"],
+                            text=True,
+                        ).strip(),
+                        "pnpm": "prebuilt GUI"
+                        if pnpm is None
+                        else subprocess.check_output(  # noqa: S603 - fixed tool commands
+                            [pnpm, "--version"],
+                            text=True,
+                        ).strip(),
+                    },
+                    "target": target_identity(),
+                    "sources": sources,
+                    "recipe_sha256": file_hash(recipe.resolve())
+                    if recipe is not None
+                    else None,
+                    "runtime": runtime,
+                    "files": files,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(
+            f"已构建 {len(requirements)} 个 wheels; 安装验证通过前不要交付", flush=True
+        )
+        return destination
 
 
 def _prepare_gui(

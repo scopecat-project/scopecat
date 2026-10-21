@@ -35,7 +35,6 @@ from pathlib import Path
 from urllib.parse import urlencode
 from verify_native_windows import require_hosted_runner, read_decision_draft
 from verify_windows_storage import require_observation
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.app_build.windows_dependency import VERSION, RESULT_SHA256, WINFORMS_SHA256
 
@@ -120,12 +119,14 @@ def exercise():
             checks.append("same-origin restart retains no old marker or cookie")
             query = urlencode({"procedure": fixture["target"]["procedure_run_id"]})
             first.load_url(base_url + "/?" + query + "#decisions")
-            selector = 'input[placeholder="name, agent id, or service id"]'
+            selector = 'input[placeholder="Person\u2019s name"]'
             wait(lambda: js(first, "document.querySelector(" + json.dumps(selector)
                             + ")?.value") == fixture["actor"],
                  "draft restored in restarted native UI")
-            assert fixture["target"]["procedure_run_id"] in js(
-                first, "document.body.textContent")
+            selected = js(
+                first, "new URL(document.querySelector('article header a').href)"
+                ".searchParams.get('procedure')")
+            assert selected == fixture["target"]["procedure_run_id"]
             assert read_decision_draft(base_url, fixture["target"]) == fixture["view"]
             checks.append("exact application draft and real form recover after restart")
 
@@ -223,6 +224,7 @@ def host_bootstrap(stage: str, reports: Path, origin: str, base_url: str) -> str
         f"sys.stdout = sys.stderr = open({str(reports / (stage + '.log'))!r}, "
         "'a', encoding='utf-8', buffering=1)\n"
         f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
+        f"sys.path.insert(1, {str(Path(__file__).resolve().parents[1])!r})\n"
         f"sys.argv = ['storage', {stage!r}, {str(reports)!r}, "
         f"{origin!r}, {base_url!r}]\n"
         f"print('Windows storage host {stage}: started', flush=True)\n"

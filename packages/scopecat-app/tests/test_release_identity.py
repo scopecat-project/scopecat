@@ -123,6 +123,11 @@ def test_preview_build_archives_historical_commit_without_release_file(
             return subprocess.CompletedProcess(command, 0)
         return original_run(command, **kwargs)
 
+    # This fixture isolates historical release identity and builds no wheels.
+    # Portable runtime supply is covered by test_build_runtime and native CI.
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(module, "prepare", lambda *_: nullcontext(Path(sys.executable)))
     monkeypatch.setattr(module, "PACKAGES", ())
     monkeypatch.setattr(module.subprocess, "run", run)
     manifest = module.build(repository, tmp_path / "preview")
