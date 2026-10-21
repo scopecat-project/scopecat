@@ -8,6 +8,7 @@ import sqlite3
 import sys
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -96,9 +97,12 @@ def read_data_identity(data_root: Path) -> str:
                 uri=True,
             )
         ) as connection:
-            row = connection.execute(
-                "SELECT identity FROM project_identity WHERE singleton = 1"
-            ).fetchone()
+            row = cast(
+                "tuple[object, ...] | None",
+                connection.execute(
+                    "SELECT identity FROM project_identity WHERE singleton = 1"
+                ).fetchone(),
+            )
         if row is None or not isinstance(row[0], str) or not row[0]:
             raise RuntimeBindingError("Application data identity is missing")
         return row[0]

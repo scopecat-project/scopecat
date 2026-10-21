@@ -74,7 +74,7 @@ def register_author_workspace(
                 candidates.add(original.data_root / "daemon.lock")
             for path in sorted(candidates):
                 path.parent.mkdir(parents=True, exist_ok=True)
-                locks.enter_context(FileLock(path, timeout=0))
+                locks.enter_context(FileLock(path, timeout=0, preserve_lock_file=True))
             binding.coordination_root.mkdir(parents=True, exist_ok=True)
             entries = list(local_author_workspaces(owner.root))
             previous = next(
@@ -86,7 +86,6 @@ def register_author_workspace(
                     previous is not None
                     and previous.id != previous_location.workspace_id
                 )
-                or (identity is not None and identity != previous_location.workspace_id)
             ):
                 raise ValueError(
                     "Existing locator and application registry disagree; "
@@ -135,10 +134,12 @@ def register_author_workspace(
                         raise ValueError(
                             "The workspace identity is not in this scientific store"
                         )
-            if (
-                previous is not None
-                and identity is not None
-                and previous.id != identity
+            if identity is not None and (
+                (previous is not None and previous.id != identity)
+                or (
+                    previous_location is not None
+                    and previous_location.workspace_id != identity
+                )
             ):
                 raise ValueError(
                     "This location already belongs to another source owner"

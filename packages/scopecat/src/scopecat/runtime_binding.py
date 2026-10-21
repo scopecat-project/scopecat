@@ -11,9 +11,11 @@ from typing import Literal, cast
 
 from scopecat.application_locator import (
     LocalAuthorWorkspaces,
-    RuntimeBindingError,
     read_author_location,
     read_data_identity,
+)
+from scopecat.application_locator import (
+    RuntimeBindingError as RuntimeBindingError,
 )
 
 RUNTIME_BINDING_NAME = "scopecat.runtime.toml"

@@ -2967,7 +2967,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.116" },
-    { name = "filelock", specifier = ">=3.18" },
+    { name = "filelock", specifier = ">=4.2" },
     { name = "httpx2", specifier = ">=2" },
     { name = "jsonschema", specifier = ">=4.26" },
     { name = "psutil", specifier = ">=7" },

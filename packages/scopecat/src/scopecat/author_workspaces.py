@@ -8,6 +8,7 @@ from scopecat.application_locator import (
 from scopecat.application_locator import (
     LocalAuthorWorkspaces as LocalAuthorWorkspaces,
 )
+from scopecat.application_locator import read_author_location
 from scopecat.runtime_binding import load_runtime_binding
 
 
@@ -35,6 +36,11 @@ def author_workspace_id(root: Path) -> str:
 
 def service_workspace_root(root: Path) -> Path:
     """Resolve process ownership independently of the registered source catalog."""
+    location = read_author_location(root.resolve())
+    if location is not None:
+        # Revoking source membership must not grant that source ownership of the
+        # application store. Maintenance still belongs to its recorded service.
+        return location.application
     path = author_bindings_path(root)
     if not path.is_file():
         return root.resolve()

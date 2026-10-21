@@ -112,7 +112,10 @@ def test_legacy_binding_preserved_and_all_paths_checked(tmp_path: Path) -> None:
     assert legacy.read_text() == text
     assert author_workspace_id(root) == registered.id
     legacy.write_text(
-        text.replace(str(binding.cache_root), str(tmp_path / "custom-cache"))
+        text.replace(
+            json.dumps(str(binding.cache_root)),
+            json.dumps(str(tmp_path / "custom-cache")),
+        )
     )
     with pytest.raises(RuntimeBindingError, match="conflicts"):
         load_runtime_binding(root)
@@ -128,7 +131,7 @@ def test_existing_independent_locks_and_data_are_preserved(tmp_path: Path) -> No
     old.mkdir()
     for name in ("deployment.lock", "daemon.lock"):
         with (
-            FileLock(old / name),
+            FileLock(old / name, preserve_lock_file=True),
             pytest.raises(ValueError, match="running application"),
         ):
             register_author_workspace(owner.root, root)
@@ -197,7 +200,7 @@ def test_interrupted_registration_retains_owner_fence_and_can_resume(
     original_replace = Path.replace
     locator_writes = 0
 
-    def fail_replace(path, target):
+    def fail_replace(path: Path, target: Path) -> Path:
         nonlocal locator_writes
         if target == locator:
             locator_writes += 1
@@ -266,10 +269,11 @@ def test_endpoint_must_match_data_identity_and_author_registration(
     }
     client = httpx2.Client
     transport = httpx2.MockTransport(lambda _: httpx2.Response(200, json=health))
-    monkeypatch.setattr(
-        "scopecat.daemon.endpoint.httpx2.Client",
-        lambda **kwargs: client(transport=transport, **kwargs),
-    )
+
+    def client_factory(*, timeout: float, trust_env: bool) -> httpx2.Client:
+        return client(transport=transport, timeout=timeout, trust_env=trust_env)
+
+    monkeypatch.setattr("scopecat.daemon.endpoint.httpx2.Client", client_factory)
     assert resolve_daemon_endpoint(root, explicit="http://localhost:9000")
     health["project_id"] = "other-space"
     with pytest.raises(DaemonEndpointError, match="another binding"):
@@ -302,10 +306,11 @@ def test_explicit_application_without_locator_still_checks_health_identity(
     }
     client = httpx2.Client
     transport = httpx2.MockTransport(lambda _: httpx2.Response(200, json=health))
-    monkeypatch.setattr(
-        "scopecat.daemon.endpoint.httpx2.Client",
-        lambda **kwargs: client(transport=transport, **kwargs),
-    )
+
+    def client_factory(*, timeout: float, trust_env: bool) -> httpx2.Client:
+        return client(transport=transport, timeout=timeout, trust_env=trust_env)
+
+    monkeypatch.setattr("scopecat.daemon.endpoint.httpx2.Client", client_factory)
     with pytest.raises(DaemonEndpointError, match="another binding"):
         resolve_daemon_endpoint(root, explicit="http://localhost:9000")
 
