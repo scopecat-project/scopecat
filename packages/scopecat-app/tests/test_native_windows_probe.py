@@ -228,7 +228,26 @@ def test_probe_acquisition_gate_uses_real_service_and_completes(tmp_path: Path):
         assert set(target) == {"procedure_run_id", "step_key", "attempt"}
         assert target["attempt"] == 1
         probe.run_bounded(
-            [sys.executable, "-I", str(authors / "notebooks/02_edit_scan.py")],
+            [
+                sys.executable,
+                "-I",
+                "-c",
+                # This SDK/service fixture seeds a run without a Notebook kernel.
+                # The ordinary template is exercised by the kernel journey.
+                """
+import sys
+import scopecat as sc
+project = sc.open_project(sys.argv[1])
+_ = project.load_application()
+with project.authoring() as author:
+    author.refresh()
+    from scopecat_lab.authored.parameters import open_parameters
+    from scopecat_lab.authored.signal import signal
+    prepared = author.prepare(signal(), parameters=open_parameters(author))
+    prepared.run().wait(timeout=45).result()
+""",
+                str(authors),
+            ],
             tmp_path / "initial.log",
             timeout=60,
         )
