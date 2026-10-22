@@ -16,6 +16,8 @@ type PostResponse<Path extends ClientPathsWithMethod<typeof apiClient, "post">> 
 export type SoftwareExecutionScenario = components["schemas"]["SoftwareExecutionScenario"];
 
 export type RunControlView = components["schemas"]["RunControlView"];
+export type ManualLineConfirmation = components["schemas"]["ManualLineConfirmation"];
+export type ManualLineReconfirmation = components["schemas"]["ManualLineReconfirmation"];
 export type ConfigProfileSnapshot = components["schemas"]["ConfigProfileSnapshot"];
 export type ConfigRegistryEntry = components["schemas"]["ConfigRegistryEntry"];
 export type ConfigRegistryPage = GetResponse<"/api/v1/config-registry">;

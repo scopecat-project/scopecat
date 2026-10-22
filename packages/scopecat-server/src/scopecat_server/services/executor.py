@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
+from uuid import uuid4
 
 from pydantic import JsonValue, RootModel
 from scopecat.control.models import (
@@ -101,7 +102,9 @@ class ExecutorService:
         active_measurements: ActiveMeasurementStore,
         point_plans: RunPointPlanService,
         lease_ttl: timedelta | None = None,
+        confirmation_runtime_id: str | None = None,
     ) -> None:
+        self._confirmation_runtime_id = confirmation_runtime_id or uuid4().hex
         self._control = control
         self._runs = runs
         self._instruments = instruments
@@ -777,22 +780,36 @@ class ExecutorService:
                     raise ControlPlaneConflict(
                         "run snapshot is not ready to start execution"
                     )
-                try:
-                    lease = self._control.start_execution_in_transaction(
-                        connection,
-                        run_id,
-                        executor_id=executor_id,
-                        ttl=self._lease_ttl,
+                confirmation_current = (
+                    self._control.manual_line_confirmation_current_in_transaction(
+                        connection, current, runtime_id=self._confirmation_runtime_id
                     )
-                except RunResourcesBusy:
-                    if on_resource_busy == "keep_queued":
-                        raise
-                    self._fail_resource_rejection(connection, run_id)
+                )
+                if not confirmation_current:
+                    self._control.require_manual_line_reconfirmation_in_transaction(
+                        connection, current
+                    )
                 else:
-                    return self._wire_lease(
-                        lease,
-                        cancellation_requested_at=current.cancellation_requested_at,
-                    )
+                    try:
+                        lease = self._control.start_execution_in_transaction(
+                            connection,
+                            run_id,
+                            executor_id=executor_id,
+                            ttl=self._lease_ttl,
+                        )
+                    except RunResourcesBusy:
+                        if on_resource_busy == "keep_queued":
+                            raise
+                        self._fail_resource_rejection(connection, run_id)
+                    else:
+                        return self._wire_lease(
+                            lease,
+                            cancellation_requested_at=current.cancellation_requested_at,
+                        )
+            if not confirmation_current:
+                raise BackendConflict(
+                    "manual line wiring must be confirmed again before execution"
+                )
             # Report rejection only after committing the terminal state. Raising
             # inside the transaction would roll it back and leave an orphan queue.
             raise BackendConflict("run resources are busy")

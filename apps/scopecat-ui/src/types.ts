@@ -1,5 +1,6 @@
 import type { SoftwareExecutionScenario } from "./api-contract";
 import type {
+  ManualLineConfirmation,
   AdaptiveRegion,
   AnalysisArtifactReference,
   AnalysisDatasetDerivation,
@@ -75,6 +76,8 @@ export interface RunPointPlanProgress {
 }
 
 export interface ProjectRun {
+  manualLineConfirmation?: ManualLineConfirmation;
+  runContractFingerprint?: string;
   scenario?: SoftwareExecutionScenario;
   address?: { collection_id: string; number: number; run_id: string };
   sequence?: number;

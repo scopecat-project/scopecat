@@ -1853,6 +1853,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Procedure Step Attention */
+        post: operations["retry_procedure_step_attention_api_v1_procedures__procedure_run_id__steps__step_key__attempts__attempt__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procedures/{procedure_run_id}/worker-log": {
         parameters: {
             query?: never;
@@ -2937,6 +2954,7 @@ export interface components {
              */
             type: "string";
         };
+        _Text: string;
         AcquisitionAxisSize: number | components["schemas"]["StatePropertyRef"] | null;
         /** AcquisitionAxisSpec */
         AcquisitionAxisSpec: {
@@ -3708,6 +3726,7 @@ export interface components {
              * @enum {string}
              */
             disposition: "close" | "continue";
+            manual_line_reconfirmation?: components["schemas"]["ManualLineReconfirmation"] | null;
             /** Run Contract Fingerprint */
             run_contract_fingerprint?: string | null;
         };
@@ -7393,6 +7412,7 @@ export interface components {
          */
         InterpretationRequest: {
             instructions: components["schemas"]["_NonEmptyText"];
+            manual_line?: components["schemas"]["ManualLineIntent"] | null;
             metadata?: components["schemas"]["JsonMetadata"];
             response_template?: components["schemas"]["pydantic__types__JsonValue"] | null;
             /**
@@ -7413,6 +7433,7 @@ export interface components {
         InterpretationResponse: {
             actor: components["schemas"]["_NonEmptyText"];
             actor_kind: components["schemas"]["InterpretationActorKind"];
+            confirmed_runtime_id?: components["schemas"]["_NonEmptyText"] | null;
             /**
              * Note
              * @default
@@ -8106,6 +8127,36 @@ export interface components {
              * @enum {string}
              */
             kind: "manual_parameter_updates";
+        };
+        /**
+         * ManualLineConfirmation
+         * @description Server-resolved original confirmation retained with admission.
+         */
+        ManualLineConfirmation: {
+            actor: components["schemas"]["_Text"];
+            line_id: components["schemas"]["_Text"];
+            procedure_run_id: components["schemas"]["_Text"];
+            request_hash: components["schemas"]["Sha256ContentHash"];
+            runtime_id: components["schemas"]["_Text"];
+            step_key: components["schemas"]["_Text"];
+        };
+        /**
+         * ManualLineIntent
+         * @description The exact child step and frozen acquisition being confirmed.
+         */
+        ManualLineIntent: {
+            intent_hash: components["schemas"]["Sha256ContentHash"];
+            line_id: components["schemas"]["_Text"];
+            step_key: components["schemas"]["_Text"];
+        };
+        /**
+         * ManualLineReconfirmation
+         * @description One idempotent human confirmation of the original frozen run.
+         */
+        ManualLineReconfirmation: {
+            actor: components["schemas"]["_Text"];
+            original: components["schemas"]["ManualLineConfirmation"];
+            request_key: components["schemas"]["_Text"];
         };
         /** ManualPreviewBinding */
         ManualPreviewBinding: {
@@ -10261,6 +10312,28 @@ export interface components {
         /** @enum {string} */
         ProcedureStepAttemptState: "running" | "succeeded" | "failed" | "waiting_for_input" | "attention_required";
         /**
+         * ProcedureStepAttentionRetryCommand
+         * @description Authorize a new attempt of one exact quarantined step.
+         */
+        ProcedureStepAttentionRetryCommand: {
+            /** Attempt */
+            attempt: number;
+            /** Expected Run Revision */
+            expected_run_revision: number;
+            /** Expected Step Revision */
+            expected_step_revision: number;
+            procedure_run_id: components["schemas"]["_NonEmptyText"];
+            step_key: components["schemas"]["_NonEmptyText"];
+        };
+        /**
+         * ProcedureStepAttentionRetryReceipt
+         * @description Ready procedure state after one exact attention retry authorization.
+         */
+        ProcedureStepAttentionRetryReceipt: {
+            run: components["schemas"]["ProcedureRun"];
+            step: components["schemas"]["ProcedureStepAttempt"];
+        };
+        /**
          * ProcedureStepInputSubmitCommand
          * @description Answer one exact waiting request without holding a worker lease.
          */
@@ -10923,6 +10996,7 @@ export interface components {
             description?: string | null;
             /** Display Name */
             display_name?: string | null;
+            manual_line_confirmation?: components["schemas"]["ManualLineConfirmation"] | null;
             plan: components["schemas"]["RunPlanView"];
             /** Run Contract Fingerprint */
             run_contract_fingerprint: string;
@@ -16851,6 +16925,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcedureInputContinueReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_procedure_step_attention_api_v1_procedures__procedure_run_id__steps__step_key__attempts__attempt__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attempt: number;
+                procedure_run_id: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcedureStepAttentionRetryCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcedureStepAttentionRetryReceipt"];
                 };
             };
             /** @description Validation Error */

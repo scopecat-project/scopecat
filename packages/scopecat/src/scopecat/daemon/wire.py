@@ -62,6 +62,7 @@ from scopecat.records.execution import (
     RecoveryGroupCompletion,
 )
 from scopecat.records.instrument import InstrumentStateSnapshot
+from scopecat.records.manual_line import ManualLineReconfirmation
 from scopecat.records.measurement_recording import (
     MeasurementDatasetHeader,
     MeasurementDatasetReceipt,
@@ -975,6 +976,7 @@ class AttentionResolutionCommand(_WireModel):
     """Choose the run disposition after external state was reconciled."""
 
     disposition: Literal["close", "continue"]
+    manual_line_reconfirmation: ManualLineReconfirmation | None = None
     run_contract_fingerprint: str | None = Field(
         default=None,
         pattern=r"^[0-9a-f]{64}$",
@@ -997,6 +999,11 @@ class AttentionResolutionCommand(_WireModel):
 
     @model_validator(mode="after")
     def validate_continuation_contract(self) -> AttentionResolutionCommand:
+        if (
+            self.manual_line_reconfirmation is not None
+            and self.disposition != "continue"
+        ):
+            raise ValueError("manual line confirmation requires continuation")
         if (self.disposition == "continue") != (
             self.run_contract_fingerprint is not None
         ):

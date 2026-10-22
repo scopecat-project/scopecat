@@ -131,6 +131,10 @@ _OPERATIONS = {
     ("/api/v1/procedures/{procedure_run_id}", "get"),
     ("/api/v1/procedures/{procedure_run_id}/operator", "get"),
     ("/api/v1/procedures/{procedure_run_id}/dispatch", "post"),
+    (
+        "/api/v1/procedures/{procedure_run_id}/steps/{step_key}/attempts/{attempt}/retry",
+        "post",
+    ),
     ("/api/v1/experiment-launcher", "get"),
     ("/api/v1/experiment-launcher/preview", "post"),
     ("/api/v1/experiment-launcher/validity", "post"),

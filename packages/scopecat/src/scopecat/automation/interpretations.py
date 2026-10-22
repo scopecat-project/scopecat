@@ -21,6 +21,7 @@ from scopecat.analysis.facts import (
 )
 from scopecat.kernel.content_identity import stable_content_hash
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_line import ManualLineIntent
 from scopecat.records.metadata import JsonMetadata
 
 type _NonEmptyText = Annotated[str, Field(min_length=1)]
@@ -48,6 +49,9 @@ class InterpretationRequest(_InterpretationModel):
     structure: JsonValue
     response_template: JsonValue | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
+    manual_line: ManualLineIntent | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("title", "instructions", "schema_id")
     @classmethod
@@ -88,6 +92,9 @@ class InterpretationResponse(_InterpretationModel):
     value: JsonValue
     note: str = ""
     submitted_at: datetime
+    confirmed_runtime_id: _NonEmptyText | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("actor")
     @classmethod

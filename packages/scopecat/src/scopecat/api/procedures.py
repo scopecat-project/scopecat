@@ -14,6 +14,7 @@ from pydantic import BaseModel, JsonValue, ValidationError
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api._config import LabConfigOperations
 from scopecat.api._runner import (
+    RunLineConfirmationRequired,
     RunResourcesBlocked,
     _DaemonRunner,
     _prepare_run_submission,
@@ -108,6 +109,7 @@ from scopecat.records.config import ConfigProfileSnapshot, config_content_hash
 from scopecat.records.configuration_fence import ProcedureConfigurationFence
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.manual_line import ManualLineConfirmationRef, ManualLineIntent
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.parameter_branch import (
     ParameterBranch,
@@ -180,6 +182,11 @@ class InterpretationResult[ValueT]:
 
     value: ValueT
     ref: InterpretationOutputRef
+
+
+@dataclass(frozen=True, slots=True)
+class _LineWiring:
+    confirmed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -385,6 +392,30 @@ class LabProcedureContext:
             ref=ref,
         )
 
+    def _confirm_line_wiring(
+        self,
+        step_key: str,
+        *,
+        intent: ManualLineIntent,
+        title: str,
+        instructions: str,
+        inputs: tuple[ProcedureStepOutputRef, ...] = (),
+    ) -> InterpretationOutputRef:
+        """Confirm the frozen acquisition and physical line before first execution."""
+        schema = AnalysisFactSchema("scopecat.manual-line-wiring.v1", _LineWiring)
+        return self._durable.interpret(
+            step_key,
+            request=InterpretationRequest(
+                title=title,
+                instructions=instructions,
+                schema_id=schema.id,
+                schema_hash=schema.schema_hash,
+                structure=schema.structure,
+                manual_line=intent,
+            ),
+            inputs=inputs,
+        )
+
     def run(
         self,
         step_key: str,
@@ -403,6 +434,7 @@ class LabProcedureContext:
         sample: str | SampleSelector | None = None,
         samples: tuple[SampleSelector, ...] = (),
         record_collection: str | None = None,
+        manual_line_id: str | None = None,
     ) -> RunOutputRef:
         """Plan and execute one exactly identified child run.
 
@@ -461,6 +493,23 @@ class LabProcedureContext:
             planned,
             submission_id="procedure-step-intent",
         )
+        manual_line_confirmation = None
+        if manual_line_id is not None:
+            manual_line_confirmation = self._confirm_line_wiring(
+                f"{step_key}/wiring",
+                intent=ManualLineIntent(
+                    line_id=manual_line_id,
+                    step_key=step_key,
+                    intent_hash=intent_hash,
+                ),
+                title=f"Confirm wiring: {name or manual_line_id}",
+                instructions=(
+                    "Check the current physical wiring for this line and the frozen "
+                    "measurement configuration before confirming."
+                ),
+                inputs=inputs,
+            )
+            inputs = (*inputs, manual_line_confirmation)
 
         def execute(operation_id: str) -> RunOutputRef:
             try:
@@ -470,12 +519,23 @@ class LabProcedureContext:
                     procedure_child=ProcedureChildSubmission(
                         procedure_run_id=self._durable.procedure_run_id,
                         step_key=step_key,
+                        manual_line_confirmation=(
+                            ManualLineConfirmationRef(
+                                procedure_run_id=manual_line_confirmation.procedure_run_id,
+                                step_key=manual_line_confirmation.step_key,
+                                request_hash=manual_line_confirmation.request_hash,
+                            )
+                            if manual_line_confirmation is not None
+                            else None
+                        ),
                     ),
                     executor_id=operation_id,
                     wait_for_resources=True,
                 )
             except RunResourcesBlocked as error:
                 raise ProcedureWaitResources(error.run_id) from error
+            except RunLineConfirmationRequired as error:
+                raise ProcedureNeedsAttention(str(error)) from error
             except httpx2.TransportError as error:
                 raise ProcedureNeedsAttention(
                     "child run transport outcome for operation "

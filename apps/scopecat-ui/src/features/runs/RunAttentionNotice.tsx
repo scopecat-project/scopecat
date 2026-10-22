@@ -2,6 +2,7 @@ import { AlertTriangle, Unlock } from "lucide-react";
 import { errorMessage } from "../../lib/presentation";
 import type { ProjectRun } from "../../types";
 import { useMeasurementFocus } from "./MeasurementWorkspace";
+import { ManualLineRecovery } from "./ManualLineRecovery";
 
 export function RunAttentionNotice({
   run,
@@ -9,7 +10,10 @@ export function RunAttentionNotice({
   pending,
   error,
 }: {
-  run: Pick<ProjectRun, "status" | "attentionReason">;
+  run: Pick<ProjectRun, "status" | "attentionReason"> &
+    Partial<
+      Pick<ProjectRun, "runId" | "runContractFingerprint" | "manualLineConfirmation" | "configHash">
+    >;
   onResolve: () => void;
   pending: boolean;
   error: Error | null;
@@ -27,12 +31,27 @@ export function RunAttentionNotice({
         <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
           {run.attentionReason ?? "The daemon has not reported a reconciliation reason."}
         </p>
-        <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
-          Inspect retained data and reconcile external state using the project workflow. Unknown
-          hardware effects cannot be retried here. Closing this record does not establish that the
-          hardware is safe.
-        </p>
-        {!focused && (
+        {!focused &&
+          run.attentionReason === "manual_line_confirmation_expired" &&
+          run.manualLineConfirmation &&
+          run.runId &&
+          run.runContractFingerprint && (
+            <ManualLineRecovery
+              key={run.runId}
+              runId={run.runId}
+              fingerprint={run.runContractFingerprint}
+              original={run.manualLineConfirmation}
+              configHash={run.configHash}
+            />
+          )}
+        {run.attentionReason !== "manual_line_confirmation_expired" && (
+          <p className="mt-1 mb-0 text-xs leading-normal text-text-soft">
+            Inspect retained data and reconcile external state using the project workflow. Unknown
+            hardware effects cannot be retried here. Closing this record does not establish that the
+            hardware is safe.
+          </p>
+        )}
+        {!focused && run.attentionReason !== "manual_line_confirmation_expired" && (
           <>
             <div className="mt-[11px] flex flex-wrap gap-[7px]">
               <button
