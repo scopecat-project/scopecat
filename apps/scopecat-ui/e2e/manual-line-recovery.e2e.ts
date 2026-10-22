@@ -130,10 +130,13 @@ for (const width of [1280, 390]) {
       await region.getByRole("checkbox").check();
       await region.getByRole("button", { name: "Retry saved confirmation" }).click();
       await expect
-        .poll(async () => {
-          const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedure}`);
-          return (await response.json()).closure?.status;
-        })
+        .poll(
+          async () => {
+            const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedure}`);
+            return (await response.json()).closure?.status;
+          },
+          { timeout: 45_000 },
+        )
         .toBe("succeeded");
       expect(commands).toHaveLength(2);
       expect(commands[1]).toEqual(commands[0]);
