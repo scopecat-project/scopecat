@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 
 from .application_runtime import ApplicationRuntime
+
+
+class ClosePreflightAborted(ValueError):
+    """A retained view invalidated its close certificate."""
 
 
 class DesktopSession:
     """Share lifecycle decisions; file transfers remain independent window work."""
 
     def __init__(self, runtime: ApplicationRuntime, closing: threading.Event):
+        self.close_preflight: Callable[[], AbstractContextManager[None]] = nullcontext
         self.runtime = runtime
         self.closing = closing
+        self.commit_close: Callable[[], None] = closing.set
+        self.close_aborted: Callable[[str], None] = lambda _message: None
         self.prepare_reset: Callable[[], None] | None = None
         self.base_url: str | None = None
         self.ui_url: str | None = None
@@ -84,7 +91,7 @@ class DesktopSession:
             self._operation_lock.release()
 
     def exit(self) -> None:
-        with self.operation(allow_files=True, allow_wait=True):
+        with self.close_preflight(), self.operation(allow_files=True, allow_wait=True):
             with self._files:
                 for cancel in self._file_operations.values():
                     cancel.set()
@@ -95,10 +102,10 @@ class DesktopSession:
             if self.runtime.selection.exists():
                 self.runtime.stop()
             self._exit_thread = threading.current_thread()
-            self.closing.set()
+            self.commit_close()
 
     def request_exit(self) -> dict[str, int] | None:
-        with self.operation(allow_files=True, allow_wait=True):
+        with self.close_preflight(), self.operation(allow_files=True, allow_wait=True):
             with self._files:
                 if self._file_operations:
                     return {
@@ -107,7 +114,7 @@ class DesktopSession:
                     }
             if not self.runtime.selection.exists() or self.runtime.stop_if_idle():
                 self._exit_thread = threading.current_thread()
-                self.closing.set()
+                self.commit_close()
                 return None
             return self.runtime.activity().model_dump()
 
@@ -145,19 +152,29 @@ class DesktopSession:
                 with self._files:
                     if self._file_operations:
                         return
-                if self.runtime.stop_if_idle():
-                    self.closing.set()
+                with self.close_preflight():
+                    if self.runtime.stop_if_idle():
+                        self.commit_close()
             except Exception as error:
                 self._exit_error = str(error)
                 raise
             finally:
                 self._operation_lock.release()
 
-    def finish_exit(self, destroy_windows: Callable[[], None]) -> None:
+    def finish_exit(self, destroy_windows: Callable[[], None]) -> bool:
         for thread in self._file_threads:
             thread.join()
         if self._exit_thread is not None:
             # Keep every page alive until the requesting bridge has delivered
             # its result; WebKit may otherwise wait forever on that callback.
             self._exit_thread.join()
-        destroy_windows()
+        try:
+            destroy_windows()
+        except ClosePreflightAborted as error:
+            self.closing.clear()
+            self._waiting.clear()
+            self._exit_thread = None
+            self._exit_error = str(error)
+            self.close_aborted(str(error))
+            return False
+        return True
