@@ -176,6 +176,7 @@ def test_open_ack_requires_loaded_native_window_and_preserves_other_views():
 def test_run_bridge_reuses_loading_target_then_reopens_after_close():
     session = DesktopSession(Mock(), threading.Event())
     session.connected("http://127.0.0.1:3210")
+    assert session.page_url is not None
     windows = DesktopWindows(session, Mock())
     target = ApplicationOpenTarget(kind="run", object_id="run-a")
     native = Mock()
@@ -208,6 +209,7 @@ def test_run_bridge_reuses_loading_target_then_reopens_after_close():
 def test_object_open_reuses_a_loading_run_bridge_view():
     session = DesktopSession(Mock(), threading.Event())
     session.connected("http://127.0.0.1:3210")
+    assert session.page_url is not None
     windows = DesktopWindows(session, Mock())
     target = ApplicationOpenTarget(kind="run", object_id="run-a")
     native = Mock()
