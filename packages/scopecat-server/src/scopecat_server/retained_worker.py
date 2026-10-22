@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
+from scopecat.automation.effects import retained_effect
 from scopecat.daemon.endpoint import DAEMON_URL_ENV
 from scopecat.kernel.content_identity import canonical_json
 from scopecat.kernel.frozen import thaw_json_value
@@ -55,7 +56,11 @@ def main() -> None:
             now = time.perf_counter()
             if isinstance(call, AnalysisCall):
                 report_stage("retained analysis")
-                result = analyze(project, application, call.request)
+                token = retained_effect.set(call.exit_call_id)
+                try:
+                    result = analyze(project, application, call.request)
+                finally:
+                    retained_effect.reset(token)
             elif isinstance(call, AnalysisActionsCall):
                 report_stage("declared analysis inputs")
                 result = describe(project, application, root, call.request)

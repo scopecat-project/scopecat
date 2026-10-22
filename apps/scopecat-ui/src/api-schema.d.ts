@@ -4279,6 +4279,8 @@ export interface components {
             calls: {
                 [key: string]: components["schemas"]["CalibrationTaskCall-Output"];
             };
+            /** @default current */
+            exit_scope: components["schemas"]["ExitScope"];
             finalization?: components["schemas"]["CalibrationTaskCall-Output"] | null;
             plan: components["schemas"]["CalibrationTaskPlan"];
             repair_budget?: components["schemas"]["CalibrationRepairBudget"] | null;
@@ -4339,6 +4341,7 @@ export interface components {
             dispatch_errors?: {
                 [key: string]: string;
             };
+            exit_scope?: components["schemas"]["ExitScope"] | null;
             /** Finalization Error */
             finalization_error?: string | null;
             /** Finalization Run Id */
@@ -6310,6 +6313,8 @@ export interface components {
             scenario?: components["schemas"]["SoftwareExecutionScenario"] | null;
             topology: components["schemas"]["Topology"];
         };
+        /** @enum {string} */
+        ExitScope: "current" | "subsequent" | "maintenance";
         /** ExperimentalBatch */
         ExperimentalBatch: {
             /**
@@ -10154,6 +10159,7 @@ export interface components {
             created_at?: string;
             decision_source?: components["schemas"]["PlanAnalysisSource"] | null;
             definition: components["schemas"]["ProcedureDefinitionRef"];
+            exit_scope?: components["schemas"]["ExitScope"] | null;
             intent: components["schemas"]["ProcedureIntent-Output"];
             intent_hash: components["schemas"]["Sha256ContentHash"];
             plan_ref?: components["schemas"]["ExperimentPlanRef"] | null;

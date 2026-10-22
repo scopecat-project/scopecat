@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from scopecat.automation.definition import MAX_PROCEDURE_REGISTRY_SIZE
+from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.interpretations import (
     InterpretationActorKind,
     InterpretationRequest,
@@ -56,6 +57,7 @@ class _WireModel(BaseModel):
 class ProcedureSubmitCommand(_WireModel):
     """Submit one canonical invocation under a caller-owned retry key."""
 
+    exit_scope: ExitScope = "current"
     request_key: _NonEmptyText
     definition: ProcedureDefinitionRef
     intent: ProcedureIntent

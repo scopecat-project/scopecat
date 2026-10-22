@@ -23,6 +23,7 @@ class DesktopSession:
         self._operation_lock = threading.Lock()
         self._exit_thread: threading.Thread | None = None
         self._waiting = threading.Event()
+        self._exit_error: str | None = None
         self._files = threading.Condition()
         self._file_operations: dict[threading.Thread, threading.Event] = {}
         self._file_threads: set[threading.Thread] = set()
@@ -65,10 +66,14 @@ class DesktopSession:
             start()
 
     @contextmanager
-    def operation(self, *, allow_files: bool = False) -> Generator[None]:
+    def operation(
+        self, *, allow_files: bool = False, allow_wait: bool = False
+    ) -> Generator[None]:
         if not self._operation_lock.acquire(blocking=False):
             raise ValueError("应用正在执行另一项操作，请稍候再试")
         try:
+            if self._waiting.is_set() and not allow_wait:
+                raise ValueError("正在等待退出；请先取消等待再开始新操作")
             if self.closing.is_set():
                 raise ValueError("应用正在关闭，无法执行新操作")
             with self._files:
@@ -79,7 +84,7 @@ class DesktopSession:
             self._operation_lock.release()
 
     def exit(self) -> None:
-        with self.operation(allow_files=True):
+        with self.operation(allow_files=True, allow_wait=True):
             with self._files:
                 for cancel in self._file_operations.values():
                     cancel.set()
@@ -93,7 +98,7 @@ class DesktopSession:
             self.closing.set()
 
     def request_exit(self) -> dict[str, int] | None:
-        with self.operation(allow_files=True):
+        with self.operation(allow_files=True, allow_wait=True):
             with self._files:
                 if self._file_operations:
                     return {
@@ -107,17 +112,32 @@ class DesktopSession:
             return self.runtime.activity().model_dump()
 
     def wait_for_idle(self, wait: bool) -> None:
-        with self.operation(allow_files=True):
+        with self.operation(allow_files=True, allow_wait=True):
             if wait:
                 self._exit_thread = threading.current_thread()
                 self._waiting.set()
-            else:
+            try:
+                self.runtime.set_exit_wait(wait)
+            except Exception as error:
+                self._exit_error = str(error)
+                raise
+            self._exit_error = None
+            if not wait:
                 self._waiting.clear()
 
     def keep_running(self, hide: Callable[[], None]) -> None:
-        with self.operation(allow_files=True):
+        with self.operation(allow_files=True, allow_wait=True):
+            self.runtime.set_exit_wait(False)
             self._waiting.clear()
+            self._exit_error = None
             hide()
+
+    def exit_status(self) -> dict[str, object]:
+        report = self.runtime.exit_report().model_dump()
+        with self._files:
+            report["file_operations"] = len(self._file_operations)
+        report["error"] = self._exit_error
+        return report
 
     def poll_exit(self) -> None:
         if self._waiting.is_set() and self._operation_lock.acquire(blocking=False):
@@ -127,6 +147,9 @@ class DesktopSession:
                         return
                 if self.runtime.stop_if_idle():
                     self.closing.set()
+            except Exception as error:
+                self._exit_error = str(error)
+                raise
             finally:
                 self._operation_lock.release()
 

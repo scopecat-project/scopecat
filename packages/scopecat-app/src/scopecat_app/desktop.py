@@ -538,6 +538,9 @@ class DesktopAPI:
     def request_exit(self) -> dict[str, int] | None:
         return self._session.request_exit()
 
+    def exit_status(self) -> dict[str, object]:
+        return self._session.exit_status()
+
     def wait_for_idle(self, wait: bool) -> None:
         self._session.wait_for_idle(wait)
 

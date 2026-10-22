@@ -114,7 +114,9 @@ class CalibrationTaskService:
                     )
             else:
                 task = CalibrationTaskRecord(
-                    specification=specification, created_at=datetime.now(UTC)
+                    specification=specification,
+                    exit_scope=specification.exit_scope,
+                    created_at=datetime.now(UTC),
                 )
                 self._store.insert(connection, task)
             return self._view(connection, task)

@@ -22,6 +22,7 @@ from scopecat.author_workspaces import (
     author_workspace_id,
 )
 from scopecat.daemon.endpoint import DaemonEndpointRecord
+from scopecat.daemon.exit import ExitReport
 from scopecat.daemon.health import ApplicationActivity
 from scopecat.project import open_project
 from scopecat.runtime_binding import APPLICATION_INSTANCE_NAME, load_runtime_binding
@@ -169,6 +170,30 @@ class ApplicationRuntime:
             )
             response.raise_for_status()
             return ApplicationActivity.model_validate(response.json())
+
+    def set_exit_wait(self, wait: bool) -> None:
+        status = self.status()
+        if status.state in ("stopped", "stale"):
+            return
+        if status.record is None:
+            raise ValueError("无法确认后台退出状态")
+        with httpx2.Client(timeout=10, trust_env=False) as client:
+            response = client.post(
+                status.record.base_url + "/api/v1/application-exit",
+                params={"wait": str(wait).lower()},
+            )
+            response.raise_for_status()
+
+    def exit_report(self) -> ExitReport:
+        status = self.status()
+        if status.state in ("stopped", "stale"):
+            return ExitReport(draining=False)
+        if status.record is None:
+            raise ValueError("无法确认后台退出状态")
+        with httpx2.Client(timeout=10, trust_env=False) as client:
+            response = client.get(status.record.base_url + "/api/v1/application-exit")
+            response.raise_for_status()
+            return ExitReport.model_validate(response.json())
 
     def stop_if_idle(self) -> bool:
         with self.lock:

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager, nullcontext, suppress
 from datetime import datetime
 from functools import cache
 from pathlib import Path, PurePosixPath
@@ -115,6 +115,7 @@ from scopecat.daemon.endpoint import (
     DAEMON_SHUTDOWN_TOKEN_HEADER,
     DaemonEndpointError,
 )
+from scopecat.daemon.exit import ExitReport
 from scopecat.daemon.hardware_receipt_wire import (
     HARDWARE_RECEIPT_MEDIA_TYPE,
     HardwareReceiptWireError,
@@ -419,6 +420,7 @@ from scopecat_server.decision_drafts import (
     DecisionDraftView,
 )
 from scopecat_server.http.analysis_actions import analysis_actions_router
+from scopecat_server.http.exit_admission import drain_allows
 from scopecat_server.http.procedure_operator import (
     read_procedure_operator,
 )
@@ -851,14 +853,21 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
             except ValueError as error:
                 raise HTTPException(422, str(error)) from error
         try:
-            completed = retained_workers.call(
-                service.binding_for(command.code_revision)
-                if command.code_revision
-                else service.worker_binding,
-                command,
-                timeout=timeout,
-                cancelled=cancelled,
-            )
+            with (
+                application.exit_drain.analysis_publication(command.request.run_id)
+                if isinstance(command, AnalysisCall)
+                else nullcontext(None)
+            ) as permit:
+                if isinstance(command, AnalysisCall):
+                    command = command.model_copy(update={"exit_call_id": permit})
+                completed = retained_workers.call(
+                    service.binding_for(command.code_revision)
+                    if command.code_revision
+                    else service.worker_binding,
+                    command,
+                    timeout=timeout,
+                    cancelled=cancelled,
+                )
         except subprocess.TimeoutExpired as error:
             stage, evidence = diagnostic_excerpt(error.stderr)
             logging.getLogger(__name__).error(  # noqa: TRY400 - bounded worker evidence
@@ -1287,22 +1296,36 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         lifecycle_lock = asyncio.Lock()
         changing = 0
         stopping = False
+        drain_path = f"{_API_PREFIX}/application-exit"
 
         @app.middleware("http")
         async def lifecycle_requests(
             request: Request, call_next: RequestResponseEndpoint
         ) -> Response:
             nonlocal changing
-            mutation = (
-                request.method not in ("GET", "HEAD", "OPTIONS")
-                and request.url.path != DAEMON_SHUTDOWN_PATH
-            )
+            mutation = request.method not in (
+                "GET",
+                "HEAD",
+                "OPTIONS",
+            ) and request.url.path not in (DAEMON_SHUTDOWN_PATH, drain_path)
             async with lifecycle_lock:
                 if stopping and mutation:
                     return JSONResponse(
                         {"detail": "Scopecat is quitting"}, status_code=503
                     )
                 if mutation:
+                    if background_rounds.draining and not await drain_allows(
+                        request, application.exit_drain, project_workers
+                    ):
+                        return JSONResponse(
+                            {
+                                "detail": (
+                                    "Exit wait has stopped new work; "
+                                    "cancel the wait to continue"
+                                )
+                            },
+                            status_code=409,
+                        )
                     changing += 1
             try:
                 return await call_next(request)
@@ -1320,6 +1343,31 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                 }
             )
 
+        @app.get(drain_path, include_in_schema=False)
+        async def exit_report() -> ExitReport:
+            async with lifecycle_lock:
+                return await run_in_threadpool(
+                    application.exit_drain.report,
+                    project_workers,
+                    background_rounds,
+                    changing,
+                )
+
+        @app.post(drain_path, include_in_schema=False, status_code=204)
+        async def set_exit_wait(wait: bool) -> None:
+            async with lifecycle_lock:
+                if stopping:
+                    raise HTTPException(503, "Scopecat is quitting")
+                # No admitted HTTP mutation can cross this boundary unnoticed.
+                # The two internal launchers each have their own serialized fence.
+                await run_in_threadpool(background_rounds.drain, wait)
+                await run_in_threadpool(
+                    project_workers.set_deferred,
+                    application.exit_drain.deferred_procedure
+                    if wait
+                    else lambda _id: False,
+                )
+
         @app.post(DAEMON_SHUTDOWN_PATH, include_in_schema=False, status_code=202)
         async def shutdown_daemon(
             token: Annotated[
@@ -1335,7 +1383,16 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                     if (
                         not stopping
                         and only_if_idle
-                        and (changing or application.activity().busy)
+                        and (
+                            changing
+                            or (
+                                not application.exit_drain.report(
+                                    project_workers, background_rounds, changing
+                                ).ready
+                                if background_rounds.draining
+                                else application.activity().busy
+                            )
+                        )
                     ):
                         raise HTTPException(
                             status_code=409, detail="Application has active work"
@@ -1345,7 +1402,9 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
                             status_code=403, detail="invalid shutdown token"
                         )
 
-                if not background_rounds.stop(accept, only_if_idle=only_if_idle):
+                if not await run_in_threadpool(
+                    background_rounds.stop, accept, only_if_idle=only_if_idle
+                ):
                     raise HTTPException(
                         status_code=409, detail="Background work is finishing"
                     )

@@ -16,16 +16,28 @@ class BackgroundRounds:
         self._lock = RLock()
         self._active = 0
         self._stopping = False
+        self._draining = False
 
     @property
     def active(self) -> int:
         with self._lock:
             return self._active
 
-    @contextmanager
-    def round(self) -> Generator[bool]:
+    def drain(self, enabled: bool) -> None:
         with self._lock:
-            admitted = not self._stopping
+            if self._stopping:
+                raise RuntimeError("Application is quitting")
+            self._draining = enabled
+
+    @property
+    def draining(self) -> bool:
+        with self._lock:
+            return self._draining
+
+    @contextmanager
+    def round(self, *, current: bool = False) -> Generator[bool]:
+        with self._lock:
+            admitted = not self._stopping and (current or not self._draining)
             if admitted:
                 self._active += 1
         try:
