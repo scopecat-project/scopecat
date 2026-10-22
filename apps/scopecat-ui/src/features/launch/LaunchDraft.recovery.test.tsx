@@ -1,14 +1,10 @@
 // @vitest-environment jsdom
 import { useEffect } from "react";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft, invalidateDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
-import {
-  attemptRequest,
-  resetLaunchRecoveryWindowForTests,
-  type AttemptRecord,
-} from "./launch-recovery";
+import { attemptRequest, type AttemptRecord } from "./launch-recovery";
 import { prepareLaunchClose, releaseLaunchClose } from "./launch-close-barrier";
 import { defaultSelection } from "./scientific-selection";
 import {
@@ -43,7 +39,6 @@ function mount() {
     </LaunchDraftProvider>,
   );
 }
-beforeEach(() => resetLaunchRecoveryWindowForTests());
 afterEach(async () => {
   cleanup();
   // Let debounced application saves finish before replacing this test's transport.

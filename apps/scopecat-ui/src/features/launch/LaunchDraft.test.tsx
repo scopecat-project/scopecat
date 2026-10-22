@@ -1,4 +1,3 @@
-import { resetLaunchRecoveryWindowForTests } from "./launch-recovery";
 import { prepareLaunchClose, releaseLaunchClose } from "./launch-close-barrier";
 import {
   installLaunchRecoveryRoutes,
@@ -121,7 +120,6 @@ function Harness({ projectId = "project-a" }: { projectId?: string }) {
   );
 }
 beforeEach(() => {
-  resetLaunchRecoveryWindowForTests();
   catalog = [{ ...prepared, id: "first", title: "Default experiment" }, prepared];
   deferCatalog = false;
   catalogResponse = undefined;
