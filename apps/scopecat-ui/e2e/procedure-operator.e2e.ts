@@ -73,7 +73,17 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       const template = join(ROOT, "testing/reference_lab");
       for (const name of ["src", "config", "scopecat.toml"])
         await cp(join(template, name), join(project, name), { recursive: true });
-      uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+      uv([
+        "python",
+        "-m",
+        "scopecat_server.cli",
+        "start",
+        project,
+        "--port",
+        "0",
+        "--static-dir",
+        resolve("dist"),
+      ]);
       const endpoint = JSON.parse(
         await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
       ) as {
@@ -81,9 +91,11 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       };
       prepareReferenceContexts(uv, project);
       const procedureId = uv(["python", "-c", ADMIT, project]);
-      uv(["scopecat", "stop", project]);
+      uv(["python", "-m", "scopecat_server.cli", "stop", project]);
       uv([
-        "scopecat",
+        "python",
+        "-m",
+        "scopecat_server.cli",
         "start",
         project,
         "--port",
@@ -93,7 +105,7 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       ]);
       await use({ project, baseUrl: endpoint.base_url, procedureId });
     } finally {
-      uv(["scopecat", "stop", project]);
+      uv(["python", "-m", "scopecat_server.cli", "stop", project]);
       await rm(project, { recursive: true, force: true });
     }
   },
@@ -285,7 +297,17 @@ test("retains launch inputs across workspaces and invalidates previews without s
       await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -376,7 +398,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
     throw error;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     // Preserve failed project state and logs for diagnosis.
     if (!failed) await rm(project, { recursive: true, force: true });
   }

@@ -85,6 +85,10 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const context = await browser.newContext();
     const b = await context.newPage();
     const c = await context.newPage();
+    await b.goto(`${firstUrl}/#settings`);
+    await b.getByLabel("Operator name", { exact: true }).fill("Working input tester");
+    await b.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(b.getByText("Operator saved", { exact: true })).toBeVisible();
     await openTable(b, firstUrl);
     await openTable(c, firstUrl);
     const field = b.getByLabel("signals[1].center", { exact: true });

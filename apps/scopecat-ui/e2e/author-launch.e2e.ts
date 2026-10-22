@@ -30,11 +30,25 @@ test("discovers an ordinary author experiment and edits controls before submitti
   let completed = false;
   try {
     await copyAuthorWorkspace(project);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Author launch tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -147,7 +161,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
     completed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved author project", {
@@ -178,9 +192,23 @@ test("prepares B while A stays pinned in a separate result page", async ({
       `    import time\n    from pathlib import Path\n    if gain == 2 and frequency.to("GHz").value > 4.7:\n        deadline = time.monotonic() + 90\n        while not Path(${JSON.stringify(release)}).exists():\n            if time.monotonic() > deadline:\n                raise RuntimeError("A was not released")\n            time.sleep(0.05)\n    detuning =`,
     );
     await writeFile(sourcePath, source);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8"));
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Author launch tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -316,7 +344,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     completed = true;
   } finally {
     await writeFile(release, "");
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved author project", {

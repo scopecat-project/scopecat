@@ -21,7 +21,17 @@ function uv(args: string[]): string {
 
 async function start(project: string) {
   await copyAuthorWorkspace(project);
-  uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+  uv([
+    "python",
+    "-m",
+    "scopecat_server.cli",
+    "start",
+    project,
+    "--port",
+    "0",
+    "--static-dir",
+    resolve("dist"),
+  ]);
   prepareAuthorContexts(uv, project);
   return (
     JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
@@ -129,6 +139,10 @@ for (const scoped of [false, true]) {
           expect(batch.status()).toBe(200);
         }
       }
+      await page.goto(`${url}/#settings`);
+      await page.getByLabel("Operator name", { exact: true }).fill("Parameter context tester");
+      await page.getByRole("button", { name: "Save operator", exact: true }).click();
+      await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
       await page.goto(`${url}/#configuration`);
       for (let index = 0; index < 4; index++) {
         const sample = index < 2 ? "a" : "b";
@@ -201,7 +215,7 @@ for (const scoped of [false, true]) {
         ]);
       }
     } finally {
-      uv(["scopecat", "stop", project]);
+      uv(["python", "-m", "scopecat_server.cli", "stop", project]);
       await rm(project, { recursive: true, force: true });
     }
   });
@@ -226,6 +240,10 @@ with sc.open_project(sys.argv[1]).connect() as lab:
 `,
       project,
     ]);
+    await page.goto(`${url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Parameter context tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${url}/#configuration`);
     await editVersion(page, optionalVersion);
     await expect(page.getByLabel("signals[1].quality", { exact: true })).toHaveValue("");
@@ -251,7 +269,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       run,
     ]);
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     await rm(project, { recursive: true, force: true });
   }
 });
@@ -318,7 +336,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       pythonVersion,
     ]);
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     await rm(project, { recursive: true, force: true });
   }
 });

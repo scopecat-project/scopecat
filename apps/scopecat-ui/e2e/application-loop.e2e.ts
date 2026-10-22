@@ -62,6 +62,10 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
         resolve("dist"),
       ),
     ) as { url: string; workspace: string };
+    await page.goto(`${prepared.url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Application loop tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${prepared.url}/?workspace=${prepared.workspace}#configuration`);
     await page.getByLabel("Working parameter branch", { exact: true }).fill("starter");
     await page.getByRole("button", { name: "Open working table", exact: true }).click();
