@@ -335,6 +335,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
     prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
+    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
     await chooseReferenceContext(page);
     await page.getByLabel("Sample ID").fill("sample-navigation");
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("draft-author");
