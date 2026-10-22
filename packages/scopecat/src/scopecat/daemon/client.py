@@ -64,6 +64,12 @@ from scopecat.automation import (
     ProcedureWorkerLeaseReleaseReceipt,
 )
 from scopecat.automation.calibration_tasks import CalibrationTaskProgress
+from scopecat.automation.effects import (
+    PROCEDURE_EFFECT_HEADER,
+    RETAINED_EFFECT_HEADER,
+    procedure_effect,
+    retained_effect,
+)
 from scopecat.automation.wire import (
     ProcedureStepResourceWaitCommand,
     ProcedureStepResourceWaitReceipt,
@@ -3182,6 +3188,12 @@ class DaemonClient:
                 "lab.get_run(run_id) to read the retained run. Capture "
                 "run.snapshot before closing to retain its state without HTTP."
             )
+        effect = procedure_effect.get()
+        if effect is not None:
+            headers = {**(headers or {}), PROCEDURE_EFFECT_HEADER: effect}
+        retained = retained_effect.get()
+        if retained is not None:
+            headers = {**(headers or {}), RETAINED_EFFECT_HEADER: retained}
         response = self._http.request(
             method,
             path,

@@ -8,6 +8,7 @@ from threading import Event, Lock, Thread
 from typing import Protocol, cast
 
 from scopecat.automation.definition import ProcedureRegistry, RegisteredProcedure
+from scopecat.automation.effects import procedure_effect
 from scopecat.automation.interpretations import InterpretationRequest
 from scopecat.automation.models import (
     InterpretationOutputRef,
@@ -285,7 +286,11 @@ class ProcedureContext:
 
         self._authority.require_live()
         try:
-            output = effect(begun.operation_id)
+            token = procedure_effect.set(begun.operation_id)
+            try:
+                output = effect(begun.operation_id)
+            finally:
+                procedure_effect.reset(token)
         except ProcedureWaitResources as error:
             child_run_id = error.run_id
             receipt = self._authority.fenced_call(

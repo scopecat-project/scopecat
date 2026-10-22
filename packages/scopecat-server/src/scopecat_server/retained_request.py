@@ -14,6 +14,7 @@ from scopecat.records.comparison import ComparisonRequest
 class AnalysisCall(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     kind: Literal["analysis"] = "analysis"
+    exit_call_id: str | None = None
     request: AuthorAnalysisRequest
 
     @property

@@ -69,6 +69,7 @@ from scopecat.automation import (
     RegisteredProcedure,
     RunOutputRef,
 )
+from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.recovery import (
     ProcedureRecoveryAdapter,
     ProcedureRecoveryAvailability,
@@ -947,6 +948,7 @@ class LabProcedureOperations:
         intent: object,
         *,
         request_key: str,
+        exit_scope: ExitScope = "current",
         expected_manual_preview: ManualPreviewFence | None = None,
         plan_ref: ExperimentPlanRef | None = None,
         decision_source: PlanAnalysisSource | None = None,
@@ -965,6 +967,7 @@ class LabProcedureOperations:
         selected = self._registry.resolve(definition.ref)
         receipt = self._client.submit_procedure(
             ProcedureSubmitCommand(
+                exit_scope=exit_scope,
                 request_key=request_key,
                 source=source or (self._source() if self._source else None),
                 expected_manual_preview=expected_manual_preview,

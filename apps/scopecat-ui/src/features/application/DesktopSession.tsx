@@ -84,12 +84,27 @@ interface DesktopAPI {
   exit(background: boolean): Promise<void>;
   request_exit(): Promise<ApplicationActivity | null>;
   wait_for_idle(wait: boolean): Promise<void>;
+  exit_status(): Promise<ExitReport>;
   register_source(directory: string, interpreter: string): Promise<string>;
   select_source_environment(directory: string, interpreter: string): Promise<string>;
   choose_directory(): Promise<string | null>;
   create_source(parent: string, name: string): Promise<string>;
   prepare_author_environment(directory: string): Promise<string>;
   create_author_environment(directory: string, rebuild?: boolean): Promise<string>;
+}
+
+interface ExitWork {
+  kind: string;
+  identity: string;
+  reason: string;
+}
+interface ExitReport {
+  draining: boolean;
+  finishing: ExitWork[];
+  deferred: ExitWork[];
+  blockers: ExitWork[];
+  file_operations: number;
+  error: string | null;
 }
 
 interface ApplicationActivity {
@@ -147,6 +162,30 @@ export function DesktopSession() {
   const [error, setError] = useState<string>();
   const [activity, setActivity] = useState<ApplicationActivity>();
   const [waiting, setWaiting] = useState(false);
+  const [report, setReport] = useState<ExitReport>();
+  useEffect(() => {
+    if (!open || !window.pywebview) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const next = await window.pywebview!.api.exit_status();
+        if (!disposed) {
+          setReport(next);
+          if (next.error) setError(next.error);
+        }
+      } catch (failure) {
+        if (!disposed) setError(failure instanceof Error ? failure.message : String(failure));
+      } finally {
+        if (!disposed) timer = setTimeout(() => void refresh(), 1000);
+      }
+    };
+    void refresh();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+    };
+  }, [open, waiting]);
   useEffect(() => {
     window.scopecatRequestExit = () => {
       if (!window.pywebview || pending.current) return;
@@ -236,7 +275,7 @@ export function DesktopSession() {
       open={open}
       onOpenChange={(next) => {
         if (!busy) {
-          if (!next && waiting) void changeWaiting(false);
+          if (!next) void changeWaiting(false);
           else setOpen(next);
         }
       }}
@@ -252,10 +291,35 @@ export function DesktopSession() {
               available from the menu bar or system tray. Saved records and code are retained.
             </Dialog.Description>
             <p>
-              Unfinished does not always mean executing. Workflows waiting for review or attention,
-              paused workflows, and uncertain device state can still prevent automatic quit. Choose
-              Cancel to return to your work and review what needs attention.
+              Waiting stops new work and lets admitted work finish. Future plans and safe human
+              checkpoints remain saved. Paused work, resource waits, faults and uncertain device
+              outcomes still need attention. Cancel restores normal admission.
             </p>
+            {report &&
+              (
+                [
+                  ["Finishing now", report.finishing],
+                  ["Deferred and retained", report.deferred],
+                  ["Needs attention", report.blockers],
+                ] as const
+              ).map(
+                ([title, items]) =>
+                  items.length > 0 && (
+                    <section key={title} aria-label={title}>
+                      <h3>{title}</h3>
+                      <ul>
+                        {items.map((item) => (
+                          <li key={`${item.kind}:${item.identity}`}>
+                            <strong>{item.identity}</strong>: {item.reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ),
+              )}
+            {report && report.file_operations > 0 && (
+              <p>Finishing {report.file_operations} file operations.</p>
+            )}
             {progress && <p role="status">{progress}</p>}
             {waiting && (
               <p role="status">

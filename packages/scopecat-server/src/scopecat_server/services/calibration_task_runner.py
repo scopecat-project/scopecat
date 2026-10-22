@@ -45,9 +45,10 @@ class CalibrationTaskRunner:
             for _, task_id in page:
                 if self._stop.is_set():
                     return
-                with self._rounds.round() as admitted:
+                current = self._tasks.get(task_id).task.exit_scope == "current"
+                with self._rounds.round(current=current) as admitted:
                     if not admitted:
-                        return
+                        continue
                     self._advance(task_id)
 
     def _advance(self, task_id: str) -> None:

@@ -336,3 +336,67 @@ def test_wait_hands_off_input_only_after_worker_exit(tmp_path: Path) -> None:
     finally:
         release_notebook_imports(project.root)
         stop_project(project)
+
+
+def test_managed_checkpoint_can_exit_and_reopen_without_answering(
+    tmp_path: Path,
+) -> None:
+    project = initialize_project(tmp_path / "exit-checkpoint")
+    manifest = project.root / "scopecat.toml"
+    manifest.write_text(
+        manifest.read_text()
+        + '\n[lab.capabilities]\nprocedures = ["scopecat_lab.workflow:ordinary"]\n'
+    )
+    source = project.root / "src/scopecat_lab/workflow.py"
+    source.write_text(_SOURCE)
+    source.with_name("helper.py").write_text('LABEL = "retained exit question"\n')
+    record = start_project(project, timeout=60)
+    try:
+        with isolated_project_imports(), project.authoring() as author:
+            author.refresh()
+            module = importlib.import_module("scopecat_lab.workflow")
+            handle = author.procedures.prepare(
+                module.ordinary,
+                module.Intent(label="Preserve this question"),
+                request_key="exit-checkpoint",
+            ).submit()
+            with httpx2.Client(
+                base_url=record.base_url, trust_env=False, timeout=10
+            ) as client:
+                assert (
+                    client.post("/api/v1/application-exit?wait=true").status_code == 204
+                )
+                deadline = time.monotonic() + 45
+                while True:
+                    report = client.get("/api/v1/application-exit").json()
+                    if not report["finishing"] and not report["blockers"]:
+                        break
+                    assert time.monotonic() < deadline, report
+                    time.sleep(0.1)
+                assert any(item["identity"] == handle.id for item in report["deferred"])
+                before = client.get(f"/api/v1/procedures/{handle.id}").json()
+                view = handle.progress()
+                assert view.dispatch.log_path is not None
+                directory = Path(view.dispatch.log_path).parent
+                assert (directory / "settled.json").read_bytes() == (
+                    directory / "process.json"
+                ).read_bytes()
+                assert before["state"] == "waiting_for_input"
+                assert view.steps.items[0].interpretation_request is not None
+                assert (
+                    view.steps.items[0].interpretation_request.instructions
+                    == "retained exit question"
+                )
+        stop_project(project, only_if_idle=True)
+        reopened = start_project(project, timeout=60)
+        with httpx2.Client(
+            base_url=reopened.base_url, trust_env=False, timeout=10
+        ) as client:
+            assert client.get(f"/api/v1/procedures/{handle.id}").json() == before
+            assert client.post("/api/v1/application-exit?wait=true").status_code == 204
+            report = client.get("/api/v1/application-exit").json()
+            assert report["finishing"] == report["blockers"] == []
+            assert client.post("/api/v1/application-exit?wait=false").status_code == 204
+    finally:
+        stop_project(project)
+        release_notebook_imports(project.root)

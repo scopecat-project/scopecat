@@ -21,6 +21,7 @@ from typing import Literal, cast
 
 import psutil
 from pydantic import BaseModel
+from scopecat.automation.models import ProcedureStepAttempt
 from scopecat.automation.wire import (
     ProcedureInputContinueReceipt,
     ProcedureStepInputSubmitCommand,
@@ -72,8 +73,93 @@ class ProjectProcedureWorkers:
         self._lock = Lock()
         self._children: dict[str, subprocess.Popen[bytes]] = {}
         self._managed: dict[str, str] | None = None
+        self._deferred: Callable[[str], bool] = lambda _identity: False
         self._stop = Event()
         self._thread: Thread | None = None
+
+    def set_deferred(self, predicate: Callable[[str], bool]) -> None:
+        """Serialize drain admission with the worker spawn boundary."""
+        with self._lock:
+            self._deferred = predicate
+
+    def unsettled_processes(self) -> tuple[str, ...]:
+        with self._lock:
+            live = {
+                key for key, child in self._children.items() if child.poll() is None
+            }
+            # Closed tasks can still have finally blocks running. Restart loses
+            # Popen handles, so retain the PID/create-time evidence as well.
+            for receipt in (self._path().parent / "procedure-workers").glob(
+                "*/process.json"
+            ):
+                identity = WorkerProcess.model_validate_json(receipt.read_text())
+                try:
+                    process = psutil.Process(identity.pid)
+                    if (
+                        process.create_time() == identity.created
+                        and process.is_running()
+                    ):
+                        live.add(f"worker:{identity.pid}:{identity.created}")
+                except psutil.NoSuchProcess:
+                    pass
+            return tuple(sorted(live))
+
+    def process_settled(self, procedure_id: str) -> bool:
+        with self._lock:
+            return self._process_settled(procedure_id)
+
+    def _process_settled(self, procedure_id: str) -> bool:
+        child = self._children.get(procedure_id)
+        if child is not None and child.poll() is None:
+            return False
+        receipt = self._worker_dir(procedure_id) / "process.json"
+        if receipt.exists():
+            identity = WorkerProcess.model_validate_json(receipt.read_text())
+            try:
+                process = psutil.Process(identity.pid)
+                if process.create_time() == identity.created and process.is_running():
+                    return False
+            except psutil.NoSuchProcess:
+                pass
+        return True
+
+    def checkpoint_settled(self, step: ProcedureStepAttempt) -> bool:
+        return self.checkpoint_blocker(step) is None
+
+    def checkpoint_blocker(self, step: ProcedureStepAttempt) -> str | None:
+        with self._lock:
+            child = self._children.get(step.procedure_run_id)
+            if child is not None:
+                code = child.poll()
+                if code is None:
+                    return "Worker is still running"
+                if code != 0:
+                    return f"Worker exited with code {code}; review required"
+            directory = self._worker_dir(step.procedure_run_id)
+            receipt = directory / "process.json"
+            settled = directory / "settled.json"
+            if not receipt.exists():
+                return (
+                    "No managed worker process receipt; cleanup cannot be established"
+                )
+            if not settled.exists():
+                return "Successful worker exit has not been observed"
+            if receipt.read_bytes() != settled.read_bytes():
+                return "Worker settlement belongs to a different process"
+            failure = self._failure(step.procedure_run_id)
+            if failure is not None:
+                return failure.message
+            request = step.interpretation_request
+            if request is None:
+                return "No durable input question"
+            token = self._input_identity(
+                step.step_key, step.attempt, step.revision, request.request_hash
+            )
+            if self._load().get(step.procedure_run_id) != f"input:{token}":
+                return "Worker is not in the exact retained input handoff"
+            if not self._process_settled(step.procedure_run_id):
+                return "Registered worker process is still running"
+            return None
 
     def _path(self) -> Path:
         return (
@@ -379,6 +465,13 @@ class ProjectProcedureWorkers:
         for key, child in tuple(self._children.items()):
             code = child.poll()
             if code is not None:
+                if code == 0:
+                    directory = self._worker_dir(key)
+                    receipt = directory / "process.json"
+                    if receipt.exists():
+                        temporary = directory / "settled.tmp"
+                        temporary.write_bytes(receipt.read_bytes())
+                        temporary.replace(directory / "settled.json")
                 del self._children[key]
                 if code != 0 and key in managed:
                     self._record_failure(key, self._exit_failure(code))
@@ -389,6 +482,7 @@ class ProjectProcedureWorkers:
                 state = self.state(key)
                 if (
                     state == "ready"
+                    and not self._deferred(key)
                     and (
                         managed[key] == "active"
                         or managed[key].startswith("input_continue:")
@@ -433,6 +527,7 @@ class ProjectProcedureWorkers:
         root = self.resolve_root(procedure_id) if self.resolve_root else self.root()
         log_path = self._worker_dir(procedure_id) / "worker.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        (log_path.parent / "settled.json").unlink(missing_ok=True)
         record_timing("procedure_dispatch", procedure_id=procedure_id)
         with log_path.open("ab") as log:
             self._children[procedure_id] = subprocess.Popen(  # noqa: S603 - fixed interpreter and module; no shell

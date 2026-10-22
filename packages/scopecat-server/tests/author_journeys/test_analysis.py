@@ -308,3 +308,101 @@ def test_ordinary_analysis_retained_source_arguments_and_restart(
             )
     finally:
         stop_project(project)
+
+
+def test_inflight_retained_analysis_publishes_during_exit_drain(
+    tmp_path: Path, select_author_source: Callable[[Path], None]
+) -> None:
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from filelock import FileLock
+
+    root = tmp_path / "drain-analysis"
+    shutil.copytree(FIXTURE_ROOT, root)
+    gate = tmp_path / "analysis.lock"
+    source = root / "src/ui_signal/analysis.py"
+    source.write_text(
+        source.read_text().replace(
+            "    selected = data.project(",
+            "    from pathlib import Path\n"
+            "    from filelock import FileLock\n"
+            f"    gate = Path({str(gate)!r})\n"
+            '    gate.with_suffix(".entered").touch()\n'
+            "    with FileLock(gate, timeout=30):\n"
+            "        pass\n"
+            "    selected = data.project(",
+            1,
+        )
+    )
+    select_author_source(root)
+    project = load_project(root / "scopecat.toml")
+    endpoint = start_project(project)
+    try:
+        with (
+            LabApplication().connect(endpoint.base_url) as lab,
+            project.authoring() as authors,
+        ):
+            content = initial_parameters()
+            revision = authors.parameters.save(
+                name="drain-inputs",
+                catalog=content.catalog,
+                parameters=content.parameters,
+            )
+            authors.parameters.create_branch("drain-inputs", revision=revision)
+            authors.use(
+                parameter_branch="drain-inputs", setup=lab.setup.get("initial").ref
+            )
+            authors.refresh()
+            run = (
+                authors.prepare("signal", scans={"frequency": [4.7, 4.8, 4.9]})
+                .run()
+                .wait(timeout=60)
+                .result()
+            )
+            with (
+                ThreadPoolExecutor(max_workers=1) as pool,
+                httpx2.Client(
+                    base_url=endpoint.base_url, timeout=10, trust_env=False
+                ) as client,
+            ):
+                with FileLock(gate, timeout=30):
+                    pending = pool.submit(
+                        authors.analyze_as,
+                        run.id,
+                        "ui_signal.analysis:estimate_peak",
+                        PeakResult,
+                    )
+                    deadline = time.monotonic() + 30
+                    while not gate.with_suffix(".entered").exists():
+                        assert not pending.done(), (
+                            pending.result() if pending.done() else None
+                        )
+                        assert time.monotonic() < deadline
+                        time.sleep(0.01)
+                    assert (
+                        client.post("/api/v1/application-exit?wait=true").status_code
+                        == 204
+                    )
+                    report = client.get("/api/v1/application-exit").json()
+                    assert any(
+                        item["kind"] == "requests" for item in report["finishing"]
+                    )
+                    assert (
+                        client.post(
+                            f"/api/v1/runs/{run.id}/analyses", json={}
+                        ).status_code
+                        == 409
+                    )
+                published = pending.result(timeout=30)
+                assert published.value.status == "estimated"
+                assert (
+                    client.get(
+                        f"/api/v1/runs/{run.id}/analyses/{published.publication.id}"
+                    ).status_code
+                    == 200
+                )
+                report = client.get("/api/v1/application-exit").json()
+                assert report["finishing"] == report["blockers"] == []
+    finally:
+        stop_project(project)

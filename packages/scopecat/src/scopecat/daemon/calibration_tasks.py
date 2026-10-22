@@ -11,6 +11,7 @@ from scopecat.automation.calibration_tasks import (
     CalibrationTaskPlan,
     CalibrationTaskProgress,
 )
+from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.models import (
     ProcedureDefinitionRef,
     ProcedureIntent,
@@ -57,6 +58,7 @@ class CalibrationTaskCreate(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    exit_scope: ExitScope = "current"
     task_id: str = Field(min_length=1, max_length=200)
     source: ProcedureSource | None = None
     plan: CalibrationTaskPlan
@@ -122,6 +124,7 @@ class CalibrationTaskControl(BaseModel):
 
 
 class CalibrationTaskRecord(BaseModel):
+    exit_scope: ExitScope | None = None
     model_config = ConfigDict(extra="forbid", frozen=True)
     specification: CalibrationTaskCreate
     attempts: dict[str, tuple[CalibrationStageAttempt, ...]] = Field(

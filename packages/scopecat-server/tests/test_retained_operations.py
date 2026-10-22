@@ -17,6 +17,7 @@ from scopecat.records.comparison import ComparisonRequest
 from scopecat_server.http.transport import create_app
 from scopecat_server.retained_request import AnalysisCall, ComparisonCall
 from scopecat_server.services.application import DaemonApplication
+from scopecat_server.services.exit_drain import ExitDrain
 from scopecat_server.services.revision_workers import AuthorWorkerBinding
 
 
@@ -27,6 +28,7 @@ def application_for(service: object) -> DaemonApplication:
             "object",
             SimpleNamespace(
                 project_root=Path.cwd(),
+                exit_drain=ExitDrain(Mock()),
                 author_workspaces=SimpleNamespace(get=Mock(return_value=service)),
             ),
         ),

@@ -65,6 +65,7 @@ from scopecat.automation import (
     procedure_intent_hash,
     procedure_step_operation_id,
 )
+from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.models import ProcedureRecoverySource, ProcedureResourceWait
 from scopecat.automation.recovery import validate_recovery_source
 from scopecat.automation.wire import (
@@ -267,6 +268,7 @@ class AutomationService:
                 decision_source=command.decision_source,
                 plan_request=command.plan_request,
                 source=command.source,
+                exit_scope=command.exit_scope,
             )
         )
 
@@ -589,6 +591,7 @@ class AutomationService:
         decision_source: PlanAnalysisSource | None = None,
         plan_request: LaunchRequest | None = None,
         source: ProcedureSource | None = None,
+        exit_scope: ExitScope = "current",
     ) -> ProcedureRun:
         """Admit one idempotent, version-pinned procedure request."""
 
@@ -612,6 +615,7 @@ class AutomationService:
                 decision_source=decision_source,
                 plan_request=plan_request,
                 source=source,
+                exit_scope=exit_scope,
             )
 
     def submit_in_transaction(
@@ -630,6 +634,7 @@ class AutomationService:
         decision_source: PlanAnalysisSource | None = None,
         plan_request: LaunchRequest | None = None,
         source: ProcedureSource | None = None,
+        exit_scope: ExitScope = "current",
         at: datetime | None = None,
         require_new: bool = False,
     ) -> ProcedureRun:
@@ -667,6 +672,10 @@ class AutomationService:
             ):
                 raise AutomationConflict(
                     "procedure request key belongs to another practice or ordinary work"
+                )
+            if existing.exit_scope is not None and existing.exit_scope != exit_scope:
+                raise AutomationConflict(
+                    "procedure request key already has different exit scope"
                 )
             if existing.intent_hash != intent_hash:
                 raise AutomationConflict(
@@ -770,6 +779,7 @@ class AutomationService:
         )
         now = self._now() if at is None else _require_aware_time(at)
         run = ProcedureRun(
+            exit_scope=exit_scope,
             procedure_run_id=f"procedure-{uuid4().hex}",
             request_key=request_key,
             definition=definition,

@@ -175,8 +175,11 @@ def test_backup_fences_other_bridges_through_capture_and_result(
 
     api, runtime, session, window, parent = backup
     second = DesktopAPI(session, Mock())
-    # An earlier wait-for-idle quit must not interrupt the capture.
+    # Drain fences new backups until the user restores ordinary admission.
     session.wait_for_idle(True)
+    with pytest.raises(ValueError, match="取消等待"):
+        api.backup_application()
+    session.wait_for_idle(False)
     stages = []
 
     def check_fence(stage: str) -> None:

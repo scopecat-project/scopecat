@@ -13,6 +13,14 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
   const wait_for_idle = vi.fn().mockResolvedValue(undefined);
   window.pywebview = {
     api: {
+      exit_status: vi.fn().mockResolvedValue({
+        draining: false,
+        finishing: [],
+        deferred: [],
+        blockers: [],
+        file_operations: 0,
+        error: null,
+      }),
       notebook_journey: vi.fn(),
       prepare_notebook_journey: vi.fn(),
       open_lesson_notebook: vi.fn(),
@@ -50,8 +58,8 @@ it("does not dismiss automatic quit until cancellation is acknowledged", async (
   expect(screen.getByText(/Unfinished work:/)).toHaveTextContent(
     "1 active background round, 1 unresolved background issue",
   );
-  expect(screen.getByText(/Unfinished does not always mean executing/)).toHaveTextContent(
-    "Choose Cancel to return to your work",
+  expect(screen.getByText(/Waiting stops new work/)).toHaveTextContent(
+    "Cancel restores normal admission",
   );
   await waitFor(() => expect(waitButton).toBeEnabled());
   fireEvent.click(waitButton);
@@ -70,6 +78,14 @@ it("leaves background work running only after the user chooses it", async () => 
   const exit = vi.fn().mockResolvedValue(undefined);
   window.pywebview = {
     api: {
+      exit_status: vi.fn().mockResolvedValue({
+        draining: false,
+        finishing: [],
+        deferred: [],
+        blockers: [],
+        file_operations: 0,
+        error: null,
+      }),
       notebook_journey: vi.fn(),
       prepare_notebook_journey: vi.fn(),
       open_lesson_notebook: vi.fn(),
@@ -105,6 +121,7 @@ it("leaves background work running only after the user chooses it", async () => 
   await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(exit).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   act(() => window.scopecatRequestExit?.());
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Keep running in background" })).toBeEnabled(),
@@ -121,6 +138,14 @@ it("keeps a failed stop recoverable in the current window", async () => {
   const exit = vi.fn().mockReturnValue(stop);
   window.pywebview = {
     api: {
+      exit_status: vi.fn().mockResolvedValue({
+        draining: false,
+        finishing: [],
+        deferred: [],
+        blockers: [],
+        file_operations: 0,
+        error: null,
+      }),
       notebook_journey: vi.fn(),
       prepare_notebook_journey: vi.fn(),
       open_lesson_notebook: vi.fn(),
@@ -169,6 +194,14 @@ it("shows progress immediately and prevents duplicate quit requests", async () =
   const request_exit = vi.fn().mockReturnValue(check);
   window.pywebview = {
     api: {
+      exit_status: vi.fn().mockResolvedValue({
+        draining: false,
+        finishing: [],
+        deferred: [],
+        blockers: [],
+        file_operations: 0,
+        error: null,
+      }),
       notebook_journey: vi.fn(),
       prepare_notebook_journey: vi.fn(),
       open_lesson_notebook: vi.fn(),

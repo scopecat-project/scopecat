@@ -50,6 +50,7 @@ from .decision_drafts import DecisionDraftService
 from .devices import DeviceService
 from .driver_sources import DriverSourceService
 from .executor import ExecutorService
+from .exit_drain import ExitDrain
 from .experiment_plans import ExperimentPlanService
 from .launch_recovery import LaunchRecoveryService
 from .leases import OwnershipLeaseSupervisor
@@ -104,6 +105,7 @@ class DaemonApplication:
         self.project_id = project_id
         self.deployment_id = deployment_id
         self._project_store = project_store
+        self.exit_drain = ExitDrain(project_store.sqlite)
         self.data_exchange = DataExchangeService(project_store)
         self.managed_analyses = ManagedAnalysisRepository(project_store.sqlite)
         self.analysis_follows = AnalysisFollowRepository(project_store.sqlite)

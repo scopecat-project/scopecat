@@ -3,7 +3,7 @@
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -331,12 +331,12 @@ def test_waiting_exit_can_be_cancelled_without_stopping_work():
     runtime.stop_if_idle.assert_called_once()
 
 
-def test_waiting_exit_does_not_replace_an_in_progress_preparation():
+def test_waiting_exit_does_not_replace_an_in_progress_lifecycle_operation():
     runtime = Mock()
     closing = threading.Event()
     api = DesktopAPI(DesktopSession(runtime, closing), Mock())
     api.wait_for_idle(True)
-    with api._session.operation():
+    with api._session.operation(allow_wait=True):
         api._session.poll_exit()
     runtime.stop_if_idle.assert_not_called()
     assert not closing.is_set()
@@ -548,3 +548,19 @@ def test_development_windows_reload_same_ui_origin_after_proxy_changes():
     )
     api = DesktopAPI(session, lambda: first.window)
     assert api._data_url() == "http://127.0.0.1:9001"
+
+
+def test_lost_wait_response_keeps_pending_exit_and_cancel_restores_admission():
+    runtime = Mock()
+    runtime.set_exit_wait.side_effect = [OSError("response lost"), None]
+    session = DesktopSession(runtime, threading.Event())
+    with pytest.raises(OSError, match="response lost"):
+        session.wait_for_idle(True)
+    assert session._waiting.is_set()
+    with pytest.raises(ValueError, match="取消等待"), session.file_operation():
+        pytest.fail("new file operation was admitted")
+    session.wait_for_idle(False)
+    assert not session._waiting.is_set()
+    assert runtime.set_exit_wait.call_args_list == [call(True), call(False)]
+    with session.file_operation():
+        pass

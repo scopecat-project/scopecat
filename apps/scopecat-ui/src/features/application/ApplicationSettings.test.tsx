@@ -22,6 +22,7 @@ it("creates an example from a chosen parent and keeps cancelled picks harmless",
   const restart = vi.fn();
   window.pywebview = {
     api: {
+      exit_status: vi.fn(),
       notebook_journey: vi.fn(),
       prepare_notebook_journey: vi.fn(),
       open_lesson_notebook: vi.fn(),
@@ -119,6 +120,7 @@ it("keeps author dependencies independent and uses native application updates", 
   const restart = vi.fn();
   window.pywebview = {
     api: {
+      exit_status: vi.fn(),
       notebook_journey: vi.fn(),
       prepare_notebook_journey: vi.fn(),
       open_lesson_notebook: vi.fn(),
