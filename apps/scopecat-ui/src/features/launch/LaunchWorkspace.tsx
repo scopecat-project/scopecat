@@ -75,14 +75,41 @@ export function LaunchWorkspace({
   }, [workspaceId, sources.data, selectWorkspace, linked]);
   const sourceAvailable =
     sources.data?.items.some((source) => source.id === workspaceId && source.available) ?? false;
+  const linkedRead = useQuery({
+    queryKey: ["linked-launch-draft", projectId, linkedWorkspace, linkedExperiment, linkedId],
+    enabled:
+      linked &&
+      !linkedMatches &&
+      sourceAvailable &&
+      Boolean(linkedExperiment && linkedId && linkedWorkspace),
+    retry: false,
+    queryFn: async () => {
+      const { head } = await readDraft(linkedWorkspace!, linkedExperiment!, linkedId!);
+      if (
+        !head ||
+        head.state !== "saved" ||
+        head.target.workspace_id !== linkedWorkspace ||
+        head.target.experiment !== linkedExperiment ||
+        (head.target.draft_id ?? "default") !== linkedId
+      )
+        throw new Error("This saved draft is unavailable. No other draft was opened.");
+      if (head.input.pinned_source && !head.input.code_revision)
+        throw new Error(
+          "This draft's pinned code revision is unavailable. Current code was not substituted.",
+        );
+      return head;
+    },
+  });
   const codeRevision = handoff
     ? handoff.request.code_revision
     : !linked || linkedMatches
       ? draft?.codeRevision
-      : undefined;
+      : linkedRead.data?.input.pinned_source
+        ? (linkedRead.data.input.code_revision ?? undefined)
+        : undefined;
   const catalog = useQuery({
     queryKey: ["experiment-launcher", projectId, workspaceId, codeRevision?.content_hash],
-    enabled: Boolean(projectId && sourceAvailable),
+    enabled: Boolean(projectId && sourceAvailable && (!linked || linkedMatches || linkedRead.data)),
     queryFn: async ({ signal }) => {
       const result = await apiData(
         apiClient.GET("/api/v1/experiment-launcher", {
@@ -100,27 +127,6 @@ export function LaunchWorkspace({
     if (catalog.data) sourceObserved(workspaceId, catalog.data.code_revision ?? undefined);
   }, [catalog.data, workspaceId, sourceObserved]);
   const linkedEntry = catalog.data?.entries.find((item) => item.id === linkedExperiment);
-  const linkedRead = useQuery({
-    queryKey: ["linked-launch-draft", projectId, linkedWorkspace, linkedExperiment, linkedId],
-    enabled:
-      linked &&
-      !linkedMatches &&
-      sourceAvailable &&
-      Boolean(linkedEntry && linkedId && linkedWorkspace),
-    retry: false,
-    queryFn: async () => {
-      const { head } = await readDraft(linkedWorkspace!, linkedExperiment!, linkedId!);
-      if (
-        !head ||
-        head.state !== "saved" ||
-        head.target.workspace_id !== linkedWorkspace ||
-        head.target.experiment !== linkedExperiment ||
-        (head.target.draft_id ?? "default") !== linkedId
-      )
-        throw new Error("This saved draft is unavailable. No other draft was opened.");
-      return head;
-    },
-  });
   const [linkBlocked, setLinkBlocked] = useState(false);
   const [linkRetry, setLinkRetry] = useState(0);
   const linkedActions = useRef(switchDraft);
@@ -128,7 +134,15 @@ export function LaunchWorkspace({
     linkedActions.current = switchDraft;
   }, [switchDraft]);
   useEffect(() => {
-    if (!linked || !linkedRead.data || linkedMatches) return;
+    if (
+      !linked ||
+      !linkedRead.data ||
+      linkedMatches ||
+      !sourceAvailable ||
+      !linkedEntry ||
+      !catalog.isSuccess
+    )
+      return;
     let active = true;
     void linkedActions
       .current(linkedRead.data, () => active)
@@ -138,7 +152,15 @@ export function LaunchWorkspace({
     return () => {
       active = false;
     };
-  }, [linked, linkedRead.data, linkedMatches, linkRetry]);
+  }, [
+    linked,
+    linkedRead.data,
+    linkedMatches,
+    linkRetry,
+    sourceAvailable,
+    linkedEntry,
+    catalog.isSuccess,
+  ]);
   const linkError =
     linked && !linkedMatches
       ? !linkedId || !linkedWorkspace || !linkedExperiment
@@ -300,7 +322,7 @@ export function LaunchWorkspace({
                 setLinkRetry((value) => value + 1);
                 void sources.refetch();
                 if (sourceAvailable) void catalog.refetch();
-                if (linkedEntry && linkedWorkspace && linkedExperiment && linkedId)
+                if (sourceAvailable && linkedWorkspace && linkedExperiment && linkedId)
                   void linkedRead.refetch();
               }}
             >
