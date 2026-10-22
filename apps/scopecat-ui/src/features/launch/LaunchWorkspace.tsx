@@ -1,3 +1,5 @@
+import { clearDraftLocation } from "./draft-location";
+import { readDraft } from "./launch-recovery";
 import {
   pageTitle,
   sectionTitle,
@@ -44,20 +46,40 @@ export function LaunchWorkspace({
     update,
     importHandoff,
     sourceObserved,
+    switchDraft,
   } = useLaunchDraft();
+  const location = useLocationUrl();
+  const linkedId = location.searchParams.get("draft");
+  const linkedWorkspace = location.searchParams.get("workspace");
+  const linkedExperiment = location.searchParams.get("experiment");
+  const linked = linkedId !== null && !handoff;
+  const linkedMatches =
+    linked &&
+    draft?.workspaceId === linkedWorkspace &&
+    draft.experiment === linkedExperiment &&
+    (draft.draftId ?? "default") === linkedId;
   const queryClient = useQueryClient();
   useEffect(() => {
     void queryClient.invalidateQueries({ queryKey: ["config", "launch-context", projectId] });
   }, [projectId, queryClient]);
-  const workspaceId = handoff ? handoff.request.workspace_id : selectedWorkspaceId;
+  const workspaceId = handoff
+    ? handoff.request.workspace_id
+    : linked
+      ? (linkedWorkspace ?? "")
+      : selectedWorkspaceId;
   const sources = useAuthorWorkspaces(projectId);
   useEffect(() => {
     const available = sources.data?.items.filter((source) => source.available) ?? [];
-    if (!workspaceId && available.length === 1 && available[0]) selectWorkspace(available[0].id);
-  }, [workspaceId, sources.data, selectWorkspace]);
+    if (!linked && !workspaceId && available.length === 1 && available[0])
+      selectWorkspace(available[0].id);
+  }, [workspaceId, sources.data, selectWorkspace, linked]);
   const sourceAvailable =
     sources.data?.items.some((source) => source.id === workspaceId && source.available) ?? false;
-  const codeRevision = handoff ? handoff.request.code_revision : draft?.codeRevision;
+  const codeRevision = handoff
+    ? handoff.request.code_revision
+    : !linked || linkedMatches
+      ? draft?.codeRevision
+      : undefined;
   const catalog = useQuery({
     queryKey: ["experiment-launcher", projectId, workspaceId, codeRevision?.content_hash],
     enabled: Boolean(projectId && sourceAvailable),
@@ -77,7 +99,63 @@ export function LaunchWorkspace({
   useEffect(() => {
     if (catalog.data) sourceObserved(workspaceId, catalog.data.code_revision ?? undefined);
   }, [catalog.data, workspaceId, sourceObserved]);
-  const location = useLocationUrl();
+  const linkedEntry = catalog.data?.entries.find((item) => item.id === linkedExperiment);
+  const linkedRead = useQuery({
+    queryKey: ["linked-launch-draft", projectId, linkedWorkspace, linkedExperiment, linkedId],
+    enabled:
+      linked &&
+      !linkedMatches &&
+      sourceAvailable &&
+      Boolean(linkedEntry && linkedId && linkedWorkspace),
+    retry: false,
+    queryFn: async () => {
+      const { head } = await readDraft(linkedWorkspace!, linkedExperiment!, linkedId!);
+      if (
+        !head ||
+        head.state !== "saved" ||
+        head.target.workspace_id !== linkedWorkspace ||
+        head.target.experiment !== linkedExperiment ||
+        (head.target.draft_id ?? "default") !== linkedId
+      )
+        throw new Error("This saved draft is unavailable. No other draft was opened.");
+      return head;
+    },
+  });
+  const [linkBlocked, setLinkBlocked] = useState(false);
+  const [linkRetry, setLinkRetry] = useState(0);
+  const linkedActions = useRef(switchDraft);
+  useEffect(() => {
+    linkedActions.current = switchDraft;
+  }, [switchDraft]);
+  useEffect(() => {
+    if (!linked || !linkedRead.data || linkedMatches) return;
+    let active = true;
+    void linkedActions
+      .current(linkedRead.data, () => active)
+      .then((opened) => {
+        if (active) setLinkBlocked(!opened);
+      });
+    return () => {
+      active = false;
+    };
+  }, [linked, linkedRead.data, linkedMatches, linkRetry]);
+  const linkError =
+    linked && !linkedMatches
+      ? !linkedId || !linkedWorkspace || !linkedExperiment
+        ? "The draft link is incomplete. No other draft was opened."
+        : sources.error
+          ? `Cannot check the linked draft's workspace: ${sources.error.message}`
+          : catalog.error
+            ? `Cannot check the linked draft's experiment: ${catalog.error.message}`
+            : sources.isSuccess && !sourceAvailable
+              ? "This draft's code workspace is unavailable. No other draft was opened."
+              : catalog.isSuccess && !linkedEntry
+                ? "This draft's experiment is unavailable. No other draft was opened."
+                : (linkedRead.error?.message ??
+                  (linkBlocked
+                    ? "Save or resolve the current input before opening the linked draft."
+                    : undefined))
+      : undefined;
   const procedureId = location.searchParams.get("procedure") ?? draft?.admittedProcedureId ?? "";
   const execution = useRef<HTMLElement>(null);
   const preparation = useRef<HTMLElement>(null);
@@ -117,8 +195,9 @@ export function LaunchWorkspace({
       );
   }, [unavailable, draft, update]);
   useEffect(() => {
-    if (entry && !handoff && sourceAvailable) void select(entry, false, workspaceId);
-  }, [entry, select, handoff, sourceAvailable, workspaceId]);
+    if (entry && !handoff && sourceAvailable && (!linked || linkedMatches))
+      void select(entry, false, workspaceId);
+  }, [entry, select, handoff, sourceAvailable, workspaceId, linked, linkedMatches]);
   const handoffTarget = handoff
     ? catalog.data?.entries.find((item) => item.id === handoff.request.experiment)
     : undefined;
@@ -207,8 +286,38 @@ export function LaunchWorkspace({
           <ProcedureProgress key={procedureId} procedureId={procedureId} projectId={projectId} />
         </section>
       )}
+      {linked && !linkedMatches && (
+        <section aria-label="Open saved draft" className={detailCard}>
+          <p role={linkError ? "alert" : "status"}>
+            {linkError ?? "Opening the exact saved draft…"}
+          </p>
+          {linkError && (
+            <button
+              type="button"
+              className={secondaryButton}
+              onClick={() => {
+                setLinkBlocked(false);
+                setLinkRetry((value) => value + 1);
+                void sources.refetch();
+                if (sourceAvailable) void catalog.refetch();
+                if (linkedEntry && linkedWorkspace && linkedExperiment && linkedId)
+                  void linkedRead.refetch();
+              }}
+            >
+              Retry opening draft
+            </button>
+          )}
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => clearDraftLocation(selectedWorkspaceId)}
+          >
+            Return to editor
+          </button>
+        </section>
+      )}
       <section
-        hidden={view !== "editor"}
+        hidden={view !== "editor" || (linked && !linkedMatches)}
         ref={preparation}
         tabIndex={-1}
         aria-labelledby="experiment-preparation"
@@ -304,7 +413,7 @@ export function LaunchWorkspace({
                 <LaunchForm
                   key={`${workspaceId}:${codeRevision?.content_hash ?? "current"}:${draft.definition}`}
                   entry={entry}
-                  active={view === "editor"}
+                  active={view === "editor" && (!linked || linkedMatches)}
                   onAdmitted={admitted}
                   catalogReady={sourceAvailable && catalog.isSuccess}
                 />
@@ -313,7 +422,7 @@ export function LaunchWorkspace({
         )}
       </section>
       <section
-        hidden={view !== "editor"}
+        hidden={view !== "editor" || (linked && !linkedMatches)}
         aria-labelledby="experiment-history"
         className="space-y-3"
       >
@@ -330,7 +439,7 @@ export function LaunchWorkspace({
       {view === "submitted" && (
         <SubmittedWork projectId={projectId} onOpenMonitor={openProcedure} />
       )}
-      {view === "editor" && projectId && (
+      {view === "editor" && (!linked || linkedMatches) && projectId && (
         <CalibrationTasks
           key={`calibration:${projectId}:${workspaceId}`}
           projectId={projectId}

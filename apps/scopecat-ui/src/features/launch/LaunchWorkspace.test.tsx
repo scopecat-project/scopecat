@@ -8,7 +8,7 @@ import { defaultSelection } from "./scientific-selection";
 import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider } from "./LaunchDraft";
@@ -711,3 +711,121 @@ it("keeps internal failures ordinary even when their text mentions unsupported c
 vi.mock("../application/OperatorSettings", () => ({
   readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "operator" })),
 }));
+
+function mountLinkedDraft(id: string) {
+  window.history.replaceState(
+    null,
+    "",
+    `/?workspace=legacy&experiment=rabi&draft=${id}&procedure=monitor-a&preparation=1#launch`,
+  );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ entries: [entry], items: [] })),
+  );
+  mount();
+  const transport = globalThis.fetch;
+  const reads: string[] = [];
+  const saves: string[] = [];
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/launch-drafts/read")) {
+      const target = await request.json();
+      reads.push(target.draft_id);
+      return Response.json({
+        head:
+          id === "missing"
+            ? null
+            : {
+                target,
+                revision: 7,
+                state: "saved",
+                created_at: "2026-10-22T00:00:00Z",
+                input: {
+                  declaration: entry,
+                  draft_name: "Independent B",
+                  pinned_source: false,
+                  values: { qubit: "Q12", amplitude_max: "0.72" },
+                  controls: {},
+                  selection: defaultSelection(),
+                  actor: "operator",
+                  plan_dirty: false,
+                },
+              },
+      });
+    }
+    if (request.url.endsWith("/launch-drafts/save")) {
+      const body = await request.clone().json();
+      saves.push(body.target.draft_id);
+    }
+    return transport(request);
+  });
+  return { reads, saves };
+}
+
+it("opens only the exact linked saved draft", async () => {
+  const { reads } = mountLinkedDraft("draft-b");
+  expect(await screen.findByLabelText("Amplitude")).toHaveValue("0.72");
+  expect(screen.getByRole("combobox", { name: "Editable draft" })).toHaveValue("draft-b");
+  expect(await screen.findByRole("link", { name: "Reopen this saved draft" })).toHaveAttribute(
+    "href",
+    "/?workspace=legacy&experiment=rabi&draft=draft-b&procedure=monitor-a&preparation=1#launch",
+  );
+  expect(reads.length).toBeGreaterThan(0);
+  expect(reads.every((read) => read === "draft-b")).toBe(true);
+  expect(new URL(window.location.href).searchParams.get("procedure")).toBe("monitor-a");
+});
+
+it("does not open or save a default draft when the linked identity is missing", async () => {
+  const { reads, saves } = mountLinkedDraft("missing");
+  await screen.findByText("This saved draft is unavailable. No other draft was opened.");
+  expect(screen.queryByLabelText("Amplitude")).toBeNull();
+  expect(saves).toEqual([]);
+  expect(reads).toEqual(["missing"]);
+  expect(new URL(window.location.href).searchParams.get("procedure")).toBe("monitor-a");
+});
+
+it("does not select a default experiment for an unavailable draft source", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/?workspace=missing&experiment=rabi&draft=b&preparation=1#launch",
+  );
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      calls.push(request.url);
+      return Response.json({ entries: [entry], items: [] });
+    }),
+  );
+  mount();
+  await screen.findByText("This draft's code workspace is unavailable. No other draft was opened.");
+  expect(screen.queryByLabelText("Amplitude")).toBeNull();
+  expect(calls.some((path) => path.endsWith("/experiment-launcher"))).toBe(false);
+});
+
+it("ignores a late linked draft read after navigation chooses another identity", async () => {
+  mountLinkedDraft("draft-b");
+  const transport = globalThis.fetch;
+  let release!: () => void;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (
+      request.url.endsWith("/launch-drafts/read") &&
+      (await request.clone().json()).draft_id === "draft-b"
+    )
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    return transport(request);
+  });
+  await waitFor(() => expect(release).toBeDefined());
+  act(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("draft", "draft-c");
+    window.history.pushState(null, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(await screen.findByRole("combobox", { name: "Editable draft" })).toHaveValue("draft-c");
+  await act(async () => release());
+  expect(screen.getByRole("combobox", { name: "Editable draft" })).toHaveValue("draft-c");
+  expect(new URL(window.location.href).searchParams.get("draft")).toBe("draft-c");
+});

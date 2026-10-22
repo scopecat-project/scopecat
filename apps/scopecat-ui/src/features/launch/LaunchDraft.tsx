@@ -1,3 +1,4 @@
+import { clearDraftLocation, retainDraftLocation } from "./draft-location";
 import { readOperatorSettings } from "../application/OperatorSettings";
 import {
   useLaunchRecovery,
@@ -87,7 +88,7 @@ export interface LaunchPreparation {
 }
 interface DraftContext {
   copyDraft: () => Promise<void>;
-  switchDraft: (record: DraftRecord) => Promise<void>;
+  switchDraft: (record: DraftRecord, isIntended?: () => boolean) => Promise<boolean>;
   renameDraft: (name: string) => void;
   beginPreparation: () => LaunchPreparation | undefined;
   recovery: ReturnType<typeof useLaunchRecovery>;
@@ -312,6 +313,7 @@ function ProjectDraft({
       );
       return;
     }
+    clearDraftLocation(owner);
     currentWorkspace.current = owner;
     setWorkspaceId(owner);
     setDraft((current) =>
@@ -412,6 +414,8 @@ function ProjectDraft({
         }
         return next;
       });
+      if (latest.current?.experiment && new URL(window.location.href).searchParams.has("draft"))
+        retainDraftLocation(latest.current);
     },
     [selectedConfiguration, selectedWorkingInput, selectedSubject, workspaceId, setDraft],
   );
@@ -546,29 +550,34 @@ function ProjectDraft({
               admittedProcedureId: undefined,
               needsReview: true,
             });
+            retainDraftLocation({ ...original, draftId });
           } catch (error) {
             setDraft((current) =>
               current === original ? { ...current, error: String(error) } : current,
             );
           }
         },
-        switchDraft: async (record) => {
+        switchDraft: async (record, isIntended = () => true) => {
           const original = latest.current;
-          if (!mayLeave() || submitting.current) return;
+          if (!mayLeave() || submitting.current || !isIntended()) return false;
           try {
-            await recovery.flush();
-            if (!alive.current || latest.current !== original) return;
+            if (original?.experiment) await recovery.flush();
+            if (!alive.current || latest.current !== original || !isIntended()) return false;
             if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
               attemptGeneration.current += 1;
               setAttempt(undefined);
             }
             currentWorkspace.current = record.target.workspace_id;
             setWorkspaceId(record.target.workspace_id);
-            setDraft(restoreDraft(record, (original?.revision ?? 0) + 1));
+            const restored = restoreDraft(record, (original?.revision ?? 0) + 1);
+            setDraft(restored);
+            retainDraftLocation(restored);
+            return true;
           } catch (error) {
             setDraft((current) =>
               current === original && current ? { ...current, error: String(error) } : current,
             );
+            return false;
           }
         },
         renameDraft: (name) => {
@@ -602,7 +611,9 @@ function ProjectDraft({
           if (!recovery.selectCopy(record)) return;
           currentWorkspace.current = record.target.workspace_id;
           setWorkspaceId(record.target.workspace_id);
-          setDraft(restoreDraft(record, (latest.current?.revision ?? 0) + 1));
+          const restored = restoreDraft(record, (latest.current?.revision ?? 0) + 1);
+          setDraft(restored);
+          retainDraftLocation(restored);
         },
         recoverAttempt: (record) => {
           preparationToken.current = undefined;
@@ -795,6 +806,7 @@ function ProjectDraft({
                 ? `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${operator}. Start will prepare these saved inputs again.`
                 : `Preparing ${plan.manualLine.label}. Adjust measurement settings, then Start; wiring confirmation is required before acquisition.`,
           });
+          retainDraftLocation(imported);
           return true;
         },
         importHandoff: async (entry, handoff) => {
@@ -844,6 +856,7 @@ function ProjectDraft({
             currentWorkspace.current = owner;
             setWorkspaceId(owner);
             setDraft({ ...imported, workspaceId: owner, actor: operator });
+            retainDraftLocation(imported);
             return true;
           } catch (error) {
             setDraft({

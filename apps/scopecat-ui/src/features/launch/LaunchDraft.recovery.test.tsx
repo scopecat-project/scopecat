@@ -405,6 +405,7 @@ it("keeps named copies independent through switching and restart without submitt
   await act(async () => state.copyDraft());
   const copyId = state.draft?.draftId;
   expect(copyId).not.toBe("default");
+  expect(new URL(window.location.href).searchParams.get("draft")).toBe(copyId);
   expect(state.draft?.values.raw).toBe("B input");
   expect(state.draft?.preview).toBeUndefined();
   expect(state.draft?.requestKey).toBeUndefined();
@@ -417,6 +418,7 @@ it("keeps named copies independent through switching and restart without submitt
   await act(async () => state.switchDraft(heads.get("default")!));
   await waitFor(() => expect(state.draft?.values.raw).toBe("B input"));
   expect(state.draft?.draftName).toBe("B");
+  expect(new URL(window.location.href).searchParams.get("draft")).toBe("default");
   first.unmount();
   mount();
   await act(async () => state.select(entry, false, "legacy"));
@@ -424,6 +426,7 @@ it("keeps named copies independent through switching and restart without submitt
   await act(async () => state.switchDraft(heads.get(copyId!)!));
   await waitFor(() => expect(state.draft?.values.raw).toBe("C input"));
   expect(state.draft?.draftName).toBe("C");
+  expect(new URL(window.location.href).searchParams.get("draft")).toBe(copyId);
   expect(requests.some((url) => url.endsWith("/experiment-launcher/submit"))).toBe(false);
 });
 
@@ -497,6 +500,7 @@ it("imports historical inputs into a new identity and preserves the existing sav
   });
   expect(state.draft?.draftId).not.toBe("default");
   expect(state.draft?.values.note).toBe("historical A");
+  expect(new URL(window.location.href).searchParams.get("draft")).toBe(state.draft?.draftId);
   await waitFor(() => expect(state.recovery.status).toContain("input saved"));
   const retained = (await readDraft("legacy", "signal")).head!;
   expect(retained.revision).toBe(original.revision);
