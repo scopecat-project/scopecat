@@ -158,11 +158,27 @@ A cancelled retained-but-unsent attempt is historical evidence, not acquisition.
 After submit is sent, the UI reports possible acquisition and uses task controls or
 original-receipt recovery; it does not call this preparation cancellation.
 
+## Native close and unsaved experiment input
+
+A destructive native-window close checks that its experiment input is saved before
+destroying the view. Application quit checks all open views, including hidden ones,
+through the existing lifecycle owner. Input edits and unsent preparation are fenced
+while the check runs. Failed saves, conflicts, missing acknowledgments and page
+changes keep the affected view available; an aborted quit releases the edit fence
+so the user can resolve the problem and retry. Deferred quit checks again when it
+actually closes. The last-window hide behavior and existing execution-stop choices
+are retained.
+
+This guard covers experiment launch-input sessions, including unfinished sessions
+retained after changing project. It does not promise to restore every transient UI
+state or certify other editors. Browser unload prompts, mocked host tests and native
+Windows interaction remain distinct qualification boundaries.
+
 ## Storage boundary
 
 Development schema 113 adds the experiment editing and original-request tables
 under the existing application SQLite owner. Current-format backups retain them.
 The [data compatibility policy](../data-compatibility.md) is unchanged: no reader
 or migration for an earlier prebaseline format is introduced, and old stores are
-rejected without modification. Native window/storage behavior is unchanged and
-has separate acceptance in [draft recovery](draft-recovery.md).
+rejected without modification. Native window/storage qualification remains separate
+from browser evidence; see [draft recovery](draft-recovery.md).

@@ -14,3 +14,7 @@ Retained parameter or candidate configurations can be copied into a new draft
 for the current editor experiment without changing the original run or draft.
 The new draft requires review and existing validation; unsupported historical
 sources remain read-only. This does not recreate the original run recipe.
+
+Native destructive close waits for confirmed experiment-input saving. Failed or
+unknown saves retain the view; an aborted quit releases its editing fence for retry.
+Existing background execution and last-window hiding behavior are preserved.
