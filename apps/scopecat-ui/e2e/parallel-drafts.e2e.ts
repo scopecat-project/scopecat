@@ -8,7 +8,7 @@ import {
   prepareAuthorContexts,
   reviewRetainedExperiment,
 } from "./author-context";
-import { startProject, stopProject, uv } from "./daemon";
+import { ROOT, startProject, stopProject, uv } from "./daemon";
 import { expectRunIdentity } from "./run-identity";
 
 async function nameDraft(page: Page, name: string) {
@@ -37,6 +37,52 @@ async function selectDraft(page: Page, id: string) {
   await saved(page);
 }
 
+// Use the existing virtual thermometer through ordinary compilation and resource admission.
+// Pure compute has no resource requirement and cannot establish a real queue wait.
+async function addSharedVirtualResource(project: string) {
+  const infrastructure = JSON.parse(
+    await readFile(join(ROOT, "testing/reference_lab/config/system-infrastructure.json"), "utf8"),
+  );
+  const instrument = infrastructure.instrument_registry.instruments.find(
+    (item: { id: string }) => item.id === "mixing-chamber",
+  );
+  const route = infrastructure.routing.routes.find(
+    (item: { id: string }) => item.id === "mixing-chamber",
+  );
+  expect(instrument.connection.kind).toBe("virtual");
+  const applicationPath = join(project, "src/ui_author/application.py");
+  const application = await readFile(applicationPath, "utf8");
+  await writeFile(
+    applicationPath,
+    application
+      .replace("from pathlib import Path", "from pathlib import Path\nimport json")
+      .replace(
+        'entities=[sc.EntityRef(id=id, kind="signal") for id in ("a", "b")]',
+        'entities=[sc.EntityRef(id=id, kind="signal") for id in ("a", "b")] + [sc.EntityRef(id="cryostat", kind="cryostat")]',
+      )
+      .replace(
+        "InstrumentRegistry(instruments=[])",
+        `InstrumentRegistry.model_validate(json.loads(${JSON.stringify(JSON.stringify({ instruments: [instrument] }))}))`,
+      )
+      .replace(
+        "routing=RoutingGraph()",
+        `routing=RoutingGraph.model_validate(json.loads(${JSON.stringify(JSON.stringify({ routes: [route] }))}))`,
+      ),
+  );
+  await writeFile(
+    join(project, "src/ui_author/backend.py"),
+    "from pathlib import Path\nfrom scopecat.sdk.instruments import InstrumentBackend\n\ndef create_backend(root: Path) -> InstrumentBackend:\n    from reference_lab.backend import create_backend as reference_backend\n    return reference_backend(root)\n",
+  );
+  const manifest = join(project, "scopecat.toml");
+  await writeFile(
+    manifest,
+    (await readFile(manifest, "utf8")).replace(
+      "[authors]",
+      'instrument_backend = "ui_author.backend:create_backend"\n\n[authors]',
+    ),
+  );
+}
+
 test("monitor A remains fixed while independent B and C preserve edits and frozen submission", async ({
   page,
   context,
@@ -50,13 +96,31 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
   const interactionTimings: Array<{ action: string; milliseconds: number }> = [];
   try {
     await copyAuthorWorkspace(project);
+    await addSharedVirtualResource(project);
     const sourcePath = join(project, "src/ui_author/signal.py");
     await writeFile(
       sourcePath,
-      (await readFile(sourcePath, "utf8")).replace(
-        "    detuning =",
-        `    if frequency.to("GHz").value > 4.8:\n        import time\n        from pathlib import Path\n        deadline = time.monotonic() + 120\n        while not Path(${JSON.stringify(releasePath)}).exists():\n            if time.monotonic() > deadline:\n                raise TimeoutError("Browser did not release synthetic point")\n            time.sleep(0.05)\n    detuning =`,
-      ),
+      (await readFile(sourcePath, "utf8"))
+        .replace(
+          "import scopecat as sc",
+          "import scopecat as sc\nfrom scopecat_instruments import temperature_readout",
+        )
+        .replace(
+          'gain: float, polarity: str = "positive"',
+          'gain: float, temperature: sc.Quantity, polarity: str = "positive"',
+        )
+        .replace(
+          "            polarity=polarity,",
+          "            polarity=polarity,\n            temperature=sample.temperature,",
+        )
+        .replace(
+          "    return cast(\n",
+          '    sample = temperature_readout(experiment, for_=sc.one(sc.EntityRef(id="cryostat", kind="cryostat"))).sample()\n    return cast(\n',
+        )
+        .replace(
+          "    detuning =",
+          `    if frequency.to("GHz").value > 4.8:\n        import time\n        from pathlib import Path\n        deadline = time.monotonic() + 120\n        while not Path(${JSON.stringify(releasePath)}).exists():\n            if time.monotonic() > deadline:\n                raise TimeoutError("Browser did not release synthetic point")\n            time.sleep(0.05)\n    detuning =`,
+        ),
     );
     const url = await startProject(project);
     started = true;
@@ -79,6 +143,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(current).toBeVisible();
     const monitorUrl = new URL((await current.getAttribute("href"))!, url);
     const runA = monitorUrl.searchParams.get("run")!;
+    const procedureA = monitorUrl.searchParams.get("procedure")!;
     const monitor = await context.newPage();
     await monitor.goto(monitorUrl.href);
     await expectRunIdentity(monitor, runA);
@@ -164,8 +229,87 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     expect(frozenB.request.control_edits.gain).toMatchObject({ mode: "fixed", value: 2 });
     expect(attempts).toHaveLength(2);
     await expectRunIdentity(monitor, runA);
-    await page.reload();
-    await selectDraft(page, draftC);
+    const savedDraftLink = await page
+      .getByRole("link", { name: "Reopen this saved draft", exact: true })
+      .getAttribute("href");
+    const reopened = await context.newPage();
+    await reopened.goto(new URL(savedDraftLink!, url).href);
+    await expect(
+      reopened.getByRole("combobox", { name: "Editable draft", exact: true }),
+    ).toHaveValue(draftC);
+    await expect(reopened.getByLabel("Gain", { exact: true })).toHaveValue("4");
+    await expect(
+      reopened.getByRole("button", { name: "Confirm reviewed input", exact: true }),
+    ).toBeVisible();
+    await reopened.screenshot({ path: testInfo.outputPath("saved-draft-c-link.png") });
+    await reopened.close();
+
+    await page
+      .getByText("Recover experiment input or an original submission", { exact: true })
+      .click();
+    await page.getByRole("button", { name: "Refresh recovery history", exact: true }).click();
+    await page
+      .getByRole("button", { name: `Recover original submission ${frozenB.sequence}`, exact: true })
+      .click();
+    await page.getByText("Compare submitted request with current draft", { exact: true }).click();
+    const comparison = page.getByRole("table", {
+      name: "Selected submitted request and current draft comparison",
+    });
+    const gainComparison = comparison
+      .getByRole("row")
+      .filter({ has: page.getByRole("rowheader", { name: /Control · gain/ }) });
+    await expect(gainComparison.getByRole("cell")).toHaveText(["Fixed · 2", "Fixed · 4"]);
+    await comparison.screenshot({ path: testInfo.outputPath("frozen-b-current-c-comparison.png") });
+
+    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+    await page.getByRole("button").filter({ hasText: procedureB }).click();
+    const inspection = page.getByRole("region", { name: "Submitted work inspection", exact: true });
+    await expect(
+      inspection.getByRole("heading", { name: `Submitted task ${procedureB}`, exact: true }),
+    ).toBeVisible();
+    await expect(inspection.getByText("Waiting for resources", { exact: true })).toBeVisible();
+    await expect(
+      inspection.getByRole("link", { name: "another run", exact: true }),
+    ).toHaveAttribute("href", `?procedure=${procedureB}&run=${runA}#runs`);
+    await expect(page).toHaveURL(
+      (currentUrl) => currentUrl.searchParams.get("procedure") === procedureA,
+    );
+    await expectRunIdentity(monitor, runA);
+    await inspection
+      .locator("summary")
+      .filter({ hasText: /^Cancel queued task$/ })
+      .click();
+    await inspection.screenshot({
+      path: testInfo.outputPath("submitted-b-waiting-owner-actions.png"),
+    });
+    await inspection
+      .getByLabel("Cancellation reason", { exact: true })
+      .fill("Cancel queued B while A keeps running");
+    await inspection.getByRole("button", { name: "Cancel queued task", exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (await (await page.request.get(`${url}/api/v1/procedures/${procedureB}/operator`)).json())
+            .procedure.closure?.status,
+      )
+      .toBe("cancelled");
+    const cancelledB = await (
+      await page.request.get(`${url}/api/v1/procedures/${procedureB}/operator`)
+    ).json();
+    expect(cancelledB.child_runs[0].run.control.completed_point_count).toBe(0);
+    await expect(monitor.getByTestId("run-status")).toHaveText("Running");
+    await page.getByRole("button").filter({ hasText: procedureA }).click();
+    await inspection
+      .locator("summary")
+      .filter({ hasText: /^Cancel remaining procedure$/ })
+      .click();
+    await inspection
+      .getByLabel("Cancellation reason", { exact: true })
+      .fill("Stop A after its current synthetic point");
+    await inspection.getByRole("button", { name: "Stop after current step", exact: true }).click();
+    await expect(inspection.getByText(/not a completed stop/)).toBeVisible();
+    await expect(monitor.getByTestId("run-status")).toHaveText("Running");
+    await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(gain).toHaveValue("4");
     await page.setViewportSize({ width: 520, height: 800 });
     await page
@@ -193,6 +337,13 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     );
     await writeFile(releasePath, "release");
     await expect(monitor.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect
+      .poll(
+        async () =>
+          (await (await page.request.get(`${url}/api/v1/procedures/${procedureA}/operator`)).json())
+            .procedure.closure?.status,
+      )
+      .toBe("cancelled");
     await expect(gain).toBeFocused();
     await expect(gain).toHaveValue("4");
     expect(
@@ -202,7 +353,15 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
       ]),
     ).toEqual([0, 1]);
     await testInfo.attach("parallel-draft-identities", {
-      body: JSON.stringify({ runA, draftB, draftC, procedureB, requestB: requestB.request_key }),
+      body: JSON.stringify({
+        runA,
+        procedureA,
+        draftB,
+        draftC,
+        procedureB,
+        requestB: requestB.request_key,
+        resource: "mixing-chamber",
+      }),
       contentType: "application/json",
     });
   } catch (error) {
