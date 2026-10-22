@@ -99,7 +99,9 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       "-1, nope, 1",
     );
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("-");
-    await expect(page.getByLabel("Operator", { exact: true })).toHaveValue("Recovery tester");
+    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+      "Recovery tester",
+    );
     await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
     await saved();
     const other = await context.newPage();

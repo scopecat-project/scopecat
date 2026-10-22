@@ -139,6 +139,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
       .click();
     await work.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await work.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+    await work.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     const oldB = await preview(work);
     expect(oldB.reviewed.config_source.overrides).toHaveLength(1);
@@ -247,6 +248,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await work.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
+    await work.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     await work.getByRole("button", { name: "Configuration", exact: true }).click();
     await expect(continuedField).toHaveValue("5.5");

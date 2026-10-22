@@ -35,7 +35,7 @@ assert catalog.code_revision is not None
 # Seed the admission-only boundary with the same immutable composition that the
 # worker restores. The public author submit API also dispatches the procedure.
 application = revision_project(project.root, catalog.code_revision).load_application()
-with application.connect(resolve_daemon_endpoint(project.root)) as lab:
+with application.connect(resolve_daemon_endpoint(project.root), workspace_id=catalog.workspace_id) as lab:
     provider = application.launch_provider
     entry = application.authors.get("reference_lab.temperature_diagnostic").entry
     catalog_entry = next(item for item in catalog.entries if item.id == entry.id)

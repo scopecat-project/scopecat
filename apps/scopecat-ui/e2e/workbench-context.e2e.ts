@@ -135,8 +135,13 @@ test("two workbench pages retain independent context and share collection number
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
     // A lesson uses the same application while both ordinary drafts stay open.
     const practice = await context.newPage();
+    // Help resumes retained peak practices; new learning starts in Notebook courses.
+    // Seed the retained practice through its real service entry before exercising recovery.
+    const retainedPractice = await practice.request.post(`${url}/api/v1/practice`, {
+      data: { lesson: "manual-peaks", request_key: "workbench-retained-practice" },
+    });
+    expect(retainedPractice.ok(), await retainedPractice.text()).toBeTruthy();
     await practice.goto(`${url}/#help`);
-    await practice.getByRole("button", { name: "Start peak practice" }).click();
     const retainedTask = practice.getByRole("link", { name: "Open practice task" });
     await expect(retainedTask).toBeVisible();
     const taskLink = await retainedTask.getAttribute("href");
