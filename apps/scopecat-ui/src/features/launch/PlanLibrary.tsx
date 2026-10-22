@@ -114,44 +114,46 @@ export function PlanLibrary({ initializing = false }: { initializing?: boolean }
       {plans.data?.items.length === 0 && (
         <p>No saved plans yet. Preview your inputs, then save a named plan.</p>
       )}
-      {plans.data?.items.map((plan) => (
-        <div
-          key={`${plan.ref.plan_id}:${plan.ref.revision}`}
-          className="flex flex-wrap gap-2 items-center"
-        >
-          <span>
-            {plan.name} · revision {plan.ref.revision} · saved by {plan.saved_by}
-          </span>
-          <button
-            className={secondaryButton}
-            type="button"
-            disabled={initializing}
-            onClick={() => void open(plan)}
+      {plans.data?.items
+        .filter((plan) => !plan.definition.manual_lines)
+        .map((plan) => (
+          <div
+            key={`${plan.ref.plan_id}:${plan.ref.revision}`}
+            className="flex flex-wrap gap-2 items-center"
           >
-            Open {plan.name} r{plan.ref.revision}
-          </button>
-          <button
-            className={secondaryButton}
-            type="button"
-            onClick={() => {
-              setSelected(plan);
-              setHistory(plan.ref.plan_id);
-            }}
-          >
-            History and compare
-          </button>
-          {!history && (
-            <button className={secondaryButton} type="button" onClick={() => void hide(plan)}>
-              Delete {plan.name}
+            <span>
+              {plan.name} · revision {plan.ref.revision} · saved by {plan.saved_by}
+            </span>
+            <button
+              className={secondaryButton}
+              type="button"
+              disabled={initializing}
+              onClick={() => void open(plan)}
+            >
+              Open {plan.name} r{plan.ref.revision}
             </button>
-          )}
-          {history && (
-            <button className={secondaryButton} type="button" onClick={() => setSelected(plan)}>
-              Compare revision {plan.ref.revision}
+            <button
+              className={secondaryButton}
+              type="button"
+              onClick={() => {
+                setSelected(plan);
+                setHistory(plan.ref.plan_id);
+              }}
+            >
+              History and compare
             </button>
-          )}
-        </div>
-      ))}
+            {!history && (
+              <button className={secondaryButton} type="button" onClick={() => void hide(plan)}>
+                Delete {plan.name}
+              </button>
+            )}
+            {history && (
+              <button className={secondaryButton} type="button" onClick={() => setSelected(plan)}>
+                Compare revision {plan.ref.revision}
+              </button>
+            )}
+          </div>
+        ))}
       {selected && (
         <details open>
           <summary>

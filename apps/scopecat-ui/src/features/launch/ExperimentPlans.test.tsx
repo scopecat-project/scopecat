@@ -5,7 +5,7 @@ import {
 import { reviewedFixture } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -127,11 +127,14 @@ const targetPlan: PlanRevision = {
 function Harness({
   library = false,
   initialize = true,
+  manualLine = false,
 }: {
   library?: boolean;
   initialize?: boolean;
+  manualLine?: boolean;
 }) {
   const context = useLaunchDraft();
+  const [lineError, setLineError] = useState("");
   const select = context.select;
   useEffect(() => {
     if (initialize) void select(entry);
@@ -139,8 +142,39 @@ function Harness({
   return (
     <>
       <output aria-label="Recovery status">{context.recovery.status}</output>
+      <output aria-label="Line import error">{lineError}</output>
+      <button
+        onClick={() => {
+          void context
+            .openPlan(
+              {
+                name: "Invalid",
+                definition: { ...first.definition, inputs: { unknown: "bad" } },
+                manualLine: { scan_id: "lines_same", line_id: "line_next", label: "Next" },
+              },
+              entry,
+            )
+            .catch((error) => setLineError(String(error)));
+        }}
+      >
+        Prepare invalid line
+      </button>
       <button onClick={() => context.select(entry)}>Select current catalog</button>
       <button onClick={() => context.openPlan(first, entry)}>Open first</button>
+      <button
+        onClick={() =>
+          context.openPlan(
+            {
+              name: "Lines",
+              definition: first.definition,
+              manualLine: { scan_id: "lines_same", line_id: "line_next", label: "Next" },
+            },
+            entry,
+          )
+        }
+      >
+        Prepare next line
+      </button>
       <button onClick={() => context.openPlan(second, entry)}>Open second</button>
       <button onClick={() => context.openPlan(targetPlan, entry)}>Open target</button>
       <button
@@ -180,6 +214,9 @@ function Harness({
               version: "1",
               actor: "bob",
               request_key: "original-key",
+              manual_line: manualLine
+                ? { scan_id: "lines_same", line_id: "line_prior", label: "Prior" }
+                : undefined,
               expected_request_hash: `sha256:${"a".repeat(64)}`,
               inputs: {},
               reviewed: reviewedFixture({
@@ -210,7 +247,7 @@ function Harness({
     </>
   );
 }
-function setup(library = false, initialize = true) {
+function setup(library = false, initialize = true, manualLine = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -218,7 +255,7 @@ function setup(library = false, initialize = true) {
   return render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="project-a">
-        <Harness library={library} initialize={initialize} />
+        <Harness library={library} initialize={initialize} manualLine={manualLine} />
       </LaunchDraftProvider>
     </QueryClientProvider>,
   );
@@ -513,4 +550,121 @@ it("keeps course plan catalogs, history and hiding in the active workspace", asy
       ),
     ).toBe(true),
   );
+});
+
+it("explicit next-line preparation resolves only its same-list original receipt without replay", async () => {
+  let found = false;
+  let resolves = 0;
+  let submissions = 0;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/resolve")) {
+      resolves++;
+      return reply({ procedure_id: found ? "original-procedure" : null });
+    }
+    if (request.url.endsWith("/experiment-launcher/submit")) {
+      submissions++;
+      throw new TypeError("lost response");
+    }
+    if (request.url.includes("setup/revisions/"))
+      return reply({ resolution: { definition_id: "bench" } });
+    return reply({ items: [] });
+  });
+  setup(false, true, true);
+  await waitFor(() => expect(screen.getByText("Unknown submit")).toBeEnabled());
+  fireEvent.click(screen.getByText("Unknown submit"));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key"),
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
+  fireEvent.click(screen.getByText("Prepare next line"));
+  await waitFor(() => expect(resolves).toBe(1));
+  expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
+  found = true;
+  fireEvent.click(screen.getByText("Prepare invalid line"));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Line import error")).toHaveTextContent("Unknown suggested input"),
+  );
+  expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
+  expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Prepare next line"));
+  await waitFor(() => expect(screen.getByText(/Physical line: Next/)).toBeVisible());
+  expect(screen.getByLabelText("Original attempt")).toHaveTextContent(":");
+  expect(screen.getByLabelText("Original attempt")).not.toHaveTextContent("original-key");
+  expect(submissions).toBe(1);
+  const history = await (
+    await fetch(new Request("http://localhost/api/v1/launch-attempts"))
+  ).json();
+  expect(history.items).toHaveLength(1);
+  expect(history.items[0].request.request_key).toBe("original-key");
+});
+
+it("line preparation cannot dismiss an unknown ordinary original submission", async () => {
+  let resolves = 0;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/resolve")) {
+      resolves++;
+      return reply({ procedure_id: "other-procedure" });
+    }
+    if (request.url.endsWith("/experiment-launcher/submit")) throw new TypeError("lost response");
+    return reply({ items: [] });
+  });
+  setup();
+  await waitFor(() => expect(screen.getByText("Unknown submit")).toBeEnabled());
+  fireEvent.click(screen.getByText("Unknown submit"));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key"),
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
+  await act(async () => {
+    fireEvent.click(screen.getByText("Prepare next line"));
+  });
+  expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
+  expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
+  expect(resolves).toBe(0);
+});
+
+it("a late line receipt lookup cannot discard an original attempt after a draft edit", async () => {
+  let release!: (response: Response) => void;
+  let started!: () => void;
+  const requested = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/resolve")) {
+      started();
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+    }
+    if (request.url.endsWith("/experiment-launcher/submit")) throw new TypeError("lost response");
+    return reply({ items: [] });
+  });
+  setup(false, true, true);
+  await waitFor(() => expect(screen.getByText("Unknown submit")).toBeEnabled());
+  fireEvent.click(screen.getByText("Unknown submit"));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key"),
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
+      "Experiment input saved in application data.",
+    ),
+  );
+  fireEvent.click(screen.getByText("Prepare next line"));
+  await requested;
+  fireEvent.click(screen.getByText("Edit while opening"));
+  await act(async () => {
+    release(reply({ procedure_id: "original-procedure" }));
+  });
+  expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
+  expect(screen.getByLabelText("Current draft")).toHaveTextContent("new edit");
+  expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
 });

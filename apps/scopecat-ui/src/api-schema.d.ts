@@ -1340,6 +1340,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/manual-line-scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Manual Line Scans */
+        get: operations["list_manual_line_scans_api_v1_manual_line_scans_get"];
+        put?: never;
+        /** Create Manual Line Scan */
+        post: operations["create_manual_line_scan_api_v1_manual_line_scans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/manual-line-scans/{scan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Manual Line Scan */
+        get: operations["read_manual_line_scan_api_v1_manual_line_scans__scan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/manual-line-scans/{scan_id}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename Manual Lines */
+        put: operations["rename_manual_lines_api_v1_manual_line_scans__scan_id__labels_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/measurement-context/resolve": {
         parameters: {
             query?: never;
@@ -6388,6 +6440,8 @@ export interface components {
             /** Experiment */
             experiment: string;
             inputs?: components["schemas"]["PlanInputs"];
+            /** Manual Lines */
+            manual_lines?: components["schemas"]["PhysicalLine"][] | null;
             /**
              * Parameter Sweeps
              * @default []
@@ -6415,6 +6469,8 @@ export interface components {
             /** Experiment */
             experiment: string;
             inputs?: components["schemas"]["PlanInputs"];
+            /** Manual Lines */
+            manual_lines?: components["schemas"]["PhysicalLine"][] | null;
             /**
              * Parameter Sweeps
              * @default []
@@ -7654,6 +7710,8 @@ export interface components {
             handoff?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             } | null;
+            line_source?: components["schemas"]["PlanAnalysisSource"] | null;
+            manual_line?: components["schemas"]["ManualLineSelection"] | null;
             /**
              * Pinned Source
              * @default false
@@ -7694,6 +7752,8 @@ export interface components {
             handoff?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             } | null;
+            line_source?: components["schemas"]["PlanAnalysisSource"] | null;
+            manual_line?: components["schemas"]["ManualLineSelection"] | null;
             /**
              * Pinned Source
              * @default false
@@ -7988,6 +8048,7 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            manual_line?: components["schemas"]["ManualLineSelection"] | null;
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
              * Parameter Sweeps
@@ -8046,6 +8107,7 @@ export interface components {
             inputs?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
             };
+            manual_line?: components["schemas"]["ManualLineSelection"] | null;
             manual_state?: components["schemas"]["ManualPreviewFence"] | null;
             /**
              * Parameter Sweeps
@@ -8133,6 +8195,12 @@ export interface components {
              */
             kind: "manual_parameter_updates";
         };
+        /** ManualLineAttemptView */
+        ManualLineAttemptView: {
+            procedure: components["schemas"]["ProcedureRun"];
+            run: components["schemas"]["RunDetail"] | null;
+            selection: components["schemas"]["ManualLineSelection"];
+        };
         /**
          * ManualLineConfirmation
          * @description Server-resolved original confirmation retained with admission.
@@ -8154,6 +8222,17 @@ export interface components {
             line_id: components["schemas"]["_Text"];
             step_key: components["schemas"]["_Text"];
         };
+        /** ManualLineLabels */
+        ManualLineLabels: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Lines */
+            lines: components["schemas"]["PhysicalLine"][];
+            /** Name */
+            name: string;
+            /** Saved By */
+            saved_by: string;
+        };
         /**
          * ManualLineReconfirmation
          * @description One idempotent human confirmation of the original frozen run.
@@ -8162,6 +8241,64 @@ export interface components {
             actor: components["schemas"]["_Text"];
             original: components["schemas"]["ManualLineConfirmation"];
             request_key: components["schemas"]["_Text"];
+        };
+        /** ManualLineScan */
+        ManualLineScan: {
+            /** Lines */
+            lines: components["schemas"]["PhysicalLine"][];
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+            /** Saved By */
+            saved_by: string;
+            /** Scan Id */
+            scan_id: string;
+            template: components["schemas"]["ExperimentPlanDefinition-Output"];
+        };
+        /** ManualLineScanCreate */
+        ManualLineScanCreate: {
+            /** Lines */
+            lines: components["schemas"]["PhysicalLine"][];
+            /** Name */
+            name: string;
+            /** Saved By */
+            saved_by: string;
+            /** Scan Id */
+            scan_id: string;
+            template: components["schemas"]["ExperimentPlanDefinition-Input"];
+        };
+        /** ManualLineScanPage */
+        ManualLineScanPage: {
+            /** Items */
+            items: components["schemas"]["ManualLineScan"][];
+        };
+        /** ManualLineScanView */
+        ManualLineScanView: {
+            /** Active Procedure Id */
+            active_procedure_id: string | null;
+            /** Blocked Reason */
+            blocked_reason: string | null;
+            /** Lines */
+            lines: components["schemas"]["PhysicalLineView"][];
+            scan: components["schemas"]["ManualLineScan"];
+        };
+        /**
+         * ManualLineSelection
+         * @description One physical line in a finite list, independent of scientific identity.
+         */
+        ManualLineSelection: {
+            /** Label */
+            label: string;
+            /** Line Id */
+            line_id: string;
+            /** Scan Id */
+            scan_id: string;
         };
         /** ManualPreviewBinding */
         ManualPreviewBinding: {
@@ -9693,6 +9830,24 @@ export interface components {
         };
         PersistableScalarWire: components["schemas"]["_PersistableScalarModel"];
         PersistableValueType: components["schemas"]["_PersistableValueTypeWire"];
+        /** PhysicalLine */
+        PhysicalLine: {
+            /** Label */
+            label: string;
+            /** Line Id */
+            line_id: string;
+        };
+        /** PhysicalLineView */
+        PhysicalLineView: {
+            /** Attempts */
+            attempts: components["schemas"]["ManualLineAttemptView"][];
+            line: components["schemas"]["PhysicalLine"];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "not_started" | "completed" | "in_progress" | "uncertain" | "incomplete" | "confirmation_required";
+        };
         /** PlanAnalysisSource */
         PlanAnalysisSource: {
             /** Analysis Id */
@@ -15879,6 +16034,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LaunchDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_manual_line_scans_api_v1_manual_line_scans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualLineScanPage"];
+                };
+            };
+        };
+    };
+    create_manual_line_scan_api_v1_manual_line_scans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualLineScanCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualLineScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_manual_line_scan_api_v1_manual_line_scans__scan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualLineScanView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_manual_lines_api_v1_manual_line_scans__scan_id__labels_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualLineLabels"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualLineScan"];
                 };
             };
             /** @description Validation Error */

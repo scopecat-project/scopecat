@@ -10,6 +10,8 @@ from scopecat.automation import ProcedureDefinitionRef
 from scopecat.records.author_revision import AuthorRevisionRef
 from scopecat.records.author_workspace import AuthorWorkspaceId
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.manual_line import ManualLineSelection
+from scopecat.records.plan_ref import PlanAnalysisSource
 from scopecat.records.scientific_selection import ScientificSelection
 
 
@@ -41,6 +43,8 @@ class LaunchDraftInput(RecoveryModel):
     selection: ScientificSelection
     actor: str
     collection: str | None = None
+    manual_line: ManualLineSelection | None = None
+    line_source: PlanAnalysisSource | None = None
     working_input: dict[str, JsonValue] | None = None
     plan: dict[str, JsonValue] | None = None
     plan_dirty: bool = False

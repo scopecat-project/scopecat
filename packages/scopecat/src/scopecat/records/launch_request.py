@@ -13,6 +13,7 @@ from scopecat.records.author_workspace import (
 )
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
+from scopecat.records.manual_line import ManualLineSelection
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.plan_ref import ExperimentPlanRef, PlanAnalysisSource
 from scopecat.records.record_collection import RecordCollectionId
@@ -33,6 +34,9 @@ def _absent_collection(value: object) -> bool:
 class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     record_collection: RecordCollectionId | None = Field(
+        default=None, exclude_if=_absent_collection
+    )
+    manual_line: ManualLineSelection | None = Field(
         default=None, exclude_if=_absent_collection
     )
     workspace_id: AuthorWorkspaceId
@@ -75,6 +79,11 @@ class LaunchRequest(BaseModel):
         """Identify visible intent, excluding retry key and preview fences."""
         return sha256_json_hash(
             {
+                **(
+                    {"manual_line": self.manual_line.model_dump(mode="json")}
+                    if self.manual_line
+                    else {}
+                ),
                 "codec": "scopecat.launch-request.v2",
                 "experiment": self.experiment,
                 "workspace_id": self.workspace_id,

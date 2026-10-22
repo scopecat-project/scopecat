@@ -84,5 +84,13 @@ class ExperimentPlanService:
                 )
 
     def save(self, command: ExperimentPlanSave) -> ExperimentPlanRevision:
+        if command.definition.manual_lines is not None or (
+            command.previous is not None
+            and self.repository.get(command.previous).definition.manual_lines
+            is not None
+        ):
+            raise BackendConflict(
+                "Edit physical line lists through their line-list controls"
+            )
         self.validate_definition(command.definition)
         return self.repository.save(command)
