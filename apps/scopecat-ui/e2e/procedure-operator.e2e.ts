@@ -250,7 +250,10 @@ retainedProcedureTest(
     const { baseUrl, procedureId } = retainedProcedure;
     await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
     await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
-    await page.locator("summary").filter({ hasText: /^Cancel queued task$/ }).click();
+    await page
+      .locator("summary")
+      .filter({ hasText: /^Cancel queued task$/ })
+      .click();
     await expect(
       page.getByRole("button", { name: "Cancel queued task", exact: true }),
     ).toBeDisabled();
