@@ -1,3 +1,4 @@
+import { withDraftContext } from "./draft-location";
 import { navigateLink, useLocationUrl } from "../../lib/navigation";
 
 /** Return to the editable draft without restoring historical inputs or submitting work. */
@@ -9,7 +10,7 @@ export function ReturnToPreparation() {
   return (
     <a
       className="underline"
-      href={`?${query}#launch`}
+      href={withDraftContext(`?${query}#launch`, location)}
       onClick={(event) => {
         const alreadyHere = event.currentTarget.href === window.location.href;
         navigateLink(event);

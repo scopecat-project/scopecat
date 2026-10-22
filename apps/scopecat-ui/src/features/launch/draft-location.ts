@@ -25,3 +25,14 @@ export function clearDraftLocation(workspace?: string) {
   if (workspace) url.searchParams.set("workspace", workspace);
   navigate(url, { replace: true });
 }
+
+/** Same-window result navigation retains the editor identity for its return path. */
+export function withDraftContext(href: string, current = new URL(window.location.href)): string {
+  if (!current.searchParams.has("draft")) return href;
+  const target = new URL(href, current);
+  for (const key of ["workspace", "experiment", "draft"]) {
+    const value = current.searchParams.get(key);
+    if (value !== null && !target.searchParams.has(key)) target.searchParams.set(key, value);
+  }
+  return target.search + target.hash;
+}

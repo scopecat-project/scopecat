@@ -1,3 +1,4 @@
+import { withDraftContext } from "./draft-location";
 import { useOperatorInput } from "../application/use-operator-input";
 import * as Controls from "../../ui/Controls";
 import { useRecordCollectionNames } from "../context/scope-catalog";
@@ -115,7 +116,7 @@ export function ProcedureProgress({
       <a
         onClick={navigateLink}
         className="underline"
-        href={`?procedure=${encodeURIComponent(procedureId)}#launch`}
+        href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#launch`)}
       >
         Reopen this procedure
       </a>
@@ -144,7 +145,9 @@ export function ProcedureProgress({
               <a
                 onClick={navigateLink}
                 className="underline"
-                href={`?procedure=${encodeURIComponent(run.recovery.procedure_run_id)}#launch`}
+                href={withDraftContext(
+                  `?procedure=${encodeURIComponent(run.recovery.procedure_run_id)}#launch`,
+                )}
               >
                 failed procedure {run.recovery.procedure_run_id}
               </a>{" "}
@@ -152,7 +155,9 @@ export function ProcedureProgress({
               <a
                 onClick={navigateLink}
                 className="underline"
-                href={`?run=${encodeURIComponent(run.recovery.retained_run.run_id)}#runs`}
+                href={withDraftContext(
+                  `?run=${encodeURIComponent(run.recovery.retained_run.run_id)}#runs`,
+                )}
               >
                 retained run {run.recovery.retained_run.run_id}
               </a>
@@ -179,7 +184,9 @@ export function ProcedureProgress({
             <a
               onClick={navigateLink}
               className="underline"
-              href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.resource_wait.run_id)}#runs`}
+              href={withDraftContext(
+                `?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.resource_wait.run_id)}#runs`,
+              )}
             >
               Inspect waiting child run: {run.resource_wait.run_id}
             </a>
@@ -195,7 +202,7 @@ export function ProcedureProgress({
             <a
               onClick={navigateLink}
               className="underline"
-              href={`?procedure=${encodeURIComponent(procedureId)}#decisions`}
+              href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#decisions`)}
             >
               Review results in Decisions
             </a>
@@ -321,7 +328,7 @@ export function ProcedureProgress({
                     </details>
                   )}
                   {href && (!child || step.output?.kind !== "run") && (
-                    <a onClick={navigateLink} className="underline" href={href}>
+                    <a onClick={navigateLink} className="underline" href={withDraftContext(href)}>
                       Open{" "}
                       {step.output?.kind === "analysis"
                         ? "analysis"

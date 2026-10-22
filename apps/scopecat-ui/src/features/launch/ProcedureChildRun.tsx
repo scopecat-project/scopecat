@@ -1,3 +1,4 @@
+import { withDraftContext } from "./draft-location";
 import { RunAddressLabel } from "../runs/RunAddressLabel";
 import { navigateLink } from "../../lib/navigation";
 import { OpenRunWindow } from "../runs/OpenRunWindow";
@@ -26,7 +27,9 @@ export function ProcedureChildRun({
     <div className="space-y-1">
       <a
         className="underline"
-        href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.runId)}#runs`}
+        href={withDraftContext(
+          `?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.runId)}#runs`,
+        )}
         onClick={navigateLink}
       >
         View {current && !run.result ? "current data" : "saved data"}:{" "}
@@ -64,7 +67,9 @@ export function ProcedureChildRun({
               <a
                 className="underline"
                 onClick={navigateLink}
-                href={`?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(resource.blocked_by.owner_id)}#runs`}
+                href={withDraftContext(
+                  `?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(resource.blocked_by.owner_id)}#runs`,
+                )}
               >
                 another run
               </a>
