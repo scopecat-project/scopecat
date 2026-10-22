@@ -40,7 +40,17 @@ import {
 } from "./launch-submission";
 import type { LaunchCatalogEntry, LaunchPreview } from "./launch-api";
 
+export type SavedLaunchTemplate =
+  | PlanRevision
+  | {
+      name: string;
+      definition: PlanRevision["definition"];
+      manualLine: components["schemas"]["ManualLineSelection"];
+    };
+
 export interface LaunchDraft {
+  manualLine?: components["schemas"]["ManualLineSelection"];
+  lineSource?: PlanRevision["definition"]["source"];
   sourceBaseline?: PlanRevision["definition"]["code_revision"];
   needsReview?: boolean;
   unresolvedFields?: string[];
@@ -93,7 +103,11 @@ interface DraftContext {
     subject?: ScientificSelection["subject"],
   ) => void;
   draft: LaunchDraft | undefined;
-  openPlan: (plan: PlanRevision, entry: LaunchCatalogEntry) => Promise<void>;
+  openPlan: (
+    plan: SavedLaunchTemplate,
+    entry: LaunchCatalogEntry,
+    isIntended?: () => boolean,
+  ) => Promise<boolean>;
   importHandoff: (entry: LaunchCatalogEntry, handoff: ComparisonHandoff) => Promise<boolean>;
   select: (entry: LaunchCatalogEntry, reset?: boolean, workspaceId?: string) => Promise<void>;
   update: (change: DraftUpdate) => void;
@@ -625,10 +639,10 @@ function ProjectDraft({
         attempt,
         submit,
         checkSubmission,
-        openPlan: async (plan, entry) => {
-          if (!mayLeave()) return;
-          if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id)) return;
-          if (!alive.current) return;
+        openPlan: async (plan, entry, isIntended = () => true) => {
+          if (!mayLeave()) return false;
+          if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id)) return false;
+          if (!alive.current) return false;
           const current = latest.current;
           const generation = ++operatorSelection.current;
           operatorPending.current = true;
@@ -641,16 +655,17 @@ function ProjectDraft({
                 : (await readOperatorSettings()).operator;
           } catch (error) {
             setOperatorError(String(error));
-            return;
+            return false;
           } finally {
             if (generation === operatorSelection.current) operatorPending.current = false;
           }
           if (
             !alive.current ||
             latest.current !== current ||
-            generation !== operatorSelection.current
+            generation !== operatorSelection.current ||
+            !isIntended()
           )
-            return;
+            return false;
           setOperatorError(undefined);
           const next = initialDraft(
             entry,
@@ -678,15 +693,21 @@ function ProjectDraft({
           setWorkspaceId(d.workspace_id);
           setDraft({
             ...imported,
-            plan,
+            plan: "ref" in plan ? plan : undefined,
+            manualLine: "manualLine" in plan ? plan.manualLine : undefined,
+            lineSource: "manualLine" in plan ? d.source : undefined,
             planDirty: false,
             selection: normalizeSelection(d.selection),
             collection: current?.collection,
             codeRevision: d.code_revision,
             workspaceId: d.workspace_id,
             handoff: undefined,
-            notice: `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${operator}. Start will prepare these saved inputs again.`,
+            notice:
+              "ref" in plan
+                ? `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${operator}. Start will prepare these saved inputs again.`
+                : `Preparing ${plan.manualLine.label}. Adjust measurement settings, then Start; wiring confirmation is required before acquisition.`,
           });
+          return true;
         },
         importHandoff: async (entry, handoff) => {
           if (!mayLeave()) return false;

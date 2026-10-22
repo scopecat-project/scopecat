@@ -46,3 +46,18 @@ class ManualLineReconfirmation(BaseModel):
     request_key: _Text
     actor: _Text
     original: ManualLineConfirmation
+
+
+class ManualLineSelection(BaseModel):
+    """One physical line in a finite list, independent of scientific identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    scan_id: str = Field(pattern=r"^lines_[0-9a-f]{32}$")
+    line_id: str = Field(pattern=r"^line_[0-9a-f]{32}$")
+    label: str = Field(min_length=1, max_length=200)
+
+
+class PhysicalLine(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+    line_id: str = Field(pattern=r"^line_[0-9a-f]{32}$")
+    label: str = Field(min_length=1, max_length=200)

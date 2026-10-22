@@ -30,6 +30,7 @@ from scopecat_server.storage.sqlite.experiment_plan_repository import (
 )
 from scopecat_server.storage.sqlite.experimental_batches import ExperimentalBatchStore
 from scopecat_server.storage.sqlite.managed_analysis import ManagedAnalysisRepository
+from scopecat_server.storage.sqlite.manual_lines import ManualLineStore
 from scopecat_server.storage.sqlite.project_store import SQLiteProjectStore
 from scopecat_server.storage.sqlite.record_collections import RecordCollectionStore
 from scopecat_server.storage.sqlite.research_projects import ResearchProjectStore
@@ -54,6 +55,7 @@ from .exit_drain import ExitDrain
 from .experiment_plans import ExperimentPlanService
 from .launch_recovery import LaunchRecoveryService
 from .leases import OwnershipLeaseSupervisor
+from .manual_lines import ManualLineService
 from .manual_previews import ManualPreviewService
 from .notebook_practice import NotebookPracticeService
 from .operator_settings import OperatorSettingsService
@@ -130,6 +132,9 @@ class DaemonApplication:
             runs=runs,
             authors=self.author_workspaces,
             targets=self.targets,
+        )
+        self.manual_lines = ManualLineService(
+            ManualLineStore(project_store), self.plans, runs
         )
         self.configuration_exchange = ConfigurationExchangeService(
             project_store, config, setup, self.author_workspaces

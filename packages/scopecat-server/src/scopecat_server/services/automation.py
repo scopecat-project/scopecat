@@ -108,6 +108,7 @@ from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
 from scopecat_server.storage.sqlite.experimental_batches import require_batches
+from scopecat_server.storage.sqlite.manual_lines import ManualLineStore
 from scopecat_server.storage.sqlite.manual_preview import (
     ManualPreviewChanged,
     ManualPreviewRepository,
@@ -148,6 +149,7 @@ class AutomationService:
         clock: Callable[[], datetime] | None = None,
         resource_waits: ProcedureResourceWaits | None = None,
         plans: ExperimentPlanRepository | None = None,
+        manual_lines: ManualLineStore | None = None,
         checks: CalibrationCheckAdmission | None = None,
         confirmation_runtime_id: str | None = None,
     ) -> None:
@@ -158,6 +160,7 @@ class AutomationService:
             store.sqlite, control=SQLiteControlPlane(store.sqlite)
         )
         self._runs = runs
+        self._manual_lines = manual_lines
         self._lease_ttl = lease_ttl
         self._clock = clock or _utc_now
         self._resource_waits = resource_waits
@@ -618,6 +621,28 @@ class AutomationService:
                 exit_scope=exit_scope,
             )
 
+    def _require_manual_line(
+        self,
+        connection: sqlite3.Connection,
+        definition: ProcedureDefinitionRef,
+        selected_intent: ProcedureIntent,
+        source: ProcedureSource | None,
+        scientific_binding: ResolvedScientificBinding | None,
+    ) -> None:
+        if self._manual_lines is not None:
+            self._manual_lines.require_admission(
+                connection,
+                definition=definition,
+                intent=selected_intent,
+                source=source,
+                binding=scientific_binding,
+            )
+        elif (
+            definition.id.startswith("scopecat.author:")
+            and selected_intent.get("manual_line") is not None
+        ):
+            raise AutomationConflict("Physical line admission is unavailable")
+
     def submit_in_transaction(
         self,
         connection: sqlite3.Connection,
@@ -686,6 +711,9 @@ class AutomationService:
                     "procedure request key already has a durable run"
                 )
             return existing
+        self._require_manual_line(
+            connection, definition, selected_intent, source, scientific_binding
+        )
         self._require_decision_source(
             connection, decision_source, plan_ref, plan_request
         )

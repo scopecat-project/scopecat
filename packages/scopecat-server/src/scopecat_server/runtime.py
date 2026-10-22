@@ -52,6 +52,7 @@ from scopecat_server.storage.sqlite.control_plane import SQLiteControlPlane
 from scopecat_server.storage.sqlite.experiment_plan_repository import (
     ExperimentPlanRepository,
 )
+from scopecat_server.storage.sqlite.manual_lines import ManualLineStore
 from scopecat_server.storage.sqlite.procedure_schedules import (
     SQLiteProcedureScheduleStore,
 )
@@ -212,6 +213,7 @@ class LocalDaemonRuntime:
                 automation_store,
                 confirmation_runtime_id=confirmation_runtime_id,
                 plans=ExperimentPlanRepository(project_store),
+                manual_lines=ManualLineStore(project_store),
                 runs=runs,
                 resource_waits=ProcedureResourceWaits(control, runs, point_plans),
                 checks=CalibrationCheckAdmission(

@@ -17,6 +17,7 @@ import { definitionKey, invalidateDraft, useLaunchDraft } from "./LaunchDraft";
 import { SourceSelector } from "./SourceSelector";
 import { useAuthorWorkspaces } from "./source-api";
 import { AuthorRefresh } from "./AuthorRefresh";
+import { LineScans } from "./LineScans";
 import { PlanLibrary } from "./PlanLibrary";
 import { ExperimentPicker } from "./ExperimentPicker";
 import { LaunchForm } from "./LaunchForm";
@@ -273,6 +274,7 @@ export function LaunchWorkspace({
         <h3 id="experiment-history" className={sectionTitle}>
           Reuse and recovery
         </h3>
+        <LineScans key={`lines:${projectId}`} />
         <PlanLibrary
           key={`plans:${projectId}`}
           initializing={catalog.isPending && draft === undefined}

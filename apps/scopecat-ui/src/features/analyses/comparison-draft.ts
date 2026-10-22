@@ -23,7 +23,7 @@ export function useComparisonDraft(projectId: string | undefined) {
     const defaults: Draft = {
       workspaceId: sameSpace ? (query.get("workspace") ?? "") : "",
       primary: sameSpace ? (query.get("compare") ?? "") : "",
-      secondary: "",
+      secondary: sameSpace ? (query.get("compare-with") ?? "") : "",
       modelId: "",
       leftPoints: "",
       rightPoints: "",

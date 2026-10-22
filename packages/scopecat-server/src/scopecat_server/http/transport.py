@@ -336,6 +336,11 @@ from scopecat.records.instrument import (
 )
 from scopecat.records.launch_rejection import LaunchRejectionResponse
 from scopecat.records.launch_request import LaunchRequest
+from scopecat.records.manual_line_scan import (
+    ManualLineLabels,
+    ManualLineScan,
+    ManualLineScanCreate,
+)
 from scopecat.records.manual_preview import ManualPreviewFence, ManualPreviewValidity
 from scopecat.records.measurement_recording import MeasurementDatasetReceipt
 from scopecat.records.parameter_branch import ParameterBranch
@@ -450,6 +455,7 @@ from scopecat_server.retained_request import (
 )
 from scopecat_server.services.background_rounds import BackgroundRounds
 from scopecat_server.services.calibration_task_runner import CalibrationTaskRunner
+from scopecat_server.services.manual_lines import ManualLineScanPage, ManualLineScanView
 from scopecat_server.services.operator_settings import OperatorSettings
 from scopecat_server.services.project_workers import (
     ProcedureDispatchError,
@@ -1776,6 +1782,22 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
         batch_id: ExperimentalBatchId, command: ExperimentalBatchEdit
     ) -> ExperimentalBatch:
         return application.experimental_batches.save(batch_id, command)
+
+    @app.get(f"{_API_PREFIX}/manual-line-scans")
+    def list_manual_line_scans() -> ManualLineScanPage:
+        return ManualLineScanPage(items=application.manual_lines.store.list())
+
+    @app.post(f"{_API_PREFIX}/manual-line-scans")
+    def create_manual_line_scan(command: ManualLineScanCreate) -> ManualLineScan:
+        return application.manual_lines.create(command)
+
+    @app.get(f"{_API_PREFIX}/manual-line-scans/{{scan_id}}")
+    def read_manual_line_scan(scan_id: str) -> ManualLineScanView:
+        return application.manual_lines.get(scan_id)
+
+    @app.put(f"{_API_PREFIX}/manual-line-scans/{{scan_id}}/labels")
+    def rename_manual_lines(scan_id: str, command: ManualLineLabels) -> ManualLineScan:
+        return application.manual_lines.store.labels(scan_id, command)
 
     @app.get(f"{_API_PREFIX}/record-collections")
     def list_record_collections(

@@ -107,27 +107,65 @@ class ExperimentPlanRepository:
             )
         )
 
-    def save(self, command: ExperimentPlanSave) -> ExperimentPlanRevision:
+    def save(
+        self, command: ExperimentPlanSave, *, creation_id: str | None = None
+    ) -> ExperimentPlanRevision:
         parent = command.previous or command.copied_from
         if parent is not None:
             self.get(parent)
         plan_id = (
-            command.previous.plan_id if command.previous else f"plan_{uuid4().hex}"
+            command.previous.plan_id
+            if command.previous
+            else creation_id or f"plan_{uuid4().hex}"
         )
         revision = command.previous.revision + 1 if command.previous else 1
-        values = command.model_dump(mode="json") | {
-            "saved_at": datetime.now(UTC).isoformat().replace("+00:00", "Z")
-        }
-        ref = ExperimentPlanRef(
-            plan_id=plan_id, revision=revision, content_hash=sha256_json_hash(values)
-        )
-        item = ExperimentPlanRevision.model_validate_json(
-            json.dumps(values | {"ref": ref.model_dump(mode="json")})
-        )
-        digest = self.store.objects.put(item.model_dump_json().encode("utf-8")).digest
         with self.store.sqlite.write_transaction() as connection:
             from .data_cleanup import require_retained_references
 
+            if creation_id is not None:
+                if parent is not None:
+                    raise BackendConflict("A creation key cannot edit or copy a plan")
+                row = cast(
+                    "sqlite3.Row | None",
+                    connection.execute(
+                        "SELECT content_hash FROM experiment_plan_revisions "
+                        "WHERE plan_id=? AND revision=1",
+                        (creation_id,),
+                    ).fetchone(),
+                )
+                if row is not None:
+                    PracticeOwnership(connection).require_writer("plan", creation_id)
+                    original = self.get_in_transaction(
+                        connection,
+                        ExperimentPlanRef(
+                            plan_id=creation_id,
+                            revision=1,
+                            content_hash=cast("str", row["content_hash"]),
+                        ),
+                    )
+                    if (
+                        original.name != command.name
+                        or original.definition != command.definition
+                        or original.saved_by != command.saved_by
+                    ):
+                        raise BackendConflict(
+                            "Line-list creation key already has different content"
+                        )
+                    return original
+            values = command.model_dump(mode="json") | {
+                "saved_at": datetime.now(UTC).isoformat().replace("+00:00", "Z")
+            }
+            ref = ExperimentPlanRef(
+                plan_id=plan_id,
+                revision=revision,
+                content_hash=sha256_json_hash(values),
+            )
+            item = ExperimentPlanRevision.model_validate_json(
+                json.dumps(values | {"ref": ref.model_dump(mode="json")})
+            )
+            digest = self.store.objects.put(
+                item.model_dump_json().encode("utf-8")
+            ).digest
             require_retained_references(connection, item.model_dump_json())
             owners = PracticeOwnership(connection)
             choice = command.definition.selection.configuration

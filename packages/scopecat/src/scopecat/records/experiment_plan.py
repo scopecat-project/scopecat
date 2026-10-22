@@ -21,6 +21,7 @@ from scopecat.records.author_workspace import (
 )
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
+from scopecat.records.manual_line import PhysicalLine
 from scopecat.records.plan_ref import (
     ExperimentPlanRef,
     PlanAnalysisSource,
@@ -61,8 +62,15 @@ type PlanControlEdits = Annotated[
 ]
 
 
+def _absent_lines(value: object) -> bool:
+    return value is None
+
+
 class ExperimentPlanDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    manual_lines: tuple[PhysicalLine, ...] | None = Field(
+        default=None, exclude_if=_absent_lines, min_length=1, max_length=1000
+    )
     experiment: str = Field(min_length=1)
     version: str = Field(min_length=1)
     definition_hash: Sha256ContentHash

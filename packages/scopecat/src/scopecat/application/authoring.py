@@ -70,6 +70,7 @@ from scopecat.records.config_context import ConfigContextRef
 from scopecat.records.content import Sha256ContentHash
 from scopecat.records.control_edit import ControlEdit
 from scopecat.records.launch_request import LaunchConfigSource, LaunchRequest
+from scopecat.records.manual_line import ManualLineSelection
 from scopecat.records.manual_preview import ManualPreviewFence
 from scopecat.records.record_collection import RecordCollectionId
 from scopecat.records.request_sweep import ParameterSweep
@@ -83,6 +84,9 @@ def _absent_collection(value: object) -> bool:
 class AuthorLaunchIntent(BaseModel):
     """Same frozen admission inputs for every discovered single-run experiment."""
 
+    manual_line: ManualLineSelection | None = Field(
+        default=None, exclude_if=_absent_collection
+    )
     manual_state: ManualPreviewFence | None = None
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -337,6 +341,10 @@ class _AuthorProcedure:
             ),
             config=selected.config,
             config_source=selected.config_source,
+            manual_line_id=selected.manual_line.line_id
+            if selected.manual_line
+            else None,
+            name=selected.manual_line.label if selected.manual_line else None,
             operator=selected.actor,
             record_collection=selected.record_collection,
             metadata={
@@ -424,7 +432,8 @@ class AuthorExperiments:
         )
         if selected is None:
             if (
-                request.record_collection is not None
+                request.manual_line is not None
+                or request.record_collection is not None
                 or request.decision_source is not None
                 or request.selection.batch.kind != "unscoped"
             ):
@@ -508,6 +517,7 @@ class AuthorExperiments:
         admitted = lab.procedures.submit(
             _AuthorProcedure(selected),
             AuthorLaunchIntent(
+                manual_line=request.manual_line,
                 config=config,
                 config_source=source,
                 edits=request.control_edits,

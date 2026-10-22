@@ -13,6 +13,10 @@ from scopecat_server.services.application import DaemonApplication
 OUTPUT = Path(__file__).parent.parent / ".generated" / "ui-api.openapi.json"
 
 _OPERATIONS = {
+    ("/api/v1/manual-line-scans", "get"),
+    ("/api/v1/manual-line-scans", "post"),
+    ("/api/v1/manual-line-scans/{scan_id}", "get"),
+    ("/api/v1/manual-line-scans/{scan_id}/labels", "put"),
     ("/api/v1/analysis-publications", "get"),
     ("/api/v1/runs/{run_id}/analyses/{analysis_id}/decision-runs", "get"),
     ("/api/v1/runs/{run_id}/analysis-actions", "get"),

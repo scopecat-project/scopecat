@@ -54,3 +54,34 @@ is restored without acquiring another lease.
 The server-side confirmation and continuation protocol is a prerequisite for the
 finite line-list UI; it is not itself delivery of the full persistent line list,
 attempt history and comparison experience in #1023. Acceptance uses fake devices.
+
+## Finite ordered lists and retained attempts
+
+Experiments → Reuse and recovery → Physical line scans creates a named list from
+one saved measurement template. Line labels are editable; stable line IDs and
+order remain unchanged. Each prepare opens the existing acquisition form, where
+ordinary settings such as frequency range or power can change. Starting creates
+a durable authored procedure, whose existing interpretation step asks for wiring
+confirmation before its independent child run. Reading or reopening a list never
+submits, dispatches or confirms anything.
+
+The catalog uses existing content-addressed experiment-plan revisions, including
+practice ownership, retention and optimistic edits; no schema migration or second
+execution-state table is added. Progress is derived from authored procedure
+intents and the exact child operation receipt. The retained template source and
+scientific subject/target/setup must match at admission. The next unattempted
+line follows saved order; remeasurement appends another independently confirmed
+attempt. A nonclosed procedure or unresolved child fences the next submission in
+the existing admission transaction.
+
+All attempts remain visible with their original label, source, actual inputs and
+run result. A historical unknown remains labeled uncertain even after the existing
+explicit reconciliation closes it; only that existing reconciliation evidence
+permits the next attempt. An expired unstarted wiring confirmation is displayed
+separately from unknown effects. No last-attempt-wins selection is made. Two exact
+attempts can open the existing retained-curve comparison; settings differences
+are shown without interpolating grids or forcing one rectangular result array.
+
+The catalog supports up to 1,000 ordered lines, one machine and manual switching.
+It does not automate wiring, create scientific samples from labels, change
+compiler/list-mode semantics, or orchestrate arbitrary scientific identities.

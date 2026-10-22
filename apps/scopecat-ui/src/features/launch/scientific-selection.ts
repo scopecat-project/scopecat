@@ -49,9 +49,15 @@ export function subjectSample(binding?: ScientificBinding) {
 export function reviewedForRequest(
   reviewed: LaunchPreview["reviewed"],
 ): components["schemas"]["ReviewedScientificSelection-Input"] {
-  const subject = reviewed.binding.subject;
+  return { ...reviewed, binding: bindingForRequest(reviewed.binding) };
+}
+
+export function bindingForRequest(
+  value: ScientificBinding,
+): components["schemas"]["ResolvedScientificBinding"] {
+  const subject = value.subject;
   const binding: components["schemas"]["ResolvedScientificBinding"] = {
-    ...reviewed.binding,
+    ...value,
     subject:
       subject.kind === "registered_target"
         ? {
@@ -70,5 +76,5 @@ export function reviewedForRequest(
           }
         : subject,
   };
-  return { ...reviewed, binding };
+  return binding;
 }
