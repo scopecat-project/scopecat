@@ -127,6 +127,8 @@ it("distinguishes a pending check from an unavailable source without replacing i
       }),
   );
   const preview = await screen.findByRole("button", { name: "Preview" });
+  // The form can render before React Query starts reading the working table.
+  await waitFor(() => expect(resolve).toBeTypeOf("function"));
   expect(preview).toBeDisabled();
   expect(preview).toHaveAccessibleDescription(/Checking the source working table/);
   await act(async () => {
