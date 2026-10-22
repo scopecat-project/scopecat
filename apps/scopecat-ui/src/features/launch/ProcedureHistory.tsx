@@ -40,8 +40,8 @@ export function ProcedureHistory({
       {mode === "submitted" && (
         <p className="text-sm text-text-dim">
           Retained submissions, newest first. Waiting work is scheduled by resource availability;
-          this list does not promise execution order. Open a task to inspect its progress and
-          actions.
+          this list does not promise execution order. Select a task to inspect its progress and
+          actions alongside this list.
         </p>
       )}
       <p>
@@ -79,11 +79,11 @@ export function ProcedureHistory({
                     : procedure.resource_wait
                       ? "Waiting for resources"
                       : stateLabel(procedure.state)}{" "}
-                · {procedure.created_at}
+                · {procedure.created_at} · {procedure.procedure_run_id}
               </button>
               {procedure.resource_wait && !procedure.closure && (
                 <p className="text-sm text-text-dim">
-                  Waiting child: {procedure.resource_wait.run_id}. Open this task for resource
+                  Waiting child: {procedure.resource_wait.run_id}. Select this task for resource
                   owners.
                 </p>
               )}

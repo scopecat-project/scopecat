@@ -304,7 +304,11 @@ it("finds durable work from history without copying an ID", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
   fireEvent.click(await screen.findByRole("button", { name: /temperature-diagnostic/ }));
   await screen.findByText("Dispatch paused");
+  expect(new URLSearchParams(window.location.search).get("submitted_task")).toBe("p1");
+  expect(new URLSearchParams(window.location.search).get("procedure")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Open in monitor" }));
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
+  expect(new URLSearchParams(window.location.search).get("workbench")).toBeNull();
 });
 
 it("links exact run and analysis publications while retaining the parent context", () => {

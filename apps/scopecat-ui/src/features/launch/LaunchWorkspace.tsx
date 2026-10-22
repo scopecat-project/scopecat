@@ -25,7 +25,7 @@ import { PlanLibrary } from "./PlanLibrary";
 import { ExperimentPicker } from "./ExperimentPicker";
 import { LaunchForm } from "./LaunchForm";
 import { OriginalSubmission } from "./OriginalSubmission";
-import { ProcedureHistory } from "./ProcedureHistory";
+import { SubmittedWork } from "./SubmittedWork";
 import { ProcedureProgress } from "./ProcedureProgress";
 import { CalibrationTasks } from "./CalibrationTasks";
 
@@ -328,7 +328,7 @@ export function LaunchWorkspace({
         <LaunchRecoveryPanel />
       </section>
       {view === "submitted" && (
-        <ProcedureHistory mode="submitted" selectedId={procedureId} onSelect={openProcedure} />
+        <SubmittedWork projectId={projectId} onOpenMonitor={openProcedure} />
       )}
       {view === "editor" && projectId && (
         <CalibrationTasks
