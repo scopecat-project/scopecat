@@ -97,9 +97,18 @@ export function ProcedureProgress({
       setPending(false);
     }
   }
+  const queued = Boolean(
+    run &&
+    !run.closure &&
+    (run.resource_wait || (run.state === "ready" && !view?.dispatch.worker_running)),
+  );
   return (
     <section className="border border-accent/40 bg-panel-soft rounded-md p-4 space-y-3 break-words">
       <h3 className="font-semibold">Execution progress</h3>
+      <p className="text-xs text-text-dim">
+        Monitoring this submitted task. Editing another draft does not change its inputs. Closing
+        this view leaves background work running.
+      </p>
       <ReturnToPreparation />
       <PlanOrigin reference={run?.plan_ref} />
       <p>{run?.definition.id ?? procedureId}</p>
@@ -111,7 +120,11 @@ export function ProcedureProgress({
         Reopen this procedure
       </a>
       {progress.isPending && <p role="status">Loading retained procedure state…</p>}
-      {progress.error && <p role="alert">{progress.error.message}</p>}
+      {progress.error && (
+        <p role="alert">
+          Live task state unavailable; displayed state may be stale. {progress.error.message}
+        </p>
+      )}
       {view && run && (
         <>
           <p role="status" className="font-semibold">
@@ -204,7 +217,7 @@ export function ProcedureProgress({
           )}
           {!run.cancellation && ["ready", "waiting_for_input", "leased"].includes(run.state) && (
             <details>
-              <summary>Cancel remaining procedure</summary>
+              <summary>{queued ? "Cancel queued task" : "Cancel remaining procedure"}</summary>
               <p>
                 Retains completed results. An already-started step, including configuration
                 acceptance, settles before cancellation completes. This is not an emergency stop.
@@ -226,12 +239,18 @@ export function ProcedureProgress({
               <button
                 className={secondaryButton}
                 type="button"
-                disabled={pending || !cancelActor.trim() || !cancelReason.trim()}
+                disabled={
+                  pending || progress.isError || !cancelActor.trim() || !cancelReason.trim()
+                }
                 onClick={() => {
                   void cancel();
                 }}
               >
-                {run.state === "leased" ? "Stop after current step" : "Cancel procedure"}
+                {queued
+                  ? "Cancel queued task"
+                  : run.state === "leased"
+                    ? "Stop after current step"
+                    : "Cancel procedure"}
               </button>
             </details>
           )}

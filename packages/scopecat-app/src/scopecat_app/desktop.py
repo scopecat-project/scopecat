@@ -650,6 +650,7 @@ class DesktopView:
     api: DesktopAPI
     loaded: threading.Event
     request_quit: Callable[[], bool]
+    initial_location: str | None = None
 
 
 class DesktopWindows:
@@ -701,6 +702,7 @@ class DesktopWindows:
                     view
                     for view in self._views
                     if view.window.get_current_url() == location
+                    or (not view.loaded.is_set() and view.initial_location == location)
                 ),
                 None,
             )
@@ -753,7 +755,7 @@ class DesktopWindows:
             hide, request_quit = _window_close_handlers(
                 window, self._session.closing, loaded
             )
-            view = DesktopView(window, api, loaded, request_quit)
+            view = DesktopView(window, api, loaded, request_quit, location)
 
             def close() -> bool:
                 if self._session.closing.is_set():
@@ -784,7 +786,29 @@ class DesktopWindows:
     def new_window(self, run_id: str | None = None) -> None:
         if self._session.base_url is None:
             raise ValueError("应用尚在准备，请稍后新建窗口")
-        self.create(run_id)
+        if run_id is None:
+            self.create()
+            return
+        target = ApplicationOpenTarget(kind="run", object_id=run_id)
+        page = self._session.page_url
+        if page is None:
+            raise ValueError("Application is not connected")
+        location = object_location(page, target)
+        with self._lock:
+            view = next(
+                (
+                    view
+                    for view in self._views
+                    if view.window.get_current_url() == location
+                    or (not view.loaded.is_set() and view.initial_location == location)
+                ),
+                None,
+            )
+            if view is None:
+                view = self.create(target=target)
+        # A bridge request can return while a new WebView loads. The retained
+        # initial location deduplicates another request during that interval.
+        show_window(view.window)
 
     def show(self) -> None:
         with self._lock:

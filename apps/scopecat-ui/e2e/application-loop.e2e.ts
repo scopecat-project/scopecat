@@ -62,6 +62,10 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
         resolve("dist"),
       ),
     ) as { url: string; workspace: string };
+    await page.goto(`${prepared.url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Application loop tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${prepared.url}/?workspace=${prepared.workspace}#configuration`);
     await page.getByLabel("Working parameter branch", { exact: true }).fill("starter");
     await page.getByRole("button", { name: "Open working table", exact: true }).click();
@@ -131,6 +135,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await expectRunIdentity(page, run);
     await page.getByRole("button", { name: "Experiments", exact: true }).click();
     await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
+    await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await expect(page.getByText(/Working inputs · revision/)).toBeVisible();
     await page.getByRole("button", { name: "Configuration", exact: true }).click();

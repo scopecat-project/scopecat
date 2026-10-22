@@ -67,11 +67,12 @@ export function SourceSelector({
           {selected.unavailable_reason ?? "No executable local source is bound."}
         </Notice>
       )}
-      <p>
-        {context === "analysis"
-          ? "Switching code workspaces clears the comparison preview. Inspect data again before fitting."
-          : "Code selection belongs to this page. Switching workspaces retains the measurement context and clears old experiment inputs and previews."}
-      </p>
+      {context === "analysis" && (
+        <p>
+          Switching code workspaces clears the comparison preview. Inspect data again before
+          fitting.
+        </p>
+      )}
     </div>
   );
 }

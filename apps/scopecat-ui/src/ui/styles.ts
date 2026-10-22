@@ -46,3 +46,8 @@ export const pageContent = "min-w-0 space-y-4 p-4 text-sm leading-6";
 export const notice = "text-sm leading-6 text-text-dim";
 export const errorNotice =
   "rounded-md border border-red/50 bg-red-soft px-3 py-2 text-sm leading-6 text-red";
+
+// Compact task navigation reuses the application palette and ordinary focus treatment.
+export const workbenchTabs = "flex flex-wrap gap-1 border-b border-line pb-2";
+export const workbenchTab =
+  "inline-flex min-h-9 items-center rounded-md border border-transparent px-3 text-sm font-semibold text-text-dim hover:bg-panel-strong aria-current:border-line-strong aria-current:bg-panel aria-current:text-text focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50";

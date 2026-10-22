@@ -52,6 +52,7 @@ export function LaunchRecoveryPanel() {
           .flatMap((page) => page.items)
           .map((record) => (
             <li key={record.revision}>
+              {record.input.draft_name ?? "Draft"} · {record.target.draft_id ?? "default"} ·{" "}
               {record.target.experiment} · {record.target.workspace_id} · {record.state} ·{" "}
               {record.created_at}
               <button className={secondaryButton} type="button" onClick={() => recover(record)}>

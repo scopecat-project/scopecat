@@ -1,8 +1,10 @@
 # Experiment input and original submission recovery
 
 Experiment input is application-owned editing data. Its logical target is the
-registered author workspace and experiment ID, not the current declaration hash
-or a browser origin. The record keeps the raw request-field strings, control
+registered author workspace, experiment ID and stable draft ID, not the current
+declaration hash or a browser origin. Existing records without a draft ID belong
+to the default draft. Named copies use fresh IDs and the same conditional-save
+authority; a name is editable display text, never the storage identity. The record keeps the raw request-field strings, control
 input modes and strings, declaration, source revision, scientific selection,
 operator, collection and any adopted working-table, plan or analysis handoff.
 Saving input neither validates scientific values nor acquires data.
@@ -44,6 +46,26 @@ conflicting and discarded revisions remain in application data; navigation and
 window closure are not deletion policies. Explicit plan/handoff selection must
 not be overwritten by an older asynchronous draft read. These are experiment
 editing records, not a general-purpose draft framework.
+
+## Parallel editing and views
+
+Editor, Monitor and Submitted work share the existing application shell. Editor
+keeps parameter, scan and source inputs separate from live execution progress.
+Monitor opens the explicitly selected procedure; Submitted work lists retained
+statuses, including resource waits, without imposing a new scheduling order.
+Opening a task is an explicit selection. Uncertain submission recovery remains
+visible while editing; an unknown outcome never becomes a success indication.
+
+Copy to new draft flushes the current input before selecting a new identity.
+Switching also waits for confirmed saving; save failure leaves the current input
+available for retry. Names, raw input and source baselines recover through the
+existing application store. Historical plans and comparison handoffs open fresh
+drafts and never replace the original run. Preview state, focus, selection and
+scroll positions are not persisted as part of the saved-draft promise.
+
+A run window reuses an already-open exact run, including while its view loads.
+If that window has navigated elsewhere or closed, opening the run creates a view.
+Closing a view keeps the existing background execution semantics.
 
 ## Original submission lifecycle
 

@@ -2,7 +2,7 @@ import { installLaunchRecoveryRoutes } from "../../test/launch-recovery-fixture"
 import { serviceWorkspaceCatalog } from "../../test/scientific-fixtures";
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProcedureProgress } from "./ProcedureProgress";
@@ -301,7 +301,7 @@ it("finds durable work from history without copying an ID", async () => {
       <LaunchWorkspace />
     </LaunchDraftProvider>,
   );
-  fireEvent.click(screen.getByText("Experiment history"));
+  fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
   fireEvent.click(await screen.findByRole("button", { name: /temperature-diagnostic/ }));
   await screen.findByText("Dispatch paused");
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
@@ -437,11 +437,38 @@ it("cancels a retained course procedure with its source workspace", async () => 
   fireEvent.change(screen.getByLabelText("Cancellation reason"), {
     target: { value: "Stop course" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Cancel procedure" }));
-  await screen.findByRole("button", { name: "Cancel procedure" });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel queued task" }));
+  await screen.findByRole("button", { name: "Cancel queued task" });
   expect(headers).toEqual(["course-one"]);
 });
 
 vi.mock("../application/OperatorSettings", () => ({
   readOperatorSettings: vi.fn(async () => ({ revision: 1, operator: "operator" })),
 }));
+
+it("preserves operator focus and text selection when live task state refreshes", async () => {
+  const data = view();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(data)),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <ProcedureProgress procedureId="p1" />
+    </QueryClientProvider>,
+  );
+  const reason = await screen.findByLabelText<HTMLInputElement>("Cancellation reason");
+  fireEvent.change(reason, { target: { value: "Keep this operator reason" } });
+  reason.focus();
+  reason.setSelectionRange(5, 9);
+  await act(async () => {
+    client.setQueryData(["procedure-operator", "p1"], {
+      pages: [{ ...data, procedure: { ...data.procedure, revision: 2 } }],
+      pageParams: [undefined],
+    });
+  });
+  expect(reason).toHaveFocus();
+  expect(reason).toHaveValue("Keep this operator reason");
+  expect([reason.selectionStart, reason.selectionEnd]).toEqual([5, 9]);
+});

@@ -10,7 +10,7 @@ import pytest
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.health import DaemonHealth
 from scopecat.records.application_open import ApplicationOpenTarget
-from scopecat_app.desktop import DesktopWindows
+from scopecat_app.desktop import DesktopView, DesktopWindows
 from scopecat_app.desktop_objects import DesktopObjectOpener, object_location
 from scopecat_app.desktop_session import DesktopSession
 from scopecat_server.services.application_open import ApplicationOpenService
@@ -171,3 +171,63 @@ def test_open_ack_requires_loaded_native_window_and_preserves_other_views():
         create.assert_called_once_with(target=target)
     new.window.show.assert_not_called()
     existing.window.load_url.assert_not_called()
+
+
+def test_run_bridge_reuses_loading_target_then_reopens_after_close():
+    session = DesktopSession(Mock(), threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    assert session.page_url is not None
+    windows = DesktopWindows(session, Mock())
+    target = ApplicationOpenTarget(kind="run", object_id="run-a")
+    native = Mock()
+    native.get_current_url.return_value = None
+    view = DesktopView(
+        native,
+        Mock(),
+        threading.Event(),
+        Mock(),
+        object_location(session.page_url, target),
+    )
+    windows._views.append(view)
+    with patch.object(windows, "create", return_value=view) as create:
+        windows.new_window("run-a")
+        windows.new_window("run-a")
+        create.assert_not_called()
+        native.show.assert_called()
+        # After loading, navigation belongs to the view. Its initial target must
+        # not steal focus when it now shows another object.
+        view.loaded.set()
+        native.get_current_url.return_value = "http://127.0.0.1:3210/?run=other#runs"
+        windows.new_window("run-a")
+        create.assert_called_once_with(target=target)
+        create.reset_mock()
+        windows._views.remove(view)
+        windows.new_window("run-a")
+        create.assert_called_once_with(target=target)
+
+
+def test_object_open_reuses_a_loading_run_bridge_view():
+    session = DesktopSession(Mock(), threading.Event())
+    session.connected("http://127.0.0.1:3210")
+    assert session.page_url is not None
+    windows = DesktopWindows(session, Mock())
+    target = ApplicationOpenTarget(kind="run", object_id="run-a")
+    native = Mock()
+    native.get_current_url.return_value = None
+    loaded = Mock()
+    loaded.is_set.return_value = False
+    loaded.wait.return_value = True
+    windows._views.append(
+        DesktopView(
+            native,
+            Mock(),
+            loaded,
+            Mock(),
+            object_location(session.page_url, target),
+        )
+    )
+    with patch.object(windows, "create") as create:
+        windows.open_target(target)
+        create.assert_not_called()
+        loaded.wait.assert_called_once_with(5)
+        native.show.assert_called()

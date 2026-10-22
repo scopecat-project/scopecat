@@ -375,3 +375,130 @@ it("refreshes automatic defaults for a new draft but retains an explicit edit ba
   await act(async () => state.select(entry, true, "legacy"));
   expect(state.draft?.actor).toBe("Bob");
 });
+
+it("keeps named copies independent through switching and restart without submitting", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  const savedFetch = globalThis.fetch;
+  const requests: string[] = [];
+  const heads = new Map<string, import("./launch-recovery").DraftRecord>();
+  vi.stubGlobal("fetch", async (request: Request) => {
+    requests.push(request.url);
+    const response = await savedFetch(request);
+    if (request.url.endsWith("/launch-drafts/save")) {
+      const result = await response.clone().json();
+      heads.set(result.saved.target.draft_id, result.saved);
+    }
+    return response;
+  });
+  const first = mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  act(() => state.renameDraft("B"));
+  act(() =>
+    state.update((draft) => invalidateDraft({ ...draft, values: { raw: "B input" } }, "edited")),
+  );
+  await waitFor(() => expect(heads.get("default")?.input.values.raw).toBe("B input"));
+  await act(async () => state.copyDraft());
+  const copyId = state.draft?.draftId;
+  expect(copyId).not.toBe("default");
+  expect(state.draft?.values.raw).toBe("B input");
+  expect(state.draft?.preview).toBeUndefined();
+  expect(state.draft?.requestKey).toBeUndefined();
+  await waitFor(() => expect(heads.has(copyId!)).toBe(true));
+  act(() => state.renameDraft("C"));
+  act(() =>
+    state.update((draft) => invalidateDraft({ ...draft, values: { raw: "C input" } }, "edited")),
+  );
+  await waitFor(() => expect(heads.get(copyId!)?.input.values.raw).toBe("C input"));
+  await act(async () => state.switchDraft(heads.get("default")!));
+  await waitFor(() => expect(state.draft?.values.raw).toBe("B input"));
+  expect(state.draft?.draftName).toBe("B");
+  first.unmount();
+  mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  await waitFor(() => expect(state.draft?.values.raw).toBe("B input"));
+  await act(async () => state.switchDraft(heads.get(copyId!)!));
+  await waitFor(() => expect(state.draft?.values.raw).toBe("C input"));
+  expect(state.draft?.draftName).toBe("C");
+  expect(requests.some((url) => url.endsWith("/experiment-launcher/submit"))).toBe(false);
+});
+
+it("refuses to copy a draft whose latest input has not been confirmed saved", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  const persisted = globalThis.fetch;
+  let offline = false;
+  vi.stubGlobal("fetch", (request: Request) =>
+    request.url.endsWith("/launch-drafts/save") && offline
+      ? Promise.reject(new Error("offline"))
+      : persisted(request),
+  );
+  mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  offline = true;
+  act(() =>
+    state.update((draft) => invalidateDraft({ ...draft, values: { raw: "unsaved B" } }, "edited")),
+  );
+  await waitFor(() => expect(state.recovery.status).toContain("not confirmed saved"));
+  await act(async () => state.copyDraft());
+  expect(state.draft?.draftId).toBe("default");
+  expect(state.draft?.values.raw).toBe("unsaved B");
+});
+
+it("imports historical inputs into a new identity and preserves the existing saved draft", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  mount();
+  const editable = {
+    ...entry,
+    request: { properties: { note: { type: "string", default: "" } }, required: [] },
+  };
+  await act(async () => state.select(editable, false, "legacy"));
+  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  act(() =>
+    state.update((draft) => invalidateDraft({ ...draft, values: { note: "B work" } }, "edited")),
+  );
+  await waitFor(() => expect(state.recovery.writing).toBe(false));
+  await act(async () => state.recovery.flush());
+  const { readDraft } = await import("./launch-recovery");
+  const original = (await readDraft("legacy", "signal")).head!;
+  await act(async () => {
+    expect(
+      await state.importHandoff(editable, {
+        kind: "handoff",
+        source_run: "run-A",
+        source_analysis: "analysis-A",
+        source_hash: "sha256:A",
+        request: {
+          workspace_id: "legacy",
+          experiment: "signal",
+          version: "1",
+          action: "preview",
+          request_key: "",
+          scan_mode: "cartesian",
+          parameter_sweeps: [],
+          actor: "operator",
+          selection: defaultSelection(),
+          inputs: { note: "historical A" },
+        },
+      }),
+    ).toBe(true);
+  });
+  expect(state.draft?.draftId).not.toBe("default");
+  expect(state.draft?.values.note).toBe("historical A");
+  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  const retained = (await readDraft("legacy", "signal")).head!;
+  expect(retained.revision).toBe(original.revision);
+  expect(retained.input.values.note).toBe("B work");
+});

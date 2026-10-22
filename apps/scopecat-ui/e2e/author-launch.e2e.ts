@@ -30,11 +30,25 @@ test("discovers an ordinary author experiment and edits controls before submitti
   let completed = false;
   try {
     await copyAuthorWorkspace(project);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Author launch tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -131,12 +145,14 @@ test("discovers an ordinary author experiment and edits controls before submitti
         return !!heading && !!navigation && heading.y >= navigation.y + navigation.height;
       })
       .toBe(true);
+    await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
     ).toBeDisabled();
+    await page.getByRole("button", { name: "Monitor", exact: true }).click();
     await expect(execution.getByText("Execution diagnostics", { exact: true })).toBeVisible();
-    await testInfo.attach("Selected execution above retained preparation", {
+    await testInfo.attach("Selected monitor and retained editor input", {
       body: await page.screenshot(),
       contentType: "image/png",
     });
@@ -145,7 +161,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
     completed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved author project", {
@@ -176,9 +192,23 @@ test("prepares B while A stays pinned in a separate result page", async ({
       `    import time\n    from pathlib import Path\n    if gain == 2 and frequency.to("GHz").value > 4.7:\n        deadline = time.monotonic() + 90\n        while not Path(${JSON.stringify(release)}).exists():\n            if time.monotonic() > deadline:\n                raise RuntimeError("A was not released")\n            time.sleep(0.05)\n    detuning =`,
     );
     await writeFile(sourcePath, source);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8"));
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Author launch tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -220,6 +250,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     };
     const acceptedA = await readA();
     await page.setViewportSize({ width: 520, height: 800 });
+    await page.getByRole("button", { name: "Editor", exact: true }).click();
     await page.getByLabel("Gain", { exact: true }).fill("3");
     await expect(
       page.getByRole("button", { name: "Start acquisition", exact: true }),
@@ -248,8 +279,12 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await expect(resultA.getByTestId("run-status")).toHaveText("Running");
     const receiptB = await submit();
     expect(receiptB).not.toEqual(receiptA);
-    const procedureB = new URL(page.url()).searchParams.get("procedure");
+    const procedureB = receiptB.procedure_id as string;
     expect(procedureB).not.toBe(procedureA);
+    // Submission B must not silently rebind the already selected monitor A.
+    expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureA);
+    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+    await expect(page).toHaveURL((url) => url.searchParams.get("procedure") === procedureB);
     await writeFile(release, "");
     await expect(resultA.getByTestId("run-status")).toHaveText("Succeeded");
     await expect(resultA.getByTestId("data-card").getByText(/^3 records/)).toBeVisible();
@@ -268,10 +303,10 @@ test("prepares B while A stays pinned in a separate result page", async ({
       contentType: "application/json",
     });
     // A historical selection must survive an ordinary page round trip even after B was admitted.
-    await page.getByText("Experiment history", { exact: true }).click();
+    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
     const historicalA = page
       .locator("details")
-      .filter({ has: page.getByText("Experiment history", { exact: true }) })
+      .filter({ has: page.locator("summary").getByText("Submitted work", { exact: true }) })
       .getByRole("button")
       .last();
     await historicalA.focus();
@@ -286,9 +321,19 @@ test("prepares B while A stays pinned in a separate result page", async ({
       page.getByRole("link", { name: "Reopen this procedure", exact: true }),
     ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
     await page.goBack();
+    await expect(page.getByRole("button", { name: "Submitted work", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await page.goBack();
     await expect(
       page.getByRole("link", { name: "Reopen this procedure", exact: true }),
     ).toHaveAttribute("href", `?procedure=${procedureB}#launch`);
+    await page.goForward();
+    await expect(page.getByRole("button", { name: "Submitted work", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await page.goForward();
     await expect(
       page.getByRole("link", { name: "Reopen this procedure", exact: true }),
@@ -299,7 +344,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     completed = true;
   } finally {
     await writeFile(release, "");
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved author project", {

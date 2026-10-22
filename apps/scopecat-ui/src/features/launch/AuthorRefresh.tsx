@@ -153,7 +153,6 @@ function AuthorRefreshPanel({
             : "Author code refreshed. Preview the updated experiment before starting."}
         </p>
       )}
-      {identity && <p className="text-xs break-all">Preparation: {identity}</p>}
       {busy && (
         <button
           className={secondaryButton}
@@ -174,8 +173,14 @@ function AuthorRefreshPanel({
           Retry same submission
         </button>
       )}
-      {state.data?.active && (
-        <p className="text-xs break-all">Author revision: {state.data.active.content_hash}</p>
+      {(identity || state.data?.active) && (
+        <details className="text-xs text-text-dim">
+          <summary>Source revision details</summary>
+          {identity && <p className="break-all">Preparation: {identity}</p>}
+          {state.data?.active && (
+            <p className="break-all">Author revision: {state.data.active.content_hash}</p>
+          )}
+        </details>
       )}
       {(operation.data?.error ||
         refresh.error ||

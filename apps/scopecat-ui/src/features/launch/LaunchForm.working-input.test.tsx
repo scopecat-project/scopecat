@@ -41,23 +41,24 @@ const source: ParameterDraftView = {
     input: { name: "", actor: "operator", branch: "browser", note: "", values: [] },
   },
 };
-function Form() {
-  const { draft, select, selectConfiguration } = useLaunchDraft();
+function Form({ recovered = false }: { recovered?: boolean }) {
+  const { draft, select, selectConfiguration, update } = useLaunchDraft();
   const initialized = useRef(false);
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
     void select(entry).then(() => {
       selectConfiguration(configuration, { draft_id: "table-a", revision: 3 });
+      if (recovered) update((current) => ({ ...current, needsReview: true }));
     });
-  }, [select, selectConfiguration]);
+  }, [select, selectConfiguration, update, recovered]);
   return draft ? <LaunchForm entry={entry} catalogReady onAdmitted={() => {}} /> : null;
 }
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-function mount(read: () => Promise<Response>, recoveryRead?: Promise<void>) {
+function mount(read: () => Promise<Response>, recoveryRead?: Promise<void>, recovered = false) {
   const fetcher = vi.fn(async (request: Request) => {
     if (request.url.endsWith("/freeze"))
       return Response.json({ draft_id: "table-a", revision: 4, configuration });
@@ -76,7 +77,7 @@ function mount(read: () => Promise<Response>, recoveryRead?: Promise<void>) {
   render(
     <QueryClientProvider client={client}>
       <LaunchDraftProvider projectId="test">
-        <Form />
+        <Form recovered={recovered} />
       </LaunchDraftProvider>
     </QueryClientProvider>,
   );
@@ -167,4 +168,25 @@ it("does not trust a cached matching source when its next check fails", async ()
   expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
   expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+});
+
+it("waits for recovered input hydration before accepting review", async () => {
+  let finish!: () => void;
+  const hydration = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  mount(async () => Response.json(source), hydration, true);
+  const review = await screen.findByRole("button", { name: "Confirm reviewed input" });
+  expect(review).toBeDisabled();
+  fireEvent.click(review);
+  expect(screen.getByRole("region", { name: "Review recovered experiment" })).toBeVisible();
+  await act(async () => finish());
+  await waitFor(() => expect(review).toBeEnabled());
+  fireEvent.click(review);
+  await waitFor(() =>
+    expect(screen.queryByRole("region", { name: "Review recovered experiment" })).toBeNull(),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
+  );
 });

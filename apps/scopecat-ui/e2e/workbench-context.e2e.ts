@@ -47,6 +47,7 @@ async function acquire(page: Page) {
   await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
+  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
   await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
   return (await result.json()).procedure_id as string;
 }
@@ -60,7 +61,17 @@ test("two workbench pages retain independent context and share collection number
   let completed = false;
   try {
     await copyAuthorWorkspace(project);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, project);
     const { base_url: url } = JSON.parse(
       await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
@@ -77,6 +88,10 @@ test("two workbench pages retain independent context and share collection number
       });
       expect(response.status()).toBe(201);
     }
+    await page.goto(`${url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("operator");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -120,8 +135,13 @@ test("two workbench pages retain independent context and share collection number
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
     // A lesson uses the same application while both ordinary drafts stay open.
     const practice = await context.newPage();
+    // Help resumes retained peak practices; new learning starts in Notebook courses.
+    // Seed the retained practice through its real service entry before exercising recovery.
+    const retainedPractice = await practice.request.post(`${url}/api/v1/practice`, {
+      data: { lesson: "manual-peaks", request_key: "workbench-retained-practice" },
+    });
+    expect(retainedPractice.ok(), await retainedPractice.text()).toBeTruthy();
     await practice.goto(`${url}/#help`);
-    await practice.getByRole("button", { name: "Start peak practice" }).click();
     const retainedTask = practice.getByRole("link", { name: "Open practice task" });
     await expect(retainedTask).toBeVisible();
     const taskLink = await retainedTask.getAttribute("href");
@@ -175,7 +195,28 @@ test("two workbench pages retain independent context and share collection number
     await expect(other.getByLabel("Experiment setup", { exact: true })).toHaveValue(
       "browser-bench-b",
     );
+    // Both pages still edit the same saved identity. Exercise the stale-copy
+    // conflict before opening a plan, which intentionally creates a new identity.
+    const sharedDraft = await page
+      .getByRole("combobox", { name: "Editable draft", exact: true })
+      .inputValue();
+    await expect(other.getByRole("combobox", { name: "Editable draft", exact: true })).toHaveValue(
+      sharedDraft,
+    );
+    await other.getByLabel("Record collection", { exact: true }).selectOption("");
+    const conflictB = other.getByRole("region", { name: "Conflicting experiment input" });
+    await expect(conflictB).toContainText("Alice");
+    await expect(other.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await conflictB.getByRole("button", { name: "Keep my copy after review" }).click();
+    await expect(conflictB).toBeHidden();
+    await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
+    await expect(
+      other.getByText("Experiment input saved in application data.", { exact: true }),
+    ).toBeVisible();
     await other.getByRole("button", { name: "Open First batch recipe r1", exact: true }).click();
+    await expect(
+      other.getByRole("combobox", { name: "Editable draft", exact: true }),
+    ).not.toHaveValue(sharedDraft);
     // Explicitly opening a plan imports its scientific selection into this page.
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
@@ -191,11 +232,14 @@ test("two workbench pages retain independent context and share collection number
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
-    const conflictB = other.getByRole("region", { name: "Conflicting experiment input" });
-    await expect(conflictB).toContainText("Alice");
-    await expect(other.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
-    await conflictB.getByRole("button", { name: "Keep my copy after review" }).click();
+    // Plan-derived edits are independent; Alice's selected draft stays intact.
+    await expect(
+      other.getByText("Experiment input saved in application data.", { exact: true }),
+    ).toBeVisible();
     await expect(conflictB).toBeHidden();
+    await expect(page.getByRole("combobox", { name: "Editable draft", exact: true })).toHaveValue(
+      sharedDraft,
+    );
     const preparedB = await preview(other);
     const resolvedB = await (
       await other.request.get(
@@ -287,8 +331,18 @@ test("two workbench pages retain independent context and share collection number
     await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(separate);
     await expect(page.getByTestId("measurement-charts")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("collection-result.png"), fullPage: true });
-    uv(["scopecat", "stop", project]);
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     uv([
       "python",
       "-c",
@@ -330,7 +384,7 @@ with sc.notebook(sys.argv[1], live=False) as session:
     completed = true;
     await other.close();
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved workbench project", {

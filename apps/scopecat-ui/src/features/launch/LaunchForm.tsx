@@ -23,10 +23,12 @@ export function LaunchForm({
   entry,
   onAdmitted,
   catalogReady,
+  active = true,
 }: {
   entry: LaunchCatalogEntry;
   onAdmitted: (id: string) => void;
   catalogReady: boolean;
+  active?: boolean;
 }) {
   const allFields = Object.entries(entry.request.properties ?? {});
   const fields = allFields.filter((pair): pair is [string, FormField] => canRenderField(pair[1]));
@@ -50,6 +52,7 @@ export function LaunchForm({
   const draft: LaunchDraft = retained;
   const { controls: drafts, actor, values, error, pending } = draft;
   const activePreparation = useRef<LaunchPreparation | undefined>(undefined);
+  const sentPreparation = useRef<LaunchPreparation | undefined>(undefined);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -99,8 +102,14 @@ export function LaunchForm({
   }, [working.data, workingCurrent, draft.workingInput, draft.pending, draft.preview, update]);
   const readyToContinue = useRef(true);
   useLayoutEffect(() => {
-    readyToContinue.current = catalogReady && workingCurrent;
-  }, [catalogReady, workingCurrent]);
+    readyToContinue.current = active && catalogReady && workingCurrent;
+    if (!active && activePreparation.current !== sentPreparation.current) {
+      // Hidden editors retain field focus state, but leaving the editor revokes
+      // any unsent Start intent permanently, including a late preview response.
+      activePreparation.current?.finish();
+      activePreparation.current = undefined;
+    }
+  }, [active, catalogReady, workingCurrent]);
   const result = catalogReady && !pending && workingCurrent ? draft.preview : undefined;
   const fence = result?.manual_state;
   const manual = useQuery({
@@ -177,6 +186,7 @@ export function LaunchForm({
     );
   }
   const canPrepare =
+    active &&
     entry.actions.includes("preview") &&
     supported &&
     catalogReady &&
@@ -294,7 +304,10 @@ export function LaunchForm({
         checked.procedure_definition,
         {
           isIntended: intended,
-          onSending: () => update((current) => ({ ...current, pending: "submit" })),
+          onSending: () => {
+            sentPreparation.current = operation;
+            update((current) => ({ ...current, pending: "submit" }));
+          },
         },
       );
       if (procedureId && intended()) {
@@ -313,6 +326,7 @@ export function LaunchForm({
     } finally {
       operation.finish();
       if (activePreparation.current === operation) activePreparation.current = undefined;
+      if (sentPreparation.current === operation) sentPreparation.current = undefined;
     }
   }
   return (
@@ -351,19 +365,22 @@ export function LaunchForm({
         <Notice role="alert">
           Input is not confirmed saved for:{" "}
           {recovery.unsavedTargets
-            .map(([workspace, experiment]) => `${workspace} / ${experiment}`)
+            .map(([workspace, experiment, draftId]) => `${workspace} / ${experiment} / ${draftId}`)
             .join(", ")}
           . Keep this application open and return to retry these copies.
         </Notice>
       )}
-      <Button
-        type="button"
-        onClick={() => {
-          void recovery.retry();
-        }}
-      >
-        Retry saving input
-      </Button>
+      {(!recovery.ready || recovery.unsavedTargets.length > 0) && (
+        <Button
+          type="button"
+          disabled={recovery.writing}
+          onClick={() => {
+            void recovery.retry();
+          }}
+        >
+          Retry saving input
+        </Button>
+      )}
       {recovery.conflict && (
         <section aria-label="Conflicting experiment input">
           <p>Both copies are retained. Review the other window’s saved input before choosing.</p>
@@ -387,7 +404,9 @@ export function LaunchForm({
           )}
           <Button
             type="button"
+            disabled={!recovery.ready}
             onClick={() =>
+              recovery.ready &&
               update((current) => ({
                 ...invalidateDraft(current, "Input reviewed. Ready to start or inspect a preview."),
                 needsReview: false,

@@ -1,3 +1,4 @@
+import { RunSnapshotDetails } from "./RunSnapshotDetails";
 import { RelatedAnalyses } from "../analyses/RelatedAnalyses";
 import { useRunCollectionName } from "./use-run-collection-name";
 import { RunAddressLabel } from "./RunAddressLabel";
@@ -244,6 +245,9 @@ export function RunDetail({
           <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
         </details>
       </div>
+      <p className="text-xs text-text-dim">
+        Monitoring this run · Closing the view does not stop execution.
+      </p>
       <RunPlanOrigin runId={run.runId} projectId={projectId} />
 
       {run.samples.length > 0 && (
@@ -353,6 +357,7 @@ export function RunDetail({
         )}
         <RunProposals key={run.runId} runId={run.runId} />
         <RunAnalysisFollows runId={run.runId} />
+        <RunSnapshotDetails key={`snapshot:${run.runId}`} runId={run.runId} />
         <details
           className="rounded-md border border-line p-4"
           open={run.plan.pointCount === undefined || undefined}

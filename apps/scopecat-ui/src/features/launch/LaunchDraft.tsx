@@ -49,6 +49,8 @@ export type SavedLaunchTemplate =
     };
 
 export interface LaunchDraft {
+  draftId?: string;
+  draftName?: string;
   manualLine?: components["schemas"]["ManualLineSelection"];
   lineSource?: PlanRevision["definition"]["source"];
   sourceBaseline?: PlanRevision["definition"]["code_revision"];
@@ -84,6 +86,9 @@ export interface LaunchPreparation {
   finish: () => void;
 }
 interface DraftContext {
+  copyDraft: () => Promise<void>;
+  switchDraft: (record: DraftRecord) => Promise<void>;
+  renameDraft: (name: string) => void;
   beginPreparation: () => LaunchPreparation | undefined;
   recovery: ReturnType<typeof useLaunchRecovery>;
   recover: (record: DraftRecord) => void;
@@ -143,6 +148,8 @@ function initialDraft(
   workspaceId: string,
 ): LaunchDraft {
   return {
+    draftId: "default",
+    draftName: "Draft",
     workspaceId,
     experiment: entry.id,
     definition: definitionKey(entry),
@@ -221,7 +228,8 @@ function ProjectDraft({
     }
     if (
       next?.revision !== latest.current?.revision ||
-      next?.workspaceId !== latest.current?.workspaceId
+      next?.workspaceId !== latest.current?.workspaceId ||
+      next?.draftId !== latest.current?.draftId
     )
       preparationToken.current = undefined;
     latest.current = next;
@@ -365,6 +373,10 @@ function ProjectDraft({
           return current;
         const next = initialDraft(entry, (current?.revision ?? 0) + 1, owner);
         next.workspaceId = owner;
+        if (current?.workspaceId === owner && current.experiment === entry.id) {
+          next.draftId = current.draftId;
+          next.draftName = current.draftName;
+        }
         next.codeRevision = current?.workspaceId === owner ? current.codeRevision : undefined;
         next.selection =
           current?.selection ??
@@ -425,6 +437,7 @@ function ProjectDraft({
       attemptGeneration.current === generation &&
       latest.current?.revision === input?.revision &&
       latest.current?.workspaceId === input?.workspaceId &&
+      latest.current?.draftId === input?.draftId &&
       (latest.current ? JSON.stringify(rawInput(latest.current)) : undefined) === inputIdentity;
     try {
       await recovery.flush();
@@ -510,6 +523,58 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        copyDraft: async () => {
+          const original = latest.current;
+          if (!original || !mayLeave() || submitting.current) return;
+          try {
+            await recovery.flush();
+            if (!alive.current || latest.current !== original) return;
+            const draftId = crypto.randomUUID();
+            if (!recovery.keepExplicitInput(original.workspaceId, original.experiment, draftId))
+              return;
+            if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
+              attemptGeneration.current += 1;
+              setAttempt(undefined);
+            }
+            setDraft({
+              ...invalidateDraft(
+                structuredClone(original),
+                "Independent draft created. Review and start when ready.",
+              ),
+              draftId,
+              draftName: `${original.draftName ?? "Draft"} copy`.slice(0, 200),
+              admittedProcedureId: undefined,
+              needsReview: true,
+            });
+          } catch (error) {
+            setDraft((current) =>
+              current === original ? { ...current, error: String(error) } : current,
+            );
+          }
+        },
+        switchDraft: async (record) => {
+          const original = latest.current;
+          if (!mayLeave() || submitting.current) return;
+          try {
+            await recovery.flush();
+            if (!alive.current || latest.current !== original) return;
+            if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
+              attemptGeneration.current += 1;
+              setAttempt(undefined);
+            }
+            currentWorkspace.current = record.target.workspace_id;
+            setWorkspaceId(record.target.workspace_id);
+            setDraft(restoreDraft(record, (original?.revision ?? 0) + 1));
+          } catch (error) {
+            setDraft((current) =>
+              current === original && current ? { ...current, error: String(error) } : current,
+            );
+          }
+        },
+        renameDraft: (name) => {
+          if (!name.trim() || name.length > 200) return;
+          setDraft((current) => (current ? { ...current, draftName: name.trim() } : current));
+        },
         beginPreparation: () => {
           if (operatorPending.current || preparationToken.current || submitting.current) return;
           const token = Symbol("launch preparation");
@@ -519,7 +584,8 @@ function ProjectDraft({
             alive.current &&
             preparationToken.current === token &&
             latest.current?.revision === input?.revision &&
-            latest.current?.workspaceId === input?.workspaceId;
+            latest.current?.workspaceId === input?.workspaceId &&
+            latest.current?.draftId === input?.draftId;
           return {
             isIntended,
             finish: () => {
@@ -641,7 +707,9 @@ function ProjectDraft({
         checkSubmission,
         openPlan: async (plan, entry, isIntended = () => true) => {
           if (!mayLeave()) return false;
-          if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id)) return false;
+          const draftId = crypto.randomUUID();
+          if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id, draftId))
+            return false;
           if (!alive.current) return false;
           const line = "manualLine" in plan;
           if (line && (!attemptsReady || submitting.current || attempt?.status === "pending"))
@@ -684,6 +752,8 @@ function ProjectDraft({
             (current?.revision ?? 0) + 1,
             plan.definition.workspace_id,
           );
+          next.draftId = draftId;
+          next.draftName = "Imported draft";
           next.defaultActor = current?.actor !== current?.defaultActor ? undefined : operator;
           next.workingInput = undefined;
           next.collection = current?.collection;
@@ -729,7 +799,9 @@ function ProjectDraft({
         },
         importHandoff: async (entry, handoff) => {
           if (!mayLeave()) return false;
-          if (!recovery.keepExplicitInput(handoff.request.workspace_id, entry.id)) return false;
+          const draftId = crypto.randomUUID();
+          if (!recovery.keepExplicitInput(handoff.request.workspace_id, entry.id, draftId))
+            return false;
           if (!alive.current) return false;
           const current = latest.current;
           const generation = ++operatorSelection.current;
@@ -759,6 +831,8 @@ function ProjectDraft({
             (current?.revision ?? 0) + 1,
             handoff.request.workspace_id,
           );
+          next.draftId = draftId;
+          next.draftName = "Imported draft";
           next.defaultActor = current?.actor !== current?.defaultActor ? undefined : operator;
           next.workingInput = undefined;
           next.collection = current?.collection;

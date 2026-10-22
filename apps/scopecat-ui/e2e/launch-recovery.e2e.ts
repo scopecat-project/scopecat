@@ -74,6 +74,10 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     ) as { url: string; workspace: string };
 
     let url = prepared.url;
+    await page.goto(`${url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Recovery tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${url}/?workspace=${prepared.workspace}#configuration`);
     await page.getByLabel("Working parameter branch", { exact: true }).fill("starter");
     await page.getByRole("button", { name: "Open working table", exact: true }).click();
@@ -95,6 +99,9 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       "-1, nope, 1",
     );
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("-");
+    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+      "Recovery tester",
+    );
     await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
     await saved();
     const other = await context.newPage();
@@ -123,6 +130,11 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     const original = await readFile(source, "utf8");
     await writeFile(source, original.replace("] = 0.0,", "] = 0.5,"));
     await page.getByRole("button", { name: /Refresh.*code/i }).click();
+    await expect(
+      page.getByText("Author code refreshed. Preview the updated experiment before starting.", {
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(page.getByLabel("Position scan values", { exact: true })).toHaveValue(
       "-1, nope, 1",
     );

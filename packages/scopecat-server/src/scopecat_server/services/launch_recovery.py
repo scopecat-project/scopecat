@@ -34,6 +34,12 @@ class LaunchRecoveryService:
         with self._database.read_transaction() as connection:
             return records.history(connection, before, limit)
 
+    def heads(
+        self, target: LaunchDraftTarget, before: int | None = None, limit: int = 50
+    ) -> LaunchDraftPage:
+        with self._database.read_transaction() as connection:
+            return records.heads(connection, target, before, limit)
+
     def retain(self, command: LaunchAttemptSave) -> LaunchAttemptRecord:
         with self._database.write_transaction() as connection:
             return records.retain(connection, command)

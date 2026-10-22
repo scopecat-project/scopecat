@@ -2593,6 +2593,14 @@ def create_app(  # noqa: C901 - route registration is intentionally centralized
     def read_launch_draft(target: LaunchDraftTarget) -> LaunchDraftView:
         return application.launch_recovery.read(target)
 
+    @app.post(f"{_API_PREFIX}/launch-drafts/list")
+    def list_launch_drafts(
+        target: LaunchDraftTarget,
+        before: Annotated[int | None, Query(ge=1)] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> LaunchDraftPage:
+        return application.launch_recovery.heads(target, before, limit)
+
     @app.post(f"{_API_PREFIX}/launch-drafts/save")
     def save_launch_draft(command: LaunchDraftSave) -> LaunchDraftView:
         return application.launch_recovery.save(command)

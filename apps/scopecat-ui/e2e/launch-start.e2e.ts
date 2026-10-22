@@ -190,8 +190,12 @@ test("Start prepares internally while cancelled and edited preparations never ac
     ).toBeFocused();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");
+    await expect(
+      page.getByRole("region", { name: "Selected execution", exact: true }),
+    ).toBeHidden();
+    await page.getByRole("button", { name: "Monitor", exact: true }).click();
     await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-    await page.getByText("Experiment history", { exact: true }).click();
+    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
     await page.getByRole("button", { name: /signal.*Completed/ }).click();
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
     const saved = page.getByRole("link", { name: /View saved data:/ });
@@ -224,7 +228,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
       path: testInfo.outputPath("adjust-without-acquisition.png"),
       fullPage: true,
     });
-    // Only this explicit Start may acquire again, and it must leave preparation focus behind.
+    // Explicit Start acquires again, while the existing monitor remains bound to A.
     const nextSubmission = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/submit"),
     );
@@ -236,6 +240,11 @@ test("Start prepares internally while cancelled and edited preparations never ac
     });
     const nextProcedure = (await nextResponse.json()).procedure_id;
     expect(nextProcedure).not.toBe(procedureId);
+    expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
+    await expect(
+      page.getByRole("region", { name: "Selected execution", exact: true }),
+    ).toBeHidden();
+    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
     await expect(
       page.getByRole("region", { name: "Selected execution", exact: true }),
     ).toBeFocused();

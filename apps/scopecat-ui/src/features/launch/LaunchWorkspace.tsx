@@ -6,7 +6,10 @@ import {
   detailCard,
   eyebrow,
   secondaryButton,
+  workbenchTabs,
+  workbenchTab,
 } from "../../ui/styles";
+import { DraftPicker } from "./DraftPicker";
 import { LaunchRecoveryPanel } from "./LaunchRecoveryPanel";
 import type { ComparisonHandoff } from "../analyses/RunComparison";
 import { useEffect, useRef, useState } from "react";
@@ -79,15 +82,21 @@ export function LaunchWorkspace({
   const execution = useRef<HTMLElement>(null);
   const preparation = useRef<HTMLElement>(null);
   const preparing = location.searchParams.has("preparation");
+  const view =
+    location.searchParams.get("workbench") === "submitted"
+      ? "submitted"
+      : preparing || !procedureId
+        ? "editor"
+        : "monitor";
   useEffect(() => {
-    if (preparing) {
+    if (view === "editor" && preparing) {
       preparation.current?.focus({ preventScroll: true });
       preparation.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-    } else if (procedureId) {
+    } else if (view === "monitor" && procedureId) {
       execution.current?.focus({ preventScroll: true });
       execution.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
     }
-  }, [procedureId, preparing]);
+  }, [procedureId, preparing, view]);
   const entry = draft?.experiment
     ? catalog.data?.entries.find((item) => item.id === draft.experiment)
     : catalog.data?.entries[0];
@@ -154,11 +163,41 @@ export function LaunchWorkspace({
           Prepare an experiment, check its inputs, then start acquisition.
         </p>
       </header>
-      <OriginalSubmission
-        onOpen={openProcedure}
-        catalogReady={sourceAvailable && !handoff && Boolean(entry) && catalog.isSuccess}
-      />
-      {procedureId && (
+      <nav aria-label="Experiment workspaces" className={workbenchTabs}>
+        <button
+          type="button"
+          className={workbenchTab}
+          aria-current={view === "editor" ? "page" : undefined}
+          onClick={() => showView("editor")}
+        >
+          Editor
+        </button>
+        <button
+          type="button"
+          className={workbenchTab}
+          disabled={!procedureId}
+          aria-current={view === "monitor" ? "page" : undefined}
+          onClick={() => showView("monitor")}
+        >
+          Monitor
+        </button>
+        <button
+          type="button"
+          className={workbenchTab}
+          aria-current={view === "submitted" ? "page" : undefined}
+          onClick={() => showView("submitted")}
+        >
+          Submitted work
+        </button>
+      </nav>
+      <div>
+        <OriginalSubmission
+          onOpen={openProcedure}
+          onPrepare={() => showView("editor")}
+          catalogReady={sourceAvailable && !handoff && Boolean(entry) && catalog.isSuccess}
+        />
+      </div>
+      {view === "monitor" && procedureId && (
         <section
           ref={execution}
           tabIndex={-1}
@@ -169,6 +208,7 @@ export function LaunchWorkspace({
         </section>
       )}
       <section
+        hidden={view !== "editor"}
         ref={preparation}
         tabIndex={-1}
         aria-labelledby="experiment-preparation"
@@ -248,6 +288,7 @@ export function LaunchWorkspace({
         )}
         {(entry || draft) && (
           <>
+            <DraftPicker />
             <ExperimentPicker
               key={workspaceId}
               entries={catalog.data?.entries ?? []}
@@ -263,6 +304,7 @@ export function LaunchWorkspace({
                 <LaunchForm
                   key={`${workspaceId}:${codeRevision?.content_hash ?? "current"}:${draft.definition}`}
                   entry={entry}
+                  active={view === "editor"}
                   onAdmitted={admitted}
                   catalogReady={sourceAvailable && catalog.isSuccess}
                 />
@@ -270,7 +312,11 @@ export function LaunchWorkspace({
           </>
         )}
       </section>
-      <section aria-labelledby="experiment-history" className="space-y-3">
+      <section
+        hidden={view !== "editor"}
+        aria-labelledby="experiment-history"
+        className="space-y-3"
+      >
         <h3 id="experiment-history" className={sectionTitle}>
           Reuse and recovery
         </h3>
@@ -280,9 +326,11 @@ export function LaunchWorkspace({
           initializing={catalog.isPending && draft === undefined}
         />
         <LaunchRecoveryPanel />
-        <ProcedureHistory selectedId={procedureId} onSelect={openProcedure} />
       </section>
-      {projectId && (
+      {view === "submitted" && (
+        <ProcedureHistory mode="submitted" selectedId={procedureId} onSelect={openProcedure} />
+      )}
+      {view === "editor" && projectId && (
         <CalibrationTasks
           key={`calibration:${projectId}:${workspaceId}`}
           projectId={projectId}
@@ -297,9 +345,22 @@ export function LaunchWorkspace({
 function openProcedure(id: string, options?: NavigationOptions) {
   const url = new URL(window.location.href);
   url.searchParams.delete("preparation");
+  url.searchParams.delete("workbench");
   url.searchParams.set("procedure", id);
   navigate(url, options);
 }
 function admitted(id: string) {
-  openProcedure(id, { replace: true });
+  // A selected monitor is a fixed object. A new submission is available through
+  // its receipt, but must not silently replace the monitor already selected.
+  const selected = new URL(window.location.href).searchParams.get("procedure");
+  if (!selected || selected === id) openProcedure(id, { replace: true });
+}
+
+function showView(next: "editor" | "monitor" | "submitted") {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("workbench");
+  url.searchParams.delete("preparation");
+  if (next === "editor") url.searchParams.set("preparation", "1");
+  if (next === "submitted") url.searchParams.set("workbench", "submitted");
+  navigate(url);
 }

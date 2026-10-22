@@ -35,7 +35,7 @@ assert catalog.code_revision is not None
 # Seed the admission-only boundary with the same immutable composition that the
 # worker restores. The public author submit API also dispatches the procedure.
 application = revision_project(project.root, catalog.code_revision).load_application()
-with application.connect(resolve_daemon_endpoint(project.root)) as lab:
+with application.connect(resolve_daemon_endpoint(project.root), workspace_id=catalog.workspace_id) as lab:
     provider = application.launch_provider
     entry = application.authors.get("reference_lab.temperature_diagnostic").entry
     catalog_entry = next(item for item in catalog.entries if item.id == entry.id)
@@ -73,7 +73,17 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       const template = join(ROOT, "testing/reference_lab");
       for (const name of ["src", "config", "scopecat.toml"])
         await cp(join(template, name), join(project, name), { recursive: true });
-      uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+      uv([
+        "python",
+        "-m",
+        "scopecat_server.cli",
+        "start",
+        project,
+        "--port",
+        "0",
+        "--static-dir",
+        resolve("dist"),
+      ]);
       const endpoint = JSON.parse(
         await readFile(join(project, ".scopecat/daemon.json"), "utf8"),
       ) as {
@@ -81,9 +91,11 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       };
       prepareReferenceContexts(uv, project);
       const procedureId = uv(["python", "-c", ADMIT, project]);
-      uv(["scopecat", "stop", project]);
+      uv(["python", "-m", "scopecat_server.cli", "stop", project]);
       uv([
-        "scopecat",
+        "python",
+        "-m",
+        "scopecat_server.cli",
         "start",
         project,
         "--port",
@@ -93,7 +105,7 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
       ]);
       await use({ project, baseUrl: endpoint.base_url, procedureId });
     } finally {
-      uv(["scopecat", "stop", project]);
+      uv(["python", "-m", "scopecat_server.cli", "stop", project]);
       await rm(project, { recursive: true, force: true });
     }
   },
@@ -114,7 +126,7 @@ retainedProcedureTest(
       const catalogResponse = await catalogReady;
       expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
       await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-      await page.getByText("Experiment history", { exact: true }).click();
+      await page.getByRole("button", { name: "Submitted work", exact: true }).click();
       await page
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
         .click();
@@ -238,13 +250,16 @@ retainedProcedureTest(
     const { baseUrl, procedureId } = retainedProcedure;
     await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
     await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
-    await page.getByText("Cancel remaining procedure", { exact: true }).click();
+    await page
+      .locator("summary")
+      .filter({ hasText: /^Cancel queued task$/ })
+      .click();
     await expect(
-      page.getByRole("button", { name: "Cancel procedure", exact: true }),
+      page.getByRole("button", { name: "Cancel queued task", exact: true }),
     ).toBeDisabled();
     await page.getByLabel("Cancellation actor", { exact: true }).fill("browser operator");
     await page.getByLabel("Cancellation reason", { exact: true }).fill("Cancel before acquisition");
-    await page.getByRole("button", { name: "Cancel procedure", exact: true }).click();
+    await page.getByRole("button", { name: "Cancel queued task", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
     await page.reload();
     await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
@@ -285,7 +300,17 @@ test("retains launch inputs across workspaces and invalidates previews without s
       await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -376,7 +401,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await testInfo.attach("Daemon log", { body: daemonLog, contentType: "text/plain" });
     throw error;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     // Preserve failed project state and logs for diagnosis.
     if (!failed) await rm(project, { recursive: true, force: true });
   }

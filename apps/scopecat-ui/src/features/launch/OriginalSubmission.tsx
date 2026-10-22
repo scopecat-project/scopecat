@@ -5,9 +5,11 @@ import { useLaunchDraft } from "./LaunchDraft";
 
 export function OriginalSubmission({
   onOpen,
+  onPrepare,
   catalogReady: _catalogReady,
 }: {
   onOpen: (id: string) => void;
+  onPrepare?: () => void;
   catalogReady: boolean;
 }) {
   const { attempt, checkSubmission, rerun } = useLaunchDraft();
@@ -77,7 +79,10 @@ export function OriginalSubmission({
           className={secondaryButton}
           type="button"
           disabled={attempt.status === "pending"}
-          onClick={rerun}
+          onClick={() => {
+            rerun();
+            onPrepare?.();
+          }}
         >
           Prepare a new run (separate acquisition)
         </button>
