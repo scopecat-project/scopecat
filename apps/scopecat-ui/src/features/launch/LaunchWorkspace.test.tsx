@@ -889,3 +889,72 @@ it("never substitutes current code when a retained pinned revision is missing", 
   expect(catalogs).toEqual([]);
   expect(screen.queryByLabelText("Amplitude")).toBeNull();
 });
+
+it("does not observe a linked draft's pinned catalog into the current draft before switching", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ entries: [entry], items: [] })),
+  );
+  mount();
+  const transport = globalThis.fetch;
+  const savedDefault: Array<{
+    code_revision: { content_hash: string };
+    values: Record<string, string>;
+  }> = [];
+  vi.stubGlobal("fetch", async (request: Request) => {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/experiment-launcher"))
+      return Response.json({
+        entries: [entry],
+        code_revision: {
+          content_hash: url.searchParams.get("code_revision") ?? "sha256:current-A",
+        },
+      });
+    if (url.pathname.endsWith("/launch-drafts/read")) {
+      const target = await request.clone().json();
+      if (target.draft_id === "pinned-b")
+        return Response.json({
+          head: {
+            target,
+            revision: 9,
+            state: "saved",
+            created_at: "2026-10-22T00:00:00Z",
+            input: {
+              declaration: entry,
+              draft_name: "Pinned B",
+              pinned_source: true,
+              code_revision: { content_hash: "sha256:pinned-B" },
+              values: { qubit: "Q12", amplitude_max: "0.72" },
+              controls: {},
+              selection: defaultSelection(),
+              actor: "operator",
+              plan_dirty: false,
+            },
+          },
+        });
+    }
+    if (url.pathname.endsWith("/launch-drafts/save")) {
+      const body = await request.clone().json();
+      if (body.target.draft_id === "default") savedDefault.push(body.input);
+    }
+    return transport(request);
+  });
+  fireEvent.change(await screen.findByLabelText("Amplitude"), { target: { value: "0.33" } });
+  await waitFor(() => expect(savedDefault.at(-1)?.values.amplitude_max).toBe("0.33"));
+  const savedA = structuredClone(savedDefault.at(-1));
+  act(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("workspace", "legacy");
+    url.searchParams.set("experiment", "rabi");
+    url.searchParams.set("draft", "pinned-b");
+    window.history.pushState(null, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "Editable draft" })).toHaveValue("pinned-b"),
+  );
+  expect(savedDefault.at(-1)).toEqual(savedA);
+  expect(
+    savedDefault.every((input) => input.code_revision?.content_hash !== "sha256:pinned-B"),
+  ).toBe(true);
+});

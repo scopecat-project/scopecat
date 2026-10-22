@@ -124,8 +124,9 @@ export function LaunchWorkspace({
     },
   });
   useEffect(() => {
-    if (catalog.data) sourceObserved(workspaceId, catalog.data.code_revision ?? undefined);
-  }, [catalog.data, workspaceId, sourceObserved]);
+    if (catalog.data && !handoff && (!linked || linkedMatches))
+      sourceObserved(workspaceId, catalog.data.code_revision ?? undefined);
+  }, [catalog.data, workspaceId, sourceObserved, handoff, linked, linkedMatches]);
   const linkedEntry = catalog.data?.entries.find((item) => item.id === linkedExperiment);
   const [linkBlocked, setLinkBlocked] = useState(false);
   const [linkRetry, setLinkRetry] = useState(0);
@@ -202,6 +203,7 @@ export function LaunchWorkspace({
     : catalog.data?.entries[0];
   const unavailable =
     !handoff &&
+    (!linked || linkedMatches) &&
     sourceAvailable &&
     catalog.isSuccess &&
     !catalog.isFetching &&
