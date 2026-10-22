@@ -541,6 +541,8 @@ export function normalizeRun(
   const status = normalizeStatus(control, snapshot);
   return {
     address: address ?? undefined,
+    manualLineConfirmation: admission.manual_line_confirmation ?? undefined,
+    runContractFingerprint: admission.run_contract_fingerprint,
     sequence: control.sequence,
     runId: admission.run_id,
     experimentId: plan.experiment_id,

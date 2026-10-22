@@ -207,8 +207,10 @@ class LocalDaemonRuntime:
             active_measurements = ActiveMeasurementStore()
             reviews = ReviewService()
             point_plans = RunPointPlanService(control=control, runs=runs)
+            confirmation_runtime_id = uuid4().hex
             automation = AutomationService(
                 automation_store,
+                confirmation_runtime_id=confirmation_runtime_id,
                 plans=ExperimentPlanRepository(project_store),
                 runs=runs,
                 resource_waits=ProcedureResourceWaits(control, runs, point_plans),
@@ -254,6 +256,7 @@ class LocalDaemonRuntime:
                 point_plans=point_plans,
             )
             admission = AdmissionService(
+                confirmation_runtime_id=confirmation_runtime_id,
                 setup=setup_service,
                 control=control,
                 runs=runs,
@@ -280,6 +283,7 @@ class LocalDaemonRuntime:
                 retain_measurements_before_fence=retain_measurements_before_fence,
             )
             executor = ExecutorService(
+                confirmation_runtime_id=confirmation_runtime_id,
                 control=control,
                 runs=runs,
                 instruments=instruments,

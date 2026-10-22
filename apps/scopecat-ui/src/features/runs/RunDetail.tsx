@@ -29,6 +29,7 @@ import { RunProposals } from "../proposals/RunProposals";
 import { RunMeasuredCosts } from "./RunMeasuredCosts";
 import { RunAnalysisFollows } from "./RunAnalysisFollows";
 import { RunAttentionNotice } from "./RunAttentionNotice";
+import { ManualLineRecovery } from "./ManualLineRecovery";
 import { RunFailureEvidence } from "./RunFailureEvidence";
 import { RunDomainDecisionCard } from "./RunDomainDecisionCard";
 import type {
@@ -287,6 +288,18 @@ export function RunDetail({
                 error={attentionError}
               />
               <RunFailureEvidence runId={run.runId} />
+              {run.status === "accepted" &&
+                run.manualLineConfirmation &&
+                run.runContractFingerprint && (
+                  <ManualLineRecovery
+                    key={run.runId}
+                    pendingOnly
+                    runId={run.runId}
+                    fingerprint={run.runContractFingerprint}
+                    original={run.manualLineConfirmation}
+                    configHash={run.configHash}
+                  />
+                )}
               {run.resources.some(
                 (resource) => resource.blockedBy || resource.status === "quarantined",
               ) && <ResourceCard run={run} />}

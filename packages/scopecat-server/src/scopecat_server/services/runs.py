@@ -291,6 +291,7 @@ def _run_control_view(
     return RunControlView(
         sequence=control.sequence,
         admission=RunAdmissionView(
+            manual_line_confirmation=control.admission.manual_line_confirmation,
             run_id=control.run_id,
             run_contract_fingerprint=control.admission.submission_content_hash,
             admitted_at=control.admission.admitted_at,

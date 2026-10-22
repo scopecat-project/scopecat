@@ -16,6 +16,7 @@ from pydantic import (
 
 from scopecat.kernel.entity import EntityRef
 from scopecat.kernel.quantity import Quantity
+from scopecat.records.manual_line import ManualLineConfirmation
 from scopecat.records.setup import SetupRevisionRef
 
 type PointCoordinateValue = bool | int | float | str | Quantity | EntityRef | None
@@ -275,6 +276,7 @@ class RunAdmissionRecord(_ControlModel):
     description: str | None = Field(default=None, min_length=1)
     resource_claims: tuple[ResourceKey, ...]
     admitted_at: datetime = Field(default_factory=utc_now)
+    manual_line_confirmation: ManualLineConfirmation | None = None
 
     @field_validator("resource_claims")
     @classmethod

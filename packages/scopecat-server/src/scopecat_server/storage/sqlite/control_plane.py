@@ -29,6 +29,7 @@ from scopecat.control.models import (
     RunExecutionSegmentResult,
     RunPage,
 )
+from scopecat.records.manual_line import ManualLineReconfirmation
 from scopecat.records.research_project import RunHistoryFilter
 from scopecat.records.setup import SetupRevisionRef
 
@@ -168,15 +169,19 @@ class SQLiteControlPlane:
         """Return an admitted submission when it already exists."""
 
         with self.sqlite.read_connection() as connection:
-            row = _one(
-                connection.execute(
-                    """
-                    SELECT * FROM scheduler_runs
-                    WHERE submission_id = ?
-                    """,
-                    (submission_id,),
-                )
+            return self.find_run_by_submission_id_in_transaction(
+                connection, submission_id
             )
+
+    def find_run_by_submission_id_in_transaction(
+        self, connection: sqlite3.Connection, submission_id: str
+    ) -> ControlRun | None:
+        """Resolve a retry before checking conditions required only by new work."""
+        row = _one(
+            connection.execute(
+                "SELECT * FROM scheduler_runs WHERE submission_id = ?", (submission_id,)
+            )
+        )
         return None if row is None else _run(row)
 
     def list_runs(
@@ -1557,18 +1562,132 @@ class SQLiteControlPlane:
             )
         return cursor.rowcount
 
+    def manual_line_confirmation_current_in_transaction(
+        self, connection: sqlite3.Connection, run: ControlRun, *, runtime_id: str
+    ) -> bool:
+        """Check first-execution freshness; existing segments retain reconciliation."""
+        original = run.admission.manual_line_confirmation
+        if original is None or self._has_execution_segment(connection, run.run_id):
+            return True
+        if original.runtime_id == runtime_id:
+            return True
+        return any(
+            payload.get("confirmation_runtime_id") == runtime_id
+            and payload.get("run_contract_fingerprint")
+            == run.admission.submission_content_hash
+            for payload in self._line_continuations(connection, run.run_id)
+        )
+
+    def require_manual_line_reconfirmation_in_transaction(
+        self, connection: sqlite3.Connection, run: ControlRun
+    ) -> None:
+        """Quarantine only an explicitly guarded child that never began execution."""
+        if (
+            run.state != "queued"
+            or run.admission.manual_line_confirmation is None
+            or self._has_execution_segment(connection, run.run_id)
+        ):
+            raise ControlPlaneConflict(
+                "line confirmation fence requires an unstarted queued run"
+            )
+        now = datetime.now(tz=UTC)
+        self._update_scheduler_state_in_transaction(
+            connection,
+            run,
+            state="attention_required",
+            at=now,
+            attention_reason="manual_line_confirmation_expired",
+        )
+        self._insert_event(
+            connection,
+            DurableEventInput(
+                run_id=run.run_id,
+                kind="manual_line_confirmation_expired",
+                payload={
+                    "run_contract_fingerprint": run.admission.submission_content_hash
+                },
+                occurred_at=now,
+            ),
+        )
+
+    @staticmethod
+    def _has_execution_segment(connection: sqlite3.Connection, run_id: str) -> bool:
+        return (
+            connection.execute(
+                "SELECT 1 FROM run_execution_segments WHERE run_id = ? LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            is not None
+        )
+
+    @staticmethod
+    def _line_continuations(
+        connection: sqlite3.Connection, run_id: str
+    ) -> tuple[dict[str, JsonValue], ...]:
+        rows = _all(
+            connection.execute(
+                "SELECT payload_json FROM durable_events "
+                "WHERE run_id = ? AND kind = 'run_continuation_authorized' "
+                "ORDER BY event_id",
+                (run_id,),
+            )
+        )
+        return tuple(
+            _JSON_OBJECT.validate_json(_text(row, "payload_json")) for row in rows
+        )
+
     def continue_run_after_attention_in_transaction(
         self,
         connection: sqlite3.Connection,
         run_id: str,
         *,
         run_contract_fingerprint: str,
+        manual_line_reconfirmation: ManualLineReconfirmation | None = None,
+        confirmation_runtime_id: str | None = None,
         at: datetime | None = None,
     ) -> tuple[ControlRun, int]:
         """Release reconciled resources and return an interrupted run to queue."""
 
         continued_at = at or datetime.now(tz=UTC)
         current = _run(self._require_run(connection, run_id))
+        original = current.admission.manual_line_confirmation
+        confirmation = manual_line_reconfirmation
+        if confirmation is not None:
+            if original is None or confirmation.original != original:
+                raise ControlPlaneConflict(
+                    "line confirmation does not match original admission"
+                )
+            if run_contract_fingerprint != current.admission.submission_content_hash:
+                raise ControlPlaneConflict(
+                    "continuation run contract does not match its admission"
+                )
+            # Replay before checking current state: a lost response must never mint
+            # another confirmation, including after another daemon restart.
+            for payload in self._line_continuations(connection, run_id):
+                saved = payload.get("manual_line_reconfirmation")
+                if (
+                    isinstance(saved, dict)
+                    and saved.get("request_key") == confirmation.request_key
+                ):
+                    if saved != confirmation.model_dump(mode="json"):
+                        raise ControlPlaneConflict(
+                            "line confirmation key already has different content"
+                        )
+                    return current, 0
+            if self._has_execution_segment(connection, run_id):
+                raise ControlPlaneConflict(
+                    "started runs require existing external-state reconciliation"
+                )
+            if confirmation_runtime_id is None:
+                raise ControlPlaneConflict("line confirmation requires a live runtime")
+            if current.attention_reason != "manual_line_confirmation_expired":
+                raise ControlPlaneConflict(
+                    "line confirmation cannot resolve other attention"
+                )
+        elif original is not None and not self._has_execution_segment(
+            connection, run_id
+        ):
+            raise ControlPlaneConflict("explicit human line reconfirmation is required")
         if current.state != "attention_required":
             raise ControlPlaneConflict("only an attention-required run can continue")
         if current.cancellation_requested_at is not None:
@@ -1589,14 +1708,20 @@ class SQLiteControlPlane:
             state="queued",
             at=continued_at,
         )
+        payload: dict[str, JsonValue] = {
+            "run_contract_fingerprint": run_contract_fingerprint,
+        }
+        if confirmation is not None:
+            payload.update(
+                manual_line_reconfirmation=confirmation.model_dump(mode="json"),
+                confirmation_runtime_id=confirmation_runtime_id,
+            )
         self._insert_event(
             connection,
             DurableEventInput(
                 run_id=run_id,
                 kind="run_continuation_authorized",
-                payload={
-                    "run_contract_fingerprint": run_contract_fingerprint,
-                },
+                payload=payload,
                 occurred_at=continued_at,
             ),
         )

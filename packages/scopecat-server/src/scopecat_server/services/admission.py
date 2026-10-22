@@ -5,7 +5,9 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import uuid4
 
+from scopecat.automation.models import InterpretationOutputRef
 from scopecat.automation.wire import procedure_step_operation_id
 from scopecat.config.contexts import apply_context_overrides
 from scopecat.config.registry import service as config_registry_service
@@ -37,6 +39,7 @@ from scopecat.records.config import (
     config_content_hash,
 )
 from scopecat.records.config_context import ContextRunConfigSource
+from scopecat.records.manual_line import ManualLineConfirmation
 from scopecat.records.run import (
     AnalysisCandidateRunConfigSource,
     ConfigRegistryRunConfigSource,
@@ -94,6 +97,7 @@ class AdmissionService:
         targets: TargetCatalogStore,
         setup: SetupService,
         deployment_id: str | None = None,
+        confirmation_runtime_id: str | None = None,
     ) -> None:
         self._control = control
         self._runs = runs
@@ -104,6 +108,7 @@ class AdmissionService:
         self._targets = targets
         self._setup = setup
         self._deployment_id = deployment_id
+        self._confirmation_runtime_id = confirmation_runtime_id or uuid4().hex
 
     def submit_run(self, submission: RunSubmission) -> RunAdmission:
         from .practice_admission import run_scope
@@ -221,13 +226,20 @@ class AdmissionService:
                         overrides=source.overrides,
                     )
                 DeviceRepository(connection).require_current(resolved_devices)
+                existing = self._control.find_run_by_submission_id_in_transaction(
+                    connection, submission.submission_id
+                )
+                if existing is None:
+                    confirmation = self._require_procedure_child(connection, submission)
+                    admission = admission.model_copy(
+                        update={"manual_line_confirmation": confirmation}
+                    )
                 run = self._control.admit_run_in_transaction(
                     connection,
                     admission,
                 )
                 self._point_plans.initialize_admitted_in_transaction(connection, run)
                 if run.run_id == admission.run_id:
-                    self._require_procedure_child(connection, submission)
                     allocate_address(
                         connection,
                         run_id=run.run_id,
@@ -261,7 +273,7 @@ class AdmissionService:
 
     def _require_procedure_child(
         self, connection: sqlite3.Connection, submission: RunSubmission
-    ) -> None:
+    ) -> ManualLineConfirmation | None:
         source = submission.procedure_child
         if source is None:
             if (
@@ -271,7 +283,7 @@ class AdmissionService:
                 raise BackendConflict(
                     "plan or decision-source run requires its admitted procedure step"
                 )
-            return
+            return None
         store = SQLiteAutomationStore(self._control.sqlite)
         try:
             parent = store.read_run_in_transaction(connection, source.procedure_run_id)
@@ -318,6 +330,43 @@ class AdmissionService:
             != procedure_step_operation_id(source.procedure_run_id, source.step_key)
         ):
             raise BackendConflict("run does not match its live durable parent step")
+        ref = source.manual_line_confirmation
+        if ref is None:
+            return None
+        if ref.procedure_run_id != source.procedure_run_id:
+            raise BackendConflict(
+                "manual line confirmation belongs to another procedure"
+            )
+        confirmed = store.latest_step_attempt_in_transaction(
+            connection, ref.procedure_run_id, ref.step_key
+        )
+        if confirmed is None:
+            raise BackendConflict("manual line confirmation was not found")
+        output = confirmed.output
+        request = confirmed.interpretation_request
+        if (
+            confirmed.state != "succeeded"
+            or not isinstance(output, InterpretationOutputRef)
+            or output not in step.inputs
+            or output.request_hash != ref.request_hash
+            or request is None
+            or request.manual_line is None
+            or request.manual_line.step_key != source.step_key
+            or request.manual_line.intent_hash != step.intent_hash
+            or output.response.actor_kind != "human"
+            or output.response.confirmed_runtime_id is None
+        ):
+            raise BackendConflict(
+                "child requires its exact human line confirmation input"
+            )
+        return ManualLineConfirmation(
+            procedure_run_id=ref.procedure_run_id,
+            step_key=ref.step_key,
+            request_hash=ref.request_hash,
+            line_id=request.manual_line.line_id,
+            actor=output.response.actor,
+            runtime_id=output.response.confirmed_runtime_id,
+        )
 
     def _replay_admission(
         self,
@@ -454,7 +503,10 @@ class AdmissionService:
         command: AttentionResolutionCommand,
     ) -> AttentionResolutionReceipt:
         run = self._control_run(run_id)
-        if run.state != "attention_required":
+        if (
+            run.state != "attention_required"
+            and command.manual_line_reconfirmation is None
+        ):
             raise BackendConflict("run does not require operator attention")
         if command.disposition == "continue":
             fingerprint = command.run_contract_fingerprint
@@ -467,11 +519,14 @@ class AdmissionService:
                             connection,
                             run_id,
                             run_contract_fingerprint=fingerprint,
+                            manual_line_reconfirmation=command.manual_line_reconfirmation,
+                            confirmation_runtime_id=self._confirmation_runtime_id,
                         )
                     )
             except ControlPlaneConflict as error:
                 raise BackendConflict(str(error)) from error
-            assert continued.state == "queued"
+            if command.manual_line_reconfirmation is None:
+                assert continued.state == "queued"
             return AttentionResolutionReceipt(
                 run_id=run_id,
                 disposition="continue",

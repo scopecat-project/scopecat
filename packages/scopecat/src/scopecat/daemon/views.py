@@ -46,6 +46,7 @@ from scopecat.records.config import (
 )
 from scopecat.records.config_context import ConfigValueOrigin, ContextRunConfigSource
 from scopecat.records.content import ContentEntry
+from scopecat.records.manual_line import ManualLineConfirmation
 from scopecat.records.measurement import (
     InstrumentAcquisitionEvidence,
     MeasurementDatasetSchema,
@@ -228,7 +229,14 @@ class RunPlanView(_ViewModel):
         return tuple(spec.id for spec in self.coordinates)
 
 
+def _absent_manual_confirmation(value: object) -> bool:
+    return value is None
+
+
 class RunAdmissionView(_ViewModel):
+    manual_line_confirmation: ManualLineConfirmation | None = Field(
+        default=None, exclude_if=_absent_manual_confirmation
+    )
     run_id: str = Field(min_length=1)
     run_contract_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     plan: RunPlanView

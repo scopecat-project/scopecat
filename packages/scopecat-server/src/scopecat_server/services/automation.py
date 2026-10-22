@@ -149,6 +149,7 @@ class AutomationService:
         resource_waits: ProcedureResourceWaits | None = None,
         plans: ExperimentPlanRepository | None = None,
         checks: CalibrationCheckAdmission | None = None,
+        confirmation_runtime_id: str | None = None,
     ) -> None:
         if lease_ttl <= timedelta(0):
             raise ValueError("procedure lease TTL must be positive")
@@ -162,6 +163,7 @@ class AutomationService:
         self._resource_waits = resource_waits
         self._plans = plans
         self._checks = checks
+        self._confirmation_runtime_id = confirmation_runtime_id or uuid4().hex
 
     def require_operator(self, procedure_id: str) -> None:
         """Authorize an operator handoff before changing process management."""
@@ -1393,12 +1395,25 @@ class AutomationService:
                 raise AutomationConflict(
                     "procedure interpretation response does not match its schema"
                 ) from error
+            if request.manual_line is not None and command.actor_kind != "human":
+                raise AutomationConflict(
+                    "physical line wiring requires a human confirmation"
+                )
+            if request.manual_line is not None and command.value != {"confirmed": True}:
+                raise AutomationConflict(
+                    "explicitly confirm the current physical line wiring"
+                )
             response = InterpretationResponse(
                 actor=command.actor,
                 actor_kind=command.actor_kind,
                 value=command.value,
                 note=command.note,
                 submitted_at=now,
+                confirmed_runtime_id=(
+                    self._confirmation_runtime_id
+                    if request.manual_line is not None
+                    else None
+                ),
             )
             output = InterpretationOutputRef(
                 procedure_run_id=command.procedure_run_id,

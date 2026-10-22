@@ -80,6 +80,12 @@ class RunResourcesBlocked(Exception):
         super().__init__(f"resources are busy for {run_id}")
 
 
+class RunLineConfirmationRequired(Exception):
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        super().__init__(f"confirm current wiring before continuing run {run_id}")
+
+
 @dataclass(frozen=True, slots=True)
 class _DaemonRunner:
     client: DaemonClient
@@ -126,6 +132,12 @@ class _DaemonRunner:
         except DaemonConflictError:
             if wait_for_resources:
                 detail = self.client.get_run(admission.run_id)
+                if (
+                    detail.control.state == "attention_required"
+                    and detail.control.attention_reason
+                    == "manual_line_confirmation_expired"
+                ):
+                    raise RunLineConfirmationRequired(admission.run_id) from None
                 if (
                     detail.control.state == "queued"
                     and not self.client.get_run_execution_segments(

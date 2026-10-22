@@ -3,6 +3,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from scopecat.records.content import Sha256ContentHash
+from scopecat.records.manual_line import ManualLineConfirmationRef
 
 
 class ExperimentPlanRef(BaseModel):
@@ -31,3 +32,4 @@ class ProcedureChildSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     procedure_run_id: str = Field(min_length=1)
     step_key: str = Field(min_length=1)
+    manual_line_confirmation: ManualLineConfirmationRef | None = None
