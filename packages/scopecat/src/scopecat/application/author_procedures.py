@@ -16,6 +16,7 @@ from scopecat.api.application_open import open_in_application
 from scopecat.api.procedure_inputs import PendingProcedureInput
 from scopecat.application.launch import LaunchSubmission
 from scopecat.automation.definition import ProcedureDefinition
+from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.models import (
     ProcedureRun,
     ProcedureSource,
@@ -50,6 +51,7 @@ class AuthorProcedureOperations:
         intent: IntentT,
         *,
         request_key: str,
+        exit_scope: ExitScope = "current",
     ) -> PreparedAuthorProcedure:
         """Freeze one source-bound command. No imports or execution are refreshed.
 
@@ -71,6 +73,7 @@ class AuthorProcedureOperations:
         return PreparedAuthorProcedure(
             self.session,
             ProcedureSubmitCommand(
+                exit_scope=exit_scope,
                 request_key=request_key,
                 definition=definition.ref,
                 intent=definition.encode_intent(intent),

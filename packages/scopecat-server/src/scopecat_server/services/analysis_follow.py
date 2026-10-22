@@ -95,7 +95,7 @@ class AnalysisFollowRunner:
                     return
                 with self._rounds.round() as admitted:
                     if not admitted:
-                        return
+                        break
                     try:
                         self._advance(identity)
                     except Exception as error:

@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
 )
 
+from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.interpretations import (
     InterpretationRequest,
     InterpretationResponse,
@@ -267,6 +268,7 @@ class ProcedureRecoverySource(_ProcedureModel):
 class ProcedureRun(_ProcedureModel):
     """Current durable state of one version-pinned procedure invocation."""
 
+    exit_scope: ExitScope | None = None
     procedure_run_id: _NonEmptyText
     request_key: _NonEmptyText
     definition: ProcedureDefinitionRef

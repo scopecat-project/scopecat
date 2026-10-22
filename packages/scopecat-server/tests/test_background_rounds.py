@@ -73,3 +73,47 @@ def test_shutdown_decision_serializes_with_concurrent_round_admission() -> None:
         assert rounds.stop(accept, only_if_idle=True)
         assert pending is not None
         assert not pending.result(timeout=5)
+
+
+def test_drain_pauses_next_round_but_current_work_and_cancel_remain_reversible() -> (
+    None
+):
+    rounds = BackgroundRounds()
+    with rounds.round() as started:
+        assert started
+        rounds.drain(True)
+        assert rounds.active == 1
+        with rounds.round() as maintenance:
+            assert not maintenance
+        with rounds.round(current=True) as bounded:
+            assert bounded
+        assert not rounds.stop(lambda: None, only_if_idle=True)
+    rounds.drain(False)
+    with rounds.round() as resumed:
+        assert resumed
+
+
+def test_analysis_follow_thread_resumes_after_cancelled_drain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import Mock
+
+    from scopecat_server.services.analysis_follow import AnalysisFollowRunner
+
+    rounds = BackgroundRounds()
+    rounds.drain(True)
+    repository = Mock()
+    repository.running.return_value = ("follow",)
+    repository.states.return_value = {}
+    invoked = Event()
+    runner = AnalysisFollowRunner(repository, Mock(), Mock(), rounds=rounds)
+    monkeypatch.setattr(runner, "_advance", lambda _: invoked.set())
+    runner.start()
+    try:
+        assert not invoked.wait(0.7)
+        assert runner._thread is not None and runner._thread.is_alive()
+        rounds.drain(False)
+        assert invoked.wait(2)
+        repository.set_state.assert_not_called()
+    finally:
+        runner.stop()

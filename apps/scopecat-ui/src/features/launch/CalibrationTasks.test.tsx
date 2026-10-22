@@ -25,6 +25,7 @@ function fixture(): View {
   return {
     task: {
       specification: {
+        exit_scope: "current",
         task_id: "round/1",
         plan: { stages: [{ id: "q0", check, depends_on: [] }] },
         calls: {
@@ -235,7 +236,10 @@ it("loads history only when expanded and paginates retained tasks", async () => 
       items: [
         {
           ...view.task,
-          specification: { ...view.task.specification, task_id: cursor ? "older" : "round/1" },
+          specification: {
+            ...view.task.specification,
+            task_id: cursor ? "older" : "round/1",
+          },
         },
       ],
       next_cursor: cursor ? null : 2,
