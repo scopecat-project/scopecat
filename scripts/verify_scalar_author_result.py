@@ -42,9 +42,12 @@ def shot_iq() -> Annotated[NDArray[np.complex128], sc.ArrayType(
 
 
 @sc.compute
-def mean_iq(samples, gain) -> Annotated[
-    complex, sc.Unit("V")
-]:
+def mean_iq(
+    samples: Annotated[NDArray[np.complex128], sc.ArrayType(
+        dtype="complex128", unit="V", dimensions=(sc.ArrayDimension("shot", 2),)
+    )],
+    gain: float,
+) -> Annotated[complex, sc.Unit("V")]:
     return complex(np.mean(samples)) * gain
 
 

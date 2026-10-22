@@ -472,6 +472,7 @@ fast_paths = [
   "packages/scopecat-app/tests/test_release_assets.py",
   "packages/scopecat-app/tests/test_acceptance_workspaces.py",
   "packages/scopecat-app/tests/test_acceptance_artifacts.py",
+  "packages/scopecat-app/tests/test_scalar_author_contract.py",
   "packages/scopecat-app/tests/test_author_environment.py",
   "packages/scopecat-app/tests/test_author_resources.py",
   "packages/scopecat-app/tests/test_notebook_journey.py",
