@@ -643,12 +643,23 @@ function ProjectDraft({
           if (!mayLeave()) return false;
           if (!recovery.keepExplicitInput(plan.definition.workspace_id, entry.id)) return false;
           if (!alive.current) return false;
+          const line = "manualLine" in plan;
+          if (line && (!attemptsReady || submitting.current || attempt?.status === "pending"))
+            return false;
+          if (line && attempt && attempt.request.manual_line?.scan_id !== plan.manualLine.scan_id)
+            return false;
+          const receiptGeneration = attemptGeneration.current;
           const current = latest.current;
           const generation = ++operatorSelection.current;
           operatorPending.current = true;
           preparationToken.current = undefined;
           let operator: string;
           try {
+            if (line && attempt?.status === "unknown") {
+              if (!attempt.sequence) return false;
+              const receipt = await resolveAttempt(attempt.sequence);
+              if (!receipt.procedure_id) return false;
+            }
             operator =
               current && current.actor !== current.defaultActor
                 ? current.actor
@@ -663,7 +674,8 @@ function ProjectDraft({
             !alive.current ||
             latest.current !== current ||
             generation !== operatorSelection.current ||
-            !isIntended()
+            !isIntended() ||
+            (line && receiptGeneration !== attemptGeneration.current)
           )
             return false;
           setOperatorError(undefined);
@@ -689,6 +701,12 @@ function ProjectDraft({
             selection: normalizeSelection(d.selection),
             actor: operator,
           });
+          if (line) {
+            // This explicit selection only changes UI focus. The same scan's
+            // durable admission fence still blocks active or unreconciled runs.
+            attemptGeneration.current += 1;
+            setAttempt(undefined);
+          }
           currentWorkspace.current = d.workspace_id;
           setWorkspaceId(d.workspace_id);
           setDraft({

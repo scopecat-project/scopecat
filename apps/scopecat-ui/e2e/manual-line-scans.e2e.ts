@@ -41,6 +41,10 @@ for (const width of [1280, 390]) {
         workspace: string;
       };
       await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${base}/#settings`);
+      await page.getByLabel("Operator name", { exact: true }).fill("measurement-operator");
+      await page.getByRole("button", { name: "Save operator", exact: true }).click();
+      await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
       await page.goto(`${base}/?workspace=${encodeURIComponent(seed.workspace)}#launch`);
       await page.getByText("Physical line scans", { exact: true }).click();
       const region = page.getByRole("region", { name: "Physical line scans", exact: true });
@@ -106,7 +110,7 @@ for (const width of [1280, 390]) {
         }
         await page.goto(`${base}/?procedure=${receipt.procedure_id}#decisions`);
         await page.getByLabel("Recorded reviewer", { exact: true }).fill(`wire-operator-${index}`);
-        await page.getByRole("checkbox").check();
+        await page.getByLabel("confirmed", { exact: true }).selectOption("true");
         await page.getByRole("button", { name: "Submit and continue", exact: true }).click();
         await expect
           .poll(
@@ -162,7 +166,9 @@ for (const width of [1280, 390]) {
       await expect(page.getByLabel("Secondary run", { exact: true })).toHaveValue(runIds[2]);
       const comparison = page.waitForResponse(
         (response) =>
-          response.url().endsWith("/run-comparison") && response.request().method() === "POST",
+          response.url().endsWith("/run-comparison") &&
+          response.request().method() === "POST" &&
+          response.request().postDataJSON().action === "inspect",
       );
       await page.getByRole("button", { name: "Inspect compatible data", exact: true }).click();
       expect((await comparison).status()).toBe(200);

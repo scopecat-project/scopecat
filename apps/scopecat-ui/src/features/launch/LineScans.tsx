@@ -168,7 +168,7 @@ export function LineScanWorkspace() {
       if (opening.current !== token) return;
       if (!accepted) {
         setError(
-          "The template was not opened. Finish saving or reviewing the current input, then prepare this line again.",
+          "The template was not opened. Finish saving or reviewing the current input and check any original submission from another list, then prepare this line again.",
         );
         return;
       }
@@ -183,7 +183,10 @@ export function LineScanWorkspace() {
     }
   }
   return (
-    <section aria-label="Physical line scans" className="border border-line rounded p-3 space-y-3">
+    <section
+      aria-label="Physical line scans"
+      className="min-w-0 break-words [overflow-wrap:anywhere] border border-line rounded p-3 space-y-3"
+    >
       <h3 className="font-semibold">Physical line scans</h3>
       <p>
         One measurement template, an ordered line list and all attempts. Confirm each physical
@@ -437,11 +440,12 @@ function LineScanDetail({
         <section aria-label="Line attempt comparison">
           <h4>Selected attempt settings</h4>
           <ul>
-            {settingDifferences(compared[0]!.procedure.intent, compared[1]!.procedure.intent).map(
-              (text) => (
-                <li key={text}>{text}</li>
-              ),
-            )}
+            {settingDifferences(
+              measurementSettings(compared[0]!.procedure.intent),
+              measurementSettings(compared[1]!.procedure.intent),
+            ).map((text) => (
+              <li key={text}>{text}</li>
+            ))}
           </ul>
           <a
             className="underline"
@@ -457,6 +461,18 @@ function LineScanDetail({
       )}
     </div>
   );
+}
+
+function measurementSettings(
+  intent: View["lines"][number]["attempts"][number]["procedure"]["intent"],
+) {
+  return {
+    configuration: intent.config,
+    controls: intent.edits,
+    inputs: intent.inputs,
+    scan_mode: intent.scan_mode,
+    parameter_sweeps: intent.parameter_sweeps,
+  };
 }
 
 export function settingDifferences(left: unknown, right: unknown, path = ""): string[] {
