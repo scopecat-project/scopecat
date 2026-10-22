@@ -107,7 +107,11 @@ def test_analysis_follow_thread_resumes_after_cancelled_drain(
     repository.states.return_value = {}
     invoked = Event()
     runner = AnalysisFollowRunner(repository, Mock(), Mock(), rounds=rounds)
-    monkeypatch.setattr(runner, "_advance", lambda _: invoked.set())
+
+    def advance(identity: str) -> None:
+        invoked.set()
+
+    monkeypatch.setattr(runner, "_advance", advance)
     runner.start()
     try:
         assert not invoked.wait(0.7)
