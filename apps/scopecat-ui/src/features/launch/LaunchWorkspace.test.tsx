@@ -71,12 +71,12 @@ it("shows a durable resource wait and its cancelled child without calling it run
     "href",
     "?procedure=p1&run=run-child#runs",
   );
-  fireEvent.click(screen.getByText("Cancel remaining procedure"));
+  fireEvent.click(screen.getByText("Cancel queued task", { selector: "summary" }));
   fireEvent.change(screen.getByLabelText("Cancellation actor"), { target: { value: "operator" } });
   fireEvent.change(screen.getByLabelText("Cancellation reason"), {
     target: { value: "Stop waiting" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Cancel procedure" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel queued task" }));
   await screen.findByText("child: Cancelled before acquisition");
 });
 const entry = {

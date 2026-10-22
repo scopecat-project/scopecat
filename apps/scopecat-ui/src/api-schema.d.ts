@@ -1306,6 +1306,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/launch-drafts/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List Launch Drafts */
+        post: operations["list_launch_drafts_api_v1_launch_drafts_list_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/launch-drafts/read": {
         parameters: {
             query?: never;
@@ -7706,6 +7723,11 @@ export interface components {
                 [key: string]: components["schemas"]["RawControl"];
             };
             declaration: components["schemas"]["LaunchCatalogEntry-Input"];
+            /**
+             * Draft Name
+             * @default Draft
+             */
+            draft_name: string;
             /** Handoff */
             handoff?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
@@ -7748,6 +7770,11 @@ export interface components {
                 [key: string]: components["schemas"]["RawControl"];
             };
             declaration: components["schemas"]["LaunchCatalogEntry-Output"];
+            /**
+             * Draft Name
+             * @default Draft
+             */
+            draft_name: string;
             /** Handoff */
             handoff?: {
                 [key: string]: components["schemas"]["pydantic__types__JsonValue"];
@@ -7821,6 +7848,11 @@ export interface components {
         };
         /** LaunchDraftTarget */
         LaunchDraftTarget: {
+            /**
+             * Draft Id
+             * @default default
+             */
+            draft_id: string;
             /** Experiment */
             experiment: string;
             /** Workspace Id */
@@ -15960,6 +15992,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchDraftPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_launch_drafts_api_v1_launch_drafts_list_post: {
+        parameters: {
+            query?: {
+                before?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchDraftTarget"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

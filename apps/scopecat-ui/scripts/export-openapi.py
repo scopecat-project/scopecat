@@ -22,6 +22,7 @@ _OPERATIONS = {
     ("/api/v1/runs/{run_id}/analysis-actions", "get"),
     ("/api/v1/launch-drafts", "get"),
     ("/api/v1/launch-drafts/read", "post"),
+    ("/api/v1/launch-drafts/list", "post"),
     ("/api/v1/launch-drafts/save", "post"),
     ("/api/v1/launch-attempts", "get"),
     ("/api/v1/launch-attempts", "post"),

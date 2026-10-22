@@ -46,8 +46,9 @@ def head(
         connection.execute(
             "SELECT draft_json FROM launch_drafts WHERE workspace_id=? "
             "AND experiment=? "
+            "AND COALESCE(json_extract(draft_json, '$.target.draft_id'), 'default')=? "
             "AND state!='conflict' ORDER BY revision DESC LIMIT 1",
-            (str(target.workspace_id), target.experiment),
+            (str(target.workspace_id), target.experiment, target.draft_id),
         ).fetchone(),
     )
     return (
@@ -116,6 +117,36 @@ def history(
             "SELECT draft_json FROM launch_drafts WHERE (? IS NULL OR revision<?) "
             "ORDER BY revision DESC LIMIT ?",
             (before, before, limit + 1),
+        ).fetchall(),
+    )
+    items = [
+        LaunchDraftRecord.model_validate_json(cast("str", row[0]))
+        for row in rows[:limit]
+    ]
+    return LaunchDraftPage(
+        items=items, next_cursor=items[-1].revision if len(rows) > limit else None
+    )
+
+
+def heads(
+    connection: sqlite3.Connection,
+    target: LaunchDraftTarget,
+    before: int | None,
+    limit: int,
+) -> LaunchDraftPage:
+    # Identity lives in the retained JSON, including old records whose identity
+    # is the default draft. No rewrite of retained editing history is needed.
+    rows = cast(
+        "list[sqlite3.Row]",
+        connection.execute(
+            "SELECT draft_json FROM launch_drafts WHERE revision IN ("
+            "SELECT MAX(revision) FROM launch_drafts "
+            "WHERE workspace_id=? AND experiment=? AND state!='conflict' "
+            "GROUP BY COALESCE(json_extract(draft_json, '$.target.draft_id'), "
+            "'default')"
+            ") AND state='saved' AND (? IS NULL OR revision<?) "
+            "ORDER BY revision DESC LIMIT ?",
+            (str(target.workspace_id), target.experiment, before, before, limit + 1),
         ).fetchall(),
     )
     items = [

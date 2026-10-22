@@ -939,7 +939,7 @@ it.each(["none", "candidate", "activation_after_review"] as const)(
   },
 );
 
-it.each(["cancel", "edit", "context", "navigate"])(
+it.each(["cancel", "edit", "context", "navigate", "submitted", "submitted and back"])(
   "does not submit a late preparation after %s",
   async (action) => {
     render(<Harness />);
@@ -959,6 +959,11 @@ it.each(["cancel", "edit", "context", "navigate"])(
       fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "another-sample" } });
     if (action === "navigate")
       fireEvent.click(screen.getByRole("button", { name: "configuration" }));
+    if (action === "submitted" || action === "submitted and back") {
+      fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
+      if (action === "submitted and back")
+        fireEvent.click(screen.getByRole("button", { name: "Editor" }));
+    }
     await act(async () => finish(Response.json(preview())));
     expect(submissions).toHaveLength(0);
     expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
@@ -1061,4 +1066,25 @@ it("reports invalid controls without retaining a preparation lock or submitting"
   fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4.8" } });
   fireEvent.click(start);
   await waitFor(() => expect(submissions).toHaveLength(1));
+});
+
+it("keeps an already-sent acquisition receipt when leaving the mounted editor", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  deferSubmission = true;
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await waitFor(() => expect(submissionResponse).toBeDefined());
+  expect(submissions).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
+  await act(async () => submissionResponse!(Response.json({ procedure_id: "submitted-A" })));
+  await screen.findByRole("heading", { name: "Submission confirmed" });
+  expect(screen.getByRole("button", { name: "Submitted work" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(submissions).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Editor" }));
+  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
 });

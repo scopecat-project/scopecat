@@ -22,6 +22,7 @@ class RecoveryModel(BaseModel):
 class LaunchDraftTarget(RecoveryModel):
     workspace_id: AuthorWorkspaceId
     experiment: str = Field(min_length=1, max_length=4096)
+    draft_id: str = Field(default="default", min_length=1, max_length=200)
 
 
 class RawControl(RecoveryModel):
@@ -35,6 +36,7 @@ class RawControl(RecoveryModel):
 
 
 class LaunchDraftInput(RecoveryModel):
+    draft_name: str = Field(default="Draft", min_length=1, max_length=200)
     declaration: LaunchCatalogEntry
     code_revision: AuthorRevisionRef | None = None
     pinned_source: bool = False

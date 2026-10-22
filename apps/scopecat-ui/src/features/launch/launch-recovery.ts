@@ -23,8 +23,17 @@ export function attemptRequest(record: AttemptRecord): SubmissionRequest {
   };
 }
 type Save = components["schemas"]["LaunchDraftSave"];
-export const readDraft = (workspace_id: string, experiment: string) =>
-  apiData(apiClient.POST("/api/v1/launch-drafts/read", { body: { workspace_id, experiment } }));
+export const readDraft = (workspace_id: string, experiment: string, draft_id = "default") =>
+  apiData(
+    apiClient.POST("/api/v1/launch-drafts/read", { body: { workspace_id, experiment, draft_id } }),
+  );
+export const listDrafts = (workspace_id: string, experiment: string, before?: number) =>
+  apiData(
+    apiClient.POST("/api/v1/launch-drafts/list", {
+      body: { workspace_id, experiment, draft_id: "default" },
+      params: { query: { before, limit: 50 } },
+    }),
+  );
 export const saveDraft = (body: Save) =>
   apiData(apiClient.POST("/api/v1/launch-drafts/save", { body }));
 export const draftHistory = (before?: number) =>
@@ -38,6 +47,7 @@ export const resolveAttempt = (sequence: number) =>
 
 export function rawInput(draft: LaunchDraft): Input {
   return {
+    draft_name: draft.draftName ?? "Draft",
     declaration: JSON.parse(draft.definition) as Input["declaration"],
     code_revision: draft.sourceBaseline ?? draft.codeRevision,
     pinned_source: Boolean(draft.codeRevision),
@@ -62,6 +72,8 @@ export function rawInput(draft: LaunchDraft): Input {
 export function restoreDraft(record: DraftRecord, revision: number): LaunchDraft {
   const input = record.input;
   return {
+    draftId: record.target.draft_id ?? "default",
+    draftName: input.draft_name ?? "Draft",
     workspaceId: record.target.workspace_id,
     experiment: record.target.experiment,
     definition: JSON.stringify(input.declaration),
@@ -123,12 +135,12 @@ export function useLaunchRecovery(
   const [epoch, setEpoch] = useState(0);
   const target =
     draft?.experiment && draft.workspaceId
-      ? JSON.stringify([draft.workspaceId, draft.experiment])
+      ? JSON.stringify([draft.workspaceId, draft.experiment, draft.draftId ?? "default"])
       : "";
   const encoded = draft?.definition ? JSON.stringify(rawInput(draft)) : "";
   useEffect(() => {
     if (!target) return;
-    const [workspace, experiment] = JSON.parse(target) as [string, string];
+    const [workspace, experiment, draft_id] = JSON.parse(target) as [string, string, string];
     const cached = unfinished.get(target);
     if (cached && (cached.failed || cached.pending > 0)) {
       requestedCopy.current = undefined;
@@ -137,7 +149,7 @@ export function useLaunchRecovery(
       const restored = restoreDraft(
         {
           revision: cached.revision,
-          target: { workspace_id: workspace, experiment },
+          target: { workspace_id: workspace, experiment, draft_id },
           input: JSON.parse(cached.queued),
           state: "saved",
           created_at: "",
@@ -173,7 +185,7 @@ export function useLaunchRecovery(
         setStatus("Loading saved experiment input…");
     });
     let active = true;
-    void readDraft(workspace, experiment)
+    void readDraft(workspace, experiment, draft_id)
       .then(({ head }) => {
         current.revision = head?.revision ?? 0;
         current.head = head ?? undefined;
@@ -181,7 +193,8 @@ export function useLaunchRecovery(
         const pendingCopy = requestedCopy.current;
         const copy =
           pendingCopy?.target.workspace_id === workspace &&
-          pendingCopy.target.experiment === experiment
+          pendingCopy.target.experiment === experiment &&
+          (pendingCopy.target.draft_id ?? "default") === draft_id
             ? pendingCopy
             : undefined;
         const selected =
@@ -195,7 +208,9 @@ export function useLaunchRecovery(
         if (selected && explicitInput.current !== target) {
           if (!copy) current.queued = JSON.stringify(rawInput(restoreDraft(selected, 1)));
           setDraft((previous) =>
-            previous?.workspaceId === workspace && previous.experiment === experiment
+            previous?.workspaceId === workspace &&
+            previous.experiment === experiment &&
+            (previous.draftId ?? "default") === draft_id
               ? restoreDraft(selected, previous.revision + 1)
               : previous,
           );
@@ -248,11 +263,15 @@ export function useLaunchRecovery(
             if (candidate !== current.queued) continue;
           }
           const sent = current.queued;
-          const [workspace_id, experiment] = JSON.parse(current.target) as [string, string];
+          const [workspace_id, experiment, draft_id] = JSON.parse(current.target) as [
+            string,
+            string,
+            string,
+          ];
           const command: Save = {
             operation_id: crypto.randomUUID(),
             expected_revision: current.revision,
-            target: { workspace_id, experiment },
+            target: { workspace_id, experiment, draft_id },
             input: JSON.parse(sent) as Input,
             discard: false,
           };
@@ -304,15 +323,31 @@ export function useLaunchRecovery(
     },
     [unfinished],
   );
+  useEffect(() => {
+    const protectUnconfirmedInput = (event: BeforeUnloadEvent) => {
+      if (
+        ![...unfinished.values()].some(
+          (item) => item.pending || item.failed || item.conflict || item.hydrating,
+        )
+      )
+        return;
+      // Browsers decide whether to show their native confirmation. This does not
+      // establish native-host close protection or guarantee an asynchronous save.
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectUnconfirmedInput);
+    return () => window.removeEventListener("beforeunload", protectUnconfirmedInput);
+  }, [unfinished]);
   const current = visibleSession;
   return {
     status,
     canLeave: () => !session.current?.failed && !session.current?.hydrating,
     unsavedTargets: [...unfinished.values()]
       .filter((item) => item.failed)
-      .map((item) => JSON.parse(item.target) as [string, string]),
-    keepExplicitInput(workspace: string, experiment: string) {
-      const selected = JSON.stringify([workspace, experiment]);
+      .map((item) => JSON.parse(item.target) as [string, string, string]),
+    keepExplicitInput(workspace: string, experiment: string, draftId = "default") {
+      const selected = JSON.stringify([workspace, experiment, draftId]);
       const cached = unfinished.get(selected);
       if (cached?.failed || cached?.pending || cached?.hydrating) {
         setStatus(
@@ -326,7 +361,11 @@ export function useLaunchRecovery(
     },
     selectCopy(record: DraftRecord) {
       const cached = unfinished.get(
-        JSON.stringify([record.target.workspace_id, record.target.experiment]),
+        JSON.stringify([
+          record.target.workspace_id,
+          record.target.experiment,
+          record.target.draft_id ?? "default",
+        ]),
       );
       if (session.current?.pending || cached?.failed || cached?.pending || cached?.hydrating) {
         setStatus("Wait for the current input save before opening a historical copy.");
@@ -335,7 +374,11 @@ export function useLaunchRecovery(
       requestedCopy.current = record;
       if (
         session.current?.target ===
-        JSON.stringify([record.target.workspace_id, record.target.experiment])
+        JSON.stringify([
+          record.target.workspace_id,
+          record.target.experiment,
+          record.target.draft_id ?? "default",
+        ])
       ) {
         session.current.revision = record.revision;
         session.current.queued = "";

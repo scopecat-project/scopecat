@@ -16,6 +16,17 @@ export function installLaunchRecoveryRoutes() {
     const path = new URL(request.url).pathname;
     if (path.endsWith("/operator-settings"))
       return Response.json({ revision: 0, operator: "operator" });
+    if (path.endsWith("/launch-drafts/list")) {
+      const target = await request.json();
+      return Response.json({
+        items: [...drafts.values()].filter(
+          (draft) =>
+            draft.target.workspace_id === target.workspace_id &&
+            draft.target.experiment === target.experiment,
+        ),
+        next_cursor: null,
+      });
+    }
     if (path.endsWith("/launch-drafts/read")) {
       const target = await request.json();
       return Response.json({ head: drafts.get(JSON.stringify(target)) ?? null });

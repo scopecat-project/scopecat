@@ -7,11 +7,13 @@ import { stateLabel } from "./procedure-operator";
 export function ProcedureHistory({
   selectedId,
   onSelect,
+  mode = "history",
 }: {
+  mode?: "history" | "submitted";
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(mode === "submitted");
   const history = useInfiniteQuery({
     queryKey: ["procedure-history"],
     enabled: expanded,
@@ -28,16 +30,30 @@ export function ProcedureHistory({
   });
   return (
     <details
+      open={mode === "submitted" || undefined}
       className="border border-line rounded p-4 space-y-2"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary className="font-semibold">Experiment history</summary>
+      <summary className="font-semibold">
+        {mode === "submitted" ? "Submitted work" : "Experiment history"}
+      </summary>
+      {mode === "submitted" && (
+        <p className="text-sm text-text-dim">
+          Retained submissions, newest first. Waiting work is scheduled by resource availability;
+          this list does not promise execution order. Open a task to inspect its progress and
+          actions.
+        </p>
+      )}
       <p>
         Open previous experiments and multi-step procedures to view their saved data. Opening
         history does not start another acquisition.
       </p>
       {history.isPending && <p role="status">Loading experiment history…</p>}
-      {history.error && <p role="alert">{history.error.message}</p>}
+      {history.error && (
+        <p role="alert">
+          Submitted state unavailable; retained entries may be stale. {history.error.message}
+        </p>
+      )}
       {history.isSuccess && history.data.pages.every((page) => page.items.length === 0) && (
         <p>No experiments have been started yet.</p>
       )}
@@ -45,7 +61,10 @@ export function ProcedureHistory({
         {history.data?.pages
           .flatMap((page) => page.items)
           .map((procedure) => (
-            <li key={procedure.procedure_run_id}>
+            <li
+              key={procedure.procedure_run_id}
+              className="border-b border-line py-2 last:border-0"
+            >
               <button
                 className="underline text-left"
                 type="button"
@@ -55,11 +74,22 @@ export function ProcedureHistory({
                 {procedure.definition.id} ·{" "}
                 {procedure.closure
                   ? stateLabel(procedure.closure.status)
-                  : procedure.resource_wait
-                    ? "Waiting for resources"
-                    : stateLabel(procedure.state)}{" "}
+                  : procedure.cancellation
+                    ? "Cancellation requested"
+                    : procedure.resource_wait
+                      ? "Waiting for resources"
+                      : stateLabel(procedure.state)}{" "}
                 · {procedure.created_at}
               </button>
+              {procedure.resource_wait && !procedure.closure && (
+                <p className="text-sm text-text-dim">
+                  Waiting child: {procedure.resource_wait.run_id}. Open this task for resource
+                  owners.
+                </p>
+              )}
+              {procedure.attention_reason && (
+                <p className="text-sm text-yellow">{procedure.attention_reason}</p>
+              )}
             </li>
           ))}
       </ul>

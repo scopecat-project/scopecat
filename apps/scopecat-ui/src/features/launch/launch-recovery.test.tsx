@@ -232,7 +232,11 @@ it("restores a pending target's local copy when its save fails after navigation"
     release();
   });
   await waitFor(() =>
-    expect(view.result.current.recovery.unsavedTargets).toContainEqual(["author", "signal"]),
+    expect(view.result.current.recovery.unsavedTargets).toContainEqual([
+      "author",
+      "signal",
+      "default",
+    ]),
   );
   act(() => view.result.current.setDraft(initial()));
   await waitFor(() => expect(view.result.current.draft.values.center).toBe("pending original"));
@@ -309,13 +313,21 @@ it("rejects history, plan, and handoff replacement of a different target's faile
     release();
   });
   await waitFor(() =>
-    expect(view.result.current.recovery.unsavedTargets).toContainEqual(["author", "signal"]),
+    expect(view.result.current.recovery.unsavedTargets).toContainEqual([
+      "author",
+      "signal",
+      "default",
+    ]),
   );
   act(() => {
     expect(view.result.current.recovery.selectCopy(old)).toBe(false);
     expect(view.result.current.recovery.keepExplicitInput("author", "signal")).toBe(false);
   });
-  expect(view.result.current.recovery.unsavedTargets).toContainEqual(["author", "signal"]);
+  expect(view.result.current.recovery.unsavedTargets).toContainEqual([
+    "author",
+    "signal",
+    "default",
+  ]);
   act(() => view.result.current.setDraft(initial()));
   await waitFor(() => expect(view.result.current.draft.values.center).toBe("unsaved original"));
 });
@@ -495,3 +507,94 @@ it.each([false, true])(
     }
   },
 );
+
+it("does not restore a late read from another draft of the same experiment", async () => {
+  const persisted = globalThis.fetch;
+  let release: (() => void) | undefined;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    const body = await request.clone().json();
+    if (request.url.endsWith("/read") && body.draft_id === "B") {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return Response.json({
+        head: {
+          target: body,
+          input: { ...history[0]!.input, draft_name: "B", values: { center: "B historical" } },
+          revision: 90,
+          state: "saved",
+          created_at: "2026-10-22T00:00:00Z",
+        },
+      });
+    }
+    return persisted(request);
+  });
+  const view = mount();
+  await saved(view);
+  act(() => view.result.current.setDraft({ ...initial(), draftId: "B", draftName: "B" }));
+  await waitFor(() => expect(release).toBeDefined());
+  act(() =>
+    view.result.current.setDraft({
+      ...initial(),
+      draftId: "C",
+      draftName: "C",
+      values: { center: "C input" },
+    }),
+  );
+  await saved(view);
+  await act(async () => {
+    release!();
+  });
+  expect(view.result.current.draft.draftId).toBe("C");
+  expect(view.result.current.draft.values.center).toBe("C input");
+  expect(
+    history.filter((record) => record.target.draft_id === "C").at(-1)?.input.values.center,
+  ).toBe("C input");
+});
+
+function unloadIsPrevented() {
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+it("requests browser close confirmation until pending or failed input is confirmed saved", async () => {
+  const view = mount();
+  await saved(view);
+  expect(unloadIsPrevented()).toBe(false);
+  let release: (() => void) | undefined;
+  holdSave = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  act(() => view.result.current.setDraft({ ...initial(), values: { center: "valuable edit" } }));
+  await waitFor(() => expect(view.result.current.recovery.writing).toBe(true));
+  expect(unloadIsPrevented()).toBe(true);
+  failSave = true;
+  await act(async () => {
+    release!();
+  });
+  await waitFor(() => expect(view.result.current.recovery.status).toContain("not confirmed saved"));
+  expect(unloadIsPrevented()).toBe(true);
+  failSave = false;
+  holdSave = undefined;
+  await act(async () => view.result.current.recovery.retry());
+  await saved(view);
+  expect(unloadIsPrevented()).toBe(false);
+  view.unmount();
+  expect(unloadIsPrevented()).toBe(false);
+});
+
+it("protects a background draft's unresolved conflict after switching to a saved draft", async () => {
+  const view = mount();
+  await saved(view);
+  history.push({ ...history[0]!, revision: 40 });
+  act(() =>
+    view.result.current.setDraft({ ...initial(), values: { center: "conflicting input" } }),
+  );
+  await waitFor(() => expect(view.result.current.recovery.conflict).toBe(true));
+  expect(unloadIsPrevented()).toBe(true);
+  act(() => view.result.current.setDraft({ ...initial(), draftId: "C", draftName: "C" }));
+  await saved(view);
+  expect(view.result.current.recovery.conflict).toBe(false);
+  expect(unloadIsPrevented()).toBe(true);
+});

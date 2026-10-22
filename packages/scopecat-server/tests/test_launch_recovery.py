@@ -286,3 +286,93 @@ def test_current_backup_retains_raw_conflicts_and_original_requests(tmp_path: Pa
     assert reopened.attempts().items == [receipt]
     assert reopened.resolve(receipt.sequence).procedure_id is None
     restored.close()
+
+
+def test_independent_named_drafts_keep_conflicts_and_receipts_separate(tmp_path: Path):
+    service = LaunchRecoveryService(store_at(tmp_path).sqlite)
+    first = command()
+    a = service.save(first).saved
+    assert a is not None
+    receipt = service.retain(original())
+    b_command = first.model_copy(
+        update={
+            "operation_id": uuid4(),
+            "target": first.target.model_copy(update={"draft_id": "draft-b"}),
+            "input": first.input.model_copy(update={"draft_name": "B"}),
+        }
+    )
+    b = service.save(b_command).saved
+    assert b is not None and b.state == "saved"
+    c_command = b_command.model_copy(
+        update={
+            "operation_id": uuid4(),
+            "target": first.target.model_copy(update={"draft_id": "draft-c"}),
+            "input": b.input.model_copy(
+                update={"draft_name": "C", "values": {"center": "42"}}
+            ),
+        }
+    )
+    c = service.save(c_command).saved
+    assert c is not None and c.state == "saved"
+    renamed = service.save(
+        b_command.model_copy(
+            update={
+                "operation_id": uuid4(),
+                "expected_revision": b.revision,
+                "input": b.input.model_copy(update={"draft_name": "B renamed"}),
+            }
+        )
+    ).saved
+    assert renamed is not None and renamed.state == "saved"
+    stale = service.save(b_command.model_copy(update={"operation_id": uuid4()}))
+    assert stale.saved and stale.saved.state == "conflict"
+    assert stale.head == renamed
+    reopened = LaunchRecoveryService(store_at(tmp_path).sqlite)
+    assert reopened.read(first.target).head == a
+    assert reopened.read(c_command.target).head == c
+    assert reopened.read(b_command.target).head == renamed
+    assert reopened.attempts().items == [receipt]
+    page = reopened.heads(first.target, limit=2)
+    assert page.items == [renamed, c]
+    assert page.next_cursor == c.revision
+    assert reopened.heads(first.target, before=page.next_cursor).items == [a]
+    assert (
+        reopened.heads(first.target.model_copy(update={"experiment": "other"})).items
+        == []
+    )
+    discarded = reopened.save(
+        c_command.model_copy(
+            update={
+                "operation_id": uuid4(),
+                "expected_revision": c.revision,
+                "discard": True,
+            }
+        )
+    ).saved
+    assert discarded and discarded.state == "discarded"
+    assert reopened.heads(first.target).items == [renamed, a]
+    assert reopened.read(c_command.target).head == discarded
+    assert c in reopened.history().items
+
+
+def test_default_identity_reads_retained_json_without_new_fields(tmp_path: Path):
+    store = store_at(tmp_path)
+    service = LaunchRecoveryService(store.sqlite)
+    first = command()
+    saved = service.save(first).saved
+    assert saved is not None
+    # Current-format JSON retained before named identities has neither field.
+    with store.sqlite.write_transaction() as connection:
+        connection.execute(
+            "UPDATE launch_drafts SET draft_json=json_remove(draft_json, "
+            "'$.target.draft_id', '$.input.draft_name'), "
+            "command_json=json_remove(command_json, '$.target.draft_id', "
+            "'$.input.draft_name') WHERE revision=?",
+            (saved.revision,),
+        )
+    assert service.read(first.target).head == saved
+    assert service.save(first).saved == saved
+    assert service.heads(first.target).items == [saved]
+    assert (
+        service.read(first.target.model_copy(update={"draft_id": "new"})).head is None
+    )
