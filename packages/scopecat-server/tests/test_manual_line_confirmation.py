@@ -420,3 +420,46 @@ def test_line_reconfirmation_cannot_resolve_started_unknown_run(tmp_path: Path) 
             == "attention_required"
         )
         assert len(second.application.executor.execution_segments(run_id).items) == 1
+
+
+def test_drain_allows_first_lease_fence_but_requires_cancel_before_reconfirmation(
+    tmp_path: Path,
+) -> None:
+    with LocalDaemonRuntime(
+        tmp_path, bootstrap_config=load_config(), instrument_endpoint=signal_endpoint()
+    ) as first:
+        output, _ = confirm(first)
+        run_id = admit(first, output)
+    with (
+        LocalDaemonRuntime(tmp_path, instrument_endpoint=signal_endpoint()) as second,
+        TestClient(second.app(request_shutdown=lambda _: True)) as transport,
+    ):
+        original = second.application.runs.get_run(run_id).control.admission
+        assert transport.post("/api/v1/application-exit?wait=true").status_code == 204
+        blocked = transport.post(
+            f"/api/v1/runs/{run_id}/executor/start",
+            json=ExecutorStartRequest(executor_id="line-worker").model_dump(
+                mode="json"
+            ),
+        )
+        assert blocked.status_code == 409
+        assert "confirmed again" in blocked.text
+        report = transport.get("/api/v1/application-exit").json()
+        assert any(item["identity"] == run_id for item in report["blockers"])
+        command = reconfirmation(second, run_id, "after-cancelling-drain")
+        path = f"/api/v1/runs/{run_id}/attention"
+        assert (
+            transport.post(path, json=command.model_dump(mode="json")).status_code
+            == 409
+        )
+        assert (
+            second.application.runs.get_run(run_id).control.state
+            == "attention_required"
+        )
+        assert transport.post("/api/v1/application-exit?wait=false").status_code == 204
+        assert (
+            transport.post(path, json=command.model_dump(mode="json")).status_code
+            == 200
+        )
+        assert second.application.runs.get_run(run_id).control.admission == original
+        assert second.application.executor.execution_segments(run_id).items == ()

@@ -28,6 +28,10 @@ type _NonEmptyText = Annotated[str, Field(min_length=1)]
 type InterpretationActorKind = Literal["human", "ai", "service"]
 
 
+def _absent_manual_confirmation(value: object) -> bool:
+    return value is None
+
+
 class _InterpretationModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -50,7 +54,7 @@ class InterpretationRequest(_InterpretationModel):
     response_template: JsonValue | None = None
     metadata: JsonMetadata = Field(default_factory=dict)
     manual_line: ManualLineIntent | None = Field(
-        default=None, exclude_if=lambda value: value is None
+        default=None, exclude_if=_absent_manual_confirmation
     )
 
     @field_validator("title", "instructions", "schema_id")
@@ -93,7 +97,7 @@ class InterpretationResponse(_InterpretationModel):
     note: str = ""
     submitted_at: datetime
     confirmed_runtime_id: _NonEmptyText | None = Field(
-        default=None, exclude_if=lambda value: value is None
+        default=None, exclude_if=_absent_manual_confirmation
     )
 
     @field_validator("actor")

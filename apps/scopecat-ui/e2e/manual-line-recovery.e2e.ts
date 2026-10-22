@@ -24,7 +24,7 @@ class Wiring:
     confirmed: bool
 
 @procedure(id="browser.manual-line", version="1", intent=Intent)
-def measure_line(context: LabProcedureContext, intent: Intent):
+def measure_line(context: LabProcedureContext, intent: Intent) -> None:
     context.run("measure", signal, config=intent.config, setup=intent.setup,
         manual_line_id="stable-line-1", name="Reading line 1")
 `;
@@ -62,7 +62,8 @@ with sc.open_project(sys.argv[1]).authoring() as author:
     while task.snapshot.state != "attention_required" or task.progress().dispatch.worker_running:
         assert time.monotonic() < deadline, task.progress()
         time.sleep(.05)
-    child = task.progress().current_child.run
+    [retained_child] = task.progress().child_runs
+    child = retained_child.run
     assert child.control.attention_reason == "manual_line_confirmation_expired"
     print(json.dumps({"run": child.snapshot.run_id, "config": child.snapshot.config_content_hash}))
 `;

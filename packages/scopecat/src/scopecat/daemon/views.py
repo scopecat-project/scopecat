@@ -229,9 +229,13 @@ class RunPlanView(_ViewModel):
         return tuple(spec.id for spec in self.coordinates)
 
 
+def _absent_manual_confirmation(value: object) -> bool:
+    return value is None
+
+
 class RunAdmissionView(_ViewModel):
     manual_line_confirmation: ManualLineConfirmation | None = Field(
-        default=None, exclude_if=lambda value: value is None
+        default=None, exclude_if=_absent_manual_confirmation
     )
     run_id: str = Field(min_length=1)
     run_contract_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")

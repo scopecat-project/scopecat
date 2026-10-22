@@ -15,7 +15,9 @@ remains an attention blocker. Human reconfirmation/continue is an ordinary
 mutation, so the user must cancel exit wait first. The existing HTTP attention
 endpoint stays outside the drain allowlist. Necessary admitted child execution
 may reach the freshness fence while draining; this does not grant new human
-continuation. Final integration must be checked on main after #1159 merges. No exit state or second execution-state store is introduced.
+continuation. The integrated fake-runtime test checks this boundary on main
+`9e53f0590bf03268b01807d965f7462a4853e4c1`, after #1159 merged.
+No exit state or second execution-state store is introduced.
 
 `LabProcedureContext.run(..., manual_line_id=...)` plans the frozen acquisition
 before asking for a human wiring confirmation through the existing interpretation

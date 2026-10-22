@@ -66,9 +66,7 @@ it("retains uncertain actor and command across reopening, including an already q
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });
   vi.mocked(reconfirmManualLine).mockResolvedValueOnce("recorded");
   show(true);
-  expect(screen.getByLabelText<HTMLInputElement>("Line confirmation operator").value).toBe(
-    "Alice",
-  );
+  expect(screen.getByLabelText<HTMLInputElement>("Line confirmation operator").value).toBe("Alice");
   expect(screen.getByLabelText("Line confirmation operator").hasAttribute("disabled")).toBe(true);
   expect(reconfirmManualLine).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("checkbox"));

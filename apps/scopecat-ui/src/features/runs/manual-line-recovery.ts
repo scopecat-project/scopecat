@@ -26,15 +26,29 @@ export async function reconfirmManualLine(
   }
   if (current.control.state !== "queued") return "recorded" as const;
   const procedureId = confirmation.original.procedure_run_id;
-  const view = await apiData(
+  let view = await apiData(
     apiClient.GET("/api/v1/procedures/{procedure_run_id}/operator", {
       params: { path: { procedure_run_id: procedureId } },
     }),
   );
-  const step = view.current_step;
+  // Attention steps are no longer running; the operator view retains them in
+  // its paged steps/children rather than current_step/current_child.
+  let child = view.child_runs.find((item) => item.run.control.admission.run_id === runId);
+  while (!child && view.steps.next_cursor != null) {
+    view = await apiData(
+      apiClient.GET("/api/v1/procedures/{procedure_run_id}/operator", {
+        params: {
+          path: { procedure_run_id: procedureId },
+          query: { cursor: view.steps.next_cursor },
+        },
+      }),
+    );
+    child = view.child_runs.find((item) => item.run.control.admission.run_id === runId);
+  }
+  const step = view.steps.items.find((item) => item.step_key === child?.step_key);
   if (view.dispatch.worker_running && view.procedure.state === "leased") return "recorded" as const;
   if (
-    view.current_child?.run.control.admission.run_id !== runId ||
+    !child ||
     view.dispatch.worker_running ||
     view.procedure.cancellation ||
     !["attention_required", "ready"].includes(view.procedure.state) ||

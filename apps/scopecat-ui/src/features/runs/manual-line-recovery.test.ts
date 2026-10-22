@@ -44,20 +44,31 @@ it.each(["retry", "dispatch"])(
           return Response.json({
             procedure: { state, revision: 12, cancellation: null },
             dispatch: { worker_running: running, management: "unmanaged" },
-            current_child: { run: { control: { admission: { run_id: "run-1" } } } },
-            current_step: {
-              step_key: "measure",
-              attempt: 1,
-              revision: 3,
-              operation: "run",
-              state: "attention_required",
-              attention_reason: "confirm current wiring before continuing run run-1",
+            current_child: null,
+            current_step: null,
+            child_runs: [
+              { step_key: "measure", run: { control: { admission: { run_id: "run-1" } } } },
+            ],
+            steps: {
+              items: [
+                {
+                  step_key: "measure",
+                  attempt: 1,
+                  revision: 3,
+                  operation: "run",
+                  state: "attention_required",
+                  attention_reason: "confirm current wiring before continuing run run-1",
+                },
+              ],
+              next_cursor: null,
             },
           });
         return Response.json({ control: { state: "queued" } });
       }),
     );
-    await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).rejects.toThrow("did not respond");
+    await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).rejects.toThrow(
+      "did not respond",
+    );
     await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).resolves.toBe(
       "recorded",
     );
@@ -83,11 +94,18 @@ it("never dispatches a changed or unknown child after reconfirmation", async () 
         return Response.json({
           procedure: { state: "attention_required", revision: 12 },
           dispatch: { worker_running: false },
-          current_child: { run: { control: { admission: { run_id: "another-run" } } } },
-          current_step: {
-            state: "attention_required",
-            operation: "run",
-            attention_reason: "unknown effect",
+          child_runs: [
+            { step_key: "measure", run: { control: { admission: { run_id: "another-run" } } } },
+          ],
+          steps: {
+            items: [
+              {
+                state: "attention_required",
+                operation: "run",
+                attention_reason: "unknown effect",
+              },
+            ],
+            next_cursor: null,
           },
         });
       return Response.json({ control: { state: "queued" } });
@@ -97,4 +115,60 @@ it("never dispatches a changed or unknown child after reconfirmation", async () 
     "task changed",
   );
   expect(writes).toEqual(["/api/v1/runs/run-1/attention"]);
+});
+
+it("uses the matching page revisions and newest retained attempt", async () => {
+  const retries: unknown[] = [];
+  const pages: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST") {
+        if (url.pathname.endsWith("/retry")) retries.push(await request.json());
+        return Response.json({});
+      }
+      if (!url.pathname.endsWith("/operator"))
+        return Response.json({ control: { state: "queued" } });
+      pages.push(url.search);
+      const matched = url.searchParams.get("cursor") === "50";
+      const step = {
+        step_key: "measure",
+        operation: "run",
+        state: "attention_required",
+        attention_reason: "confirm current wiring before continuing run run-1",
+      };
+      return Response.json({
+        procedure: { state: "attention_required", revision: matched ? 15 : 14 },
+        dispatch: { worker_running: false },
+        current_child: null,
+        current_step: null,
+        child_runs: matched
+          ? [{ step_key: "measure", run: { control: { admission: { run_id: "run-1" } } } }]
+          : [],
+        steps: {
+          items: matched
+            ? [
+                { ...step, attempt: 2, revision: 7 },
+                { ...step, attempt: 1, revision: 3 },
+              ]
+            : [],
+          next_cursor: matched ? null : 50,
+        },
+      });
+    }),
+  );
+  await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).resolves.toBe(
+    "recorded",
+  );
+  expect(pages).toEqual(["", "?cursor=50"]);
+  expect(retries).toEqual([
+    {
+      procedure_run_id: "parent",
+      step_key: "measure",
+      attempt: 2,
+      expected_run_revision: 15,
+      expected_step_revision: 7,
+    },
+  ]);
 });
