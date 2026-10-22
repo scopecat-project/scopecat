@@ -250,13 +250,13 @@ retainedProcedureTest(
     const { baseUrl, procedureId } = retainedProcedure;
     await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
     await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
-    await page.getByText("Cancel remaining procedure", { exact: true }).click();
+    await page.getByText("Cancel queued task", { exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Cancel procedure", exact: true }),
+      page.getByRole("button", { name: "Cancel queued task", exact: true }),
     ).toBeDisabled();
     await page.getByLabel("Cancellation actor", { exact: true }).fill("browser operator");
     await page.getByLabel("Cancellation reason", { exact: true }).fill("Cancel before acquisition");
-    await page.getByRole("button", { name: "Cancel procedure", exact: true }).click();
+    await page.getByRole("button", { name: "Cancel queued task", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
     await page.reload();
     await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
