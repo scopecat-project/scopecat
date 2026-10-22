@@ -589,7 +589,13 @@ function ProjectDraft({
           if (!mayLeave() || submitting.current || !isIntended()) return false;
           try {
             if (original?.experiment) await recovery.flush();
-            if (launchCloseBlocked() || !alive.current || latest.current !== original || !isIntended()) return false;
+            if (
+              launchCloseBlocked() ||
+              !alive.current ||
+              latest.current !== original ||
+              !isIntended()
+            )
+              return false;
             if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
               attemptGeneration.current += 1;
               setAttempt(undefined);
