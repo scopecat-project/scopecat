@@ -1,4 +1,5 @@
 import { clearDraftLocation, retainDraftLocation } from "./draft-location";
+import { launchCloseBlocked } from "./launch-close-barrier";
 import { readOperatorSettings } from "../application/OperatorSettings";
 import {
   useLaunchRecovery,
@@ -221,22 +222,37 @@ function ProjectDraft({
   const preparationToken = useRef<symbol | undefined>(undefined);
   // Admission continuations must observe edits synchronously, before a React effect
   // can run or a late preview/receipt response can continue the old intent.
-  const setDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>((change) => {
-    const next = typeof change === "function" ? change(latest.current) : change;
-    if (next !== latest.current) {
-      operatorSelection.current += 1;
-      operatorPending.current = false;
-    }
-    if (
-      next?.revision !== latest.current?.revision ||
-      next?.workspaceId !== latest.current?.workspaceId ||
-      next?.draftId !== latest.current?.draftId
-    )
+  const setRecoveredDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>(
+    (change) => {
+      const next = typeof change === "function" ? change(latest.current) : change;
+      if (next !== latest.current) {
+        operatorSelection.current += 1;
+        operatorPending.current = false;
+      }
+      if (
+        next?.revision !== latest.current?.revision ||
+        next?.workspaceId !== latest.current?.workspaceId ||
+        next?.draftId !== latest.current?.draftId
+      )
+        preparationToken.current = undefined;
+      latest.current = next;
+      setDraftState(next);
+    },
+    [],
+  );
+  const setDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>(
+    (change) => {
+      if (!launchCloseBlocked()) setRecoveredDraft(change);
+    },
+    [setRecoveredDraft],
+  );
+  const recovery = useLaunchRecovery(draft, setRecoveredDraft, {
+    owner: projectId ?? "unselected",
+    getDraft: () => latest.current,
+    revoke: () => {
       preparationToken.current = undefined;
-    latest.current = next;
-    setDraftState(next);
-  }, []);
-  const recovery = useLaunchRecovery(draft, setDraft);
+    },
+  });
   const [workspaceId, setWorkspaceId] = useState(
     () => new URLSearchParams(window.location.search).get("workspace") || "",
   );
@@ -341,6 +357,7 @@ function ProjectDraft({
   };
   const select = useCallback(
     async (entry: LaunchCatalogEntry, reset = false, owner = workspaceId) => {
+      if (launchCloseBlocked()) return;
       if (
         latest.current?.experiment &&
         latest.current.experiment !== entry.id &&
@@ -368,7 +385,12 @@ function ProjectDraft({
       } finally {
         if (generation === operatorSelection.current) operatorPending.current = false;
       }
-      if (!alive.current || generation !== operatorSelection.current || latest.current !== original)
+      if (
+        launchCloseBlocked() ||
+        !alive.current ||
+        generation !== operatorSelection.current ||
+        latest.current !== original
+      )
         return;
       setOperatorError(undefined);
       setDraft((current) => {
@@ -427,6 +449,8 @@ function ProjectDraft({
     identity?: components["schemas"]["ProcedureDefinitionRef"],
     preparation?: { isIntended: () => boolean; onSending: () => void },
   ) {
+    if (launchCloseBlocked())
+      throw new Error("Wait for the window close check before starting acquisition.");
     if (attempt) throw new Error("Recover the original task or explicitly choose a new run first.");
     if (!attemptsReady)
       throw new Error(
@@ -438,6 +462,7 @@ function ProjectDraft({
     const input = latest.current;
     const inputIdentity = input ? JSON.stringify(rawInput(input)) : undefined;
     const stillIntended = () =>
+      !launchCloseBlocked() &&
       alive.current &&
       (!preparation || preparation.isIntended()) &&
       attemptGeneration.current === generation &&
@@ -534,7 +559,7 @@ function ProjectDraft({
           if (!original || !mayLeave() || submitting.current) return;
           try {
             await recovery.flush();
-            if (!alive.current || latest.current !== original) return;
+            if (launchCloseBlocked() || !alive.current || latest.current !== original) return;
             const draftId = crypto.randomUUID();
             if (!recovery.keepExplicitInput(original.workspaceId, original.experiment, draftId))
               return;
@@ -564,7 +589,7 @@ function ProjectDraft({
           if (!mayLeave() || submitting.current || !isIntended()) return false;
           try {
             if (original?.experiment) await recovery.flush();
-            if (!alive.current || latest.current !== original || !isIntended()) return false;
+            if (launchCloseBlocked() || !alive.current || latest.current !== original || !isIntended()) return false;
             if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
               attemptGeneration.current += 1;
               setAttempt(undefined);
@@ -587,11 +612,18 @@ function ProjectDraft({
           setDraft((current) => (current ? { ...current, draftName: name.trim() } : current));
         },
         beginPreparation: () => {
-          if (operatorPending.current || preparationToken.current || submitting.current) return;
+          if (
+            launchCloseBlocked() ||
+            operatorPending.current ||
+            preparationToken.current ||
+            submitting.current
+          )
+            return;
           const token = Symbol("launch preparation");
           preparationToken.current = token;
           const input = latest.current;
           const isIntended = () =>
+            !launchCloseBlocked() &&
             alive.current &&
             preparationToken.current === token &&
             latest.current?.revision === input?.revision &&

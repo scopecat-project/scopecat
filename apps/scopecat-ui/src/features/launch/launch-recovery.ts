@@ -1,8 +1,13 @@
+import {
+  retainLaunchCloseParticipant,
+  launchCloseBlocked,
+  resetLaunchCloseWindowForTests,
+} from "./launch-close-barrier";
 import type { MethodResponse } from "openapi-fetch";
 import { normalizeSelection, reviewedForRequest } from "./scientific-selection";
 import type { SubmissionRequest } from "./launch-submission";
 import type { Dispatch, SetStateAction } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { apiClient, apiData } from "../../api-client";
 import type { components } from "../../api-schema";
 import type { LaunchDraft } from "./LaunchDraft";
@@ -106,6 +111,7 @@ interface Session {
   ready: boolean;
   pending: number;
   queued: string;
+  confirmed: string;
   queue: Promise<void>;
   failed?: Save;
   conflict: boolean;
@@ -113,9 +119,17 @@ interface Session {
   wake?: () => void;
   flushing?: boolean;
 }
+const windowSessions = new Map<string, Map<string, Session>>();
+/** Tests destroy the whole window between cases; provider unmount must retain sessions. */
+export function resetLaunchRecoveryWindowForTests() {
+  windowSessions.clear();
+  resetLaunchCloseWindowForTests();
+}
+
 export function useLaunchRecovery(
   draft: LaunchDraft | undefined,
   setDraft: Dispatch<SetStateAction<LaunchDraft | undefined>>,
+  close?: { owner: string; getDraft: () => LaunchDraft | undefined; revoke: () => void },
 ) {
   const mounted = useRef(false);
   useEffect(() => {
@@ -126,7 +140,16 @@ export function useLaunchRecovery(
     };
   }, []);
   const session = useRef<Session | undefined>(undefined);
-  const [unfinished] = useState(() => new Map<string, Session>());
+  const [unfinished] = useState(() => {
+    if (!close) return new Map<string, Session>();
+    const retained = windowSessions.get(close.owner) ?? new Map<string, Session>();
+    windowSessions.set(close.owner, retained);
+    return retained;
+  });
+  const liveInput = useRef({ draft, close });
+  useLayoutEffect(() => {
+    liveInput.current = { draft, close };
+  });
   const [visibleSession, setVisibleSession] = useState<Session>();
   const explicitInput = useRef<string | undefined>(undefined);
   const [reload, setReload] = useState(0);
@@ -142,7 +165,7 @@ export function useLaunchRecovery(
     if (!target) return;
     const [workspace, experiment, draft_id] = JSON.parse(target) as [string, string, string];
     const cached = unfinished.get(target);
-    if (cached && (cached.failed || cached.pending > 0)) {
+    if (cached && (cached.failed || cached.conflict || cached.pending > 0)) {
       requestedCopy.current = undefined;
       explicitInput.current = undefined;
       session.current = cached;
@@ -163,7 +186,9 @@ export function useLaunchRecovery(
         setStatus(
           cached.failed
             ? "Input not confirmed saved. Your local copy is retained; retry saving before switching again."
-            : "Saving experiment input…",
+            : cached.conflict
+              ? "Another window changed this experiment. Your conflict copy is retained."
+              : "Saving experiment input…",
         );
         setEpoch((value) => value + 1);
       });
@@ -175,6 +200,7 @@ export function useLaunchRecovery(
       ready: false,
       pending: 0,
       queued: "",
+      confirmed: "",
       queue: Promise.resolve(),
       conflict: false,
     };
@@ -206,7 +232,10 @@ export function useLaunchRecovery(
         if (copy) requestedCopy.current = undefined;
         if (copy && selected === copy) current.revision = copy.revision;
         if (selected && explicitInput.current !== target) {
-          if (!copy) current.queued = JSON.stringify(rawInput(restoreDraft(selected, 1)));
+          if (!copy) {
+            current.queued = JSON.stringify(rawInput(restoreDraft(selected, 1)));
+            current.confirmed = current.queued;
+          }
           setDraft((previous) =>
             previous?.workspaceId === workspace &&
             previous.experiment === experiment &&
@@ -234,19 +263,12 @@ export function useLaunchRecovery(
       active = false;
     };
   }, [target, setDraft, reload, unfinished]);
-  useEffect(() => {
-    const current = session.current;
-    if (current?.hydrating) {
-      if (encoded !== current.hydrating) return;
-      current.hydrating = undefined;
-      setEpoch((value) => value + 1);
-    }
-    if (!encoded || !current?.ready || current.target !== target || current.queued === encoded)
-      return;
-    current.queued = encoded;
+  function queueInput(current: Session, input: string) {
+    if (current.queued === input && current.confirmed === input) return;
+    current.queued = input;
     if (current.failed || current.pending) return;
     current.pending = 1;
-    setStatus("Saving experiment input…");
+    if (mounted.current) setStatus("Saving experiment input…");
     current.queue = (async () => {
       try {
         while (!current.failed) {
@@ -279,7 +301,10 @@ export function useLaunchRecovery(
             const result = await saveDraft(command);
             current.head = result.head ?? undefined;
             current.conflict = result.saved?.state === "conflict";
-            if (!current.conflict) current.revision = result.saved!.revision;
+            if (!current.conflict) {
+              current.revision = result.saved!.revision;
+              current.confirmed = sent;
+            }
             if (sent !== current.queued) continue;
             if (mounted.current && session.current === current)
               setStatus(
@@ -302,7 +327,96 @@ export function useLaunchRecovery(
         if (mounted.current) setEpoch((value) => value + 1);
       }
     })();
+  }
+  useEffect(() => {
+    const current = session.current;
+    if (current?.hydrating) {
+      if (encoded !== current.hydrating) return;
+      current.hydrating = undefined;
+      setEpoch((value) => value + 1);
+    }
+    if (!encoded || !current?.ready || current.target !== target || current.queued === encoded)
+      return;
+    queueInput(current, encoded);
   }, [encoded, target, epoch]);
+  const closeParticipant = useRef<{
+    freeze: () => void;
+    flush: () => Promise<"saved" | "blocked" | "unknown">;
+    saved: () => boolean;
+  }>({ freeze: () => {}, flush: async () => "unknown", saved: () => false });
+  function currentInput() {
+    const latest = liveInput.current.close
+      ? liveInput.current.close.getDraft()
+      : liveInput.current.draft;
+    return latest?.experiment && latest.definition && latest.workspaceId
+      ? {
+          target: JSON.stringify([
+            latest.workspaceId,
+            latest.experiment,
+            latest.draftId ?? "default",
+          ]),
+          encoded: JSON.stringify(rawInput(latest)),
+        }
+      : undefined;
+  }
+  function allSaved() {
+    const input = currentInput();
+    if (
+      input &&
+      (!session.current ||
+        session.current.target !== input.target ||
+        session.current.confirmed !== input.encoded)
+    )
+      return false;
+    return [...unfinished.values()].every(
+      (item) =>
+        item.ready &&
+        !item.pending &&
+        !item.failed &&
+        !item.conflict &&
+        !item.hydrating &&
+        item.confirmed === item.queued,
+    );
+  }
+  const participant = {
+    freeze() {
+      liveInput.current.close?.revoke();
+      const input = currentInput();
+      const active = session.current;
+      if (input && active?.ready && !active.hydrating && active.target === input.target)
+        queueInput(active, input.encoded);
+      for (const item of unfinished.values()) {
+        item.flushing = true;
+        item.wake?.();
+      }
+    },
+    async flush(): Promise<"saved" | "blocked" | "unknown"> {
+      const input = currentInput();
+      if (
+        input &&
+        (!session.current?.ready ||
+          session.current.hydrating ||
+          session.current.target !== input.target)
+      )
+        return "unknown";
+      await Promise.all([...unfinished.values()].map((item) => item.queue));
+      if ([...unfinished.values()].some((item) => item.failed || item.conflict)) return "blocked";
+      return allSaved() ? "saved" : "unknown";
+    },
+    saved: allSaved,
+  };
+  useLayoutEffect(() => {
+    closeParticipant.current = participant;
+  });
+  useEffect(
+    () =>
+      retainLaunchCloseParticipant(unfinished, {
+        freeze: () => closeParticipant.current.freeze(),
+        flush: () => closeParticipant.current.flush(),
+        saved: () => closeParticipant.current.saved(),
+      }),
+    [unfinished],
+  );
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
@@ -342,11 +456,13 @@ export function useLaunchRecovery(
   const current = visibleSession;
   return {
     status,
-    canLeave: () => !session.current?.failed && !session.current?.hydrating,
+    canLeave: () =>
+      !launchCloseBlocked() && !session.current?.failed && !session.current?.hydrating,
     unsavedTargets: [...unfinished.values()]
       .filter((item) => item.failed)
       .map((item) => JSON.parse(item.target) as [string, string, string]),
     keepExplicitInput(workspace: string, experiment: string, draftId = "default") {
+      if (launchCloseBlocked()) return false;
       const selected = JSON.stringify([workspace, experiment, draftId]);
       const cached = unfinished.get(selected);
       if (cached?.failed || cached?.pending || cached?.hydrating) {
@@ -360,6 +476,7 @@ export function useLaunchRecovery(
       return true;
     },
     selectCopy(record: DraftRecord) {
+      if (launchCloseBlocked()) return false;
       const cached = unfinished.get(
         JSON.stringify([
           record.target.workspace_id,
@@ -403,6 +520,7 @@ export function useLaunchRecovery(
         throw new Error("Resolve and save the current input before submitting.");
     },
     async retry() {
+      if (launchCloseBlocked()) return;
       const activeSession = session.current;
       if (!activeSession?.ready) {
         setReload((value) => value + 1);
@@ -429,6 +547,7 @@ export function useLaunchRecovery(
       await activeSession.queue;
     },
     adoptLocal() {
+      if (launchCloseBlocked()) return;
       const activeSession = session.current;
       if (!activeSession?.conflict || activeSession.pending) return;
       activeSession.revision = activeSession.head?.revision ?? 0;
