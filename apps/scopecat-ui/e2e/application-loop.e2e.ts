@@ -131,6 +131,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await expectRunIdentity(page, run);
     await page.getByRole("button", { name: "Experiments", exact: true }).click();
     await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
+    await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await expect(page.getByText(/Working inputs · revision/)).toBeVisible();
     await page.getByRole("button", { name: "Configuration", exact: true }).click();

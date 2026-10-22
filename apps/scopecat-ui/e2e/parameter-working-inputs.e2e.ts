@@ -48,6 +48,7 @@ async function submit(page: Page) {
   await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
+  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
   return (await result.json()).procedure_id as string;
 }
 async function retainedRun(page: Page) {

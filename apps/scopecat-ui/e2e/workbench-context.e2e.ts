@@ -47,6 +47,7 @@ async function acquire(page: Page) {
   await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
+  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
   await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
   return (await result.json()).procedure_id as string;
 }

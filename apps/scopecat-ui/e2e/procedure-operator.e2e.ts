@@ -114,7 +114,7 @@ retainedProcedureTest(
       const catalogResponse = await catalogReady;
       expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
       await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-      await page.getByText("Experiment history", { exact: true }).click();
+      await page.getByRole("button", { name: "Submitted work", exact: true }).click();
       await page
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
         .click();

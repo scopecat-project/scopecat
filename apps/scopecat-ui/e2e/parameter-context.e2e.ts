@@ -72,6 +72,7 @@ async function acquire(page: Page): Promise<string> {
   const response = await submitting;
   expect(response.status(), await response.text()).toBe(200);
   const receipt = (await response.json()) as { procedure_id: string };
+  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`procedure=${receipt.procedure_id}`));
   await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /^View saved data:/ }).click();
