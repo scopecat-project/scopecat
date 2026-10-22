@@ -404,7 +404,9 @@ export function LaunchForm({
           )}
           <Button
             type="button"
+            disabled={!recovery.ready}
             onClick={() =>
+              recovery.ready &&
               update((current) => ({
                 ...invalidateDraft(current, "Input reviewed. Ready to start or inspect a preview."),
                 needsReview: false,

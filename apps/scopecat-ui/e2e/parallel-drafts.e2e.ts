@@ -32,6 +32,7 @@ async function selectDraft(page: Page, id: string) {
   await picker.focus();
   await expect(picker.locator(`option[value="${id}"]`)).toBeAttached();
   await picker.selectOption(id);
+  await expect(picker).toHaveValue(id);
   await reviewRetainedExperiment(page);
   await saved(page);
 }
