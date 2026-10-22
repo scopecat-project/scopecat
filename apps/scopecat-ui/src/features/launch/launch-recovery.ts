@@ -112,7 +112,6 @@ interface Session {
   pending: number;
   queued: string;
   confirmed: string;
-  initialInput: string;
   localInput?: string;
   queue: Promise<void>;
   failed?: Save;
@@ -175,11 +174,7 @@ export function useLaunchRecovery(
     )
       return;
     const input = JSON.stringify(rawInput(latest));
-    if (
-      input !== current.initialInput ||
-      current.localInput !== undefined ||
-      explicitInput.current === current.target
-    )
+    if (current.localInput !== undefined || explicitInput.current === current.target)
       current.localInput = input;
   }
   useLayoutEffect(() => {
@@ -245,7 +240,6 @@ export function useLaunchRecovery(
       pending: 0,
       queued: "",
       confirmed: "",
-      initialInput: retainedInput ?? initialInput,
       localInput:
         retainedInput ??
         (explicitInput.current === target || requestedCopy.current ? initialInput : undefined),
@@ -261,7 +255,10 @@ export function useLaunchRecovery(
     let active = true;
     void readDraft(workspace, experiment, draft_id)
       .then(({ head }) => {
-        current.revision = head?.revision ?? 0;
+        capturePendingInput(current);
+        // Local input adopted before hydration has no reviewed server base. Let
+        // the existing CAS retain a conflict instead of overwriting a newer head.
+        if (current.localInput === undefined) current.revision = head?.revision ?? 0;
         current.head = head ?? undefined;
         if (!active) return;
         const pendingCopy = requestedCopy.current;
@@ -518,6 +515,20 @@ export function useLaunchRecovery(
   }, [unfinished]);
   const current = visibleSession;
   return {
+    // Only intentional input changes claim an unresolved initial read. Automatic
+    // source/default observations must still allow the saved head to hydrate.
+    retainPendingInput(input: LaunchDraft) {
+      const active = session.current;
+      if (
+        !active ||
+        active.ready ||
+        !input.definition ||
+        JSON.stringify([input.workspaceId, input.experiment, input.draftId ?? "default"]) !==
+          active.target
+      )
+        return;
+      active.localInput = JSON.stringify(rawInput(input));
+    },
     status,
     canLeave: () =>
       !launchCloseBlocked() && !session.current?.failed && !session.current?.hydrating,

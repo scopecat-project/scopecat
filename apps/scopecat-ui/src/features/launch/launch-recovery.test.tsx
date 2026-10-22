@@ -598,3 +598,25 @@ it("protects a background draft's unresolved conflict after switching to a saved
   expect(view.result.current.recovery.conflict).toBe(false);
   expect(unloadIsPrevented()).toBe(true);
 });
+
+it("keeps a selected saved copy's known revision when recovering from another target", async () => {
+  const view = mount();
+  await saved(view);
+  const selected = history[0]!;
+  act(() =>
+    view.result.current.setDraft((current) => ({
+      ...current!,
+      experiment: "other",
+      definition: JSON.stringify({ ...entry, id: "other" }),
+    })),
+  );
+  await saved(view);
+  act(() => {
+    view.result.current.recovery.selectCopy(selected);
+    view.result.current.setDraft(restoreDraft(selected, 10));
+  });
+  await saved(view);
+  expect(view.result.current.recovery.conflict).toBe(false);
+  expect(history.at(-1)?.state).toBe("saved");
+  expect(history.at(-1)?.target).toEqual(selected.target);
+});

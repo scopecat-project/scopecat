@@ -329,18 +329,20 @@ function ProjectDraft({
   const resetSource = (owner: string) => {
     if (!mayLeave()) return;
     if (owner === currentWorkspace.current) {
-      setDraft((current) =>
-        current
-          ? {
-              ...invalidateDraft(
-                current,
-                "Current source selected. Review retained input before starting or previewing.",
-              ),
-              codeRevision: undefined,
-              needsReview: true,
-            }
-          : current,
-      );
+      setDraft((current) => {
+        if (!current) return current;
+        const next = {
+          ...invalidateDraft(
+            current,
+            "Current source selected. Review retained input before starting or previewing.",
+          ),
+          codeRevision: undefined,
+          needsReview: true,
+        };
+        if (JSON.stringify(rawInput(next)) !== JSON.stringify(rawInput(current)))
+          recovery.retainPendingInput(next);
+        return next;
+      });
       return;
     }
     // Ordinary workspace selection remains window-local. Only replace URL
@@ -726,7 +728,12 @@ function ProjectDraft({
         },
         renameDraft: (name) => {
           if (!name.trim() || name.length > 200) return;
-          setDraft((current) => (current ? { ...current, draftName: name.trim() } : current));
+          setDraft((current) => {
+            if (!current) return current;
+            const next = { ...current, draftName: name.trim() };
+            recovery.retainPendingInput(next);
+            return next;
+          });
         },
         beginPreparation: () => {
           if (
@@ -833,31 +840,32 @@ function ProjectDraft({
           setSelectedConfiguration(choice);
           setSelectedWorkingInput(workingInput);
           setSelectedSubject(subject);
-          setDraft((current) =>
-            current
-              ? invalidateDraft(
-                  {
-                    ...current,
-                    planDirty: Boolean(current.plan),
-                    workingInput,
-                    selection: {
-                      ...current.selection,
-                      subject: subject ?? current.selection.subject,
-                      configuration:
-                        workingInput &&
-                        choice.kind === "parameters" &&
-                        current.selection.configuration.kind === "parameters"
-                          ? {
-                              ...choice,
-                              setup: choice.setup ?? current.selection.configuration.setup,
-                            }
-                          : choice,
-                    },
-                  },
-                  "Configuration selected. Start will check these inputs before acquisition.",
-                )
-              : current,
-          );
+          setDraft((current) => {
+            if (!current) return current;
+            const next = invalidateDraft(
+              {
+                ...current,
+                planDirty: Boolean(current.plan),
+                workingInput,
+                selection: {
+                  ...current.selection,
+                  subject: subject ?? current.selection.subject,
+                  configuration:
+                    workingInput &&
+                    choice.kind === "parameters" &&
+                    current.selection.configuration.kind === "parameters"
+                      ? {
+                          ...choice,
+                          setup: choice.setup ?? current.selection.configuration.setup,
+                        }
+                      : choice,
+                },
+              },
+              "Configuration selected. Start will check these inputs before acquisition.",
+            );
+            recovery.retainPendingInput(next);
+            return next;
+          });
         },
         draft,
         attemptsReady,
@@ -1024,6 +1032,8 @@ function ProjectDraft({
           setDraft((current) => {
             if (!current) return current;
             const next = change(current);
+            if (JSON.stringify(rawInput(next)) !== JSON.stringify(rawInput(current)))
+              recovery.retainPendingInput(next);
             return next.actor !== current.actor ? { ...next, defaultActor: undefined } : next;
           }),
         isCurrent: (revision) =>

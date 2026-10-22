@@ -810,3 +810,86 @@ it.each(["handoff", "plan"] as const)(
     act(() => releaseLaunchClose("late-import"));
   },
 );
+
+it("hydrates saved raw inputs after automatic source initialization during a delayed read", async () => {
+  const transport = await configurationCopyFixture();
+  act(() =>
+    state.update((draft) => ({
+      ...draft,
+      actor: "Alice",
+      values: { sample: "chip-a" },
+      controls: { position: { mode: "values", values: "1\n2", unit: "mm" } },
+    })),
+  );
+  await act(async () => state.recovery.flush());
+  cleanup();
+  const { resetLaunchRecoveryWindowForTests } = await import("./launch-recovery");
+  resetLaunchRecoveryWindowForTests();
+  let finish!: () => void;
+  const reading = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/launch-drafts/read")) await reading;
+    return transport(request);
+  });
+  mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  expect(state.recovery.ready).toBe(false);
+  act(() => state.sourceObserved("legacy", { content_hash: "sha256:current-catalog" }));
+  await act(async () => finish());
+  await waitFor(() => expect(state.recovery.ready).toBe(true));
+  expect(state.draft?.actor).toBe("Alice");
+  expect(state.draft?.values.sample).toBe("chip-a");
+  expect(state.draft?.controls.position).toMatchObject({
+    mode: "values",
+    values: "1\n2",
+    unit: "mm",
+  });
+  expect(state.draft?.needsReview).toBe(true);
+  expect(state.recovery.conflict).toBe(false);
+});
+
+it("retains an explicit current-source choice during initial recovery instead of restoring the pin", async () => {
+  const transport = await configurationCopyFixture();
+  act(() =>
+    state.update((draft) => ({ ...draft, codeRevision: { content_hash: "sha256:pinned" } })),
+  );
+  await act(async () => state.recovery.flush());
+  const { readDraft, resetLaunchRecoveryWindowForTests } = await import("./launch-recovery");
+  const original = (await readDraft("legacy", "signal")).head!;
+  cleanup();
+  resetLaunchRecoveryWindowForTests();
+  let finish!: () => void;
+  const reading = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/launch-drafts/read")) await reading;
+    if (request.url.endsWith("/launch-drafts/save")) {
+      const command = await request.clone().json();
+      if (command.expected_revision !== original.revision)
+        return Response.json({
+          head: original,
+          saved: {
+            ...original,
+            input: command.input,
+            state: "conflict",
+            revision: original.revision + 1,
+          },
+        });
+    }
+    return transport(request);
+  });
+  mount();
+  await act(async () => {
+    expect(await state.switchDraft(original)).toBe(true);
+  });
+  expect(state.recovery.ready).toBe(false);
+  expect(state.draft?.codeRevision?.content_hash).toBe("sha256:pinned");
+  act(() => state.selectCurrentSource("legacy"));
+  await act(async () => finish());
+  await waitFor(() => expect(state.recovery.conflict).toBe(true));
+  expect(state.draft?.codeRevision).toBeUndefined();
+  expect((await readDraft("legacy", "signal")).head).toEqual(original);
+});

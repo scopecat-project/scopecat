@@ -154,6 +154,7 @@ it.each([
           draft,
           change: (experiment: string, gain = "1") => {
             latest.current = { ...latest.current!, experiment, values: { gain } };
+            recovery.retainPendingInput(latest.current);
             setDraft(latest.current);
           },
         };
@@ -204,6 +205,106 @@ it.each([
       expect(await prepareLaunchClose("remounted-input")).toBe("saved");
     });
     releaseLaunchClose("remounted-input");
+    cleanup();
+    vi.unstubAllGlobals();
+  },
+);
+
+it.each([true, false])(
+  "retains configuration adoption during initial read when an existing head is %s",
+  async (existing) => {
+    let finish!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const initial: LaunchDraft = {
+      workspaceId: "author",
+      experiment: "signal",
+      draftId: existing ? "default" : crypto.randomUUID(),
+      definition: "{}",
+      controlDefinition: "",
+      values: { gain: "1" },
+      controls: {},
+      selection: defaultSelection(),
+      actor: "local",
+      pending: false,
+      error: "",
+      notice: "",
+      revision: 1,
+    };
+    const { rawInput } = await import("./launch-recovery");
+    const remote: DraftRecord = {
+      target: { workspace_id: "author", experiment: "signal", draft_id: initial.draftId! },
+      revision: 4,
+      input: rawInput({ ...initial, actor: "other window", values: { gain: "valuable remote" } }),
+      state: "saved",
+      created_at: "",
+    };
+    let head: DraftRecord | null = existing ? remote : null;
+    let retained: DraftRecord | undefined;
+    const revisions: number[] = [];
+    vi.stubGlobal("fetch", async (request: Request) => {
+      const command = await request.json();
+      if (request.url.endsWith("/read")) {
+        await reading;
+        return Response.json({ head });
+      }
+      revisions.push(command.expected_revision);
+      const conflict = command.expected_revision !== (head?.revision ?? 0);
+      retained = {
+        target: command.target,
+        revision: 5,
+        input: command.input,
+        state: conflict ? "conflict" : "saved",
+        created_at: "",
+      };
+      if (!conflict) head = retained;
+      return Response.json({ head, saved: retained });
+    });
+    const view = renderHook(() => {
+      const [draft, setDraft] = useState<LaunchDraft | undefined>(initial);
+      const latest = useRef(draft);
+      latest.current = draft;
+      const recovery = useLaunchRecovery(draft, setDraft, {
+        owner: "configuration-adoption",
+        getDraft: () => latest.current,
+        revoke() {},
+      });
+      return {
+        draft,
+        recovery,
+        adopt() {
+          latest.current = {
+            ...latest.current!,
+            selection: {
+              ...latest.current!.selection,
+              configuration: {
+                kind: "parameters",
+                ref: { revision_id: "chosen", content_hash: "sha256:chosen" },
+                overrides: [],
+              },
+            },
+          };
+          recovery.retainPendingInput(latest.current);
+          setDraft(latest.current);
+        },
+      };
+    });
+    // Equivalent to ConfigurationForLaunch -> selectConfiguration: this adoption
+    // is allowed outside the disabled launch form while the initial read is pending.
+    act(() => view.result.current.adopt());
+    await act(async () => finish());
+    await waitFor(() => expect(retained).toBeDefined());
+    expect(revisions).toEqual([0]);
+    expect(retained?.state).toBe(existing ? "conflict" : "saved");
+    expect(retained?.input.selection.configuration).toMatchObject({
+      kind: "parameters",
+      ref: { revision_id: "chosen" },
+    });
+    expect(head).toBe(existing ? remote : retained);
+    await waitFor(() => expect(view.result.current.recovery.conflict).toBe(existing));
+    await expect(prepareLaunchClose("adoption")).resolves.toBe(existing ? "blocked" : "saved");
+    releaseLaunchClose("adoption");
     cleanup();
     vi.unstubAllGlobals();
   },
