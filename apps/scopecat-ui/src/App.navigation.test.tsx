@@ -40,7 +40,30 @@ vi.mock("./features/runs/run-api", async (importOriginal) => ({
 }));
 
 vi.mock("./features/config/ConfigWorkspace", () => ({
-  ConfigWorkspace: () => <p>Experiment configuration</p>,
+  ConfigWorkspace: ({
+    onSelectConfiguration,
+  }: {
+    onSelectConfiguration?: (choice: {
+      kind: "parameters";
+      ref: { revision_id: string; content_hash: string };
+      overrides: [];
+    }) => void;
+  }) => (
+    <div>
+      <p>Experiment configuration</p>
+      <button
+        onClick={() =>
+          onSelectConfiguration?.({
+            kind: "parameters",
+            ref: { revision_id: "parameters-b", content_hash: "hash-b" },
+            overrides: [],
+          })
+        }
+      >
+        Use for next experiment
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("./features/analyses/AnalysesWorkspace", () => ({
@@ -1263,4 +1286,16 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   await screen.findByText("Source: space-b");
   expect(screen.queryByText("Source: space-a")).toBeNull();
   expect(requests.every((request) => request.method === "GET")).toBe(true);
+});
+
+it("opens preparation when adopting parameters while preserving the fixed monitor procedure", async () => {
+  window.history.replaceState(null, "", "/?procedure=run-a&workbench=submitted#configuration");
+  renderApp();
+  fireEvent.click(await screen.findByRole("button", { name: "Use for next experiment" }));
+  await screen.findByText("Calibration launcher");
+  const url = new URL(window.location.href);
+  expect(url.hash).toBe("#launch");
+  expect(url.searchParams.get("preparation")).toBe("1");
+  expect(url.searchParams.has("workbench")).toBe(false);
+  expect(url.searchParams.get("procedure")).toBe("run-a");
 });

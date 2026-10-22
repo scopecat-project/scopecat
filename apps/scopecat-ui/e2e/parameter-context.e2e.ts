@@ -293,6 +293,10 @@ with sc.open_project(sys.argv[1]).connect() as lab:
 `,
       project,
     ]);
+    await page.goto(`${url}/#settings`);
+    await page.getByLabel("Operator name", { exact: true }).fill("Parameter context tester");
+    await page.getByRole("button", { name: "Save operator", exact: true }).click();
+    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${url}/#configuration`);
     await editVersion(page, pythonVersion);
     const frequency = page.getByLabel("signals[1].center", { exact: true });

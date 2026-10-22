@@ -270,13 +270,14 @@ export default function App() {
   const refresh = () => {
     void queryClient.invalidateQueries();
   };
-  const selectView = (selected: ProjectView) => {
+  const selectView = (selected: ProjectView, preparation = false) => {
     setView(selected);
     navigateToView(selected, {
       analysisId: selected === "analyses" ? selectedAnalysisId : undefined,
       runId: selected === "runs" ? selectedRunId : undefined,
       sampleId: selected === "samples" ? selectedSampleId : undefined,
       sampleRevision: selected === "samples" ? selectedSampleRevision : undefined,
+      preparation,
     });
     window.scrollTo({ top: 0, left: 0 });
   };
@@ -519,7 +520,7 @@ export default function App() {
               <ContextConfigWorkspace
                 workspaceRef={parameterWorkspace}
                 objectPanel={objectPanel}
-                onSelected={() => selectView("launch")}
+                onSelected={() => selectView("launch", true)}
                 daemonUnavailable={daemonUnavailable}
               />
             </Suspense>
@@ -743,6 +744,7 @@ function navigateToView(
     runId?: string;
     sampleId?: string;
     sampleRevision?: number;
+    preparation?: boolean;
   } = {},
   options?: NavigationOptions,
 ): void {
@@ -773,6 +775,10 @@ function navigateToView(
     location.searchParams.set("sample-revision", String(selection.sampleRevision));
   } else {
     location.searchParams.delete("sample-revision");
+  }
+  if (selection.preparation) {
+    location.searchParams.delete("workbench");
+    location.searchParams.set("preparation", "1");
   }
   location.hash = view === "runs" ? "" : view;
   navigate(location, options);
