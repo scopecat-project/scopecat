@@ -573,6 +573,7 @@ function ProjectDraft({
           const original = latest.current;
           if (!original?.experiment) throw new Error("Choose an experiment in the editor first.");
           if (
+            launchCloseBlocked() ||
             configurationCopyBusy.current ||
             submitting.current ||
             original.pending ||
@@ -582,6 +583,7 @@ function ProjectDraft({
             throw new Error("Finish saving the current draft before creating another.");
           const identity = JSON.stringify(rawInput(original));
           const intended = () =>
+            !launchCloseBlocked() &&
             alive.current &&
             latest.current === original &&
             !submitting.current &&
@@ -899,6 +901,7 @@ function ProjectDraft({
             if (generation === operatorSelection.current) operatorPending.current = false;
           }
           if (
+            launchCloseBlocked() ||
             !alive.current ||
             latest.current !== current ||
             generation !== operatorSelection.current ||
@@ -981,6 +984,7 @@ function ProjectDraft({
             if (generation === operatorSelection.current) operatorPending.current = false;
           }
           if (
+            launchCloseBlocked() ||
             !alive.current ||
             latest.current !== current ||
             generation !== operatorSelection.current

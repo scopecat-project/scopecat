@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 import { useEffect } from "react";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LaunchDraftProvider, useLaunchDraft, invalidateDraft } from "./LaunchDraft";
 import type { LaunchCatalogEntry } from "./launch-api";
-import { attemptRequest, type AttemptRecord } from "./launch-recovery";
+import {
+  attemptRequest,
+  resetLaunchRecoveryWindowForTests,
+  type AttemptRecord,
+} from "./launch-recovery";
+import { prepareLaunchClose, releaseLaunchClose } from "./launch-close-barrier";
 import { defaultSelection } from "./scientific-selection";
 import {
   installLaunchRecoveryRoutes,
@@ -38,6 +43,7 @@ function mount() {
     </LaunchDraftProvider>,
   );
 }
+beforeEach(() => resetLaunchRecoveryWindowForTests());
 afterEach(async () => {
   cleanup();
   // Let debounced application saves finish before replacing this test's transport.
@@ -665,3 +671,147 @@ it("rejects unsupported historical configuration without saving or changing B", 
   expect(state.draft).toBe(original);
   expect(writes).toEqual([]);
 });
+
+it("rejects a historical configuration copy initiated while native close holds the saved input", async () => {
+  const transport = await configurationCopyFixture();
+  const original = state.draft;
+  const writes: string[] = [];
+  vi.stubGlobal("fetch", (request: Request) => {
+    if (request.url.endsWith("/launch-drafts/save")) writes.push(request.url);
+    return transport(request);
+  });
+  await act(async () => {
+    expect(await prepareLaunchClose("copy-init")).toBe("saved");
+  });
+  await act(async () => {
+    await expect(state.copyHistoricalConfiguration("run-A", historicalSource)).rejects.toThrow(
+      "Finish saving",
+    );
+  });
+  expect(writes).toHaveLength(0);
+  expect(state.draft).toBe(original);
+  act(() => releaseLaunchClose("copy-init"));
+});
+
+it("retains an already-sent historical copy without replacing the close-certified draft", async () => {
+  const transport = await configurationCopyFixture();
+  const original = state.draft;
+  const originalLocation = window.location.href;
+  let release!: () => void;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (
+      request.url.endsWith("/launch-drafts/save") &&
+      (await request.clone().json()).target.draft_id !== "default"
+    )
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    return transport(request);
+  });
+  let pending!: ReturnType<typeof state.copyHistoricalConfiguration>;
+  act(() => {
+    pending = state.copyHistoricalConfiguration("run-A", historicalSource);
+  });
+  await waitFor(() => expect(release).toBeDefined());
+  await act(async () => {
+    expect(await prepareLaunchClose("copy-finish")).toBe("saved");
+  });
+  let result: Awaited<typeof pending> | undefined;
+  await act(async () => {
+    release();
+    result = await pending;
+  });
+  expect(result?.selected).toBe(false);
+  expect(state.draft).toBe(original);
+  expect(window.location.href).toBe(originalLocation);
+  const { readDraft } = await import("./launch-recovery");
+  const saved = await readDraft("legacy", "signal", result!.target.draft_id);
+  expect(saved.head?.input.values.raw).toBe("B input");
+  expect(saved.head?.input.selection.configuration).toEqual({
+    kind: "parameters",
+    ref: historicalSource.parameters,
+    setup: historicalSource.setup,
+    overrides: historicalSource.overrides,
+  });
+  act(() => releaseLaunchClose("copy-finish"));
+});
+
+it.each(["handoff", "plan"] as const)(
+  "does not navigate to a late %s import while native close holds B",
+  async (mode) => {
+    const transport = await configurationCopyFixture();
+    const original = state.draft;
+    const location = window.location.href;
+    let finish!: (response: Response) => void;
+    vi.stubGlobal("fetch", (request: Request) =>
+      request.url.endsWith("/operator-settings")
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : transport(request),
+    );
+    let pending!: Promise<boolean>;
+    act(() => {
+      pending =
+        mode === "plan"
+          ? state.openPlan(
+              {
+                ref: { plan_id: "saved-plan", revision: 1, content_hash: "sha256:plan" },
+                name: "Saved plan",
+                saved_by: "Alice",
+                saved_at: "2026-10-01T00:00:00Z",
+                definition: {
+                  workspace_id: "other-source",
+                  experiment: "signal",
+                  version: "1",
+                  definition_hash: "sha256:definition",
+                  scan_mode: "cartesian",
+                  parameter_sweeps: [],
+                  inputs: {},
+                  control_edits: {},
+                  selection: defaultSelection(),
+                  scientific_binding: {
+                    codec: "scopecat.scientific-binding.v3",
+                    config_content_hash: "sha256:config",
+                    setup_content_hash: "sha256:setup",
+                    subject: { kind: "unbound" },
+                  },
+                },
+              },
+              entry,
+            )
+          : state.importHandoff(entry, {
+              kind: "handoff",
+              source_run: "run-A",
+              source_analysis: "analysis-A",
+              source_hash: "sha256:A",
+              request: {
+                workspace_id: "other-source",
+                experiment: "signal",
+                version: "1",
+                action: "preview",
+                request_key: "",
+                scan_mode: "cartesian",
+                parameter_sweeps: [],
+                actor: "operator",
+                selection: defaultSelection(),
+                inputs: {},
+              },
+            });
+    });
+    await waitFor(() => expect(finish).toBeDefined());
+    await act(async () => {
+      expect(await prepareLaunchClose("late-import")).toBe("saved");
+    });
+    let selected: boolean | undefined;
+    await act(async () => {
+      finish(Response.json({ revision: 2, operator: "Bob" }));
+      selected = await pending;
+    });
+    expect(selected).toBe(false);
+    expect(state.draft).toBe(original);
+    expect(state.workspaceId).toBe("legacy");
+    expect(window.location.href).toBe(location);
+    act(() => releaseLaunchClose("late-import"));
+  },
+);
