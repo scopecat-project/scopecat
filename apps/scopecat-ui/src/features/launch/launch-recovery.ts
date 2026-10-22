@@ -112,6 +112,8 @@ interface Session {
   pending: number;
   queued: string;
   confirmed: string;
+  initialInput: string;
+  localInput?: string;
   queue: Promise<void>;
   failed?: Save;
   conflict: boolean;
@@ -161,6 +163,28 @@ export function useLaunchRecovery(
       ? JSON.stringify([draft.workspaceId, draft.experiment, draft.draftId ?? "default"])
       : "";
   const encoded = draft?.definition ? JSON.stringify(rawInput(draft)) : "";
+  function capturePendingInput(current: Session) {
+    if (current.ready) return;
+    const latest = liveInput.current.close
+      ? liveInput.current.close.getDraft()
+      : liveInput.current.draft;
+    if (
+      !latest?.definition ||
+      JSON.stringify([latest.workspaceId, latest.experiment, latest.draftId ?? "default"]) !==
+        current.target
+    )
+      return;
+    const input = JSON.stringify(rawInput(latest));
+    if (
+      input !== current.initialInput ||
+      current.localInput !== undefined ||
+      explicitInput.current === current.target
+    )
+      current.localInput = input;
+  }
+  useLayoutEffect(() => {
+    if (session.current) capturePendingInput(session.current);
+  });
   useEffect(() => {
     if (!target) return;
     const [workspace, experiment, draft_id] = JSON.parse(target) as [string, string, string];
@@ -194,6 +218,26 @@ export function useLaunchRecovery(
       });
       return;
     }
+    // A detached read may own edits even though no server revision was available.
+    // Keep that input when retrying recovery instead of replacing it with the head.
+    const retainedInput = cached && !cached.ready ? cached.localInput : undefined;
+    if (retainedInput) {
+      explicitInput.current = target;
+      setDraft((previous) =>
+        restoreDraft(
+          {
+            revision: cached!.revision,
+            target: { workspace_id: workspace, experiment, draft_id },
+            input: JSON.parse(retainedInput),
+            state: "saved",
+            created_at: "",
+          },
+          (previous?.revision ?? 0) + 1,
+        ),
+      );
+    }
+    const initial = liveInput.current.draft;
+    const initialInput = initial?.definition ? JSON.stringify(rawInput(initial)) : "";
     const current: Session = {
       target,
       revision: 0,
@@ -201,6 +245,10 @@ export function useLaunchRecovery(
       pending: 0,
       queued: "",
       confirmed: "",
+      initialInput: retainedInput ?? initialInput,
+      localInput:
+        retainedInput ??
+        (explicitInput.current === target || requestedCopy.current ? initialInput : undefined),
       queue: Promise.resolve(),
       conflict: false,
     };
@@ -231,7 +279,7 @@ export function useLaunchRecovery(
               : undefined;
         if (copy) requestedCopy.current = undefined;
         if (copy && selected === copy) current.revision = copy.revision;
-        if (selected && explicitInput.current !== target) {
+        if (selected && explicitInput.current !== target && current.localInput === undefined) {
           if (!copy) {
             current.queued = JSON.stringify(rawInput(restoreDraft(selected, 1)));
             current.confirmed = current.queued;
@@ -261,6 +309,20 @@ export function useLaunchRecovery(
       });
     return () => {
       active = false;
+      capturePendingInput(current);
+      // An abandoned initial lookup owns no edits or pending write. Its late
+      // response must neither hydrate another target nor block this window forever.
+      if (
+        !current.ready &&
+        current.localInput === undefined &&
+        !current.pending &&
+        !current.failed &&
+        !current.conflict &&
+        !current.hydrating
+      ) {
+        if (unfinished.get(target) === current) unfinished.delete(target);
+        if (session.current === current) session.current = undefined;
+      }
     };
   }, [target, setDraft, reload, unfinished]);
   function queueInput(current: Session, input: string) {
@@ -345,6 +407,7 @@ export function useLaunchRecovery(
     saved: () => boolean;
   }>({ freeze: () => {}, flush: async () => "unknown", saved: () => false });
   function currentInput() {
+    if (!mounted.current && !session.current) return undefined;
     const latest = liveInput.current.close
       ? liveInput.current.close.getDraft()
       : liveInput.current.draft;
