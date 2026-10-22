@@ -68,3 +68,49 @@ it("loads only the selected run on demand and keeps its frozen identity", async 
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(screen.queryByRole("textbox")).toBeNull();
 });
+
+it("requires an editor experiment for configuration reuse and never offers full recipe replay", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        snapshot: {
+          config_content_hash: "frozen-a",
+          config_source: {
+            kind: "parameter_revision",
+            parameters: { revision_id: "parameters-a", content_hash: "parameters-hash" },
+            setup: { revision_id: "setup-a", content_hash: "setup-hash" },
+            content_hash: "frozen-a",
+            overrides: [],
+          },
+          scientific_binding: { subject: { kind: "unbound" }, setup_content_hash: "setup-a" },
+        },
+        control: {
+          admission: {
+            plan: {
+              experiment_id: "original-experiment",
+              point_count: 1,
+              coordinates: [],
+              adaptive_coordinate_ids: [],
+            },
+          },
+        },
+      }),
+    ),
+  );
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <RunSnapshotDetails runId="run-a" />
+    </QueryClientProvider>,
+  );
+  const details = screen.getByText("Frozen execution inputs").closest("details")!;
+  details.open = true;
+  fireEvent(details, new Event("toggle"));
+  expect(
+    await screen.findByRole("button", { name: "Use this configuration in a new draft" }),
+  ).toBeDisabled();
+  expect(screen.getByText("Choose an experiment in the editor first.")).toBeVisible();
+  expect(screen.getByText(/does not recreate the original run's recipe/)).toBeVisible();
+});

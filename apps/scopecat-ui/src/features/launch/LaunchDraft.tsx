@@ -1,3 +1,7 @@
+import {
+  historicalConfiguration,
+  type HistoricalConfiguration,
+} from "../runs/historical-configuration";
 import { clearDraftLocation, retainDraftLocation } from "./draft-location";
 import { launchCloseBlocked } from "./launch-close-barrier";
 import { readOperatorSettings } from "../application/OperatorSettings";
@@ -7,6 +11,7 @@ import {
   attemptRequest,
   restoreDraft,
   rawInput,
+  saveDraft,
   resolveAttempt,
   type DraftRecord,
   type AttemptRecord,
@@ -88,6 +93,11 @@ export interface LaunchPreparation {
   finish: () => void;
 }
 interface DraftContext {
+  copyHistoricalConfiguration: (
+    runId: string,
+    source: HistoricalConfiguration,
+  ) => Promise<{ target: DraftRecord["target"]; selected: boolean }>;
+
   copyDraft: () => Promise<void>;
   switchDraft: (record: DraftRecord, isIntended?: () => boolean) => Promise<boolean>;
   renameDraft: (name: string) => void;
@@ -220,6 +230,10 @@ function ProjectDraft({
   const operatorPending = useRef(false);
   const latest = useRef(draft);
   const preparationToken = useRef<symbol | undefined>(undefined);
+  const configurationCopyBusy = useRef(false);
+  const configurationCopy = useRef<
+    { key: string; command: Parameters<typeof saveDraft>[0] } | undefined
+  >(undefined);
   // Admission continuations must observe edits synchronously, before a React effect
   // can run or a late preview/receipt response can continue the old intent.
   const setRecoveredDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>(
@@ -554,6 +568,101 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        copyHistoricalConfiguration: async (runId, source) => {
+          const configuration = historicalConfiguration(source);
+          const original = latest.current;
+          if (!original?.experiment) throw new Error("Choose an experiment in the editor first.");
+          if (
+            configurationCopyBusy.current ||
+            submitting.current ||
+            original.pending ||
+            preparationToken.current ||
+            !mayLeave()
+          )
+            throw new Error("Finish saving the current draft before creating another.");
+          const identity = JSON.stringify(rawInput(original));
+          const intended = () =>
+            alive.current &&
+            latest.current === original &&
+            !submitting.current &&
+            !preparationToken.current &&
+            latest.current?.draftId === original.draftId &&
+            latest.current?.workspaceId === original.workspaceId &&
+            latest.current?.revision === original.revision &&
+            JSON.stringify(rawInput(latest.current)) === identity;
+          const key = JSON.stringify([
+            original.workspaceId,
+            original.experiment,
+            original.draftId,
+            original.revision,
+            identity,
+            runId,
+            source,
+          ]);
+          configurationCopyBusy.current = true;
+          try {
+            await recovery.flush();
+            if (!intended())
+              throw new Error("The editor changed. Keep its current input and try again.");
+            if (configurationCopy.current?.key !== key) {
+              const next = invalidateDraft(
+                structuredClone(original),
+                "Historical configuration copied. Review these new inputs before starting.",
+              );
+              next.draftId = crypto.randomUUID();
+              next.draftName = `Configuration from ${runId}`.slice(0, 200);
+              next.selection = { ...next.selection, configuration };
+              next.workingInput = undefined;
+              next.plan = undefined;
+              next.planDirty = false;
+              next.handoff = undefined;
+              next.manualLine = undefined;
+              next.lineSource = undefined;
+              next.admittedProcedureId = undefined;
+              next.needsReview = true;
+              configurationCopy.current = {
+                key,
+                command: {
+                  operation_id: crypto.randomUUID(),
+                  expected_revision: 0,
+                  discard: false,
+                  target: {
+                    workspace_id: next.workspaceId,
+                    experiment: next.experiment,
+                    draft_id: next.draftId,
+                  },
+                  input: rawInput(next),
+                },
+              };
+            }
+            const command = configurationCopy.current.command;
+            const result = await saveDraft(command);
+            if (
+              !result.saved ||
+              result.saved.state !== "saved" ||
+              result.saved.target.workspace_id !== command.target.workspace_id ||
+              result.saved.target.experiment !== command.target.experiment ||
+              result.saved.target.draft_id !== command.target.draft_id
+            )
+              throw new Error(
+                "The new configuration draft was not confirmed saved. Keep the current editor and retry.",
+              );
+            const selected = intended();
+            if (selected) {
+              if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
+                attemptGeneration.current += 1;
+                setAttempt(undefined);
+              }
+              const restored = restoreDraft(result.saved, original.revision + 1);
+              setDraft(restored);
+              retainDraftLocation(restored);
+            }
+            configurationCopy.current = undefined;
+            return { target: result.saved.target, selected };
+          } finally {
+            configurationCopyBusy.current = false;
+          }
+        },
         copyDraft: async () => {
           const original = latest.current;
           if (!original || !mayLeave() || submitting.current) return;
@@ -929,6 +1038,9 @@ function ProjectDraft({
       {children}
     </Context>
   );
+}
+export function useOptionalLaunchDraft() {
+  return useContext(Context);
 }
 export function useLaunchDraft() {
   const context = useContext(Context);

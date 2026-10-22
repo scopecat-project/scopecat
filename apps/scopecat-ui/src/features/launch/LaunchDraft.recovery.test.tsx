@@ -506,3 +506,162 @@ it("imports historical inputs into a new identity and preserves the existing sav
   expect(retained.revision).toBe(original.revision);
   expect(retained.input.values.note).toBe("B work");
 });
+
+const historicalSource = {
+  kind: "parameter_revision" as const,
+  parameters: { revision_id: "historical-parameters", content_hash: "sha256:parameters" },
+  setup: { revision_id: "historical-setup", content_hash: "sha256:setup" },
+  content_hash: "sha256:composed",
+  overrides: [
+    {
+      kind: "update_parameter_rows" as const,
+      parameter_id: "frequencies",
+      key: { target: "q1" },
+      values: { frequency: { value: 5, unit: "GHz" } },
+    },
+  ],
+};
+async function configurationCopyFixture() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  installLaunchRecoveryRoutes();
+  mount();
+  await act(async () => state.select(entry, false, "legacy"));
+  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  act(() =>
+    state.update((draft) => invalidateDraft({ ...draft, values: { raw: "B input" } }, "edited")),
+  );
+  await act(async () => state.recovery.flush());
+  return globalThis.fetch;
+}
+
+it("persists a new draft with exact historical configuration without changing B or submitting", async () => {
+  const transport = await configurationCopyFixture();
+  const { readDraft } = await import("./launch-recovery");
+  const original = (await readDraft("legacy", "signal")).head!;
+  const requests: string[] = [];
+  vi.stubGlobal("fetch", (request: Request) => {
+    requests.push(new URL(request.url).pathname);
+    return transport(request);
+  });
+  let result: Awaited<ReturnType<typeof state.copyHistoricalConfiguration>> | undefined;
+  await act(async () => {
+    result = await state.copyHistoricalConfiguration("run-A", historicalSource);
+  });
+  expect(result?.selected).toBe(true);
+  expect(state.draft?.draftId).not.toBe("default");
+  expect(state.draft?.values.raw).toBe("B input");
+  expect(state.draft?.draftName).toBe("Configuration from run-A");
+  expect(state.draft?.selection.configuration).toEqual({
+    kind: "parameters",
+    ref: historicalSource.parameters,
+    setup: historicalSource.setup,
+    overrides: historicalSource.overrides,
+  });
+  expect(state.draft?.preview).toBeUndefined();
+  expect(state.draft?.requestKey).toBeUndefined();
+  expect(state.draft?.needsReview).toBe(true);
+  expect((await readDraft("legacy", "signal")).head).toEqual(original);
+  expect(requests.every((path) => path.includes("launch-drafts"))).toBe(true);
+});
+
+it("preserves B on a lost new-copy response and retries the exact save identity", async () => {
+  const transport = await configurationCopyFixture();
+  const original = state.draft;
+  const commands: unknown[] = [];
+  let lost = true;
+  let saved: Response | undefined;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (request.url.endsWith("/launch-drafts/save")) {
+      const command = await request.clone().json();
+      if (command.target.draft_id !== "default") {
+        commands.push(command);
+        if (saved) return saved.clone();
+        saved = await transport(request);
+        if (lost) {
+          lost = false;
+          throw new Error("response lost");
+        }
+        return saved.clone();
+      }
+    }
+    return transport(request);
+  });
+  await act(async () => {
+    await expect(state.copyHistoricalConfiguration("run-A", historicalSource)).rejects.toThrow(
+      "The local daemon did not respond.",
+    );
+  });
+  expect(state.draft).toBe(original);
+  await act(async () => {
+    await state.copyHistoricalConfiguration("run-A", historicalSource);
+  });
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).toEqual(commands[0]);
+  expect(state.draft?.draftId).not.toBe("default");
+});
+
+it("retains a saved historical configuration copy separately when B changes during save", async () => {
+  const transport = await configurationCopyFixture();
+  let release!: () => void;
+  vi.stubGlobal("fetch", async (request: Request) => {
+    if (
+      request.url.endsWith("/launch-drafts/save") &&
+      (await request.clone().json()).target.draft_id !== "default"
+    )
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    return transport(request);
+  });
+  let pending!: ReturnType<typeof state.copyHistoricalConfiguration>;
+  act(() => {
+    pending = state.copyHistoricalConfiguration("run-A", historicalSource);
+  });
+  await waitFor(() => expect(release).toBeDefined());
+  act(() =>
+    state.update((draft) => invalidateDraft({ ...draft, values: { raw: "later B" } }, "edited")),
+  );
+  let result: Awaited<typeof pending> | undefined;
+  await act(async () => {
+    release();
+    result = await pending;
+  });
+  expect(result?.selected).toBe(false);
+  expect(state.draft?.draftId).toBe("default");
+  expect(state.draft?.values.raw).toBe("later B");
+  const { readDraft } = await import("./launch-recovery");
+  const retained = await readDraft("legacy", "signal", result!.target.draft_id);
+  expect(retained.head?.input.values.raw).toBe("B input");
+  expect(retained.head?.input.selection.configuration).toEqual({
+    kind: "parameters",
+    ref: historicalSource.parameters,
+    setup: historicalSource.setup,
+    overrides: historicalSource.overrides,
+  });
+});
+
+it("rejects unsupported historical configuration without saving or changing B", async () => {
+  const transport = await configurationCopyFixture();
+  const original = state.draft;
+  const writes: string[] = [];
+  vi.stubGlobal("fetch", (request: Request) => {
+    if (request.method !== "GET") writes.push(request.url);
+    return transport(request);
+  });
+  await act(async () => {
+    await expect(
+      state.copyHistoricalConfiguration("run-A", {
+        kind: "config_registry",
+        config_ref: "legacy",
+        entry_id: "legacy-entry",
+        selector: "default",
+        content_hash: "hash",
+      }),
+    ).rejects.toThrow("no reusable parameter-version or candidate configuration");
+  });
+  expect(state.draft).toBe(original);
+  expect(writes).toEqual([]);
+});

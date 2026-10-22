@@ -525,6 +525,17 @@ export default function App() {
               />
             </Suspense>
           </div>
+          {view === "runs" && !healthQuery.isPending && (
+            <RunsWorkspace
+              selectedRunId={selectedRunId}
+              onSelectRun={selectRun}
+              health={healthQuery.data}
+              healthPending={healthQuery.isPending}
+              healthReachable={daemonReachable}
+              daemonUnavailable={daemonUnavailable}
+              onOpenSample={openRunSample}
+            />
+          )}
         </LaunchDraftProvider>
         {healthQuery.data?.projectId && (
           <RetainedView
@@ -548,16 +559,6 @@ export default function App() {
           <Suspense fallback={<p>Loading settings…</p>}>
             <ApplicationSettings health={healthQuery.data} />
           </Suspense>
-        ) : view === "runs" ? (
-          <RunsWorkspace
-            selectedRunId={selectedRunId}
-            onSelectRun={selectRun}
-            health={healthQuery.data}
-            healthPending={healthQuery.isPending}
-            healthReachable={daemonReachable}
-            daemonUnavailable={daemonUnavailable}
-            onOpenSample={openRunSample}
-          />
         ) : view === "samples" ? (
           <Suspense
             fallback={
