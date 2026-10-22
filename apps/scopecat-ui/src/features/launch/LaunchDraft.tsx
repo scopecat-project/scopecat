@@ -313,7 +313,9 @@ function ProjectDraft({
       );
       return;
     }
-    clearDraftLocation(owner);
+    // Ordinary workspace selection remains window-local. Only replace URL
+    // identity when an explicit saved-draft link would otherwise stay stale.
+    if (new URL(window.location.href).searchParams.has("draft")) clearDraftLocation(owner);
     currentWorkspace.current = owner;
     setWorkspaceId(owner);
     setDraft((current) =>
