@@ -26,18 +26,21 @@
   ],
   "packageRules": [
     {
-      "description": "The notebook extra reuses this local package's kernel extra; it is not a PyPI dependency",
+      "description": "Internal versions of these public-monorepo packages are managed together by scripts/app_build/package_versions.py, not by independent registry updates",
       "matchManagers": [
         "pep621"
       ],
-      "matchFileNames": [
-        "packages/scopecat-app/pyproject.toml"
-      ],
-      "matchDepTypes": [
-        "project.optional-dependencies"
+      "matchDatasources": [
+        "pypi"
       ],
       "matchPackageNames": [
-        "scopecat-app"
+        "scopecat",
+        "scopecat-server",
+        "scopecat-instruments",
+        "scopecat-quantum",
+        "scopecat-app",
+        "scopecat-tutorials",
+        "scopecat-testkit"
       ],
       "enabled": false
     },
@@ -53,7 +56,7 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "将 Python uv CLI 与规范化的 uv-build 包更新放在同一组审查",
+      "description": "\u5c06 Python uv CLI \u4e0e\u89c4\u8303\u5316\u7684 uv-build \u5305\u66f4\u65b0\u653e\u5728\u540c\u4e00\u7ec4\u5ba1\u67e5",
       "matchManagers": [
         "pep621"
       ],
