@@ -131,6 +131,14 @@ retainedProcedureTest(
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
         .click();
       await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+      const inspectedUrl = new URL(page.url());
+      expect(inspectedUrl.searchParams.get("submitted_task")).toBe(procedureId);
+      expect(inspectedUrl.searchParams.get("procedure")).toBeNull();
+      await page.getByRole("button", { name: "Open in monitor", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Monitor", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
       expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
       const reopenedScreenshot = testInfo.outputPath("operator-reopened.png");
       await page.screenshot({ path: reopenedScreenshot, fullPage: true });

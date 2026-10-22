@@ -268,9 +268,19 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
       inspection.getByRole("heading", { name: `Submitted task ${procedureB}`, exact: true }),
     ).toBeVisible();
     await expect(inspection.getByText("Waiting for resources", { exact: true })).toBeVisible();
-    await expect(
-      inspection.getByRole("link", { name: "another run", exact: true }),
-    ).toHaveAttribute("href", `?procedure=${procedureB}&run=${runA}#runs`);
+    const ownerLink = inspection.getByRole("link", { name: "another run", exact: true });
+    await expect(ownerLink).toBeVisible();
+    const ownerUrl = new URL((await ownerLink.getAttribute("href"))!, url);
+    const savedDraftUrl = new URL(savedDraftLink!, url);
+    expect(ownerUrl.origin).toBe(new URL(url).origin);
+    expect(ownerUrl.hash).toBe("#runs");
+    expect(Object.fromEntries(ownerUrl.searchParams)).toEqual({
+      procedure: procedureB,
+      run: runA,
+      workspace: savedDraftUrl.searchParams.get("workspace"),
+      experiment: "signal",
+      draft: draftC,
+    });
     await expect(page).toHaveURL(
       (currentUrl) => currentUrl.searchParams.get("procedure") === procedureA,
     );
