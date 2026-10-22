@@ -16,7 +16,7 @@ with project.authoring() as author:
     saved = author.parameters.save(name="line-inputs", catalog=content.catalog, parameters=content.parameters)
     setup = author.setup.get("initial")
     author.use(parameters=saved, setup=setup.ref)
-    prepared = author.prepare("ui_signal.signal", actor="template-operator")
+    prepared = author.prepare("ui_signal.signal", actor="template-operator", scans={"frequency": [sc.Quantity(v, "GHz") for v in (4.6, 4.7, 4.8, 4.9, 5.0)]})
     plan = prepared.save_plan("Synthetic S21 template", saved_by="template-operator")
     print(json.dumps({"plan": plan.ref.plan_id, "workspace": plan.definition.workspace_id}))
 `;
@@ -26,6 +26,7 @@ for (const width of [1280, 390]) {
     page,
   }, testInfo) => {
     test.setTimeout(240_000);
+    page.setDefaultTimeout(15_000);
     const project = await mkdtemp(join(tmpdir(), "scopecat-line-list-"));
     let started = false;
     try {
@@ -66,6 +67,7 @@ for (const width of [1280, 390]) {
           })
           .click();
         await expect(page.getByText(`Physical line: ${label}`, { exact: false })).toBeVisible();
+        await page.locator('input[aria-label="Operator"]').fill("measurement-operator");
         if (index > 0) await page.getByLabel("Amplitude", { exact: true }).fill("0.08");
         const submitted = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/submit"),
@@ -146,7 +148,7 @@ for (const width of [1280, 390]) {
       );
       await expect(region.getByRole("link", { name: "Compare retained curves" })).toHaveAttribute(
         "href",
-        new RegExp(runIds[0]!),
+        new RegExp(runIds[0]),
       );
       expect(
         await page.evaluate<number>("document.documentElement.scrollWidth"),
@@ -155,6 +157,18 @@ for (const width of [1280, 390]) {
         path: testInfo.outputPath(`line-list-${width}.png`),
         fullPage: true,
       });
+      await region.getByRole("link", { name: "Compare retained curves" }).click();
+      await expect(page.getByLabel("Primary run", { exact: true })).toHaveValue(runIds[0]);
+      await expect(page.getByLabel("Secondary run", { exact: true })).toHaveValue(runIds[2]);
+      const comparison = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/run-comparison") && response.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Inspect compatible data", exact: true }).click();
+      expect((await comparison).status()).toBe(200);
+      await expect(
+        page.getByRole("region", { name: "Retained run comparison" }).locator("svg"),
+      ).toBeVisible();
     } finally {
       if (started) stopProject(project);
       await rm(project, { recursive: true, force: true });

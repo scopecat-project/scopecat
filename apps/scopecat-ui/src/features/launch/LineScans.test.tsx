@@ -12,6 +12,7 @@ vi.mock("./LaunchDraft", () => ({
     openPlan,
     draft: { revision: 1 },
     isCurrent: () => true,
+    recovery: { canLeave: () => true },
   }),
 }));
 vi.mock("../application/use-operator-input", () => ({

@@ -28,7 +28,7 @@ export function LineScans() {
 }
 
 export function LineScanWorkspace() {
-  const { projectId, workspaceId, openPlan, draft, isCurrent } = useLaunchDraft();
+  const { projectId, workspaceId, openPlan, draft, isCurrent, recovery } = useLaunchDraft();
   const cache = useQueryClient();
   const operator = useOperatorInput();
   const location = useLocationUrl();
@@ -149,7 +149,13 @@ export function LineScanWorkspace() {
         (item) => item.id === saved.experiment && item.version === saved.version,
       );
       if (!entry) throw new Error("Restore the saved template source before measuring this list.");
-      if (opening.current !== token || !isCurrent(revision)) return;
+      if (opening.current !== token) return;
+      if (!isCurrent(revision)) {
+        setError(
+          "The current draft changed while loading the template. Prepare the line again when input recovery is complete.",
+        );
+        return;
+      }
       const accepted = await openPlan(
         {
           name: scan.name,
@@ -159,7 +165,13 @@ export function LineScanWorkspace() {
         entry,
         () => opening.current === token,
       );
-      if (!accepted || opening.current !== token) return;
+      if (opening.current !== token) return;
+      if (!accepted) {
+        setError(
+          "The template was not opened. Finish saving or reviewing the current input, then prepare this line again.",
+        );
+        return;
+      }
       const url = new URL(window.location.href);
       url.searchParams.delete("procedure");
       url.searchParams.set("preparation", "1");
@@ -259,7 +271,7 @@ export function LineScanWorkspace() {
         <LineScanDetail
           key={selected}
           view={detail.data}
-          busy={busy}
+          busy={busy || !draft || !recovery.canLeave()}
           onPrepare={(line) => void prepare(detail.data.scan, line)}
           onSaved={() =>
             cache.invalidateQueries({ queryKey: ["line-scans", projectId, workspaceId] })
