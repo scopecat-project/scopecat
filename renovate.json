@@ -26,6 +26,22 @@
   ],
   "packageRules": [
     {
+      "description": "The notebook extra reuses this local package's kernel extra; it is not a PyPI dependency",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchFileNames": [
+        "packages/scopecat-app/pyproject.toml"
+      ],
+      "matchDepTypes": [
+        "project.optional-dependencies"
+      ],
+      "matchPackageNames": [
+        "scopecat-app"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Update locked Python quality tools within their declared ranges",
       "matchManagers": [
         "pep621"
