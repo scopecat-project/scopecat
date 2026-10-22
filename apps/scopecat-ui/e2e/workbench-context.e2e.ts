@@ -195,7 +195,28 @@ test("two workbench pages retain independent context and share collection number
     await expect(other.getByLabel("Experiment setup", { exact: true })).toHaveValue(
       "browser-bench-b",
     );
+    // Both pages still edit the same saved identity. Exercise the stale-copy
+    // conflict before opening a plan, which intentionally creates a new identity.
+    const sharedDraft = await page
+      .getByRole("combobox", { name: "Editable draft", exact: true })
+      .inputValue();
+    await expect(other.getByRole("combobox", { name: "Editable draft", exact: true })).toHaveValue(
+      sharedDraft,
+    );
+    await other.getByLabel("Record collection", { exact: true }).selectOption("");
+    const conflictB = other.getByRole("region", { name: "Conflicting experiment input" });
+    await expect(conflictB).toContainText("Alice");
+    await expect(other.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await conflictB.getByRole("button", { name: "Keep my copy after review" }).click();
+    await expect(conflictB).toBeHidden();
+    await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
+    await expect(
+      other.getByText("Experiment input saved in application data.", { exact: true }),
+    ).toBeVisible();
     await other.getByRole("button", { name: "Open First batch recipe r1", exact: true }).click();
+    await expect(
+      other.getByRole("combobox", { name: "Editable draft", exact: true }),
+    ).not.toHaveValue(sharedDraft);
     // Explicitly opening a plan imports its scientific selection into this page.
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
@@ -211,11 +232,14 @@ test("two workbench pages retain independent context and share collection number
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
-    const conflictB = other.getByRole("region", { name: "Conflicting experiment input" });
-    await expect(conflictB).toContainText("Alice");
-    await expect(other.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
-    await conflictB.getByRole("button", { name: "Keep my copy after review" }).click();
+    // Plan-derived edits are independent; Alice's selected draft stays intact.
+    await expect(
+      other.getByText("Experiment input saved in application data.", { exact: true }),
+    ).toBeVisible();
     await expect(conflictB).toBeHidden();
+    await expect(page.getByRole("combobox", { name: "Editable draft", exact: true })).toHaveValue(
+      sharedDraft,
+    );
     const preparedB = await preview(other);
     const resolvedB = await (
       await other.request.get(
