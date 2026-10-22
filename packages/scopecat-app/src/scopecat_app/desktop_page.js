@@ -71,3 +71,20 @@ function upgradeData() {
     if (!changed) progress("");
   });
 }
+
+// These pages own no experiment editor. A missing handler on another page is
+// never equivalent to this explicit acknowledgement.
+window.addEventListener("scopecat:close-preflight", (event) => {
+  const requestId = event.detail && event.detail.requestId;
+  if (typeof requestId !== "string" || !requestId) return;
+  if (!window.pywebview || !pywebview.api.complete_close_preflight) return;
+  Promise.resolve(pywebview.api.complete_close_preflight(requestId, "saved")).catch((error) => {
+    document.getElementById("error").textContent = error.message || String(error);
+  });
+});
+window.addEventListener("scopecat:close-release", (event) => {
+  if (event.detail && event.detail.message) {
+    progress("");
+    document.getElementById("error").textContent = event.detail.message;
+  }
+});

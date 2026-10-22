@@ -53,3 +53,39 @@ it("shows submitted wait and uncertainty without implying queue order or changin
   fireEvent.click(waiting);
   expect(select).toHaveBeenCalledWith("b");
 });
+
+it("keeps earlier pages and the inspected selection while loading more submitted tasks", async () => {
+  const cursors: Array<string | null> = [];
+  vi.stubGlobal("fetch", async (request: Request) => {
+    const cursor = new URL(request.url).searchParams.get("cursor");
+    cursors.push(cursor);
+    return Response.json({
+      items: [
+        {
+          procedure_run_id: cursor ? "earlier" : "selected",
+          definition: { id: cursor ? "older-task" : "current-task" },
+          state: "ready",
+          created_at: "2026-10-22",
+        },
+      ],
+      next_cursor: cursor ? null : 10,
+    });
+  });
+  const select = vi.fn();
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ProcedureHistory mode="submitted" selectedId="selected" onSelect={select} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Load earlier procedures" }));
+  await screen.findByRole("button", { name: /older-task/ });
+  expect(screen.getByRole("button", { name: /current-task/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  expect(screen.queryByRole("button", { name: "Load earlier procedures" })).not.toBeInTheDocument();
+  expect(cursors).toEqual([null, "10"]);
+  expect(select).not.toHaveBeenCalled();
+});

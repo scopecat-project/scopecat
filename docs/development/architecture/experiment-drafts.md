@@ -53,7 +53,9 @@ Editor, Monitor and Submitted work share the existing application shell. Editor
 keeps parameter, scan and source inputs separate from live execution progress.
 Monitor opens the explicitly selected procedure; Submitted work lists retained
 statuses, including resource waits, without imposing a new scheduling order.
-Opening a task is an explicit selection. Uncertain submission recovery remains
+Submitted work has its own inline inspection selection; inspecting task B does
+not replace Monitor A. Only **Open in monitor** changes that monitor selection.
+Closing an inspection leaves background work running. Uncertain submission recovery remains
 visible while editing; an unknown outcome never becomes a success indication.
 
 Copy to new draft flushes the current input before selecting a new identity.
@@ -62,6 +64,50 @@ available for retry. Names, raw input and source baselines recover through the
 existing application store. Historical plans and comparison handoffs open fresh
 drafts and never replace the original run. Preview state, focus, selection and
 scroll positions are not persisted as part of the saved-draft promise.
+
+### Reopen an exact saved draft
+
+The saved-draft link carries `workspace`, `experiment` and `draft` identities.
+Reopening resolves that exact saved record before selecting its experiment and
+uses its retained source revision when pinned. A missing record, unavailable
+source revision or missing experiment produces an explicit recovery message;
+it never silently opens the default draft or substitutes the current catalog.
+The current editor is preserved while another linked draft is being resolved.
+
+Switching saved drafts updates the editing identity in the URL. In-window monitor
+and return-to-preparation links preserve it alongside the selected procedure, so
+returning and then reloading reopens the same saved draft. These links do not
+promise recovery of unsaved input or every transient view state, and do not force
+an additional window.
+
+### Compare submitted and current inputs
+
+The submitted-input disclosure compares the selected immutable request with the
+currently selected draft. It does not claim that this draft originated that
+submission. Changed fields appear first; unchanged fields can be expanded.
+Different workspaces or experiments are identified as separate preparations.
+Unresolved defaults and incomplete input are not reported as equal. Comparison
+is read-only: it neither modifies submitted work nor replaces preview, source,
+unit, setup or admission validation.
+
+### Reuse a retained configuration
+
+In a run's **Frozen execution inputs**, **Use this configuration in a new draft**
+copies its retained configuration into a new copy of the current editor
+experiment. Choose that experiment first. The new draft keeps the current
+experiment's inputs and subject, with the historical parameter revision, setup
+and overrides, or the exact retained analysis-candidate source. This is
+configuration reuse, not reconstruction of the original source code or run recipe.
+Legacy and unknown configuration sources remain read-only; current defaults are
+never substituted for missing historical evidence.
+
+The new identity is saved before it can replace the selected editor. A failed
+save preserves the current draft; retrying a lost response reuses the same save
+operation and target. If the editor changes during saving, the new draft remains
+saved separately and can be opened explicitly. Neither the original run nor the
+existing draft is modified. The new draft clears stale plan/handoff and preview
+state, requires review, and still passes the existing compatibility and submission
+checks before execution. Creating it does not submit work.
 
 A run window reuses an already-open exact run, including while its view loads.
 If that window has navigated elsewhere or closed, opening the run creates a view.
@@ -112,11 +158,27 @@ A cancelled retained-but-unsent attempt is historical evidence, not acquisition.
 After submit is sent, the UI reports possible acquisition and uses task controls or
 original-receipt recovery; it does not call this preparation cancellation.
 
+## Native close and unsaved experiment input
+
+A destructive native-window close checks that its experiment input is saved before
+destroying the view. Application quit checks all open views, including hidden ones,
+through the existing lifecycle owner. Input edits and unsent preparation are fenced
+while the check runs. Failed saves, conflicts, missing acknowledgments and page
+changes keep the affected view available; an aborted quit releases the edit fence
+so the user can resolve the problem and retry. Deferred quit checks again when it
+actually closes. The last-window hide behavior and existing execution-stop choices
+are retained.
+
+This guard covers experiment launch-input sessions, including unfinished sessions
+retained after changing project. It does not promise to restore every transient UI
+state or certify other editors. Browser unload prompts, mocked host tests and native
+Windows interaction remain distinct qualification boundaries.
+
 ## Storage boundary
 
 Development schema 113 adds the experiment editing and original-request tables
 under the existing application SQLite owner. Current-format backups retain them.
 The [data compatibility policy](../data-compatibility.md) is unchanged: no reader
 or migration for an earlier prebaseline format is introduced, and old stores are
-rejected without modification. Native window/storage behavior is unchanged and
-has separate acceptance in [draft recovery](draft-recovery.md).
+rejected without modification. Native window/storage qualification remains separate
+from browser evidence; see [draft recovery](draft-recovery.md).

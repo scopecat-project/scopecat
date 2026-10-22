@@ -1,3 +1,4 @@
+import { SubmissionComparison } from "./SubmissionComparison";
 import { useEffect, useRef } from "react";
 import { secondaryButton } from "../../ui/styles";
 import { subjectLabel } from "./scientific-selection";
@@ -12,7 +13,7 @@ export function OriginalSubmission({
   onPrepare?: () => void;
   catalogReady: boolean;
 }) {
-  const { attempt, checkSubmission, rerun } = useLaunchDraft();
+  const { attempt, draft, checkSubmission, rerun } = useLaunchDraft();
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (attempt?.status === "unknown" || attempt?.status === "rejected") {
@@ -87,16 +88,7 @@ export function OriginalSubmission({
           Prepare a new run (separate acquisition)
         </button>
       </div>
-      <details>
-        <summary>Original launch inputs</summary>
-        <pre className="overflow-auto">
-          {JSON.stringify(
-            { inputs: attempt.request.inputs, control_edits: attempt.request.control_edits },
-            null,
-            2,
-          )}
-        </pre>
-      </details>
+      <SubmissionComparison request={attempt.request} draft={draft} />
     </section>
   );
 }

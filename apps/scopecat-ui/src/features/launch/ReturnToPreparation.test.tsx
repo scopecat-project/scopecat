@@ -47,3 +47,25 @@ it("focuses preparation again when its return URL is already selected", () => {
   fireEvent.click(link);
   expect(preparation).toHaveFocus();
 });
+
+it("retains the exact editing draft through a monitor return and page reload", () => {
+  const monitor = "/?procedure=A&run=child&workspace=author&experiment=signal&draft=B#runs";
+  window.history.replaceState(null, "", monitor);
+  const view = render(<ReturnToPreparation />);
+  fireEvent.click(screen.getByRole("link", { name: "Return to preparation" }));
+  expect(Object.fromEntries(new URL(window.location.href).searchParams)).toEqual({
+    preparation: "1",
+    procedure: "A",
+    workspace: "author",
+    experiment: "signal",
+    draft: "B",
+  });
+  const reopened = window.location.href;
+  view.unmount();
+  window.history.replaceState(null, "", reopened);
+  render(<ReturnToPreparation />);
+  expect(screen.getByRole("link", { name: "Return to preparation" })).toHaveAttribute(
+    "href",
+    "?preparation=1&procedure=A&workspace=author&experiment=signal&draft=B#launch",
+  );
+});

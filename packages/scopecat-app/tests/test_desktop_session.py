@@ -161,15 +161,29 @@ def test_native_windows_share_backend_and_keep_navigation(
     ]
 
     # pywebview returns True from Event.set when a handler vetoes the close.
-    assert first.window.events.closing.set() is False
+    def confirm_close(script):
+        if "scopecat:close-preflight" in script:
+            assert first.close_request is not None
+            first.api.complete_close_preflight(first.close_request, "saved")
+
+    first.window.run_js.side_effect = confirm_close
+    destroyed = threading.Event()
+
+    def destroy_first():
+        first.window.events.closed.set()
+        destroyed.set()
+
+    first.window.destroy.side_effect = destroy_first
+    assert first.window.events.closing.set() is True
+    assert destroyed.wait(5)
     assert second.window.events.closing.set() is True
-    first.window.events.closed.set()
     assert windows.latest is second
     shown.reset_mock()
     windows.show()
     shown.assert_called_once_with(second.window)
     runtime.stop.assert_not_called()
-    session.closing.set()
+    acknowledge(second)
+    second.api.exit(False)
     windows.destroy()
     second.window.destroy.assert_called_once()
 
@@ -517,18 +531,6 @@ def test_new_window_keeps_root_and_run_window_requires_ready_service():
         windows.new_window("run-a")
 
 
-def test_quit_recovery_reports_exit_and_only_offers_quit_retry():
-    from scopecat_app.desktop import _quit_recovery
-
-    page = _quit_recovery(ValueError("still quitting <details>"))
-    assert "退出未完成" in page
-    assert "still quitting &lt;details&gt;" in page
-    assert 'onclick="quit()"' in page
-    assert "启动未完成" not in page
-    assert 'onclick="restart()"' not in page
-    assert 'onclick="resetData()"' not in page
-
-
 def test_development_windows_reload_same_ui_origin_after_proxy_changes():
     runtime = Mock()
     session = DesktopSession(runtime, threading.Event())
@@ -567,3 +569,286 @@ def test_lost_wait_response_keeps_pending_exit_and_cancel_restores_admission():
     assert runtime.set_exit_wait.call_args_list == [call(True), call(False)]
     with session.file_operation():
         pass
+
+
+def close_fixture():
+    from scopecat_app.desktop import DesktopView
+
+    runtime = Mock()
+    runtime.stop_if_idle.return_value = True
+    session = DesktopSession(runtime, threading.Event())
+    windows = DesktopWindows(session, Mock())
+    windows.preflight_timeout = 0.03
+    views = []
+    for _ in range(2):
+        window = Mock()
+        api = DesktopAPI(session, lambda window=window: window)
+        view = DesktopView(window, api, threading.Event(), Mock())
+        api.close_reply = lambda request, status, view=view: windows._reply(
+            view, request, status
+        )
+        views.append(view)
+    windows._views = views
+    return runtime, session, windows, views
+
+
+def acknowledge(view, status="saved"):
+    def dispatch(script):
+        if "scopecat:close-preflight" in script:
+            view.api.complete_close_preflight(view.close_request, status)
+
+    view.window.run_js.side_effect = dispatch
+
+
+@pytest.mark.parametrize("status", ["blocked", "unknown", None])
+def test_quit_preflight_failure_preserves_all_views_and_daemon(status):
+    runtime, session, windows, views = close_fixture()
+    acknowledge(views[0])
+    if status:
+        acknowledge(views[1], status)
+    with pytest.raises(ValueError, match="confirmed"):
+        views[0].api.request_exit()
+    assert not session.closing.is_set()
+    runtime.stop_if_idle.assert_not_called()
+    runtime.stop.assert_not_called()
+    for view in views:
+        view.window.destroy.assert_not_called()
+        assert any(
+            "close-release" in call.args[0]
+            for call in view.window.run_js.call_args_list
+        )
+    assert len(windows._views) == 2
+
+
+def test_all_view_preflight_releases_after_busy_inspection_and_rechecks_stop():
+    runtime, session, _windows, views = close_fixture()
+    runtime.stop_if_idle.return_value = False
+    runtime.activity.return_value.model_dump.return_value = {"runs": 1}
+    for view in views:
+        acknowledge(view)
+    assert views[0].api.request_exit() == {"runs": 1}
+    assert not session.closing.is_set()
+    for view in views:
+        assert any(
+            "close-release" in call.args[0]
+            for call in view.window.run_js.call_args_list
+        )
+    acknowledge(views[1], "blocked")
+    with pytest.raises(ValueError, match="confirmed"):
+        views[0].api.exit(False)
+    runtime.stop.assert_not_called()
+
+
+def test_preflight_rejects_stale_ack_and_prevents_new_view():
+    runtime, session, windows, views = close_fixture()
+
+    def dispatch(script):
+        if "scopecat:close-preflight" in script:
+            views[0].api.complete_close_preflight("old-request", "saved")
+            assert not views[0].close_ready.is_set()
+            with pytest.raises(ValueError, match="saving"):
+                windows.create()
+            views[0].api.complete_close_preflight(views[0].close_request, "saved")
+
+    views[0].window.run_js.side_effect = dispatch
+    acknowledge(views[1])
+    with windows.preflight():
+        assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+
+
+def test_deferred_exit_obtains_fresh_all_view_preflight():
+    runtime, session, _windows, views = close_fixture()
+    for view in views:
+        acknowledge(view)
+    runtime.stop_if_idle.return_value = False
+    runtime.activity.return_value.model_dump.return_value = {"runs": 1}
+    assert views[0].api.request_exit() == {"runs": 1}
+    views[0].api.wait_for_idle(True)
+    acknowledge(views[1], "blocked")
+    with pytest.raises(ValueError, match="confirmed"):
+        session.poll_exit()
+    assert not session.closing.is_set()
+    assert runtime.stop_if_idle.call_count == 1
+    acknowledge(views[1])
+    runtime.stop_if_idle.return_value = True
+    session.poll_exit()
+    assert session.closing.is_set()
+    assert runtime.stop_if_idle.call_count == 2
+
+
+def test_close_reserves_last_view_until_actual_closed_event():
+    runtime, session, windows, views = close_fixture()
+    for view in views:
+        acknowledge(view)
+    # Fake destroy deliberately does not emit closed yet.
+    windows._close_view(views[0])
+    assert views[0].close_authorized
+    assert len(windows._views) == 2
+    views[0].window.destroy.assert_called_once()
+    windows._close_view(views[1])
+    views[1].window.destroy.assert_not_called()
+    views[1].window.hide.assert_called_once()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+
+
+def test_reload_during_preflight_invalidates_old_page_ack(monkeypatch):
+    from webview.event import Event
+
+    def create(_title, **_kwargs):
+        window = Mock()
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+    windows = DesktopWindows(session, Mock())
+    view = windows.create()
+    assert isinstance(view.window, Mock)
+
+    def dispatch(script):
+        if "scopecat:close-preflight" in script:
+            request = view.close_request
+            assert request is not None
+            view.window.events.loaded.set()
+            view.api.complete_close_preflight(request, "saved")
+
+    view.window.run_js.side_effect = dispatch
+    with pytest.raises(ValueError, match="confirmed"):
+        view.api.request_exit()
+    runtime.stop_if_idle.assert_not_called()
+    assert not session.closing.is_set()
+    view.window.destroy.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["request", "stop", "deferred"])
+def test_shutdown_revalidates_certificate_after_runtime_stop(operation):
+    runtime, session, _windows, views = close_fixture()
+    for view in views:
+        acknowledge(view)
+
+    def invalidate():
+        views[1].close_status = "unknown"
+        return True
+
+    runtime.stop.side_effect = invalidate
+    runtime.stop_if_idle.side_effect = invalidate
+    with pytest.raises(ValueError, match="page changed before closing"):
+        if operation == "request":
+            views[0].api.request_exit()
+        elif operation == "stop":
+            views[0].api.exit(False)
+        else:
+            views[0].api.wait_for_idle(True)
+            session.poll_exit()
+    assert not session.closing.is_set()
+    for view in views:
+        view.window.destroy.assert_not_called()
+        assert view.close_request is None
+
+
+def test_reload_between_authorization_and_destroy_vetoes_close(monkeypatch):
+    from webview.event import Event
+
+    def create(_title, **_kwargs):
+        window = Mock()
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    session = DesktopSession(Mock(), threading.Event())
+    windows = DesktopWindows(session, Mock())
+    first, second = windows.create(), windows.create()
+    assert isinstance(first.window, Mock)
+    acknowledge(first)
+    acknowledge(second)
+    vetoed = []
+
+    def destroy():
+        first.window.events.loaded.set()
+        vetoed.append(first.window.events.closing.set())
+
+    first.window.destroy.side_effect = destroy
+    windows._close_view(first)
+    assert vetoed == [True]
+    assert first in windows._views
+    assert not first.close_authorized
+    assert first.close_request is None
+    assert not session.closing.is_set()
+
+
+@pytest.mark.parametrize("phase", ["join", "destroy"])
+def test_post_commit_reload_aborts_close_and_allows_existing_retry(monkeypatch, phase):
+    from webview.event import Event
+
+    def create(_title, **_kwargs):
+        window = Mock()
+        window.events = SimpleNamespace(
+            loaded=Event(window, True),
+            closing=Event(window, True),
+            closed=Event(window, True),
+        )
+        return window
+
+    monkeypatch.setattr("webview.create_window", create)
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+    windows = DesktopWindows(session, Mock())
+    first, second = windows.create(), windows.create()
+    assert isinstance(first.window, Mock)
+    assert isinstance(second.window, Mock)
+    acknowledge(first)
+    acknowledge(second)
+    bridge = threading.Thread(target=first.api.request_exit)
+    bridge.start()
+    bridge.join(5)
+    assert session.closing.is_set()
+    if phase == "join":
+        pending_file = Mock()
+        pending_file.join.side_effect = first.window.events.loaded.set
+        session._file_threads.add(pending_file)
+    else:
+
+        def destroy_invalidated():
+            first.window.events.loaded.set()
+            assert first.window.events.closing.set() is True
+
+        first.window.destroy.side_effect = destroy_invalidated
+    assert session.finish_exit(windows.destroy) is False
+    assert not session.closing.is_set()
+    assert windows._views == [first, second]
+    assert session._exit_error is not None
+    assert "page" in session._exit_error.lower()
+    for view in (first, second):
+        assert view.close_request is None
+    restarted = Mock()
+    session.restart(restarted)
+    restarted.assert_called_once()
+    # Existing retry/quit paths remain usable; a fresh certificate is required.
+    session._file_threads.clear()
+
+    def destroy_first():
+        assert first.window.events.closing.set() is False
+        first.window.events.closed.set()
+
+    def destroy_second():
+        assert second.window.events.closing.set() is False
+        second.window.events.closed.set()
+
+    first.window.destroy.side_effect = destroy_first
+    second.window.destroy.side_effect = destroy_second
+    retry = threading.Thread(target=first.api.request_exit)
+    retry.start()
+    retry.join(5)
+    assert session.finish_exit(windows.destroy) is True
+    assert not windows._views

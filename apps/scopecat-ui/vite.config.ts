@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, loadEnv } from "vite";
+import { loadEnv } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -15,6 +16,7 @@ export default defineConfig(({ mode, command }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    test: { setupFiles: ["./src/test/window-lifecycle.ts"] },
     server: {
       proxy: daemonOrigin
         ? {

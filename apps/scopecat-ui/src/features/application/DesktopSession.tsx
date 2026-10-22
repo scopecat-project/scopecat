@@ -1,3 +1,8 @@
+import {
+  prepareLaunchClose,
+  releaseLaunchClose,
+  type LaunchCloseStatus,
+} from "../launch/launch-close-barrier";
 import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState } from "react";
 import type { components } from "../../api-schema";
@@ -51,6 +56,7 @@ export interface NotebookJourneyStatus {
 }
 
 interface DesktopAPI {
+  complete_close_preflight?(requestId: string, status: LaunchCloseStatus): Promise<void>;
   preview_notebook_cleanup?(topic: LessonTopic): Promise<{
     preview: components["schemas"]["DataCleanupPreview"];
     files_error: string | null;
@@ -163,6 +169,64 @@ export function DesktopSession() {
   const [activity, setActivity] = useState<ApplicationActivity>();
   const [waiting, setWaiting] = useState(false);
   const [report, setReport] = useState<ExitReport>();
+  const [closeNotice, setCloseNotice] = useState<string>();
+  useEffect(() => {
+    const active = new Set<string>();
+    const preflight = (event: Event) => {
+      const detail: unknown = (event as CustomEvent).detail;
+      if (
+        !detail ||
+        typeof detail !== "object" ||
+        !("requestId" in detail) ||
+        typeof detail.requestId !== "string" ||
+        !detail.requestId
+      )
+        return;
+      const requestId = detail.requestId;
+      if (active.has(requestId)) return;
+      active.add(requestId);
+      setCloseNotice("Saving experiment input before closing…");
+      void prepareLaunchClose(requestId).then(async (status) => {
+        if (!active.has(requestId)) return;
+        try {
+          const api = window.pywebview?.api;
+          if (!api?.complete_close_preflight)
+            throw new Error("Native close acknowledgement is unavailable.");
+          await api.complete_close_preflight(requestId, status);
+          if (active.has(requestId) && status !== "saved")
+            setCloseNotice(
+              "Window kept open: experiment input is not confirmed saved. Resolve recovery, save errors or conflicts before closing again.",
+            );
+        } catch (failure) {
+          // Only the host can release a close barrier. A failed reply is not permission to close.
+          if (active.has(requestId))
+            setCloseNotice(`Window close is unconfirmed: ${String(failure)}`);
+        }
+      });
+    };
+    const release = (event: Event) => {
+      const detail: unknown = (event as CustomEvent).detail;
+      if (
+        !detail ||
+        typeof detail !== "object" ||
+        !("requestId" in detail) ||
+        typeof detail.requestId !== "string"
+      )
+        return;
+      active.delete(detail.requestId);
+      releaseLaunchClose(detail.requestId);
+      setCloseNotice(
+        "message" in detail && typeof detail.message === "string" ? detail.message : undefined,
+      );
+    };
+    window.addEventListener("scopecat:close-preflight", preflight);
+    window.addEventListener("scopecat:close-release", release);
+    return () => {
+      active.clear();
+      window.removeEventListener("scopecat:close-preflight", preflight);
+      window.removeEventListener("scopecat:close-release", release);
+    };
+  }, []);
   useEffect(() => {
     if (!open || !window.pywebview) return;
     let disposed = false;
@@ -271,85 +335,92 @@ export function DesktopSession() {
   };
 
   return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (!busy) {
-          if (!next) void changeWaiting(false);
-          else setOpen(next);
-        }
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Backdrop className={dialogBackdrop} />
-        <Dialog.Viewport className={dialogViewport}>
-          <Dialog.Popup className={`${dialogPopup} grid gap-4 p-5`}>
-            <Dialog.Title className={dialogTitle}>Quit Scopecat</Dialog.Title>
-            <Dialog.Description>
-              {activity && `Unfinished work: ${describeWork(activity)}. `}
-              Quitting stops this work and releases devices. Background mode keeps Scopecat
-              available from the menu bar or system tray. Saved records and code are retained.
-            </Dialog.Description>
-            <p>
-              Waiting stops new work and lets admitted work finish. Future plans and safe human
-              checkpoints remain saved. Paused work, resource waits, faults and uncertain device
-              outcomes still need attention. Cancel restores normal admission.
-            </p>
-            {report &&
-              (
-                [
-                  ["Finishing now", report.finishing],
-                  ["Deferred and retained", report.deferred],
-                  ["Needs attention", report.blockers],
-                ] as const
-              ).map(
-                ([title, items]) =>
-                  items.length > 0 && (
-                    <section key={title} aria-label={title}>
-                      <h3>{title}</h3>
-                      <ul>
-                        {items.map((item) => (
-                          <li key={`${item.kind}:${item.identity}`}>
-                            <strong>{item.identity}</strong>: {item.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ),
-              )}
-            {report && report.file_operations > 0 && (
-              <p>Finishing {report.file_operations} file operations.</p>
-            )}
-            {progress && <p role="status">{progress}</p>}
-            {waiting && (
-              <p role="status">
-                Automatic quit is enabled. Waiting does not answer reviews, resolve faults, or
-                resume paused workflows. Close this dialog to cancel automatic quit and return to
-                your work.
+    <>
+      {closeNotice && (
+        <p role="status" className="border-b border-line bg-panel px-4 py-2 text-sm">
+          {closeNotice}
+        </p>
+      )}
+      <Dialog.Root
+        open={open}
+        onOpenChange={(next) => {
+          if (!busy) {
+            if (!next) void changeWaiting(false);
+            else setOpen(next);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className={dialogBackdrop} />
+          <Dialog.Viewport className={dialogViewport}>
+            <Dialog.Popup className={`${dialogPopup} grid gap-4 p-5`}>
+              <Dialog.Title className={dialogTitle}>Quit Scopecat</Dialog.Title>
+              <Dialog.Description>
+                {activity && `Unfinished work: ${describeWork(activity)}. `}
+                Quitting stops this work and releases devices. Background mode keeps Scopecat
+                available from the menu bar or system tray. Saved records and code are retained.
+              </Dialog.Description>
+              <p>
+                Waiting stops new work and lets admitted work finish. Future plans and safe human
+                checkpoints remain saved. Paused work, resource waits, faults and uncertain device
+                outcomes still need attention. Cancel restores normal admission.
               </p>
-            )}
-            {error && <p role="alert">{error}</p>}
-            <div className="flex flex-wrap gap-2">
-              <button className={dangerButton} disabled={busy} onClick={() => void exit(false)}>
-                Stop and close
-              </button>
-              <button
-                className={secondaryButton}
-                disabled={busy || waiting}
-                onClick={() => void changeWaiting(true)}
-              >
-                Quit when work finishes
-              </button>
-              <button className={secondaryButton} disabled={busy} onClick={() => void exit(true)}>
-                Keep running in background
-              </button>
-              <Dialog.Close className={secondaryButton} disabled={busy}>
-                Cancel
-              </Dialog.Close>
-            </div>
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+              {report &&
+                (
+                  [
+                    ["Finishing now", report.finishing],
+                    ["Deferred and retained", report.deferred],
+                    ["Needs attention", report.blockers],
+                  ] as const
+                ).map(
+                  ([title, items]) =>
+                    items.length > 0 && (
+                      <section key={title} aria-label={title}>
+                        <h3>{title}</h3>
+                        <ul>
+                          {items.map((item) => (
+                            <li key={`${item.kind}:${item.identity}`}>
+                              <strong>{item.identity}</strong>: {item.reason}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ),
+                )}
+              {report && report.file_operations > 0 && (
+                <p>Finishing {report.file_operations} file operations.</p>
+              )}
+              {progress && <p role="status">{progress}</p>}
+              {waiting && (
+                <p role="status">
+                  Automatic quit is enabled. Waiting does not answer reviews, resolve faults, or
+                  resume paused workflows. Close this dialog to cancel automatic quit and return to
+                  your work.
+                </p>
+              )}
+              {error && <p role="alert">{error}</p>}
+              <div className="flex flex-wrap gap-2">
+                <button className={dangerButton} disabled={busy} onClick={() => void exit(false)}>
+                  Stop and close
+                </button>
+                <button
+                  className={secondaryButton}
+                  disabled={busy || waiting}
+                  onClick={() => void changeWaiting(true)}
+                >
+                  Quit when work finishes
+                </button>
+                <button className={secondaryButton} disabled={busy} onClick={() => void exit(true)}>
+                  Keep running in background
+                </button>
+                <Dialog.Close className={secondaryButton} disabled={busy}>
+                  Cancel
+                </Dialog.Close>
+              </div>
+            </Dialog.Popup>
+          </Dialog.Viewport>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }

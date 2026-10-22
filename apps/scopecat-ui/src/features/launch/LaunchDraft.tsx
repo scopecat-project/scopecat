@@ -1,3 +1,9 @@
+import {
+  historicalConfiguration,
+  type HistoricalConfiguration,
+} from "../runs/historical-configuration";
+import { clearDraftLocation, retainDraftLocation } from "./draft-location";
+import { launchCloseBlocked } from "./launch-close-barrier";
 import { readOperatorSettings } from "../application/OperatorSettings";
 import {
   useLaunchRecovery,
@@ -5,6 +11,7 @@ import {
   attemptRequest,
   restoreDraft,
   rawInput,
+  saveDraft,
   resolveAttempt,
   type DraftRecord,
   type AttemptRecord,
@@ -86,8 +93,13 @@ export interface LaunchPreparation {
   finish: () => void;
 }
 interface DraftContext {
+  copyHistoricalConfiguration: (
+    runId: string,
+    source: HistoricalConfiguration,
+  ) => Promise<{ target: DraftRecord["target"]; selected: boolean }>;
+
   copyDraft: () => Promise<void>;
-  switchDraft: (record: DraftRecord) => Promise<void>;
+  switchDraft: (record: DraftRecord, isIntended?: () => boolean) => Promise<boolean>;
   renameDraft: (name: string) => void;
   beginPreparation: () => LaunchPreparation | undefined;
   recovery: ReturnType<typeof useLaunchRecovery>;
@@ -218,24 +230,43 @@ function ProjectDraft({
   const operatorPending = useRef(false);
   const latest = useRef(draft);
   const preparationToken = useRef<symbol | undefined>(undefined);
+  const configurationCopyBusy = useRef(false);
+  const configurationCopy = useRef<
+    { key: string; command: Parameters<typeof saveDraft>[0] } | undefined
+  >(undefined);
   // Admission continuations must observe edits synchronously, before a React effect
   // can run or a late preview/receipt response can continue the old intent.
-  const setDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>((change) => {
-    const next = typeof change === "function" ? change(latest.current) : change;
-    if (next !== latest.current) {
-      operatorSelection.current += 1;
-      operatorPending.current = false;
-    }
-    if (
-      next?.revision !== latest.current?.revision ||
-      next?.workspaceId !== latest.current?.workspaceId ||
-      next?.draftId !== latest.current?.draftId
-    )
+  const setRecoveredDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>(
+    (change) => {
+      const next = typeof change === "function" ? change(latest.current) : change;
+      if (next !== latest.current) {
+        operatorSelection.current += 1;
+        operatorPending.current = false;
+      }
+      if (
+        next?.revision !== latest.current?.revision ||
+        next?.workspaceId !== latest.current?.workspaceId ||
+        next?.draftId !== latest.current?.draftId
+      )
+        preparationToken.current = undefined;
+      latest.current = next;
+      setDraftState(next);
+    },
+    [],
+  );
+  const setDraft = useCallback<Dispatch<SetStateAction<LaunchDraft | undefined>>>(
+    (change) => {
+      if (!launchCloseBlocked()) setRecoveredDraft(change);
+    },
+    [setRecoveredDraft],
+  );
+  const recovery = useLaunchRecovery(draft, setRecoveredDraft, {
+    owner: projectId ?? "unselected",
+    getDraft: () => latest.current,
+    revoke: () => {
       preparationToken.current = undefined;
-    latest.current = next;
-    setDraftState(next);
-  }, []);
-  const recovery = useLaunchRecovery(draft, setDraft);
+    },
+  });
   const [workspaceId, setWorkspaceId] = useState(
     () => new URLSearchParams(window.location.search).get("workspace") || "",
   );
@@ -298,20 +329,25 @@ function ProjectDraft({
   const resetSource = (owner: string) => {
     if (!mayLeave()) return;
     if (owner === currentWorkspace.current) {
-      setDraft((current) =>
-        current
-          ? {
-              ...invalidateDraft(
-                current,
-                "Current source selected. Review retained input before starting or previewing.",
-              ),
-              codeRevision: undefined,
-              needsReview: true,
-            }
-          : current,
-      );
+      setDraft((current) => {
+        if (!current) return current;
+        const next = {
+          ...invalidateDraft(
+            current,
+            "Current source selected. Review retained input before starting or previewing.",
+          ),
+          codeRevision: undefined,
+          needsReview: true,
+        };
+        if (JSON.stringify(rawInput(next)) !== JSON.stringify(rawInput(current)))
+          recovery.retainPendingInput(next);
+        return next;
+      });
       return;
     }
+    // Ordinary workspace selection remains window-local. Only replace URL
+    // identity when an explicit saved-draft link would otherwise stay stale.
+    if (new URL(window.location.href).searchParams.has("draft")) clearDraftLocation(owner);
     currentWorkspace.current = owner;
     setWorkspaceId(owner);
     setDraft((current) =>
@@ -337,6 +373,7 @@ function ProjectDraft({
   };
   const select = useCallback(
     async (entry: LaunchCatalogEntry, reset = false, owner = workspaceId) => {
+      if (launchCloseBlocked()) return;
       if (
         latest.current?.experiment &&
         latest.current.experiment !== entry.id &&
@@ -364,7 +401,12 @@ function ProjectDraft({
       } finally {
         if (generation === operatorSelection.current) operatorPending.current = false;
       }
-      if (!alive.current || generation !== operatorSelection.current || latest.current !== original)
+      if (
+        launchCloseBlocked() ||
+        !alive.current ||
+        generation !== operatorSelection.current ||
+        latest.current !== original
+      )
         return;
       setOperatorError(undefined);
       setDraft((current) => {
@@ -412,6 +454,8 @@ function ProjectDraft({
         }
         return next;
       });
+      if (latest.current?.experiment && new URL(window.location.href).searchParams.has("draft"))
+        retainDraftLocation(latest.current);
     },
     [selectedConfiguration, selectedWorkingInput, selectedSubject, workspaceId, setDraft],
   );
@@ -421,6 +465,8 @@ function ProjectDraft({
     identity?: components["schemas"]["ProcedureDefinitionRef"],
     preparation?: { isIntended: () => boolean; onSending: () => void },
   ) {
+    if (launchCloseBlocked())
+      throw new Error("Wait for the window close check before starting acquisition.");
     if (attempt) throw new Error("Recover the original task or explicitly choose a new run first.");
     if (!attemptsReady)
       throw new Error(
@@ -432,6 +478,7 @@ function ProjectDraft({
     const input = latest.current;
     const inputIdentity = input ? JSON.stringify(rawInput(input)) : undefined;
     const stillIntended = () =>
+      !launchCloseBlocked() &&
       alive.current &&
       (!preparation || preparation.isIntended()) &&
       attemptGeneration.current === generation &&
@@ -523,12 +570,109 @@ function ProjectDraft({
     <Context
       value={{
         projectId,
+        copyHistoricalConfiguration: async (runId, source) => {
+          const configuration = historicalConfiguration(source);
+          const original = latest.current;
+          if (!original?.experiment) throw new Error("Choose an experiment in the editor first.");
+          if (
+            launchCloseBlocked() ||
+            configurationCopyBusy.current ||
+            submitting.current ||
+            original.pending ||
+            preparationToken.current ||
+            !mayLeave()
+          )
+            throw new Error("Finish saving the current draft before creating another.");
+          const identity = JSON.stringify(rawInput(original));
+          const intended = () =>
+            !launchCloseBlocked() &&
+            alive.current &&
+            latest.current === original &&
+            !submitting.current &&
+            !preparationToken.current &&
+            latest.current?.draftId === original.draftId &&
+            latest.current?.workspaceId === original.workspaceId &&
+            latest.current?.revision === original.revision &&
+            JSON.stringify(rawInput(latest.current)) === identity;
+          const key = JSON.stringify([
+            original.workspaceId,
+            original.experiment,
+            original.draftId,
+            original.revision,
+            identity,
+            runId,
+            source,
+          ]);
+          configurationCopyBusy.current = true;
+          try {
+            await recovery.flush();
+            if (!intended())
+              throw new Error("The editor changed. Keep its current input and try again.");
+            if (configurationCopy.current?.key !== key) {
+              const next = invalidateDraft(
+                structuredClone(original),
+                "Historical configuration copied. Review these new inputs before starting.",
+              );
+              next.draftId = crypto.randomUUID();
+              next.draftName = `Configuration from ${runId}`.slice(0, 200);
+              next.selection = { ...next.selection, configuration };
+              next.workingInput = undefined;
+              next.plan = undefined;
+              next.planDirty = false;
+              next.handoff = undefined;
+              next.manualLine = undefined;
+              next.lineSource = undefined;
+              next.admittedProcedureId = undefined;
+              next.needsReview = true;
+              configurationCopy.current = {
+                key,
+                command: {
+                  operation_id: crypto.randomUUID(),
+                  expected_revision: 0,
+                  discard: false,
+                  target: {
+                    workspace_id: next.workspaceId,
+                    experiment: next.experiment,
+                    draft_id: next.draftId,
+                  },
+                  input: rawInput(next),
+                },
+              };
+            }
+            const command = configurationCopy.current.command;
+            const result = await saveDraft(command);
+            if (
+              !result.saved ||
+              result.saved.state !== "saved" ||
+              result.saved.target.workspace_id !== command.target.workspace_id ||
+              result.saved.target.experiment !== command.target.experiment ||
+              result.saved.target.draft_id !== command.target.draft_id
+            )
+              throw new Error(
+                "The new configuration draft was not confirmed saved. Keep the current editor and retry.",
+              );
+            const selected = intended();
+            if (selected) {
+              if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
+                attemptGeneration.current += 1;
+                setAttempt(undefined);
+              }
+              const restored = restoreDraft(result.saved, original.revision + 1);
+              setDraft(restored);
+              retainDraftLocation(restored);
+            }
+            configurationCopy.current = undefined;
+            return { target: result.saved.target, selected };
+          } finally {
+            configurationCopyBusy.current = false;
+          }
+        },
         copyDraft: async () => {
           const original = latest.current;
           if (!original || !mayLeave() || submitting.current) return;
           try {
             await recovery.flush();
-            if (!alive.current || latest.current !== original) return;
+            if (launchCloseBlocked() || !alive.current || latest.current !== original) return;
             const draftId = crypto.randomUUID();
             if (!recovery.keepExplicitInput(original.workspaceId, original.experiment, draftId))
               return;
@@ -546,41 +690,64 @@ function ProjectDraft({
               admittedProcedureId: undefined,
               needsReview: true,
             });
+            retainDraftLocation({ ...original, draftId });
           } catch (error) {
             setDraft((current) =>
               current === original ? { ...current, error: String(error) } : current,
             );
           }
         },
-        switchDraft: async (record) => {
+        switchDraft: async (record, isIntended = () => true) => {
           const original = latest.current;
-          if (!mayLeave() || submitting.current) return;
+          if (!mayLeave() || submitting.current || !isIntended()) return false;
           try {
-            await recovery.flush();
-            if (!alive.current || latest.current !== original) return;
+            if (original?.experiment) await recovery.flush();
+            if (
+              launchCloseBlocked() ||
+              !alive.current ||
+              latest.current !== original ||
+              !isIntended()
+            )
+              return false;
             if (attempt?.status === "confirmed" || attempt?.status === "rejected") {
               attemptGeneration.current += 1;
               setAttempt(undefined);
             }
             currentWorkspace.current = record.target.workspace_id;
             setWorkspaceId(record.target.workspace_id);
-            setDraft(restoreDraft(record, (original?.revision ?? 0) + 1));
+            const restored = restoreDraft(record, (original?.revision ?? 0) + 1);
+            setDraft(restored);
+            retainDraftLocation(restored);
+            return true;
           } catch (error) {
             setDraft((current) =>
               current === original && current ? { ...current, error: String(error) } : current,
             );
+            return false;
           }
         },
         renameDraft: (name) => {
           if (!name.trim() || name.length > 200) return;
-          setDraft((current) => (current ? { ...current, draftName: name.trim() } : current));
+          setDraft((current) => {
+            if (!current) return current;
+            const next = { ...current, draftName: name.trim() };
+            recovery.retainPendingInput(next);
+            return next;
+          });
         },
         beginPreparation: () => {
-          if (operatorPending.current || preparationToken.current || submitting.current) return;
+          if (
+            launchCloseBlocked() ||
+            operatorPending.current ||
+            preparationToken.current ||
+            submitting.current
+          )
+            return;
           const token = Symbol("launch preparation");
           preparationToken.current = token;
           const input = latest.current;
           const isIntended = () =>
+            !launchCloseBlocked() &&
             alive.current &&
             preparationToken.current === token &&
             latest.current?.revision === input?.revision &&
@@ -602,7 +769,9 @@ function ProjectDraft({
           if (!recovery.selectCopy(record)) return;
           currentWorkspace.current = record.target.workspace_id;
           setWorkspaceId(record.target.workspace_id);
-          setDraft(restoreDraft(record, (latest.current?.revision ?? 0) + 1));
+          const restored = restoreDraft(record, (latest.current?.revision ?? 0) + 1);
+          setDraft(restored);
+          retainDraftLocation(restored);
         },
         recoverAttempt: (record) => {
           preparationToken.current = undefined;
@@ -671,31 +840,32 @@ function ProjectDraft({
           setSelectedConfiguration(choice);
           setSelectedWorkingInput(workingInput);
           setSelectedSubject(subject);
-          setDraft((current) =>
-            current
-              ? invalidateDraft(
-                  {
-                    ...current,
-                    planDirty: Boolean(current.plan),
-                    workingInput,
-                    selection: {
-                      ...current.selection,
-                      subject: subject ?? current.selection.subject,
-                      configuration:
-                        workingInput &&
-                        choice.kind === "parameters" &&
-                        current.selection.configuration.kind === "parameters"
-                          ? {
-                              ...choice,
-                              setup: choice.setup ?? current.selection.configuration.setup,
-                            }
-                          : choice,
-                    },
-                  },
-                  "Configuration selected. Start will check these inputs before acquisition.",
-                )
-              : current,
-          );
+          setDraft((current) => {
+            if (!current) return current;
+            const next = invalidateDraft(
+              {
+                ...current,
+                planDirty: Boolean(current.plan),
+                workingInput,
+                selection: {
+                  ...current.selection,
+                  subject: subject ?? current.selection.subject,
+                  configuration:
+                    workingInput &&
+                    choice.kind === "parameters" &&
+                    current.selection.configuration.kind === "parameters"
+                      ? {
+                          ...choice,
+                          setup: choice.setup ?? current.selection.configuration.setup,
+                        }
+                      : choice,
+                },
+              },
+              "Configuration selected. Start will check these inputs before acquisition.",
+            );
+            recovery.retainPendingInput(next);
+            return next;
+          });
         },
         draft,
         attemptsReady,
@@ -739,6 +909,7 @@ function ProjectDraft({
             if (generation === operatorSelection.current) operatorPending.current = false;
           }
           if (
+            launchCloseBlocked() ||
             !alive.current ||
             latest.current !== current ||
             generation !== operatorSelection.current ||
@@ -795,6 +966,7 @@ function ProjectDraft({
                 ? `Opened ${plan.name}, revision ${plan.ref.revision}. Saved by ${plan.saved_by}; current operator is ${operator}. Start will prepare these saved inputs again.`
                 : `Preparing ${plan.manualLine.label}. Adjust measurement settings, then Start; wiring confirmation is required before acquisition.`,
           });
+          retainDraftLocation(imported);
           return true;
         },
         importHandoff: async (entry, handoff) => {
@@ -820,6 +992,7 @@ function ProjectDraft({
             if (generation === operatorSelection.current) operatorPending.current = false;
           }
           if (
+            launchCloseBlocked() ||
             !alive.current ||
             latest.current !== current ||
             generation !== operatorSelection.current
@@ -844,6 +1017,7 @@ function ProjectDraft({
             currentWorkspace.current = owner;
             setWorkspaceId(owner);
             setDraft({ ...imported, workspaceId: owner, actor: operator });
+            retainDraftLocation(imported);
             return true;
           } catch (error) {
             setDraft({
@@ -858,6 +1032,8 @@ function ProjectDraft({
           setDraft((current) => {
             if (!current) return current;
             const next = change(current);
+            if (JSON.stringify(rawInput(next)) !== JSON.stringify(rawInput(current)))
+              recovery.retainPendingInput(next);
             return next.actor !== current.actor ? { ...next, defaultActor: undefined } : next;
           }),
         isCurrent: (revision) =>
@@ -876,6 +1052,9 @@ function ProjectDraft({
       {children}
     </Context>
   );
+}
+export function useOptionalLaunchDraft() {
+  return useContext(Context);
 }
 export function useLaunchDraft() {
   const context = useContext(Context);

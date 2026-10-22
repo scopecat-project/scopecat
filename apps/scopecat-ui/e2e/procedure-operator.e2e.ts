@@ -131,6 +131,14 @@ retainedProcedureTest(
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
         .click();
       await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+      const inspectedUrl = new URL(page.url());
+      expect(inspectedUrl.searchParams.get("submitted_task")).toBe(procedureId);
+      expect(inspectedUrl.searchParams.get("procedure")).toBeNull();
+      await page.getByRole("button", { name: "Open in monitor", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Monitor", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
       expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
       const reopenedScreenshot = testInfo.outputPath("operator-reopened.png");
       await page.screenshot({ path: reopenedScreenshot, fullPage: true });
@@ -327,6 +335,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
     prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
+    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
     await chooseReferenceContext(page);
     await page.getByLabel("Sample ID").fill("sample-navigation");
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("draft-author");

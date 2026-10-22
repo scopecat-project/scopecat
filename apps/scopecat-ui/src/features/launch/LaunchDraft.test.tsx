@@ -1,3 +1,4 @@
+import { prepareLaunchClose, releaseLaunchClose } from "./launch-close-barrier";
 import {
   installLaunchRecoveryRoutes,
   procedureDefinition,
@@ -1087,4 +1088,26 @@ it("keeps an already-sent acquisition receipt when leaving the mounted editor", 
   expect(submissions).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: "Editor" }));
   expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+});
+
+it("fences edits and revokes unsent preparation during native close preflight", async () => {
+  render(<Harness />);
+  await selectPrepared();
+  deferPreview = true;
+  const start = screen.getByRole("button", { name: "Start acquisition" });
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+  await waitFor(() => expect(previewResponse).toBeDefined());
+  const note = screen.getByLabelText("Note");
+  const original = (note as HTMLInputElement).value;
+  await act(async () => {
+    expect(await prepareLaunchClose("provider-close")).toBe("saved");
+  });
+  fireEvent.change(note, { target: { value: "must not replace saved input" } });
+  expect(note).toHaveValue(original);
+  await act(async () => previewResponse!(Response.json(preview())));
+  expect(submissions).toHaveLength(0);
+  act(() => releaseLaunchClose("provider-close"));
+  fireEvent.change(note, { target: { value: "editable again" } });
+  expect(note).toHaveValue("editable again");
 });

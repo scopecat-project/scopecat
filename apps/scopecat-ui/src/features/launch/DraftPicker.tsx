@@ -1,3 +1,4 @@
+import { draftLocation } from "./draft-location";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useLaunchDraft } from "./LaunchDraft";
@@ -105,6 +106,20 @@ export function DraftPicker() {
             </Button>
           </ActionRow>
         </form>
+      )}
+      {recovery.ready && !recovery.writing && (
+        <a
+          className="underline"
+          href={(() => {
+            const url = draftLocation(draft);
+            url.hash = "launch";
+            url.searchParams.set("preparation", "1");
+            url.searchParams.delete("workbench");
+            return url.pathname + url.search + url.hash;
+          })()}
+        >
+          Reopen this saved draft
+        </a>
       )}
       <p className="text-xs text-text-dim">
         Edits belong to this draft. Submitted inputs stay frozen; copying never starts acquisition.

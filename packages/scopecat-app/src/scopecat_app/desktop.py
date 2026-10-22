@@ -6,13 +6,15 @@ import json
 import logging
 import sys
 import threading
-from collections.abc import Callable
-from contextlib import ExitStack
-from dataclasses import dataclass
+import time
+from collections.abc import Callable, Generator
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 from filelock import FileLock, Timeout
 
@@ -31,7 +33,7 @@ from .desktop_platform import (
     show_window,
     start_tray,
 )
-from .desktop_session import DesktopSession
+from .desktop_session import ClosePreflightAborted, DesktopSession
 
 if TYPE_CHECKING:
     import webview
@@ -56,6 +58,12 @@ class DesktopAPI:
         self._file_lock = threading.Lock()
         self._unsupported: UnsupportedDataSpace | None = None
         self._page_thread: threading.Thread | None = None
+        self.close_reply: Callable[[str, str], None] = lambda _id, _status: None
+
+    def complete_close_preflight(self, requestId: str, status: str) -> None:
+        if status not in {"saved", "blocked", "unknown"}:
+            raise ValueError("Invalid close preflight status")
+        self.close_reply(requestId, status)
 
     def new_window(self) -> None:
         with self._session.operation(allow_files=True):
@@ -606,16 +614,6 @@ def _recovery(error: Exception, *, can_reset: bool = False) -> str:
     )
 
 
-def _quit_recovery(error: Exception) -> str:
-    return _page(
-        "<h1>退出未完成</h1>"
-        "<p>应用尚未确认退出。已保存数据保留；请重试退出，勿重复启动或提交实验。</p>"
-        "<details><summary>查看退出错误详情</summary>"
-        f"<p>{escape(str(error))}</p></details>"
-        '<button onclick="quit()">重试退出 Scopecat</button>'
-    )
-
-
 def _window_close_handlers(
     window: webview.Window, closing: threading.Event, loaded: threading.Event
 ) -> tuple[Callable[[], bool], Callable[[], bool]]:
@@ -651,6 +649,12 @@ class DesktopView:
     loaded: threading.Event
     request_quit: Callable[[], bool]
     initial_location: str | None = None
+    close_request: str | None = None
+    close_status: str | None = None
+    close_reply_thread: threading.Thread | None = None
+    close_ready: threading.Event = field(default_factory=threading.Event)
+    close_authorized: bool = False
+    close_finished: threading.Event = field(default_factory=threading.Event)
 
 
 class DesktopWindows:
@@ -662,6 +666,173 @@ class DesktopWindows:
         self._views: list[DesktopView] = []
         self._lock = threading.RLock()
         session.connection_changed = self._reconnect
+        self._preflight_lock = threading.Lock()
+        self.preflight_timeout = 10.0
+        session.close_preflight = self.preflight
+        session.commit_close = self._commit_close
+        session.close_aborted = self._abort_close
+        self._closing_certificate: tuple[str, tuple[DesktopView, ...]] | None = None
+        self._certificate: tuple[str, tuple[DesktopView, ...]] | None = None
+
+    def _validate_certificate(self) -> None:
+        certificate = self._certificate
+        if certificate is None:
+            raise ValueError("Saved input was not confirmed for this close request")
+        request_id, views = certificate
+        if any(
+            view not in self._views
+            or view.close_request != request_id
+            or view.close_status != "saved"
+            for view in views
+        ):
+            raise ValueError(
+                "The page changed before closing. The window is retained; "
+                "the background may already have stopped. Reconnect before retrying."
+            )
+
+    def _commit_close(self) -> None:
+        with self._lock:
+            self._validate_certificate()
+            self._closing_certificate = self._certificate
+            self._session.closing.set()
+
+    def _abort_close(self, message: str) -> None:
+        with self._lock:
+            certificate = self._closing_certificate
+            self._closing_certificate = None
+            views = tuple(self._views)
+        if certificate is None:
+            return
+        request_id, _ = certificate
+        for view in views:
+            view.close_authorized = False
+            view.close_request = None
+            try:
+                self._dispatch(
+                    view,
+                    "scopecat:close-release",
+                    {
+                        "requestId": request_id,
+                        "message": message,
+                    },
+                )
+                show_window(view.window)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not show retained view")
+
+    def _reply(self, view: DesktopView, request_id: str, status: str) -> None:
+        with self._lock:
+            if (
+                view in self._views
+                and view.close_request == request_id
+                and view.close_status is None
+            ):
+                view.close_status = status
+                view.close_reply_thread = threading.current_thread()
+                view.close_ready.set()
+
+    @staticmethod
+    def _dispatch(view: DesktopView, event: str, detail: dict[str, str]) -> None:
+        view.window.run_js(
+            f"window.dispatchEvent(new CustomEvent({json.dumps(event)}, "
+            f"{{detail:{json.dumps(detail)}}}));"
+        )
+
+    @contextmanager
+    def preflight(self, selected: DesktopView | None = None) -> Generator[None]:
+        # This waits only in a bridge/background worker. Native closing callbacks
+        # return immediately; JS acknowledgment uses an independent bridge call.
+        if not self._preflight_lock.acquire(blocking=False):
+            raise ValueError("Another close request is checking saved input")
+        request_id = uuid4().hex
+        message = ""
+        views: tuple[DesktopView, ...] = ()
+        try:
+            with self._lock:
+                views = (selected,) if selected is not None else tuple(self._views)
+                if not views or any(view not in self._views for view in views):
+                    raise ValueError("The requested view is no longer available")
+                self._certificate = (request_id, views)
+                for view in views:
+                    view.close_request = request_id
+                    view.close_status = None
+                    view.close_reply_thread = None
+                    view.close_ready.clear()
+            for view in views:
+                self._dispatch(
+                    view, "scopecat:close-preflight", {"requestId": request_id}
+                )
+            deadline = time.monotonic() + self.preflight_timeout
+            for view in views:
+                if not view.close_ready.wait(max(0, deadline - time.monotonic())):
+                    raise ValueError(
+                        "Input saving could not be confirmed; "
+                        "keep this window open and retry"
+                    )
+                if view.close_status != "saved":
+                    raise ValueError(
+                        "Input is not confirmed saved; resolve saving before closing"
+                    )
+            for view in views:
+                reply = view.close_reply_thread
+                if reply is not None and reply is not threading.current_thread():
+                    # pywebview delivers its Promise result after the exposed
+                    # method returns. Keep the page alive through that reply.
+                    reply.join(max(0, deadline - time.monotonic()))
+                    if reply.is_alive():
+                        raise ValueError(
+                            "Save acknowledgment is still pending; retry closing"
+                        )
+            with self._lock:
+                if any(view.close_status != "saved" for view in views):
+                    raise ValueError("The page changed while confirming saved input")
+            yield
+        except Exception as error:
+            message = str(error)
+            raise
+        finally:
+            for view in views:
+                with self._lock:
+                    retain = view.close_authorized and view.close_status == "saved"
+                    if not retain and not self._session.closing.is_set():
+                        view.close_authorized = False
+                        if view.close_request == request_id:
+                            view.close_request = None
+                if not self._session.closing.is_set() and not retain:
+                    try:
+                        self._dispatch(
+                            view,
+                            "scopecat:close-release",
+                            {
+                                "requestId": request_id,
+                                "message": message,
+                            },
+                        )
+                        if message:
+                            show_window(view.window)
+                    except Exception:
+                        logging.getLogger(__name__).exception(
+                            "Could not release close preflight"
+                        )
+            self._certificate = None
+            self._preflight_lock.release()
+
+    def _close_view(self, view: DesktopView) -> None:
+        try:
+            with self.preflight(view), self._session.operation(allow_files=True):
+                with self._lock:
+                    if sum(not item.close_authorized for item in self._views) <= 1:
+                        hide_window(view.window)
+                        return
+                    self._validate_certificate()
+                    view.close_authorized = True
+                try:
+                    view.window.destroy()
+                except Exception:
+                    view.close_authorized = False
+                    raise
+        except Exception:
+            logging.getLogger(__name__).exception("Window close retained the view")
 
     def _reconnect(self, previous: str, current: str) -> None:
         old, new = (
@@ -718,6 +889,8 @@ class DesktopWindows:
         import webview
 
         with self._lock:
+            if self._preflight_lock.locked() or self._session.closing.is_set():
+                raise ValueError("Wait for input saving before opening another window")
             location = self._session.page_url
             if run_id is not None:
                 if location is None:
@@ -751,25 +924,45 @@ class DesktopWindows:
                 ),
             )
             loaded = threading.Event()
-            window.events.loaded += loaded.set
+
+            def page_loaded() -> None:
+                loaded.set()
+                with self._lock:
+                    # Reload/replacement invalidates the old page's certificate.
+                    if view.close_request is not None:
+                        view.close_status = "unknown"
+                        view.close_ready.set()
+
+            window.events.loaded += page_loaded
             hide, request_quit = _window_close_handlers(
                 window, self._session.closing, loaded
             )
             view = DesktopView(window, api, loaded, request_quit, location)
 
+            api.close_reply = lambda request_id, status: self._reply(
+                view, request_id, status
+            )
+
             def close() -> bool:
                 if self._session.closing.is_set():
-                    return True
+                    if view.close_status == "saved":
+                        return True
+                    view.close_finished.set()
+                    return False
+                if view.close_authorized:
+                    if view.close_request is not None and view.close_status == "saved":
+                        return True
+                    view.close_authorized = False
+                    return False
                 try:
                     with self._session.operation(allow_files=True), self._lock:
-                        if len(self._views) > 1:
-                            # Reserve the close before another window checks whether
-                            # it is the last view keeping the native host alive.
-                            self._views.remove(view)
-                            return True
+                        destructive = len(self._views) > 1
+                    if destructive:
+                        threading.Thread(
+                            target=self._close_view, args=(view,), daemon=True
+                        ).start()
+                        return False
                 except ValueError:
-                    # Keep the bridge and its result page alive during maintenance.
-                    # Closing all views must not terminate an in-flight operation.
                     pass
                 return hide()
 
@@ -777,6 +970,7 @@ class DesktopWindows:
                 with self._lock:
                     if view in self._views:
                         self._views.remove(view)
+                    view.close_finished.set()
 
             window.events.closing += close
             window.events.closed += closed
@@ -863,8 +1057,29 @@ class DesktopWindows:
     def destroy(self) -> None:
         with self._lock:
             views = tuple(self._views)
+            certificate = self._closing_certificate
+            if certificate is None or any(
+                view.close_request != certificate[0] or view.close_status != "saved"
+                for view in views
+            ):
+                raise ClosePreflightAborted(
+                    "A page changed before closing. Views are retained; "
+                    "the background may have stopped. Reconnect before retrying."
+                )
+        deadline = time.monotonic() + self.preflight_timeout
         for view in views:
+            view.close_finished.clear()
             view.window.destroy()
+            if not view.close_finished.wait(max(0, deadline - time.monotonic())):
+                raise ClosePreflightAborted(
+                    "Window closure was not confirmed; retry closing"
+                )
+            with self._lock:
+                if view in self._views:
+                    raise ClosePreflightAborted(
+                        "A changed page refused closure. "
+                        "Reconnect and retry when input is saved."
+                    )
 
 
 def run(
@@ -950,8 +1165,7 @@ def run(
             while not loaded.wait(0.5):
                 if closing.is_set():
                     return
-            if closing.is_set():
-                session.finish_exit(windows.destroy)
+            if closing.is_set() and session.finish_exit(windows.destroy):
                 return
             try:
                 # Cocoa status items need the application to have finished
@@ -965,28 +1179,34 @@ def run(
             except Exception as error:
                 logging.getLogger(__name__).exception("Application startup failed")
                 window.load_html(_recovery(error, can_reset=prepare_reset is not None))
-            while not closing.wait(0.5):
-                opener.pump()
-                try:
-                    session.poll_exit()
-                except Exception as error:
-                    session.wait_for_idle(False)
-                    windows.show()
-                    windows.latest.window.load_html(_quit_recovery(error))
-                if activate.exists():
-                    requested_package = activate.read_text(encoding="utf-8")
-                    activate.unlink(missing_ok=True)
-                    windows.show()
-                    if requested_package != package_identity:
-                        quit_current = windows.latest.window.create_confirmation_dialog(
-                            "Scopecat 已安装其他版本",
-                            "当前窗口仍由之前打开的版本运行。"
-                            "请退出当前应用，再打开已安装的版本。现在退出？",
+            while True:
+                while not closing.wait(0.5):
+                    opener.pump()
+                    try:
+                        session.poll_exit()
+                    except Exception:
+                        session.wait_for_idle(False)
+                        windows.show()
+                        logging.getLogger(__name__).exception(
+                            "Deferred quit retained open views"
                         )
-                        if quit_current:
-                            windows.request_quit()
-            # Keep the native completion hook out of the exposed JavaScript API.
-            session.finish_exit(windows.destroy)
+                    if activate.exists():
+                        requested_package = activate.read_text(encoding="utf-8")
+                        activate.unlink(missing_ok=True)
+                        windows.show()
+                        if requested_package != package_identity:
+                            quit_current = (
+                                windows.latest.window.create_confirmation_dialog(
+                                    "Scopecat 已安装其他版本",
+                                    "当前窗口仍由之前打开的版本运行。"
+                                    "请退出当前应用，再打开已安装的版本。现在退出？",
+                                )
+                            )
+                            if quit_current:
+                                windows.request_quit()
+                # Keep the native completion hook out of the exposed JavaScript API.
+                if session.finish_exit(windows.destroy):
+                    return
 
         # The GUI runs on the main thread. Its supervisor never opens a browser.
         modifier = "⌘" if sys.platform == "darwin" else "Ctrl+"
