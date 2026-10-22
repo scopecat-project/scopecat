@@ -161,11 +161,22 @@ analysis after refresh, retained analysis after restart, and rejection/restorati
 of changed installed bytes. This extends the installed framework journey instead of adding a
 second full runtime job or a dependency on private laboratory code.
 
-Renovate excludes this fixture's `pyproject.toml` from automatic updates. It
-intentionally depends on the installed `scopecat` wheel without a workspace source
-or its own lock file. Resolving it from the registry cannot succeed before SDK
-publication; the installed verifier supplies the local wheels. Keep its build
-backend constraint aligned manually when updating the workspace build backend.
+This fixture represents the current recommended author build environment. Its
+backend range follows the current workspace baseline; it is not a frozen
+historical compatibility sample. The installed `scopecat` wheel is supplied by
+the verifier, with no workspace source or fixture lockfile. The verifier copies
+the fixture outside the checkout, builds it in isolation, and installs its wheel
+with `--no-deps` into the already provisioned framework environment.
+
+Renovate maintains the fixture's external `uv_build` requirement through a custom
+manager limited to this file. The built-in `pep621` manager searches parent
+folders for `uv.lock` even for non-workspace projects, so it excludes this file
+to avoid borrowing the root lock's versions or updating the wrong artifact.
+Other Python projects retain `pep621`; first-party versions belong to the release
+process. Backend proposals join the manually reviewed Python build toolchain
+updates. If this fixture gains another external dependency, extend its extraction
+coverage and verify the isolated wheel journey. Do not add a lockfile that the
+isolated build does not consume.
 
 ## Teaching capability is not fixture retirement
 

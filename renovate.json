@@ -8,8 +8,7 @@
     "**/__tests__/**",
     "**/test/**",
     "**/tests/**",
-    "**/__fixtures__/**",
-    "fixtures/installed_author_lab/pyproject.toml"
+    "**/__fixtures__/**"
   ],
   "minimumReleaseAge": "3 days",
   "lockFileMaintenance": {
@@ -56,9 +55,10 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "\u5c06 Python uv CLI \u4e0e\u89c4\u8303\u5316\u7684 uv-build \u5305\u66f4\u65b0\u653e\u5728\u540c\u4e00\u7ec4\u5ba1\u67e5",
+      "description": "Review the Python uv CLI and normalized uv-build package together",
       "matchManagers": [
-        "pep621"
+        "pep621",
+        "custom.regex"
       ],
       "matchPackageNames": [
         "uv",
@@ -126,6 +126,26 @@
       ],
       "groupName": null,
       "automerge": false
+    }
+  ],
+  "pep621": {
+    "ignorePaths": [
+      "fixtures/installed_author_lab/pyproject.toml"
+    ]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The installed author fixture is built in isolation without a lockfile; update its backend without inheriting the workspace uv.lock",
+      "managerFilePatterns": [
+        "/^fixtures/installed_author_lab/pyproject\\.toml$/"
+      ],
+      "matchStrings": [
+        "\\[build-system\\]\\s+requires = \\[\"(?<depName>uv_build)(?<currentValue>[^\"\\r\\n]+)\"\\]"
+      ],
+      "datasourceTemplate": "pypi",
+      "packageNameTemplate": "uv-build",
+      "versioningTemplate": "pep440"
     }
   ]
 }

@@ -19,10 +19,14 @@ Python 3.14+ 支持及作者环境恢复策略不因此缩窄。Renovate 使用�
 `Python build toolchain` 组，Python minor/major 单独审查。这些更新不自动合并；
 成组不是兼容证明，必须通过 portable 供应和 Mac/Windows 原生打包验收。
 `setup-uv` Action 独立更新，CI 用 `version-file: uv.lock` 读取实际 checkout 的 CLI 精确版本。
-当前用户模板不声明 build backend；升级 backend 时按需核对旧教学和独立安装 fixture 的约束：
-`testing/app_support/project.py`、`test_installed_adapter_journey.py`、
-`fixtures/installed_author_lab/pyproject.toml`。保留兼容 fixture 的 Renovate 忽略，
-不强制历史版本下限一致，也不要求 CLI 与 backend 每个 patch 同版。
+当前用户模板不声明 build backend。`fixtures/installed_author_lab/pyproject.toml`
+代表当前推荐的作者构建环境，backend 范围跟随当前基线；Renovate 用限定到该文件的
+custom manager 维护外部 backend，不关联根 `uv.lock`。内部包版本由发布流程管理。
+更新时验证仓库外的隔离构建与安装，不把它兼作历史兼容样本。
+`testing/app_support/project.py` 与 `test_installed_adapter_journey.py` 中动态生成的
+旧项目元数据属于既有回归输入，不要求与当前安装样本同步；后者直接调用测试环境的
+build backend，不能据其声明的旧范围声称验证了旧 backend。参见
+[安装作者包边界](reference-fixtures.md#installed-author-package-boundary)。
 
 Daily desktop development has one entry:
 
