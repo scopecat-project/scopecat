@@ -18,8 +18,8 @@ from scopecat.automation import (
     RunOutputRef,
     procedure,
 )
+from scopecat.automation.models import ProcedureDefinitionRef
 from scopecat.automation.wire import (
-    ProcedureDefinitionRef,
     ProcedureStepBeginCommand,
     ProcedureStepInputSubmitCommand,
     ProcedureStepInputWaitCommand,

@@ -360,7 +360,9 @@ class AdmissionService:
                 "child requires its exact human line confirmation input"
             )
         return ManualLineConfirmation(
-            **ref.model_dump(),
+            procedure_run_id=ref.procedure_run_id,
+            step_key=ref.step_key,
+            request_hash=ref.request_hash,
             line_id=request.manual_line.line_id,
             actor=output.response.actor,
             runtime_id=output.response.confirmed_runtime_id,

@@ -57,7 +57,7 @@ it.each(["retry", "dispatch"])(
         return Response.json({ control: { state: "queued" } });
       }),
     );
-    await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).rejects.toThrow();
+    await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).rejects.toThrow("did not respond");
     await expect(reconfirmManualLine("run-1", "b".repeat(64), confirmation)).resolves.toBe(
       "recorded",
     );

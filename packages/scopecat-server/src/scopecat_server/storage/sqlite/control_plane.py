@@ -1624,13 +1624,17 @@ class SQLiteControlPlane:
     def _line_continuations(
         connection: sqlite3.Connection, run_id: str
     ) -> tuple[dict[str, JsonValue], ...]:
-        rows = connection.execute(
-            "SELECT payload_json FROM durable_events "
-            "WHERE run_id = ? AND kind = 'run_continuation_authorized' "
-            "ORDER BY event_id",
-            (run_id,),
-        ).fetchall()
-        return tuple(_JSON_OBJECT.validate_json(row["payload_json"]) for row in rows)
+        rows = _all(
+            connection.execute(
+                "SELECT payload_json FROM durable_events "
+                "WHERE run_id = ? AND kind = 'run_continuation_authorized' "
+                "ORDER BY event_id",
+                (run_id,),
+            )
+        )
+        return tuple(
+            _JSON_OBJECT.validate_json(_text(row, "payload_json")) for row in rows
+        )
 
     def continue_run_after_attention_in_transaction(
         self,

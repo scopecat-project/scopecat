@@ -66,7 +66,7 @@ it("retains uncertain actor and command across reopening, including an already q
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });
   vi.mocked(reconfirmManualLine).mockResolvedValueOnce("recorded");
   show(true);
-  expect((screen.getByLabelText("Line confirmation operator") as HTMLInputElement).value).toBe(
+  expect(screen.getByLabelText<HTMLInputElement>("Line confirmation operator").value).toBe(
     "Alice",
   );
   expect(screen.getByLabelText("Line confirmation operator").hasAttribute("disabled")).toBe(true);
@@ -84,7 +84,7 @@ it("does not automatically renew an expired recorded confirmation", async () => 
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "Confirm wiring and continue" }));
   await screen.findByText(/earlier confirmation is retained but has expired/);
-  expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByRole<HTMLInputElement>("checkbox").checked).toBe(false);
   expect(
     screen.getByRole("button", { name: "Confirm wiring and continue" }).hasAttribute("disabled"),
   ).toBe(true);
