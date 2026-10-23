@@ -139,13 +139,19 @@ The current audit integration cannot list alerts; that does not establish whethe
 the separately installed Renovate app can read them. No additional permissions
 are needed for the OSV workflow.
 
-Verify the installed Renovate app has **read** access to Dependabot alerts, and
-check its next run for successful alert ingestion and lockfile mapping. Only
-approve that app permission if it is missing. Keep **Dependabot security updates**
-off so Renovate remains the single automated fix-PR owner. One enabled auto-triage
-rule was reported in settings; its identity/actions have not been inspected, so
-no claim is made about whether it hides alerts or creates update PRs. Inspect it
-before relying on that policy. No setting or permission was changed by this PR.
+The administrator's latest settings screenshots show both auto-triage presets
+(low-impact development-dependency dismissal and malware-alert dismissal) disabled.
+Baseline review should still include previously dismissed/auto-dismissed alerts,
+not only open alerts. The latest permissions screenshot explicitly includes
+**Read access to Dependabot alerts**, but the application identity is cropped:
+if it is the Renovate app page, no additional permission is needed. Confirm the
+app identity rather than requesting broader permissions.
+
+Permission evidence is not successful ingestion evidence. Check Renovate's next
+run for alert retrieval and affected-lockfile mapping. Keep **Dependabot security
+updates** off so Renovate remains the single automated fix-PR owner. The separate
+audit integration's 403 does not disprove Renovate's permission. No setting or
+permission was changed by this PR.
 
 Automatic dependency submission is not needed to obtain the verified Python
 inventory. Do not enable another submission workflow or grant write access merely
