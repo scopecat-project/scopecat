@@ -13,8 +13,8 @@ adds no required status check and changes no repository settings.
 
 ## Independent lockfile audit
 
-The `Dependency security` workflow runs on relevant PRs/main updates, daily, and
-on manual dispatch. It downloads OSV-Scanner **v2.7.0** from the official Google
+The `Dependency security` workflow runs on relevant PRs and manual dispatch.
+It does not add a scheduled scanner or repeat every main push. It downloads OSV-Scanner **v2.7.0** from the official Google
 GitHub release and verifies a committed SHA-256 before executing it. When updating
 the scanner, review the release and replace its version and checksum together.
 The scan uses only these two explicit inputs, never a recursive workspace scan:
@@ -41,6 +41,28 @@ The existing universal CI gate remains unchanged. OSV coverage is advisory
 matching, not malware detection or proof of runtime exploitability; OS/native
 libraries, unlocked build backends and downloaded runtimes need separate review.
 
+## Why keep a PR audit alongside Dependabot alerts?
+
+Dependabot alerts rely on the dependency graph's actual inventory, not simply on
+support for a package manager's version-update feature. GitHub's
+[2026-10-20 announcement](https://github.blog/changelog/2026-10-20-dependabot-now-supports-npm-12-pnpm-11-and-12-and-bun-1-4/)
+explicitly says pnpm two-document lockfiles are not yet detected by the graph and
+will not generate alerts/security updates. This repository uses that exact format.
+The [graph ecosystem table](https://docs.github.com/en/code-security/reference/supply-chain-security/dependency-graph-supported-package-ecosystems)
+also does not list `uv.lock`; do not infer locked Python transitive coverage from
+`pyproject.toml` or Dependabot's support for uv version updates.
+
+On 2026-10-23 the repository SBOM endpoint returned HTTP 404 and GraphQL
+`dependencyGraphManifests` returned `totalCount: 0, nodes: []`. That is not a usable
+inventory comparison or proof of why the graph is empty. After enabling the graph,
+export its SBOM and compare package/version pairs against all 178 Python registry
+records and both pnpm documents (15 + 287 pairs at this baseline). Reassess this
+PR audit when GitHub's parser support and actual inventory close those gaps.
+Meanwhile it gives reviewers evidence for the proposed lockfile before merging;
+it does not create a second fix-PR owner. No recurring scan is introduced while
+repository graph coverage is being established. Newly disclosed issues on an
+unchanged, unsupported lockfile require a manual audit until that gap is resolved.
+
 ## Verified initial inventory and triage
 
 Scanned baseline `ea73ec4ca6a10673b39ab625ed4bef4d7f67503c` on 2026-10-23.
@@ -62,8 +84,19 @@ actual local source, rather than replacing them with public registry packages.
 | --- | ---: | --- |
 | certifi 2026.7.22 | 1 (two alias records) | Transitive via httpx/httpcore/requests. Compromised CA advisory; review a targeted lock fix to 2026.10.19. |
 | uv 0.13.1 | 1 (two alias records) | Used by scopecat-app and CI's version-file. Bundled CA advisory; review 0.13.4 with the existing build/runtime qualification. |
-| Pillow 12.3.0 | 39 | Desktop extra plus matplotlib/pystray paths. Image-parser advisories require reachability triage; most fixes indicate 13.0.0, so assess major-version compatibility separately. |
+| Pillow 12.3.0 | 39 | Desktop extra plus matplotlib/pystray paths. Image-parser advisories require reachability triage; all matched ranges indicate 13.0.0, so assess major-version compatibility separately. |
 | npm packages | 0 | No known advisory returned for the 302 locked versions; this is not a permanent assurance. |
+
+Representative Pillow matches are
+[GHSA-22hg-r758-rrw9](https://osv.dev/vulnerability/GHSA-22hg-r758-rrw9)
+(`[7.2.0, 13.0.0)`),
+[GHSA-v9pv-5gc8-w2m6](https://osv.dev/vulnerability/GHSA-v9pv-5gc8-w2m6)
+(`[11.0.0, 13.0.0)`), and
+[GHSA-78g4-xqwv-q3g8](https://osv.dev/vulnerability/GHSA-78g4-xqwv-q3g8)
+(`[11.1.0, 13.0.0)`, bundled libopenjp2 in wheels). All 39 affected records identify
+PyPI/pillow and explicitly list 12.3.0; there is no observed local-package/name
+collision for these hits. They are advisory matches pending platform, wheel and
+input-path applicability triage, not confirmed exploitable product vulnerabilities.
 
 There are 43 raw advisory records / 41 alias-deduplicated groups across three
 Python packages. certifi and uv each report maximum severity 9.1; Pillow reaches

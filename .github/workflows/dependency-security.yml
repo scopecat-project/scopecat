@@ -8,16 +8,6 @@ on:
       - renovate.json
       - .github/workflows/dependency-security.yml
       - scripts/dependency_security_report.py
-  push:
-    branches: [main]
-    paths:
-      - uv.lock
-      - apps/scopecat-ui/pnpm-lock.yaml
-      - renovate.json
-      - .github/workflows/dependency-security.yml
-      - scripts/dependency_security_report.py
-  schedule:
-    - cron: '23 7 * * *'
   workflow_dispatch:
 
 permissions:
