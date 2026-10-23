@@ -1,43 +1,21 @@
 # Dependency security review
 
 Renovate owns dependency fix PRs, including fixes sourced from GitHub Dependabot
-alerts. Ordinary updates keep the three-day minimum release age. Automerge is off
-by default; only patch/minor updates to the following explicit dependencies opt in:
+alerts. See [renovate.json](../../renovate.json) for the automerge allowlist and
+update exceptions; keep the executable configuration as the source of truth.
 
-- npm: `react`, `react-dom`, `@tanstack/react-query`, `lucide-react`, `@base-ui/react`,
-  `@types/node`, `oxlint`, `oxlint-tsgolint`, `oxfmt`, `vitest`, `jsdom`,
-  `@testing-library/jest-dom`, and `@testing-library/react`.
-- pep621 / PyPI: `ruff`, retaining its existing `update-lockfile` range strategy.
+Eligible updates clear inherited groups so presets cannot combine them with
+unapproved dependencies. Oxlint includes its `oxlint-tsgolint` peer because the UI
+uses type-aware linting. Internal-tool updates may include 0.x minors, but existing
+checks must pass without automated source or lint/format-rule fixes.
 
-React and React DOM update together. The type-aware Oxlint configuration uses its
-explicit `oxlint-tsgolint` peer, so that same-tool package is included and grouped
-with Oxlint. This does not enroll other Oxc packages, Vite, TypeScript, Node, or
-React types. Eligible updates first clear inherited groups, then use only these
-two explicit coordinated groups, avoiding mixed eligible/ineligible groups from
-presets. Global `separateMinorPatch` remains the default `false`; the existing
-`pyenv` split remains `true`.
+Security fixes skip ordinary cooldown/scheduling limits but still require review:
+Renovate applies `vulnerabilityAlerts.automerge: false` as a forced override of
+package rules. A faster proposal is not proof of compatibility.
 
-This policy accepts internal-app iteration, including `ruff` and `oxfmt` 0.x minor
-updates, only when existing lint, formatting and tests pass unchanged. Do not
-modify source or rules automatically to make an update pass, or add fix scripts.
-Major updates, unlisted dependencies (including measurement/data core and device
-SDKs/drivers), Python/runtime/native packaging and release tooling, GitHub Actions,
-pins and lockfile maintenance remain manual. Broad patch and stable non-major
-automerge presets stay absent.
-
-Security PRs remain manual even for an allowlisted package. Renovate turns
-`vulnerabilityAlerts` into a forced override applied during config merging, so
-`automerge: false` overrides ordinary package rules. Security fixes retain their
-cooldown/scheduling exceptions and request the lowest fixed version. A faster
-proposal is not permission to merge or proof of compatibility.
-
-All merges use the existing protected `CI gate` and `ALLGREEN` squash merge queue.
-Do not bypass the queue or weaken tests to merge dependency changes. The required
-`CI gate` aggregates Python core tests, quality checks, Windows/macOS platform
-smokes, UI checks and documentation. It does not prove every device, native release
-or author journey works, nor does it test Renovate policy resolution. The advisory
-security audit below is not a required vulnerability-free gate. This policy adds
-no required status check and changes no repository settings.
+Use the protected `CI gate` and `ALLGREEN` squash merge queue. Do not bypass the
+queue or weaken checks to merge an update; assess device and release compatibility
+separately when those paths are affected.
 
 ## Official lockfile audit
 
