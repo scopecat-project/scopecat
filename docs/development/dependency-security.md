@@ -1,15 +1,21 @@
 # Dependency security review
 
 Renovate owns dependency fix PRs, including fixes sourced from GitHub Dependabot
-alerts. Ordinary updates keep the three-day minimum release age. Broad patch and
-stable non-major automerge presets are removed; security PRs also require review.
-Security fixes skip the ordinary cooldown and scheduling limits and request the
-lowest fixed version. A faster proposal is not permission to merge or proof of
-compatibility. Existing runtime/build exceptions remain in place.
+alerts. See [renovate.json](../../renovate.json) for the automerge allowlist and
+update exceptions; keep the executable configuration as the source of truth.
 
-After review, use the existing protected `CI gate` and `ALLGREEN` merge queue.
-Do not bypass the queue or weaken tests to merge dependency changes. This change
-adds no required status check and changes no repository settings.
+Eligible updates clear inherited groups so presets cannot combine them with
+unapproved dependencies. Oxlint includes its `oxlint-tsgolint` peer because the UI
+uses type-aware linting. Internal-tool updates may include 0.x minors, but existing
+checks must pass without automated source or lint/format-rule fixes.
+
+Security fixes skip ordinary cooldown/scheduling limits but still require review:
+Renovate applies `vulnerabilityAlerts.automerge: false` as a forced override of
+package rules. A faster proposal is not proof of compatibility.
+
+Use the protected `CI gate` and `ALLGREEN` squash merge queue. Do not bypass the
+queue or weaken checks to merge an update; assess device and release compatibility
+separately when those paths are affected.
 
 ## Official lockfile audit
 
