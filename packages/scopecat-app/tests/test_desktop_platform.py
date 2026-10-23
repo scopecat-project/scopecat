@@ -14,6 +14,13 @@ from scopecat_app.desktop_platform import (
 )
 
 
+def _backend_tray(backend: str) -> Mock:
+    tray = Mock()
+    # Mock creates a fresh class per instance; tag that class for backend dispatch.
+    type(tray).__module__ = backend
+    return tray
+
+
 def test_window_menu_excludes_auxiliary_windows_on_the_main_loop(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -204,7 +211,7 @@ def test_linux_gtk_keeps_working_tray_and_requires_embedding(monkeypatch, embedd
     from scopecat_app.desktop_platform import _tray_is_available
 
     monkeypatch.setattr(sys, "platform", "linux")
-    tray = type("Icon", (), {"__module__": "pystray._gtk"})()
+    tray = _backend_tray("pystray._gtk")
     tray._status_icon = Mock()
     tray._status_icon.is_embedded.return_value = embedded
     tray._status_icon.get_visible.return_value = True
@@ -216,7 +223,7 @@ def test_linux_xorg_requires_completed_docking(monkeypatch, docked, mapped):
     from scopecat_app.desktop_platform import _tray_is_available
 
     monkeypatch.setattr(sys, "platform", "linux")
-    tray = type("Icon", (), {"__module__": "pystray._xorg"})()
+    tray = _backend_tray("pystray._xorg")
     tray._systray_manager = object()
     tray._display = Mock()
     tray._display.screen.return_value.root.id = 1
@@ -258,7 +265,7 @@ def test_linux_gtk_reports_only_from_its_event_loop(monkeypatch):
     callbacks = []
     glib = SimpleNamespace(idle_add=callbacks.append)
     monkeypatch.setitem(sys.modules, "gi.repository", SimpleNamespace(GLib=glib))
-    tray = type("Icon", (), {"__module__": "pystray._gtk"})()
+    tray = _backend_tray("pystray._gtk")
     tray.visible = False
     tray.run_detached, tray.stop = Mock(), Mock()
     tray._status_icon = Mock()
