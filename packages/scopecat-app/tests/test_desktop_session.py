@@ -937,3 +937,32 @@ def test_desktop_starts_service_with_optional_import_unavailable(
     runtime.start.assert_called_once()
     window.load_html.assert_not_called()
     assert attempted == (["pystray"] if platform == "win32" else [])
+
+
+def test_no_tray_close_and_reopen_preserve_synthetic_background_work(monkeypatch):
+    runtime, session, windows, views = close_fixture()
+    windows._views = [views[0]]
+    monkeypatch.setattr("webview.active_window", lambda: views[0].window)
+    proceed, completed = threading.Event(), threading.Event()
+    results = []
+
+    def work():
+        if proceed.wait(2):
+            results.append("synthetic result")
+            completed.set()
+
+    worker = threading.Thread(target=work)
+    worker.start()
+    try:
+        windows._hide_or_retain(views[0].window)
+        proceed.set()
+        assert completed.wait(2)
+        windows.show()
+        assert results == ["synthetic result"]
+        assert not session.closing.is_set()
+        views[0].window.hide.assert_not_called()
+        runtime.stop.assert_not_called()
+        runtime.stop_if_idle.assert_not_called()
+    finally:
+        proceed.set()
+        worker.join(2)

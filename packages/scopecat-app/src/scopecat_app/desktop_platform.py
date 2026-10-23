@@ -112,6 +112,23 @@ def _stop_tray(tray: Icon | None) -> None:
             )
 
 
+def _monitor_tray(
+    stopped: threading.Event,
+    schedule: Callable[[Callable[[], None]], None],
+    report: Callable[[], None],
+    changed: Callable[[bool], None],
+) -> None:
+    while not stopped.wait(1):
+        try:
+            schedule(report)
+        except Exception:
+            changed(False)
+            logging.getLogger(__name__).warning(
+                "Optional tray monitoring failed", exc_info=True
+            )
+            return
+
+
 def start_tray(
     create: Callable[[], Icon],
     changed: Callable[[bool], None] = lambda _available: None,
@@ -127,6 +144,8 @@ def start_tray(
     tray: Icon | None = None
 
     def report() -> None:
+        if stopped.is_set():
+            return
         try:
             available = tray is not None and tray.visible and _tray_is_available(tray)
         except Exception:
@@ -137,6 +156,7 @@ def start_tray(
 
     def setup(icon: Icon) -> None:
         if stopped.is_set():
+            _stop_tray(icon)
             return
         try:
             icon.visible = True
@@ -186,15 +206,16 @@ def start_tray(
         logger.warning("Optional tray scheduling failed", exc_info=True)
         return stopped.set
 
-    def monitor() -> None:
-        while not stopped.wait(1):
-            schedule(report)
-
-    threading.Thread(target=monitor, daemon=True).start()
+    threading.Thread(
+        target=_monitor_tray, args=(stopped, schedule, report, changed), daemon=True
+    ).start()
 
     def stop() -> None:
         stopped.set()
-        schedule(lambda: _stop_tray(tray))
+        try:
+            schedule(lambda: _stop_tray(tray))
+        except Exception:
+            logger.warning("Optional tray cleanup scheduling failed", exc_info=True)
 
     return stop
 

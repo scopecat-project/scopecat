@@ -196,3 +196,15 @@ def test_cocoa_probe_requires_visible_native_button(monkeypatch, hidden, window)
     button.isHidden.return_value = hidden
     button.window.return_value = window
     assert _tray_is_available(tray) == (not hidden and window is not None)
+
+
+def test_late_windows_setup_after_shutdown_cleans_up(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    tray, changed = Mock(), Mock()
+    stop = start_tray(lambda: tray, changed)
+    setup = tray.run_detached.call_args.kwargs["setup"]
+    stop()
+    tray.reset_mock()
+    setup(tray)
+    tray.stop.assert_called_once()
+    changed.assert_not_called()
