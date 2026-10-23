@@ -56,11 +56,19 @@ Loss of a previously confirmed entry restores hidden windows on the next check.
 
 Windows checks the actual Shell notification-icon rectangle after setup; Cocoa
 checks the visible status-item button's native window on its main loop. Constructor
-success and pystray's requested visibility alone are insufficient. Linux currently
-uses conservative no-tray mode without importing pystray: its selectable backends
-do not expose a common reliable host acknowledgment. This does not diagnose or
-repair X11 authorization or claim that a Linux tray host is present. Native Mac and
-Windows interaction still requires candidate-specific qualification.
+success and pystray's requested visibility alone are insufficient. Linux retains
+backend-specific tray support: GTK requires an embedded visible status icon;
+AppIndicator requires a connected active indicator, a registered host and this
+process's registered item; Xorg requires the icon window to be reparented and
+viewable after docking. Unknown backends and unconfirmed AppIndicator fallback
+icons retain the window. Import/authentication errors are contained, without
+changing X11 authorization. GTK checks run on its event loop. Native interaction
+still requires candidate-specific qualification.
+
+Native hide/show calls run outside the window-list lock. A generation check after
+hiding restores the view if availability changed during the native call, including
+loss followed by reconnection; this avoids both late invisible windows and a
+WinForms Invoke/closing-callback lock inversion.
 
 An installed package includes its host dependencies. It must not bootstrap a host
 from a mutable selection in the data directory. Retained execution environments

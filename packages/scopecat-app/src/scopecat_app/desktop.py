@@ -665,6 +665,7 @@ class DesktopWindows:
         self._prepare = prepare
         self._views: list[DesktopView] = []
         self._tray_available = False
+        self._tray_generation = 0
         self._lock = threading.RLock()
         session.connection_changed = self._reconnect
         self._preflight_lock = threading.Lock()
@@ -1055,6 +1056,8 @@ class DesktopWindows:
         with self._lock:
             previous = self._tray_available
             self._tray_available = available
+            if previous != available:
+                self._tray_generation += 1
         if previous and not available and not self._session.closing.is_set():
             self.show()
 
@@ -1071,21 +1074,35 @@ class DesktopWindows:
             "关闭窗口不会停止测量。",
         )
 
-    def _hide_or_retain(self, window: webview.Window) -> None:
+    def _try_hide(self, window: webview.Window) -> bool:
         with self._lock:
-            if self._tray_available:
-                hide_window(window)
-                return
+            available = self._tray_available
+            generation = self._tray_generation
+        if not available:
+            return False
+        # Native Invoke can synchronously wait on a closing callback which
+        # takes our lock. Never hold that lock across native UI operations.
+        hide_window(window)
+        with self._lock:
+            retained = self._tray_available and generation == self._tray_generation
+        if not retained:
+            # Tray loss may have restored this view before the native hide
+            # completed. Undo that late hide, even if the tray has reappeared.
+            show_window(window)
+        return retained
+
+    def _hide_or_retain(self, window: webview.Window) -> None:
+        if self._try_hide(window):
+            return
         show_window(window)
         self.tray_status()
 
     def hide(self) -> None:
         with self._lock:
-            if self._tray_available:
-                for view in self._views:
-                    hide_window(view.window)
-                return
-        self.tray_status()
+            views = tuple(self._views)
+        hidden = [self._try_hide(view.window) for view in views]
+        if not all(hidden):
+            self.tray_status()
 
     def request_quit(self) -> None:
         _ = self.latest.request_quit()

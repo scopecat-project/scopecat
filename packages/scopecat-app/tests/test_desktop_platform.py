@@ -100,16 +100,6 @@ def test_quit_hook_matches_real_pywebview_delegate_signature():
         app.setDelegate_(previous)
 
 
-@pytest.mark.parametrize("platform", ["linux", "freebsd"])
-def test_unverified_platform_never_imports_tray(monkeypatch, platform):
-    monkeypatch.setattr(sys, "platform", platform)
-    create, changed = Mock(), Mock()
-    stop = start_tray(create, changed)
-    changed.assert_called_once_with(False)
-    create.assert_not_called()
-    stop()
-
-
 @pytest.mark.parametrize("failure", [ImportError, RuntimeError])
 @pytest.mark.parametrize("platform", ["win32", "darwin"])
 def test_optional_tray_failure_retains_fallback(monkeypatch, failure, platform):
@@ -207,3 +197,77 @@ def test_late_windows_setup_after_shutdown_cleans_up(monkeypatch):
     setup(tray)
     tray.stop.assert_called_once()
     changed.assert_not_called()
+
+
+@pytest.mark.parametrize("embedded", [True, False])
+def test_linux_gtk_keeps_working_tray_and_requires_embedding(monkeypatch, embedded):
+    from scopecat_app.desktop_platform import _tray_is_available
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    tray = type("Icon", (), {"__module__": "pystray._gtk"})()
+    tray._status_icon = Mock()
+    tray._status_icon.is_embedded.return_value = embedded
+    tray._status_icon.get_visible.return_value = True
+    assert _tray_is_available(tray) is embedded
+
+
+@pytest.mark.parametrize("docked, mapped", [(True, True), (False, True), (True, False)])
+def test_linux_xorg_requires_completed_docking(monkeypatch, docked, mapped):
+    from scopecat_app.desktop_platform import _tray_is_available
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    tray = type("Icon", (), {"__module__": "pystray._xorg"})()
+    tray._systray_manager = object()
+    tray._display = Mock()
+    tray._display.screen.return_value.root.id = 1
+    tray._window = Mock()
+    tray._window.query_tree.return_value.parent.id = 2 if docked else 1
+    tray._window.get_attributes.return_value.map_state = 2 if mapped else 0
+    assert _tray_is_available(tray) == (docked and mapped)
+
+
+@pytest.mark.parametrize(
+    "host, registered", [(True, True), (False, True), (True, False)]
+)
+def test_indicator_requires_host_and_own_registration(monkeypatch, host, registered):
+    from scopecat_app.desktop_platform import _indicator_has_host
+
+    bus = Mock()
+    bus.get_unique_name.return_value = ":1.42"
+    bus.call_sync.return_value.unpack.return_value = (
+        {
+            "IsStatusNotifierHostRegistered": host,
+            "RegisteredStatusNotifierItems": [
+                (":1.42" if registered else ":1.99") + "/StatusNotifierItem"
+            ],
+        },
+    )
+    gio, glib = Mock(), Mock()
+    gio.bus_get_sync.return_value = bus
+    monkeypatch.setitem(
+        sys.modules, "gi.repository", SimpleNamespace(Gio=gio, GLib=glib)
+    )
+    tray = Mock()
+    tray._appindicator.get_property.return_value = True
+    tray._appindicator.get_status.return_value = 1
+    assert _indicator_has_host(tray) == (host and registered)
+
+
+def test_linux_gtk_reports_only_from_its_event_loop(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    callbacks = []
+    glib = SimpleNamespace(idle_add=callbacks.append)
+    monkeypatch.setitem(sys.modules, "gi.repository", SimpleNamespace(GLib=glib))
+    tray = type("Icon", (), {"__module__": "pystray._gtk"})()
+    tray.visible = False
+    tray.run_detached, tray.stop = Mock(), Mock()
+    tray._status_icon = Mock()
+    tray._status_icon.is_embedded.return_value = True
+    tray._status_icon.get_visible.return_value = True
+    changed = Mock()
+    stop = start_tray(lambda: tray, changed)
+    tray.run_detached.call_args.kwargs["setup"](tray)
+    changed.assert_not_called()
+    callbacks.pop()()
+    changed.assert_called_once_with(True)
+    stop()

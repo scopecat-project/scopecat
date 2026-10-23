@@ -66,8 +66,67 @@ def install_window_menu() -> None:
     AppHelper.callAfter(install)
 
 
+def _indicator_has_host(tray: Icon) -> bool:
+    from gi.repository import Gio, GLib
+
+    indicator = tray._appindicator
+    if not indicator.get_property("connected") or not indicator.get_status():
+        return False
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    result = bus.call_sync(
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
+        "org.freedesktop.DBus.Properties",
+        "GetAll",
+        GLib.Variant("(s)", ("org.kde.StatusNotifierWatcher",)),
+        GLib.VariantType.new("(a{sv})"),
+        Gio.DBusCallFlags.NO_AUTO_START,
+        1000,
+        None,
+    )
+    properties = result.unpack()[0]
+    owner = bus.get_unique_name()
+    return bool(
+        owner
+        and properties.get("IsStatusNotifierHostRegistered") is True
+        and any(
+            item.startswith(owner + "/")
+            for item in properties.get("RegisteredStatusNotifierItems", [])
+        )
+    )
+
+
+def _linux_tray_is_available(tray: Icon) -> bool:
+    backend = type(tray).__module__
+    if backend == "pystray._gtk":
+        return bool(tray._status_icon.is_embedded() and tray._status_icon.get_visible())
+    if backend == "pystray._appindicator":
+        return _indicator_has_host(tray)
+    if backend == "pystray._xorg":
+        # A dock request/selection owner alone is not acknowledgment. Require
+        # the host to have reparented and mapped the actual icon window.
+        return bool(
+            tray._systray_manager is not None
+            and tray._window.query_tree().parent.id != tray._display.screen().root.id
+            and tray._window.get_attributes().map_state == 2  # X.IsViewable
+        )
+    return False
+
+
+def _gtk_schedule(action: Callable[[], None]) -> None:
+    from gi.repository import GLib
+
+    def callback() -> bool:
+        action()
+        return False
+
+    _ = GLib.idle_add(callback)
+
+
 def _tray_is_available(tray: Icon) -> bool:
     """Check the native entry, not pystray's requested visibility flag."""
+    if sys.platform.startswith("linux"):
+        return _linux_tray_is_available(tray)
     if sys.platform == "darwin":
         button = tray._status_item.button()
         return bool(button.window() is not None and not button.isHidden())
@@ -135,9 +194,9 @@ def start_tray(
 ) -> Callable[[], None]:
     """An optional tray must never prevent the window/service from starting.
 
-    Linux pystray backends cannot reliably acknowledge a usable host. Keep the
-    window there rather than importing a backend that may open X11 at import time.
-    Cocoa work, including failures and cleanup, stays on its native event loop.
+    Backend imports are isolated here, including Linux backends that connect
+    to X11 during import. Native evidence, not construction, enables hiding.
+    Cocoa and GTK availability checks stay on their respective event loops.
     """
     logger = logging.getLogger(__name__)
     stopped = threading.Event()
@@ -160,7 +219,7 @@ def start_tray(
             return
         try:
             icon.visible = True
-            report()
+            schedule(report)
         except Exception:
             changed(False)
             logger.warning("Optional tray initialization failed", exc_info=True)
@@ -170,11 +229,13 @@ def start_tray(
         pass
 
     def ready() -> None:
-        nonlocal tray
+        nonlocal tray, schedule
         if stopped.is_set():
             return
         try:
             tray = create()  # Includes optional imports and image loading.
+            if type(tray).__module__ in {"pystray._gtk", "pystray._appindicator"}:
+                schedule = _gtk_schedule
             if sys.platform == "darwin":
                 tray.run_detached(setup=no_setup)
                 tray.visible = True
@@ -186,11 +247,6 @@ def start_tray(
             changed(False)
             logger.warning("Optional tray initialization failed", exc_info=True)
             _stop_tray(tray)
-
-    if sys.platform not in {"darwin", "win32"}:
-        changed(False)
-        logger.info("No tray: backend cannot confirm a usable system entry")
-        return stopped.set
 
     def schedule(action: Callable[[], None]) -> None:
         action()
