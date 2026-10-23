@@ -11,45 +11,53 @@ After review, use the existing protected `CI gate` and `ALLGREEN` merge queue.
 Do not bypass the queue or weaken tests to merge dependency changes. This change
 adds no required status check and changes no repository settings.
 
-## Independent lockfile audit
+## Official lockfile audit
 
-The `Dependency security` workflow runs on relevant PRs and manual dispatch.
-It does not add a scheduled scanner or repeat every main push. It downloads OSV-Scanner **v2.7.0** from the official Google
-GitHub release and verifies a committed SHA-256 before executing it. When updating
-the scanner, review the release and replace its version and checksum together.
-The scan uses only these two explicit inputs, never a recursive workspace scan:
+`Dependency security` uses Google's official OSV-Scanner reusable workflows,
+v2.7.0 pinned to release commit `b1d267aea5211fa648d9d442fa64b90dbdcbdd36`.
+The annotated release tag was resolved through GitHub and both workflow files
+were checked at that immutable ref. Upstream owns the scanner, reporter, Docker
+images and result-upload steps; this repository does not maintain a scanner
+wrapper, package-exclusion generator or custom report/diff implementation.
 
-- `uv.lock`: all locked Python registry packages, including optional/development
-  dependencies and transitive packages, regardless of the runner's platform.
-- `apps/scopecat-ui/pnpm-lock.yaml`: both pnpm 12 YAML documents, including the
-  package-manager dependencies, UI dependencies, platform variants and transitives.
+Both paths scan exactly `uv.lock` and `apps/scopecat-ui/pnpm-lock.yaml` with
+`--no-resolve --all-packages`. OSV reads all locked direct/transitive, development,
+optional and platform-specific versions, including both pnpm YAML documents.
+No project dependencies are installed, imported or built. No call analysis or
+recursive repository scan is requested. Only these public lockfiles are eligible;
+review the data boundary before adding private package identities or repositories.
 
-OSV's native extractors support both formats. `--no-resolve` disables manifest
-resolution; it does not discard transitive versions already in the lockfiles.
-No project dependency is installed, imported or built, no package lifecycle
-script runs, and no call analysis is enabled. No token or write permission is
-needed. OSV receives package identities/versions; it does not receive source
-files. Only these public-repository lockfiles are eligible. Never extend this
-workflow to private checkouts, private indexes or private package identities
-without reviewing the data boundary first.
+- On relevant PRs targeting main, the upstream PR workflow scans the target branch
+  and then the proposed merge ref, and reports newly introduced findings.
+- Manual dispatch runs the upstream full scan on the selected ref's exact SHA,
+  so existing findings remain inspectable. There is no scheduled or main-push scan.
 
-Before scanning, a small standard-library helper reads `uv.lock` source metadata
-and generates native OSV `PackageOverrides` matching the exact name, version and
-PyPI ecosystem of editable/directory packages. These local identities are excluded
-from advisory reporting; no package-name prefix, external registry package or
-vulnerability ID is blanket-ignored. The native extractor still handles the lock
-formats and OSV handles all matching/filtering. A regression test ensures local
-sources are excluded while similarly named registry packages remain eligible.
-An exact local/registry name-version collision (using PyPI name normalization)
-fails before scanning, because native overrides cannot distinguish sources.
+Both use `fail-on-vuln: false`: findings are advisory, not part of `CI gate`.
+Upstream rejects failed scans with missing output rather than treating them as
+clean comparisons.
+A passing differential result does not mean the baseline is vulnerability-free.
+The official PR workflow retains old/new JSON and SARIF artifacts for five days;
+the full workflow retains SARIF. Review run output and Security → Code scanning.
 
-JSON inventory/findings are retained for 14 days with a job summary. Findings
-(exit 1) are advisory during baseline triage; operational errors fail this
-separate job. The summary rejects absent/empty lockfile inventories. A green
-report job means the scan completed, not that there are zero vulnerabilities.
-The existing universal CI gate remains unchanged. OSV coverage is advisory
-matching, not malware detection or proof of runtime exploitability; OS/native
-libraries, unlocked build backends and downloaded runtimes need separate review.
+The workflow uses `contents: read`, `actions: read` and the explicitly approved
+`security-events: write` for SARIF reports. No application permissions change.
+SARIF upload is enabled for same-repository PRs and manual baselines. Fork and
+Dependabot PRs disable upload while retaining upstream artifacts/annotations;
+normal GitHub approval/token restrictions still apply. No `pull_request_target`,
+extra secrets or fork-token write setting is introduced. Fork execution has not
+been claimed as tested merely because a same-repository PR passes.
+
+This advisory workflow does not run on `merge_group`. At this pinned release the
+upstream PR workflow checks out `$GITHUB_BASE_REF`, which GitHub only supplies for
+PR events, and exposes no base-ref override. Do not assume its documented
+merge-group trigger produces the same comparison. Existing required CI continues
+running on merge groups unchanged. Adding a required security gate needs separate
+policy and upstream merge-group qualification.
+
+OSV can extract local Python workspace packages as same-named PyPI identities.
+No current finding came from those eight packages. They remain visible and require
+source-aware triage if matched; there are no speculative package overrides or
+advisory suppressions. Matching alone does not prove runtime exploitability.
 
 ## Why keep a PR audit alongside Dependabot alerts?
 
@@ -89,16 +97,16 @@ verified every package/version pair, not only direct manifest dependencies:
 
 | Input | Lock inventory | OSV extraction |
 | --- | --- | --- |
-| Python | 178 PyPI records, 8 local versioned packages, 1 virtual root | 186 extracted; 8 exact local identities filtered; 178 reported |
+| Python | 178 PyPI records, 8 local versioned packages, 1 virtual root | 186 extracted: 178 registry + 8 local identities; virtual root omitted |
 | pnpm package-manager document | 15 package/version pairs | All 15 |
 | pnpm UI document | 287 package/version pairs | All 287 |
 
 The Python registry is `https://pypi.org/simple`; pnpm resolutions use integrity
-hashes with no private tarball/registry overrides. OSV initially extracts the eight
-local versioned Python packages as PyPI identities; the generated source-based
-native overrides remove them from the published inventory/findings. The final
-178 reported Python identities exactly match the registry subset of `uv.lock`.
-All 302 npm identities and all 41 baseline advisory groups remain unchanged.
+hashes with no private tarball/registry overrides. The eight local versioned Python
+identities are additional to the 178 registry records, not additional third-party
+packages. The current official workflow leaves all of them visible for triage.
+The initial baseline's 302 npm identities and 41 advisory groups are recorded below;
+use a fresh manual full scan when reviewing newer lock revisions.
 
 | Locked package | Baseline advisory groups | Initial assessment / next review |
 | --- | ---: | --- |
@@ -136,8 +144,8 @@ Dependabot security updates off. The now-readable SBOM confirms graph population
 Earlier, the alerts endpoint explicitly returned **Dependabot alerts are disabled**;
 after setup it returns HTTP 403 **Resource not accessible by integration** instead.
 The current audit integration cannot list alerts; that does not establish whether
-the separately installed Renovate app can read them. No additional permissions
-are needed for the OSV workflow.
+the separately installed Renovate app can read them. The OSV workflow uses the
+approved security-events write permission solely for its code-scanning reports.
 
 The administrator's latest settings screenshots show both auto-triage presets
 (low-impact development-dependency dismissal and malware-alert dismissal) disabled.
@@ -150,8 +158,8 @@ app identity rather than requesting broader permissions.
 Permission evidence is not successful ingestion evidence. Check Renovate's next
 run for alert retrieval and affected-lockfile mapping. Keep **Dependabot security
 updates** off so Renovate remains the single automated fix-PR owner. The separate
-audit integration's 403 does not disprove Renovate's permission. No setting or
-permission was changed by this PR.
+audit integration's 403 does not disprove Renovate's permission. No repository setting or application permission was changed; only the workflow
+report permission was approved and added.
 
 Automatic dependency submission is not needed to obtain the verified Python
 inventory. Do not enable another submission workflow or grant write access merely
@@ -160,4 +168,5 @@ OSV alerts are not used as the audit or as a second fix-PR source.
 
 References: [OSV supported lockfiles](https://google.github.io/osv-scanner/supported-languages-and-lockfiles/),
 [OSV usage](https://google.github.io/osv-scanner/usage/),
+[official GitHub workflows](https://google.github.io/osv-scanner/github-action/),
 [Renovate vulnerability alerts](https://docs.renovatebot.com/configuration-options/#vulnerabilityalerts).
