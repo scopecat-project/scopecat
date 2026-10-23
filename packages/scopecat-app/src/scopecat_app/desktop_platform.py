@@ -66,53 +66,219 @@ def install_window_menu() -> None:
     AppHelper.callAfter(install)
 
 
-def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
-    """Keep Cocoa status item creation and visibility on the running main loop."""
-    if sys.platform != "darwin":
-        tray = create()
-        tray.run_detached()
+def _indicator_has_host(tray: Icon) -> bool:
+    from gi.repository import Gio, GLib
 
-        def stop() -> None:
-            tray.visible = False
-            tray.stop()
+    indicator = tray._appindicator
+    if not indicator.get_property("connected") or not indicator.get_status():
+        return False
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    result = bus.call_sync(
+        "org.kde.StatusNotifierWatcher",
+        "/StatusNotifierWatcher",
+        "org.freedesktop.DBus.Properties",
+        "GetAll",
+        GLib.Variant("(s)", ("org.kde.StatusNotifierWatcher",)),
+        GLib.VariantType.new("(a{sv})"),
+        Gio.DBusCallFlags.NO_AUTO_START,
+        1000,
+        None,
+    )
+    properties = result.unpack()[0]
+    owner = bus.get_unique_name()
+    return bool(
+        owner
+        and properties.get("IsStatusNotifierHostRegistered") is True
+        and any(
+            item.startswith(owner + "/")
+            for item in properties.get("RegisteredStatusNotifierItems", [])
+        )
+    )
 
-        return stop
 
-    from PyObjCTools import AppHelper
+def _linux_tray_is_available(tray: Icon) -> bool:
+    backend = type(tray).__module__
+    if backend == "pystray._gtk":
+        return bool(tray._status_icon.is_embedded() and tray._status_icon.get_visible())
+    if backend == "pystray._appindicator":
+        return _indicator_has_host(tray)
+    if backend == "pystray._xorg":
+        # A dock request/selection owner alone is not acknowledgment. Require
+        # the host to have reparented and mapped the actual icon window.
+        return bool(
+            tray._systray_manager is not None
+            and tray._window.query_tree().parent.id != tray._display.screen().root.id
+            and tray._window.get_attributes().map_state == 2  # X.IsViewable
+        )
+    return False
 
-    mac_tray: Icon | None = None
-    stopped = False
 
-    def setup(_icon: Icon) -> None:
+def _gtk_schedule(action: Callable[[], None]) -> None:
+    from gi.repository import GLib
+
+    def callback() -> bool:
+        action()
+        return False
+
+    _ = GLib.idle_add(callback)
+
+
+def _tray_is_available(tray: Icon) -> bool:
+    """Check the native entry, not pystray's requested visibility flag."""
+    if sys.platform.startswith("linux"):
+        return _linux_tray_is_available(tray)
+    if sys.platform == "darwin":
+        button = tray._status_item.button()
+        return bool(button.window() is not None and not button.isHidden())
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class Identifier(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("hWnd", wintypes.HWND),
+                ("uID", wintypes.UINT),
+                ("guidItem", ctypes.c_byte * 16),
+            ]
+
+        # Pinned pystray 0.19.5 passes hID (not the structure's uID) to
+        # NOTIFYICONDATAW, leaving its actual uID at zero. HWND disambiguates
+        # icons. Keep this paired with the pinned backend when upgrading it.
+        identifier = Identifier(ctypes.sizeof(Identifier), tray._hwnd, 0)
+        rect = wintypes.RECT()
+        query = ctypes.windll.shell32.Shell_NotifyIconGetRect
+        query.argtypes = [ctypes.POINTER(Identifier), ctypes.POINTER(wintypes.RECT)]
+        query.restype = ctypes.c_long
+        return bool(
+            query(ctypes.byref(identifier), ctypes.byref(rect)) == 0
+            and rect.right > rect.left
+            and rect.bottom > rect.top
+        )
+    return False
+
+
+def _stop_tray(tray: Icon | None) -> None:
+    if tray is not None:
+        try:
+            try:
+                tray.visible = False
+            finally:
+                tray.stop()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Optional tray cleanup failed", exc_info=True
+            )
+
+
+def _monitor_tray(
+    stopped: threading.Event,
+    schedule: Callable[[Callable[[], None]], None],
+    report: Callable[[], None],
+    changed: Callable[[bool], None],
+) -> None:
+    while not stopped.wait(1):
+        try:
+            schedule(report)
+        except Exception:
+            changed(False)
+            logging.getLogger(__name__).warning(
+                "Optional tray monitoring failed", exc_info=True
+            )
+            return
+
+
+def start_tray(
+    create: Callable[[], Icon],
+    changed: Callable[[bool], None] = lambda _available: None,
+) -> Callable[[], None]:
+    """An optional tray must never prevent the window/service from starting.
+
+    Backend imports are isolated here, including Linux backends that connect
+    to X11 during import. Native evidence, not construction, enables hiding.
+    Cocoa and GTK availability checks stay on their respective event loops.
+    """
+    logger = logging.getLogger(__name__)
+    stopped = threading.Event()
+    tray: Icon | None = None
+
+    def report() -> None:
+        if stopped.is_set():
+            return
+        try:
+            available = tray is not None and tray.visible and _tray_is_available(tray)
+        except Exception:
+            available = False
+            logger.info("Optional tray availability could not be confirmed")
+        if not stopped.is_set():
+            changed(available)
+
+    def setup(icon: Icon) -> None:
+        if stopped.is_set():
+            _stop_tray(icon)
+            return
+        try:
+            icon.visible = True
+            schedule(report)
+        except Exception:
+            changed(False)
+            logger.warning("Optional tray initialization failed", exc_info=True)
+            _stop_tray(tray)
+
+    def no_setup(_icon: Icon) -> None:
         pass
 
     def ready() -> None:
-        nonlocal mac_tray
-        if stopped:
+        nonlocal tray, schedule
+        if stopped.is_set():
             return
-        mac_tray = create()
-        # Default setup changes Cocoa visibility from a worker thread.
-        mac_tray.run_detached(setup=setup)
-        mac_tray.visible = True
-        # pystray has no public template-image option. Its Cocoa image is created
-        # by the first show; let macOS supply the menu-bar appearance and tint.
-        mac_tray._icon_image.setTemplate_(True)
-        logging.getLogger(__name__).info(
-            "Menu bar item created: image=%s bundle=%s",
-            mac_tray._icon_image.size(),
-            macos_bundle_identifier(),
-        )
+        try:
+            tray = create()  # Includes optional imports and image loading.
+            if type(tray).__module__ in {"pystray._gtk", "pystray._appindicator"}:
+                schedule = _gtk_schedule
+            if sys.platform == "darwin":
+                tray.run_detached(setup=no_setup)
+                tray.visible = True
+                tray._icon_image.setTemplate_(True)
+                report()
+            else:
+                tray.run_detached(setup=setup)
+        except Exception:
+            changed(False)
+            logger.warning("Optional tray initialization failed", exc_info=True)
+            _stop_tray(tray)
 
-    AppHelper.callAfter(ready)
+    def schedule(action: Callable[[], None]) -> None:
+        action()
 
-    def stop_mac() -> None:
-        nonlocal stopped
-        stopped = True
-        if mac_tray is not None:
-            mac_tray.visible = False
-            mac_tray.stop()
+    try:
+        if sys.platform == "darwin":
+            from PyObjCTools import AppHelper
 
-    return stop_mac
+            schedule = AppHelper.callAfter
+        schedule(ready)
+    except Exception:
+        changed(False)
+        logger.warning("Optional tray scheduling failed", exc_info=True)
+        return stopped.set
+
+    threading.Thread(
+        target=_monitor_tray, args=(stopped, schedule, report, changed), daemon=True
+    ).start()
+
+    def stop() -> None:
+        stopped.set()
+        try:
+            # webview.start returns on the main thread after the native loop
+            # ends; another queued Cocoa callback would never be serviced.
+            if threading.current_thread() is threading.main_thread():
+                _stop_tray(tray)
+            else:
+                schedule(lambda: _stop_tray(tray))
+        except Exception:
+            logger.warning("Optional tray cleanup scheduling failed", exc_info=True)
+
+    return stop
 
 
 def install_reopen_handler(

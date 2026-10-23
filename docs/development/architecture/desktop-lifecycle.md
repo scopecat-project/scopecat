@@ -37,7 +37,7 @@ never replace the destination. Import cancellation is not rollback of a capture
 already committed by the backend. Environment replacement is unavailable during
 transfers. A failed or unresponsive transfer leaves a usable exit recovery path.
 
-The last-window policy is the same on Mac and Windows: closing the last window
+When a usable tray entry is confirmed, the last-window policy is the same on Mac and Windows: closing the last window
 hides it and retains the application with a visible menu-bar/tray entry, whether
 idle or busy. Reopening restores the retained view. Closing an additional window
 closes only that view. Closing a window does not request application exit;
@@ -45,6 +45,30 @@ explicit Quit is always work-aware. Do not introduce idle automatic exit or
 different close semantics by platform. A data-only window must
 not initialize hardware. Window-local selections and navigation must not become
 application-global state merely because windows share data.
+
+The tray is optional. Import, image loading, initialization or native availability
+failure must not prevent the main window or measurements from starting. Until a
+usable entry is confirmed, closing the last window retains it with an explanation;
+the native File menu provides Background status and explicit Quit. Minimize remains
+available. Additional windows still use the saved-input close guard. Tray absence
+does not stop work, release devices, or bypass the application-wide Quit/drain guard.
+Loss of a previously confirmed entry restores hidden windows on the next check.
+
+Windows checks the actual Shell notification-icon rectangle after setup; Cocoa
+checks the visible status-item button's native window on its main loop. Constructor
+success and pystray's requested visibility alone are insufficient. Linux retains
+backend-specific tray support: GTK requires an embedded visible status icon;
+AppIndicator requires a connected active indicator, a registered host and this
+process's registered item; Xorg requires the icon window to be reparented and
+viewable after docking. Unknown backends and unconfirmed AppIndicator fallback
+icons retain the window. Import/authentication errors are contained, without
+changing X11 authorization. GTK checks run on its event loop. Native interaction
+still requires candidate-specific qualification.
+
+Native hide/show calls run outside the window-list lock. A generation check after
+hiding restores the view if availability changed during the native call, including
+loss followed by reconnection; this avoids both late invisible windows and a
+WinForms Invoke/closing-callback lock inversion.
 
 An installed package includes its host dependencies. It must not bootstrap a host
 from a mutable selection in the data directory. Retained execution environments

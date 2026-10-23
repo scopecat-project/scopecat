@@ -131,6 +131,7 @@ def test_native_windows_share_backend_and_keep_navigation(
         'window.location.replace("http://localhost:4321/?run=B#runs");'
     )
 
+    windows.tray_changed(True)
     # Tray hide/open is application-wide: neither retained view may be stranded.
     shown = Mock()
     monkeypatch.setattr("scopecat_app.desktop.show_window", shown)
@@ -679,6 +680,7 @@ def test_deferred_exit_obtains_fresh_all_view_preflight():
 
 def test_close_reserves_last_view_until_actual_closed_event():
     runtime, session, windows, views = close_fixture()
+    windows.tray_changed(True)
     for view in views:
         acknowledge(view)
     # Fake destroy deliberately does not emit closed yet.
@@ -852,3 +854,182 @@ def test_post_commit_reload_aborts_close_and_allows_existing_retry(monkeypatch, 
     retry.join(5)
     assert session.finish_exit(windows.destroy) is True
     assert not windows._views
+
+
+@pytest.mark.parametrize("available", [False, True])
+def test_last_reserved_view_retains_work_and_can_reopen(monkeypatch, available):
+    runtime, session, windows, views = close_fixture()
+    monkeypatch.setattr("webview.active_window", lambda: views[1].window)
+    windows.tray_changed(available)
+    for view in views:
+        acknowledge(view)
+    windows._close_view(views[0])
+    windows._close_view(views[1])
+    views[1].window.destroy.assert_not_called()
+    assert views[1].window.hide.call_count == int(available)
+    assert views[1].window.create_confirmation_dialog.call_count == int(not available)
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    windows.show()
+    views[1].window.show.assert_called()
+
+
+def test_tray_loss_restores_hidden_views_without_stopping_work():
+    runtime, session, windows, views = close_fixture()
+    windows.tray_changed(True)
+    windows.hide()
+    windows.tray_changed(False)
+    for view in views:
+        view.window.hide.assert_called_once()
+        view.window.show.assert_called()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_desktop_starts_service_with_optional_import_unavailable(
+    monkeypatch, tmp_path, platform
+):
+    import builtins
+    import sys
+
+    from webview.event import Event
+
+    from scopecat_app.desktop import run
+
+    monkeypatch.setattr(sys, "platform", platform)
+    original_import = builtins.__import__
+    attempted = []
+
+    def import_module(name, *args, **kwargs):
+        if name == "pystray":
+            attempted.append(name)
+            raise ImportError("optional backend unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_module)
+    window = Mock()
+    window.events = SimpleNamespace(
+        loaded=Event(window, True),
+        closing=Event(window, True),
+        closed=Event(window, True),
+    )
+    monkeypatch.setattr("webview.create_window", Mock(return_value=window))
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+
+    def start_service():
+        session.closing.set()
+        return SimpleNamespace(base_url="http://localhost:1234")
+
+    runtime.start.side_effect = start_service
+    monkeypatch.setattr(session, "finish_exit", lambda _destroy: True)
+
+    def start_native(supervise, **kwargs):
+        assert kwargs["menu"]  # Explicit Quit/status remain native menu actions.
+        window.events.loaded.set()
+        supervise()
+
+    monkeypatch.setattr("webview.start", start_native)
+    run(tmp_path, prepare=Mock(), session=session)
+    runtime.start.assert_called_once()
+    window.load_html.assert_not_called()
+    assert attempted == ["pystray"]
+
+
+def test_no_tray_close_and_reopen_preserve_synthetic_background_work(monkeypatch):
+    runtime, session, windows, views = close_fixture()
+    windows._views = [views[0]]
+    monkeypatch.setattr("webview.active_window", lambda: views[0].window)
+    proceed, completed = threading.Event(), threading.Event()
+    results = []
+
+    def work():
+        if proceed.wait(2):
+            results.append("synthetic result")
+            completed.set()
+
+    worker = threading.Thread(target=work)
+    worker.start()
+    try:
+        windows._hide_or_retain(views[0].window)
+        proceed.set()
+        assert completed.wait(2)
+        windows.show()
+        assert results == ["synthetic result"]
+        assert not session.closing.is_set()
+        views[0].window.hide.assert_not_called()
+        runtime.stop.assert_not_called()
+        runtime.stop_if_idle.assert_not_called()
+    finally:
+        proceed.set()
+        worker.join(2)
+
+
+def test_hide_does_not_block_synchronous_native_close_callback(monkeypatch):
+    from webview.event import Event
+
+    window = Mock()
+    window.events = SimpleNamespace(
+        loaded=Event(window, True),
+        closing=Event(window, True),
+        closed=Event(window, True),
+    )
+    monkeypatch.setattr("webview.create_window", Mock(return_value=window))
+    session = DesktopSession(Mock(), threading.Event())
+    windows = DesktopWindows(session, Mock())
+    windows.create()
+    windows.tray_changed(True)
+    # Closing still runs the actual native callback, but its deferred hide is
+    # irrelevant to the synchronous GUI-thread/host-lock interleaving.
+    monkeypatch.setattr(windows, "_hide_or_retain", Mock())
+    invoked, released, closed = threading.Event(), threading.Event(), threading.Event()
+
+    def native_hide(_window):
+        invoked.set()
+        assert released.wait(2)
+
+    def native_closing():
+        window.events.closing.set()
+        closed.set()
+
+    monkeypatch.setattr("scopecat_app.desktop.hide_window", native_hide)
+    worker = threading.Thread(target=windows.hide)
+    gui = threading.Thread(target=native_closing)
+    worker.start()
+    try:
+        assert invoked.wait(2)
+        gui.start()
+        assert closed.wait(1), "GUI close callback blocked on the hide owner's lock"
+    finally:
+        released.set()
+        worker.join(2)
+        if gui.ident is not None:
+            gui.join(2)
+    assert not worker.is_alive() and not gui.is_alive()
+
+
+@pytest.mark.parametrize("regained", [False, True])
+def test_tray_loss_during_native_hide_cannot_leave_late_hidden_view(
+    monkeypatch, regained
+):
+    _, _, windows, views = close_fixture()
+    windows._views = views[:1]
+    windows.tray_changed(True)
+    actions = []
+    monkeypatch.setattr(
+        "scopecat_app.desktop.show_window", lambda _window: actions.append("show")
+    )
+    monkeypatch.setattr(windows, "tray_status", Mock())
+
+    def native_hide(_window):
+        windows.tray_changed(False)
+        if regained:
+            windows.tray_changed(True)
+        actions.append("hide")  # Native Invoke finishes after the loss callback.
+
+    monkeypatch.setattr("scopecat_app.desktop.hide_window", native_hide)
+    windows.hide()
+    assert actions == ["show", "hide", "show"]
