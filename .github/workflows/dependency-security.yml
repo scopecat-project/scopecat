@@ -2,58 +2,45 @@ name: Dependency security
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - uv.lock
       - apps/scopecat-ui/pnpm-lock.yaml
       - renovate.json
       - .github/workflows/dependency-security.yml
-      - scripts/dependency_security_report.py
-      - scripts/test_dependency_security_report.py
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
+  security-events: write
 
 jobs:
-  audit:
-    name: Locked dependency report
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Check audit source classification
-        run: python3 -m unittest scripts.test_dependency_security_report
-      - name: Install verified scanner (no project dependencies)
-        shell: bash
-        run: |
-          curl --fail --silent --show-error --location --retry 3 \
-            https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64 \
-            --output "$RUNNER_TEMP/osv-scanner"
-          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  $RUNNER_TEMP/osv-scanner" | sha256sum --check
-          chmod +x "$RUNNER_TEMP/osv-scanner"
-      - name: Audit the two public lockfiles
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/dependency-security"
-          python3 scripts/dependency_security_report.py config uv.lock \
-            > "$RUNNER_TEMP/dependency-security/osv-scanner.toml"
-          status=0
-          "$RUNNER_TEMP/osv-scanner" scan source --no-resolve --all-packages \
-            --config "$RUNNER_TEMP/dependency-security/osv-scanner.toml" \
-            --format json --output-file "$RUNNER_TEMP/dependency-security/osv.json" \
-            --lockfile uv.lock --lockfile apps/scopecat-ui/pnpm-lock.yaml || status=$?
-          # 1 means findings, not an operational failure. Do not hide other errors.
-          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
-            exit "$status"
-          fi
-          python3 scripts/dependency_security_report.py \
-            report "$RUNNER_TEMP/dependency-security/osv.json" >> "$GITHUB_STEP_SUMMARY"
-      - name: Retain public lockfile inventory and findings
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: dependency-security-${{ github.sha }}
-          path: ${{ runner.temp }}/dependency-security/osv.json
-          retention-days: 14
-          if-no-files-found: error
+  pr-audit:
+    name: New dependency findings
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+    with:
+      scan-args: |-
+        --no-resolve
+        --all-packages
+        --lockfile=uv.lock
+        --lockfile=apps/scopecat-ui/pnpm-lock.yaml
+      fail-on-vuln: false
+      # Fork/Dependabot tokens can be read-only. Keep their scan artifacts without
+      # requesting elevated execution via pull_request_target or extra secrets.
+      upload-sarif: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+
+  baseline:
+    name: Full dependency baseline
+    if: github.event_name == 'workflow_dispatch'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+    with:
+      ref: ${{ github.sha }}
+      scan-args: |-
+        --no-resolve
+        --all-packages
+        --lockfile=uv.lock
+        --lockfile=apps/scopecat-ui/pnpm-lock.yaml
+      fail-on-vuln: false
+      upload-sarif: true
