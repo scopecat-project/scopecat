@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import json
-import sys
+import tomllib
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
@@ -38,6 +39,36 @@ class Report(TypedDict):
     results: list[Result]
 
 
+class LockedPackage(TypedDict):
+    name: str
+    version: str
+    source: dict[str, str]
+
+
+def workspace_config(lockfile: Path) -> str:
+    """Exclude exact local-source identities with native OSV overrides."""
+    packages = cast(
+        "list[LockedPackage]", tomllib.loads(lockfile.read_text())["package"]
+    )
+    lines = ["# Generated from uv.lock source metadata; not vulnerability exceptions."]
+    for package in packages:
+        source = package["source"]
+        if "virtual" in source:
+            continue
+        if "editable" not in source and "directory" not in source:
+            continue
+        lines += [
+            "",
+            "[[PackageOverrides]]",
+            f"name = {json.dumps(package['name'])}",
+            f"version = {json.dumps(package['version'])}",
+            'ecosystem = "PyPI"',
+            "ignore = true",
+            'reason = "Local workspace source, not the same-named PyPI distribution"',
+        ]
+    return "\n".join(lines) + "\n"
+
+
 def summarize(report: Report) -> str:
     sources = report.get("results", [])
     lines = [
@@ -48,7 +79,7 @@ def summarize(report: Report) -> str:
             "Review findings before dependency merges."
         ),
         "",
-        "| Lockfile | Extracted packages | Affected packages | Advisory groups |",
+        "| Lockfile | Audited packages | Affected packages | Advisory groups |",
         "| --- | ---: | ---: | ---: |",
     ]
     findings: list[str] = []
@@ -75,12 +106,21 @@ def summarize(report: Report) -> str:
         "",
         (
             "Counts include development, optional and transitive locked packages; "
-            "they do not establish runtime reachability. Python workspace packages "
-            "may be extracted as PyPI identities and need source-aware triage."
+            "they do not establish runtime reachability. Local Python workspace "
+            "identities "
+            "are excluded using native OSV overrides derived from uv.lock sources."
         ),
     ]
     return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":
-    print(summarize(cast("Report", json.loads(Path(sys.argv[1]).read_text()))), end="")
+    parser = argparse.ArgumentParser(description=__doc__)
+    _ = parser.add_argument("command", choices=("config", "report"))
+    _ = parser.add_argument("path", type=Path)
+    args = parser.parse_args()
+    path = cast("Path", args.path)
+    if cast("str", args.command) == "config":
+        print(workspace_config(path), end="")
+    else:
+        print(summarize(cast("Report", json.loads(path.read_text()))), end="")

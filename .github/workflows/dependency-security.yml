@@ -8,6 +8,7 @@ on:
       - renovate.json
       - .github/workflows/dependency-security.yml
       - scripts/dependency_security_report.py
+      - scripts/test_dependency_security_report.py
   workflow_dispatch:
 
 permissions:
@@ -22,6 +23,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check audit source classification
+        run: python3 -m unittest scripts.test_dependency_security_report
       - name: Install verified scanner (no project dependencies)
         shell: bash
         run: |
@@ -34,8 +37,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/dependency-security"
+          python3 scripts/dependency_security_report.py config uv.lock \
+            > "$RUNNER_TEMP/dependency-security/osv-scanner.toml"
           status=0
           "$RUNNER_TEMP/osv-scanner" scan source --no-resolve --all-packages \
+            --config "$RUNNER_TEMP/dependency-security/osv-scanner.toml" \
             --format json --output-file "$RUNNER_TEMP/dependency-security/osv.json" \
             --lockfile uv.lock --lockfile apps/scopecat-ui/pnpm-lock.yaml || status=$?
           # 1 means findings, not an operational failure. Do not hide other errors.
@@ -43,7 +49,7 @@ jobs:
             exit "$status"
           fi
           python3 scripts/dependency_security_report.py \
-            "$RUNNER_TEMP/dependency-security/osv.json" >> "$GITHUB_STEP_SUMMARY"
+            report "$RUNNER_TEMP/dependency-security/osv.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain public lockfile inventory and findings
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

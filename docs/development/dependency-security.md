@@ -33,6 +33,14 @@ files. Only these public-repository lockfiles are eligible. Never extend this
 workflow to private checkouts, private indexes or private package identities
 without reviewing the data boundary first.
 
+Before scanning, a small standard-library helper reads `uv.lock` source metadata
+and generates native OSV `PackageOverrides` matching the exact name, version and
+PyPI ecosystem of editable/directory packages. These local identities are excluded
+from advisory reporting; no package-name prefix, external registry package or
+vulnerability ID is blanket-ignored. The native extractor still handles the lock
+formats and OSV handles all matching/filtering. A regression test ensures local
+sources are excluded while similarly named registry packages remain eligible.
+
 JSON inventory/findings are retained for 14 days with a job summary. Findings
 (exit 1) are advisory during baseline triage; operational errors fail this
 separate job. The summary rejects absent/empty lockfile inventories. A green
@@ -71,14 +79,16 @@ verified every package/version pair, not only direct manifest dependencies:
 
 | Input | Lock inventory | OSV extraction |
 | --- | --- | --- |
-| Python | 178 PyPI records, 8 local versioned packages, 1 virtual root | 186; virtual root omitted |
+| Python | 178 PyPI records, 8 local versioned packages, 1 virtual root | 186 extracted; 8 exact local identities filtered; 178 reported |
 | pnpm package-manager document | 15 package/version pairs | All 15 |
 | pnpm UI document | 287 package/version pairs | All 287 |
 
 The Python registry is `https://pypi.org/simple`; pnpm resolutions use integrity
-hashes with no private tarball/registry overrides. OSV treats the eight local
-versioned Python packages as PyPI identities: triage any future hits against their
-actual local source, rather than replacing them with public registry packages.
+hashes with no private tarball/registry overrides. OSV initially extracts the eight
+local versioned Python packages as PyPI identities; the generated source-based
+native overrides remove them from the published inventory/findings. The final
+178 reported Python identities exactly match the registry subset of `uv.lock`.
+All 302 npm identities and all 41 baseline advisory groups remain unchanged.
 
 | Locked package | Baseline advisory groups | Initial assessment / next review |
 | --- | ---: | --- |
