@@ -56,20 +56,28 @@ support for a package manager's version-update feature. GitHub's
 [2026-10-20 announcement](https://github.blog/changelog/2026-10-20-dependabot-now-supports-npm-12-pnpm-11-and-12-and-bun-1-4/)
 explicitly says pnpm two-document lockfiles are not yet detected by the graph and
 will not generate alerts/security updates. This repository uses that exact format.
-The [graph ecosystem table](https://docs.github.com/en/code-security/reference/supply-chain-security/dependency-graph-supported-package-ecosystems)
-also does not list `uv.lock`; do not infer locked Python transitive coverage from
-`pyproject.toml` or Dependabot's support for uv version updates.
+After the administrator enabled the graph/alerts, the SBOM generated at
+`2026-10-23T08:01:34Z` was compared with the actual locked package/version pairs:
 
-On 2026-10-23 the repository SBOM endpoint returned HTTP 404 and GraphQL
-`dependencyGraphManifests` returned `totalCount: 0, nodes: []`. That is not a usable
-inventory comparison or proof of why the graph is empty. After enabling the graph,
-export its SBOM and compare package/version pairs against all 178 Python registry
-records and both pnpm documents (15 + 287 pairs at this baseline). Reassess this
-PR audit when GitHub's parser support and actual inventory close those gaps.
-Meanwhile it gives reviewers evidence for the proposed lockfile before merging;
-it does not create a second fix-PR owner. No recurring scan is introduced while
-repository graph coverage is being established. Newly disclosed issues on an
-unchanged, unsupported lockfile require a manual audit until that gap is resolved.
+| Registry inventory | Exact versions in GitHub SBOM | Exact versions in OSV |
+| --- | ---: | ---: |
+| Python uv registry packages | 178 / 178 | 178 / 178 |
+| pnpm manager document | 15 / 15 | 15 / 15 |
+| pnpm UI document | 0 / 287 | 287 / 287 |
+
+Python main-branch lock coverage is therefore verified, despite `uv.lock` not
+being listed in the current documentation table. The initial SBOM 404 and empty
+GraphQL manifest list were observations before setup, not a parser diagnosis.
+After setup GraphQL lists 21 manifests but reports zero dependency counts for all
+of them; those counts contradict the SBOM and must not be used as coverage proof.
+
+Keep Dependabot alerts for the default branch. This workflow checks the versions
+proposed in a PR before merge, and additionally fills the demonstrated pnpm UI
+gap. It does not create a second fix-PR owner or recurring scan. Reassess the pnpm
+check when GitHub supports both documents and an SBOM set comparison confirms it;
+retain Python scanning only while its pre-merge evidence remains useful. Newly
+disclosed issues on an unchanged unsupported lockfile require a manual audit
+until graph coverage is fixed (or a separately reviewed monitoring policy).
 
 ## Verified initial inventory and triage
 
@@ -119,28 +127,28 @@ findings with explicit owners and expiry dates; then consider blocking only new
 high/critical findings introduced by dependency-changing PRs. Do not add blanket
 ignores or force unrelated PRs to resolve this whole baseline.
 
-## Administrator setup still needed
+## Repository settings and remaining verification
 
-The alerts API explicitly returned **Dependabot alerts are disabled**. The
-integration cannot read the administrative vulnerability-alert/security-update
-settings (HTTP 403), and repository metadata omitted `security_and_analysis`.
-Therefore dependency graph state, Dependabot security-update state and Renovate's
-installed permissions have not been confirmed.
+The administrator has enabled Dependency graph and Dependabot alerts and left
+Dependabot security updates off. The now-readable SBOM confirms graph population.
+Earlier, the alerts endpoint explicitly returned **Dependabot alerts are disabled**;
+after setup it returns HTTP 403 **Resource not accessible by integration** instead.
+The current audit integration cannot list alerts; that does not establish whether
+the separately installed Renovate app can read them. No additional permissions
+are needed for the OSV workflow.
 
-A repository administrator should inspect **Settings → Advanced Security**:
+Verify the installed Renovate app has **read** access to Dependabot alerts, and
+check its next run for successful alert ingestion and lockfile mapping. Only
+approve that app permission if it is missing. Keep **Dependabot security updates**
+off so Renovate remains the single automated fix-PR owner. One enabled auto-triage
+rule was reported in settings; its identity/actions have not been inspected, so
+no claim is made about whether it hides alerts or creates update PRs. Inspect it
+before relying on that policy. No setting or permission was changed by this PR.
 
-1. Ensure Dependency graph is enabled and enable Dependabot alerts.
-2. Verify the installed Renovate app already has read access to Dependabot alerts;
-   grant only that permission if missing, through the app's normal approval UI.
-3. Keep **Dependabot security updates** disabled (disable it if currently enabled)
-   so Renovate is the single automated fix-PR owner. Alerts remain enabled.
-4. After the next Renovate run, verify alert ingestion and the affected lockfile
-   mapping in its logs. Do not assume all transitive alerts can produce a fix PR:
-   manager/lockfile mapping and available resolutions still constrain automation.
-
-No settings or permissions were changed by this PR. The OSV workflow works
-independently of these settings. Renovate's experimental direct-dependency OSV
-alerts are not used as the audit or as a second PR source.
+Automatic dependency submission is not needed to obtain the verified Python
+inventory. Do not enable another submission workflow or grant write access merely
+to work around the pnpm gap in this batch. Renovate's experimental direct-only
+OSV alerts are not used as the audit or as a second fix-PR source.
 
 References: [OSV supported lockfiles](https://google.github.io/osv-scanner/supported-languages-and-lockfiles/),
 [OSV usage](https://google.github.io/osv-scanner/usage/),
