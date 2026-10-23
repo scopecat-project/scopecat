@@ -17,8 +17,6 @@
   "extends": [
     "config:best-practices",
     ":semanticCommitTypeAll(chore)",
-    ":automergePatch",
-    ":automergeStableNonMajor",
     ":prHourlyLimitNone",
     "helpers:pinGitHubActionDigestsToSemver",
     "customManagers:githubActionsVersions"
@@ -147,5 +145,15 @@
       "packageNameTemplate": "uv-build",
       "versioningTemplate": "pep440"
     }
-  ]
+  ],
+  "automerge": false,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": false,
+    "minimumReleaseAge": "0 days",
+    "addLabels": [
+      "security"
+    ],
+    "vulnerabilityFixStrategy": "lowest"
+  }
 }

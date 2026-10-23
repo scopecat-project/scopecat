@@ -65,6 +65,7 @@ uv run --locked --package reference-lab --group test pytest testing/reference_la
 - [Repository map](repository-map.md): package ownership and generated code.
 - [Daily source development](public-preview.md#daily-source-desktop): run a checkout with native UI and HMR.
 - [Release preparation and previews](public-preview.md#numbered-releases): distribute reviewed artifacts.
+- [Dependency security](dependency-security.md): locked inventory audits and reviewed fixes.
 - [Test feedback](test-feedback.md): focused checks, CI and acceptance profiles.
 - [Reference fixtures](reference-fixtures.md): shared evidence and fixture ownership.
 - [Workflow evaluations](workflow-evaluations.md): user goals, representative evidence and gaps.
