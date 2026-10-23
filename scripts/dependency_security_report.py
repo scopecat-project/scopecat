@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import tomllib
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
@@ -45,11 +46,21 @@ class LockedPackage(TypedDict):
     source: dict[str, str]
 
 
+def package_identity(package: LockedPackage) -> tuple[str, str]:
+    """Normalize names as PyPI does before matching an exact version."""
+    return re.sub(r"[-_.]+", "-", package["name"]).lower(), package["version"]
+
+
 def workspace_config(lockfile: Path) -> str:
     """Exclude exact local-source identities with native OSV overrides."""
     packages = cast(
         "list[LockedPackage]", tomllib.loads(lockfile.read_text())["package"]
     )
+    registry = {
+        package_identity(package)
+        for package in packages
+        if "registry" in package["source"]
+    }
     lines = ["# Generated from uv.lock source metadata; not vulnerability exceptions."]
     for package in packages:
         source = package["source"]
@@ -57,6 +68,10 @@ def workspace_config(lockfile: Path) -> str:
             continue
         if "editable" not in source and "directory" not in source:
             continue
+        if package_identity(package) in registry:
+            raise ValueError(
+                "Local/registry identity collision; refusing an OSV ignore"
+            )
         lines += [
             "",
             "[[PackageOverrides]]",

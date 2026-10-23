@@ -40,6 +40,8 @@ from advisory reporting; no package-name prefix, external registry package or
 vulnerability ID is blanket-ignored. The native extractor still handles the lock
 formats and OSV handles all matching/filtering. A regression test ensures local
 sources are excluded while similarly named registry packages remain eligible.
+An exact local/registry name-version collision (using PyPI name normalization)
+fails before scanning, because native overrides cannot distinguish sources.
 
 JSON inventory/findings are retained for 14 days with a job summary. Findings
 (exit 1) are advisory during baseline triage; operational errors fail this

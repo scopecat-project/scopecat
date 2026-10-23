@@ -46,6 +46,22 @@ source = { registry = "https://pypi.org/simple" }
             }
             assert all(p["ecosystem"] == "PyPI" and p["ignore"] for p in overrides)
 
+    def test_exact_registry_collision_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            lockfile = Path(directory) / "uv.lock"
+            _ = lockfile.write_text("""
+[[package]]
+name = "Local_Author"
+version = "0.1.0"
+source = { editable = "packages/author" }
+[[package]]
+name = "local-author"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+""")
+            with self.assertRaisesRegex(ValueError, "identity collision"):
+                _ = workspace_config(lockfile)
+
     def test_missing_inventory_is_not_a_clean_report(self) -> None:
         with self.assertRaisesRegex(ValueError, "Missing or empty"):
             _ = summarize({"results": []})
