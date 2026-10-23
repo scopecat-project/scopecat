@@ -124,6 +124,83 @@
       ],
       "groupName": null,
       "automerge": false
+    },
+    {
+      "description": "Automerge only approved internal UI and test-tool patch/minor updates; isolate them from inherited mixed groups",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@tanstack/react-query",
+        "lucide-react",
+        "@base-ui/react",
+        "@types/node",
+        "oxlint",
+        "oxlint-tsgolint",
+        "oxfmt",
+        "vitest",
+        "jsdom",
+        "@testing-library/jest-dom",
+        "@testing-library/react"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": null,
+      "groupSlug": null,
+      "automerge": true
+    },
+    {
+      "description": "Keep the React runtime and DOM renderer coordinated without enrolling React types or other React packages",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "react",
+        "react-dom"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "React runtime"
+    },
+    {
+      "description": "Keep type-aware oxlint and its declared oxlint-tsgolint peer coordinated; no other Oxc or runtime packages",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "oxlint",
+        "oxlint-tsgolint"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Oxlint tooling"
+    },
+    {
+      "description": "Automerge ruff patch/minor updates including 0.x minors only when existing checks pass without source or rule fixes",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchDatasources": [
+        "pypi"
+      ],
+      "matchPackageNames": [
+        "ruff"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": null,
+      "groupSlug": null,
+      "automerge": true
     }
   ],
   "pep621": {
