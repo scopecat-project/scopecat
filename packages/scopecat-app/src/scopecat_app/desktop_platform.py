@@ -213,7 +213,12 @@ def start_tray(
     def stop() -> None:
         stopped.set()
         try:
-            schedule(lambda: _stop_tray(tray))
+            # webview.start returns on the main thread after the native loop
+            # ends; another queued Cocoa callback would never be serviced.
+            if threading.current_thread() is threading.main_thread():
+                _stop_tray(tray)
+            else:
+                schedule(lambda: _stop_tray(tray))
         except Exception:
             logger.warning("Optional tray cleanup scheduling failed", exc_info=True)
 

@@ -75,7 +75,6 @@ def test_cocoa_tray_is_created_and_shown_on_the_main_loop(
     setup(tray)
     assert not tray.visible  # The pystray setup worker must not touch Cocoa.
     stop()
-    callbacks.pop()()
     tray.stop.assert_called_once()
 
 
