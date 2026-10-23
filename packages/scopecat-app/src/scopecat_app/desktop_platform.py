@@ -66,53 +66,137 @@ def install_window_menu() -> None:
     AppHelper.callAfter(install)
 
 
-def start_tray(create: Callable[[], Icon]) -> Callable[[], None]:
-    """Keep Cocoa status item creation and visibility on the running main loop."""
-    if sys.platform != "darwin":
-        tray = create()
-        tray.run_detached()
+def _tray_is_available(tray: Icon) -> bool:
+    """Check the native entry, not pystray's requested visibility flag."""
+    if sys.platform == "darwin":
+        button = tray._status_item.button()
+        return bool(button.window() is not None and not button.isHidden())
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
 
-        def stop() -> None:
-            tray.visible = False
-            tray.stop()
+        class Identifier(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("hWnd", wintypes.HWND),
+                ("uID", wintypes.UINT),
+                ("guidItem", ctypes.c_byte * 16),
+            ]
 
-        return stop
+        # Pinned pystray 0.19.5 passes hID (not the structure's uID) to
+        # NOTIFYICONDATAW, leaving its actual uID at zero. HWND disambiguates
+        # icons. Keep this paired with the pinned backend when upgrading it.
+        identifier = Identifier(ctypes.sizeof(Identifier), tray._hwnd, 0)
+        rect = wintypes.RECT()
+        query = ctypes.windll.shell32.Shell_NotifyIconGetRect
+        query.argtypes = [ctypes.POINTER(Identifier), ctypes.POINTER(wintypes.RECT)]
+        query.restype = ctypes.c_long
+        return bool(
+            query(ctypes.byref(identifier), ctypes.byref(rect)) == 0
+            and rect.right > rect.left
+            and rect.bottom > rect.top
+        )
+    return False
 
-    from PyObjCTools import AppHelper
 
-    mac_tray: Icon | None = None
-    stopped = False
+def _stop_tray(tray: Icon | None) -> None:
+    if tray is not None:
+        try:
+            try:
+                tray.visible = False
+            finally:
+                tray.stop()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Optional tray cleanup failed", exc_info=True
+            )
 
-    def setup(_icon: Icon) -> None:
+
+def start_tray(
+    create: Callable[[], Icon],
+    changed: Callable[[bool], None] = lambda _available: None,
+) -> Callable[[], None]:
+    """An optional tray must never prevent the window/service from starting.
+
+    Linux pystray backends cannot reliably acknowledge a usable host. Keep the
+    window there rather than importing a backend that may open X11 at import time.
+    Cocoa work, including failures and cleanup, stays on its native event loop.
+    """
+    logger = logging.getLogger(__name__)
+    stopped = threading.Event()
+    tray: Icon | None = None
+
+    def report() -> None:
+        try:
+            available = tray is not None and tray.visible and _tray_is_available(tray)
+        except Exception:
+            available = False
+            logger.info("Optional tray availability could not be confirmed")
+        if not stopped.is_set():
+            changed(available)
+
+    def setup(icon: Icon) -> None:
+        if stopped.is_set():
+            return
+        try:
+            icon.visible = True
+            report()
+        except Exception:
+            changed(False)
+            logger.warning("Optional tray initialization failed", exc_info=True)
+            _stop_tray(tray)
+
+    def no_setup(_icon: Icon) -> None:
         pass
 
     def ready() -> None:
-        nonlocal mac_tray
-        if stopped:
+        nonlocal tray
+        if stopped.is_set():
             return
-        mac_tray = create()
-        # Default setup changes Cocoa visibility from a worker thread.
-        mac_tray.run_detached(setup=setup)
-        mac_tray.visible = True
-        # pystray has no public template-image option. Its Cocoa image is created
-        # by the first show; let macOS supply the menu-bar appearance and tint.
-        mac_tray._icon_image.setTemplate_(True)
-        logging.getLogger(__name__).info(
-            "Menu bar item created: image=%s bundle=%s",
-            mac_tray._icon_image.size(),
-            macos_bundle_identifier(),
-        )
+        try:
+            tray = create()  # Includes optional imports and image loading.
+            if sys.platform == "darwin":
+                tray.run_detached(setup=no_setup)
+                tray.visible = True
+                tray._icon_image.setTemplate_(True)
+                report()
+            else:
+                tray.run_detached(setup=setup)
+        except Exception:
+            changed(False)
+            logger.warning("Optional tray initialization failed", exc_info=True)
+            _stop_tray(tray)
 
-    AppHelper.callAfter(ready)
+    if sys.platform not in {"darwin", "win32"}:
+        changed(False)
+        logger.info("No tray: backend cannot confirm a usable system entry")
+        return stopped.set
 
-    def stop_mac() -> None:
-        nonlocal stopped
-        stopped = True
-        if mac_tray is not None:
-            mac_tray.visible = False
-            mac_tray.stop()
+    def schedule(action: Callable[[], None]) -> None:
+        action()
 
-    return stop_mac
+    try:
+        if sys.platform == "darwin":
+            from PyObjCTools import AppHelper
+
+            schedule = AppHelper.callAfter
+        schedule(ready)
+    except Exception:
+        changed(False)
+        logger.warning("Optional tray scheduling failed", exc_info=True)
+        return stopped.set
+
+    def monitor() -> None:
+        while not stopped.wait(1):
+            schedule(report)
+
+    threading.Thread(target=monitor, daemon=True).start()
+
+    def stop() -> None:
+        stopped.set()
+        schedule(lambda: _stop_tray(tray))
+
+    return stop
 
 
 def install_reopen_handler(

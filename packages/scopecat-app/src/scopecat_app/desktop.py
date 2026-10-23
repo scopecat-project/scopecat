@@ -664,6 +664,7 @@ class DesktopWindows:
         self._session = session
         self._prepare = prepare
         self._views: list[DesktopView] = []
+        self._tray_available = False
         self._lock = threading.RLock()
         session.connection_changed = self._reconnect
         self._preflight_lock = threading.Lock()
@@ -821,11 +822,13 @@ class DesktopWindows:
         try:
             with self.preflight(view), self._session.operation(allow_files=True):
                 with self._lock:
-                    if sum(not item.close_authorized for item in self._views) <= 1:
-                        hide_window(view.window)
-                        return
-                    self._validate_certificate()
-                    view.close_authorized = True
+                    last = sum(not item.close_authorized for item in self._views) <= 1
+                    if not last:
+                        self._validate_certificate()
+                        view.close_authorized = True
+                if last:
+                    self._hide_or_retain(view.window)
+                    return
                 try:
                     view.window.destroy()
                 except Exception:
@@ -934,7 +937,7 @@ class DesktopWindows:
                         view.close_ready.set()
 
             window.events.loaded += page_loaded
-            hide, request_quit = _window_close_handlers(
+            _hide, request_quit = _window_close_handlers(
                 window, self._session.closing, loaded
             )
             view = DesktopView(window, api, loaded, request_quit, location)
@@ -964,7 +967,10 @@ class DesktopWindows:
                         return False
                 except ValueError:
                     pass
-                return hide()
+                threading.Thread(
+                    target=self._hide_or_retain, args=(window,), daemon=True
+                ).start()
+                return False
 
             def closed() -> None:
                 with self._lock:
@@ -1045,11 +1051,41 @@ class DesktopWindows:
             "window.dispatchEvent(new Event('scopecat:find'));"
         )
 
+    def tray_changed(self, available: bool) -> None:
+        with self._lock:
+            previous = self._tray_available
+            self._tray_available = available
+        if previous and not available and not self._session.closing.is_set():
+            self.show()
+
+    def tray_status(self) -> None:
+        with self._lock:
+            available = self._tray_available
+        self._command_window().create_confirmation_dialog(
+            "后台运行",
+            "系统托盘可用。关闭最后一个窗口后，可从托盘重新打开或退出。"
+            if available
+            else "系统托盘不可用或尚未确认。最后一个窗口将保持打开，"
+            "以便返回正在进行的工作。可最小化窗口；"
+            "要退出，请选择“文件 → 退出 Scopecat”。"
+            "关闭窗口不会停止测量。",
+        )
+
+    def _hide_or_retain(self, window: webview.Window) -> None:
+        with self._lock:
+            if self._tray_available:
+                hide_window(window)
+                return
+        show_window(window)
+        self.tray_status()
+
     def hide(self) -> None:
         with self._lock:
-            views = tuple(self._views)
-        for view in views:
-            hide_window(view.window)
+            if self._tray_available:
+                for view in self._views:
+                    hide_window(view.window)
+                return
+        self.tray_status()
 
     def request_quit(self) -> None:
         _ = self.latest.request_quit()
@@ -1092,9 +1128,7 @@ def run(
     session: DesktopSession | None = None,
 ) -> None:
     # Optional dependency: command-line/service installations stay headless.
-    import pystray
     import webview
-    from PIL import Image
     from webview.menu import Menu, MenuAction
 
     home.mkdir(parents=True, exist_ok=True)
@@ -1141,11 +1175,13 @@ def run(
                     "暂时无法新建窗口", str(error)
                 )
 
-        tray_name = "tray-template.png" if sys.platform == "darwin" else "tray.png"
-        with Image.open(Path(__file__).with_name("icons") / tray_name) as image:
-            icon_image = image.convert("RGBA")
-
         def create_tray() -> Icon:
+            import pystray
+            from PIL import Image
+
+            tray_name = "tray-template.png" if sys.platform == "darwin" else "tray.png"
+            with Image.open(Path(__file__).with_name("icons") / tray_name) as image:
+                icon_image = image.convert("RGBA")
             return pystray.Icon(
                 "Scopecat",
                 icon_image,
@@ -1170,7 +1206,7 @@ def run(
             try:
                 # Cocoa status items need the application to have finished
                 # launching; a queued callback before webview.start is too early.
-                stop_tray = start_tray(create_tray)
+                stop_tray = start_tray(create_tray, windows.tray_changed)
                 install_window_menu()
                 install_reopen_handler(
                     windows.show, windows.request_quit, closing.is_set
@@ -1221,6 +1257,7 @@ def run(
                         [
                             MenuAction(f"打开文件…（{modifier}O）", windows.open_file),
                             MenuAction("新建窗口", new_window_from_menu),
+                            MenuAction("后台运行状态…", windows.tray_status),
                             MenuAction(
                                 f"退出 Scopecat（{modifier}Q）", windows.request_quit
                             ),

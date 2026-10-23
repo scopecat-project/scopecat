@@ -131,6 +131,7 @@ def test_native_windows_share_backend_and_keep_navigation(
         'window.location.replace("http://localhost:4321/?run=B#runs");'
     )
 
+    windows.tray_changed(True)
     # Tray hide/open is application-wide: neither retained view may be stranded.
     shown = Mock()
     monkeypatch.setattr("scopecat_app.desktop.show_window", shown)
@@ -679,6 +680,7 @@ def test_deferred_exit_obtains_fresh_all_view_preflight():
 
 def test_close_reserves_last_view_until_actual_closed_event():
     runtime, session, windows, views = close_fixture()
+    windows.tray_changed(True)
     for view in views:
         acknowledge(view)
     # Fake destroy deliberately does not emit closed yet.
@@ -852,3 +854,86 @@ def test_post_commit_reload_aborts_close_and_allows_existing_retry(monkeypatch, 
     retry.join(5)
     assert session.finish_exit(windows.destroy) is True
     assert not windows._views
+
+
+@pytest.mark.parametrize("available", [False, True])
+def test_last_reserved_view_retains_work_and_can_reopen(monkeypatch, available):
+    runtime, session, windows, views = close_fixture()
+    monkeypatch.setattr("webview.active_window", lambda: views[1].window)
+    windows.tray_changed(available)
+    for view in views:
+        acknowledge(view)
+    windows._close_view(views[0])
+    windows._close_view(views[1])
+    views[1].window.destroy.assert_not_called()
+    assert views[1].window.hide.call_count == int(available)
+    assert views[1].window.create_confirmation_dialog.call_count == int(not available)
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+    windows.show()
+    views[1].window.show.assert_called()
+
+
+def test_tray_loss_restores_hidden_views_without_stopping_work():
+    runtime, session, windows, views = close_fixture()
+    windows.tray_changed(True)
+    windows.hide()
+    windows.tray_changed(False)
+    for view in views:
+        view.window.hide.assert_called_once()
+        view.window.show.assert_called()
+    assert not session.closing.is_set()
+    runtime.stop.assert_not_called()
+    runtime.stop_if_idle.assert_not_called()
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_desktop_starts_service_with_optional_import_unavailable(
+    monkeypatch, tmp_path, platform
+):
+    import builtins
+    import sys
+
+    from webview.event import Event
+
+    from scopecat_app.desktop import run
+
+    monkeypatch.setattr(sys, "platform", platform)
+    original_import = builtins.__import__
+    attempted = []
+
+    def import_module(name, *args, **kwargs):
+        if name == "pystray":
+            attempted.append(name)
+            raise ImportError("optional backend unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_module)
+    window = Mock()
+    window.events = SimpleNamespace(
+        loaded=Event(window, True),
+        closing=Event(window, True),
+        closed=Event(window, True),
+    )
+    monkeypatch.setattr("webview.create_window", Mock(return_value=window))
+    runtime = Mock()
+    session = DesktopSession(runtime, threading.Event())
+
+    def start_service():
+        session.closing.set()
+        return SimpleNamespace(base_url="http://localhost:1234")
+
+    runtime.start.side_effect = start_service
+    monkeypatch.setattr(session, "finish_exit", lambda _destroy: True)
+
+    def start_native(supervise, **kwargs):
+        assert kwargs["menu"]  # Explicit Quit/status remain native menu actions.
+        window.events.loaded.set()
+        supervise()
+
+    monkeypatch.setattr("webview.start", start_native)
+    run(tmp_path, prepare=Mock(), session=session)
+    runtime.start.assert_called_once()
+    window.load_html.assert_not_called()
+    assert attempted == (["pystray"] if platform == "win32" else [])
