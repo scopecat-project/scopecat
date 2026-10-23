@@ -1,0 +1,54 @@
+name: GitHub Actions security
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '**/action.yml'
+      - '**/action.yaml'
+      - '**/zizmor.yml'
+      - '**/zizmor.yaml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '**/action.yml'
+      - '**/action.yaml'
+      - '**/zizmor.yml'
+      - '**/zizmor.yaml'
+  # merge_group has no path filters; scan queue commits without adding a gate.
+  merge_group:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: zizmor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
+
+jobs:
+  zizmor:
+    name: zizmor
+    if: github.repository == 'scopecat-project/scopecat' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # SARIF reports findings without failing the job; operational errors still fail.
+      # This is advisory initially: do not make it a required check without triage.
+      - name: Scan workflows and local actions
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          version: '1.31.1'
+          persona: regular
+          advanced-security: true
