@@ -254,7 +254,7 @@ are exact execution/provenance data, not another editable configuration authorit
 Procedure, schedule, calibration, publication and notebook callbacks belong to the
 full application loaded by the project worker or notebook, not the daemon's
 lightweight bootstrap. Editing Python source does not mutate a saved revision.
-See [configuration ownership](../configuration-ownership.md).
+See [configuration ownership](configuration-ownership.md).
 
 The backend entry is imported only by the instrument worker. The daemon sees its
 serializable catalog and opaque handles.

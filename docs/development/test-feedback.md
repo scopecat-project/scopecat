@@ -85,7 +85,9 @@ gate. The two Python shards use two workers each and retain diagnostics.
 The feedback target is under five minutes from the first job start to the gate,
 excluding runner queues. Record the run URL, revision and slowest job when measuring
 it; it is not a timeout or permission to conceal failures with retries. See
-[CI feedback cost](ci-feedback-cost.md) for measurements and tradeoffs, and
+[the #914 experiment](https://github.com/scopecat-project/scopecat/pull/914) and its
+[fixed measurements](https://github.com/scopecat-project/scopecat/blob/5c8cdc30d812fa4484d8fd1af3a5b5f30aca133e/docs/development/ci-feedback-cost.md) for the historical
+latency/runner-cost tradeoff; these are not current performance guarantees. See
 [#523](https://github.com/scopecat-project/scopecat/issues/523) for first-use profiling.
 
 [Full acceptance](https://github.com/scopecat-project/scopecat/blob/main/.github/workflows/acceptance.yml)
