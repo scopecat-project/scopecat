@@ -33,8 +33,8 @@ export function SubmittedWork({
           </>
         ) : (
           <p className="rounded-md border border-line p-4 text-text-dim">
-            Select submitted work to inspect its progress, resource waits and actions here. Your
-            monitor keeps its selected task. Closing this inspection leaves background work running.
+            Select a task to inspect. Your monitor keeps its selected task; closing inspection
+            leaves work running.
           </p>
         )}
       </div>

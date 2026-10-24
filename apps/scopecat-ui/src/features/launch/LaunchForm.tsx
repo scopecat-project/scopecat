@@ -359,10 +359,6 @@ export function LaunchForm({
       <section aria-label="Inputs for this run" className="space-y-2 border-t border-line pt-2">
         <div>
           <h4 className="font-semibold">Inputs for this run</h4>
-          <p className="text-sm text-text-dim">
-            Choose fixed values, declared defaults or scans where available. These inputs belong to
-            this preparation; editing them does not publish a parameter version.
-          </p>
         </div>
         <fieldset disabled={pending === "submit" || !recovery.ready}>
           <ControlFields

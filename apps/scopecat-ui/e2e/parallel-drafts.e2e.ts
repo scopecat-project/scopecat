@@ -145,7 +145,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByLabel("Frequency points").fill("2");
     await saved(page);
     await expect(
-      page.getByText("Author code refreshed. Preview the updated experiment before starting.", {
+      page.getByText("Author code refreshed.", {
         exact: true,
       }),
     ).toBeVisible();

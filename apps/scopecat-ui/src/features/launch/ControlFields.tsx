@@ -327,10 +327,14 @@ export function ControlFields({
         </fieldset>
       ))}
       {controls.some((control) => control.scannable) && (
-        <p className="text-sm">
-          Changing source replaces its values. Fixed value starts from the declared default. Project
-          constraints are checked during preview and before admission.
-        </p>
+        <details className="text-xs text-text-dim">
+          <summary className="cursor-pointer">Source and validation details</summary>
+          <p>
+            Changing source replaces its values. Fixed value starts from the declared default.
+            Project constraints are checked during preview and before admission. Editing inputs does
+            not publish a parameter version.
+          </p>
+        </details>
       )}
     </div>
   );

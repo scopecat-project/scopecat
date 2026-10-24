@@ -123,9 +123,10 @@ export function DraftPicker() {
           Reopen this saved draft
         </a>
       )}
-      <p className="text-xs text-text-dim">
-        Draft edits stay separate from frozen submissions; copies never start acquisition.
-      </p>
+      <details className="text-xs text-text-dim">
+        <summary className="cursor-pointer">Draft details</summary>
+        <p>Draft edits stay separate from frozen submissions; copies never start acquisition.</p>
+      </details>
       {drafts.error && (
         <p role="alert">
           Saved drafts unavailable. Your current input remains here.{" "}

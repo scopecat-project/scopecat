@@ -138,7 +138,7 @@ function AuthorRefreshPanel({
       >
         {busy ? "Preparing author code…" : "Refresh author code"}
       </button>
-      {operation.data && (
+      {operation.data && !(compact && synchronized === identity) && (
         <p role="status">
           {operation.data.status}: {operation.data.phase}
           {!terminal(operation.data.status) &&
@@ -150,9 +150,11 @@ function AuthorRefreshPanel({
       )}
       {identity && synchronized === identity && (
         <p role="status">
-          {context === "analysis"
-            ? "Author code refreshed. Inspect compatible data before fitting with this code."
-            : "Author code refreshed. Preview the updated experiment before starting."}
+          {compact
+            ? "Author code refreshed."
+            : context === "analysis"
+              ? "Author code refreshed. Inspect compatible data before fitting with this code."
+              : "Author code refreshed. Preview the updated experiment before starting."}
         </p>
       )}
       {busy && (
@@ -178,6 +180,7 @@ function AuthorRefreshPanel({
       {(identity || state.data?.active) && (
         <details className="text-xs text-text-dim">
           <summary>Source revision details</summary>
+          {compact && <p>Preview the updated experiment before starting.</p>}
           {identity && <p className="break-all">Preparation: {identity}</p>}
           {state.data?.active && (
             <p className="break-all">Author revision: {state.data.active.content_hash}</p>

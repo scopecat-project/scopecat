@@ -346,11 +346,15 @@ export function LaunchWorkspace({
           <h3 id="experiment-preparation" className="sr-only">
             Prepare an experiment
           </h3>
-          <p className="text-sm text-text-dim">
-            {preparing
-              ? "Showing your current editable inputs. Returning from a run does not load its historical inputs."
-              : "Your editable inputs stay here while submitted work runs."}
-          </p>
+          {preparing && (
+            <details className="text-xs text-text-dim">
+              <summary className="cursor-pointer">Current draft</summary>
+              <p>
+                Showing your current editable inputs. Returning from a run does not load its
+                historical inputs.
+              </p>
+            </details>
+          )}
         </div>
         <div className="grid items-start gap-3 lg:grid-cols-3 border-b border-line pb-2">
           <SourceSelector
