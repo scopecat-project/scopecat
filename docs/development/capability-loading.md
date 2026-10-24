@@ -84,66 +84,19 @@ records outside Git. `python -X importtime` and `cProfile` help attribute the gr
 their instrumented timings must not be substituted for ordinary latency samples.
 
 
-### Matched local observations
+### Historical experiment and limits
 
-On macOS 26.6.2 arm64, Python 3.14.7, a serial same-worktree on/off comparison
-against `7214d0ff5` used the copied virtual reference project. Five ordinary
-submissions per variant included first use, two repeats, an input edit and refresh.
+The [fixed experiment record](https://github.com/scopecat-project/scopecat/blob/5c8cdc30d812fa4484d8fd1af3a5b5f30aca133e/docs/development/capability-loading.md#matched-local-observations)
+preserves host, revisions, matched observations, outlier and prototype results.
+On-demand dataframe views reduced application-load cost and loaded-process RSS
+in that local comparison; retained-result visibility did not improve consistently.
+RSS was measured at the loaded-process boundary, not peak or aggregate memory.
+First analysis included Xarray loading; the subsequent fit was not a cold-fit test.
+These software observations are not Windows laboratory promises.
 
-| Boundary | Eager views | On-demand views |
-| --- | --- | --- |
-| Submit to first measurement ready | 1.287–1.363 s | 1.130–1.164 s |
-| Application load in execution | 0.551–0.575 s | 0.398–0.409 s |
-| Framework imports in execution | 0.443–0.455 s | 0.443–0.460 s |
-| First prepare | 1.321 s | 1.148 s |
-| Repeated prepare | 0.101–0.104 s | 0.096–0.099 s |
-| First ordinary analysis, including required Xarray loading | 1.187 s | 1.177 s |
-| First comparison fit after that analysis | 0.031 s | 0.034 s |
-| Loaded-process RSS, three fresh processes | 213.0–213.1 MiB | 165.4–165.5 MiB |
-
-The RSS samples import the normal launch-worker module and call the reference
-project's `load_application`, then read `psutil.Process().memory_info().rss`.
-Both variants retain ten procedures and two discovered authors; pandas is absent
-only in the on-demand variant before a view is used. This is resident memory at
-that boundary, not peak memory or aggregate worker consumption.
-
-The first-analysis result includes loading the dependencies needed by its actual
-Xarray operation. Comparison fitting here follows that analysis, so it is not a
-standalone cold-fit claim. Retained-result visibility did not improve consistently:
-its independent 0.2-second observer and completion boundary can conceal the earlier
-first measurement. These local software observations are not Windows lab promises.
-Initial cross-worktree/noisier trials did not establish a latency gain; the table
-uses the serial same-worktree control rather than those exploratory timings.
-
-
-### Client import control and stopping point
-
-A second same-worktree control against `5699411b4` moved 231 Scopecat imports
-from `DaemonClient` module scope into the 164 methods/helpers that actually used
-them, retaining type-checking imports. It added 607 lines and removed 268. This
-was an exploratory prototype, not an API change to retain.
-
-| Boundary | Existing client | Per-method import prototype |
-| --- | --- | --- |
-| Client import, warm filesystem / fresh process | 0.411–0.418 s | 0.110–0.122 s |
-| Worker imports after client | 0.044–0.047 s | 0.252–0.266 s |
-| Application construction after worker | 0.400–0.425 s | 0.484–0.510 s |
-| Total through application-ready | 0.855–0.891 s | 0.865–0.872 s |
-| Submit to first measurement, five ordinary operations | 1.143–1.171 s | 1.117–1.213 s |
-
-The prototype loaded 388 modules at the client boundary instead of 535, but
-application-ready still loaded 1,033 instead of 1,039. Settled RSS observations
-were about 164 versus 166 MiB, far smaller than the earlier dataframe-view gain.
-The same ten procedures remained available. Both variants completed ordinary
-first/repeated submissions, input edits and refresh with normal retained results.
-The prototype's median submit-to-first-measurement was about 1.175 s versus
-1.152 s; the small spread does not establish a regression or an improvement.
-
-The first existing-client process had an 11.75-second outlier through application
-construction, followed by 0.85–0.89 seconds in fresh processes. Keep that observation
-separate: the table labels the subsequent warm-filesystem observations and does not
-infer antivirus, a cold-start guarantee or a fix for #465. No retries or increased
-deadlines were used to make a failed benchmark pass.
+The per-method client-import prototype shifted work into later imports without
+establishing an end-to-end improvement. The isolated slow first process was not
+evidence of antivirus, a cold-start guarantee or a fix for #465.
 
 Decision: discard the per-method import prototype. Application declarations and
 execution dependencies bring nearly all of the same graph back before useful work.
