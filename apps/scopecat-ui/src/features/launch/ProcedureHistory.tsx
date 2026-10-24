@@ -31,7 +31,7 @@ export function ProcedureHistory({
   return (
     <details
       open={mode === "submitted" || undefined}
-      className="border border-line rounded p-4 space-y-2"
+      className="min-w-0 border border-line rounded p-3 space-y-2"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary className="font-semibold">
@@ -44,9 +44,8 @@ export function ProcedureHistory({
           actions alongside this list.
         </p>
       )}
-      <p>
-        Open previous experiments and multi-step procedures to view their saved data. Opening
-        history does not start another acquisition.
+      <p className="text-xs text-text-dim">
+        Opening saved work does not start another acquisition.
       </p>
       {history.isPending && <p role="status">Loading experiment history…</p>}
       {history.error && (
@@ -66,21 +65,30 @@ export function ProcedureHistory({
               className="border-b border-line py-2 last:border-0"
             >
               <button
-                className="underline text-left"
+                className="grid w-full min-w-0 gap-1 text-left hover:bg-panel-strong aria-current:bg-panel-strong focus-visible:outline-accent"
                 type="button"
                 aria-current={selectedId === procedure.procedure_run_id ? "true" : undefined}
                 onClick={() => onSelect(procedure.procedure_run_id)}
               >
-                {procedure.definition.id} ·{" "}
-                {procedure.closure
-                  ? stateLabel(procedure.closure.status)
-                  : procedure.cancellation
-                    ? "Cancellation requested"
-                    : procedure.resource_wait
-                      ? "Waiting for resources"
-                      : stateLabel(procedure.state)}{" "}
-                · {procedure.created_at} · {procedure.procedure_run_id}
+                <span className="font-medium">
+                  {procedure.definition.id} ·{" "}
+                  {procedure.closure
+                    ? stateLabel(procedure.closure.status)
+                    : procedure.cancellation
+                      ? "Cancellation requested"
+                      : procedure.resource_wait
+                        ? "Waiting for resources"
+                        : stateLabel(procedure.state)}{" "}
+                </span>
+                <span className="truncate text-xs text-text-dim" title={procedure.procedure_run_id}>
+                  {procedure.procedure_run_id}
+                </span>
               </button>
+              <details className="text-xs text-text-dim">
+                <summary className="cursor-pointer">Task identifiers and time</summary>
+                <p className="select-text [overflow-wrap:anywhere]">{procedure.procedure_run_id}</p>
+                <time dateTime={procedure.created_at}>{procedure.created_at}</time>
+              </details>
               {procedure.resource_wait && !procedure.closure && (
                 <p className="text-sm text-text-dim">
                   Waiting child: {procedure.resource_wait.run_id}. Select this task for resource

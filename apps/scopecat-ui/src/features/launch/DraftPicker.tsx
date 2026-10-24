@@ -22,7 +22,7 @@ export function DraftPicker() {
   return (
     <section
       aria-label="Independent experiment drafts"
-      className="space-y-2 border-b border-line pb-3"
+      className="space-y-1 border-b border-line pb-2"
     >
       <ActionRow>
         <Field>
@@ -109,7 +109,7 @@ export function DraftPicker() {
       )}
       {recovery.ready && !recovery.writing && (
         <a
-          className="underline"
+          className="text-xs underline"
           href={(() => {
             const url = draftLocation(draft);
             url.hash = "launch";

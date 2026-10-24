@@ -336,7 +336,7 @@ export function LaunchForm({
         const previewOnly = event.nativeEvent.submitter?.getAttribute("value") === "preview";
         void prepare(!previewOnly && entry.actions.includes("submit"));
       }}
-      className="space-y-4 max-w-3xl"
+      className="space-y-3 max-w-4xl"
     >
       {draft.manualLine && (
         <Notice>
@@ -344,12 +344,8 @@ export function LaunchForm({
           wiring before measurement.
         </Notice>
       )}
-      <section
-        aria-label="Selected experiment"
-        className="rounded border border-line bg-panel p-4 space-y-2"
-      >
-        <p className="text-xs text-text-dim">Selected experiment</p>
-        <h3 className="font-semibold text-lg">{entry.title}</h3>
+      <section aria-label="Selected experiment" className="border-b border-line pb-2 space-y-1">
+        <h3 className="sr-only">{entry.title}</h3>
         <p className="text-sm whitespace-pre-line">{entry.description}</p>
         {entry.configuration_effect !== "none" && (
           <p>
@@ -359,6 +355,82 @@ export function LaunchForm({
           </p>
         )}
         {entry.review && <p>{entry.review.instructions}</p>}
+      </section>
+      <section aria-label="Preview and start" className="space-y-2 border-b border-line pb-3">
+        <h4 className="sr-only">Start or inspect</h4>
+        <p className="text-sm text-text-dim">
+          Start checks your inputs. Preview inspects them without acquisition.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          {entry.actions.includes("submit") && (
+            <Button
+              type="submit"
+              value="start"
+              variant="primary"
+              disabled={!canPrepare || Boolean(pending) || Boolean(attempt) || !attemptsReady}
+              aria-describedby={draft.workingInput ? workingStatusId : undefined}
+            >
+              {pending === "prepare"
+                ? "Preparing acquisition…"
+                : pending === "submit"
+                  ? "Submitting acquisition…"
+                  : "Start acquisition"}
+            </Button>
+          )}
+          {entry.actions.includes("preview") && (
+            <Button
+              type="submit"
+              value="preview"
+              disabled={!canPrepare || Boolean(pending)}
+              aria-describedby={draft.workingInput ? workingStatusId : undefined}
+            >
+              {pending === "preview" ? "Preparing preview…" : "Preview"}
+            </Button>
+          )}
+          {attempt?.status === "confirmed" && (
+            <Button type="button" disabled={Boolean(pending)} onClick={rerun}>
+              Prepare another acquisition
+            </Button>
+          )}
+          {(pending === "prepare" || pending === "preview") && (
+            <Button
+              type="button"
+              onClick={() => {
+                activePreparation.current?.finish();
+                update((current) =>
+                  invalidateDraft(current, "Preparation cancelled. No acquisition was submitted."),
+                );
+              }}
+            >
+              Cancel preparation
+            </Button>
+          )}
+        </div>
+        {pending && (
+          <Notice role="status" className="font-medium text-text-soft">
+            {pending === "submit"
+              ? "Waiting for submission confirmation. Acquisition may already have started."
+              : "Checking the experiment inputs. Acquisition has not been submitted."}
+          </Notice>
+        )}
+        <p className="text-sm text-text-dim">
+          {attempt
+            ? "A submission is already retained. Check its status above, or explicitly prepare a new run."
+            : "Start preserves the exact checked inputs and an original submission receipt for recovery."}
+        </p>
+        {fence && !manualReady && (
+          <p role={manual.isError ? "alert" : "status"}>
+            {manual.isError
+              ? "Cannot check recent instrument changes. Preview again or wait for the connection to recover."
+              : "Checking relevant instrument changes…"}
+          </p>
+        )}
+        {error &&
+          (draft.rejection ? (
+            <LaunchRejectionDetails rejection={draft.rejection} />
+          ) : (
+            <Notice role="alert">{error}</Notice>
+          ))}
       </section>
       <Notice role="status">{recovery.status}</Notice>
       {recovery.unsavedTargets.length > 0 && (
@@ -520,7 +592,7 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </Notice>
       )}
-      <section aria-label="Inputs for this run" className="space-y-3 border-t border-line pt-4">
+      <section aria-label="Inputs for this run" className="space-y-2 border-t border-line pt-2">
         <div>
           <h4 className="font-semibold">Inputs for this run</h4>
           <p className="text-sm text-text-dim">
@@ -598,99 +670,16 @@ export function LaunchForm({
           ))}
         </fieldset>
       </section>
-      <section
-        aria-label="Preview and start"
-        className="space-y-3 rounded-md border border-line-strong bg-panel p-4"
-      >
-        <h4 className="font-semibold">Start or inspect</h4>
-        <p className="text-sm text-text-dim">
-          Start checks your inputs. Preview inspects them without acquisition.
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          {entry.actions.includes("submit") && (
-            <Button
-              type="submit"
-              value="start"
-              variant="primary"
-              disabled={!canPrepare || Boolean(pending) || Boolean(attempt) || !attemptsReady}
-              aria-describedby={draft.workingInput ? workingStatusId : undefined}
-            >
-              {pending === "prepare"
-                ? "Preparing acquisition…"
-                : pending === "submit"
-                  ? "Submitting acquisition…"
-                  : "Start acquisition"}
-            </Button>
-          )}
-          {entry.actions.includes("preview") && (
-            <Button
-              type="submit"
-              value="preview"
-              disabled={!canPrepare || Boolean(pending)}
-              aria-describedby={draft.workingInput ? workingStatusId : undefined}
-            >
-              {pending === "preview" ? "Preparing preview…" : "Preview"}
-            </Button>
-          )}
-          {attempt?.status === "confirmed" && (
-            <Button type="button" disabled={Boolean(pending)} onClick={rerun}>
-              Prepare another acquisition
-            </Button>
-          )}
-          {(pending === "prepare" || pending === "preview") && (
-            <Button
-              type="button"
-              onClick={() => {
-                activePreparation.current?.finish();
-                update((current) =>
-                  invalidateDraft(current, "Preparation cancelled. No acquisition was submitted."),
-                );
-              }}
-            >
-              Cancel preparation
-            </Button>
-          )}
-        </div>
-        <p className="text-sm text-text-dim">
-          Use Preview to inspect planned measurements, available estimates and waveforms before
-          starting. Details appear below when supplied by the experiment.
-        </p>
-        {pending && (
-          <Notice role="status" className="font-medium text-text-soft">
-            {pending === "submit"
-              ? "Waiting for submission confirmation. Acquisition may already have started."
-              : "Checking the experiment inputs. Acquisition has not been submitted."}
-          </Notice>
-        )}
-        <p className="text-sm text-text-dim">
-          {attempt
-            ? "A submission is already retained. Check its status above, or explicitly prepare a new run."
-            : "Start preserves the exact checked inputs and an original submission receipt for recovery."}
-        </p>
-        {fence && !manualReady && (
-          <p role={manual.isError ? "alert" : "status"}>
-            {manual.isError
-              ? "Cannot check recent instrument changes. Preview again or wait for the connection to recover."
-              : "Checking relevant instrument changes…"}
-          </p>
-        )}
-        {error &&
-          (draft.rejection ? (
-            <LaunchRejectionDetails rejection={draft.rejection} />
-          ) : (
-            <Notice role="alert">{error}</Notice>
-          ))}
-        {result && (
-          <>
-            <ExecutionScenario
-              scenario={result.reviewed.binding.scenario}
-              label="Reviewed execution scenario"
-            />
-            <PreflightSummary preview={result} />
-            <ControlSummary fields={entry.controls} values={result.controls} />
-          </>
-        )}
-      </section>
+      {result && (
+        <>
+          <ExecutionScenario
+            scenario={result.reviewed.binding.scenario}
+            label="Reviewed execution scenario"
+          />
+          <PreflightSummary preview={result} />
+          <ControlSummary fields={entry.controls} values={result.controls} />
+        </>
+      )}
       <section aria-label="Save this preparation" className="border-t border-line pt-4">
         <PlanSave
           key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}

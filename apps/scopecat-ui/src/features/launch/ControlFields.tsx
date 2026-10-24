@@ -167,146 +167,159 @@ export function ControlFields({
                 "aria-invalid": Boolean(error),
               };
               return (
-                <div key={control.id} className="space-y-2">
+                <div
+                  key={control.id}
+                  className="grid min-w-0 gap-2 border-b border-line py-2 last:border-0 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,2fr)] sm:items-center"
+                >
                   <strong>
                     {control.title}
                     {control.default == null ? " (required)" : ""}
                   </strong>
                   {error && <Notice role="alert">{error}</Notice>}
-                  <p className="text-sm">
+                  <p className="text-xs text-text-dim sm:col-start-1">
                     {control.provenance}
                     {control.minimum != null || control.maximum != null
                       ? ` · Allowed: ${control.minimum ?? "−∞"}–${control.maximum ?? "∞"} ${control.unit ?? ""}`
                       : ""}
                   </p>
-                  <Field>
-                    Source{" "}
-                    <Select
-                      aria-label={`${control.title} source`}
-                      value={draft.mode}
-                      onChange={(event) =>
-                        update(control.id, () =>
-                          newSource(control, event.target.value as ControlDraft["mode"]),
-                        )
-                      }
-                    >
-                      <option value="fixed">Fixed value</option>
-                      {control.default != null && <option value="default">Declared default</option>}
-                      {control.scannable && (
-                        <>
-                          <option value="values">Scan values</option>
-                          <option value="range">Scan range</option>
-                        </>
-                      )}
-                    </Select>
-                  </Field>
-                  {draft.mode === "default" ? (
-                    <p>
-                      {defaultNumber(control)} {control.unit} · Declared default
+                  <div className="flex min-w-0 flex-wrap items-end gap-2 sm:col-start-2 sm:row-span-3 sm:row-start-1">
+                    <Field>
+                      Source{" "}
+                      <Select
+                        aria-label={`${control.title} source`}
+                        value={draft.mode}
+                        onChange={(event) =>
+                          update(control.id, () =>
+                            newSource(control, event.target.value as ControlDraft["mode"]),
+                          )
+                        }
+                      >
+                        <option value="fixed">Fixed value</option>
+                        {control.default != null && (
+                          <option value="default">Declared default</option>
+                        )}
+                        {control.scannable && (
+                          <>
+                            <option value="values">Scan values</option>
+                            <option value="range">Scan range</option>
+                          </>
+                        )}
+                      </Select>
+                    </Field>
+                    {draft.mode === "default" ? (
+                      <p>
+                        {defaultNumber(control)} {control.unit} · Declared default
+                      </p>
+                    ) : (
+                      <>
+                        {draft.unit && (
+                          <Field>
+                            Unit{" "}
+                            <Select
+                              aria-label={`${control.title} unit`}
+                              value={draft.unit}
+                              onChange={(event) =>
+                                update(control.id, () => convertDraft(draft, event.target.value))
+                              }
+                            >
+                              {choices.map((unit) => (
+                                <option key={unit}>{unit}</option>
+                              ))}
+                            </Select>
+                          </Field>
+                        )}
+                        {draft.mode === "fixed" && (
+                          <Input
+                            {...numeric}
+                            className="w-32 flex-1"
+                            aria-label={control.title}
+                            value={draft.value}
+                            onBlur={() =>
+                              update(control.id, () => ({
+                                ...draft,
+                                value: String(controlNumber(draft.value, draft.unit)),
+                              }))
+                            }
+                            onChange={(event) =>
+                              onChange(control.id, { ...draft, value: event.target.value })
+                            }
+                          />
+                        )}
+                        {draft.mode === "values" && (
+                          <Controls.Field>
+                            Values{" "}
+                            <Textarea
+                              required
+                              aria-label={`${control.title} scan values`}
+                              value={draft.values}
+                              onBlur={() =>
+                                update(control.id, () => convertDraft(draft, draft.unit))
+                              }
+                              onChange={(event) =>
+                                onChange(control.id, { ...draft, values: event.target.value })
+                              }
+                              aria-invalid={Boolean(error)}
+                            />
+                            <span className="text-sm">
+                              Separate values with commas, spaces or newlines. Attach unit suffixes
+                              without spaces. A single value is still a scan.
+                            </span>
+                          </Controls.Field>
+                        )}
+                        {draft.mode === "range" && (
+                          <div className="flex w-full min-w-0 gap-2">
+                            <Input
+                              {...numeric}
+                              aria-label={`${control.title} start`}
+                              placeholder="Start"
+                              value={draft.start}
+                              onBlur={() =>
+                                update(control.id, () => ({
+                                  ...draft,
+                                  start: String(controlNumber(draft.start, draft.unit)),
+                                }))
+                              }
+                              onChange={(event) =>
+                                onChange(control.id, { ...draft, start: event.target.value })
+                              }
+                            />
+                            <Input
+                              {...numeric}
+                              aria-label={`${control.title} stop`}
+                              placeholder="Stop"
+                              value={draft.stop}
+                              onBlur={() =>
+                                update(control.id, () => ({
+                                  ...draft,
+                                  stop: String(controlNumber(draft.stop, draft.unit)),
+                                }))
+                              }
+                              onChange={(event) =>
+                                onChange(control.id, { ...draft, stop: event.target.value })
+                              }
+                            />
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              min={2}
+                              step={1}
+                              required
+                              aria-label={`${control.title} points`}
+                              value={draft.points}
+                              onChange={(event) =>
+                                onChange(control.id, { ...draft, points: event.target.value })
+                              }
+                              className="w-24"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {draft.mode !== "default" && draft.unit && (
+                    <p className="text-xs text-text-dim sm:col-start-2">
+                      Bare numbers use {draft.unit}; unit suffixes convert on blur.
                     </p>
-                  ) : (
-                    <>
-                      {draft.unit && (
-                        <p className="text-sm">裸数按 {draft.unit}；单位简写失焦后换算。</p>
-                      )}
-                      {draft.unit && (
-                        <Field>
-                          Unit{" "}
-                          <Select
-                            aria-label={`${control.title} unit`}
-                            value={draft.unit}
-                            onChange={(event) =>
-                              update(control.id, () => convertDraft(draft, event.target.value))
-                            }
-                          >
-                            {choices.map((unit) => (
-                              <option key={unit}>{unit}</option>
-                            ))}
-                          </Select>
-                        </Field>
-                      )}
-                      {draft.mode === "fixed" && (
-                        <Input
-                          {...numeric}
-                          aria-label={control.title}
-                          value={draft.value}
-                          onBlur={() =>
-                            update(control.id, () => ({
-                              ...draft,
-                              value: String(controlNumber(draft.value, draft.unit)),
-                            }))
-                          }
-                          onChange={(event) =>
-                            onChange(control.id, { ...draft, value: event.target.value })
-                          }
-                        />
-                      )}
-                      {draft.mode === "values" && (
-                        <Controls.Field>
-                          Values{" "}
-                          <Textarea
-                            required
-                            aria-label={`${control.title} scan values`}
-                            value={draft.values}
-                            onBlur={() => update(control.id, () => convertDraft(draft, draft.unit))}
-                            onChange={(event) =>
-                              onChange(control.id, { ...draft, values: event.target.value })
-                            }
-                            aria-invalid={Boolean(error)}
-                          />
-                          <span className="text-sm">
-                            逗号、空白或换行分隔；单位后缀紧接数字，不加空格。单值仍为扫描。
-                          </span>
-                        </Controls.Field>
-                      )}
-                      {draft.mode === "range" && (
-                        <div className="flex gap-2">
-                          <Input
-                            {...numeric}
-                            aria-label={`${control.title} start`}
-                            placeholder="Start"
-                            value={draft.start}
-                            onBlur={() =>
-                              update(control.id, () => ({
-                                ...draft,
-                                start: String(controlNumber(draft.start, draft.unit)),
-                              }))
-                            }
-                            onChange={(event) =>
-                              onChange(control.id, { ...draft, start: event.target.value })
-                            }
-                          />
-                          <Input
-                            {...numeric}
-                            aria-label={`${control.title} stop`}
-                            placeholder="Stop"
-                            value={draft.stop}
-                            onBlur={() =>
-                              update(control.id, () => ({
-                                ...draft,
-                                stop: String(controlNumber(draft.stop, draft.unit)),
-                              }))
-                            }
-                            onChange={(event) =>
-                              onChange(control.id, { ...draft, stop: event.target.value })
-                            }
-                          />
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            min={2}
-                            step={1}
-                            required
-                            aria-label={`${control.title} points`}
-                            value={draft.points}
-                            onChange={(event) =>
-                              onChange(control.id, { ...draft, points: event.target.value })
-                            }
-                            className="w-24"
-                          />
-                        </div>
-                      )}
-                    </>
                   )}
                 </div>
               );

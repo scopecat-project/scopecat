@@ -6,7 +6,6 @@ import {
   pageContent,
   classes,
   detailCard,
-  eyebrow,
   secondaryButton,
   workbenchTabs,
   workbenchTab,
@@ -260,11 +259,7 @@ export function LaunchWorkspace({
         </button>
       )}
       <header>
-        <p className={eyebrow}>Experiment workbench</p>
         <h2 className={pageTitle}>Experiments</h2>
-        <p className="mt-2 text-sm text-text-dim">
-          Prepare an experiment, check its inputs, then start acquisition.
-        </p>
       </header>
       <nav aria-label="Experiment workspaces" className={workbenchTabs}>
         <button
@@ -345,10 +340,10 @@ export function LaunchWorkspace({
         ref={preparation}
         tabIndex={-1}
         aria-labelledby="experiment-preparation"
-        className={`${detailCard} space-y-4 scroll-mt-24`}
+        className={`${detailCard} space-y-3 scroll-mt-24`}
       >
         <div>
-          <h3 id="experiment-preparation" className={sectionTitle}>
+          <h3 id="experiment-preparation" className="sr-only">
             Prepare an experiment
           </h3>
           <p className="text-sm text-text-dim">
@@ -357,7 +352,7 @@ export function LaunchWorkspace({
               : "Your editable inputs stay here while submitted work runs."}
           </p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 border-b border-line pb-4">
+        <div className="grid gap-3 md:grid-cols-2 border-b border-line pb-2">
           <SourceSelector
             catalog={sources}
             workspaceId={workspaceId}
