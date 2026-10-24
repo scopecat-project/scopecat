@@ -131,7 +131,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await writeFile(source, original.replace("] = 0.0,", "] = 0.5,"));
     await page.getByRole("button", { name: /Refresh.*code/i }).click();
     await expect(
-      page.getByText("Author code refreshed. Preview the updated experiment before starting.", {
+      page.getByText("Author code refreshed.", {
         exact: true,
       }),
     ).toBeVisible();

@@ -9,6 +9,7 @@ const terminal = (status: Preparation["status"]) =>
 type Request = { operation_id: string; expected_generation: number };
 
 type Props = {
+  compact?: boolean;
   context?: "acquisition" | "analysis";
   projectId: string | undefined;
   workspaceId: string;
@@ -26,6 +27,7 @@ function AuthorRefreshPanel({
   workspaceId,
   disabled = false,
   context = "acquisition",
+  compact = false,
 }: Props) {
   const queryClient = useQueryClient();
   const headers = { "X-Scopecat-Workspace": workspaceId };
@@ -118,7 +120,7 @@ function AuthorRefreshPanel({
   if (state.data && !state.data.enabled) return null;
   const busy = identity && (!operation.data || !terminal(operation.data.status));
   return (
-    <div className="space-y-2">
+    <div className={compact ? "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" : "space-y-2"}>
       <button
         type="button"
         className={secondaryButton}
@@ -136,7 +138,7 @@ function AuthorRefreshPanel({
       >
         {busy ? "Preparing author code…" : "Refresh author code"}
       </button>
-      {operation.data && (
+      {operation.data && !(compact && synchronized === identity) && (
         <p role="status">
           {operation.data.status}: {operation.data.phase}
           {!terminal(operation.data.status) &&
@@ -148,9 +150,11 @@ function AuthorRefreshPanel({
       )}
       {identity && synchronized === identity && (
         <p role="status">
-          {context === "analysis"
-            ? "Author code refreshed. Inspect compatible data before fitting with this code."
-            : "Author code refreshed. Preview the updated experiment before starting."}
+          {compact
+            ? "Author code refreshed."
+            : context === "analysis"
+              ? "Author code refreshed. Inspect compatible data before fitting with this code."
+              : "Author code refreshed. Preview the updated experiment before starting."}
         </p>
       )}
       {busy && (
@@ -176,6 +180,7 @@ function AuthorRefreshPanel({
       {(identity || state.data?.active) && (
         <details className="text-xs text-text-dim">
           <summary>Source revision details</summary>
+          {compact && <p>Preview the updated experiment before starting.</p>}
           {identity && <p className="break-all">Preparation: {identity}</p>}
           {state.data?.active && (
             <p className="break-all">Author revision: {state.data.active.content_hash}</p>

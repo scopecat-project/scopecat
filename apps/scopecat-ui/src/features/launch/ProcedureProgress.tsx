@@ -104,22 +104,21 @@ export function ProcedureProgress({
     (run.resource_wait || (run.state === "ready" && !view?.dispatch.worker_running)),
   );
   return (
-    <section className="border border-accent/40 bg-panel-soft rounded-md p-4 space-y-3 break-words">
+    <section className="border border-accent/40 bg-panel-soft rounded-md p-3 space-y-2 break-words">
       <h3 className="font-semibold">Execution progress</h3>
-      <p className="text-xs text-text-dim">
-        Monitoring this submitted task. Editing another draft does not change its inputs. Closing
-        this view leaves background work running.
-      </p>
-      <ReturnToPreparation />
+      <p className="text-xs text-text-dim">Closing this view leaves background work running.</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p>{run?.definition.id ?? procedureId}</p>
+        <ReturnToPreparation />
+        <a
+          onClick={navigateLink}
+          className="underline"
+          href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#launch`)}
+        >
+          Reopen this procedure
+        </a>
+      </div>
       <PlanOrigin reference={run?.plan_ref} />
-      <p>{run?.definition.id ?? procedureId}</p>
-      <a
-        onClick={navigateLink}
-        className="underline"
-        href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#launch`)}
-      >
-        Reopen this procedure
-      </a>
       {progress.isPending && <p role="status">Loading retained procedure state…</p>}
       {progress.error && (
         <p role="alert">
