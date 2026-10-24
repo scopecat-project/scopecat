@@ -38,15 +38,17 @@ export function ProcedureHistory({
         {mode === "submitted" ? "Submitted work" : "Experiment history"}
       </summary>
       {mode === "submitted" && (
-        <p className="text-sm text-text-dim">
-          Retained submissions, newest first. Waiting work is scheduled by resource availability;
-          this list does not promise execution order. Select a task to inspect its progress and
-          actions alongside this list.
-        </p>
+        <div className="text-xs text-text-dim">
+          <p>Newest first · opening work does not start acquisition.</p>
+          <details>
+            <summary className="cursor-pointer">Scheduling and inspection</summary>
+            <p>
+              Waiting work is scheduled by resource availability, not list order. Select a task to
+              inspect its progress and actions alongside this list.
+            </p>
+          </details>
+        </div>
       )}
-      <p className="text-xs text-text-dim">
-        Opening saved work does not start another acquisition.
-      </p>
       {history.isPending && <p role="status">Loading experiment history…</p>}
       {history.error && (
         <p role="alert">
@@ -81,7 +83,8 @@ export function ProcedureHistory({
                         : stateLabel(procedure.state)}{" "}
                 </span>
                 <span className="truncate text-xs text-text-dim" title={procedure.procedure_run_id}>
-                  {procedure.procedure_run_id}
+                  <span aria-hidden="true">…{procedure.procedure_run_id.slice(-8)}</span>
+                  <span className="sr-only">{procedure.procedure_run_id}</span>
                 </span>
               </button>
               <details className="text-xs text-text-dim">

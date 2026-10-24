@@ -143,13 +143,24 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByLabel("Frequency start").fill("4.8");
     await page.getByLabel("Frequency stop").fill("4.9");
     await page.getByLabel("Frequency points").fill("2");
-    await captureWorkbench("editor-before-start");
+    await saved(page);
     await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeInViewport();
+      page.getByText("Author code refreshed. Preview the updated experiment before starting.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await captureWorkbench("editor-before-start");
+    await page.screenshot({ path: testInfo.outputPath("editor-ready-full.png"), fullPage: true });
+    await expect(page.getByLabel("Gain", { exact: true })).toBeInViewport();
+    await expect(page.getByLabel("Frequency start", { exact: true })).toBeInViewport();
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const current = page.getByRole("link", { name: /View current data:/ });
     await expect(current).toBeVisible();
+    await captureWorkbench("monitor-selected-running");
+    await page.screenshot({
+      path: testInfo.outputPath("monitor-selected-running-full.png"),
+      fullPage: true,
+    });
     const monitorUrl = new URL((await current.getAttribute("href"))!, url);
     const runA = monitorUrl.searchParams.get("run")!;
     const procedureA = monitorUrl.searchParams.get("procedure")!;
@@ -355,6 +366,14 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     });
     await page.screenshot({ path: testInfo.outputPath("independent-draft-c.png") });
     await monitor.screenshot({ path: testInfo.outputPath("fixed-monitor-a.png") });
+    await page
+      .getByRole("region", { name: "Inputs for this run", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("narrow-fields.png") });
+    await page
+      .getByRole("region", { name: "Preview and start", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("narrow-actions.png") });
     await gain.focus();
     await gain.evaluate((node) =>
       (

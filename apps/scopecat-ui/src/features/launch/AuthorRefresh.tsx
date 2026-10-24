@@ -9,6 +9,7 @@ const terminal = (status: Preparation["status"]) =>
 type Request = { operation_id: string; expected_generation: number };
 
 type Props = {
+  compact?: boolean;
   context?: "acquisition" | "analysis";
   projectId: string | undefined;
   workspaceId: string;
@@ -26,6 +27,7 @@ function AuthorRefreshPanel({
   workspaceId,
   disabled = false,
   context = "acquisition",
+  compact = false,
 }: Props) {
   const queryClient = useQueryClient();
   const headers = { "X-Scopecat-Workspace": workspaceId };
@@ -118,7 +120,7 @@ function AuthorRefreshPanel({
   if (state.data && !state.data.enabled) return null;
   const busy = identity && (!operation.data || !terminal(operation.data.status));
   return (
-    <div className="space-y-2">
+    <div className={compact ? "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" : "space-y-2"}>
       <button
         type="button"
         className={secondaryButton}

@@ -20,10 +20,7 @@ export function DraftPicker() {
   const records = drafts.data?.pages.flatMap((page) => page.items) ?? [];
   const id = draft.draftId ?? "default";
   return (
-    <section
-      aria-label="Independent experiment drafts"
-      className="space-y-1 border-b border-line pb-2"
-    >
+    <section aria-label="Independent experiment drafts" className="min-w-0 space-y-1">
       <ActionRow>
         <Field>
           Editable draft
@@ -57,15 +54,20 @@ export function DraftPicker() {
           </Select>
         </Field>
         <Button
+          aria-label="Copy to new draft"
           disabled={!recovery.ready || recovery.writing}
           onClick={() => {
             void copyDraft().then(() => drafts.refetch());
           }}
         >
-          Copy to new draft
+          Copy
         </Button>
-        <Button disabled={!recovery.ready} onClick={() => setRenaming(!renaming)}>
-          Rename draft
+        <Button
+          aria-label="Rename draft"
+          disabled={!recovery.ready}
+          onClick={() => setRenaming(!renaming)}
+        >
+          Rename
         </Button>
         {drafts.hasNextPage && (
           <Button
@@ -122,7 +124,7 @@ export function DraftPicker() {
         </a>
       )}
       <p className="text-xs text-text-dim">
-        Edits belong to this draft. Submitted inputs stay frozen; copying never starts acquisition.
+        Draft edits stay separate from frozen submissions; copies never start acquisition.
       </p>
       {drafts.error && (
         <p role="alert">

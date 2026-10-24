@@ -356,6 +356,84 @@ export function LaunchForm({
         )}
         {entry.review && <p>{entry.review.instructions}</p>}
       </section>
+      <section aria-label="Inputs for this run" className="space-y-2 border-t border-line pt-2">
+        <div>
+          <h4 className="font-semibold">Inputs for this run</h4>
+          <p className="text-sm text-text-dim">
+            Choose fixed values, declared defaults or scans where available. These inputs belong to
+            this preparation; editing them does not publish a parameter version.
+          </p>
+        </div>
+        <fieldset disabled={pending === "submit" || !recovery.ready}>
+          <ControlFields
+            controls={entry.controls}
+            drafts={drafts}
+            onChange={(id, controlDraft) => {
+              changeInput({ controls: { ...drafts, [id]: controlDraft } });
+            }}
+          />
+        </fieldset>
+        <fieldset
+          disabled={pending === "submit" || !recovery.ready}
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+        >
+          {fields.map(([name, field]) => (
+            <Field key={name} className="flex-col">
+              {field.title ?? name}
+              {field.type === "array" && field.items?.enum ? (
+                <Select
+                  multiple
+                  size={5}
+                  className="min-h-32"
+                  aria-label={field.title ?? name}
+                  required={entry.request.required?.includes(name)}
+                  value={(values[name] ?? "").split("\n").filter(Boolean)}
+                  onChange={(event) =>
+                    change(
+                      name,
+                      Array.from(event.target.selectedOptions, (option) => option.value).join("\n"),
+                    )
+                  }
+                >
+                  {field.items.enum.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </Select>
+              ) : field.enum || field.type === "boolean" ? (
+                <Select
+                  aria-label={field.title ?? name}
+                  required={entry.request.required?.includes(name)}
+                  value={values[name]}
+                  onChange={(event) => change(name, event.target.value)}
+                >
+                  <option value="">Select…</option>
+                  {(field.enum ?? ["true", "false"]).map((value) => (
+                    <option key={String(value)} value={String(value)}>
+                      {String(value)}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  aria-label={field.title ?? name}
+                  required={entry.request.required?.includes(name)}
+                  type="text"
+                  inputMode={
+                    ["number", "integer"].includes(field.type ?? "") ? "decimal" : undefined
+                  }
+                  step={field.type === "integer" ? 1 : "any"}
+                  min={field.minimum ?? field.exclusiveMinimum ?? undefined}
+                  max={field.maximum ?? undefined}
+                  value={values[name]}
+                  onChange={(event) => change(name, event.target.value)}
+                />
+              )}
+            </Field>
+          ))}
+        </fieldset>
+      </section>
       <section aria-label="Preview and start" className="space-y-2 border-b border-line pb-3">
         <h4 className="sr-only">Start or inspect</h4>
         <p className="text-sm text-text-dim">
@@ -592,84 +670,6 @@ export function LaunchForm({
           This request schema needs a project-specific form. Use the project's Python workflow.
         </Notice>
       )}
-      <section aria-label="Inputs for this run" className="space-y-2 border-t border-line pt-2">
-        <div>
-          <h4 className="font-semibold">Inputs for this run</h4>
-          <p className="text-sm text-text-dim">
-            Choose fixed values, declared defaults or scans where available. These inputs belong to
-            this preparation; editing them does not publish a parameter version.
-          </p>
-        </div>
-        <fieldset disabled={pending === "submit" || !recovery.ready}>
-          <ControlFields
-            controls={entry.controls}
-            drafts={drafts}
-            onChange={(id, controlDraft) => {
-              changeInput({ controls: { ...drafts, [id]: controlDraft } });
-            }}
-          />
-        </fieldset>
-        <fieldset
-          disabled={pending === "submit" || !recovery.ready}
-          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-        >
-          {fields.map(([name, field]) => (
-            <Field key={name} className="flex-col">
-              {field.title ?? name}
-              {field.type === "array" && field.items?.enum ? (
-                <Select
-                  multiple
-                  size={5}
-                  className="min-h-32"
-                  aria-label={field.title ?? name}
-                  required={entry.request.required?.includes(name)}
-                  value={(values[name] ?? "").split("\n").filter(Boolean)}
-                  onChange={(event) =>
-                    change(
-                      name,
-                      Array.from(event.target.selectedOptions, (option) => option.value).join("\n"),
-                    )
-                  }
-                >
-                  {field.items.enum.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </Select>
-              ) : field.enum || field.type === "boolean" ? (
-                <Select
-                  aria-label={field.title ?? name}
-                  required={entry.request.required?.includes(name)}
-                  value={values[name]}
-                  onChange={(event) => change(name, event.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {(field.enum ?? ["true", "false"]).map((value) => (
-                    <option key={String(value)} value={String(value)}>
-                      {String(value)}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <Input
-                  aria-label={field.title ?? name}
-                  required={entry.request.required?.includes(name)}
-                  type="text"
-                  inputMode={
-                    ["number", "integer"].includes(field.type ?? "") ? "decimal" : undefined
-                  }
-                  step={field.type === "integer" ? 1 : "any"}
-                  min={field.minimum ?? field.exclusiveMinimum ?? undefined}
-                  max={field.maximum ?? undefined}
-                  value={values[name]}
-                  onChange={(event) => change(name, event.target.value)}
-                />
-              )}
-            </Field>
-          ))}
-        </fieldset>
-      </section>
       {result && (
         <>
           <ExecutionScenario

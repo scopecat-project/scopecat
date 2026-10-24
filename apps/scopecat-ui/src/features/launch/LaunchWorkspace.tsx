@@ -352,7 +352,7 @@ export function LaunchWorkspace({
               : "Your editable inputs stay here while submitted work runs."}
           </p>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 border-b border-line pb-2">
+        <div className="grid items-start gap-3 lg:grid-cols-3 border-b border-line pb-2">
           <SourceSelector
             catalog={sources}
             workspaceId={workspaceId}
@@ -361,13 +361,26 @@ export function LaunchWorkspace({
               selectWorkspace(id);
             }}
           />
-          <AuthorRefresh
-            projectId={projectId}
-            workspaceId={workspaceId}
-            disabled={!sourceAvailable}
-            onRefreshed={() => authorRefreshed(workspaceId)}
-          />
+          {(entry || draft) && (
+            <>
+              <DraftPicker />
+              <ExperimentPicker
+                key={workspaceId}
+                entries={catalog.data?.entries ?? []}
+                selectedId={draft?.experiment ?? entry?.id ?? ""}
+                disabled={!sourceAvailable || Boolean(handoff)}
+                onSelect={(selected) => select(selected, false, workspaceId)}
+              />
+            </>
+          )}
         </div>
+        <AuthorRefresh
+          compact
+          projectId={projectId}
+          workspaceId={workspaceId}
+          disabled={!sourceAvailable}
+          onRefreshed={() => authorRefreshed(workspaceId)}
+        />
         {codeRevision && (
           <div className="space-y-2">
             <p>
@@ -416,14 +429,6 @@ export function LaunchWorkspace({
         )}
         {(entry || draft) && (
           <>
-            <DraftPicker />
-            <ExperimentPicker
-              key={workspaceId}
-              entries={catalog.data?.entries ?? []}
-              selectedId={draft?.experiment ?? entry?.id ?? ""}
-              disabled={!sourceAvailable || Boolean(handoff)}
-              onSelect={(selected) => select(selected, false, workspaceId)}
-            />
             {entry &&
               sourceAvailable &&
               !handoff &&
