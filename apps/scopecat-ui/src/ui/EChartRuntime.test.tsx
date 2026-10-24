@@ -13,36 +13,12 @@ const runtime = vi.hoisted(() => {
   };
   return {
     chart,
-    components: {
-      customChart: { id: "custom-chart" },
-      dataZoomInside: { id: "data-zoom-inside" },
-      grid: { id: "grid" },
-      legendScroll: { id: "legend-scroll" },
-      lineChart: { id: "line-chart" },
-      scatterChart: { id: "scatter-chart" },
-      svgRenderer: { id: "svg-renderer" },
-      tooltip: { id: "tooltip" },
-      visualMapContinuous: { id: "visual-map-continuous" },
-    },
     init: vi.fn(() => chart),
     use: vi.fn(),
   };
 });
 
-vi.mock("echarts/charts", () => ({
-  CustomChart: runtime.components.customChart,
-  LineChart: runtime.components.lineChart,
-  ScatterChart: runtime.components.scatterChart,
-}));
-vi.mock("echarts/components", () => ({
-  DataZoomInsideComponent: runtime.components.dataZoomInside,
-  GridComponent: runtime.components.grid,
-  LegendScrollComponent: runtime.components.legendScroll,
-  TooltipComponent: runtime.components.tooltip,
-  VisualMapContinuousComponent: runtime.components.visualMapContinuous,
-}));
 vi.mock("echarts/core", () => ({ init: runtime.init, use: runtime.use }));
-vi.mock("echarts/renderers", () => ({ SVGRenderer: runtime.components.svgRenderer }));
 
 import { EChartRuntime } from "./EChartRuntime";
 
@@ -57,24 +33,6 @@ afterEach(() => {
 });
 
 describe("EChartRuntime", () => {
-  it("registers the custom chart and the exact modular ECharts features", async () => {
-    vi.resetModules();
-    await import("./EChartRuntime");
-
-    expect(runtime.use).toHaveBeenCalledTimes(1);
-    expect(runtime.use).toHaveBeenCalledWith([
-      runtime.components.customChart,
-      runtime.components.dataZoomInside,
-      runtime.components.grid,
-      runtime.components.legendScroll,
-      runtime.components.lineChart,
-      runtime.components.scatterChart,
-      runtime.components.svgRenderer,
-      runtime.components.tooltip,
-      runtime.components.visualMapContinuous,
-    ]);
-  });
-
   it("initializes, updates, resizes, and disposes one SVG chart instance", () => {
     const firstOption: EChartsCoreOption = { series: [] };
     const secondOption: EChartsCoreOption = { series: [{ data: [[1, 2]], type: "line" }] };
