@@ -156,6 +156,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const current = page.getByRole("link", { name: /View current data:/ });
     await expect(current).toBeVisible();
+    await expect(page.getByText("Running · 1 completed points", { exact: true })).toBeVisible();
     await captureWorkbench("monitor-selected-running");
     await page.screenshot({
       path: testInfo.outputPath("monitor-selected-running-full.png"),
