@@ -1,11 +1,11 @@
 """Acceptance owns disposable copies, not the candidate or retained reports."""
 
-import re
 import subprocess
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 def load_script(name):
@@ -24,12 +24,19 @@ verify_native_replacement = load_script("verify_native_replacement")
 
 def assert_reports_uploaded(workflow, relatives):
     """Check actual retained files against this workflow's always-upload step."""
-    step = workflow.split("      - name: Retain native acceptance logs\n", 1)[1]
-    step = re.split(r"(?m)^ {2}\S|^ {6}- ", step, maxsplit=1)[0]
-    assert "        if: always()\n" in step
+    jobs = yaml.safe_load(workflow)["jobs"]
+    uploads = [
+        step
+        for step in jobs["native-distribution"]["steps"]
+        if step.get("uses", "").startswith("actions/upload-artifact@")
+        and step.get("with", {}).get("name") == "native-${{ matrix.os }}"
+    ]
+    assert len(uploads) == 1
+    step = uploads[0]
+    assert step["if"] in ("always()", "${{ always() }}")
     paths = {
         Path(line.strip().removeprefix("${{ runner.temp }}/"))
-        for line in step.splitlines()
+        for line in step["with"]["path"].splitlines()
         if line.strip().startswith("${{ runner.temp }}/")
     }
     for relative in relatives:
@@ -40,14 +47,25 @@ def assert_reports_uploaded(workflow, relatives):
     "relative",
     ["windows-storage/", "reset-recovery/", "data/desktop/desktop.log"],
 )
-def test_native_upload_contract_rejects_missing_reports(relative):
+@pytest.mark.parametrize("fault", ["missing", "checkout-root", "blank-line"])
+def test_native_upload_contract_rejects_missing_or_misrooted_reports(relative, fault):
     workflow = (
         Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
     ).read_text()
-    omitted = workflow.replace(
-        f"            ${{{{ runner.temp }}}}/native-acceptance/{relative}\n", ""
+    document = yaml.safe_load(workflow)
+    upload = next(
+        step
+        for step in document["jobs"]["native-distribution"]["steps"]
+        if step.get("with", {}).get("name") == "native-${{ matrix.os }}"
     )
-    assert omitted != workflow
+    paths = upload["with"]["path"].splitlines()
+    paths.remove("${{ runner.temp }}/native-acceptance/" + relative)
+    if fault == "checkout-root":
+        paths.append("native-acceptance/" + relative)
+    elif fault == "blank-line":
+        paths.insert(0, "   ")
+    upload["with"]["path"] = "\n".join(paths)
+    omitted = yaml.safe_dump(document)
     with pytest.raises(AssertionError):
         assert_reports_uploaded(
             omitted, [Path("native-acceptance") / relative / "C.json"]
@@ -419,8 +437,12 @@ def test_incomplete_help_receipt_is_retained_by_installed_upload():
     workflow = (
         Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
     ).read_text()
-    upload = workflow.split(
-        "      - name: Retain tutorial delivery and executed notebooks\n", 1
-    )[1].split("  docs:\n", 1)[0]
-    assert "        if: always()\n" in upload
-    assert "dist/tutorial-evidence/**/acceptance.json" in upload
+    uploads = [
+        step
+        for step in yaml.safe_load(workflow)["jobs"]["installed-artifacts"]["steps"]
+        if step.get("uses", "").startswith("actions/upload-artifact@")
+        and "dist/tutorial-evidence/**/acceptance.json"
+        in step.get("with", {}).get("path", "").splitlines()
+    ]
+    assert len(uploads) == 1
+    assert uploads[0]["if"] in ("always()", "${{ always() }}")

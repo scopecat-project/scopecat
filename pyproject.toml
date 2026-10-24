@@ -24,6 +24,7 @@ dev = [
   "psutil>=7.2",
   "pytest>=9",
   "pytest-xdist>=3.8",
+  "pyyaml>=6",
   "ruff>=0.16.0",
   { include-group = "delivery" },
 ]
