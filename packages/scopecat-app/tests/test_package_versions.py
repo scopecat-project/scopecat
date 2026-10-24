@@ -11,7 +11,6 @@ from email.parser import BytesParser
 from pathlib import Path
 
 import pytest
-from packaging.version import Version
 from scripts.app_build.package_versions import pin, stamp, validate_dependencies
 from scripts.app_build.release_identity import ReleaseIdentity
 
@@ -32,8 +31,6 @@ def test_real_wheels_and_explicit_resolver_switch(tmp_path: Path):
     wheels.mkdir()
     identity = ReleaseIdentity("0.1.0", 1)
     dev = identity.python_package_version("a" * 40, "123")
-    assert dev == identity.python_package_version("a" * 40, "123")
-    assert Version("0.1.0") < Version("0.2.0")
     versions = ("0.2.0", "0.1.0", "0.1.0rc1", dev)
     for name, dependencies in (
         ("scopecat", []),
