@@ -89,7 +89,3 @@ def install_fixture_lesson(root: Path) -> None:
         "MAINTENANCE.md",
     ):
         (root / "notebooks" / name).write_bytes(material.joinpath(name).read_bytes())
-    readme = material.joinpath("README.md").read_text(encoding="utf-8")
-    for name in ("EDITING.md", "GROUPS.md", "MAINTENANCE.md"):
-        readme = readme.replace(f"]({name})", f"](notebooks/{name})")
-    (root / "README.md").write_text(readme, encoding="utf-8")

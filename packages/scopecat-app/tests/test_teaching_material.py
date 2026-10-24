@@ -1,6 +1,7 @@
 """Independent authoring examples remain fixtures, without a sandbox manager."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -88,6 +89,15 @@ def test_generated_material_matches_reviewed_source_and_cannot_overlay_edits(
             assert (root / f"notebooks/{name}.ipynb").read_bytes() == (
                 fixture / f"{name}.ipynb"
             ).read_bytes()
+        # Notebook instructions name help files in backticks, not Markdown links.
+        for notebook in (root / "notebooks").glob("*.ipynb"):
+            cells = json.loads(notebook.read_text(encoding="utf-8"))["cells"]
+            for cell in cells:
+                if cell["cell_type"] == "markdown":
+                    for target in re.findall(
+                        r"`([^`\n]+\.md)`", "".join(cell["source"])
+                    ):
+                        assert (notebook.parent / target).is_file(), (notebook, target)
     assert all(
         "scopecat_tutorials" not in file.read_text(encoding="utf-8")
         for file in source.glob("*.py")

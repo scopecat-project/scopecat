@@ -20,12 +20,12 @@ from my_experiment.teaching import teaching_rabi
 不需要另写 `importlib.reload`。共享软件包升级由维护者处理，并重启 Notebook kernel。
 如果刷新报语法错误，修正文件后再次刷新；不要把刷新成功当成实验已经运行。
 
-第二批小范围练习见 [修改、刷新、读取](EDITING.md)：先改一个默认值，
-再另选时间尝试平均 IQ 与类型化历史读取。两项不要求同时完成，也不包含原课程全部题目。
+补充练习见 [修改、刷新、读取](EDITING.md)：先改一个默认值，
+再另选时间尝试平均 IQ 与类型化历史读取。两项可以分别进行。
 
 参数保存、扫描/分组与研究目录分题见 [GROUPS.md](GROUPS.md)；
 维护者无 AI 备份恢复专项见 [MAINTENANCE.md](MAINTENANCE.md)。
-旧 A/B 练习项目保持固定；这些题在对应新版交付的新项目中另做。
+这些材料服务保留的回归场景；当前 Help 课程由教学包维护。
 
 ## 可编辑的课程源码
 
