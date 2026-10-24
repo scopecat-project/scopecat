@@ -37,6 +37,7 @@ def assert_reports_uploaded(workflow, relatives):
     paths = {
         Path(line.strip().removeprefix("${{ runner.temp }}/"))
         for line in step["with"]["path"].splitlines()
+        if line.strip().startswith("${{ runner.temp }}/")
     }
     for relative in relatives:
         assert any(relative.is_relative_to(path) for path in paths), relative
@@ -46,7 +47,8 @@ def assert_reports_uploaded(workflow, relatives):
     "relative",
     ["windows-storage/", "reset-recovery/", "data/desktop/desktop.log"],
 )
-def test_native_upload_contract_rejects_missing_reports(relative):
+@pytest.mark.parametrize("fault", ["missing", "checkout-root", "blank-line"])
+def test_native_upload_contract_rejects_missing_or_misrooted_reports(relative, fault):
     workflow = (
         Path(__file__).resolve().parents[3] / ".github/workflows/acceptance.yml"
     ).read_text()
@@ -58,6 +60,10 @@ def test_native_upload_contract_rejects_missing_reports(relative):
     )
     paths = upload["with"]["path"].splitlines()
     paths.remove("${{ runner.temp }}/native-acceptance/" + relative)
+    if fault == "checkout-root":
+        paths.append("native-acceptance/" + relative)
+    elif fault == "blank-line":
+        paths.insert(0, "   ")
     upload["with"]["path"] = "\n".join(paths)
     omitted = yaml.safe_dump(document)
     with pytest.raises(AssertionError):
