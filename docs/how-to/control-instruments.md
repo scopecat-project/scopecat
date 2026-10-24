@@ -146,8 +146,8 @@ lab.devices.driver_source()  # inspect the active snapshot without connecting
 
 The directory must contain `scopecat.toml` with `lab.instrument_backend` and author
 source roots. Its factory must retain the current provider identity and support
-the registered connection options. Dependencies must already be available in the
-application environment. No wheel build or application restart is required.
+the registered connection options. Dependencies must already be available in the selected driver execution Python.
+No wheel build or application restart is required.
 
 The update replaces the whole driver worker, so all devices it serves must be
 idle. It releases old connections; the next explicit operation reconnects. Prepare
@@ -156,8 +156,10 @@ errors preserve the previous selection; failed disconnection requires resolving
 device attention before retrying. Application restart and backup/restore retain
 the selected source even if the development directory has moved.
 
-This command updates drivers. It does not refresh experiment/compiler source or
-install dependencies, and there is not yet a workbench source-update button.
+The Instruments workspace also provides **Update from source**, with a source
+directory and optional driver execution Python override. Finish manual sessions
+and affected work before submitting; reconnect devices and prepare experiments
+again afterwards. This updates drivers, not experiment/compiler source or dependencies.
 
 ## Return from manual work to an experiment
 

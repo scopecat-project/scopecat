@@ -1,8 +1,7 @@
 # Everyday Python author contract
 
-This contributor contract records the shared semantics and validation strategy for
-[implementation slices A0–A8](https://github.com/scopecat-project/scopecat/issues/466),
-whose APIs and consumer views are implemented. For hands-on use, start with
+This contributor contract records shared author semantics and their validation
+boundaries. For hands-on use, start with
 [configuration editing, dataclass rows and new tables](../how-to/manage-configuration.md),
 [managed author sessions](../how-to/managed-author-session.md),
 [ordinary analysis](../guides/ordinary-analysis.md), and
@@ -73,7 +72,7 @@ verification refers to its own retained acquisition and decision. Neither a
 successful acquisition nor a successfully executed fit implies a useful or
 verified calibration.
 
-## Interface ownership and implementation order
+## Interface ownership
 
 The workspace entry point is `lab.parameters.workspace(branch_name)`, or
 `session.params` after `session.use(parameter_branch=...)`. It exposes keyed
@@ -87,22 +86,10 @@ fixed/scanned inputs, frozen workspace previews, receipt-backed submission,
 bounded waiting and read-only recovery. [Ordinary analysis](../guides/ordinary-analysis.md)
 retains typed conclusions and their input/source publication.
 
-| Producer | Contract consumed by other slices |
-| --- | --- |
-| [#468 workspace](https://github.com/scopecat-project/scopecat/issues/468) | Independent parameter storage, coherent cells, immutable freeze and branch save semantics |
-| [#469 typed rows](https://github.com/scopecat-project/scopecat/issues/469) | Standard dataclass binding to an existing table; explicit unit conversion |
-| [#470 unknowns and schema](https://github.com/scopecat-project/scopecat/issues/470) | Complete unknown tables and explicit creation/structure changes |
-| [#471 author session](https://github.com/scopecat-project/scopecat/issues/471) | Scan/preview/submit/wait/reopen consuming the frozen workspace |
-| [#472 analysis](https://github.com/scopecat-project/scopecat/issues/472) | Ordinary function adapter over existing Dataset and retained publications |
-| [#473 verification](https://github.com/scopecat-project/scopecat/issues/473) | Typed candidate with evidence, independent verification, explicit selection |
-| [#474 recipes](https://github.com/scopecat-project/scopecat/issues/474) | Honest symbolic input/reference types and bounded supported arithmetic |
-| [#475 views](https://github.com/scopecat-project/scopecat/issues/475) | Live notebook representations and console drafts with units, origins and explicit save/select/publish boundaries |
-
-No slice introduces a second configuration registry, result store or dataset
-model. Producers own shared storage/wire definitions and client regeneration;
-consumers rebase and use the contract. Workspace freezing is first checked using
-existing low-level run APIs; the session slice owns the end-to-end new facade
-check, avoiding a dependency cycle.
+The original [implementation sequence](https://github.com/scopecat-project/scopecat/issues/466)
+is historical planning. Current storage and publication ownership is defined in
+[configuration ownership](architecture/configuration-ownership.md); the author
+facade uses those records rather than introducing another registry or result store.
 
 The managed session extends the existing revision-aware `AuthorProject` worker
 path without reintroducing notebook-global project imports. A submitted job owns
@@ -150,19 +137,16 @@ The facade coverage now also includes:
 These tests exercise the current author boundary; passing them does not
 establish novice usability or physical calibration performance.
 
-## Implemented preview and novice evaluation
+## Novice evaluation
 
-A0–A8 provide the implemented preview: edit an existing table or declare one from
-zero, bind standard dataclass rows, preview and run scans, write ordinary analysis,
-stage and independently verify candidates, save and reopen versions, and inspect
-the same parameters in notebooks and the console. Explicit structure changes
-must be saved before preparing a run. Selecting a candidate and publishing a
-shared default remain separate actions.
-
-[A9 batch import/export](https://github.com/scopecat-project/scopecat/issues/476)
-is later convenience work. It does not block this preview. Automated fixtures
-have exercised the implemented route; evaluation by a basic Python/NumPy user
-who did not implement the APIs is still **unperformed**.
+Authors can edit or declare tables, bind dataclass rows, preview and run scans,
+retain ordinary analysis, independently verify candidates and reopen exact versions.
+[JSON and pandas table exchange](../how-to/exchange-parameter-tables.md) is also
+available. Explicit structure changes must be saved before preparing a run.
+Selecting a candidate and verified branch publication remain separate actions.
+Automated fixtures exercise these routes; they do not establish independent learner
+comprehension. Human observations are tracked in
+[#616](https://github.com/scopecat-project/scopecat/issues/616).
 
 Observe at least one basic Python/NumPy user who did not implement these APIs.
 Give them the task and supported documentation, then record the following for
@@ -176,7 +160,7 @@ each step without filling gaps on their behalf:
 | Change a value after preview | Whether the frozen review and next edit are distinguishable |
 | Save, discard and reopen | Whether the user predicts which values return |
 | Analyze peaked and flat inputs | Whether acquisition success is distinguished from useful analysis |
-| Select a working point | Whether the user understands that the shared default is unchanged |
+| Select parameters and setup | Whether selection, saving and verified publication remain distinguishable |
 
 For each task record completion, stalls, exact assistance, and the artifact/run
 identity. Require no Pydantic, record assembly, manual hashes, generation tokens,

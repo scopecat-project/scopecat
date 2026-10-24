@@ -181,7 +181,7 @@ isolated build does not consume.
 ## Teaching capability is not fixture retirement
 
 The reference lab's retired teaching role is distinct from generic teaching in
-`scopecat-tutorials`. Seven topic Notebooks and their editable source remain. Their
+`scopecat-tutorials`. The generator-declared topic Notebooks and their editable source remain. Their
 current use as maintained fixtures does not cancel the Notebook/application
 learning journey. Help's single manual-peak practice is only a bounded part of
 that goal. The manager topology is retired; the full learning experience has not
