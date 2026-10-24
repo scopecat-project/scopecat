@@ -206,9 +206,8 @@ checking material identity.
 | `test_managed_task_calibration_shipped_kernel` | Task-calibration cells; worker continues after close, prepared source survives edits, retry creates no duplicate execution, accepted/rejected/stale finalizations remain distinct |
 | `scripts/verify_notebook_journey.py` | Browser Help preparation/Continue, real kernels, editable material, source/scan edits and retained-result reopening |
 
-Standalone `verify`/`verify_maintenance` reuse shipped-cell checks and keep their
-independent project environment and admission boundaries. Extra failure/read checks
-remain external. Grouping does not teach parameter-save or research-history steps;
+Extra failure/read checks remain outside learner cells. Grouping does not teach
+parameter-save or research-history steps;
 minimal teaching and server sample-history tests cover those separately.
 Source/kernel checks do not establish installed delivery, actual editor use or
 learner comprehension. Installed teaching and recovery owners are in

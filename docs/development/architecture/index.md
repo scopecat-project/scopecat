@@ -11,7 +11,7 @@ directions to Scopecat contributors:
   still required before delivery.
 - [Device and driver management](device-management.md) defines the target device
   registry, connection revisions, setup references and shared physical access;
-  it distinguishes these from the current setup-copy editor and project backend.
+  it separates device maintenance from experiment setup and parameter editing.
 - [Experiment execution semantics](execution.md) covers authoring ownership,
   specialization, domain lowering, effects, completion, and evidence.
 - [Experiment workbench and session contexts](experiment-contexts.md) defines the
@@ -19,8 +19,8 @@ directions to Scopecat contributors:
   acceptance. 当前能力边界见[平台说明](../platform-status.md)。
 - [Local application host](application-host.md) describes the packaged application
   runtime registration, process ownership and native window lifecycle.
-- [Configuration ownership](configuration-ownership.md) separates fixed scientific
-  selection fences from default activation and records scoped publication work.
+- [Configuration ownership](configuration-ownership.md) defines independent parameter
+  branches, setup resolution and exact execution/admission fences.
 - [Lab daemon](daemon.md) covers durable run ownership, instrument workers,
   cancellation, API events, configuration, and storage.
 - [Durable procedure automation](automation.md) covers replayable multi-run
@@ -38,3 +38,8 @@ preserving user-facing concepts that still deliver value.
 - [Quantum compiler and device adapter boundary](quantum-adapters.md)
 
 - [Flux correction](flux-correction.md): explicit static voltage mixing, FIR snapshots and the bounded list-mode integration.
+
+- [Sampled timing corrections](timing-corrections.md): explicit integer-sample shifts,
+  retained coordinates and output/acquisition limits.
+- [Manual physical lines](manual-lines.md): confirmation, drain/recovery and finite
+  ordered attempts with retained identity.

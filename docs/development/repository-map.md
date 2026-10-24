@@ -47,15 +47,11 @@ Each fresh admitted course installs its own named teaching setup/parameter branc
 through editable initialization code. Source, SDK and execution registration remain
 ordinary author work in the existing application.
 
-| Topic | Editable material / registration difference | Help readiness |
-| --- | --- | --- |
-| parameters | Synthetic experiment, response and parameter declarations; independent identity/setup helper | Supported, including existing receipts |
-| groups | Same experiment and independent setup helper; `group_analysis.py` and `result_types.py`; no new procedure registration | Supported; separate preview/acquisition/read cells, saved run and publication IDs for reopen |
-| refresh | Same base experiment plus `examples/extra.py`, copied explicitly by the learner | Supported; independent inputs, saved source adopted for new requests, separate preview/acquisition and exact retained reads |
-| compute | Replaces `teaching.py` with raw/mean IQ experiments and typed results | Supported; independent inputs, separate acquisition/read cells and exact run ID or number selection after restart |
-| calibration | `calibration.py`; explicit calibrate/check procedure list replaces the experiment | Supported; independent setup/catalog/trial identities and read-only paginated request history |
-| joint-calibration | Adds `joint_calibration.py` and its procedure registration | Supported; independent identities and read-only request history; coupled verification remains visible |
-| task-calibration | Adds `task_calibration.py`, task-stage/finalization procedures | Supported; shared preparation, independent identities and read-only task history |
+The generator's `TOPICS` and `TOPIC_PROCEDURES` in
+[`scopecat_tutorials.lessons`](../../packages/scopecat-tutorials/src/scopecat_tutorials/lessons.py)
+own the supported topics and procedure registration. Learners choose through
+[Help's lesson guide](../tutorials/teaching-sandboxes.md); this map does not maintain
+a second topic inventory.
 
 All supplied topics share the application data and editable-source contract; there
 is no independent service, per-course state machine or course-scoring system.
@@ -87,20 +83,10 @@ keep their original software environment and data or explicitly transfer edits;
 there is no automatic migration. `testing.app_support.project` remains a small regression
 fixture for scientific and kernel tests, without generated lifecycle tasks.
 
-`scripts/verify_teaching_delivery.py` runs installed Help acceptance, then checks
-CLI source identity and ordinary author preparation against that application.
-The installed Help carrier covers wrong kernels, source/Notebook edits, restart,
-exact-result reads without reacquisition and cold-cache snapshot recovery.
-`verify_editing` and `verify_groups` retain evidence appended to shipped lessons,
-not separate course implementations. Focused refresh/compute/calibration kernel
-journeys and `scripts/verify_teaching_help_topics.py` cover the other supplied
-material. Duplicate standalone course/recovery stages and their admission tests
-are retired with their entry points.
-
-Offline bundle verification and installation remain in `bundle.py`; ordinary
-author environments retain their independent interpreters and existing user edits.
-These checks do not establish native editor activation, unfamiliar-user learning
-or physical-device acceptance.
+Teaching check selection and scientific/source boundaries belong to
+[test feedback](test-feedback.md#teaching-and-author-entry). Installation, recovery
+and native qualification belong to the
+[packaging matrix](architecture/desktop-packaging.md#teaching-intent-and-acceptance-limits).
 
 Native installation currently exposes a desktop entry, not a global PATH console.
 The wheel console above is not a requirement to install application ownership in
@@ -134,35 +120,8 @@ the producer; resolve generated-file conflicts by regenerating from the resolved
 source. The [fixture map](reference-fixtures.md) describes their coverage.
 
 
-## Package and entry transition (#1067 / #1068)
-
-| Consumer | Current owner / migration |
-| --- | --- |
-| Desktop user | Installed Scopecat → Help. No global PATH setup or root teach menu. |
-| Wheel-installed author or application maintainer | `scopecat_app.public_cli`; `scopecat` remains the environment-local console. |
-| Server integrations and project maintenance | `python -m scopecat_server.cli`, including lifecycle, configuration, snapshots and diagnosis. |
-| Repository developer | `uv run --locked python -m scripts.dev`; native development hosts and resource producers live in `scripts/app_build`. |
-| CI / packaging / release consumers | `scripts.app_build.delivery`, `native_package`, `toolchain`, `preview` and the existing `scripts/release*.py` orchestration. |
-| Installed acceptance | `scripts/verify_*.py` consumes installed wheels and repository-only `testing/app_support`; helpers are not copied into application wheels. |
-| Internal processes | `scopecat_app.native_bootstrap`, application lifecycle and `service_runtime.py` remain installed; server and instrument workers retain their existing owners. |
-
-Distribution names are `scopecat-app` and `scopecat-tutorials`; imports are
-`scopecat_app` and `scopecat_tutorials`. Downstream source-development scripts,
-application integration tests, and dependency recipes using the previous names
-must explicitly select the new source/package set. Existing pinned release
-consumers continue using their selected artifacts; this change does not edit
-consumer pins or make old assets match the new names. Read-only downstream
-inspection found these migration points; downstream edits are separate work.
-
-Runtime `bundle.py` and `author_resources.py` retain resource verification and
-installation receipts needed after installation. Offline installer assembly and
-author-resource production belong to `scripts/app_build`. Developer resource
-identities include their build scripts and platform patches, so producer changes
-invalidate cached resources. Test scaffolding and Notebook verification live in
-`testing/app_support`; tutorials ship generation code and editable resources.
-
-The existing preview/UI and wheel asset collection remains available for consumer
-migration; renaming packages does not authorize publication or remove historical
-assets. Same-batch first-party release versions will follow the application under
-#1030, accepting the old 0.2 baseline rollback; implementing that version rule is
-a separate follow-up. Released v0.1.0 tags/assets remain untouched.
+First-party wheels built together follow the application version in `release.toml`;
+`scripts/app_build/package_versions.py` stamps source copies and validates exact
+internal dependencies. See the [release asset contract](architecture/desktop-packaging.md#release-asset-boundary).
+Existing consumers keep their explicitly selected artifacts; source changes do not
+upgrade them or rewrite historical release assets.

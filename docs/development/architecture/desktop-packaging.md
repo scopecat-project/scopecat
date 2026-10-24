@@ -22,9 +22,9 @@ retains CPython, pywebview and the existing web UI.
 ## Exact build runtime
 
 `.python-version` is the single exact CPython patch/variant baseline for CI and
-packaging. Build entry points reject host patch or variant drift. The current
-3.15.0 baseline is supplied by locked uv 0.13.1; no minor or free-threaded fallback
-is permitted. SDK support and author recovery/default policies are unchanged.
+packaging. Build entry points reject host patch or variant drift. The uv version
+is selected by `uv.lock`; no minor or free-threaded fallback is permitted. SDK
+support and author recovery/default policies are unchanged.
 
 Delivery preparation obtains a clean uv-managed runtime before building wheels
 or preparing dependencies. Explicit `--python` paths and disabled implicit Python
@@ -68,7 +68,7 @@ not additional desktop products.
 | --- | --- | --- |
 | Source and browser | Regular CI; Linux browser shards in `full` / `local-application` / `browser` | API, UI interactions and source regressions; not installed-package evidence |
 | Minimal framework installation | Linux/Windows `installed-artifacts`; four-wheel subset of standard preview plus GUI ZIP | No checkout imports, Node, reference-lab, testkit or scopecat-app; CLI/scaffold, real GUI bytes/assets/version, installed/local author discovery, source-byte identity and durable restart |
-| Offline installer and teaching consumers | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained notebook and generated editor-task callers, application reopen |
+| Offline installer and teaching consumers | Same Linux/Windows job; platform delivery assembled with `--public-artifacts` | Archived `bundle.json`/standalone `install.py`, empty-cache offline install, installed public console, retained Notebooks and ordinary CLI author preparation, application reopen |
 | Desktop package | Separate Mac/Windows `native-distribution` profile | Native entry, relocation, empty PATH, unchanged application files, independent author Python and platform installer behavior |
 | Public artifact consumer | Immutable `preview.json`, wheels and GUI; downstream consumer pins | Source commit and package/hash identity; a downstream pin is not evidence for a newer framework candidate |
 | Release assembly | `release-publish` builds standard artifacts once, reuses them for platform delivery/native packaging | Matching release identity and qualified installer inventory; not invoked by ordinary CI |
@@ -79,9 +79,8 @@ standard artifact is built once within `full` / `local-application`; browser and
 installed checks consume its GUI, and platform delivery reuses its wheels.
 The offline archive is an internal validation carrier, not an additional desktop
 product commitment. Calling course code a fixture describes its current maintenance
-form; it does not retire the teaching requirement. Existing generated teaching callers are retained;
-retiring them or narrowing their platform matrix requires an explicit consumer
-replacement and supported-platform decision.
+form; it does not retire the teaching requirement. Narrowing installed teaching
+coverage requires an explicit consumer replacement and supported-platform decision.
 
 The standard artifact carries framework wheels and a separate GUI ZIP. The old
 pilot builder and GUI-embedded server package are retired; the `bundle.json`
@@ -135,8 +134,8 @@ to PyPI or modify historical releases (including v0.1.0 assets and tag).
 ## Teaching intent and acceptance limits
 
 Help supports Notebook/application collaboration through shared preparation and
-Continue for all seven supplied topics. It preserves editable source and retained
-results. Course ordering and remaining standalone lifecycle consumers belong to
+Continue for the supplied topics. It preserves editable source and retained
+results. Course ordering and learning design belong to
 [#565](https://github.com/scopecat-project/scopecat/issues/565); actual editor use and
 unfamiliar-user observations belong to
 [#616](https://github.com/scopecat-project/scopecat/issues/616).
@@ -145,20 +144,21 @@ Source/browser/kernel owners are listed in
 [test feedback](../test-feedback.md#teaching-and-author-entry). Installed coverage
 has two additional boundaries:
 
-- `verify_teaching_delivery.py` checks offline installation, console/editor-task
-  entry, wrong-kernel rejection and headless continuation on Linux/Windows.
-  Installed Help and grouped recovery pass before duplicate standalone grouped
-  stages are omitted. Default-course, editing and snapshot checks retain their
-  own consumers. Application-install cache reuse does not replace empty-cache
-  author and recovery preparation. These preparation phases now allow network
-  access; application installation remains offline.
-- `verify_installed_help_kernels.py` installs the full toolchain at a fresh location,
-  prepares author environments from minimal format-2 resources online with independent
-  Python and separate empty caches, and executes all seven shipped Help topics in
-  real kernels. Parameters/groups retain the restart, repair and snapshot recovery
-  assertions. Fresh kernels reject the application interpreter; after application restart they
-  read exact retained results without acquisition. Run
-  `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
+- `verify_teaching_delivery.py` checks offline application installation, the installed
+  console and CLI-created editable author source. It invokes the default installed
+  Help checks below, then prepares the CLI source through the same application's
+  ordinary author operations. It generates no separate service or editor tasks.
+  Application installation is offline; author and recovery preparation use
+  independent empty caches and may access the network.
+- `verify_installed_help_kernels.py` prepares independent author Python environments
+  from minimal format-2 resources and executes `parameters` and `groups` by default.
+  These checks retain restart, repair, wrong-kernel rejection and snapshot recovery;
+  after application restart they read exact retained results without acquisition.
+  Run `python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>`.
+  Add `--all-topics` to also execute the remaining generator-declared topics in
+  real kernels. The ordinary delivery invocation does not pass that flag; its
+  success is not evidence that every topic ran. Inspect the receipt's
+  `installed_help_topics` for the actual selection.
 
 The installed Help verifier also restores a stopped-service snapshot at a new
 location with old source/environment paths unavailable. It explicitly registers

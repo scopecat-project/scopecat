@@ -100,73 +100,26 @@ Adoption and dependency design should follow an actual maintained workflow. The
 catalog itself neither supplies automatic calibration freshness nor demands that
 users keep it synchronized with every physical intervention.
 
-## Why active configuration needs a separate redesign
+## Executable configuration and remaining scientific boundaries
 
-The current active configuration is useful because it supplies a convenient
-execution default, an accepted parameter/configuration version, apparatus and
-routing structure, and a generation fence against stale decisions. Those concerns
-have different owners once several samples, working points and automation jobs
-share an installation.
+The [configuration ownership contract](configuration-ownership.md) owns current
+parameter branches, setup definitions/resolutions and execution fences. The former
+global-default selector and combined working-point writers are retired. Descriptive
+apparatus history neither selects execution inputs nor supplies calibration acceptance.
 
-Current code still exposes `ActiveConfiguration` in scientific selection;
-`CalibrationConfigSourceRef` requires the active registry selector and a generation.
-Working-point and calibration consumers remain primarily sample/context scoped.
-The new descriptive catalog does not remove those limitations, and should not be
-presented as the active-configuration redesign.
+Executable setup declarations contain what software needs to execute; additional
+verification is needed to claim that real wiring matches them. Association with
+catalog objects must be explicit. Port-complete apparatus documentation is not a
+prerequisite for an otherwise valid setup.
 
-The next design should assign responsibilities as follows:
+Independent parameter branches have separate publication conflicts. This does not
+permit concurrent access to one physical instrument: admission still enforces
+resource authority and stale-device protection. Each run retains its complete
+resolved configuration and provenance, rather than reconstructing it from mutable heads.
 
-| Responsibility | Intended owner |
-|---|---|
-| Convenient next-experiment defaults | Page/kernel session selection |
-| Execution topology, drivers, routes and lifecycle declarations | An exact maintained executable setup revision |
-| Accepted parameter state and publication conflicts | A working point scoped to the relevant measurement object and conditions |
-| Calibration results and dependency freshness | Explicit scoped publications with retained input/result evidence |
-| Exact configuration used for execution and reproduction | A complete immutable resolved execution snapshot |
-| Device exclusion, stale hardware authority and uncertain effects | Runtime resource authority, generation fences and quarantine |
-
-Executable setup declarations are not the same as descriptive apparatus history.
-They contain what software needs to execute; additional verification is needed to
-claim that real wiring matches them. Their future association with catalog objects
-must be explicit. Do not make port-complete apparatus documentation a prerequisite
-for an otherwise valid execution setup.
-
-Publishing A's parameter state should check A's working-point revision rather than
-conflict merely because B published unrelated values. Updating shared setup checks
-its own revision. Admission still checks the appropriate runtime authority. The
-change must separate these conflict domains without deleting fences or permitting
-stale hardware access. Independence of scientific state does not imply that two
-jobs can simultaneously use one instrument.
-
-Retain the complete resolved configuration and provenance for each run. Separating
-maintenance ownership must not scatter the only recoverable description of an
-experiment across mutable heads. Existing exact preview, saved-plan and admitted
-binding behavior remains the execution boundary to build upon.
-
-Executable setup now has independent immutable revisions and activation authority.
-Fixed selections use setup-content fences, while parameter-default selection also
-retains its own generation fence. Working-point saves and automated publication
-compare their own heads without changing the global default. Explicit setup rebinding
-creates a new saved branch without inheriting calibration acceptance. See
-[configuration ownership](configuration-ownership.md) for the implemented boundary
-and race protection.
-
-## Order of work and evidence for convergence
-
-1. Deliver descriptive history and current-format recovery first. Assess concrete
-   history lookup and evidence navigation before requiring more structure.
-2. Specify the executable setup/parameter composition boundary and audit all active
-   configuration consumers. Replace their current writers/readers together, with
-   per-working-point publication conflicts and unchanged resource protection.
-3. Extend executable subject identity to apparatus where a real no-sample
-   measurement requires it. An observation-to-run link alone is insufficient.
-4. Carry the resulting applicability through automation requirements, dependencies,
-   candidates and publication. Build explicit adoption only where that workflow
-   needs it. A graphical target picker can follow the settled selection contract.
-
-Steps 1–2 are implemented, including a bounded independent A/B publication case.
-The following scenarios distinguish that evidence from the remaining executable
-apparatus and cross-object work; the descriptive catalog alone does not satisfy them:
+The following scenarios distinguish existing independent publication from remaining
+executable-apparatus and cross-object work. Descriptive observations alone do not
+satisfy the latter boundaries:
 
 | Scenario | Required observation |
 |---|---|
