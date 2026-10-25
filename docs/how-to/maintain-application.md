@@ -1,8 +1,8 @@
 # 维护应用 {#maintain-the-application}
 
 Scopecat 原生入口直接打开工作台，没有实验室选择器或单独的管理页。
-**设置（Settings / Application settings）**管理软件、作者目录和数据位置；
-**设备与驱动（Devices and drivers）**管理共享设备。下文括号内及英文粗体文字对应当前界面入口。
+**设置**管理软件、作者目录和数据位置；
+**设备与驱动**管理共享设备。
 
 ## 日常使用 {#daily-use}
 
@@ -22,7 +22,7 @@ Scopecat 原生入口直接打开工作台，没有实验室选择器或单独�
 
 ## 备份应用数据 {#back-up-application-data}
 
-在原生应用中选择**设置（Settings）→ Software and data → Back up application data…**。
+在原生应用中选择**设置 → 软件与数据 → 备份应用数据…**。
 选择应用主目录之外的现有文件夹，保存并停止编辑练习文件，然后确认。
 取消任一对话框都不会改变数据。应用仅在空闲时停止服务；活动工作和文件传输必须先结束。
 
@@ -53,17 +53,17 @@ Scopecat 原生入口直接打开工作台，没有实验室选择器或单独�
 
 首次 Notebook 实验请按[帮助页课程](../getting-started/quickstart.md)开始。
 课程目录已登记，可直接成为日常编写实验的目录。
-若需独立目录，在**设置（Settings）→ Author code → New code folder** 中选择保存位置和名称，
-然后点击 **Create folder and prepare Python**。应用创建无需设备的示例和独立 Python 环境，
+若需独立目录，在**设置 → 作者代码 → 新建代码目录** 中选择保存位置和名称，
+然后点击 **创建目录并准备 Python**。应用创建无需设备的示例和独立 Python 环境，
 不会连接设备或开始测量，也不会覆盖现有目录。
 
 准备完成后，设置页显示目录和 Python 路径。在 VS Code 中打开该目录，
 选择 `.venv` 解释器，逐单元格运行 `notebooks/02_edit_scan.py`。
 示例会提交合成扫描、分析并重新打开已保存结果；再次运行提交部分会产生一次新测量。
 
-接入已有 Scopecat 源码时，选择 **Use existing folder → Browse for code folder…**，
-填写 **Execution Python**，再点击 **Add code folder**。
-可在 **Your code folders** 中选择已登记目录。添加目录不会停止应用；
+接入已有 Scopecat 源码时，选择 **使用已有目录 → 浏览代码目录…**，
+填写 **执行 Python**，再点击 **添加代码目录**。
+可在 **代码目录** 中选择已登记目录。添加目录不会停止应用；
 多个目录共享同一服务、设备登记和数据管理。
 
 对已登记目录，`sc.notebook()` 可使用用户选择的兼容内核，同时保留旧 `.venv`。
@@ -71,14 +71,14 @@ Scopecat 原生入口直接打开工作台，没有实验室选择器或单独�
 Notebook 内核与执行 worker 不必使用同一个解释器路径。
 请保留旧环境，以便执行已保存源码及恢复工作。
 
-如果现有目录没有本地 Python，选择 **Create local Python environment**，
+如果现有目录没有本地 Python，选择 **创建本地 Python 环境**，
 随后选择 macOS 的 `.venv/bin/python` 或 Windows 的 `.venv/Scripts/python.exe`。
 这是用户环境，在其中安装绘图或分析包不会修改应用。
 不要把应用安装目录内的解释器作为 Notebook 内核。
 生成的环境使用由 uv 管理的独立 Python；环境使用期间请保留它。
 更换或卸载应用不会删除这个 Python。
 
-首次准备需要联网下载 Python 和第三方依赖；应用本身仍可离线启动。
+所需 Python 和第三方依赖未缓存时，准备过程需要联网下载；应用本身仍可离线启动。
 作者资源只携带所需的未发布 Scopecat wheels 和匹配的依赖配方，不是完整离线依赖包。
 目录内的 `.python-version` 优先于配方固定的 Python 版本，并会检查 `requires-python`
 和声明的依赖。已有 `uv.lock` 用 `--locked` 导出；过期锁文件会导致失败，不会被重写。
@@ -86,7 +86,7 @@ Notebook 内核与执行 worker 不必使用同一个解释器路径。
 
 应用 CLI 的准备操作可通过 `--python /path/to/python` 使用已有独立解释器；
 设置了 `UV_PYTHON` 时也会检查它。选择已准备好的后台环境时，
-**Execution Python** 会先验证环境。准备失败保留原环境。
+**执行 Python** 会先验证环境。准备失败保留原环境。
 
 生成的环境包含 Scopecat Python API、Notebook 内核及其依赖，不复制桌面、服务和教学包。
 VS Code 可直接使用。如需 JupyterLab 编辑器，用该环境的 pip 安装 `jupyterlab`；
@@ -101,7 +101,7 @@ version = "0.1.0"
 dependencies = ["humanize==4.13.0"]
 ```
 
-选择 **Prepare execution environment from pyproject.toml**，然后刷新并预览实验。
+选择 **按 pyproject.toml 准备执行环境**，然后刷新并预览实验。
 准备操作在独立受管环境中解析源码需求与兼容的 Scopecat 包。
 交付包提供的依赖仍受完整依赖锁约束，与本地 Notebook 环境使用相同基线；
 联网解析可以添加声明的包，但不能静默升级该基线。
@@ -113,20 +113,22 @@ dependencies = ["humanize==4.13.0"]
 不要求每个分析库版本或 Python 补丁版本都与执行环境相同。
 已保存工作的执行和恢复仍检查精确记录的环境；原地修改用户环境可能使先前准备的工作失效。
 
-本地环境损坏时，先关闭其终端和内核，再选择 **Rebuild local Python environment**。
+本地环境损坏时，先关闭其终端和内核，再展开 **查看或修改 Python 环境**，
+选择 **重建本地 Python 环境**。
 旧目录保留为 `.venv-retained-…`，重建失败会恢复旧目录。
 新环境基于所选交付包创建，之后需重新安装自行添加的包。
 此操作不会修改源码、测量记录或受管执行环境。
 
 帮助页课程导入失败时，关闭该课程的 Notebook 和 Python 终端，再展开
-**Repair Notebook environments**，点击 **Repair environments and open Notebook**。
+**修复 Notebook 环境**，点击 **修复环境并打开 Notebook**。
 修复保留同一目录、源码编辑、Notebook 笔记和已保存结果，保留旧本地环境，
 并按交付依赖锁准备后台环境；之前准备的工作仍使用其记录的环境。
 重新启动 Notebook 时选择页面显示的 `.venv` 内核，并按需重装自行添加的包。
 多个帮助窗口观察的是同一次准备操作：运行中请等待，失败或中断后重试仍使用同一目录。
 
 受管执行环境位于 `HOME/environments`，已保留的环境不是可丢弃缓存。
-也可以填写现有 Python 并选择 **Use this execution Python**，不会安装包。
+也可以展开 **查看或修改 Python 环境**，填写现有 Python 并选择
+**使用此执行 Python**，不会安装包。
 驱动更新默认使用登记源码的执行环境，除非在驱动面板显式覆盖。
 修改源码执行 Python 不会替换已连接的驱动。
 
@@ -158,7 +160,7 @@ uv run --locked python -m scripts.dev --home /path/to/development
 命令打开带 Vite 和独立后端的原生桌面；Ctrl-C 请求在工作空闲后退出。
 通过设置登记能力源码目录，详见[日常源码开发](../development/public-preview.md#daily-source-desktop)。
 登记源码不会启用驱动。实验和分析修改使用普通作者代码刷新；
-首次选择或修改驱动使用**设备与驱动（Devices and drivers）**中的 **Update from source**，
+首次选择或修改驱动使用**设备与驱动**中的 **从源码更新**，
 此前应结束活动工作并释放手动会话。仅保存文件不会替换正在使用的驱动。
 依赖变更需要显式准备开发环境。应用更新使用新构建的原生包，
 不在运行中的应用内切换候选解释器或能力 wheel。
@@ -171,10 +173,10 @@ uv run --locked python -m scripts.dev --home /path/to/development
 强制终止后，系统会在运行锁保护下核对有效但过期的占用记录。
 锁文件存在本身不代表进程存活；无法确定归属时仍报错，不会删除记录或猜测 PID。
 
-修改本地设置后，在设置页选择 **Stop work and restart**。
+修改本地设置后，在设置页选择 **停止任务并重启**。
 重启会先检查当前应用和设置；失败时窗口保留错误及重试入口。
 应用依赖损坏应安装修正后的应用包，不要在应用内使用 pip。
-**Technical diagnostics** 提供维护者需要的解释器和能力详情。
+**技术诊断** 提供维护者需要的解释器和能力详情。
 
 原生日志位于 `HOME/desktop/desktop.log`。新建应用的科学数据位于 `HOME/data/`，
 daemon 日志位于 `HOME/state/daemon.log`；`state/` 还保存安装登记、作者目录登记、
