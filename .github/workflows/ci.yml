@@ -102,6 +102,8 @@ jobs:
           cache-suffix: platform-smoke-v1
       - name: Install smoke dependencies
         run: uv sync --locked --no-default-groups --group platform-smoke
+      - name: Check pinned portable Python supply
+        run: uv run --locked --no-default-groups --group platform-smoke python -m scripts.check_python_supply
       - name: Check relocated Mac console
         if: runner.os == 'macOS'
         run: >-
@@ -160,6 +162,9 @@ jobs:
         with:
           version-file: uv.lock
           enable-cache: true
+
+      - name: Check pinned portable Python supply
+        run: uv run --locked python -m scripts.check_python_supply
 
       - name: Check generated instrument clients
         run: uv run --locked python scripts/generate_instrument_clients.py --check

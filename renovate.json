@@ -74,6 +74,7 @@
     },
     {
       "description": "Review exact Python patch updates with the uv runtime catalog and native packaging acceptance",
+      "minimumReleaseAge": "7 days",
       "matchManagers": [
         "pyenv"
       ],

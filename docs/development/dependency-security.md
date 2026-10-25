@@ -13,6 +13,21 @@ Security fixes skip ordinary cooldown/scheduling limits but still require review
 Renovate applies `vulnerabilityAlerts.automerge: false` as a forced override of
 package rules. A faster proposal is not proof of compatibility.
 
+Ordinary Python patch updates wait seven days; uv retains the global three-day
+minimum release age. Python minor upgrades remain separate reviews. Waiting does
+not prove supply compatibility: Linux, macOS and Windows CI query the locked uv
+catalog for the exact ordinary CPython version using the same selector as portable
+builds, without downloading an interpreter. Native distribution acceptance still
+validates actual installation, relocation and application behavior.
+
+An urgent security update may receive an explicitly reviewed cooldown exception
+when the affected component is actually used here. Record the affected environments
+and the evidence; a security label alone never authorizes merging. Supply checks,
+build validation and merge protections still apply. Updating the application
+interpreter does not repair pip or certificate stores in existing author virtual
+environments; assess those environments separately without silently changing their
+recorded identities.
+
 Use the protected `CI gate` and `ALLGREEN` squash merge queue. Do not bypass the
 queue or weaken checks to merge an update; assess device and release compatibility
 separately when those paths are affected.
