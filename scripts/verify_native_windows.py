@@ -657,7 +657,7 @@ def probe(home: Path) -> None:
                         "Main run did not return after saving draft",
                     )
                     checks.append("real decision edit saved before secondary creation")
-                    click_text(first.window, "Open result in new window")
+                    click_text(first.window, "在新窗口打开结果")
                     wait_for(
                         lambda: len(webview.windows) == 2,
                         "Bridge did not create a native window",

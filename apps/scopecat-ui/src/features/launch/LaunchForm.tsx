@@ -87,7 +87,7 @@ export function LaunchForm({
           ? "The source working table is closed or conflicted. Open Configuration to review it and explicitly choose inputs again."
           : working.data.branch_changed
             ? "The working table’s branch changed. Review the latest branch head in Configuration, keep your table after review, then use current working inputs and preview again."
-            : "The working table has newer saved edits. 使用当前工作输入, then review the changes before starting. Saved edits do not replace the adopted copy automatically.";
+            : "工作表有更新的已保存编辑。使用当前工作输入后，请检查变化再开始。已保存的编辑不会自动替换已采用的副本。";
   useEffect(() => {
     if (!draft.workingInput || !working.data || workingCurrent || draft.pending || !draft.preview)
       return;

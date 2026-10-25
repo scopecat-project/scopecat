@@ -368,14 +368,18 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await page.getByLabel("Delay start").fill("16");
     await page.getByLabel("Delay stop").fill("48");
     await page.getByLabel("Delay points").fill("3");
-    for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
+    for (const destination of [
+      "参数与绑定 / Configuration",
+      "设备与驱动 / Devices and drivers",
+      "运行详情 / Runs",
+    ]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
-        .getByRole("button", { name: new RegExp(`${destination}$`) })
+        .getByRole("button", { name: destination, exact: true })
         .click();
       await page
         .getByRole("navigation", { name: "Project sections" })
-        .getByRole("button", { name: /Experiments$/, exact: true })
+        .getByRole("button", { name: "实验 / Experiments", exact: true })
         .click();
       await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("ramsey");
       await expect(page.getByLabel("样品 ID")).toHaveValue("sample-navigation");

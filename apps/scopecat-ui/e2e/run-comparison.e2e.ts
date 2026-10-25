@@ -146,9 +146,7 @@ test("compares retained signals, saves independent results and starts edited sug
     );
     await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     expect((await refreshed).status()).toBe(200);
-    await expect(
-      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
-    ).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
     await action("检查兼容数据");
     await page.getByLabel("主 run 选点位置").fill("4,1,2,3");
     await page.getByLabel("Carrier offset (GHz)").fill("0.01");

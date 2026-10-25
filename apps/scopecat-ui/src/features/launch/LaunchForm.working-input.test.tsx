@@ -97,9 +97,9 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
     await client.invalidateQueries({ queryKey: ["launch-working-input"] });
   });
   expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
-  await screen.findByText(/The working table has newer saved edits/);
+  await screen.findByText(/工作表有更新的已保存编辑/);
   expect(preview).toBeDisabled();
-  expect(preview).toHaveAccessibleDescription(/newer saved edits.*使用当前工作输入/);
+  expect(preview).toHaveAccessibleDescription(/工作表有更新的已保存编辑.*使用当前工作输入/);
   expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   expect(fetcher.mock.calls.some(([request]) => request.url.endsWith("/freeze"))).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "使用当前工作输入" }));
