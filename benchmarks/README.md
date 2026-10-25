@@ -232,7 +232,10 @@ This copies the virtual reference project, prepares and publishes analyses using
 normal APIs, rotates through at least three revisions and revisits the original.
 The optional bounded rounds repeat fresh revision churn and original restoration;
 operations-per-revision adds consecutive prepare/analysis calls at each visit.
-The defaults keep the short workload. Case version 3 correlates every operation
+`--run-per-visit --concurrent-analysis` adds bounded three-point runs and analysis
+requests submitted alongside preparation in the same daemon; see the workload
+counts and limitations below. The defaults keep the short workload.
+Case version 5 correlates every operation
 with its revision, round, iteration, phase and analysis receipt, and links
 checkpoints by operation index. It records checkpoint PID/creation-time/role/RSS,
 asserts same-revision reuse and the two-worker limit per pool, and checks observed

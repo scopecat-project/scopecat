@@ -1,6 +1,8 @@
 """Direct callable computations keep construction separate from native execution."""
 
-from typing import Annotated, assert_type
+# pyright: reportUnnecessaryTypeIgnoreComment=true
+
+from typing import TYPE_CHECKING, Annotated, assert_type
 
 import pytest
 
@@ -24,6 +26,46 @@ def declared_voltage(
     value: Annotated[complex, sc.Unit("V")],
 ) -> Annotated[complex, sc.Unit("V")]:
     return value
+
+
+if TYPE_CHECKING:
+
+    def native_and_symbolic_call_contracts(reference: sc.DataRef[complex]) -> None:
+        assert_type(offset.eager(1j, correction=2j), complex)
+        offset.eager("wrong")  # pyright: ignore[reportArgumentType]
+        offset.eager(reference)  # pyright: ignore[reportArgumentType]
+        offset.eager(1j, unknown=2j)  # pyright: ignore[reportCallIssue]
+        offset.eager()  # pyright: ignore[reportCallIssue]
+        assert_type(offset(reference), sc.DataRef[complex])
+        # Symbolic arguments are not a transformed native signature. These pass
+        # static checking; names/required arguments are checked when building.
+        assert_type(offset(other=1), sc.DataRef[complex])
+        assert_type(offset("wrong"), sc.DataRef[complex])
+
+
+def test_plain_native_annotation_is_not_a_symbolic_argument_type_check() -> None:
+    @sc.compute
+    def increment(value: int) -> int:
+        return value + 1
+
+    @sc.experiment(id="test.symbolic-native-boundary")
+    def experiment(ctx: sc.ExperimentContext) -> sc.DataRef[int]:
+        return increment("wrong")
+
+    # Document the current boundary without promising that arbitrary Python
+    # annotations are checked by the graph builder or changing that boundary.
+    assert isinstance(experiment.build().output, sc.ValueRef)
+    with pytest.raises(TypeError):
+        increment.eager("wrong")  # pyright: ignore[reportArgumentType]
+
+
+def test_plain_complex_annotation_checks_symbolic_input_during_build() -> None:
+    @sc.experiment(id="test.symbolic-complex-boundary")
+    def experiment(ctx: sc.ExperimentContext) -> sc.DataRef[complex]:
+        return offset("wrong")
+
+    with pytest.raises(TypeError, match=r"input 'value' expects Scalar\[Complex\]"):
+        experiment.build()
 
 
 def test_direct_calls_build_dependencies_and_keep_native_test_entry() -> None:
