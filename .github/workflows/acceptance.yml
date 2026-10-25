@@ -94,59 +94,36 @@ jobs:
           node-version-file: .node-version
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         if: runner.os == 'Windows'
-      - name: Build native application and installer
+      - name: Prepare smoke dependencies
+        run: uv sync --locked --group delivery
+      - name: Build platform delivery
+        run: uv run --locked python -m scripts.app_build.delivery "${{ runner.temp }}/delivery"
+      - name: Build native host without installer
         shell: bash
         run: |
-          uv run --locked --group delivery pytest -v -n 0 \
-            packages/scopecat-app/tests/test_build_runtime.py \
-            packages/scopecat-app/tests/test_delivery_recipe.py \
-            packages/scopecat-app/tests/test_acceptance_workspaces.py \
-            packages/scopecat-app/tests/test_native_windows_probe.py \
-            packages/scopecat-app/tests/test_cocoa_dependency.py \
-            packages/scopecat-app/tests/test_windows_dependency.py \
-            packages/scopecat-app/tests/test_author_environment.py \
-            packages/scopecat-app/tests/test_desktop_platform.py \
-            packages/scopecat-app/tests/test_desktop_session.py \
-            packages/scopecat-app/tests/test_desktop_files.py \
-            packages/scopecat-app/tests/test_installed_adapter_journey.py \
-            packages/scopecat-instruments/tests/test_sdk_process.py \
-            packages/scopecat-server/tests/test_instrument_worker.py \
-            packages/scopecat-server/tests/storage/sqlite/test_run_repository.py::test_capture_import_is_idempotent_and_keeps_execution_tables_empty
-          uv run --locked python -m scripts.app_build.delivery "$RUNNER_TEMP/delivery"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            native_app="$RUNNER_TEMP/Scopecat"
-            installer="$RUNNER_TEMP/Scopecat-Setup.exe"
-          else
-            native_app="$RUNNER_TEMP/Scopecat.app"
-            installer="$RUNNER_TEMP/Scopecat.dmg"
-          fi
-          uv run --locked python -m scripts.app_build.native_package "$RUNNER_TEMP/delivery" "$native_app" --installer "$installer"
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            uv run --locked python scripts/verify_macos_desktop_exit.py "$native_app"
-          fi
-          uv run --locked python scripts/measure_packaged_runtime.py --app "$native_app" --output "$RUNNER_TEMP/direct-runtime"
-          uv run --locked python scripts/verify_native_application.py "$native_app" "$RUNNER_TEMP/native-acceptance" "$installer" --native-windows
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            uv run --locked python scripts/verify_macos_download.py "$installer" "$RUNNER_TEMP/macos-download"
-          fi
-      - name: Retain qualified preview installers
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: scopecat-preview-${{ runner.os }}-${{ github.sha }}
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-          path: |
-            ${{ runner.temp }}/Scopecat.dmg
-            ${{ runner.temp }}/Scopecat-Setup.exe
-            ${{ runner.temp }}/native-acceptance/native-release.json
-            ${{ runner.temp }}/native-acceptance/bundle.json
+          native_app="$RUNNER_TEMP/Scopecat"
+          if [ "$RUNNER_OS" = "macOS" ]; then native_app="$native_app.app"; fi
+          uv run --locked python -m scripts.app_build.native_package "$RUNNER_TEMP/delivery" "$native_app"
+      - name: Prepare isolated native application
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/native-acceptance"
+          executable="$RUNNER_TEMP/Scopecat/Scopecat.exe"
+          if [ "$RUNNER_OS" = "macOS" ]; then executable="$RUNNER_TEMP/Scopecat.app/Contents/MacOS/Scopecat"; fi
+          "$executable" --home "$RUNNER_TEMP/native-acceptance" --check-result "$RUNNER_TEMP/native-acceptance/prepare.json"
+      - name: Run independent short native smoke
+        shell: bash
+        run: |
+          native_app="$RUNNER_TEMP/Scopecat"
+          if [ "$RUNNER_OS" = "macOS" ]; then native_app="$native_app.app"; fi
+          uv run --locked python scripts/verify_native_windows.py "$native_app" "$RUNNER_TEMP/native-acceptance" --short
       - name: Retain native acceptance logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.os }}
           path: |
+            ${{ runner.temp }}/native-acceptance/prepare.json
             ${{ runner.temp }}/native-acceptance/result.json
             ${{ runner.temp }}/native-acceptance/data-journey.json
             ${{ runner.temp }}/native-acceptance/reset-recovery/
