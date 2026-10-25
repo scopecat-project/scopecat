@@ -20,9 +20,9 @@ describe("ConfigParameters", () => {
     fireEvent.click(screen.getByRole("button", { name: /qubits/i }));
     expect(screen.getByText("q0 (logical_qubit)")).toBeInTheDocument();
     expect(screen.getByText("6.6 GHz")).toBeInTheDocument();
-    expect(screen.getByText(/was 6.5 GHz.*Physical value change/)).toBeInTheDocument();
+    expect(screen.getByText(/原值 6.5 GHz.*物理量变化/)).toBeInTheDocument();
 
-    const advanced = screen.getByText("Advanced · raw snapshot").closest("details");
+    const advanced = screen.getByText("高级 · 原始快照").closest("details");
     expect(advanced).not.toHaveAttribute("open");
     expect(advanced).not.toBeNull();
     expect(within(advanced!).getByText(/profile-5\.1/)).toBeInTheDocument();

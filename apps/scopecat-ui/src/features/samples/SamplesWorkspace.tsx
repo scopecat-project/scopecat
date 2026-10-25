@@ -43,12 +43,12 @@ import {
 type StatusFilter = "all" | SampleSummary["revision"]["content"]["status"];
 
 const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "available", label: "Available" },
-  { key: "mounted", label: "Mounted" },
-  { key: "received", label: "Received" },
-  { key: "retired", label: "Retired" },
-  { key: "damaged", label: "Damaged" },
+  { key: "all", label: "全部" },
+  { key: "available", label: "可用" },
+  { key: "mounted", label: "已装载" },
+  { key: "received", label: "已接收" },
+  { key: "retired", label: "已退役" },
+  { key: "damaged", label: "已损坏" },
 ];
 const EMPTY_SAMPLES: SampleSummary[] = [];
 
@@ -94,24 +94,22 @@ export function SamplesWorkspace({
     <>
       <section
         className="mb-2.5 grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-panel max-[560px]:grid-cols-1"
-        aria-label="Sample registry status"
+        aria-label="样品登记状态"
       >
         <RegistryMetric
-          label="Samples"
+          label="样品"
           value={samplesQuery.isSuccess ? String(samples.length) : "—"}
-          detail={
-            samplesQuery.hasNextPage ? "Loaded physical identities" : "Stable physical identities"
-          }
+          detail={samplesQuery.hasNextPage ? "已加载的物理标识" : "稳定物理标识"}
         />
         <RegistryMetric
-          label="In service"
+          label="使用中"
           value={samplesQuery.isSuccess ? String(activeCount) : "—"}
-          detail="Available or mounted"
+          detail="可用或已装载"
         />
         <RegistryMetric
-          label="Mapped"
+          label="已有映射"
           value={samplesQuery.isSuccess ? String(mappedCount) : "—"}
-          detail="With entity topology"
+          detail="含实体拓扑"
         />
       </section>
 
@@ -122,33 +120,33 @@ export function SamplesWorkspace({
         >
           <div className="flex items-start justify-between px-1 pb-3">
             <div>
-              <p className={eyebrow}>Physical registry</p>
+              <p className={eyebrow}>物理对象登记</p>
               <h2 id="samples-heading" className="m-0 text-[1.08rem] font-[650] tracking-[-0.02em]">
-                Chips &amp; samples
+                芯片与样品
               </h2>
             </div>
             {samplesQuery.isFetching && (
               <LoaderCircle
                 className="mt-2 animate-spin text-text-dim"
                 size={17}
-                aria-label="Refreshing samples"
+                aria-label="正在刷新样品"
               />
             )}
           </div>
 
           <Controls.Field className="flex min-h-10 items-center gap-2.5 rounded-[9px] border border-line bg-bg px-3 text-text-dim focus-within:border-[rgb(128_163_207_/_55%)]">
             <Search size={16} aria-hidden="true" />
-            <span className="sr-only">Search samples</span>
+            <span className="sr-only">搜索样品</span>
             <Controls.Input
               className="w-full min-w-0 border-0 bg-transparent placeholder:text-text-dim"
               type="search"
-              placeholder="Name, ID, alias, tag"
+              placeholder="名称、ID、别名、标签"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </Controls.Field>
 
-          <div className="my-2.5 flex gap-1 overflow-x-auto pb-0.5" aria-label="Filter samples">
+          <div className="my-2.5 flex gap-1 overflow-x-auto pb-0.5" aria-label="筛选样品">
             {STATUS_FILTERS.map((item) => (
               <button
                 key={item.key}
@@ -170,29 +168,29 @@ export function SamplesWorkspace({
             {samplesQuery.isPending && (
               <PanelMessage
                 icon={<LoaderCircle className="animate-spin" />}
-                title="Reading registry"
-                detail="Loading stable sample identities."
+                title="正在读取登记信息"
+                detail="正在加载稳定样品标识。"
               />
             )}
             {samplesQuery.isError && (
               <PanelMessage
                 icon={<Unplug />}
-                title="Registry unavailable"
+                title="登记信息不可用"
                 detail={errorMessage(samplesQuery.error)}
               />
             )}
             {samplesQuery.isSuccess && samples.length === 0 && (
               <PanelMessage
                 icon={<Boxes />}
-                title="No samples yet"
-                detail="Register a chip or physical sample before binding it to runs."
+                title="尚无样品"
+                detail="绑定到运行前，请先登记芯片或物理样品。"
               />
             )}
             {samplesQuery.isSuccess && samples.length > 0 && filteredSamples.length === 0 && (
               <PanelMessage
                 icon={<Search />}
-                title="No matching samples"
-                detail="Try another lifecycle state or search term."
+                title="没有匹配样品"
+                detail="请尝试其他生命周期状态或搜索词。"
               />
             )}
             {filteredSamples.map((sample) => (
@@ -208,7 +206,7 @@ export function SamplesWorkspace({
                 pending={samplesQuery.isFetchingNextPage}
                 onClick={() => void samplesQuery.fetchNextPage()}
               >
-                Load older samples
+                加载更早样品
               </LoadMoreButton>
             )}
           </div>
@@ -218,8 +216,8 @@ export function SamplesWorkspace({
           {daemonUnavailable ? (
             <DetailEmpty
               icon={<Unplug />}
-              title="Connect to the daemon"
-              detail="The sample registry is read directly from this project."
+              title="连接后台服务"
+              detail="样品登记信息直接从此项目读取。"
             />
           ) : selectedSampleId ? (
             <SampleDetail
@@ -235,14 +233,14 @@ export function SamplesWorkspace({
           ) : samplesQuery.isPending ? (
             <DetailEmpty
               icon={<LoaderCircle className="animate-spin" />}
-              title="Loading samples"
-              detail="Reading the project sample registry."
+              title="正在加载样品"
+              detail="正在读取项目样品登记信息。"
             />
           ) : (
             <DetailEmpty
               icon={<CircleDot />}
-              title="No sample selected"
-              detail="Choose a chip or sample to inspect its topology, run history, analyses, and revisions."
+              title="尚未选择样品"
+              detail="选择芯片或样品以查看拓扑、运行历史、分析和版本。"
             />
           )}
         </section>
@@ -269,13 +267,10 @@ function ObjectPanelSlot({
   );
   return (
     <div className="group/object-panel">
-      <div ref={attach} aria-label="Sample working parameter panel" />
+      <div ref={attach} aria-label="样品工作参数面板" />
       <div className="group-has-[section]/object-panel:hidden rounded-lg border border-line bg-panel-soft p-3 text-sm grid gap-2">
-        <strong>Object parameters</strong>
-        <p>
-          Open a working table here, then select an object on the map to edit its directly
-          referenced values.
-        </p>
+        <strong>对象参数</strong>
+        <p>在此打开工作表，再选择地图对象以编辑其直接引用的数值。</p>
         <Controls.Button
           onClick={() => {
             const context = document.getElementById("sample-parameter-context");
@@ -283,7 +278,7 @@ function ObjectPanelSlot({
             context?.scrollIntoView({ block: "center", behavior: "smooth" });
           }}
         >
-          Choose working parameter context
+          选择工作参数上下文
         </Controls.Button>
       </div>
     </div>
@@ -350,18 +345,14 @@ function SampleDetail({
     return (
       <DetailEmpty
         icon={<LoaderCircle className="animate-spin" />}
-        title="Loading sample"
-        detail={`Reading ${sampleId}.`}
+        title="正在加载样品"
+        detail={`正在读取 ${sampleId}。`}
       />
     );
   }
   if (detailQuery.isError && !effective) {
     return (
-      <DetailEmpty
-        icon={<Unplug />}
-        title="Sample unavailable"
-        detail={errorMessage(detailQuery.error)}
-      />
+      <DetailEmpty icon={<Unplug />} title="样品不可用" detail={errorMessage(detailQuery.error)} />
     );
   }
   if (!effective) return null;
@@ -385,7 +376,7 @@ function SampleDetail({
             <span className="text-xs font-bold tracking-[0.08em] text-text-dim uppercase">
               {titleCase(effective.record.kind)}
             </span>
-            <span className="text-xs text-text-dim">Revision {revision.revision}</span>
+            <span className="text-xs text-text-dim">版本 {revision.revision}</span>
           </div>
           <h2 className="m-0 text-[clamp(1.35rem,2.4vw,2rem)] font-[650] tracking-[-0.035em]">
             {content.display_name}
@@ -411,12 +402,12 @@ function SampleDetail({
           )}
         </div>
         <div className="grid grid-cols-3 overflow-hidden rounded-md border border-line bg-panel-soft">
-          <MiniMetric label="Runs" value={String(effective.run_count)} />
+          <MiniMetric label="运行记录" value={String(effective.run_count)} />
           <MiniMetric
-            label="Analyses"
+            label="分析"
             value={`${analyses.length}${analysesQuery.hasNextPage ? "+" : ""}`}
           />
-          <MiniMetric label="Entities" value={String(topology?.entities?.length ?? 0)} />
+          <MiniMetric label="实体" value={String(topology?.entities?.length ?? 0)} />
         </div>
       </header>
 
@@ -428,7 +419,7 @@ function SampleDetail({
             className="cursor-pointer rounded-md border border-line-strong bg-panel px-2 py-1 text-text-soft"
             onClick={() => onSelectSample(sampleId)}
           >
-            View active revision
+            查看当前版本
           </button>
         </section>
       )}
@@ -436,21 +427,20 @@ function SampleDetail({
       {historical && (
         <section className="flex items-center justify-between gap-3 rounded-md border border-[rgb(237_201_111_/_23%)] bg-yellow-soft px-3 py-2 text-xs text-yellow">
           <span>
-            Viewing historical revision {revision.revision}; active revision is{" "}
-            {effective.record.active_revision}.
+            正在查看历史版本 {revision.revision}；当前版本为 {effective.record.active_revision}.
           </span>
           <button
             type="button"
             className="cursor-pointer rounded-md border border-line-strong bg-panel px-2 py-1 text-text-soft"
             onClick={() => onSelectSample(sampleId)}
           >
-            View active revision
+            查看当前版本
           </button>
         </section>
       )}
 
       {content.relations.length > 0 && (
-        <section className="flex flex-wrap items-center gap-2" aria-label="Sample relations">
+        <section className="flex flex-wrap items-center gap-2" aria-label="样品关系">
           <GitBranch size={14} className="text-text-dim" aria-hidden="true" />
           {content.relations.map((relation) => (
             <button
@@ -476,8 +466,8 @@ function SampleDetail({
         >
           <SectionHeading
             icon={<MapIcon />}
-            eyebrowText="Physical projection"
-            title="Sample map"
+            eyebrowText="物理投影"
+            title="样品地图"
             id="sample-map-heading"
           />
           <SampleMap
@@ -497,16 +487,16 @@ function SampleDetail({
           <section className={detailCard}>
             <SectionHeading
               icon={<Activity />}
-              eyebrowText="Context"
-              title={entity ? "Selected entity" : "Sample facts"}
+              eyebrowText="上下文"
+              title={entity ? "选中实体" : "样品信息"}
             />
             {entity ? (
               <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
                 <Fact term="ID">
                   <code>{entity.id}</code>
                 </Fact>
-                <Fact term="Kind">{titleCase(entity.kind ?? "entity")}</Fact>
-                <Fact term="Links">
+                <Fact term="类型">{titleCase(entity.kind ?? "entity")}</Fact>
+                <Fact term="关联">
                   {String(
                     topology?.connections?.filter((connection) =>
                       connection.endpoints.includes(entity.id),
@@ -516,14 +506,14 @@ function SampleDetail({
               </dl>
             ) : (
               <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
-                <Fact term="Created">
+                <Fact term="创建时间">
                   {effective.record.created_at ? formatDateTime(effective.record.created_at) : "—"}
                 </Fact>
-                <Fact term="Last run">
-                  {effective.last_run_at ? formatRelative(effective.last_run_at) : "No runs"}
+                <Fact term="最近运行">
+                  {effective.last_run_at ? formatRelative(effective.last_run_at) : "无运行记录"}
                 </Fact>
-                <Fact term="Connections">{String(topology?.connections?.length ?? 0)}</Fact>
-                <Fact term="Artifacts">{String(content.artifacts.length)}</Fact>
+                <Fact term="连接">{String(topology?.connections?.length ?? 0)}</Fact>
+                <Fact term="产物">{String(content.artifacts.length)}</Fact>
               </dl>
             )}
           </section>
@@ -549,15 +539,15 @@ function SampleDetail({
         <section className={detailCard} aria-labelledby="sample-runs-heading">
           <SectionHeading
             icon={<FlaskConical />}
-            eyebrowText="Provenance"
-            title="Runs"
+            eyebrowText="来源"
+            title="运行记录"
             id="sample-runs-heading"
             count={effective.run_count}
           />
           <HistoryList
             pending={runsQuery.isPending}
             error={runsQuery.error}
-            empty="No runs are bound to this sample yet."
+            empty="尚无运行绑定到此样品。"
           >
             {runs.map((run) => (
               <RunRow
@@ -573,7 +563,7 @@ function SampleDetail({
               pending={runsQuery.isFetchingNextPage}
               onClick={() => void runsQuery.fetchNextPage()}
             >
-              Load older runs
+              加载更早运行
             </LoadMoreButton>
           )}
         </section>
@@ -581,15 +571,15 @@ function SampleDetail({
         <section className={detailCard} aria-labelledby="sample-analyses-heading">
           <SectionHeading
             icon={<Activity />}
-            eyebrowText="Longitudinal"
-            title="Analyses"
+            eyebrowText="历次记录"
+            title="分析"
             id="sample-analyses-heading"
             count={`${analyses.length}${analysesQuery.hasNextPage ? "+" : ""}`}
           />
           <HistoryList
             pending={analysesQuery.isPending}
             error={analysesQuery.error}
-            empty="No sample-level analyses have been published."
+            empty="尚未发布样品级分析。"
           >
             {analyses.map((analysis) => (
               <button
@@ -606,7 +596,7 @@ function SampleDetail({
                     {analysis.title}
                   </strong>
                   <span className="text-xs text-text-dim">
-                    {analysis.input_count} inputs · {analysis.output_count} outputs
+                    {analysis.input_count} 项输入 · {analysis.output_count} 项输出
                   </span>
                 </span>
                 <span className="text-xs text-text-dim">r{analysis.revision}</span>
@@ -618,7 +608,7 @@ function SampleDetail({
               pending={analysesQuery.isFetchingNextPage}
               onClick={() => void analysesQuery.fetchNextPage()}
             >
-              Load older analyses
+              加载更早分析
             </LoadMoreButton>
           )}
           {selectedAnalysisId && (
@@ -637,8 +627,8 @@ function SampleDetail({
         <section className={detailCard} aria-labelledby="sample-revisions-heading">
           <SectionHeading
             icon={<History />}
-            eyebrowText="Audit trail"
-            title="Revision history"
+            eyebrowText="审计记录"
+            title="版本历史"
             id="sample-revisions-heading"
             count={`${revisions.length}${revisionsQuery.hasNextPage ? "+" : ""}`}
           />
@@ -650,7 +640,7 @@ function SampleDetail({
               >
                 <button
                   type="button"
-                  aria-label={`View revision ${item.revision}`}
+                  aria-label={`查看版本 ${item.revision}`}
                   aria-pressed={item.revision === revision.revision}
                   className={classes(
                     "grid size-[22px] cursor-pointer place-items-center rounded-full border border-line-strong bg-panel text-xs font-bold text-accent",
@@ -669,8 +659,8 @@ function SampleDetail({
                   <span className="text-xs text-text-dim">
                     {item.note ||
                       (index === revisions.length - 1 && !revisionsQuery.hasNextPage
-                        ? "Initial registration"
-                        : "Revision recorded")}{" "}
+                        ? "首次登记"
+                        : "版本已记录")}{" "}
                     · {item.actor}
                   </span>
                 </button>
@@ -685,7 +675,7 @@ function SampleDetail({
               pending={revisionsQuery.isFetchingNextPage}
               onClick={() => void revisionsQuery.fetchNextPage()}
             >
-              Load older revisions
+              加载更早版本
             </LoadMoreButton>
           )}
         </section>
@@ -715,10 +705,8 @@ function SampleMap({
     return (
       <div className="grid min-h-[285px] place-content-center justify-items-center text-center text-text-dim">
         <MapIcon size={28} className="mb-3" />
-        <strong className="text-sm text-text-soft">No entity map</strong>
-        <span className="mt-1 text-xs">
-          Add topology and optional geometry to a sample revision.
-        </span>
+        <strong className="text-sm text-text-soft">无实体地图</strong>
+        <span className="mt-1 text-xs">请为样品版本添加拓扑和可选几何信息。</span>
       </div>
     );
   }
@@ -728,7 +716,7 @@ function SampleMap({
         className="block aspect-[16/9] min-h-[280px] w-full"
         viewBox="0 0 1000 560"
         role="img"
-        aria-label="Sample topology map"
+        aria-label="样品拓扑地图"
       >
         <defs>
           <pattern id="sample-grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -776,7 +764,7 @@ function SampleMap({
             <g
               key={entity.id}
               role="button"
-              aria-label={`Select object ${entity.id}`}
+              aria-label={`选择对象 ${entity.id}`}
               aria-pressed={selected}
               tabIndex={0}
               className="cursor-pointer"
@@ -812,11 +800,9 @@ function SampleMap({
         })}
       </svg>
       <div className="flex items-center justify-between border-t border-line px-3 py-2 text-xs text-text-dim">
+        <span>{geometry ? `几何单位：${geometry.unit ?? "本地单位"}` : "自动拓扑布局"}</span>
         <span>
-          {geometry ? `Geometry in ${geometry.unit ?? "local units"}` : "Automatic topology layout"}
-        </span>
-        <span>
-          {entities.length} entities · {connections.length} connections
+          {entities.length} 个实体 · {connections.length} 条连接
         </span>
       </div>
     </div>
@@ -849,7 +835,7 @@ function PropertiesCard({ sample }: { sample: SampleSummary | SampleView }) {
   if (properties.length === 0 && content.artifacts.length === 0) return null;
   return (
     <section className={detailCard}>
-      <SectionHeading icon={<Boxes />} eyebrowText="Metadata" title="Properties & artifacts" />
+      <SectionHeading icon={<Boxes />} eyebrowText="元数据" title="属性与产物" />
       {properties.length > 0 && (
         <dl className="grid grid-cols-[minmax(90px,0.7fr)_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
           {properties.map(([key, value]) => (
@@ -883,9 +869,7 @@ function AnalysisPeek({
 }) {
   if (pending)
     return (
-      <p className="mt-3 border-t border-line pt-3 text-xs text-text-dim">
-        Loading analysis outputs…
-      </p>
+      <p className="mt-3 border-t border-line pt-3 text-xs text-text-dim">正在加载分析输出…</p>
     );
   if (error)
     return <p className="mt-3 border-t border-line pt-3 text-xs text-red">{errorMessage(error)}</p>;
@@ -956,7 +940,7 @@ function HistoryList({
   error: unknown;
   empty: string;
 }) {
-  if (pending) return <p className="text-xs text-text-dim">Loading…</p>;
+  if (pending) return <p className="text-xs text-text-dim">正在加载…</p>;
   if (error) return <p className="text-xs text-red">{errorMessage(error)}</p>;
   if (!children || (Array.isArray(children) && children.length === 0))
     return <p className="text-xs text-text-dim">{empty}</p>;
@@ -979,7 +963,7 @@ function LoadMoreButton({
       disabled={pending}
       onClick={onClick}
     >
-      {pending ? "Loading…" : children}
+      {pending ? "正在加载…" : children}
     </button>
   );
 }
@@ -1018,7 +1002,7 @@ function SampleListItem({
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className="rounded-[5px] border border-line px-1.5 py-1 text-xs font-bold text-text-dim">
-            {sample.run_count} runs
+            {sample.run_count} 次运行
           </span>
           {content.tags.slice(0, 2).map((tag) => (
             <span
@@ -1088,7 +1072,7 @@ function StatusBadge({ status }: { status: string }) {
               : "border-accent/20 bg-accent-soft text-accent",
       )}
     >
-      {titleCase(status)}
+      {STATUS_FILTERS.find((item) => item.key === status)?.label ?? status}
     </span>
   );
 }
@@ -1105,7 +1089,7 @@ function StatusDot({ status }: { status: string }) {
               ? "bg-text-dim"
               : "bg-accent",
       )}
-      aria-label={titleCase(status)}
+      aria-label={STATUS_FILTERS.find((item) => item.key === status)?.label ?? status}
     />
   );
 }

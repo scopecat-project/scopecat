@@ -77,7 +77,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       aria-labelledby="application-settings-heading"
     >
       <h2 id="application-settings-heading" className={pageTitle}>
-        Application settings
+        应用设置
       </h2>
       <OperatorSettings />
       {operation.error && <Notice role="alert">{errorMessage(operation.error)}</Notice>}
@@ -85,46 +85,39 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
       {operation.data && <Notice role="status">{operation.data}</Notice>}
       {status.error && <Notice role="alert">{errorMessage(status.error)}</Notice>}
       <section className={section}>
-        <h3 className={sectionTitle}>Software and data</h3>
+        <h3 className={sectionTitle}>软件与数据</h3>
         {status.data && (
           <p>
-            Application home: <code>{status.data.home}</code>
+            应用主目录： <code>{status.data.home}</code>
           </p>
         )}
         {typeof dataRoot === "string" && (
           <p>
-            Scientific data: <code>{dataRoot}</code>
+            科学数据： <code>{dataRoot}</code>
           </p>
         )}
         {status.data && (
           <details>
-            <summary>Technical diagnostics</summary>
+            <summary>技术诊断</summary>
             <InstallationDetails installation={status.data.installation} />
           </details>
         )}
         <p>
-          To update Scopecat, quit the application, install the new version, then reopen it. Startup
-          uses the installed version directly. Updates keep scientific data and source folders.
-          Reopening does not repeat measurements.
+          更新 Scopecat
+          时，请先退出应用、安装新版本，再重新打开。启动时直接使用已安装版本。更新保留科学数据和源码目录；重新打开不会重复测量。
         </p>
         {native && (
           <>
             <p>
-              Back up scientific records and retained source while idle. External code folders,
-              Python environments and the application installer need separate copies. The service
-              stays stopped until you reopen it from the backup result page.
+              请在空闲时备份科学记录与保留源码。外部代码目录、Python
+              环境和应用安装程序需另行备份。服务会保持停止，直到你从备份结果页重新打开。
             </p>
             <Button disabled={busy} onClick={() => operation.mutate("backup")}>
-              Back up application data…
+              备份应用数据…
             </Button>
           </>
         )}
-        {!native && (
-          <p>
-            Open the Scopecat desktop application to manage local source folders and Python
-            environments.
-          </p>
-        )}
+        {!native && <p>请打开 Scopecat 桌面应用，管理本地源码目录与 Python 环境。</p>}
       </section>
       {native && (
         <>
@@ -137,24 +130,24 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
             </p>
             <ActionRow>
               <Button disabled={busy} onClick={() => setCreating(true)}>
-                New code folder
+                新建代码目录
               </Button>
               <Button disabled={busy} onClick={() => setCreating(false)}>
-                Use existing folder
+                使用已有目录
               </Button>
             </ActionRow>
             {creating ? (
               <div className="grid gap-3">
                 <Button disabled={busy} onClick={() => picker.mutate()}>
-                  Choose save location…
+                  选择保存位置…
                 </Button>
                 {parent && (
                   <p>
-                    Save in: <code>{parent}</code>
+                    保存位置： <code>{parent}</code>
                   </p>
                 )}
                 <Field>
-                  New folder name
+                  新目录名称
                   <Input
                     value={name}
                     disabled={busy}
@@ -170,21 +163,21 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   disabled={busy || !parent || !name.trim()}
                   onClick={() => operation.mutate("create")}
                 >
-                  Create folder and prepare Python
+                  创建目录并准备 Python
                 </Button>
               </div>
             ) : (
               <>
                 {!!status.data?.sources.length && (
                   <Field>
-                    Your code folders
+                    代码目录
                     <Select
                       className="min-w-0 max-w-full"
                       value={selected ? source.trim() : ""}
                       disabled={busy}
                       onChange={(event) => setSource(event.target.value)}
                     >
-                      <option value="">Choose a folder</option>
+                      <option value="">选择目录</option>
                       {status.data.sources.map((item) => (
                         <option key={item.directory} value={item.directory}>
                           {item.directory}
@@ -194,26 +187,26 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   </Field>
                 )}
                 <Button disabled={busy} onClick={() => picker.mutate()}>
-                  Browse for code folder…
+                  浏览代码目录…
                 </Button>
                 <Field>
-                  Author directory
+                  作者目录
                   <Input
                     value={source}
                     onChange={(event) => setSource(event.target.value)}
                     disabled={busy}
-                    placeholder="Folder containing scopecat.toml"
+                    placeholder="包含 scopecat.toml 的目录"
                   />
                 </Field>
                 {!selected && (
                   <>
                     <Field>
-                      Execution Python
+                      执行 Python
                       <Input
                         value={interpreter}
                         disabled={busy}
                         onChange={(event) => setInterpreter(event.target.value)}
-                        placeholder="Full path to python or python.exe"
+                        placeholder="python 或 python.exe 的完整路径"
                       />
                     </Field>
                     <p className="text-sm text-text-dim">
@@ -224,7 +217,7 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                       disabled={busy || !source.trim() || !interpreter.trim()}
                       onClick={() => operation.mutate("source")}
                     >
-                      Add code folder
+                      添加代码目录
                     </Button>
                   </>
                 )}
@@ -253,16 +246,16 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                   disabled={busy || !selected || !!selected.python}
                   onClick={() => operation.mutate("client")}
                 >
-                  Create local Python environment
+                  创建本地 Python 环境
                 </Button>
                 <Button
                   disabled={busy || !source.trim()}
                   onClick={() => operation.mutate("dependencies")}
                 >
-                  Prepare execution environment from pyproject.toml
+                  按 pyproject.toml 准备执行环境
                 </Button>
                 <details>
-                  <summary>Inspect or change Python environments</summary>
+                  <summary>查看或修改 Python 环境</summary>
                   {selected && (
                     <div className="mt-3 grid gap-3">
                       <p>
@@ -275,23 +268,23 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                         </p>
                       )}
                       <Field>
-                        Execution Python
+                        执行 Python
                         <Input
                           value={interpreter}
                           disabled={busy}
                           onChange={(event) => setInterpreter(event.target.value)}
-                          placeholder="Full path to python or python.exe"
+                          placeholder="python 或 python.exe 的完整路径"
                         />
                       </Field>
                       <Button
                         disabled={busy || !interpreter.trim()}
                         onClick={() => operation.mutate("environment")}
                       >
-                        Use this execution Python
+                        使用此执行 Python
                       </Button>
                     </div>
                   )}
-                  <h4 className="mt-3 font-semibold">Repair notebook environment</h4>
+                  <h4 className="mt-3 font-semibold">修复 Notebook 环境</h4>
                   <p>
                     修复本地 Python 前，先关闭该环境的终端和 Notebook
                     kernel。重建会另存旧环境并保留源码。 完成后重新选择
@@ -301,27 +294,24 @@ export function ApplicationSettings({ health }: { health?: ProjectHealth }) {
                     disabled={busy || !selected}
                     onClick={() => operation.mutate("rebuild-client")}
                   >
-                    Rebuild local Python environment
+                    重建本地 Python 环境
                   </Button>
                 </details>
               </>
             )}
           </section>
           <section className={section}>
-            <h3 className={sectionTitle}>Restart application</h3>
+            <h3 className={sectionTitle}>重启应用</h3>
             <p>
-              Restart to recover the connection or apply changes to local settings. This stops
-              active work and releases devices. Saved records and source files are retained.
+              重启可恢复连接或应用本地设置修改。此操作会停止正在进行的任务并释放设备，保留已保存记录和源码文件。
             </p>
             <Button disabled={busy} onClick={() => operation.mutate("restart")}>
-              Stop work and restart
+              停止任务并重启
             </Button>
           </section>
         </>
       )}
-      {busy && (
-        <Notice role="status">Working… You can keep this window open to see the result.</Notice>
-      )}
+      {busy && <Notice role="status">正在处理…可保持窗口打开以查看结果。</Notice>}
     </section>
   );
 }
@@ -330,19 +320,19 @@ function InstallationDetails({ installation }: { installation: InstallationStatu
   return (
     <dl className="grid gap-2 break-all">
       <div>
-        <dt>Application Python (managed; not a notebook kernel)</dt>
+        <dt>应用 Python（受管理；不是 Notebook kernel）</dt>
         <dd>
           <code>{installation.python}</code>
         </dd>
       </div>
       <div>
-        <dt>Runtime</dt>
+        <dt>运行时</dt>
         <dd>{installation.environment.python}</dd>
       </div>
       <div>
-        <dt>Capability identity</dt>
+        <dt>能力标识</dt>
         <dd>
-          <code>{installation.adapter_identity ?? "No optional capability selected"}</code>
+          <code>{installation.adapter_identity ?? "未选择可选能力"}</code>
         </dd>
       </div>
     </dl>

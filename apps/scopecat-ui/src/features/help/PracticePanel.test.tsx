@@ -33,16 +33,16 @@ it("reopens the retained task and defaults cleanup to preserving edited files", 
       <PracticePanel reachable />
     </QueryClientProvider>,
   );
-  expect(await screen.findByRole("link", { name: "Open practice task" })).toHaveAttribute(
+  expect(await screen.findByRole("link", { name: "打开练习任务" })).toHaveAttribute(
     "href",
     "?procedure=existing-task#launch",
   );
   expect(fetch).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Clear practice…" }));
-  expect(screen.getByRole("combobox", { name: "Practice files" })).toHaveValue("preserve");
-  fireEvent.click(screen.getByRole("button", { name: "Clear this practice" }));
-  expect(await screen.findByText("Practice cleared")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "清理练习…" }));
+  expect(screen.getByRole("combobox", { name: "练习文件" })).toHaveValue("preserve");
+  fireEvent.click(screen.getByRole("button", { name: "清理此练习" }));
+  expect(await screen.findByText("练习已清理")).toBeVisible();
   const request = fetch.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({ files: "preserve" });
-  expect(screen.getByRole("link", { name: "Export practice files" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "导出练习文件" })).toBeVisible();
 });

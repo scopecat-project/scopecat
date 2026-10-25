@@ -63,7 +63,7 @@ export function ConfigParameters({
           </span>
           <span className="grid min-w-0">
             <h4 className="m-0 text-[0.75rem]" id={headingId}>
-              Parameters
+              参数
             </h4>
             <small className="overflow-hidden text-[0.56rem] text-ellipsis whitespace-nowrap text-text-dim">
               {config.system.parameter_catalog.id}
@@ -80,7 +80,7 @@ export function ConfigParameters({
             )}
           >
             <GitCompareArrows size={13} aria-hidden="true" />
-            {changedCount === 0 ? "No parameter differences" : `${changedCount} changed`}
+            {changedCount === 0 ? "参数无差异" : `${changedCount} changed`}
           </span>
         )}
       </header>
@@ -88,25 +88,22 @@ export function ConfigParameters({
       <div className="grid min-h-[365px] grid-cols-[minmax(180px,220px)_minmax(0,1fr)] max-[1100px]:grid-cols-[minmax(165px,190px)_minmax(0,1fr)] max-[880px]:grid-cols-[minmax(180px,220px)_minmax(0,1fr)] max-[680px]:block">
         <aside
           className="min-w-0 border-r border-line bg-[rgb(255_255_255_/_1%)] px-[9px] py-2.5 max-[680px]:border-r-0 max-[680px]:border-b"
-          aria-label="Parameters"
+          aria-label="参数"
         >
           <label className="flex min-h-[34px] items-center gap-[7px] rounded-[7px] border border-line bg-bg px-[9px] text-text-dim focus-within:border-[rgb(128_163_207_/_45%)]">
             <Search size={14} aria-hidden="true" />
-            <span className="sr-only">Find parameter</span>
+            <span className="sr-only">查找参数</span>
             <input
               className="w-full min-w-0 border-0 bg-transparent p-0 text-[0.64rem] text-text outline-0"
               type="search"
               value={search}
-              placeholder="Find parameter"
+              placeholder="查找参数"
               onChange={(event) => setSearch(event.target.value)}
             />
           </label>
           <div className="mt-2 grid max-h-[330px] gap-1 overflow-auto [scrollbar-color:#344252_transparent] [scrollbar-width:thin] max-[680px]:max-h-none max-[680px]:grid-flow-col max-[680px]:auto-cols-[minmax(165px,60vw)] max-[680px]:overflow-x-auto">
             {filtered.length === 0 ? (
-              <ParameterEmpty
-                title="No matching parameters"
-                detail="Try a parameter id, description, or shape."
-              />
+              <ParameterEmpty title="没有匹配参数" detail="可尝试参数 ID、描述或结构。" />
             ) : (
               filtered.map((diff) => {
                 const definition = diff.afterDefinition ?? diff.beforeDefinition;
@@ -142,10 +139,7 @@ export function ConfigParameters({
           {selected ? (
             <ParameterDetail diff={selected} comparing={activeConfig !== undefined} />
           ) : (
-            <ParameterEmpty
-              title="Nothing selected"
-              detail="Choose a parameter to inspect its typed value."
-            />
+            <ParameterEmpty title="尚未选择" detail="选择参数以查看其类型化数值。" />
           )}
         </div>
       </div>
@@ -153,7 +147,7 @@ export function ConfigParameters({
       <details className="border-t border-line">
         <summary className="flex min-h-[39px] cursor-pointer list-none items-center gap-[7px] px-3.5 text-[0.58rem] font-bold text-text-dim [&::-webkit-details-marker]:hidden">
           <Braces size={15} aria-hidden="true" />
-          Advanced · raw snapshot
+          高级 · 原始快照
         </summary>
         <pre className="m-0 max-h-[360px] overflow-auto border-t border-line bg-bg p-[13px] text-[0.55rem] leading-normal text-text-soft">
           {JSON.stringify(config, null, 2)}
@@ -169,11 +163,11 @@ function ParameterDetail({ diff, comparing }: { diff: ParameterDiff; comparing: 
   if (!definition || !value) {
     return (
       <ParameterEmpty
-        title={definition ? "Unknown parameter" : "Incomplete parameter"}
+        title={definition ? "未知参数" : "参数不完整"}
         detail={
           definition
-            ? `${diff.parameterId} · ${parameterTypeLabel(definition)}. No value has been assigned.`
-            : "The catalog definition is not available."
+            ? `${diff.parameterId} · ${parameterTypeLabel(definition)}. 尚未赋值。`
+            : "目录定义不可用。"
         }
       />
     );
@@ -187,29 +181,29 @@ function ParameterDetail({ diff, comparing }: { diff: ParameterDiff; comparing: 
           </span>
           <h5 className="mt-[7px] mb-[3px] text-[0.9rem]">{diff.parameterId}</h5>
           <p className="m-0 text-[0.6rem] leading-[1.45] text-text-dim">
-            {definition.description ?? "No parameter description."}
+            {definition.description ?? "没有参数描述。"}
           </p>
         </div>
         {comparing && <DiffBadge status={diff.status} />}
       </header>
       <div className="flex flex-wrap gap-[22px] py-[11px]">
-        <ParameterFact label="Type" value={parameterTypeLabel(definition)} />
+        <ParameterFact label="类型" value={parameterTypeLabel(definition)} />
         {definition.value_type.shape === "table" && (
           <>
             <ParameterFact
-              label="Rows"
+              label="行数"
               value={String(value.shape === "table" ? (value.rows?.length ?? 0) : 0)}
             />
             <ParameterFact
-              label="Primary key"
-              value={(definition.value_type.primary_key ?? []).join(", ") || "None"}
+              label="主键"
+              value={(definition.value_type.primary_key ?? []).join(", ") || "无"}
             />
           </>
         )}
       </div>
       {diff.status === "schema-changed" && (
         <div className="mb-[9px] rounded-[7px] border border-[rgb(255_140_136_/_18%)] bg-red-soft px-[9px] py-2 text-[0.58rem] leading-[1.45] text-red">
-          The parameter schema changed. Values are shown without a cell-level comparison.
+          参数 schema 已改变。仅显示数值，不进行单元格级比较。
         </div>
       )}
       <ParameterValueView diff={diff} definition={definition} value={value} />
@@ -244,12 +238,7 @@ function ParameterValueView({
   }
   const valueType = definition.value_type.shape === "table" ? definition.value_type : undefined;
   if (!valueType) {
-    return (
-      <ParameterEmpty
-        title="Table schema unavailable"
-        detail="The stored table does not have a matching catalog definition."
-      />
-    );
+    return <ParameterEmpty title="表格 schema 不可用" detail="已保存表格没有匹配的目录定义。" />;
   }
   return <TableValueView diff={diff} value={value} valueType={valueType} />;
 }
@@ -258,15 +247,15 @@ function ValueComparison({ before, after }: { before: ParameterAtom; after: Para
   return (
     <div
       className="grid w-[min(100%,440px)] grid-cols-[minmax(90px,1fr)_auto_minmax(90px,1fr)] items-center gap-3.5 max-[680px]:gap-2"
-      aria-label="Comparison to selected value"
+      aria-label="与选中数值比较"
     >
       <span className="grid min-w-0 gap-[5px] text-center">
-        <small className="text-[0.52rem] font-extrabold text-text-dim uppercase">Comparison</small>
+        <small className="text-[0.52rem] font-extrabold text-text-dim uppercase">比较</small>
         <ParameterAtomView value={before} />
       </span>
       <GitCompareArrows className="text-yellow" size={16} aria-hidden="true" />
       <span className="grid min-w-0 gap-[5px] text-center">
-        <small className="text-[0.52rem] font-extrabold text-text-dim uppercase">Selected</small>
+        <small className="text-[0.52rem] font-extrabold text-text-dim uppercase">已选择</small>
         <ParameterAtomView value={after} />
       </span>
     </div>
@@ -300,7 +289,7 @@ function TableValueView({
     <div>
       {diff.status === "changed" && diff.table?.mode === "complete-replacement" && (
         <div className="mb-[9px] rounded-[7px] border border-[rgb(237_201_111_/_18%)] bg-yellow-soft px-[9px] py-2 text-[0.58rem] leading-[1.45] text-[#d9c48c]">
-          This table has no primary key, so it is compared as one complete replacement.
+          此表没有主键，因此按整表替换进行比较。
         </div>
       )}
       <div className="max-w-full overflow-auto rounded-[8px] border border-line [scrollbar-color:#344252_transparent] [scrollbar-width:thin]">
@@ -315,11 +304,11 @@ function TableValueView({
                   <span>{column.id}</span>
                   <small className="mt-0.5 block text-[0.48rem] font-medium text-text-dim">
                     {column.value_type.type}
-                    {(valueType.primary_key ?? []).includes(column.id) ? " · key" : ""}
+                    {(valueType.primary_key ?? []).includes(column.id) ? " · 键" : ""}
                   </small>
                 </th>
               ))}
-              {keyedRows && <th>Status</th>}
+              {keyedRows && <th>状态</th>}
             </tr>
           </thead>
           <tbody>
@@ -333,7 +322,7 @@ function TableValueView({
                       <ParameterAtomView value={displayed!} />
                       {cell?.status === "changed" && (
                         <small className="mt-1 block max-w-56 text-[0.48rem] whitespace-normal text-yellow">
-                          was {parameterAtomLabel(cell.before)} ·{" "}
+                          原值 {parameterAtomLabel(cell.before)} ·{" "}
                           {scientificChangeLabel(cell.changeKind ?? "physical")}
                         </small>
                       )}
@@ -386,7 +375,13 @@ function ParameterFact({ label, value }: { label: string; value: string }) {
 }
 
 function DiffBadge({ status }: { status: ParameterDiff["status"] | TableRowDiff["status"] }) {
-  const label = status.replace("-", " ");
+  const label = {
+    unchanged: "未改变",
+    changed: "已改变",
+    added: "已添加",
+    removed: "已移除",
+    "schema-changed": "schema 已改变",
+  }[status];
   return (
     <span
       className={classes(

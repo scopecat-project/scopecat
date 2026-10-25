@@ -47,12 +47,12 @@ function show(sessionBusy = false) {
 it("only activates on explicit submission and refreshes device and driver views", async () => {
   vi.mocked(updateDriverSource).mockImplementation(async (request) => ({ ...selection, request }));
   const invalidate = show();
-  await screen.findByText("Active driver source: /lab/source");
+  await screen.findByText("当前驱动源码：/lab/source");
   expect(updateDriverSource).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("Driver source directory"), {
+  fireEvent.change(screen.getByLabelText("驱动源码目录"), {
     target: { value: "/lab/new-source" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Update from source" }));
+  fireEvent.click(screen.getByRole("button", { name: "从源码更新" }));
   await screen.findByRole("status");
   expect(updateDriverSource).toHaveBeenCalledWith({
     operation_id: expect.stringMatching(/^ui-driver-source-/),
@@ -77,11 +77,11 @@ it("keeps the selected source visible and retries an uncertain result with the s
     .mockRejectedValueOnce(new ApiError("Connection lost"))
     .mockImplementation(async (request) => ({ ...selection, request }));
   show();
-  await screen.findByText("Active driver source: /lab/source");
-  const button = screen.getByRole("button", { name: "Update from source" });
+  await screen.findByText("当前驱动源码：/lab/source");
+  const button = screen.getByRole("button", { name: "从源码更新" });
   fireEvent.click(button);
   expect(await screen.findByRole("alert")).toHaveTextContent("Connection lost");
-  expect(screen.getByText("Active driver source: /lab/source")).toBeVisible();
+  expect(screen.getByText("当前驱动源码：/lab/source")).toBeVisible();
   await waitFor(() => expect(button).toBeEnabled());
   expect(updateDriverSource).toHaveBeenCalledTimes(1);
   expect(vi.mocked(updateDriverSource).mock.calls[0]![0].actor).toBe("Alice");
@@ -103,8 +103,8 @@ it("uses the refreshed selection on an explicit retry after a rejected update", 
     })
     .mockImplementation(async (request) => ({ ...selection, request }));
   show();
-  await screen.findByText("Active driver source: /lab/source");
-  const button = screen.getByRole("button", { name: "Update from source" });
+  await screen.findByText("当前驱动源码：/lab/source");
+  const button = screen.getByRole("button", { name: "从源码更新" });
   fireEvent.click(button);
   await screen.findByRole("alert");
   await waitFor(() => expect(button).toBeEnabled());
@@ -115,8 +115,8 @@ it("uses the refreshed selection on an explicit retry after a rejected update", 
 
 it("requires the current manual session to be released", async () => {
   show(true);
-  await screen.findByText("Active driver source: /lab/source");
-  expect(screen.getByRole("button", { name: "Update from source" })).toBeDisabled();
+  await screen.findByText("当前驱动源码：/lab/source");
+  expect(screen.getByRole("button", { name: "从源码更新" })).toBeDisabled();
   expect(updateDriverSource).not.toHaveBeenCalled();
 });
 

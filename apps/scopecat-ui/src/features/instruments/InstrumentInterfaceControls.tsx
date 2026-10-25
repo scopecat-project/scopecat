@@ -380,21 +380,21 @@ function OperationControl({
         <button
           type="button"
           className={classes(secondaryButton, "flex-none")}
-          aria-label={`Invoke ${label}`}
+          aria-label={`调用 ${label}`}
           onClick={() => onInvoke(operationArguments)}
           disabled={!connected || interactionDisabled || invalid}
           title={
             !connected
-              ? "Connect before invoking"
+              ? "调用前请连接"
               : interactionDisabled
-                ? "Wait for the current instrument interaction to finish"
+                ? "请等待当前仪器交互完成"
                 : invalid
-                  ? "Fill every operation argument before invoking"
+                  ? "调用前请填写所有 operation 参数"
                   : undefined
           }
         >
           {invoking ? <LoaderCircle className="animate-spin" size={14} /> : <Play size={14} />}
-          Invoke
+          调用 Invoke
         </button>
       </header>
       {argumentSpecs.length > 0 && (
@@ -418,7 +418,7 @@ function OperationControl({
             receiptTone(result.status),
           )}
         >
-          Invoke receipt: {titleCase(result.status)}
+          Invoke 回执： {titleCase(result.status)}
         </p>
       )}
     </section>
@@ -449,7 +449,7 @@ function OperationArgumentEditor({
           </strong>
         </span>
         <small className="flex-none text-xs font-extrabold tracking-[0.04em] text-text-dim uppercase">
-          Argument
+          参数
         </small>
       </span>
       {type.type === "bool" ? (
@@ -463,10 +463,10 @@ function OperationArgumentEditor({
           }}
         >
           <option value="" disabled>
-            Select…
+            请选择…
           </option>
-          <option value="true">On</option>
-          <option value="false">Off</option>
+          <option value="true">开启</option>
+          <option value="false">关闭</option>
         </Controls.Select>
       ) : type.type === "string" && type.choices ? (
         <Controls.Select
@@ -476,7 +476,7 @@ function OperationArgumentEditor({
           onChange={(event) => onChange({ raw: event.target.value, value: event.target.value })}
         >
           <option value="" disabled>
-            Select…
+            请选择…
           </option>
           {type.choices.map((choice) => (
             <option key={choice} value={choice}>
@@ -500,7 +500,7 @@ function OperationArgumentEditor({
             min={type.minimum ?? undefined}
             max={type.maximum ?? undefined}
             value={typeof raw === "string" ? raw : ""}
-            placeholder={editable ? "Enter value" : "—"}
+            placeholder={editable ? "输入数值" : "—"}
             disabled={!editable}
             aria-invalid={draft !== undefined && draft.value === undefined}
             onChange={(event) =>
@@ -514,9 +514,9 @@ function OperationArgumentEditor({
               <Controls.Input
                 className={classes(controlInput, "min-w-16 rounded-l-none border-l-0")}
                 type="text"
-                aria-label={`${label} unit`}
+                aria-label={`${label} 单位`}
                 value={draft?.unit ?? ""}
-                placeholder="Unit"
+                placeholder="单位"
                 disabled={!editable}
                 onChange={(event) =>
                   onChange(
@@ -535,7 +535,7 @@ function OperationArgumentEditor({
           className={controlInput}
           type="text"
           value={typeof raw === "string" ? raw : ""}
-          placeholder={editable ? "Enter value" : "—"}
+          placeholder={editable ? "输入数值" : "—"}
           disabled={!editable}
           onChange={(event) => onChange({ raw: event.target.value, value: event.target.value })}
         />
@@ -545,7 +545,7 @@ function OperationArgumentEditor({
       )}
       {draft && (
         <button type="button" className={propertyReset} onClick={() => onChange()}>
-          Clear argument
+          清除参数
         </button>
       )}
     </Controls.Field>
@@ -591,9 +591,9 @@ function AcquisitionControl({
               disabled={!connected || interactionDisabled}
               title={
                 !connected
-                  ? "Connect before collecting"
+                  ? "收集前请连接"
                   : interactionDisabled
-                    ? "Wait for the current instrument interaction to finish"
+                    ? "请等待当前仪器交互完成"
                     : undefined
               }
             >
@@ -602,7 +602,7 @@ function AcquisitionControl({
               ) : (
                 <Database size={14} />
               )}
-              Collect
+              收集 Collect
             </button>
           </div>
         )}
@@ -610,7 +610,7 @@ function AcquisitionControl({
       {results.length > 0 && (
         <div className="flex flex-wrap items-center gap-[7px] border-t border-line px-3 py-[9px]">
           <span className="mr-[3px] text-xs font-extrabold tracking-[0.05em] text-text-dim uppercase">
-            Results
+            结果
           </span>
           {results.map((acquisitionResult) => (
             <span
@@ -678,7 +678,7 @@ function PropertyEditor({
       )}
       {observation && (
         <small className={propertyDescription}>
-          Observed from {titleCase(observation.source)}
+          观测来源 {titleCase(observation.source)}
           {observation.observed_at
             ? ` · ${new Date(observation.observed_at).toLocaleString()}`
             : ""}
@@ -686,7 +686,7 @@ function PropertyEditor({
       )}
       {dirty && (
         <button type="button" className={propertyReset} onClick={() => onChange()}>
-          Reset staged value
+          重置暂存值
         </button>
       )}
     </Controls.Field>
@@ -705,22 +705,20 @@ function CollectPreview({ receipt }: { receipt: InstrumentCollectReceipt }) {
             (receipt.status === "not_collected" || receipt.status === "unknown") && "text-yellow",
           )}
         >
-          Collect receipt: {titleCase(receipt.status)}
+          Collect 回执： {titleCase(receipt.status)}
         </strong>
         {receipt.readback && (
           <small className="text-xs text-text-dim">
-            {Object.keys(receipt.readback.values ?? {}).length} results returned
+            {Object.keys(receipt.readback.values ?? {}).length} 项返回结果
           </small>
         )}
       </div>
       {unavailable.count > 0 && (
         <div className="flex items-center gap-[7px] text-yellow" role="status">
           <AlertTriangle size={13} aria-hidden="true" />
-          <span className="text-xs font-[650]">
-            {unavailable.count} {unavailable.count === 1 ? "result" : "results"} unavailable
-          </span>
+          <span className="text-xs font-[650]">{unavailable.count} 项结果不可用</span>
           <small className="text-inherit">
-            Reasons: {unavailable.reasons.map(titleCase).join(", ")}
+            原因： {unavailable.reasons.map(titleCase).join(", ")}
           </small>
         </div>
       )}
@@ -797,7 +795,7 @@ function TracePreview({ values }: { values: number[] }) {
       className="h-[110px] w-full rounded-sm border border-line p-[5px] [background-image:linear-gradient(var(--color-line)_1px,transparent_1px),linear-gradient(90deg,var(--color-line)_1px,transparent_1px)] [background-size:25%_50%] [&_polyline]:fill-none [&_polyline]:stroke-accent [&_polyline]:[stroke-width:1.5] [&_polyline]:[vector-effect:non-scaling-stroke]"
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label={`${values.length}-point trace preview`}
+      aria-label={`${values.length} 点轨迹预览`}
       preserveAspectRatio="none"
     >
       <polyline points={points} />
@@ -835,7 +833,11 @@ export function AvailabilityBadge({
   availability: InstrumentView["availability"];
   connected?: boolean;
 }) {
-  const label = connected ? "Connected" : titleCase(availability);
+  const label = connected
+    ? "已连接"
+    : { available: "可用", active: "使用中", quarantined: "已隔离", unavailable: "不可用" }[
+        availability
+      ];
   const tone = connected ? availabilityTone.connected : availabilityTone[availability];
   return (
     <span
@@ -1065,9 +1067,9 @@ export function operationKey(target: InstrumentOperationTarget): string {
 }
 
 function accessLabel(access: InstrumentProperty["access"]): string {
-  if (access === "read_only") return "Read only";
-  if (access === "write_only") return "Write only";
-  return "Read / write";
+  if (access === "read_only") return "只读";
+  if (access === "write_only") return "只写";
+  return "读写";
 }
 
 function samePath(left: string[], right: string[]): boolean {
@@ -1080,7 +1082,7 @@ function interfaceFallbackLabel(interfaceId: string): string {
 }
 
 export function requireSession(session: InstrumentSession | undefined): InstrumentSession {
-  if (!session) throw new Error("Connect the instrument before interacting with it.");
+  if (!session) throw new Error("交互前请先连接仪器。");
   return session;
 }
 
@@ -1091,13 +1093,11 @@ export function mutationError(error: unknown): string | undefined {
 export function configuredDefaultsReceiptMessage(
   receipt: InstrumentConfiguredDefaultsApplyReceipt,
 ): string {
-  if (receipt.status === "applied") return "Configured defaults applied.";
+  if (receipt.status === "applied") return "已应用配置的默认值。";
   if (receipt.status === "unchanged") {
-    return "State already matched the configured defaults.";
+    return "状态已与配置的默认值一致。";
   }
-  return `Configured defaults rejected: ${receipt.problems
-    .map((problem) => problem.message)
-    .join(" ")}`;
+  return `已拒绝配置的默认值： ${receipt.problems.map((problem) => problem.message).join(" ")}`;
 }
 
 function traceValues(receipt: InstrumentCollectReceipt): number[] | undefined {

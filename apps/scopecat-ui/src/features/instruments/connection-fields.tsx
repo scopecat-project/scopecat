@@ -33,14 +33,14 @@ export function TcpConnectionFields({
   return (
     <div className="grid grid-cols-3 gap-2.5 max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
       <Controls.Field>
-        <span>Host</span>
+        <span>主机</span>
         <Controls.Input
           value={connection.host}
           onChange={(event) => onChange({ ...connection, host: event.target.value })}
         />
       </Controls.Field>
       <NumberField
-        label="Port"
+        label="端口"
         value={connection.port}
         minimum={1}
         maximum={65_535}
@@ -48,7 +48,7 @@ export function TcpConnectionFields({
         onChange={(port) => onChange({ ...connection, port })}
       />
       <NumberField
-        label="Timeout (seconds)"
+        label="超时（秒）"
         value={connection.timeout_seconds}
         minimum={0.001}
         onChange={(timeout_seconds) => onChange({ ...connection, timeout_seconds })}
@@ -67,11 +67,11 @@ export function SerialConnectionFields({
   return (
     <fieldset className="m-0 min-w-0 rounded-sm border border-line p-2.5">
       <legend className="px-[5px] text-xs font-extrabold tracking-[0.07em] text-text-dim uppercase">
-        Serial transport
+        串口传输
       </legend>
       <div className="grid grid-cols-3 gap-2.5 max-[680px]:grid-cols-2 max-[460px]:grid-cols-1">
         <Controls.Field>
-          <span>Port</span>
+          <span>端口</span>
           <Controls.Input
             value={connection.port}
             placeholder="/dev/ttyUSB0"
@@ -79,14 +79,14 @@ export function SerialConnectionFields({
           />
         </Controls.Field>
         <NumberField
-          label="Baud rate"
+          label="波特率"
           value={connection.baud_rate}
           minimum={1}
           integer
           onChange={(baud_rate) => onChange({ ...connection, baud_rate })}
         />
         <Controls.Field>
-          <span>Data bits</span>
+          <span>数据位</span>
           <Controls.Select
             value={connection.data_bits}
             onChange={(event) =>
@@ -104,7 +104,7 @@ export function SerialConnectionFields({
           </Controls.Select>
         </Controls.Field>
         <Controls.Field>
-          <span>Parity</span>
+          <span>校验位</span>
           <Controls.Select
             value={connection.parity}
             onChange={(event) =>
@@ -122,7 +122,7 @@ export function SerialConnectionFields({
           </Controls.Select>
         </Controls.Field>
         <Controls.Field>
-          <span>Stop bits</span>
+          <span>停止位</span>
           <Controls.Select
             value={connection.stop_bits}
             onChange={(event) => onChange({ ...connection, stop_bits: Number(event.target.value) })}
@@ -135,13 +135,13 @@ export function SerialConnectionFields({
           </Controls.Select>
         </Controls.Field>
         <NumberField
-          label="Read timeout (seconds)"
+          label="读取超时（秒）"
           value={connection.timeout_seconds}
           minimum={0.001}
           onChange={(timeout_seconds) => onChange({ ...connection, timeout_seconds })}
         />
         <NumberField
-          label="Write timeout (seconds)"
+          label="写入超时（秒）"
           value={connection.write_timeout_seconds}
           minimum={0.001}
           onChange={(write_timeout_seconds) => onChange({ ...connection, write_timeout_seconds })}
@@ -154,7 +154,7 @@ export function SerialConnectionFields({
             onChange={(event) => onChange({ ...connection, rtscts: event.target.checked })}
           />
           <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
-            RTS/CTS flow control
+            RTS/CTS 流控
           </span>
         </Controls.Field>
         <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
@@ -165,7 +165,7 @@ export function SerialConnectionFields({
             onChange={(event) => onChange({ ...connection, xonxoff: event.target.checked })}
           />
           <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
-            XON/XOFF flow control
+            XON/XOFF 流控
           </span>
         </Controls.Field>
         <Controls.Field className="flex min-h-[34px] items-center gap-[7px]" data-toggle>
@@ -176,7 +176,7 @@ export function SerialConnectionFields({
             onChange={(event) => onChange({ ...connection, dsrdtr: event.target.checked })}
           />
           <span className="text-xs font-normal tracking-normal text-text-soft normal-case">
-            DSR/DTR flow control
+            DSR/DTR 流控
           </span>
         </Controls.Field>
       </div>
@@ -269,7 +269,7 @@ function JsonOptionInput({
       const shapeValid =
         isOptionValue(parsed) &&
         (field.type === "array" ? Array.isArray(parsed) : isRecord(parsed));
-      if (!shapeValid) throw new Error("Unexpected JSON shape");
+      if (!shapeValid) throw new Error("JSON 结构不符合预期");
       setValid(true);
       onValidityChange(true);
       onChange(parsed);
@@ -288,7 +288,7 @@ function JsonOptionInput({
         placeholder={field.type === "array" ? "[]" : "{}"}
         onChange={(event) => edit(event.target.value)}
       />
-      {!valid && <small className="text-xs text-red">Enter a valid JSON {field.type}.</small>}
+      {!valid && <small className="text-xs text-red">请输入有效 JSON {field.type}.</small>}
     </Controls.Field>
   );
 }
@@ -471,10 +471,10 @@ export function driverLabel(driver: DriverSpec): string {
 }
 
 export function connectionKindLabel(kind: ConnectionKind): string {
-  if (kind === "virtual") return "Virtual simulator";
+  if (kind === "virtual") return "虚拟模拟器";
   if (kind === "tcpip_socket") return "TCP/IP socket";
-  if (kind === "serial") return "Serial port";
-  return "Driver managed";
+  if (kind === "serial") return "串口";
+  return "由驱动管理";
 }
 
 function titleCase(value: string): string {

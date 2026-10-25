@@ -35,7 +35,7 @@ export function InstrumentPropertyInput({
           aria-label={ariaLabel}
           onChange={(event) => onChange({ raw: event.target.checked, value: event.target.checked })}
         />
-        {typeof value === "boolean" ? (value ? "On" : "Off") : "Unknown"}
+        {typeof value === "boolean" ? (value ? "开启" : "关闭") : "未知"}
       </span>
     );
   }
@@ -49,7 +49,7 @@ export function InstrumentPropertyInput({
         onChange={(event) => onChange({ raw: event.target.value, value: event.target.value })}
       >
         <option value="" disabled>
-          Select…
+          请选择…
         </option>
         {type.choices.map((choice) => (
           <option key={choice} value={choice}>
@@ -69,7 +69,7 @@ export function InstrumentPropertyInput({
           min={type.minimum ?? undefined}
           max={type.maximum ?? undefined}
           value={typeof value === "string" || typeof value === "number" ? value : ""}
-          placeholder={editable ? "Enter value" : "—"}
+          placeholder={editable ? "输入数值" : "—"}
           disabled={!editable}
           aria-label={ariaLabel}
           aria-invalid={draft !== undefined && draft.value === undefined}
@@ -97,7 +97,7 @@ export function InstrumentPropertyInput({
         />
         {type.type === "quantity" && (
           <span className="grid min-w-[42px] place-items-center rounded-r-sm border border-l-0 border-line bg-panel-strong px-2 text-xs text-text-dim">
-            {type.unit ?? "unit required"}
+            {type.unit ?? "需要单位"}
           </span>
         )}
       </span>
@@ -108,7 +108,7 @@ export function InstrumentPropertyInput({
       className={propertyInput}
       type="text"
       value={typeof value === "string" ? value : ""}
-      placeholder={editable ? "Enter value" : "—"}
+      placeholder={editable ? "输入数值" : "—"}
       disabled={!editable}
       aria-label={ariaLabel}
       onChange={(event) => onChange({ raw: event.target.value, value: event.target.value })}

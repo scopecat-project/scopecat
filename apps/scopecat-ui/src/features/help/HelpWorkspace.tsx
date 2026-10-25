@@ -11,49 +11,44 @@ export function HelpWorkspace({ reachable }: { health?: ProjectHealth; reachable
   return (
     <section aria-labelledby="help-heading" className={classes(pageContent, "max-w-4xl")}>
       <h2 id="help-heading" className={pageTitle}>
-        Help
+        帮助
       </h2>
       {!reachable && (
         <Notice role="status">
-          The application cannot currently be reached. Reopen Scopecat and use its recovery action
-          to stop and restart the recorded background process.
+          当前无法连接应用。请重新打开 Scopecat，使用恢复操作停止并重启已记录的后台进程。
         </Notice>
       )}
       <NotebookJourneyPanel reachable={reachable} />
       <PracticePanel reachable={reachable} />
       <section className={section}>
-        <h3 className={sectionTitle}>Run your own experiment</h3>
+        <h3 className={sectionTitle}>运行自己的实验</h3>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Open your code folder in VS Code. For the Notebook kernel, use the folder’s Notebook
-            interpreter shown in{" "}
+            在 VS Code 中打开代码目录。Notebook kernel 请使用该目录的 Notebook 解释器，路径见{" "}
             <a className="underline" href="#settings">
-              Application settings
+              应用设置
             </a>
             .
           </li>
           <li>
-            In{" "}
+            在{" "}
             <a className="underline" href="#launch">
-              Experiments
+              实验
             </a>
-            , select your code and experiment. After editing code, use Refresh author code.
+            中选择代码与实验。修改代码后使用“刷新作者代码”。
           </li>
-          <li>
-            Choose the setup and parameters, then Start acquisition. Start checks your inputs;
-            Preview is optional.
-          </li>
+          <li>选择 setup 和参数，再点击“开始采集”。开始时会检查输入；预览为可选步骤。</li>
         </ol>
       </section>
-      <nav aria-label="More help" className={section}>
-        <h3 className={sectionTitle}>Setup and maintenance</h3>
+      <nav aria-label="更多帮助" className={section}>
+        <h3 className={sectionTitle}>配置与维护</h3>
         <a
           className="underline"
           href={docs + "how-to/maintain-executable-setup/"}
           target="_blank"
           rel="noopener noreferrer"
         >
-          Set up devices and connections
+          配置设备与连接
         </a>
         <a
           className="underline"
@@ -61,7 +56,7 @@ export function HelpWorkspace({ reachable }: { health?: ProjectHealth; reachable
           target="_blank"
           rel="noopener noreferrer"
         >
-          Back up and restore scientific records
+          备份与恢复科学记录
         </a>
         <a
           className="underline"
@@ -69,7 +64,7 @@ export function HelpWorkspace({ reachable }: { health?: ProjectHealth; reachable
           target="_blank"
           rel="noopener noreferrer"
         >
-          Close, restart or update the application
+          关闭、重启或更新应用
         </a>
       </nav>
     </section>

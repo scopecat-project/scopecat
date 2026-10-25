@@ -22,13 +22,11 @@ export function OperatorSettings() {
   });
   return (
     <section className="grid min-w-0 gap-3 rounded-lg border border-line bg-panel p-4">
-      <h3 className="font-semibold">Default operator</h3>
+      <h3 className="font-semibold">默认操作者</h3>
       <p className="text-sm text-text-soft">
-        Default attribution for new operation forms in this data space, shared across windows.
-        Existing drafts and retries keep their recorded operator. This name is editable attribution,
-        not a login.
+        此数据空间中新操作表单的默认署名，跨窗口共享。已有草稿和重试保留原记录的操作者。此名称为可编辑署名，不是登录账号。
       </p>
-      {settings.isPending && <p>Loading operator…</p>}
+      {settings.isPending && <p>正在加载操作者…</p>}
       {settings.error && <Notice role="alert">{errorMessage(settings.error)}</Notice>}
       {settings.data && (
         <form
@@ -38,7 +36,7 @@ export function OperatorSettings() {
           }}
         >
           <Field>
-            Operator name
+            操作者名称
             <Input
               value={edit?.operator ?? settings.data.operator}
               disabled={save.isPending}
@@ -51,7 +49,7 @@ export function OperatorSettings() {
             />
           </Field>
           <Button type="submit" disabled={!edit || save.isPending}>
-            Save operator
+            保存操作者
           </Button>
         </form>
       )}
@@ -65,11 +63,11 @@ export function OperatorSettings() {
               void settings.refetch();
             }}
           >
-            Reload operator
+            重新加载操作者
           </Button>
         </Notice>
       )}
-      {save.isSuccess && !edit && <p role="status">Operator saved</p>}
+      {save.isSuccess && !edit && <p role="status">操作者已保存</p>}
     </section>
   );
 }

@@ -36,7 +36,7 @@ export function SetupPanel({
   const attempt = useRef<{ key: string; actor: string } | undefined>(undefined);
   const save = useMutation({
     mutationFn: async () => {
-      if (!draft) throw new Error("Choose a setup to edit.");
+      if (!draft) throw new Error("请选择要编辑的 setup。");
       const key = JSON.stringify({
         draft,
         name: name.trim(),
@@ -67,14 +67,11 @@ export function SetupPanel({
   };
   return (
     <section
-      aria-label="Experiment setups"
+      aria-label="实验 setup"
       className="grid gap-3 rounded-lg border border-line bg-panel p-4"
     >
-      <h3 className="text-base font-semibold leading-6">Experiment setups</h3>
-      <p>
-        A setup maps experiment roles and channels to registered devices. Edit addresses and device
-        safety in Devices and drivers.
-      </p>
+      <h3 className="text-base font-semibold leading-6">实验 setup</h3>
+      <p>setup 将实验角色和通道映射到已登记设备。地址和设备安全设置请在“设备与驱动”中编辑。</p>
       <ConfigurationTemplatesPanel
         actor={operator}
         resolveOperator={resolveOperator}
@@ -87,9 +84,9 @@ export function SetupPanel({
         }}
       />
       <Controls.Field>
-        Saved setup
+        已保存的 setup
         <Controls.Select value={selected} onChange={(event) => choose(event.target.value)}>
-          <option value="">Choose a setup</option>
+          <option value="">选择 setup</option>
           {definitions.data?.items.map((item) => (
             <option key={item.id} value={item.id}>
               {item.id}
@@ -97,18 +94,18 @@ export function SetupPanel({
           ))}
         </Controls.Select>
       </Controls.Field>
-      <Controls.Button onClick={() => choose("")}>New setup</Controls.Button>
+      <Controls.Button onClick={() => choose("")}>新建 setup</Controls.Button>
       {draft && (
         <>
           <Controls.Field>
-            Save as
+            另存为
             <Controls.Input value={name} onChange={(event) => setName(event.target.value)} />
           </Controls.Field>
           {draft.instruments.map((binding, index) => (
             <fieldset className="grid gap-2 rounded border border-line p-3" key={binding.id}>
               <legend>{binding.id}</legend>
               <Controls.Field>
-                Registered device
+                已登记设备
                 <Controls.Select
                   value={binding.device_id}
                   onChange={(event) =>
@@ -127,13 +124,13 @@ export function SetupPanel({
                       disabled={item.device.state === "retired"}
                     >
                       {item.device.label}
-                      {item.device.state === "retired" ? " · retired" : ""}
+                      {item.device.state === "retired" ? " · 已退役" : ""}
                     </option>
                   ))}
                 </Controls.Select>
               </Controls.Field>
               <Controls.Field>
-                After successful work
+                任务成功后
                 <Controls.Select
                   value={binding.success_action}
                   onChange={(event) =>
@@ -150,13 +147,13 @@ export function SetupPanel({
                     })
                   }
                 >
-                  <option value="release">Leave final state</option>
-                  <option value="restore_baseline">Restore initial state</option>
-                  <option value="apply_safe_state">Apply device safe state</option>
+                  <option value="release">保留最终状态</option>
+                  <option value="restore_baseline">恢复初始状态</option>
+                  <option value="apply_safe_state">应用设备安全状态</option>
                 </Controls.Select>
               </Controls.Field>
               <Controls.Field>
-                After failure
+                失败后
                 <Controls.Select
                   value={binding.failure_action}
                   onChange={(event) =>
@@ -173,22 +170,19 @@ export function SetupPanel({
                     })
                   }
                 >
-                  <option value="abort_and_release">Abort and release</option>
-                  <option value="abort_then_safe_state">Abort and apply device safe state</option>
+                  <option value="abort_and_release">中止并释放</option>
+                  <option value="abort_then_safe_state">中止并应用设备安全状态</option>
                 </Controls.Select>
               </Controls.Field>
               <p>
-                Start:{" "}
-                {binding.run_start === "preserve"
-                  ? "Preserve observed state"
-                  : "Apply experiment defaults"}
-                . Device safety requirements remain mandatory.
+                启动时： {binding.run_start === "preserve" ? "保留观测状态" : "应用实验默认值"}
+                。设备安全要求仍必须遵守。
               </p>
               {(draft.routing.routes ?? [])
                 .filter((route) => route.instrument_id === binding.id)
                 .map((route) => (
                   <p key={route.id}>
-                    Route {route.id}:{" "}
+                    路由 {route.id}:{" "}
                     {route.endpoints
                       .map((endpoint) => endpoint.channel_id ?? endpoint.interface_id)
                       .join(", ")}
@@ -197,18 +191,18 @@ export function SetupPanel({
             </fieldset>
           ))}
           <fieldset className="flex flex-wrap gap-2 border border-line p-3">
-            <legend>Add device binding</legend>
+            <legend>添加设备绑定</legend>
             <Controls.Field>
-              Experiment alias
+              实验别名
               <Controls.Input value={alias} onChange={(event) => setAlias(event.target.value)} />
             </Controls.Field>
             <Controls.Field>
-              Device
+              设备
               <Controls.Select
                 value={deviceId}
                 onChange={(event) => setDeviceId(event.target.value)}
               >
-                <option value="">Choose a device</option>
+                <option value="">选择设备</option>
                 {devices.data?.items
                   .filter((item) => item.device.state === "available")
                   .map((item) => (
@@ -248,20 +242,17 @@ export function SetupPanel({
                 setAlias("");
               }}
             >
-              Add binding
+              添加绑定
             </Controls.Button>
           </fieldset>
           <Controls.Button
             disabled={!name.trim() || !operator.trim() || save.isPending}
             onClick={() => save.mutate()}
           >
-            Save setup
+            保存 setup
           </Controls.Button>
-          <Controls.Button onClick={() => setDraft(undefined)}>Cancel editing</Controls.Button>
-          <p>
-            Saving creates a named definition. Preparing an experiment resolves its current device
-            connections; submitted work retains its exact snapshot.
-          </p>
+          <Controls.Button onClick={() => setDraft(undefined)}>取消编辑</Controls.Button>
+          <p>保存会创建命名定义。准备实验时解析当前设备连接；已提交任务保留其精确快照。</p>
         </>
       )}
       {(definitions.error || devices.error || save.error) && (

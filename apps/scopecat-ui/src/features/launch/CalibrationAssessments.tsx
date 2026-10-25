@@ -8,7 +8,7 @@ export function CalibrationAssessments({
   if (!assessments?.length) return null;
   return (
     <details>
-      <summary>Why retained checks apply or need rechecking</summary>
+      <summary>保留检查为何适用或需要重查</summary>
       {assessments.map((assessment) => (
         <div key={assessment.run_id} className="border rounded p-2">
           <a href={`?run=${encodeURIComponent(assessment.run_id)}#runs`} className="underline">
@@ -20,17 +20,13 @@ export function CalibrationAssessments({
           {assessment.dependencies && (
             <>
               <p>
-                Dependency coverage: {assessment.dependencies.status}.{" "}
+                依赖覆盖： {assessment.dependencies.status}.{" "}
                 {assessment.dependencies.reasons.join(", ").replaceAll("_", " ")}
               </p>
               <p>
-                Compared parameters:{" "}
-                {assessment.dependencies.compared_parameters?.join(", ") || "none"}
+                已比较参数： {assessment.dependencies.compared_parameters?.join(", ") || "none"}
               </p>
-              <p>
-                Changed parameters:{" "}
-                {assessment.dependencies.changed_parameters?.join(", ") || "none"}
-              </p>
+              <p>已改变参数： {assessment.dependencies.changed_parameters?.join(", ") || "none"}</p>
             </>
           )}
         </div>

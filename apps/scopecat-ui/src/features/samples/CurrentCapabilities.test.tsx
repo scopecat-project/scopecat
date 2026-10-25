@@ -52,20 +52,20 @@ it("resolves one saved revision by name without a branch and clears stale result
       <CurrentCapabilities sampleId="chip" revision={2} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Working parameters and capability context"));
-  fireEvent.change(screen.getByLabelText("Parameter source"), { target: { value: "revision" } });
-  expect(screen.getByText("Resolve capability context")).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Saved parameter revision"), {
+  fireEvent.click(screen.getByText("工作参数与能力上下文"));
+  fireEvent.change(screen.getByLabelText("参数来源"), { target: { value: "revision" } });
+  expect(screen.getByText("解析能力上下文")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("已保存的参数版本"), {
     target: { value: " p1 " },
   });
-  expect(screen.getByText("Resolve capability context")).toBeDisabled();
+  expect(screen.getByText("解析能力上下文")).toBeDisabled();
   await screen.findByRole("option", { name: "bench" });
-  fireEvent.change(screen.getByLabelText("Setup for capability context"), {
+  fireEvent.change(screen.getByLabelText("能力上下文的 setup"), {
     target: { value: "bench" },
   });
-  fireEvent.click(screen.getByText("Resolve capability context"));
+  fireEvent.click(screen.getByText("解析能力上下文"));
   await screen.findByText("Profile inspector");
-  expect(screen.getByText(/Exact saved parameters p1/)).toBeInTheDocument();
+  expect(screen.getByText(/精确保存的参数 p1/)).toBeInTheDocument();
   expect(bodies).toEqual([
     {
       parameters: { revision_id: "p1", content_hash: "sha256:p" },
@@ -74,13 +74,13 @@ it("resolves one saved revision by name without a branch and clears stale result
       target: null,
     },
   ]);
-  fireEvent.change(screen.getByLabelText("Parameter source"), { target: { value: "branch" } });
+  fireEvent.change(screen.getByLabelText("参数来源"), { target: { value: "branch" } });
   expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Parameter source"), { target: { value: "revision" } });
-  fireEvent.click(screen.getByText("Resolve capability context"));
+  fireEvent.change(screen.getByLabelText("参数来源"), { target: { value: "revision" } });
+  fireEvent.click(screen.getByText("解析能力上下文"));
   await screen.findByText("Profile inspector");
   fail = true;
-  fireEvent.click(screen.getByText("Resolve capability context"));
+  fireEvent.click(screen.getByText("解析能力上下文"));
   await screen.findByRole("alert");
   expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
   expect(bodies).toHaveLength(2);
@@ -128,14 +128,14 @@ it("resolves explicit choices and clears the captured context before a failed re
       <CurrentCapabilities sampleId="chip" revision={2} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Working parameters and capability context"));
-  expect(screen.getByText("Resolve capability context")).toBeDisabled();
+  fireEvent.click(screen.getByText("工作参数与能力上下文"));
+  expect(screen.getByText("解析能力上下文")).toBeDisabled();
   await screen.findByRole("option", { name: "saved-setup" });
-  fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "daily" } });
-  fireEvent.change(screen.getByLabelText("Setup for capability context"), {
+  fireEvent.change(screen.getByLabelText("参数分支"), { target: { value: "daily" } });
+  fireEvent.change(screen.getByLabelText("能力上下文的 setup"), {
     target: { value: "saved-setup" },
   });
-  fireEvent.click(screen.getByText("Resolve capability context"));
+  fireEvent.click(screen.getByText("解析能力上下文"));
   await screen.findByText("Profile inspector");
   expect(bodies).toEqual([
     {
@@ -147,9 +147,9 @@ it("resolves explicit choices and clears the captured context before a failed re
   ]);
   expect(screen.getByText(/generation 3/)).toBeInTheDocument();
   await screen.findByRole("option", { name: "Registered chip · target · r2" });
-  fireEvent.change(screen.getByLabelText("Measurement subject"), { target: { value: "target:2" } });
+  fireEvent.change(screen.getByLabelText("测量对象"), { target: { value: "target:2" } });
   expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText("Resolve capability context"));
+  fireEvent.click(screen.getByText("解析能力上下文"));
   await screen.findByText("Profile inspector");
   expect(bodies[1]).toEqual({
     branch: "daily",
@@ -157,16 +157,16 @@ it("resolves explicit choices and clears the captured context before a failed re
     samples: [],
     target: targetRef,
   });
-  fireEvent.change(screen.getByLabelText("Setup for capability context"), {
+  fireEvent.change(screen.getByLabelText("能力上下文的 setup"), {
     target: { value: "" },
   });
   expect(screen.queryByText("Profile inspector")).not.toBeInTheDocument();
   fail = true;
-  expect(screen.getByText("Resolve capability context")).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Setup for capability context"), {
+  expect(screen.getByText("解析能力上下文")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("能力上下文的 setup"), {
     target: { value: "saved-setup" },
   });
-  fireEvent.click(screen.getByText("Resolve capability context"));
+  fireEvent.click(screen.getByText("解析能力上下文"));
   await screen.findByRole("alert");
   expect(bodies[2]).toEqual({
     branch: "daily",

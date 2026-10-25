@@ -28,10 +28,10 @@ it("requires exact mapped sample identity, never a same-name object on another c
   ).toBe(true);
   expect(
     objectContextError({ ...context, sample: { ...context.sample, sample_id: "chip-b" } }),
-  ).toContain("another sample");
+  ).toContain("其他样品");
   context.resolution.context.target_binding = null;
   expect(mappedEntity(context, "q0")).toBeUndefined();
-  expect(objectContextError(context)).toContain("registered");
+  expect(objectContextError(context)).toContain("已登记");
 });
 
 it("projects typed references with kind and original positions, retaining compound rows and shared references", () => {

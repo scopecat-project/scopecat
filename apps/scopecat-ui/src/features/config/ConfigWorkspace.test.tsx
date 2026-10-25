@@ -161,20 +161,20 @@ function mount(availability = false) {
 }
 async function edit() {
   await screen.findByRole("option", { name: "initial" });
-  fireEvent.change(screen.getByLabelText("Saved parameter version"), {
+  fireEvent.change(screen.getByLabelText("已保存的参数版本"), {
     target: { value: "initial" },
   });
-  fireEvent.click(await screen.findByRole("button", { name: "Edit a copy" }));
-  await screen.findByLabelText("New version name");
-  fireEvent.change(screen.getByLabelText("New version name"), { target: { value: "revised" } });
+  fireEvent.click(await screen.findByRole("button", { name: "编辑副本" }));
+  await screen.findByLabelText("新版本名称");
+  fireEvent.change(screen.getByLabelText("新版本名称"), { target: { value: "revised" } });
 }
 it("selects exact independent parameters without a device or global default", async () => {
   const selected = mount();
   await screen.findByRole("option", { name: "initial" });
-  fireEvent.change(screen.getByLabelText("Saved parameter version"), {
+  fireEvent.change(screen.getByLabelText("已保存的参数版本"), {
     target: { value: "initial" },
   });
-  fireEvent.click(await screen.findByRole("button", { name: "Use for next experiment" }));
+  fireEvent.click(await screen.findByRole("button", { name: "用于下次实验" }));
   expect(selected).toHaveBeenCalledWith({
     kind: "parameters",
     ref: { revision_id: "initial", content_hash: "sha256:initial" },
@@ -188,7 +188,7 @@ it("preserves unknown values and retains the draft after validation fails", asyn
   mount();
   await edit();
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "4.9" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save parameter version" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存参数版本" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Invalid frequency");
   expect(screen.getByLabelText("frequency")).toHaveValue("4.9");
   expect(draftView.draft.input.name).toBe("revised");
@@ -196,8 +196,8 @@ it("preserves unknown values and retains the draft after validation fails", asyn
     { id: "frequency", shape: "scalar", value: { text: "4.9", unit: "GHz" } },
   ]);
   expect(commitParameterDraft).toHaveBeenCalled();
-  expect(screen.getByText("Draft saved in application data")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Retry draft save" })).not.toBeInTheDocument();
+  expect(screen.getByText("草稿已保存到应用数据")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "重试保存草稿" })).not.toBeInTheDocument();
   expect(base.parameters.values).toEqual([
     { id: "frequency", shape: "scalar", value: { value: 4.8, unit: "GHz" } },
   ]);
@@ -206,7 +206,7 @@ it("captures working inputs without saving a parameter version", async () => {
   const selected = mount();
   await edit();
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e" } });
-  fireEvent.click(screen.getByRole("button", { name: "Use working inputs for next experiment" }));
+  fireEvent.click(screen.getByRole("button", { name: "将工作输入用于下次实验" }));
   await waitFor(() => expect(selected).toHaveBeenCalled());
   expect(draftView.draft.input.values?.[0]?.value?.text).toBe("1e");
   expect(freezeParameterDraft).toHaveBeenCalledWith(
@@ -224,25 +224,23 @@ it("keeps an unsaved parameter draft when an import creates another copy", async
   fireEvent.click(screen.getByRole("button", { name: "Create imported test copy" }));
   await waitFor(() => expect(getParameterRevisions).toHaveBeenCalledTimes(2));
   expect(screen.getByLabelText("frequency")).toHaveValue("4.9");
-  expect(screen.getByLabelText("New version name")).toHaveValue("revised");
+  expect(screen.getByLabelText("新版本名称")).toHaveValue("revised");
 });
 
 it("does not reuse a reviewed branch head after changing its destination", async () => {
   mount();
   await edit();
-  fireEvent.change(screen.getByLabelText("Named branch (optional)"), {
+  fireEvent.change(screen.getByLabelText("命名分支（可选）"), {
     target: { value: "daily" },
   });
-  await screen.findByText(/Latest read generation: 3/);
-  fireEvent.click(screen.getByRole("button", { name: "Review latest branch head" }));
-  await screen.findByRole("button", { name: "Keep my table after branch review" });
-  fireEvent.change(screen.getByLabelText("Named branch (optional)"), {
+  await screen.findByText(/最近读取的 generation： 3/);
+  fireEvent.click(screen.getByRole("button", { name: "核对分支最新版本" }));
+  await screen.findByRole("button", { name: "核对分支后保留我的表格" });
+  fireEvent.change(screen.getByLabelText("命名分支（可选）"), {
     target: { value: "other" },
   });
-  expect(
-    screen.queryByRole("button", { name: "Keep my table after branch review" }),
-  ).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Save parameter version" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "核对分支后保留我的表格" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "保存参数版本" })).toBeDisabled();
 });
 
 it("keeps failed input visible when closing or switching the saved version", async () => {
@@ -250,19 +248,19 @@ it("keeps failed input visible when closing or switching the saved version", asy
   await edit();
   vi.mocked(saveParameterDraft).mockRejectedValue(new Error("offline"));
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e" } });
-  fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭编辑器" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("offline");
   expect(screen.getByLabelText("frequency")).toHaveValue("1e");
-  fireEvent.change(screen.getByLabelText("Saved parameter version"), { target: { value: "" } });
+  fireEvent.change(screen.getByLabelText("已保存的参数版本"), { target: { value: "" } });
   await waitFor(() => expect(saveParameterDraft).toHaveBeenCalledTimes(2));
-  expect(screen.getByLabelText("Saved parameter version")).toHaveValue("initial");
+  expect(screen.getByLabelText("已保存的参数版本")).toHaveValue("initial");
   expect(screen.getByLabelText("frequency")).toHaveValue("1e");
   vi.mocked(saveParameterDraft).mockImplementation(async (_id, command) => ({
     ...draftView,
     head_revision: 2,
     draft: { ...draftView.draft, revision: 2, input: command.input },
   }));
-  fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭编辑器" }));
   await waitFor(() => expect(screen.queryByLabelText("frequency")).not.toBeInTheDocument());
   expect(vi.mocked(saveParameterDraft).mock.calls.at(-1)?.[1].input.values?.[0]?.value?.text).toBe(
     "1e",
@@ -277,7 +275,7 @@ it("keeps the editor and failed input mounted while the service is unavailable",
   fireEvent.click(screen.getByRole("button", { name: "Disconnect service" }));
   expect(screen.getByLabelText("frequency")).toHaveValue("-");
   expect(await screen.findByText("offline")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Retry draft save" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "重试保存草稿" })).toBeVisible();
 });
 
 it("ignores a completed editor's delayed read after another draft is opened", async () => {
@@ -300,11 +298,11 @@ it("ignores a completed editor's delayed read after another draft is opened", as
       result: { revision_id: "revised", content_hash: "sha256:revised" },
     },
   }));
-  fireEvent.click(screen.getByRole("button", { name: "Save parameter version" }));
-  await screen.findByText(/This draft is completed/);
+  fireEvent.click(screen.getByRole("button", { name: "保存参数版本" }));
+  await screen.findByText(/此草稿状态为 completed/);
   fireEvent.click(
     screen
-      .getAllByRole("button", { name: "Close editor" })
+      .getAllByRole("button", { name: "关闭编辑器" })
       .find((button) => !button.closest("fieldset[disabled]"))!,
   );
   await waitFor(() => expect(screen.queryByLabelText("frequency")).not.toBeInTheDocument());
@@ -312,14 +310,14 @@ it("ignores a completed editor's delayed read after another draft is opened", as
     ...draftView,
     draft: { ...draftView.draft, draft_id: "22222222-2222-4222-8222-222222222222" },
   };
-  fireEvent.click(screen.getByRole("button", { name: "Edit a copy" }));
+  fireEvent.click(screen.getByRole("button", { name: "编辑副本" }));
   await screen.findByLabelText("frequency");
   vi.mocked(saveParameterDraft).mockRejectedValue(new Error("offline"));
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e" } });
   await act(async () => release(Response.json({ ...base, id: "revised" })));
   await waitFor(() => expect(getParameterRevisions).toHaveBeenCalledTimes(2));
   expect(screen.getByLabelText("frequency")).toHaveValue("1e");
-  expect(screen.getByLabelText("Saved parameter version")).toHaveValue("initial");
+  expect(screen.getByLabelText("已保存的参数版本")).toHaveValue("initial");
 });
 
 it("distinguishes failed adoption from unsaved edits", async () => {
@@ -327,20 +325,20 @@ it("distinguishes failed adoption from unsaved edits", async () => {
   const selected = mount();
   await edit();
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e" } });
-  expect(screen.getByText("Draft has unsaved changes")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Use working inputs for next experiment" }));
+  expect(screen.getByText("草稿有未保存的修改")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "将工作输入用于下次实验" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Complete working input");
-  expect(screen.getByText("Draft saved in application data")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Retry draft save" })).not.toBeInTheDocument();
+  expect(screen.getByText("草稿已保存到应用数据")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "重试保存草稿" })).not.toBeInTheDocument();
   expect(draftView.draft.input.values?.[0]?.value?.text).toBe("1e");
   expect(selected).not.toHaveBeenCalled();
   expect(commitParameterDraft).not.toHaveBeenCalled();
   vi.mocked(saveParameterDraft).mockRejectedValue(new Error("offline"));
   fireEvent.change(screen.getByLabelText("frequency"), { target: { value: "1e+" } });
-  fireEvent.click(screen.getByRole("button", { name: "Use working inputs for next experiment" }));
+  fireEvent.click(screen.getByRole("button", { name: "将工作输入用于下次实验" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("offline");
-  expect(screen.getByText("Draft has unsaved changes")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Retry draft save" })).toBeVisible();
+  expect(screen.getByText("草稿有未保存的修改")).toBeVisible();
+  expect(screen.getByRole("button", { name: "重试保存草稿" })).toBeVisible();
 });
 
 it("keeps one raw draft owner across object views and advanced edits without adopting launch inputs", async () => {
@@ -384,15 +382,15 @@ it("keeps one raw draft owner across object views and advanced edits without ado
   );
   const rendered = render(view("q0"));
   await act(() => workspace.current!.openObject(context));
-  const fields = () => within(node).getByRole("region", { name: "Object parameter values" });
+  const fields = () => within(node).getByRole("region", { name: "对象参数值" });
   const { within } = await import("@testing-library/react");
-  expect(within(fields()).getAllByText(/bias · row/)).toHaveLength(2);
+  expect(within(fields()).getAllByText(/bias · 行/)).toHaveLength(2);
   fireEvent.change(within(fields()).getByLabelText("bias[2].offset", { exact: true }), {
     target: { value: "-" },
   });
   rendered.rerender(view("q1"));
   expect(within(fields()).getByLabelText("bias[1].offset", { exact: true })).toHaveValue("10");
-  expect(within(fields()).getByText(/Shared row/)).toBeVisible();
+  expect(within(fields()).getByText(/共享行/)).toBeVisible();
   fireEvent.change(within(fields()).getByLabelText("bias[3].offset", { exact: true }), {
     target: { value: "7" },
   });
@@ -400,8 +398,8 @@ it("keeps one raw draft owner across object views and advanced edits without ado
   expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("-");
   expect(within(fields()).getByLabelText("bias[3].offset", { exact: true })).toHaveValue("7");
   expect(within(fields()).queryByLabelText("bias[2].profile")).toBeNull();
-  fireEvent.click(screen.getByText("All parameters · advanced"));
-  const all = screen.getByText("All parameters · advanced").closest("details")!;
+  fireEvent.click(screen.getByText("全部参数 · 高级"));
+  const all = screen.getByText("全部参数 · 高级").closest("details")!;
   fireEvent.change(within(all).getByLabelText("bias[2].offset", { exact: true }), {
     target: { value: "1e" },
   });
@@ -418,7 +416,7 @@ it("keeps one raw draft owner across object views and advanced edits without ado
   expect(freezeParameterDraft).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole("button", {
-      name: "Use working inputs, target and setup for next experiment",
+      name: "将工作输入、目标和 setup 用于下次实验",
     }),
   );
   await waitFor(() =>
@@ -435,7 +433,7 @@ it("keeps one raw draft owner across object views and advanced edits without ado
     ),
   );
   generation = 4;
-  await expect(workspace.current!.openObject(context)).rejects.toThrow("branch changed");
+  await expect(workspace.current!.openObject(context)).rejects.toThrow("分支已改变");
   expect(within(fields()).getByLabelText("bias[2].offset", { exact: true })).toHaveValue("1e");
   rendered.unmount();
   node.remove();
@@ -455,10 +453,10 @@ it("cancels an object opening if the editor owner changes during its branch read
     </QueryClientProvider>,
   );
   await screen.findByRole("option", { name: "initial" });
-  fireEvent.change(screen.getByLabelText("Saved parameter version"), {
+  fireEvent.change(screen.getByLabelText("已保存的参数版本"), {
     target: { value: "initial" },
   });
-  fireEvent.click(await screen.findByRole("button", { name: "Edit a copy" }));
+  fireEvent.click(await screen.findByRole("button", { name: "编辑副本" }));
   await screen.findByLabelText("frequency", { exact: true });
   const fetcher = vi.mocked(fetch).getMockImplementation()!;
   let finishRead!: (response: Response) => void;
@@ -470,16 +468,16 @@ it("cancels an object opening if the editor owner changes during its branch read
   );
   const result = workspace.current!.openObject(objectContext()).catch((error: Error) => error);
   await waitFor(() => expect(finishRead).toBeDefined());
-  fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+  fireEvent.click(screen.getByRole("button", { name: "关闭编辑器" }));
   await waitFor(() => expect(screen.queryByLabelText("frequency", { exact: true })).toBeNull());
   draftView.draft.draft_id = "22222222-2222-4222-8222-222222222222";
   vi.mocked(fetch).mockImplementation(fetcher);
-  fireEvent.click(await screen.findByRole("button", { name: "Edit a copy" }));
+  fireEvent.click(await screen.findByRole("button", { name: "编辑副本" }));
   await screen.findByLabelText("frequency", { exact: true });
   await act(async () => {
     finishRead(Response.json(objectContext().resolution.branch));
     expect(await result).toEqual(
-      expect.objectContaining({ message: expect.stringContaining("editor changed") }),
+      expect.objectContaining({ message: expect.stringContaining("编辑器已改变") }),
     );
   });
   expect(screen.getByLabelText("frequency", { exact: true })).toHaveValue("4.8");

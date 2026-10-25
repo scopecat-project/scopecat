@@ -91,9 +91,9 @@ test("populated workspaces, exact result window and focus view remain readable",
       await page.keyboard.press("Escape");
       await expect(page.getByRole("button", { name: "聚焦曲线", exact: true })).toBeFocused();
       await page.goto(`${base}/#configuration`);
-      await page.getByLabel("Working parameter branch", { exact: true }).fill("visual-inputs");
-      await page.getByRole("button", { name: "Open working table", exact: true }).click();
-      await expect(page.getByText("Draft operator", { exact: true })).toBeVisible();
+      await page.getByLabel("工作参数分支", { exact: true }).fill("visual-inputs");
+      await page.getByRole("button", { name: "打开工作参数表", exact: true }).click();
+      await expect(page.getByText("草稿操作者", { exact: true })).toBeVisible();
       await capture(page, `working-parameters-${width}`);
       await page.goto(`${base}/?sample=visual-chip#samples`);
       await expect(page.getByRole("heading", { name: "Visual sample", exact: true })).toBeVisible();

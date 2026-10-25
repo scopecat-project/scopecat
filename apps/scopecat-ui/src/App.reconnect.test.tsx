@@ -87,8 +87,8 @@ async function checkHealth() {
 }
 async function expectRecovered() {
   expect(await screen.findByRole("heading", { name: "Chip A17" })).toBeVisible();
-  await waitFor(() => expect(screen.queryByText("Registry unavailable")).not.toBeInTheDocument());
-  const metrics = screen.getByRole("region", { name: "Sample registry status" });
+  await waitFor(() => expect(screen.queryByText("登记信息不可用")).not.toBeInTheDocument());
+  const metrics = screen.getByRole("region", { name: "样品登记状态" });
   expect(within(metrics).getAllByText("1")).toHaveLength(3);
   expect(window.location.search).toBe("?sample=chip-a17");
   expect(window.location.hash).toBe("#samples");
@@ -103,7 +103,7 @@ it("recovers the mounted registry and selection after health recovers without SS
   await act(async () => {
     await client.refetchQueries({ queryKey: ["samples"] });
   });
-  expect(await screen.findByText("Registry unavailable")).toBeVisible();
+  expect(await screen.findByText("登记信息不可用")).toBeVisible();
   vi.mocked(getHealth).mockResolvedValue(healthy);
   vi.mocked(getSamples).mockResolvedValue({ items: [sampleView()] });
   await checkHealth();
