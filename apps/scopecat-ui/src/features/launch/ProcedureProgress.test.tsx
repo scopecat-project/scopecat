@@ -211,7 +211,7 @@ it("shows an uncertain current child as attention even when its parent is ready 
   );
   expect(screen.getByRole("link", { name: "Open result in new tab or window" })).toHaveAttribute(
     "href",
-    "/?run=retained-child",
+    "/?run=retained-child&focus=run#runs",
   );
   fireEvent.click(screen.getByRole("link", { name: /View saved data/ }));
   expect(window.location.search).toBe("?procedure=p1&run=retained-child");
