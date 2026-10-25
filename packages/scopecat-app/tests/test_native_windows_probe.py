@@ -90,13 +90,7 @@ def test_probe_normal_exit_uses_preflight_and_joins_request_before_destroy(
         assert events == ["preflight", "saved", "destroy"]
 
 
-@pytest.mark.parametrize("exit_fails", [False, True])
-def test_reset_exit_retains_business_result_before_wait_and_preflight(
-    tmp_path, exit_fails
-):
-    # Execute the actual generated observer's finally block without a native GUI.
-    import traceback
-
+def reset_host_function(name: str) -> ast.FunctionDef:
     script = SCRIPT.with_name("verify_native_reset.py")
     source = ast.parse(script.read_text())
     host = next(
@@ -105,15 +99,50 @@ def test_reset_exit_retains_business_result_before_wait_and_preflight(
         if isinstance(node, ast.Assign)
         and any(isinstance(t, ast.Name) and t.id == "HOST" for t in node.targets)
     )
-    observer = next(
+    return next(
         node
         for node in ast.parse(host).body
-        if isinstance(node, ast.FunctionDef) and node.name == "observe"
+        if isinstance(node, ast.FunctionDef) and node.name == name
     )
+
+
+@pytest.mark.parametrize(
+    ("connection", "loading", "expected"),
+    [
+        (None, False, False),
+        ("Connecting", False, False),
+        ("Disconnected", False, False),
+        ("Ready", True, False),
+        ("Ready", False, True),
+    ],
+)
+def test_reset_readiness_requires_health_completion(connection, loading, expected):
+    function = reset_host_function("workspace_ready")
+    code = compile(ast.Module(body=[function], type_ignores=[]), "reset-ready", "exec")
+    scope = {}
+    exec(code, scope)  # noqa: S102 - repository-owned readiness predicate
+    window = SimpleNamespace(
+        evaluate_js=lambda _: {
+            "mounted": True,
+            "connection": connection,
+            "loading": loading,
+        }
+    )
+    assert bool(scope["workspace_ready"](window)) is expected
+
+
+@pytest.mark.parametrize("exit_fails", [False, True])
+def test_reset_exit_retains_business_result_before_wait_and_preflight(
+    tmp_path, exit_fails
+):
+    # Execute the actual generated observer's finally block without a native GUI.
+    import traceback
+
+    observer = reset_host_function("observe")
     final = observer.body[-1]
     assert isinstance(final, ast.Try)
     body = final.finalbody
-    code = compile(ast.Module(body=body, type_ignores=[]), str(script), "exec")
+    code = compile(ast.Module(body=body, type_ignores=[]), "reset-exit", "exec")
     result = {"status": "failed", "error": "original business failure"}
     output = tmp_path / "reset.json"
     calls = []
@@ -136,6 +165,7 @@ def test_reset_exit_retains_business_result_before_wait_and_preflight(
         "json": json,
         "traceback": traceback,
         "wait": wait,
+        "workspace_ready": lambda _: True,
         "window": SimpleNamespace(
             evaluate_js=lambda _: True,
             _js_api=SimpleNamespace(exit=exit_application),

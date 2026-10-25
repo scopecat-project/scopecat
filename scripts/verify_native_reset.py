@@ -50,6 +50,22 @@ def wait(check, label):
         time.sleep(0.05)
 
 
+def workspace_ready(window):
+    state = window.evaluate_js(
+        "({mounted: Boolean(window.pywebview?.api && "
+        "document.querySelector('[aria-label=\"Refresh project data\"]')), "
+        "connection: document.querySelector('.workspace-top [role=status]')"
+        "?.textContent.trim(), loading: Boolean("
+        "document.querySelector('[aria-label=\"Refresh project data\"] .animate-spin')"
+        " || document.body.textContent.includes('Loading experiments…'))})"
+    )
+    return (
+        isinstance(state, dict) and state.get("mounted")
+        and state.get("connection") not in (None, "", "Connecting", "Disconnected")
+        and not state.get("loading")
+    )
+
+
 if stage == "reset":
     paths.state.mkdir(parents=True)
     prepare()
@@ -211,12 +227,7 @@ def observe():
             # An HTTP navigation alone does not mean React and its save/close
             # listener are mounted. Wait for the real workspace to finish loading.
             wait(
-                lambda: window.evaluate_js(
-                    "Boolean(window.pywebview?.api && "
-                    "document.querySelector('[aria-label=\"Refresh project data\"] "
-                    "svg:not(.animate-spin)') && "
-                    "!document.body.textContent.includes('Loading experiments…'))"
-                ),
+                lambda: workspace_ready(window),
                 "workspace ready for saved-input exit preflight",
             )
             result["exit_page"] = window.evaluate_js(
