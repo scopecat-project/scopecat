@@ -124,6 +124,25 @@ convert 改变引用单位，不移除它。
 `.eager` 是普通 Python 原生入口，不经过符号构图的消费边界；直接调用时应提供
 函数声明单位下的原生值。其他普通 Python 参数注解尚未普遍支持构图时检查。
 
+### 检查发生在哪一层
+
+| 作者写法 | 可检查的内容 | 仍需作者声明或验证 |
+| --- | --- | --- |
+| `offset.eager(1j)`，原生参数为 `complex` | basedpyright 保留原生签名，拒绝字符串、`DataRef`、缺失参数和未知参数名 | Python 运行时不自动执行类型注解检查；数值行为由函数自身和数值测试验证 |
+| 构图内 `offset(ref)` | 返回值静态保留 `DataRef[complex]`；构图检查参数名、必填项及支持的 float／complex 消费类型 | 普通 `complex` 等原生参数尚未全部映射成符号参数类型；静态通过不表示输入值有效 |
+| `Annotated[float, Unit("MHz")]` 消费参数 | 构图拒绝不兼容单位，执行消费边界把兼容单位换算为 MHz 数值 | `.eager` 不执行该换算；不能靠实验的单位声明替代消费函数契约 |
+| `rows_as(MeanResult[MeanIQ])` | 静态保留所选原生字段类型；读取时对照历史 schema 检查字段、dtype 和显式单位 | 历史读取类型需显式选择；单位校验不是单位转换，数组轴与归约方向也不能由标量返回值推导 |
+
+例如普通 `int` 参数收到字符串时，符号调用目前可能构图成功，在原生执行
+`value + 1` 时才失败；`float`／`complex` 消费类型已会在构图时检查，单位契约
+也会在构图阶段拒绝不兼容的 `ns` 输入。
+不要把这类延迟错误当作完整符号类型系统已经存在。
+
+对应的小型可执行例子在 `test_compute_functions.py`（原生签名与符号边界）、
+`test_compute_unit_boundaries.py`（消费单位）和 `test_result_rows.py`（历史 schema）。
+静态负例使用精确诊断 ignore 并开启 unnecessary-ignore 检查；诊断消失同样会失败。
+它们补充作者契约，不替代 installed verifier 或真人使用验证。
+
 `experiment.compute(fn=ordinary_function, ...)` remains available for explicit
 node IDs, output schemas, structured bundles and axis inheritance. When its
 `output_type` is omitted it also preserves the native return type. If reusing a
