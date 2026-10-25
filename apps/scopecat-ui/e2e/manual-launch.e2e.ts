@@ -29,11 +29,25 @@ test("registered devices share ownership across pages without setup selection", 
       await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareReferenceContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Device ownership tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     const second = await context.newPage();
     await page.goto(`${endpoint.base_url}/#instruments`);
     await second.goto(`${endpoint.base_url}/#instruments`);
@@ -77,11 +91,11 @@ test("registered devices share ownership across pages without setup selection", 
     await expect(second.getByText("交互会话已连接")).toBeVisible();
     await second.getByRole("button", { name: "断开连接", exact: true }).click();
     await second.getByRole("button", { name: "测试连接", exact: true }).click();
-    await expect(second.getByText(/连接测试通过; the test session was released/)).toBeVisible();
+    await expect(second.getByText(/连接测试通过，测试会话已释放/)).toBeVisible();
     await second.close();
     completed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved device context project", {
@@ -101,11 +115,26 @@ test("manual changes invalidate a retained preview before a fresh acquisition", 
       await cp(join(ROOT, "testing/reference_lab", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareReferenceContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
+    await page.goto(`${endpoint.base_url}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Device preview tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
+    await page.reload();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("ramsey");
     await chooseReferenceContext(page);
@@ -142,7 +171,7 @@ with LabApplication().connect(sys.argv[1]) as lab:
     await expect(page.getByTestId("run-status")).toHaveText("已完成");
     completed = true;
   } finally {
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     if (completed) await rm(project, { recursive: true, force: true });
     else
       await testInfo.attach("Preserved manual project", {

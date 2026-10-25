@@ -148,7 +148,7 @@ for (const scoped of [false, true]) {
         const name = `values-${index}`;
         await editVersion(page, "browser-values");
         await page.getByLabel("signals[1].center", { exact: true }).fill(String(frequency));
-        await page.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
+        await page.getByLabel("signals[1].center 单位", { exact: true }).fill("GHz");
         await saveVersion(page, name);
         await launchVersion(page);
         await page.getByLabel("样品 ID", { exact: true }).fill(`context-${sample}`);
@@ -293,7 +293,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await editVersion(page, pythonVersion);
     const frequency = page.getByLabel("signals[1].center", { exact: true });
     await expect(frequency).toHaveValue("5100.0");
-    await expect(page.getByLabel("signals[1].center unit", { exact: true })).toHaveValue("MHz");
+    await expect(page.getByLabel("signals[1].center 单位", { exact: true })).toHaveValue("MHz");
     await frequency.focus();
     await frequency.press("ControlOrMeta+A");
     await frequency.pressSequentially("5200");
