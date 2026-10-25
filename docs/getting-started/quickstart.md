@@ -32,7 +32,8 @@ Learn with Notebooks → Parameters and scans（参数与扫描）**开始。
 额外的分析包应安装到你选择的 Python，不要安装到应用内置 Python。
 准备失败或接入现有实验室代码时，参见
 [维护应用：作者目录](../how-to/maintain-application.md#author-folders)。
-关闭最后一个窗口会将应用留在托盘或菜单栏；选择 **Quit** 才退出。
+托盘或菜单栏可用时，关闭最后一个窗口会让应用留在后台；选择**退出 Scopecat**才退出。
+托盘不可用时，最后一个窗口保持打开，可最小化或通过**文件 → 退出 Scopecat**退出。
 重新打开 Scopecat 后，可从**运行详情（Runs）**查看同一份已保存结果，不会再次测量。
 
 下一步可选[其他 Notebook 课程](../tutorials/teaching-sandboxes.md#choose-a-notebook-route)，
