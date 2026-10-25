@@ -359,7 +359,9 @@ describe("config provenance navigation", () => {
     window.history.replaceState(null, "", "/?run=run-1");
     renderApp();
 
-    fireEvent.click(await screen.findByTitle("chip-a17 · exact revision 2"));
+    fireEvent.click(await screen.findByText("样品与计划来源"));
+    expect(screen.getByTitle("chip-a17 · exact revision 2")).toBeVisible();
+    fireEvent.click(screen.getByTitle("chip-a17 · exact revision 2"));
 
     expect(await screen.findByText("Selected sample chip-a17")).toBeVisible();
     expect(window.location.search).toBe("?sample=chip-a17&sample-revision=2");

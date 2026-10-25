@@ -246,38 +246,6 @@ export function RunDetail({
         </details>
       </div>
       <p className="text-xs text-text-dim">正在监看此 run；关闭视图不会停止执行。</p>
-      <RunPlanOrigin runId={run.runId} projectId={projectId} />
-
-      {run.samples.length > 0 && (
-        <section
-          className="mt-[18px] flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel-soft px-3 py-2.5"
-          aria-label="绑定样品"
-        >
-          <span className="mr-1 inline-flex items-center gap-2 text-xs font-extrabold tracking-[0.08em] text-text-dim uppercase">
-            <Boxes size={14} aria-hidden="true" />
-            Samples
-          </span>
-          {run.samples.map((sample) => (
-            <button
-              key={`${sample.role}:${sample.sample_id}:${sample.context_id ?? ""}`}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[rgb(128_163_207_/_20%)] bg-accent-soft px-2.5 py-1.5 text-left text-xs text-text-soft hover:border-line-strong hover:bg-panel-strong disabled:cursor-default"
-              type="button"
-              title={`${sample.sample_id} · exact revision ${sample.revision}`}
-              disabled={!onOpenSample}
-              onClick={() => onOpenSample?.(sample.sample_id, sample.revision)}
-            >
-              <span className="grid gap-0.5">
-                <strong className="font-[650] text-accent">{sample.display_name}</strong>
-                <span className="text-xs text-text-dim">
-                  {sample.role} · r{sample.revision}
-                  {sample.context_id ? ` · ${sample.context_id}` : ""}
-                </span>
-              </span>
-              {onOpenSample && <ChevronRight size={13} aria-hidden="true" />}
-            </button>
-          ))}
-        </section>
-      )}
 
       <div className="mt-2 grid min-w-0 gap-3">
         <DataCard
@@ -343,6 +311,43 @@ export function RunDetail({
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
+        <details className="min-w-0 rounded-md border border-line p-3 [overflow-wrap:anywhere]">
+          <summary className="cursor-pointer text-sm font-semibold">样品与计划来源</summary>
+          <div className="mt-2 space-y-2">
+            <RunPlanOrigin runId={run.runId} projectId={projectId} />
+
+            {run.samples.length > 0 && (
+              <section
+                className="mt-[18px] flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel-soft px-3 py-2.5"
+                aria-label="绑定样品"
+              >
+                <span className="mr-1 inline-flex items-center gap-2 text-xs font-extrabold tracking-[0.08em] text-text-dim uppercase">
+                  <Boxes size={14} aria-hidden="true" />
+                  Samples
+                </span>
+                {run.samples.map((sample) => (
+                  <button
+                    key={`${sample.role}:${sample.sample_id}:${sample.context_id ?? ""}`}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[rgb(128_163_207_/_20%)] bg-accent-soft px-2.5 py-1.5 text-left text-xs text-text-soft hover:border-line-strong hover:bg-panel-strong disabled:cursor-default"
+                    type="button"
+                    title={`${sample.sample_id} · exact revision ${sample.revision}`}
+                    disabled={!onOpenSample}
+                    onClick={() => onOpenSample?.(sample.sample_id, sample.revision)}
+                  >
+                    <span className="grid gap-0.5">
+                      <strong className="font-[650] text-accent">{sample.display_name}</strong>
+                      <span className="text-xs text-text-dim">
+                        {sample.role} · r{sample.revision}
+                        {sample.context_id ? ` · ${sample.context_id}` : ""}
+                      </span>
+                    </span>
+                    {onOpenSample && <ChevronRight size={13} aria-hidden="true" />}
+                  </button>
+                ))}
+              </section>
+            )}
+          </div>
+        </details>
         {run.status === "succeeded" && (
           <RunAnalysisActionsCard key={`analysis:${run.runId}`} runId={run.runId} />
         )}

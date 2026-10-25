@@ -16,12 +16,19 @@ from scopecat.records.author_revision import AuthorAnalysisReceipt, AuthorRevisi
 
 
 @pytest.mark.parametrize(("rounds", "operations"), [(1, 1), (2, 3)])
+@pytest.mark.parametrize("extended", [False, True])
 def test_residency_record(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rounds: int, operations: int
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rounds: int,
+    operations: int,
+    extended: bool,
 ) -> None:
     pools: dict[str, dict[str, MagicMock]] = {"prepare": {}, "analysis": {}}
     next_pid = 100
     revision_number = 0
+    run_ids: list[str] = []
+    analysis_inputs: list[str] = []
     original = AuthorRevisionRef(content_hash=f"sha256:{0:064x}")
     active = original
 
@@ -50,18 +57,27 @@ def test_residency_record(
         code_revision: AuthorRevisionRef | None = None,
         **_kwargs: object,
     ) -> MagicMock:
+        if extended and code_revision is not None:
+            assert _kwargs["scans"] == {"frequency": [4.7, 4.8, 4.9]}
         revision = code_revision or active
         worker("prepare", revision)
         result = MagicMock()
         result.preview.code_revision = revision
-        result.run.return_value.wait.return_value.result.return_value.id = (
-            "retained-run"
-        )
+
+        def run() -> MagicMock:
+            run_id = f"retained-run-{len(run_ids) + 1}"
+            run_ids.append(run_id)
+            job = MagicMock()
+            job.wait.return_value.result.return_value.id = run_id
+            return job
+
+        result.run.side_effect = run
         return result
 
     def analyze(
-        _run: str, _name: str, *, code_revision: AuthorRevisionRef
+        run_id: str, _name: str, *, code_revision: AuthorRevisionRef
     ) -> AuthorAnalysisReceipt:
+        analysis_inputs.append(run_id)
         worker("analysis", code_revision)
         return AuthorAnalysisReceipt(code_revision=code_revision, analysis_id="receipt")
 
@@ -98,7 +114,12 @@ def test_residency_record(
     monkeypatch.setattr(psutil, "Process", MagicMock(return_value=owner))
     monkeypatch.setattr(psutil, "wait_procs", MagicMock(return_value=([], [])))
     result = author_residency.measure(
-        tmp_path, revisions=3, rounds=rounds, operations_per_revision=operations
+        tmp_path,
+        revisions=3,
+        rounds=rounds,
+        operations_per_revision=operations,
+        run_per_visit=extended,
+        concurrent_analysis=extended,
     )
     records = cast("list[dict[str, object]]", result["operations"])
     samples = cast("list[dict[str, object]]", result["samples"])
@@ -108,11 +129,27 @@ def test_residency_record(
         "prepare": expected,
         "analysis": expected,
         "refresh": 2 * rounds,
-        "virtual": 1,
+        "virtual": 1 + (rounds * 3 + (operations > 2) if extended else 0),
     }
-    assert result["case_version"] == 4
+    assert result["case_version"] == 5
     assert len(cast("list[str]", result["revision_hashes"])) == 1 + 2 * rounds
-    assert result["run_id"] == "retained-run"
+    assert result["run_id"] == run_ids[-1]
+    assert len(run_ids) == counts["virtual"]
+    latest_run: str | None = None
+    expected_analysis_inputs: list[str] = []
+    for record in records:
+        if record["operation"] == "virtual_run":
+            latest_run = cast("str", record["run_id"])
+        if "overlapping_analysis_id" in record:
+            # Overlap finishes before this visit's new run is submitted.
+            assert record["overlapping_run_id"] == latest_run
+            assert latest_run is not None
+            expected_analysis_inputs.append(latest_run)
+        if str(record["operation"]).startswith("analysis"):
+            assert record["run_id"] == latest_run
+            assert latest_run is not None
+            expected_analysis_inputs.append(latest_run)
+    assert analysis_inputs == expected_analysis_inputs
     assert result["survivors"] == []
     assert all(record["revision"] for record in records)
     assert all(
@@ -135,10 +172,15 @@ def test_residency_record(
                 process["role"] == role and process["revision"] == record["revision"]
                 for process in processes
             )
-    assert sum(record["phase"] == "restore" for record in records) == 2 * rounds
+    assert (
+        sum(record["phase"] == "restore" for record in records)
+        == (3 if extended else 2) * rounds
+    )
     stop.assert_called_once()
     assert author.prepare.call_count == expected
-    assert author.analyze.call_count == expected
+    assert author.analyze.call_count == expected + (
+        rounds * 3 * operations + max(0, operations - 2) if extended else 0
+    )
 
 
 @pytest.mark.parametrize(

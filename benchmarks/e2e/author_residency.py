@@ -9,6 +9,7 @@ import shutil
 import tempfile
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
 
@@ -39,7 +40,13 @@ def validate_workload(
 
 
 def measure(
-    root: Path, *, revisions: int, rounds: int = 1, operations_per_revision: int = 1
+    root: Path,
+    *,
+    revisions: int,
+    rounds: int = 1,
+    operations_per_revision: int = 1,
+    run_per_visit: bool = False,
+    concurrent_analysis: bool = False,
 ) -> dict[str, object]:
     validate_workload(
         revisions=revisions,
@@ -153,6 +160,7 @@ def measure(
             run = timed(
                 "virtual_run", lambda: prepared.run().wait().result(), revision=original
             )
+            operations[-1]["run_id"] = run.id
             snapshot("virtual_run")
 
             def analyze(
@@ -161,6 +169,7 @@ def measure(
                 return author.analyze(run.id, _ANALYSIS, code_revision=revision)
 
             timed("analysis_first", analyze, revision=original)
+            operations[-1]["run_id"] = run.id
             initial = snapshot("analysis_first")
             assert len(initial["analysis"]) == 1
             timed(
@@ -170,23 +179,74 @@ def measure(
                 revision=original,
                 iteration=1,
             )
+            operations[-1]["run_id"] = run.id
             repeated = snapshot("analysis_repeat")
             assert repeated["analysis"] == initial["analysis"]
 
             def visit(revision: AuthorRevisionRef, phase: str, start: int = 0) -> None:
+                nonlocal run
                 previous = snapshot("visit_started")
                 for iteration in range(start, operations_per_revision):
                     current_phase = phase if iteration == 0 else "reuse"
-                    prepared = timed(
-                        "prepare",
-                        lambda: author.prepare("signal", code_revision=revision),
-                        phase=current_phase,
-                        visit_phase=phase,
-                        revision=revision,
-                        iteration=iteration,
-                    )
+                    # A separate client owns the overlapping analysis request. The
+                    # caller still owns selection, refresh and acquisition.
+                    pair_started = time.perf_counter()
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+
+                        def overlapping_analysis(
+                            run_id: str = run.id,
+                        ) -> AuthorAnalysisReceipt:
+                            with AuthorProject(
+                                daemon.base_url,
+                                project_root=root,
+                                receipts=root / "concurrent-receipts",
+                            ) as reader:
+                                return reader.analyze(
+                                    run_id, _ANALYSIS, code_revision=revision
+                                )
+
+                        concurrent = (
+                            executor.submit(overlapping_analysis)
+                            if concurrent_analysis
+                            else None
+                        )
+                        prepared = timed(
+                            "prepare",
+                            lambda: author.prepare(
+                                "signal",
+                                code_revision=revision,
+                                scans={"frequency": [4.7, 4.8, 4.9]}
+                                if run_per_visit
+                                else None,
+                            ),
+                            phase=current_phase,
+                            visit_phase=phase,
+                            revision=revision,
+                            iteration=iteration,
+                        )
+                        if concurrent is not None:
+                            receipt = concurrent.result()
+                            assert receipt.code_revision == revision
+                            operations[-1]["overlap_batch_seconds"] = (
+                                time.perf_counter() - pair_started
+                            )
+                            operations[-1]["overlapping_run_id"] = run.id
+                            operations[-1]["overlapping_analysis_id"] = (
+                                receipt.analysis_id
+                            )
                     assert prepared.preview.code_revision == revision
                     after_prepare = snapshot("prepare")
+                    if run_per_visit and iteration == start:
+                        run = timed(
+                            "virtual_run",
+                            lambda prepared=prepared: prepared.run().wait().result(),
+                            phase=current_phase,
+                            visit_phase=phase,
+                            revision=revision,
+                            iteration=iteration,
+                        )
+                        operations[-1]["run_id"] = run.id
+                        snapshot("virtual_run")
                     receipt = timed(
                         "analysis",
                         lambda: analyze(revision),
@@ -196,6 +256,7 @@ def measure(
                         iteration=iteration,
                     )
                     assert receipt.code_revision == revision
+                    operations[-1]["run_id"] = run.id
                     after_analysis = snapshot("analysis")
                     if current_phase == "reuse":
                         assert after_prepare["prepare"] == previous["prepare"]
@@ -257,13 +318,15 @@ def measure(
             )
     return {
         **benchmark_record_header(
-            case_id="author-residency", case_version=4, kind="e2e"
+            case_id="author-residency", case_version=5, kind="e2e"
         ),
         "host": platform.platform(),
         "python": platform.python_version(),
         "revisions": revisions,
         "rounds": rounds,
         "operations_per_revision": operations_per_revision,
+        "run_per_visit": run_per_visit,
+        "concurrent_analysis": concurrent_analysis,
         "revision_hashes": revision_hashes,
         "run_id": run.id,
         "original_revision": original.content_hash,
@@ -272,7 +335,9 @@ def measure(
         "stop_seconds": stop_seconds,
         "survivors": survivors,
         "scope": (
-            "Serial virtual project; one retained run and published analyses. "
+            "Virtual project; optional per-visit runs and overlapping "
+            "analysis/prepare. "
+            "Overlap is submitted, not proof of simultaneous worker execution. "
             "Settled checkpoints, not transient peaks or long-session leak proof. "
             "Per-process RSS includes shared pages; do not sum it as physical memory. "
             "Shutdown checks identities within a five-second observation grace."
@@ -285,6 +350,8 @@ def main() -> None:
     parser.add_argument("--revisions", type=int, default=3)
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--operations-per-revision", type=int, default=1)
+    parser.add_argument("--run-per-visit", action="store_true")
+    parser.add_argument("--concurrent-analysis", action="store_true")
     args = parser.parse_args()
     revisions = cast("int", args.revisions)
     rounds = cast("int", args.rounds)
@@ -306,6 +373,8 @@ def main() -> None:
                     revisions=revisions,
                     rounds=rounds,
                     operations_per_revision=operations_per_revision,
+                    run_per_visit=cast("bool", args.run_per_visit),
+                    concurrent_analysis=cast("bool", args.concurrent_analysis),
                 )
             )
         )

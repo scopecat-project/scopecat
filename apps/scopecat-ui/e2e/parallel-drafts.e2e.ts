@@ -169,6 +169,26 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
     await expectRunIdentity(monitor, runA);
     await expect(monitor.getByTestId("run-status")).toHaveText("执行中");
+    // Identity inspection opens metadata; return to the normal collapsed monitor.
+    await monitor.getByText("run 详情", { exact: true }).click();
+    for (const width of [1266, 390]) {
+      await monitor.setViewportSize({ width, height: 900 });
+      await monitor.evaluate("window.scrollTo(0, 0)");
+      await expect(monitor.getByRole("region", { name: "run 进度" })).toBeInViewport();
+      await expect(
+        monitor.getByRole("button", { name: "Focus chart", exact: true }),
+      ).toBeInViewport();
+      const chart = monitor.getByTestId("measurement-charts").locator("svg").first();
+      await expect(chart).toBeInViewport();
+      expect(
+        await monitor.evaluate<number>("document.documentElement.scrollWidth"),
+      ).toBeLessThanOrEqual(width);
+      await monitor.screenshot({
+        path: testInfo.outputPath(`curve-first-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await monitor.setViewportSize({ width: 1266, height: 893 });
     await monitor.getByRole("link", { name: "返回准备", exact: true }).click();
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
     await monitor.setViewportSize({ width: 520, height: 800 });

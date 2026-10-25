@@ -116,6 +116,24 @@ automated fix-PR owner. A different integration's access failure does not establ
 Renovate's access. Reassess graph coverage by comparing package/version sets, not
 manifest counts or a successful request alone.
 
+### 有告警却没有 Renovate PR
+
+`uv.lock` 中仅作为传递依赖出现的包，可能落在 Renovate 的上游告警到更新映射缺口中；
+先核对实际运行日志、依赖路径与锁定制品，不把“没有 PR”解释成没有风险或权限不足。
+确认修复版本后，用 `uv lock --upgrade-package <name>==<version>` 定向刷新，
+复核 diff 只包含预期包，验证锁一致性、实际 wheel 准备和离线交付，再走正常审查与合并队列。
+不为此新增直接依赖、扩大普通更新范围或改变 uv 单包 `update-lockfile` 策略；
+修复后继续由现有 Renovate 配置负责常规更新。API 无法读取告警时，只报告已验证的代码修复，
+不声称告警已关闭。
+
+证书依赖须分别检查：notebook 的独立 `certifi`、`delivery-build` 的
+`pip._vendor.certifi`，以及 PBS 自带 pip 的内置副本。独立 certifi 更新不会替换 pip 的副本。
+交付准备通过隔离的锁定 build pip 执行联网 `pip wheel`；其默认 TLS 信任同时使用系统证书和
+内置 certifi（见 [pip HTTPS 说明](https://pip.pypa.io/en/stable/topics/https-certificates/)），
+也要核对显式 CA 配置。交付安装则由 uv 使用 `--offline --no-index --require-hashes`
+读取已验证的本地 wheels，不调用 PBS pip 联网安装。版本匹配本身不证明可利用性，
+仓库锁更新也不代表既有作者环境或系统证书库已更新。
+
 Before introducing a required security gate, triage findings with owners and
 expiry dates and qualify merge-group behavior. Scanner success is not device or
 release compatibility evidence.
