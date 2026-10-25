@@ -41,6 +41,7 @@ notebook = [
 
 [tool.basedpyright]
 include = [
+  "apps/scopecat-ui/e2e/fixtures/admit_procedure.py",
   "packages/scopecat/src",
   "packages/scopecat/tests",
   "packages/scopecat-tutorials/src",
@@ -459,6 +460,7 @@ extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantit
 [tool.scopecat-tests]
 roots = ["packages/scopecat-app/tests", "testing/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
 fast_paths = [
+  "testing/reference_lab/tests/test_browser_admission_seed.py",
   "testing/reference_lab/tests/unit",
   "packages/scopecat/tests",
   "packages/scopecat-instruments/tests",
