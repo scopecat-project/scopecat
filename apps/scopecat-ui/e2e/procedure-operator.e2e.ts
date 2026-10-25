@@ -128,9 +128,19 @@ retainedProcedureTest(
       await expect(childRun).toBeVisible();
       const childHref = await childRun.getAttribute("href");
       expect(childHref).toContain(`procedure=${procedureId}`);
-      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "Selected execution", exact: true })
+          .getByRole("status")
+          .filter({ hasText: /^Completed$/ }),
+      ).toBeVisible();
       await page.reload();
-      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "Selected execution", exact: true })
+          .getByRole("status")
+          .filter({ hasText: /^Completed$/ }),
+      ).toBeVisible();
       const retainedRun = page.getByRole("link", { name: /^View saved data:/ });
       await expect(retainedRun).toHaveAttribute("href", childHref!);
       await retainedRun.click();
@@ -223,7 +233,12 @@ retainedProcedureTest(
   async ({ page, retainedProcedure }, testInfo) => {
     const { baseUrl, procedureId } = retainedProcedure;
     await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
-    await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected execution", exact: true })
+        .getByRole("status")
+        .filter({ hasText: /^Admitted — not dispatched$/ }),
+    ).toBeVisible();
     await page
       .locator("summary")
       .filter({ hasText: /^Cancel queued task$/ })
@@ -234,9 +249,19 @@ retainedProcedureTest(
     await page.getByLabel("Cancellation actor", { exact: true }).fill("browser operator");
     await page.getByLabel("Cancellation reason", { exact: true }).fill("Cancel before acquisition");
     await page.getByRole("button", { name: "Cancel queued task", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected execution", exact: true })
+        .getByRole("status")
+        .filter({ hasText: /^Cancelled$/ }),
+    ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected execution", exact: true })
+        .getByRole("status")
+        .filter({ hasText: /^Cancelled$/ }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue task", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^View (current|saved) data:/ })).toHaveCount(0);
     const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedureId}/operator`);
@@ -310,7 +335,11 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await page.getByLabel("Delay start").fill("16");
     await page.getByLabel("Delay stop").fill("48");
     await page.getByLabel("Delay points").fill("3");
-    for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
+    for (const destination of [
+      "参数与绑定 / Configuration",
+      "设备与驱动 / Devices and drivers",
+      "运行详情 / Runs",
+    ]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
         .getByRole("button", { name: destination, exact: true })
