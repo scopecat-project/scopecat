@@ -17,9 +17,9 @@ export function SourceSelector({
   return (
     <div className="min-w-0 space-y-2">
       <Field>
-        Code workspace{" "}
+        代码工作区{" "}
         <Select
-          aria-label="Code workspace"
+          aria-label="代码工作区"
           className="mt-1 w-full min-w-0"
           value={workspaceId}
           onChange={(event) => onSelect(event.target.value)}
@@ -28,24 +28,22 @@ export function SourceSelector({
           {!selected && (
             <option value={workspaceId}>
               {workspaceId
-                ? `${workspaceId} ${catalog.isPending ? "(loading)" : "(unavailable)"}`
-                : "Choose code"}
+                ? `${workspaceId} ${catalog.isPending ? "（加载中）" : "（不可用）"}`
+                : "选择代码"}
             </option>
           )}
           {sources.map((source) => (
             <option key={source.id} value={source.id} disabled={!source.available}>
               {source.name} · {source.id}
-              {source.available ? "" : " (unavailable)"}
+              {source.available ? "" : " （不可用）"}
             </option>
           ))}
         </Select>
       </Field>
       <Button type="button" disabled={catalog.isFetching} onClick={() => void catalog.refetch()}>
-        Refresh workspace list
+        刷新工作区列表
       </Button>
-      {catalog.error && (
-        <Notice role="alert">Cannot read code workspaces: {catalog.error.message}</Notice>
-      )}
+      {catalog.error && <Notice role="alert">无法读取代码工作区： {catalog.error.message}</Notice>}
       {catalog.isSuccess && workspaceId && !selected && (
         <Notice role="alert">
           The selected code workspace {workspaceId} is not registered on this application. Select an
@@ -67,12 +65,7 @@ export function SourceSelector({
           {selected.unavailable_reason ?? "No executable local source is bound."}
         </Notice>
       )}
-      {context === "analysis" && (
-        <p>
-          Switching code workspaces clears the comparison preview. Inspect data again before
-          fitting.
-        </p>
-      )}
+      {context === "analysis" && <p>切换代码工作区会清除比较预览，拟合前需重新检查数据。</p>}
     </div>
   );
 }

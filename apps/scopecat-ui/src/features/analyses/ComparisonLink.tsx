@@ -16,7 +16,7 @@ export function ComparisonLink({ runId }: { runId?: string }) {
         navigate(target);
       }}
     >
-      Compare retained runs
+      比较已有 run
     </a>
   );
 }

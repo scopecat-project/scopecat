@@ -247,9 +247,9 @@ async function selectPrepared() {
   await screen.findByLabelText("Note");
 }
 async function previewReady() {
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await screen.findByText("Preview ready", { exact: true });
   await waitFor(() =>
     expect(screen.queryByText("Checking relevant instrument changes…")).toBeNull(),
@@ -259,20 +259,18 @@ it("distinguishes preview waiting from submission confirmation without allowing 
   render(<Harness />);
   await selectPrepared();
   deferPreview = true;
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
-  expect(screen.getByRole("button", { name: "Preparing preview…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在准备预览…" })).toBeDisabled();
   expect(screen.getByText(/Acquisition has not been submitted/)).toBeVisible();
   await act(async () => previewResponse?.(Response.json(preview())));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
-  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
   deferSubmission = true;
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissionResponse).toBeDefined());
-  expect(screen.getByRole("button", { name: "Submitting acquisition…" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在提交采集…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "预览" })).toBeDisabled();
   expect(screen.getByText(/Waiting for submission confirmation/)).toBeVisible();
   expect(screen.queryByText(/Acquisition has not been submitted/)).toBeNull();
   expect(submissions).toHaveLength(1);
@@ -324,13 +322,13 @@ it("recovers a retained candidate without consulting global configuration or res
   render(<Harness />);
   await selectPrepared();
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "configuration" }));
   await returnToLaunch();
   lookupMatch = "original";
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
-  await screen.findByRole("button", { name: "Open submitted procedure" });
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
+  await screen.findByRole("button", { name: "查看已提交任务" });
   expect(submissions).toHaveLength(1);
 });
 
@@ -338,20 +336,20 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   render(<Harness />);
   await selectPrepared();
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await screen.findByRole("alert");
   const originalKey = submissions[0]?.request_key;
   fireEvent.click(screen.getByRole("button", { name: "configuration" }));
   configFails = true;
   await returnToLaunch();
-  expect(screen.getByRole("button", { name: "Check original submission" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "核实原始提交" })).toBeEnabled();
   configFails = false;
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["config"] });
   });
   await screen.findByText("Preview ready", { exact: true });
   await previewReady(); // Previewing the same request does not allocate another submission.
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
   await screen.findByText(/No retained procedure found yet/);
   expect(submissions).toHaveLength(1);
   expect(submissions[0]?.request_key).toBe(originalKey);
@@ -359,11 +357,11 @@ it("keeps an unknown submission key across navigation and temporary configuratio
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "changed request" } });
   expect(screen.queryByText("Preview ready")).toBeNull();
   lookupMatch = "original";
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
-  await screen.findByRole("button", { name: "Open submitted procedure" });
-  fireEvent.click(screen.getByRole("button", { name: "Prepare a new run (separate acquisition)" }));
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
+  await screen.findByRole("button", { name: "查看已提交任务" });
+  fireEvent.click(screen.getByRole("button", { name: "准备新的 run（独立采集）" }));
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissions).toHaveLength(2));
   expect(submissions[1]?.request_key).not.toBe(originalKey);
 });
@@ -397,15 +395,15 @@ it("retains fixed-source previews across unrelated active parameter publication"
     await client.invalidateQueries({ queryKey: ["config"] });
   });
   expect(screen.getByText("Preview ready")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
 });
 it("does not transfer a draft or late preview when the same console changes project identity", async () => {
   const view = render(<Harness />);
   await selectPrepared();
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "project A only" } });
   deferPreview = true;
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   view.rerender(<Harness projectId="project-b" />);
   await screen.findByLabelText("Note");
@@ -423,7 +421,7 @@ it("reopens original admitted work after lost response, configuration and defini
   render(<Harness />);
   await selectPrepared();
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "configuration" }));
   generation = 2;
@@ -435,8 +433,8 @@ it("reopens original admitted work after lost response, configuration and defini
   await screen.findByText(/Experiment declaration changed/);
   expect(screen.queryByRole("button", { name: "Retry original submission" })).toBeNull();
   lookupMatch = "original";
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Open submitted procedure" }));
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看已提交任务" }));
   expect(screen.queryByRole("alert")).toBeNull();
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("original-procedure");
   expect(submissions).toHaveLength(1);
@@ -447,13 +445,13 @@ it.each(["none", "ambiguous", "unverified", "different-config"] as const)(
     render(<Harness />);
     await selectPrepared();
     await previewReady();
-    fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
     await screen.findByRole("alert");
     lookupMatch = match;
-    fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
+    fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
     await screen.findByRole("alert");
-    expect(screen.queryByRole("button", { name: "Open submitted procedure" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "查看已提交任务" })).toBeNull();
+    expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
     expect(submissions).toHaveLength(1);
   },
 );
@@ -463,13 +461,13 @@ it("keeps an unknown submission read-only after an earlier known rejection", asy
   await selectPrepared();
   await previewReady();
   rejectSubmission = true;
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
-  await screen.findByText("Submission rejected", { exact: true });
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
+  await screen.findByText("提交被拒绝", { exact: true });
   rejectSubmission = false;
-  fireEvent.click(screen.getByRole("button", { name: "Prepare a new run (separate acquisition)" }));
+  fireEvent.click(screen.getByRole("button", { name: "准备新的 run（独立采集）" }));
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
-  await screen.findByRole("button", { name: "Check original submission" });
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
+  await screen.findByRole("button", { name: "核实原始提交" });
   expect(screen.queryByRole("button", { name: "Retry original submission" })).toBeNull();
   expect(submissions).toHaveLength(2);
 });
@@ -478,8 +476,8 @@ it("ignores a late preview after selecting another experiment in the same projec
   render(<Harness />);
   await selectPrepared();
   deferPreview = true;
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   fireEvent.change(screen.getByLabelText("Experiment"), { target: { value: "first" } });
   await waitFor(() => expect(screen.getByLabelText("Experiment")).toHaveValue("first"));
@@ -532,7 +530,7 @@ it("retains a scan across helper and default revisions for explicit review", asy
   expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
   expect(screen.getByLabelText("Frequency start")).toHaveValue("4.7");
   expect(screen.queryByText("Preview ready")).toBeNull();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   catalog = [
     catalog[0]!,
     {
@@ -555,15 +553,15 @@ it("uses a new key after a fresh manual-state preview while preserving the origi
   render(<Harness />);
   await selectPrepared();
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await screen.findByRole("alert");
   const original = submissions[0];
   lookupMatch = "original";
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
-  await screen.findByRole("button", { name: "Open submitted procedure" });
-  fireEvent.click(screen.getByRole("button", { name: "Prepare a new run (separate acquisition)" }));
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
+  await screen.findByRole("button", { name: "查看已提交任务" });
+  fireEvent.click(screen.getByRole("button", { name: "准备新的 run（独立采集）" }));
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissions).toHaveLength(2));
   expect(submissions[1]?.request_key).not.toBe(original?.request_key);
   expect(submissions[1]?.manual_state).not.toEqual(original?.manual_state);
@@ -577,7 +575,7 @@ it("keeps preview clickable during a background catalog read and blocks a failed
     void client.invalidateQueries({ queryKey: ["experiment-launcher"] });
   });
   await waitFor(() => expect(catalogResponse).toBeDefined());
-  const button = screen.getByRole("button", { name: "Preview" });
+  const button = screen.getByRole("button", { name: "预览" });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
   await screen.findByText("Preview ready", { exact: true });
@@ -604,7 +602,7 @@ it("keeps context across experiments and preserves the original submission after
   expect(screen.getByLabelText("Experimental batch")).toHaveValue("batch-a");
   expect(screen.getByLabelText("Operator")).toHaveValue("Alice");
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await screen.findByRole("alert");
   expect(submissions[0]).toMatchObject({
     selection: {
@@ -617,10 +615,10 @@ it("keeps context across experiments and preserves the original submission after
   });
   fireEvent.change(screen.getByLabelText("Experimental batch"), { target: { value: "batch-b" } });
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   lookupMatch = "original";
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
-  await screen.findByRole("button", { name: "Open submitted procedure" });
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
+  await screen.findByRole("button", { name: "查看已提交任务" });
   expect(submissions).toHaveLength(1);
   expect(screen.getByLabelText("Experimental batch")).toHaveValue("batch-b");
 });
@@ -717,7 +715,7 @@ it("pins a picked target across head refresh and pages, then clears it on catalo
     subject: { kind: "registered_target", ref },
     batch: { kind: "declared", id: "batch-a" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissions).toHaveLength(1));
   expect(submissions[0]).toMatchObject({
     actor: "Alice",
@@ -786,11 +784,11 @@ it("switches identical experiment definitions by workspace without replacing sci
     target: { value: "collection-a" },
   });
   await previewReady();
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissions).toHaveLength(1));
-  await screen.findByRole("button", { name: "Check original submission" });
+  await screen.findByRole("button", { name: "核实原始提交" });
   const original = submissions[0];
-  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "workspace-b" } });
+  fireEvent.change(screen.getByLabelText("代码工作区"), { target: { value: "workspace-b" } });
   await selectPrepared();
   expect(screen.getByLabelText("Note")).toHaveValue("original");
   expect(screen.getByLabelText("Sample ID")).toHaveValue("chip-a");
@@ -801,18 +799,16 @@ it("switches identical experiment definitions by workspace without replacing sci
   expect(submissions).toEqual([original]);
   fireEvent.click(screen.getByRole("button", { name: "devices" }));
   await returnToLaunch();
-  expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  expect(screen.getByLabelText("代码工作区")).toHaveValue("workspace-b");
   await previewReady();
   expect(requests.catalogOwners).toContain("workspace-b");
   expect(requests.previewOwners).toEqual(["legacy", "workspace-b"]);
-  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "legacy" } });
+  fireEvent.change(screen.getByLabelText("代码工作区"), { target: { value: "legacy" } });
   await selectPrepared();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Check original submission" })).toBeEnabled(),
-  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "核实原始提交" })).toBeEnabled());
   lookupMatch = "original";
-  fireEvent.click(screen.getByRole("button", { name: "Check original submission" }));
-  await screen.findByRole("button", { name: "Open submitted procedure" });
+  fireEvent.click(screen.getByRole("button", { name: "核实原始提交" }));
+  await screen.findByRole("button", { name: "查看已提交任务" });
   expect(submissions).toEqual([original]);
 });
 
@@ -822,22 +818,22 @@ it("ignores a pending preview from the previous source even when the experiment 
   await selectPrepared();
   await screen.findByRole("option", { name: /Second code/ });
   deferPreview = true;
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   const previous = previewResponse!;
-  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "workspace-b" } });
+  fireEvent.change(screen.getByLabelText("代码工作区"), { target: { value: "workspace-b" } });
   await selectPrepared();
   await act(async () => {
     previous(Response.json(preview()));
   });
   expect(screen.queryByText("Preview ready", { exact: true })).toBeNull();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
-  expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
+  expect(screen.getByLabelText("代码工作区")).toHaveValue("workspace-b");
   await screen.findByText("Experiment input saved in application data.", { exact: true });
   view.rerender(<Harness projectId="project-b" />);
   await selectPrepared();
-  expect(screen.getByLabelText("Code workspace")).toHaveValue("legacy");
+  expect(screen.getByLabelText("代码工作区")).toHaveValue("legacy");
 });
 
 it("opens the linked source without loading the service owner's catalog", async () => {
@@ -845,7 +841,7 @@ it("opens the linked source without loading the service owner's catalog", async 
   const { catalogOwners, previewOwners } = mockWorkspaceCatalog();
   render(<Harness />);
   await selectPrepared();
-  expect(screen.getByLabelText("Code workspace")).toHaveValue("workspace-b");
+  expect(screen.getByLabelText("代码工作区")).toHaveValue("workspace-b");
   await previewReady();
   expect(catalogOwners.length).toBeGreaterThan(0);
   expect(catalogOwners.every((id) => id === "workspace-b")).toBe(true);
@@ -857,7 +853,7 @@ it("keeps an unknown linked source unavailable instead of selecting default code
   const { catalogOwners } = mockWorkspaceCatalog();
   render(<Harness />);
   expect(await screen.findByText(/missing-source is not registered/)).toBeVisible();
-  expect(screen.getByLabelText("Code workspace")).toHaveValue("missing-source");
+  expect(screen.getByLabelText("代码工作区")).toHaveValue("missing-source");
   expect(catalogOwners).toEqual([]);
   expect(submissions).toEqual([]);
 });
@@ -888,7 +884,7 @@ it("follows an explicit historical procedure without replacing a newer draft", a
   await selectPrepared();
   await previewReady();
   deferSubmission = true;
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissionResponse).toBeDefined());
   await act(async () =>
     submissionResponse?.(Response.json({ procedure_id: "B", dispatch_error: null })),
@@ -916,7 +912,7 @@ it("follows an explicit historical procedure without replacing a newer draft", a
 });
 
 function selectedProcedureLink() {
-  return screen.getByRole("link", { name: "Reopen this procedure" });
+  return screen.getByRole("link", { name: "重新打开此任务" });
 }
 
 it.each(["none", "candidate", "activation_after_review"] as const)(
@@ -925,7 +921,7 @@ it.each(["none", "candidate", "activation_after_review"] as const)(
     catalog = [{ ...prepared, configuration_effect: effect }];
     render(<Harness />);
     await screen.findByLabelText("Note");
-    const start = screen.getByRole("button", { name: "Start acquisition" });
+    const start = screen.getByRole("button", { name: "开始采集" });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
     await waitFor(() => expect(submissions).toHaveLength(1));
@@ -935,8 +931,8 @@ it.each(["none", "candidate", "activation_after_review"] as const)(
       inputs: { note: "original" },
     });
     expect(manualEventId).toBe(1);
-    await screen.findByRole("heading", { name: "Original submission awaiting confirmation" });
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+    await screen.findByRole("heading", { name: "原始提交待确认" });
+    expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   },
 );
 
@@ -946,11 +942,11 @@ it.each(["cancel", "edit", "context", "navigate", "submitted", "submitted and ba
     render(<Harness />);
     await selectPrepared();
     deferPreview = true;
-    const start = screen.getByRole("button", { name: "Start acquisition" });
+    const start = screen.getByRole("button", { name: "开始采集" });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
     await waitFor(() => expect(previewResponse).toBeDefined());
-    fireEvent.click(screen.getByRole("button", { name: "Preparing acquisition…" }));
+    fireEvent.click(screen.getByRole("button", { name: "正在准备采集…" }));
     const finish = previewResponse!;
     if (action === "cancel")
       fireEvent.click(screen.getByRole("button", { name: "Cancel preparation" }));
@@ -961,9 +957,9 @@ it.each(["cancel", "edit", "context", "navigate", "submitted", "submitted and ba
     if (action === "navigate")
       fireEvent.click(screen.getByRole("button", { name: "configuration" }));
     if (action === "submitted" || action === "submitted and back") {
-      fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
+      fireEvent.click(screen.getByRole("button", { name: "已提交任务" }));
       if (action === "submitted and back")
-        fireEvent.click(screen.getByRole("button", { name: "Editor" }));
+        fireEvent.click(screen.getByRole("button", { name: "准备" }));
     }
     await act(async () => finish(Response.json(preview())));
     expect(submissions).toHaveLength(0);
@@ -986,7 +982,7 @@ it("stops when manual state changes during internal preparation and prepares afr
   );
   render(<Harness />);
   await selectPrepared();
-  const start = screen.getByRole("button", { name: "Start acquisition" });
+  const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
   await screen.findByText(/Instrument changes stopped this start/);
@@ -1009,11 +1005,11 @@ it("cancels the internal Start while its original receipt is being retained", as
   });
   render(<Harness />);
   await selectPrepared();
-  const start = screen.getByRole("button", { name: "Start acquisition" });
+  const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
   await waitFor(() => expect(release).toBeDefined());
-  expect(screen.getByRole("button", { name: "Preparing acquisition…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在准备采集…" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Cancel preparation" }));
   await act(async () => release());
   expect(submissions).toHaveLength(0);
@@ -1024,19 +1020,17 @@ it("ignores an old preview after an edited input starts a new preparation", asyn
   render(<Harness />);
   await selectPrepared();
   deferPreview = true;
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   const oldPreview = previewResponse!;
   fireEvent.change(screen.getByLabelText("Note"), { target: { value: "new intent" } });
   previewResponse = undefined;
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(previewResponse).toBeDefined());
   await act(async () => oldPreview(Response.json(preview())));
   expect(submissions).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Preparing acquisition…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在准备采集…" })).toBeDisabled();
   await act(async () => previewResponse!(Response.json(preview())));
   await waitFor(() => expect(submissions).toHaveLength(1));
   expect(submissions[0]?.inputs).toEqual({ note: "new intent" });
@@ -1048,7 +1042,7 @@ it("reuses a matching optional preview without preparing a second time", async (
   await selectPrepared();
   await previewReady();
   expect(submissions).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await waitFor(() => expect(submissions).toHaveLength(1));
   expect(manualEventId).toBe(1);
 });
@@ -1058,7 +1052,7 @@ it("reports invalid controls without retaining a preparation lock or submitting"
   await selectPrepared();
   fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "fixed" } });
   fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "not a number" } });
-  const start = screen.getByRole("button", { name: "Start acquisition" });
+  const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
   await screen.findByText("Control values must be finite numbers.");
@@ -1073,28 +1067,28 @@ it("keeps an already-sent acquisition receipt when leaving the mounted editor", 
   render(<Harness />);
   await selectPrepared();
   deferSubmission = true;
-  const start = screen.getByRole("button", { name: "Start acquisition" });
+  const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
   await waitFor(() => expect(submissionResponse).toBeDefined());
   expect(submissions).toHaveLength(1);
-  fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
+  fireEvent.click(screen.getByRole("button", { name: "已提交任务" }));
   await act(async () => submissionResponse!(Response.json({ procedure_id: "submitted-A" })));
-  await screen.findByRole("heading", { name: "Submission confirmed" });
-  expect(screen.getByRole("button", { name: "Submitted work" })).toHaveAttribute(
+  await screen.findByRole("heading", { name: "提交已确认" });
+  expect(screen.getByRole("button", { name: "已提交任务" })).toHaveAttribute(
     "aria-current",
     "page",
   );
   expect(submissions).toHaveLength(1);
-  fireEvent.click(screen.getByRole("button", { name: "Editor" }));
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "准备" }));
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
 });
 
 it("fences edits and revokes unsent preparation during native close preflight", async () => {
   render(<Harness />);
   await selectPrepared();
   deferPreview = true;
-  const start = screen.getByRole("button", { name: "Start acquisition" });
+  const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
   await waitFor(() => expect(previewResponse).toBeDefined());

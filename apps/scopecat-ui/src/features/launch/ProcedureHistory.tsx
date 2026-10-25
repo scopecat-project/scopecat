@@ -35,28 +35,23 @@ export function ProcedureHistory({
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary className="font-semibold">
-        {mode === "submitted" ? "Submitted work" : "Experiment history"}
+        {mode === "submitted" ? "已提交任务" : "实验历史"}
       </summary>
       {mode === "submitted" && (
         <div className="text-xs text-text-dim">
-          <p>Newest first · opening work does not start acquisition.</p>
+          <p>按新到旧排列；查看任务不会启动采集。</p>
           <details>
-            <summary className="cursor-pointer">Scheduling and inspection</summary>
-            <p>
-              Waiting work is scheduled by resource availability, not list order. Select a task to
-              inspect its progress and actions alongside this list.
-            </p>
+            <summary className="cursor-pointer">调度与检查</summary>
+            <p>等待任务按资源可用性调度，并非按此列表排序。选择任务可在列表旁查看进度和操作。</p>
           </details>
         </div>
       )}
-      {history.isPending && <p role="status">Loading experiment history…</p>}
+      {history.isPending && <p role="status">正在加载实验历史…</p>}
       {history.error && (
-        <p role="alert">
-          Submitted state unavailable; retained entries may be stale. {history.error.message}
-        </p>
+        <p role="alert">无法更新提交状态；保留记录可能已过时。 {history.error.message}</p>
       )}
       {history.isSuccess && history.data.pages.every((page) => page.items.length === 0) && (
-        <p>No experiments have been started yet.</p>
+        <p>尚未启动实验。</p>
       )}
       <ul className="space-y-1">
         {history.data?.pages
@@ -77,9 +72,9 @@ export function ProcedureHistory({
                   {procedure.closure
                     ? stateLabel(procedure.closure.status)
                     : procedure.cancellation
-                      ? "Cancellation requested"
+                      ? "已请求取消"
                       : procedure.resource_wait
-                        ? "Waiting for resources"
+                        ? "等待资源"
                         : stateLabel(procedure.state)}{" "}
                 </span>
                 <span className="truncate text-xs text-text-dim" title={procedure.procedure_run_id}>
@@ -88,7 +83,7 @@ export function ProcedureHistory({
                 </span>
               </button>
               <details className="text-xs text-text-dim">
-                <summary className="cursor-pointer">Task identifiers and time</summary>
+                <summary className="cursor-pointer">任务标识与时间</summary>
                 <p className="select-text [overflow-wrap:anywhere]">{procedure.procedure_run_id}</p>
                 <time dateTime={procedure.created_at}>{procedure.created_at}</time>
               </details>
@@ -112,7 +107,7 @@ export function ProcedureHistory({
             void history.fetchNextPage();
           }}
         >
-          Load earlier procedures
+          加载更早任务
         </Controls.Button>
       )}
     </details>

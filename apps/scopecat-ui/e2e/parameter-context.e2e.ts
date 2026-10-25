@@ -78,15 +78,15 @@ async function acquire(page: Page): Promise<string> {
       response.url().endsWith("/experiment-launcher/submit") &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+  await page.getByRole("button", { name: "开始采集", exact: true }).click();
   const response = await submitting;
   expect(response.status(), await response.text()).toBe(200);
   const receipt = (await response.json()) as { procedure_id: string };
-  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+  await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`procedure=${receipt.procedure_id}`));
-  await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: /^View saved data:/ }).click();
-  await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+  await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: /^查看已保存结果:/ }).click();
+  await expect(page.getByTestId("run-status")).toHaveText("已完成");
   const run = new URL(page.url()).searchParams.get("run");
   expect(run).toBeTruthy();
   return run!;
@@ -167,23 +167,17 @@ for (const scoped of [false, true]) {
         }
         if (index > 0) {
           await expect(
-            page.getByRole("heading", { name: "Submission confirmed", exact: true }),
+            page.getByRole("heading", { name: "提交已确认", exact: true }),
           ).toBeVisible();
-          await expect(
-            page.getByRole("button", { name: "Start acquisition", exact: true }),
-          ).toBeDisabled();
-          await page
-            .getByRole("button", { name: "Prepare a new run (separate acquisition)", exact: true })
-            .click();
-          await expect(
-            page.getByRole("button", { name: "Start acquisition", exact: true }),
-          ).toBeEnabled();
+          await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
+          await page.getByRole("button", { name: "准备新的 run（独立采集）", exact: true }).click();
+          await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
           await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
         }
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
         );
-        await page.getByRole("button", { name: "Preview", exact: true }).click();
+        await page.getByRole("button", { name: "预览", exact: true }).click();
         const response = await previewing;
         expect(response.status(), await response.text()).toBe(200);
         const prepared = await response.json();
@@ -249,7 +243,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(page.getByLabel("signals[1].quality", { exact: true })).toHaveValue("");
     await saveVersion(page, "gui-optional-quality");
     await launchVersion(page);
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     const run = await acquire(page);
     uv([

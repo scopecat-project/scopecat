@@ -269,7 +269,7 @@ export function LaunchForm({
           JSON.stringify(current.preview.manual_state) === JSON.stringify(checked.manual_state)
             ? current.requestKey
             : undefined,
-        notice: "Preview matches these inputs and the checked project configuration.",
+        notice: "预览与当前输入及已检查的项目配置一致。",
       }));
       if (!startAfter) return;
       if (!checked.manual_state || !checked.procedure_definition)
@@ -357,9 +357,9 @@ export function LaunchForm({
         {entry.review && <p>{entry.review.instructions}</p>}
       </section>
       <div className="experiment-input-stage">
-        <section aria-label="Inputs for this run" className="space-y-2 border-t border-line pt-2">
+        <section aria-label="本次 run 的输入" className="space-y-2 border-t border-line pt-2">
           <div>
-            <h4 className="font-semibold">Inputs for this run</h4>
+            <h4 className="font-semibold">本次 run 的输入</h4>
           </div>
           <fieldset disabled={pending === "submit" || !recovery.ready}>
             <ControlFields
@@ -407,7 +407,7 @@ export function LaunchForm({
                     value={values[name]}
                     onChange={(event) => change(name, event.target.value)}
                   >
-                    <option value="">Select…</option>
+                    <option value="">请选择…</option>
                     {(field.enum ?? ["true", "false"]).map((value) => (
                       <option key={String(value)} value={String(value)}>
                         {String(value)}
@@ -437,11 +437,9 @@ export function LaunchForm({
           <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
         </fieldset>
       </div>
-      <section aria-label="Preview and start" className="space-y-2 border-b border-line pb-3">
-        <h4 className="sr-only">Start or inspect</h4>
-        <p className="text-sm text-text-dim">
-          Start checks your inputs. Preview inspects them without acquisition.
-        </p>
+      <section aria-label="预览与开始" className="space-y-2 border-b border-line pb-3">
+        <h4 className="sr-only">开始或检查</h4>
+        <p className="text-sm text-text-dim">开始前会检查输入。预览只检查输入，不执行采集。</p>
         <div className="flex flex-wrap items-center gap-3">
           {entry.actions.includes("submit") && (
             <Button
@@ -452,10 +450,10 @@ export function LaunchForm({
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
               {pending === "prepare"
-                ? "Preparing acquisition…"
+                ? "正在准备采集…"
                 : pending === "submit"
-                  ? "Submitting acquisition…"
-                  : "Start acquisition"}
+                  ? "正在提交采集…"
+                  : "开始采集"}
             </Button>
           )}
           {entry.actions.includes("preview") && (
@@ -465,12 +463,12 @@ export function LaunchForm({
               disabled={!canPrepare || Boolean(pending)}
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
-              {pending === "preview" ? "Preparing preview…" : "Preview"}
+              {pending === "preview" ? "正在准备预览…" : "预览"}
             </Button>
           )}
           {attempt?.status === "confirmed" && (
             <Button type="button" disabled={Boolean(pending)} onClick={rerun}>
-              Prepare another acquisition
+              准备另一次采集
             </Button>
           )}
           {(pending === "prepare" || pending === "preview") && (
@@ -593,7 +591,7 @@ export function LaunchForm({
             <p className="break-all">{draft.workingInput.draft_id}</p>
           </details>
           <Notice id={workingStatusId} role="status">
-            {workingBlockReason ?? (result ? "Preview up to date" : "Inputs up to date")}
+            {workingBlockReason ?? (result ? "预览已更新" : "输入已更新")}
           </Notice>
           {!workingCurrent && working.data && !working.isError && (
             <p>

@@ -174,14 +174,14 @@ it("retains ordered selections and exact publication through explicit candidate,
   let mounted = render(view());
   await screen.findByRole("option", { name: "User model · v1" });
   expect(screen.getAllByRole("option", { name: "Morning sweep · #1" })).toHaveLength(2);
-  fireEvent.change(screen.getByLabelText("Primary run"), { target: { value: "left" } });
-  fireEvent.change(screen.getByLabelText("Secondary run"), { target: { value: "right" } });
-  fireEvent.click(screen.getByText("Inspect compatible data"));
+  fireEvent.change(screen.getByLabelText("主 run"), { target: { value: "left" } });
+  fireEvent.change(screen.getByLabelText("对照 run"), { target: { value: "right" } });
+  fireEvent.click(screen.getByText("检查兼容数据"));
   await screen.findByText("Two retained curves");
-  fireEvent.change(screen.getByLabelText("Primary selected positions"), {
+  fireEvent.change(screen.getByLabelText("主 run 选点位置"), {
     target: { value: "2,0" },
   });
-  fireEvent.change(screen.getByLabelText("Secondary selected positions"), {
+  fireEvent.change(screen.getByLabelText("对照 run 选点位置"), {
     target: { value: "1,2" },
   });
   fireEvent.change(screen.getByLabelText("Offset"), { target: { value: "0.01" } });
@@ -189,20 +189,20 @@ it("retains ordered selections and exact publication through explicit candidate,
   mounted.unmount();
   mounted = render(view());
   await screen.findByText("Two retained curves");
-  expect(screen.getByLabelText("Secondary run")).toHaveValue("right");
-  expect(screen.getByLabelText("Primary selected positions")).toHaveValue("2,0");
+  expect(screen.getByLabelText("对照 run")).toHaveValue("right");
+  expect(screen.getByLabelText("主 run 选点位置")).toHaveValue("2,0");
   expect(screen.getByLabelText("Offset")).toHaveValue(0.01);
   mounted.unmount();
   client.removeQueries({ queryKey: ["comparison-preview"] });
   mounted = render(view());
   expect(screen.queryByText("Two retained curves")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Primary selected positions")).toHaveValue("2,0");
-  expect(screen.getByText("Fit selected data and save analysis")).toBeDisabled();
+  expect(screen.getByLabelText("主 run 选点位置")).toHaveValue("2,0");
+  expect(screen.getByText("拟合选中数据并保存 analysis")).toBeDisabled();
   expect(requests.filter((request) => request.action !== "list")).toHaveLength(beforeRecovery);
-  fireEvent.click(screen.getByText("Inspect compatible data"));
+  fireEvent.click(screen.getByText("检查兼容数据"));
   await screen.findByText("Two retained curves");
-  expect(screen.getByLabelText("Primary selected positions")).toHaveValue("2,0");
-  fireEvent.click(screen.getByText("Fit selected data and save analysis"));
+  expect(screen.getByLabelText("主 run 选点位置")).toHaveValue("2,0");
+  fireEvent.click(screen.getByText("拟合选中数据并保存 analysis"));
   await screen.findByText("Publication fit");
   expect(requests.find((item) => item.action === "fit")).toMatchObject({
     code_revision: { content_hash: "sha256:inspected" },
@@ -210,26 +210,27 @@ it("retains ordered selections and exact publication through explicit candidate,
     secondary: { points: [1, 2] },
     parameters: { offset: 0.01 },
   });
-  fireEvent.click(screen.getByText("Import suggested inputs into Launch"));
+  fireEvent.click(screen.getByText("将建议输入导入准备"));
   await waitFor(() =>
     expect(handoff).toHaveBeenCalledWith(
       expect.objectContaining({ source_analysis: "fit", source_hash: "hash-fit" }),
     ),
   );
-  fireEvent.click(screen.getByText("Create explicit candidate"));
+  fireEvent.click(screen.getByText("创建候选"));
   await screen.findByText("Publication candidate");
-  expect(
-    screen.getByRole("link", { name: "Review parameter changes and adoption steps" }),
-  ).toHaveAttribute("href", "?run=left&run-analysis=candidate#runs");
+  expect(screen.getByRole("link", { name: "检查参数变更与接纳步骤" })).toHaveAttribute(
+    "href",
+    "?run=left&run-analysis=candidate#runs",
+  );
   expect(requests.find((item) => item.action === "candidate")).toMatchObject({
     analysis_id: "fit",
     analysis_hash: "hash-fit",
   });
-  fireEvent.change(screen.getByLabelText("Rejection reason"), {
+  fireEvent.change(screen.getByLabelText("拒绝原因"), {
     target: { value: "Insufficient evidence" },
   });
-  fireEvent.click(screen.getByText("Record candidate rejection"));
-  await screen.findByText("Independent review recorded. This is not procedure approval.");
+  fireEvent.click(screen.getByText("记录候选拒绝"));
+  await screen.findByText("独立判断已记录，不代表任务已获批准。");
   expect(requests.find((item) => item.action === "reject")).toMatchObject({
     analysis_id: "candidate",
     analysis_hash: "hash-candidate",
@@ -237,14 +238,14 @@ it("retains ordered selections and exact publication through explicit candidate,
   });
   mounted.rerender(view("another-data-space"));
   await act(async () => {});
-  expect(screen.getByLabelText("Primary run")).toHaveValue("");
-  expect(screen.getByLabelText("Secondary run")).toHaveValue("");
+  expect(screen.getByLabelText("主 run")).toHaveValue("");
+  expect(screen.getByLabelText("对照 run")).toHaveValue("");
   expect(screen.queryByText("Two retained curves")).not.toBeInTheDocument();
 });
 
 it("rejects empty, duplicated and out-of-range positions", () => {
   for (const selection of ["", "0,,2", "0,0", "-1", "3"])
-    expect(() => selectedPoints(selection, 3)).toThrow(/Select at least one point|Point positions/);
+    expect(() => selectedPoints(selection, 3)).toThrow(/至少选择一个点|点位置必须/);
   expect(selectedPoints("2, 0", 3)).toEqual([2, 0]);
 });
 
@@ -276,7 +277,7 @@ it("resolves an older selected run and disambiguates equal collection names and 
   );
   await screen.findAllByRole("option", { name: "Repeated [a] · #1" });
   expect(screen.getAllByRole("option", { name: "Repeated [b] · #1" })).toHaveLength(2);
-  expect(screen.getByLabelText("Primary run")).toHaveValue("old");
+  expect(screen.getByLabelText("主 run")).toHaveValue("old");
   expect(getRun).toHaveBeenCalledWith("old", expect.any(AbortSignal));
 });
 

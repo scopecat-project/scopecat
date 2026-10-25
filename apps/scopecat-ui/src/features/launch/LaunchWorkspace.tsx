@@ -259,20 +259,20 @@ export function LaunchWorkspace({
             setHandoffRetry((value) => value + 1);
           }}
         >
-          Retry importing inputs
+          重试导入输入
         </button>
       )}
       <header>
-        <h2 className={pageTitle}>Experiments</h2>
+        <h2 className={pageTitle}>实验</h2>
       </header>
-      <nav aria-label="Experiment workspaces" className={workbenchTabs}>
+      <nav aria-label="实验工作区" className={workbenchTabs}>
         <button
           type="button"
           className={workbenchTab}
           aria-current={view === "editor" ? "page" : undefined}
           onClick={() => showView("editor")}
         >
-          Editor
+          准备
         </button>
         <button
           type="button"
@@ -281,7 +281,7 @@ export function LaunchWorkspace({
           aria-current={view === "monitor" ? "page" : undefined}
           onClick={() => showView("monitor")}
         >
-          Monitor
+          监看
         </button>
         <button
           type="button"
@@ -289,7 +289,7 @@ export function LaunchWorkspace({
           aria-current={view === "submitted" ? "page" : undefined}
           onClick={() => showView("submitted")}
         >
-          Submitted work
+          已提交任务
         </button>
       </nav>
       <div>
@@ -303,17 +303,15 @@ export function LaunchWorkspace({
         <section
           ref={execution}
           tabIndex={-1}
-          aria-label="Selected execution"
+          aria-label="当前执行"
           className="scroll-mt-24 rounded-md focus-visible:outline-accent"
         >
           <ProcedureProgress key={procedureId} procedureId={procedureId} projectId={projectId} />
         </section>
       )}
       {linked && !linkedMatches && (
-        <section aria-label="Open saved draft" className={detailCard}>
-          <p role={linkError ? "alert" : "status"}>
-            {linkError ?? "Opening the exact saved draft…"}
-          </p>
+        <section aria-label="打开已保存草稿" className={detailCard}>
+          <p role={linkError ? "alert" : "status"}>{linkError ?? "正在打开指定草稿…"}</p>
           {linkError && (
             <button
               type="button"
@@ -327,7 +325,7 @@ export function LaunchWorkspace({
                   void linkedRead.refetch();
               }}
             >
-              Retry opening draft
+              重试打开草稿
             </button>
           )}
           <button
@@ -335,7 +333,7 @@ export function LaunchWorkspace({
             className={secondaryButton}
             onClick={() => clearDraftLocation(selectedWorkspaceId)}
           >
-            Return to editor
+            返回准备
           </button>
         </section>
       )}
@@ -348,15 +346,12 @@ export function LaunchWorkspace({
       >
         <div>
           <h3 id="experiment-preparation" className="sr-only">
-            Prepare an experiment
+            准备实验
           </h3>
           {preparing && (
             <details className="text-xs text-text-dim">
-              <summary className="cursor-pointer">Current draft</summary>
-              <p>
-                Showing your current editable inputs. Returning from a run does not load its
-                historical inputs.
-              </p>
+              <summary className="cursor-pointer">当前草稿</summary>
+              <p>这里显示当前可编辑输入。从 run 返回不会载入历史输入。</p>
             </details>
           )}
         </div>
@@ -404,15 +399,11 @@ export function LaunchWorkspace({
                 selectCurrentSource(workspaceId);
               }}
             >
-              Use current source
+              使用当前源码
             </button>
           </div>
         )}
-        {handoffUnavailable && (
-          <p role="alert">
-            The suggested experiment is unavailable. The source analysis is retained.
-          </p>
-        )}
+        {handoffUnavailable && <p role="alert">建议的实验当前不可用，来源 analysis 已保留。</p>}
         {draft?.handoff && (
           <p>
             Suggested by{" "}
@@ -426,9 +417,9 @@ export function LaunchWorkspace({
             with the inputs you submit. You can edit the suggestion first.
           </p>
         )}
-        {sourceAvailable && catalog.isPending && <p role="status">Loading experiments…</p>}
+        {sourceAvailable && catalog.isPending && <p role="status">正在加载实验…</p>}
         {catalog.error && <p role="alert">{catalog.error.message}</p>}
-        {catalog.data?.entries.length === 0 && <p>This project has no registered experiments.</p>}
+        {catalog.data?.entries.length === 0 && <p>此项目尚未注册实验。</p>}
         {unavailable && draft && (
           <p role="alert">
             The selected experiment ({draft.experiment}) is unavailable. Its inputs are retained
@@ -459,7 +450,7 @@ export function LaunchWorkspace({
         className="space-y-3"
       >
         <h3 id="experiment-history" className={sectionTitle}>
-          Reuse and recovery
+          复用与恢复
         </h3>
         <LineScans key={`lines:${projectId}`} />
         <PlanLibrary

@@ -126,16 +126,20 @@ retainedProcedureTest(
       const catalogResponse = await catalogReady;
       expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
       await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+      await page.getByRole("button", { name: "已提交任务", exact: true }).click();
       await page
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
         .click();
-      await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "已提交任务检查" })
+          .getByText("已接纳，尚未调度", { exact: true }),
+      ).toBeVisible();
       const inspectedUrl = new URL(page.url());
       expect(inspectedUrl.searchParams.get("submitted_task")).toBe(procedureId);
       expect(inspectedUrl.searchParams.get("procedure")).toBeNull();
-      await page.getByRole("button", { name: "Open in monitor", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Monitor", exact: true })).toHaveAttribute(
+      await page.getByRole("button", { name: "在监看中打开", exact: true }).click();
+      await expect(page.getByRole("button", { name: "监看", exact: true })).toHaveAttribute(
         "aria-current",
         "page",
       );
@@ -151,24 +155,34 @@ retainedProcedureTest(
           new URL(response.url()).pathname === `/api/v1/procedures/${procedureId}/dispatch` &&
           response.request().method() === "POST",
       );
-      await page.getByRole("button", { name: "Continue task", exact: true }).click();
+      await page.getByRole("button", { name: "继续任务", exact: true }).click();
       const dispatch = await dispatchResponse;
       expect(dispatch.ok(), await dispatch.text()).toBe(true);
       const receipt = (await dispatch.json()) as { dispatch_error: string | null };
       expect(receipt.dispatch_error).toBeNull();
       // Observe the real child-run admission separately from its acquisition,
       // just as the source/candidate workflow below observes each durable step.
-      const childRun = page.getByRole("link", { name: /^View (current|saved) data:/ });
+      const childRun = page.getByRole("link", { name: /^查看(当前结果|已保存结果):/ });
       await expect(childRun).toBeVisible();
       const childHref = await childRun.getAttribute("href");
       expect(childHref).toContain(`procedure=${procedureId}`);
-      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "当前执行" })
+          .getByRole("status")
+          .filter({ hasText: /^已完成$/ }),
+      ).toBeVisible();
       await page.reload();
-      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
-      const retainedRun = page.getByRole("link", { name: /^View saved data:/ });
+      await expect(
+        page
+          .getByRole("region", { name: "当前执行" })
+          .getByRole("status")
+          .filter({ hasText: /^已完成$/ }),
+      ).toBeVisible();
+      const retainedRun = page.getByRole("link", { name: /^查看已保存结果:/ });
       await expect(retainedRun).toHaveAttribute("href", childHref!);
       await retainedRun.click();
-      await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+      await expect(page.getByTestId("run-status")).toHaveText("已完成");
       await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
 
       const runScreenshot = testInfo.outputPath("operator-retained-run.png");
@@ -257,22 +271,32 @@ retainedProcedureTest(
   async ({ page, retainedProcedure }, testInfo) => {
     const { baseUrl, procedureId } = retainedProcedure;
     await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
-    await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "当前执行" }).getByText("已接纳，尚未调度", { exact: true }),
+    ).toBeVisible();
     await page
       .locator("summary")
-      .filter({ hasText: /^Cancel queued task$/ })
+      .filter({ hasText: /^取消等待任务$/ })
       .click();
+    await expect(page.getByRole("button", { name: "取消等待任务", exact: true })).toBeDisabled();
+    await page.getByLabel("取消操作人", { exact: true }).fill("browser operator");
+    await page.getByLabel("取消原因", { exact: true }).fill("Cancel before acquisition");
+    await page.getByRole("button", { name: "取消等待任务", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Cancel queued task", exact: true }),
-    ).toBeDisabled();
-    await page.getByLabel("Cancellation actor", { exact: true }).fill("browser operator");
-    await page.getByLabel("Cancellation reason", { exact: true }).fill("Cancel before acquisition");
-    await page.getByRole("button", { name: "Cancel queued task", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+      page
+        .getByRole("region", { name: "当前执行" })
+        .getByRole("status")
+        .filter({ hasText: /^已取消$/ }),
+    ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue task", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /^View (current|saved) data:/ })).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("region", { name: "当前执行" })
+        .getByRole("status")
+        .filter({ hasText: /^已取消$/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "继续任务", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^查看(当前结果|已保存结果):/ })).toHaveCount(0);
     const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedureId}/operator`);
     expect(response.ok()).toBe(true);
     expect((await response.json()).child_runs).toEqual([]);
@@ -365,23 +389,23 @@ test("retains launch inputs across workspaces and invalidates previews without s
       await expect(page.getByLabel("Delay points")).toHaveValue("3");
     }
     expect(submissions).toBe(0);
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     await page.getByLabel("Delay points").fill("2");
     await expect(page.getByText("Preview ready", { exact: true })).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集" })).toBeEnabled();
     expect(submissions).toBe(0);
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: /changed; prepare/ })).toBeVisible();
     await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
     // Start must recheck the changed setup and reject it without submitting.
     const rejected = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/preview"),
     );
-    await page.getByRole("button", { name: "Start acquisition" }).click();
+    await page.getByRole("button", { name: "开始采集" }).click();
     expect((await rejected).ok()).toBe(false);
     await expect(page.getByRole("alert").filter({ hasText: /changed; prepare/ })).toBeVisible();
     expect(submissions).toBe(0);

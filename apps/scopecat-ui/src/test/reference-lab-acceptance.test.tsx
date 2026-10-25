@@ -118,8 +118,8 @@ describe("shared reference-lab acceptance", () => {
     fireEvent.change(screen.getByLabelText("Experiment"), {
       target: { value: "reference_lab.temperature_diagnostic" },
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
     await screen.findByText("Preview ready");
     expect(
       screen.queryByText("This task does not publish parameter changes."),
@@ -128,9 +128,7 @@ describe("shared reference-lab acceptance", () => {
     expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
     expect(screen.getByText("Unknown (s)")).toBeVisible();
     expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
   });
 
   it("uses the shared controls catalog for fixed and scanned previews with owned provenance", async () => {
@@ -188,8 +186,8 @@ describe("shared reference-lab acceptance", () => {
     expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("signal[signal]");
     fireEvent.change(screen.getByLabelText("Frequency unit"), { target: { value: "MHz" } });
     fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "4900" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
     await screen.findByText("Resolved controls");
     expect(screen.getAllByText("fixed")).toHaveLength(2);
     expect(screen.getByText("configuration")).toBeVisible();
@@ -199,7 +197,7 @@ describe("shared reference-lab acceptance", () => {
     });
     fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "range" } });
     expect(screen.queryByText("Resolved controls")).toBeNull();
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
     fireEvent.change(screen.getByLabelText("Frequency start"), { target: { value: "4.7" } });
     fireEvent.change(screen.getByLabelText("Frequency stop"), { target: { value: "4.9" } });
     fireEvent.change(screen.getByLabelText("Frequency points"), { target: { value: "3" } });
@@ -207,8 +205,8 @@ describe("shared reference-lab acceptance", () => {
     fireEvent.change(screen.getByLabelText("Amplitude scan values"), {
       target: { value: "0.05, 0.1" },
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
     await screen.findByText("Resolved controls");
     expect(screen.getAllByText("scanned")).toHaveLength(2);
     const edits = requests[1]?.control_edits;
@@ -217,10 +215,8 @@ describe("shared reference-lab acceptance", () => {
       amplitude: { mode: "scan", axis: { kind: "values" } },
     });
     expect(JSON.stringify(edits)).not.toContain("4900");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Start acquisition" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
     await waitFor(() => expect(submitted).toBeDefined());
     expect(submitted?.control_edits).toEqual(edits);
     expect(submitted?.expected_request_hash).toEqual(fixtures.controls_scan.request_hash);

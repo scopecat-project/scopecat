@@ -63,9 +63,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     page.on("request", (request) => {
       if (request.url().endsWith("/experiment-launcher/preview")) previewRequests += 1;
     });
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Recheck device connections", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Recheck device connections", exact: true }),
@@ -88,17 +86,13 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await expect(page.getByRole("region", { name: "Parameter source", exact: true })).toContainText(
       "no overrides",
     );
-    await expect(
-      page.getByRole("region", { name: "Inputs for this run", exact: true }),
-    ).toContainText("does not publish a parameter version");
+    await expect(page.getByRole("region", { name: "本次 run 的输入", exact: true })).toContainText(
+      "does not publish a parameter version",
+    );
     await page.setViewportSize({ width: 390, height: 844 });
-    await page
-      .getByRole("region", { name: "Preview and start", exact: true })
-      .scrollIntoViewIfNeeded();
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeInViewport();
-    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeInViewport();
+    await page.getByRole("region", { name: "预览与开始", exact: true }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "预览", exact: true })).toBeInViewport();
     await page.screenshot({ path: testInfo.outputPath("prepare-mobile.png") });
     await page.setViewportSize({ width: 1280, height: 900 });
     const runs = async () =>
@@ -124,9 +118,9 @@ test("Start prepares internally while cancelled and edited preparations never ac
         await route.fulfill({ response });
         finished();
       });
-      await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+      await page.getByRole("button", { name: "开始采集", exact: true }).click();
       await received;
-      await expect(page.getByRole("button", { name: "Preparing acquisition…" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "正在准备采集…" })).toBeDisabled();
       await expect(page.getByText(/Acquisition has not been submitted/)).toBeVisible();
       if (action === "cancel") {
         await page.screenshot({ path: testInfo.outputPath("preparing-start.png") });
@@ -141,13 +135,11 @@ test("Start prepares internally while cancelled and edited preparations never ac
       await page.unroute("**/experiment-launcher/preview");
       if (action === "navigate")
         await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
-      await expect(
-        page.getByRole("button", { name: "Start acquisition", exact: true }),
-      ).toBeEnabled();
+      await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
       await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
       expect(await runs()).toHaveLength(0);
     }
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
     expect(await runs()).toHaveLength(0);
     await page.getByLabel("Gain", { exact: true }).fill("3");
@@ -162,7 +154,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     const submitted = page.waitForRequest((request) =>
       request.url().endsWith("/experiment-launcher/submit"),
     );
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const checked = await (await preview).json();
     const request = (await submitted).postDataJSON();
     expect(request.control_edits.gain).toEqual({ mode: "fixed", value: 3 });
@@ -170,13 +162,13 @@ test("Start prepares internally while cancelled and edited preparations never ac
     expect(request.manual_state).toEqual(checked.manual_state);
     expect(request.code_revision).toEqual(checked.code_revision);
     expect(request.reviewed).toEqual(checked.reviewed);
-    const current = page.getByRole("link", { name: /View current data:/ });
+    const current = page.getByRole("link", { name: /查看当前结果:/ });
     await expect(current).toBeVisible();
     const currentHref = await current.getAttribute("href");
     const runId = new URL(currentHref!, endpoint.base_url).searchParams.get("run");
     const procedureId = new URL(currentHref!, endpoint.base_url).searchParams.get("procedure");
     await current.click();
-    await expect(page.getByTestId("run-status")).toHaveText("Running");
+    await expect(page.getByTestId("run-status")).toHaveText("执行中");
     await expect(
       page.getByTestId("data-card").getByText("Measurement data", { exact: true }),
     ).toBeVisible();
@@ -184,29 +176,25 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await writeFile(releasePath, "release");
     // The current view receives the completed batch without reopening or collecting again.
     await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
-    await page.getByRole("link", { name: "Return to preparation", exact: true }).click();
-    await expect(
-      page.getByRole("region", { name: "Prepare an experiment", exact: true }),
-    ).toBeFocused();
+    await page.getByRole("link", { name: "返回准备", exact: true }).click();
+    await expect(page.getByRole("region", { name: "准备实验", exact: true })).toBeFocused();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");
-    await expect(
-      page.getByRole("region", { name: "Selected execution", exact: true }),
-    ).toBeHidden();
-    await page.getByRole("button", { name: "Monitor", exact: true }).click();
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
-    await page.getByRole("button", { name: /signal.*Completed/ }).click();
+    await expect(page.getByRole("region", { name: "当前执行", exact: true })).toBeHidden();
+    await page.getByRole("button", { name: "监看", exact: true }).click();
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "已提交任务", exact: true }).click();
+    await page.getByRole("button", { name: /signal.*已完成/ }).click();
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
-    const saved = page.getByRole("link", { name: /View saved data:/ });
+    const saved = page.getByRole("link", { name: /查看已保存结果:/ });
     expect(
       new URL((await saved.getAttribute("href"))!, endpoint.base_url).searchParams.get("run"),
     ).toBe(runId);
     await saved.click();
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByTestId("run-status")).toHaveText("已完成");
     await expect(page.getByTestId("data-card").getByText(/^2 records/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("historical-data.png"), fullPage: true });
-    await page.getByRole("link", { name: "Return to preparation", exact: true }).click();
+    await page.getByRole("link", { name: "返回准备", exact: true }).click();
     await expect(
       page.getByText(
         "Showing your current editable inputs. Returning from a run does not load its historical inputs.",
@@ -215,14 +203,12 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");
     await page.getByLabel("Gain", { exact: true }).fill("4");
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Prepare another acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "准备另一次采集", exact: true }).click();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("4");
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     expect(await runs()).toHaveLength(1);
     await page.screenshot({
       path: testInfo.outputPath("adjust-without-acquisition.png"),
@@ -232,7 +218,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     const nextSubmission = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/submit"),
     );
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const nextResponse = await nextSubmission;
     expect(nextResponse.request().postDataJSON().control_edits.gain).toEqual({
       mode: "fixed",
@@ -241,16 +227,12 @@ test("Start prepares internally while cancelled and edited preparations never ac
     const nextProcedure = (await nextResponse.json()).procedure_id;
     expect(nextProcedure).not.toBe(procedureId);
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureId);
-    await expect(
-      page.getByRole("region", { name: "Selected execution", exact: true }),
-    ).toBeHidden();
-    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
-    await expect(
-      page.getByRole("region", { name: "Selected execution", exact: true }),
-    ).toBeFocused();
+    await expect(page.getByRole("region", { name: "当前执行", exact: true })).toBeHidden();
+    await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
+    await expect(page.getByRole("region", { name: "当前执行", exact: true })).toBeFocused();
     expect(new URL(page.url()).searchParams.has("preparation")).toBe(false);
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(nextProcedure);
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
     expect(await runs()).toHaveLength(2);
   } finally {
     await writeFile(releasePath, "release");

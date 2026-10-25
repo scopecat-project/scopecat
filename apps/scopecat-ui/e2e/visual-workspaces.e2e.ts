@@ -85,11 +85,11 @@ test("populated workspaces, exact result window and focus view remain readable",
       await expect(page.getByTestId("run-detail-header")).toBeVisible();
       await expect(page.getByRole("region", { name: "Run progress" })).toBeVisible();
       await capture(page, `run-${width}`);
-      await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+      await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await capture(page, `focused-chart-${width}`);
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+      await expect(page.getByRole("button", { name: "聚焦曲线", exact: true })).toBeFocused();
       await page.goto(`${base}/#configuration`);
       await page.getByLabel("Working parameter branch", { exact: true }).fill("visual-inputs");
       await page.getByRole("button", { name: "Open working table", exact: true }).click();

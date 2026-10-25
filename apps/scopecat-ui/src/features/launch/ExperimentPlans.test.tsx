@@ -234,7 +234,7 @@ function Harness({
       >
         Unknown submit
       </button>
-      <output aria-label="Current draft">{context.draft?.values.note}</output>
+      <output aria-label="当前草稿">{context.draft?.values.note}</output>
       <output aria-label="Current operator">{context.draft?.actor}</output>
       <output aria-label="Original attempt">
         {context.attempt?.status}:{context.attempt?.request.request_key}
@@ -326,18 +326,18 @@ it("a slow older open cannot overwrite a later plan or a new edit", async () => 
   await act(async () => {
     pending[1]!(reply({ entries: [entry] }));
   });
-  expect(screen.getByLabelText("Current draft")).toHaveTextContent("Second plan");
+  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("Second plan");
   await act(async () => {
     pending[0]!(reply({ entries: [entry] }));
   });
-  expect(screen.getByLabelText("Current draft")).toHaveTextContent("Second plan");
+  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("Second plan");
   fireEvent.click(screen.getByText("Open First plan r1"));
   await waitFor(() => expect(pending).toHaveLength(3));
   fireEvent.click(screen.getByText("Edit while opening"));
   await act(async () => {
     pending[2]!(reply({ entries: [entry] }));
   });
-  expect(screen.getByLabelText("Current draft")).toHaveTextContent("new edit");
+  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("new edit");
 });
 
 it("comparison identifies changed inputs without placing hashes in the ordinary summary", () => {
@@ -372,12 +372,12 @@ it("an open started without a draft cannot replace the subsequently selected cat
   fireEvent.click(screen.getByText("Open First plan r1"));
   await waitFor(() => expect(finish).toBeDefined());
   fireEvent.click(screen.getByText("Select current catalog"));
-  await waitFor(() => expect(screen.getByLabelText("Current draft")).toHaveTextContent("default"));
+  await waitFor(() => expect(screen.getByLabelText("当前草稿")).toHaveTextContent("default"));
   fireEvent.click(screen.getByText("Edit while opening"));
   await act(async () => {
     finish!(reply({ entries: [entry] }));
   });
-  expect(screen.getByLabelText("Current draft")).toHaveTextContent("new edit");
+  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("new edit");
 });
 
 it("waits for initial catalog readiness before allowing a saved plan to open", async () => {
@@ -483,10 +483,10 @@ it("preserves a registered target through reopening, preview, submission and pla
     "revision 3",
   );
   expect(screen.getByLabelText("Sample ID")).toBeDisabled();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await screen.findByText("Preview ready");
-  const start = screen.getByRole("button", { name: "Start acquisition" });
+  const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
   await waitFor(() =>
@@ -665,6 +665,6 @@ it("a late line receipt lookup cannot discard an original attempt after a draft 
     release(reply({ procedure_id: "original-procedure" }));
   });
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
-  expect(screen.getByLabelText("Current draft")).toHaveTextContent("new edit");
+  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("new edit");
   expect(screen.queryByText(/Physical line: Next/)).not.toBeInTheDocument();
 });

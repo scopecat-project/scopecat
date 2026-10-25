@@ -352,7 +352,7 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
     }),
   ).toBeVisible();
   await expect(page.getByText("first_run", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Succeeded", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("已完成", { exact: true }).first()).toBeVisible();
   const dataCard = page.getByTestId("data-card");
   await expect(dataCard.getByText(/^1 records/)).toBeVisible();
   await dataCard.getByText("Raw records", { exact: true }).click();
@@ -470,29 +470,29 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
   try {
     const runId = await waitForMarker(experiment.acceptedReady, experiment);
     const runItem = page.getByTestId("run-list-item").filter({ hasText: LIVE_DISPLAY_NAME });
-    await expect(runItem).toContainText("Accepted");
+    await expect(runItem).toContainText("已接纳");
     await expect(runItem).toHaveAttribute("title", `Inspect run ${runId}`);
     await runItem.click();
     await expectRunIdentity(page, runId);
 
-    const detail = page.getByRole("region", { name: "Selected run details" });
+    const detail = page.getByRole("region", { name: "选中 run 详情" });
     const state = detail.getByTestId("run-status");
-    await detail.getByText("Execution diagnostics and provenance", { exact: true }).click();
+    await detail.getByText("执行诊断与来源", { exact: true }).click();
     const timeline = detail.getByTestId("timeline-card");
     await expect(detail.getByRole("heading", { name: LIVE_DISPLAY_NAME })).toBeVisible();
     await expect(detail.getByText(LIVE_EXPERIMENT_ID, { exact: true })).toBeVisible();
     await expect(detail.getByText(runId, { exact: true })).toBeVisible();
-    await expect(state).toHaveText("Accepted");
+    await expect(state).toHaveText("已接纳");
     await expect(timeline.getByText("Run admitted", { exact: true })).toBeVisible();
 
     await writeFile(experiment.releaseAccepted, "", "utf8");
     await waitForMarker(experiment.runningReady, experiment);
-    await expect(state).toHaveText("Running");
+    await expect(state).toHaveText("执行中");
     await expect(timeline.getByText(/From: queued.*To: leased/)).toBeVisible();
 
     await writeFile(experiment.releaseRunning, "", "utf8");
     await waitForMarker(experiment.measurementReady, experiment);
-    await expect(state).toHaveText("Running");
+    await expect(state).toHaveText("执行中");
     const dataCard = detail.getByTestId("data-card");
     await expect(dataCard.getByText("Measurement data", { exact: true })).toBeVisible();
     await expect(dataCard.getByText(/^1 records/)).toBeVisible();
@@ -510,7 +510,7 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
     await writeFile(experiment.releaseMeasurement, "", "utf8");
     const completion = await experiment.completion;
     expectProcessOk(completion);
-    await expect(state).toHaveText("Succeeded");
+    await expect(state).toHaveText("已完成");
     await expect(dataCard.getByText(/^15 records/)).toBeVisible();
     await expect(timeline.getByText(/From: leased.*To: closed/)).toBeVisible();
   } finally {
@@ -543,7 +543,7 @@ test("exact run opens independently in two browser pages while acquisition conti
     await page.setViewportSize({ width: 520, height: 800 });
     await expect(page.getByTestId("run-detail-header")).toContainText(runId);
     const open = page
-      .getByRole("region", { name: "Selected run details" })
+      .getByRole("region", { name: "选中 run 详情" })
       .getByRole("link", { name: "Open result in new tab or window" });
     await open.focus();
     await expect(open).toBeFocused();
@@ -573,7 +573,7 @@ test("exact run opens independently in two browser pages while acquisition conti
     await waitForMarker(experiment.runningReady, experiment);
     await writeFile(experiment.releaseRunning, "", "utf8");
     await waitForMarker(experiment.measurementReady, experiment);
-    await expect(result.getByTestId("run-status")).toHaveText("Running");
+    await expect(result.getByTestId("run-status")).toHaveText("执行中");
     const resultData = result.getByTestId("data-card");
     await expect(resultData.getByText(/^1 records/)).toBeVisible();
     await resultData.getByText("Raw records", { exact: true }).click();
@@ -585,10 +585,10 @@ test("exact run opens independently in two browser pages while acquisition conti
     await result.goBack();
     await expect(result.getByTestId("run-detail-header")).toContainText(runId);
     await result.close();
-    await expect(page.getByTestId("run-status")).toHaveText("Running");
+    await expect(page.getByTestId("run-status")).toHaveText("执行中");
     await writeFile(experiment.releaseMeasurement, "", "utf8");
     expectProcessOk(await experiment.completion);
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByTestId("run-status")).toHaveText("已完成");
     await expect(page.getByTestId("data-card").getByText(/^15 records/)).toBeVisible();
     expect(writes).toEqual([]);
   } finally {
@@ -607,7 +607,7 @@ test("running A and historical C stay bound while working B is edited and adopte
   await c.getByTestId("run-list-item").filter({ hasText: "first_run" }).first().click();
   const runC = new URL(c.url()).searchParams.get("run");
   expect(runC).toBeTruthy();
-  await expect(c.getByTestId("run-status")).toHaveText("Succeeded");
+  await expect(c.getByTestId("run-status")).toHaveText("已完成");
   const cUrl = c.url();
   const b = await context.newPage();
   const scale = b.getByRole("textbox", { name: "response[1].scale", exact: true });
@@ -704,10 +704,10 @@ test("running A and historical C stay bound while working B is edited and adopte
       expect(await processResultWithin(experiment, 0)).toBeUndefined();
       await expect(a).toHaveURL(aUrl);
       await expect(a.getByTestId("run-detail-header")).toContainText(runA);
-      await expect(a.getByTestId("run-status")).toHaveText("Running");
+      await expect(a.getByTestId("run-status")).toHaveText("执行中");
       await expect(c).toHaveURL(cUrl);
       await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
-      await expect(c.getByTestId("run-status")).toHaveText("Succeeded");
+      await expect(c.getByTestId("run-status")).toHaveText("已完成");
     };
     const retained = () =>
       JSON.parse(
@@ -758,20 +758,20 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       await b.getByLabel("Experiment", { exact: true }).selectOption("signal");
       await b.getByLabel("Experiment setup", { exact: true }).selectOption("starter-bench");
       // Start may prepare internally; merely editing or previewing must not acquire.
-      await expect(b.getByRole("button", { name: "Start acquisition", exact: true })).toBeEnabled();
+      await expect(b.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
       expect(submissions).toEqual([]);
       phase = `preview working input ${value}`;
       const response = b.waitForResponse(
         (item) =>
           item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
       );
-      await b.getByRole("button", { name: "Preview", exact: true }).click();
+      await b.getByRole("button", { name: "预览", exact: true }).click();
       const preview = await response;
       await expectResponseOk(preview, "POST");
       const capture = await preview.json();
       expect(capture.reviewed.config_source.overrides).toHaveLength(1);
       previewHashes.push(capture.request_hash);
-      await expect(b.getByRole("button", { name: "Start acquisition", exact: true })).toBeEnabled();
+      await expect(b.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
       await assertObservers();
     }
     expect(previewHashes[0]).not.toBe(previewHashes[1]);
@@ -794,7 +794,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     });
     await writeFile(experiment.releaseMeasurement, "", "utf8");
     expectProcessOk(await experiment.completion);
-    await expect(a.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(a.getByTestId("run-status")).toHaveText("已完成");
     await expect(c).toHaveURL(cUrl);
     await expect(c.getByTestId("run-detail-header")).toContainText(runC!);
     expect(submissions).toEqual([]);
@@ -838,8 +838,8 @@ test("queues a free off-grid scan domain into a running adaptive compiler", asyn
     await waitForMarker(experiment.optimizerReady, experiment);
     await page.goto(`${daemon.baseUrl}/?run=${encodeURIComponent(runId)}`);
 
-    const detail = page.getByRole("region", { name: "Selected run details" });
-    await expect(detail.getByTestId("run-status")).toHaveText("Running");
+    const detail = page.getByRole("region", { name: "选中 run 详情" });
+    await expect(detail.getByTestId("run-status")).toHaveText("执行中");
     const inspection = detail.getByTestId("run-domain-decision-card");
     await inspection.getByRole("button", { name: "Free scan" }).click();
     await inspection.getByLabel("x values").fill("0.375");
@@ -861,7 +861,7 @@ test("queues a free off-grid scan domain into a running adaptive compiler", asyn
     await writeFile(experiment.releaseFinish, "", "utf8");
     const completion = await experiment.completion;
     expectProcessOk(completion);
-    await expect(detail.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(detail.getByTestId("run-status")).toHaveText("已完成");
   } finally {
     await finishAdaptiveExperiment(experiment);
   }

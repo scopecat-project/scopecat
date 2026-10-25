@@ -51,10 +51,10 @@ export function AnalysisPublicationView({
           </section>
         ))}
       {analysis.outputs.length === 0 && (
-        <p className="text-sm text-text-dim">No saved outputs in this publication.</p>
+        <p className="text-sm text-text-dim">此 analysis revision 没有已保存输出。</p>
       )}
       <dl className="text-xs text-text-soft">
-        <dt className="text-text-dim">Publication ID</dt>
+        <dt className="text-text-dim">发布 ID</dt>
         <dd className="m-0">
           <code className="break-all" data-testid="publication-id">
             {analysis.id}
@@ -63,9 +63,7 @@ export function AnalysisPublicationView({
       </dl>
       {copyTarget && <CopyReadOnlyCode target={{ ...copyTarget, publicationId: analysis.id }} />}
       <details className="min-w-0 rounded-md border border-line p-3">
-        <summary className="cursor-pointer text-sm font-semibold">
-          Sources and execution evidence
-        </summary>
+        <summary className="cursor-pointer text-sm font-semibold">来源与执行证据</summary>
         <div className="mt-3 grid min-w-0 gap-2">
           {analysis.inputs.length > 0 ? (
             <section className="rounded-[7px] border border-line bg-panel p-[9px]">
@@ -99,10 +97,7 @@ export function AnalysisPublicationView({
                           </button>
                         ) : (
                           <code className="text-text-dim">
-                            {runId ??
-                              (input.kind === "interpretation"
-                                ? "Procedure decision"
-                                : "Project analysis")}
+                            {runId ?? (input.kind === "interpretation" ? "任务判断" : "项目分析")}
                           </code>
                         )}
                         <code

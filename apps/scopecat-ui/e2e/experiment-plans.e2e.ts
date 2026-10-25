@@ -47,7 +47,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
       const response = page.waitForResponse((r) =>
         r.url().endsWith("/experiment-launcher/preview"),
       );
-      await page.getByRole("button", { name: "Preview", exact: true }).click();
+      await page.getByRole("button", { name: "预览", exact: true }).click();
       const result = await response;
       expect(result.status(), await result.text()).toBe(200);
     }
@@ -104,9 +104,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     await expect(page.getByLabel("Plan name")).toHaveValue("Signal baseline");
     await expect(frequency).toHaveValue("4900");
     await expect(page.getByLabel("Frequency unit")).toHaveValue("MHz");
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Operator", exact: true }).fill("bob");
     await preview();
@@ -117,7 +115,7 @@ test("saves, reopens, copies and submits an immutable plan without activating co
     expect(copied.saved_by).toBe("bob");
     await preview();
     const receipt = page.waitForResponse((r) => r.url().endsWith("/experiment-launcher/submit"));
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const submitted = await receipt;
     expect(submitted.status(), await submitted.text()).toBe(200);
     await expect(page.getByRole("link", { name: "Reopen exact plan" })).toBeVisible();

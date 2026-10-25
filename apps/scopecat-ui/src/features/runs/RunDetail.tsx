@@ -183,7 +183,7 @@ export function RunDetail({
           )}
         </div>
         <details className="text-xs text-text-soft">
-          <summary className="cursor-pointer py-1">Run details</summary>
+          <summary className="cursor-pointer py-1">run 详情</summary>
           <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             <div>
               <dt>Experiment</dt>
@@ -245,15 +245,13 @@ export function RunDetail({
           <ExecutionScenario scenario={run.scenario} label="Retained execution scenario" />
         </details>
       </div>
-      <p className="text-xs text-text-dim">
-        Monitoring this run · Closing the view does not stop execution.
-      </p>
+      <p className="text-xs text-text-dim">正在监看此 run；关闭视图不会停止执行。</p>
       <RunPlanOrigin runId={run.runId} projectId={projectId} />
 
       {run.samples.length > 0 && (
         <section
           className="mt-[18px] flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel-soft px-3 py-2.5"
-          aria-label="Bound samples"
+          aria-label="绑定样品"
         >
           <span className="mr-1 inline-flex items-center gap-2 text-xs font-extrabold tracking-[0.08em] text-text-dim uppercase">
             <Boxes size={14} aria-hidden="true" />
@@ -364,7 +362,7 @@ export function RunDetail({
           className="rounded-md border border-line p-4"
           open={run.plan.pointCount === undefined || undefined}
         >
-          <summary className="cursor-pointer text-sm font-semibold">Adaptive controls</summary>
+          <summary className="cursor-pointer text-sm font-semibold">自适应控制</summary>
           <div className="mt-3 grid gap-3">
             <RunDomainDecisionCard
               page={domainDecisions}
@@ -376,9 +374,7 @@ export function RunDetail({
           </div>
         </details>
         <details className="rounded-md border border-line p-4">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Execution diagnostics and provenance
-          </summary>
+          <summary className="cursor-pointer text-sm font-semibold">执行诊断与来源</summary>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
             <ExecutionSegmentsCard
               page={executionSegments}

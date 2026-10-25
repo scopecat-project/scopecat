@@ -92,7 +92,7 @@ it.each(["attention_required", "failed"] as const)(
     }
     const { rerender } = render(view(false));
     fireEvent.change(screen.getByLabelText("Slice"), { target: { value: "1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Focus chart" }));
+    fireEvent.click(screen.getByRole("button", { name: "聚焦曲线" }));
     rerender(view(true));
     const focused = within(screen.getByRole("dialog"));
     expect(focused.getByText("Synthetic computation failed")).toBeVisible();
@@ -107,9 +107,9 @@ it.each(["attention_required", "failed"] as const)(
     expect(
       focused.queryByRole("button", { name: "Close without resuming" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(focused.getByRole("button", { name: "Exit focus to view run details" }));
+    fireEvent.click(focused.getByRole("button", { name: "退出聚焦，查看 run 详情" }));
     expect(screen.getByLabelText("Slice")).toHaveValue("1");
-    expect(screen.getByRole("button", { name: "Focus chart" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "聚焦曲线" })).toHaveFocus();
     expect(resolve).not.toHaveBeenCalled();
     expect(screen.queryAllByRole("button", { name: "Close without resuming" })).toHaveLength(
       status === "attention_required" ? 1 : 0,

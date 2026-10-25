@@ -38,7 +38,7 @@ export async function chooseReferenceContext(page: Page, setup = "browser-bench-
 export async function reviewRetainedExperiment(page: Page) {
   const review = page.getByRole("region", { name: "Review recovered experiment", exact: true });
   await expect(review).toBeVisible();
-  await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
   await review.getByRole("button", { name: "Confirm reviewed input", exact: true }).click();
   await expect(review).toBeHidden();
 }

@@ -77,7 +77,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       .click();
     await page.getByLabel("Experiment setup", { exact: true }).selectOption("loop-bench");
     await page.getByLabel("Position", { exact: true }).fill("0.5");
-    const start = page.getByRole("button", { name: "Start acquisition", exact: true });
+    const start = page.getByRole("button", { name: "开始采集", exact: true });
     await expect(start).toBeEnabled();
     let submissions = 0;
     let release!: () => void;
@@ -100,9 +100,9 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     });
     await start.click();
     await receiptReady;
-    await expect(page.getByRole("button", { name: "Submitting acquisition…" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "正在提交采集…" })).toBeDisabled();
     const pendingBounds = (await page
-      .getByRole("button", { name: "Submitting acquisition…" })
+      .getByRole("button", { name: "正在提交采集…" })
       .boundingBox())!;
     await page.mouse.click(pendingBounds.x + 5, pendingBounds.y + 5);
     expect(submissions).toBe(1);
@@ -110,38 +110,36 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     release();
     await expect(scale).toHaveValue("2");
     await scale.fill("3");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Original submission awaiting confirmation" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "原始提交待确认" })).toBeVisible();
     await expect(start).toBeDisabled();
-    await page.getByRole("button", { name: "Check original submission", exact: true }).click();
-    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "核实原始提交", exact: true }).click();
+    await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
     // This author-linked URL still carries workspace context. Reopening the
     // procedure changes its query and must not reload the window's draft.
     expect(new URL(page.url()).searchParams.get("workspace")).toBe(prepared.workspace);
-    await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
+    await page.getByRole("link", { name: "重新打开此任务", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
-    const result = page.getByRole("link", { name: /^View saved data:/ });
+    const result = page.getByRole("link", { name: /^查看已保存结果:/ });
     const href = (await result.getAttribute("href"))!;
     const run = new URL(href, page.url()).searchParams.get("run")!;
     await result.click();
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByTestId("run-status")).toHaveText("已完成");
     await page.goBack();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await page.goForward();
     await expectRunIdentity(page, run);
     await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
-    await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
-    await page.getByRole("button", { name: "Editor", exact: true }).click();
+    await page.getByRole("link", { name: "重新打开此任务", exact: true }).click();
+    await page.getByRole("button", { name: "准备", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await expect(page.getByText(/Working inputs · revision/)).toBeVisible();
     await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(scale).toHaveValue("3");
     await scale.fill("4");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     expect(submissions).toBe(1);
     const runs = (await (
       await page.request.get(`${prepared.url}/api/v1/runs`)

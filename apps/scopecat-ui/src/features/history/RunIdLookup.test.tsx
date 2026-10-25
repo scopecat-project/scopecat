@@ -39,14 +39,14 @@ function setup() {
 it("distinguishes invalid input, missing opaque IDs, and unavailable service", async () => {
   const { find } = setup();
   find("https://example/run/123");
-  expect(screen.getByRole("alert")).toHaveTextContent("Invalid run ID format");
+  expect(screen.getByRole("alert")).toHaveTextContent("run ID 格式无效");
   expect(getRun).not.toHaveBeenCalled();
   vi.mocked(getRun).mockRejectedValueOnce(new ApiError("Not found", 404));
   find("run_legacy_opaque");
-  expect(await screen.findByRole("alert")).toHaveTextContent("Run not found in this data space");
+  expect(await screen.findByRole("alert")).toHaveTextContent("当前数据空间未找到此 run");
   vi.mocked(getRun).mockRejectedValueOnce(new ApiError("Unavailable", 503));
   find("01a13403-f4f3-743a-b1a1-2ea87934729b");
-  expect(await screen.findByRole("alert")).toHaveTextContent("Run lookup unavailable");
+  expect(await screen.findByRole("alert")).toHaveTextContent("run 查找不可用");
 });
 it("ignores late requests and separates identical IDs across data spaces and offline state", async () => {
   let finish!: (value: ProjectRun) => void;
@@ -62,18 +62,18 @@ it("ignores late requests and separates identical IDs across data spaces and off
   find("same-id");
   await screen.findByText("Morning · #7");
   await act(async () => finish(subject("earlier")));
-  fireEvent.click(screen.getByRole("button", { name: "Open found run", hidden: true }));
+  fireEvent.click(screen.getByRole("button", { name: "打开找到的 run", hidden: true }));
   expect(open).toHaveBeenCalledWith("same-id");
   mounted.rerender(view("b"));
-  expect(screen.getByLabelText("Full run ID")).toHaveValue("");
+  expect(screen.getByLabelText("完整 run ID")).toHaveValue("");
   expect(screen.queryByText("Morning · #7")).not.toBeInTheDocument();
   vi.mocked(getRun).mockRejectedValueOnce(new ApiError("missing", 404));
   find("same-id");
-  expect(await screen.findByRole("alert")).toHaveTextContent("Run not found");
+  expect(await screen.findByRole("alert")).toHaveTextContent("未找到此 run");
   mounted.rerender(view("b", true));
-  expect(screen.getByText(/reconnect to this data space/)).toBeInTheDocument();
+  expect(screen.getByText(/重新连接此数据空间/)).toBeInTheDocument();
   expect(
-    screen.queryByRole("button", { name: "Open found run", hidden: true }),
+    screen.queryByRole("button", { name: "打开找到的 run", hidden: true }),
   ).not.toBeInTheDocument();
 });
 
@@ -81,7 +81,7 @@ it("hides the cached result while repeating an exact lookup and reports its fail
   vi.mocked(getRun).mockResolvedValueOnce(subject("same-id"));
   const { find } = setup();
   find("same-id");
-  await screen.findByRole("button", { name: "Open found run" });
+  await screen.findByRole("button", { name: "打开找到的 run" });
   let fail!: (error: Error) => void;
   vi.mocked(getRun).mockImplementationOnce(
     () =>
@@ -89,17 +89,17 @@ it("hides the cached result while repeating an exact lookup and reports its fail
         fail = reject;
       }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Find exact run" }));
+  fireEvent.click(screen.getByRole("button", { name: "查找精确 run" }));
   await waitFor(() => expect(getRun).toHaveBeenCalledTimes(2));
-  expect(screen.queryByRole("button", { name: "Open found run" })).not.toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Finding run");
+  expect(screen.queryByRole("button", { name: "打开找到的 run" })).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("正在查找 run");
   await act(async () => fail(new ApiError("Unavailable", 503)));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Run lookup unavailable");
-  expect(screen.queryByRole("button", { name: "Open found run" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("run 查找不可用");
+  expect(screen.queryByRole("button", { name: "打开找到的 run" })).not.toBeInTheDocument();
 });
 
 const find = (id: string) => {
-  screen.getByText("Find by full run ID").closest("details")!.open = true;
-  fireEvent.change(screen.getByLabelText("Full run ID"), { target: { value: id } });
-  fireEvent.submit(screen.getByLabelText("Full run ID").closest("form")!);
+  screen.getByText("按完整 run ID 查找").closest("details")!.open = true;
+  fireEvent.change(screen.getByLabelText("完整 run ID"), { target: { value: id } });
+  fireEvent.submit(screen.getByLabelText("完整 run ID").closest("form")!);
 };

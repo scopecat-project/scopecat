@@ -107,23 +107,23 @@ test("finds the same run, sample and space publications from either direct input
     for (const run of seed.runs) {
       await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(run)}#runs`);
       const header = page.getByTestId("run-detail-header");
-      await header.getByText("Run details", { exact: true }).click();
+      await header.getByText("run 详情", { exact: true }).click();
       const copiedId = await header.locator("code").filter({ hasText: run }).first().textContent();
       expect(copiedId).toBe(run);
       await page.getByRole("button", { name: /Data$/, exact: true }).click();
-      await page.getByText("Find by full run ID", { exact: true }).click();
-      await page.getByLabel("Full run ID", { exact: true }).fill(copiedId!);
+      await page.getByText("按完整 run ID 查找", { exact: true }).click();
+      await page.getByLabel("完整 run ID", { exact: true }).fill(copiedId!);
       // Deliberately exclude all rows; exact ID lookup must still find this run.
-      await page.getByLabel("From (local time)", { exact: true }).fill("2099-01-01T00:00");
-      await page.getByRole("button", { name: "Find exact run", exact: true }).click();
-      await page.getByRole("button", { name: "Open found run", exact: true }).click();
+      await page.getByLabel("起始时间（本地）", { exact: true }).fill("2099-01-01T00:00");
+      await page.getByRole("button", { name: "查找精确 run", exact: true }).click();
+      await page.getByRole("button", { name: "打开找到的 run", exact: true }).click();
       const related = page.getByRole("region", { name: "Analyses", exact: true });
       await expect(related.locator(":scope > details > summary")).toHaveCount(2);
       while (
-        await related.getByRole("button", { name: "Load older analyses", exact: true }).count()
+        await related.getByRole("button", { name: "加载更早 analysis", exact: true }).count()
       ) {
         const previous = await related.locator(":scope > details > summary").count();
-        await related.getByRole("button", { name: "Load older analyses", exact: true }).click();
+        await related.getByRole("button", { name: "加载更早 analysis", exact: true }).click();
         await expect
           .poll(() => related.locator(":scope > details > summary").count())
           .toBeGreaterThan(previous);
@@ -154,7 +154,7 @@ test("finds the same run, sample and space publications from either direct input
       .locator('[aria-label="Direct run inputs"]')
       .getByRole("button")
       .filter({ has: page.locator(`[title="Run ${seed.runs[0]}"]`) });
-    await row.getByText("Sources and execution evidence", { exact: true }).click();
+    await row.getByText("来源与执行证据", { exact: true }).click();
     await source.scrollIntoViewIfNeeded();
     const originalScroll = await page
       .locator("html")
@@ -175,9 +175,10 @@ test("finds the same run, sample and space publications from either direct input
         ),
       )
       .toBeLessThan(120);
-    await expect(
-      row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
-    ).toHaveAttribute("open", "");
+    await expect(row.getByText("来源与执行证据", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+      "",
+    );
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[0]}`));
     await page.goBack();
@@ -199,7 +200,7 @@ test("finds the same run, sample and space publications from either direct input
     await savedVersion.click();
     const exactResult = page.getByRole("region", { name: "Linked analysis", exact: true });
     await expect(exactResult.getByTestId("publication-id")).toHaveText(seed.ids[0]);
-    const exactSources = exactResult.getByText("Sources and execution evidence", { exact: true });
+    const exactSources = exactResult.getByText("来源与执行证据", { exact: true });
     // Leave in the same native toggle dispatch, without another page click or a 200ms wait.
     const backOnToggle = () =>
       exactSources.locator("..").evaluate((element) => {
@@ -220,9 +221,10 @@ test("finds the same run, sample and space publications from either direct input
     await page.goForward();
     await expect(exactSources.locator("..")).not.toHaveAttribute("open");
     await page.goBack();
-    await expect(
-      row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
-    ).toHaveAttribute("open", "");
+    await expect(row.getByText("来源与执行证据", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+      "",
+    );
     await expect
       .poll(async () =>
         Math.abs(
@@ -234,14 +236,15 @@ test("finds the same run, sample and space publications from either direct input
       )
       .toBeLessThan(120);
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
-    await expect(page.getByLabel("Full run ID", { exact: true })).toHaveValue(seed.runs[1]);
-    await expect(page.getByLabel("From (local time)", { exact: true })).toHaveValue(
+    await expect(page.getByLabel("完整 run ID", { exact: true })).toHaveValue(seed.runs[1]);
+    await expect(page.getByLabel("起始时间（本地）", { exact: true })).toHaveValue(
       "2099-01-01T00:00",
     );
     await page.goBack();
-    await expect(
-      row.getByText("Sources and execution evidence", { exact: true }).locator(".."),
-    ).toHaveAttribute("open", "");
+    await expect(row.getByText("来源与执行证据", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+      "",
+    );
     await page.screenshot({ path: testInfo.outputPath("run-analysis-return.png"), fullPage: true });
 
     await page.goto(
@@ -259,30 +262,32 @@ test("finds the same run, sample and space publications from either direct input
     });
     // A project publication and a comparison are distinct navigable pages.
     await page.setViewportSize({ width: 1024, height: 600 });
-    await pinned.getByText("Sources and execution evidence", { exact: true }).click();
+    await pinned.getByText("来源与执行证据", { exact: true }).click();
     await pinned.getByRole("button", { name: seed.runs[1], exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run=${seed.runs[1]}`));
     await page.goBack();
     await expect(pinned.getByTestId("publication-id")).toHaveText(seed.ids[0]);
-    await expect(
-      pinned.getByText("Sources and execution evidence", { exact: true }).locator(".."),
-    ).toHaveAttribute("open", "");
-    await page.getByRole("link", { name: "Compare retained runs", exact: true }).click();
-    await expect(page.getByLabel("Primary run", { exact: true })).toHaveValue(seed.runs[0]);
+    await expect(pinned.getByText("来源与执行证据", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+      "",
+    );
+    await page.getByRole("link", { name: "比较已有 run", exact: true }).click();
+    await expect(page.getByLabel("主 run", { exact: true })).toHaveValue(seed.runs[0]);
     await page.goBack();
     await expect(pinned.getByTestId("publication-id")).toHaveText(seed.ids[0]);
-    await expect(
-      pinned.getByText("Sources and execution evidence", { exact: true }).locator(".."),
-    ).toHaveAttribute("open", "");
+    await expect(pinned.getByText("来源与执行证据", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+      "",
+    );
     await page.goForward();
-    await page.getByLabel("Secondary run", { exact: true }).selectOption(seed.runs[1]);
-    await page.getByLabel("Primary selected positions", { exact: true }).fill("0,2");
-    await page.getByRole("button", { name: "Project analysis history", exact: true }).click();
+    await page.getByLabel("对照 run", { exact: true }).selectOption(seed.runs[1]);
+    await page.getByLabel("主 run 选点位置", { exact: true }).fill("0,2");
+    await page.getByRole("button", { name: "项目分析历史", exact: true }).click();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[4]);
     await page.getByTitle(`Inspect analysis ${seed.ids[3]}`).click();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);
     expect(new URL(page.url()).searchParams.has("compare")).toBe(false);
-    await page.getByText("Sources and execution evidence", { exact: true }).click();
+    await page.getByText("来源与执行证据", { exact: true }).click();
     await page.getByText("Publication details and data management", { exact: true }).click();
     await page.getByRole("button", { name: seed.runs[0], exact: true }).scrollIntoViewIfNeeded();
     const projectScroll = await page
@@ -296,9 +301,10 @@ test("finds the same run, sample and space publications from either direct input
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
     await page.goBack();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);
-    await expect(
-      page.getByRole("button", { name: "Project analysis history", exact: true }),
-    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "项目分析历史", exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await expect
       .poll(() =>
         page.locator("html").evaluate((element) => element.ownerDocument.defaultView!.scrollY),
@@ -309,9 +315,10 @@ test("finds the same run, sample and space publications from either direct input
     await page.goBack();
     await page.reload();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);
-    await expect(
-      page.getByText("Sources and execution evidence", { exact: true }).locator(".."),
-    ).toHaveAttribute("open", "");
+    await expect(page.getByText("来源与执行证据", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+      "",
+    );
     await expect
       .poll(() =>
         page.locator("html").evaluate((element) => element.ownerDocument.defaultView!.scrollY),
@@ -325,14 +332,14 @@ test("finds the same run, sample and space publications from either direct input
     await expect(page.getByTestId("run-detail-header")).toContainText(seed.runs[0]);
     await page.goBack();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);
-    await page.getByRole("button", { name: "Compare retained runs", exact: true }).click();
-    await expect(page.getByLabel("Secondary run", { exact: true })).toHaveValue(seed.runs[1]);
-    await expect(page.getByLabel("Primary selected positions", { exact: true })).toHaveValue("0,2");
+    await page.getByRole("button", { name: "比较已有 run", exact: true }).click();
+    await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(seed.runs[1]);
+    await expect(page.getByLabel("主 run 选点位置", { exact: true })).toHaveValue("0,2");
     await page.reload();
-    await expect(page.getByLabel("Secondary run", { exact: true })).toHaveValue(seed.runs[1]);
-    await expect(page.getByLabel("Primary selected positions", { exact: true })).toHaveValue("0,2");
+    await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(seed.runs[1]);
+    await expect(page.getByLabel("主 run 选点位置", { exact: true })).toHaveValue("0,2");
     await expect(
-      page.getByRole("button", { name: "Fit selected data and save analysis", exact: true }),
+      page.getByRole("button", { name: "拟合选中数据并保存 analysis", exact: true }),
     ).toBeDisabled();
     await expect(other.getByTestId("run-detail-header")).toContainText(seed.runs[1]);
     await other.close();

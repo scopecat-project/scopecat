@@ -141,7 +141,7 @@ function mount() {
   };
 }
 async function ready() {
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   await waitFor(() =>
     expect(screen.getByLabelText("Experiment setup")).toHaveValue("starter-bench"),
   );
@@ -168,7 +168,7 @@ it.each(["before click", "during preflight"])(
     };
     if (order === "before click") await settleSetup();
     const revision = context.draft!.revision;
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
     await act(async () => test.preflightStarted);
     expect(context.draft!.pending).toBe("preview");
     if (order === "during preflight") await settleSetup();
@@ -192,7 +192,7 @@ it.each([
     act(() => context.sourceObserved("legacy", sourceRevision));
     await ready();
     test.hold();
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
     await act(async () => test.preflightStarted);
     expect(context.draft!.pending).toBe("preview");
     const revision = context.draft!.revision;
@@ -221,7 +221,7 @@ it.each([
   await ready();
   test.hold();
   fireEvent.click(screen.getByRole("button", { name: "Recheck device connections" }));
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await act(async () => test.preflightStarted);
   await act(async () => test.resolution.resolve(Response.json(selected)));
   await act(async () => test.preflight.resolve(Response.json(source)));
@@ -238,7 +238,7 @@ it("still blocks preview when the preflight read reports newer working input", a
   const test = mount();
   await ready();
   test.hold();
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await act(async () => test.preflightStarted);
   await act(async () => test.preflight.resolve(Response.json({ ...source, head_revision: 4 })));
   expect(test.previews).toHaveLength(0);
@@ -261,10 +261,10 @@ it("preserves a new parameter selection and target when an earlier setup resolut
   act(() =>
     context.selectConfiguration(nextConfiguration, { draft_id: "table-a", revision: 3 }, subject),
   );
-  await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   const revision = context.draft!.revision;
   test.hold();
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await act(async () => test.preflightStarted);
   await act(async () =>
     test.resolution.resolve(Response.json({ id: "bench", content_hash: "sha256:bench" })),

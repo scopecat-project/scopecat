@@ -35,7 +35,7 @@ vi.mock("./AnalysisPublicationView", () => ({
         </details>
       )}
       <details>
-        <summary>Sources and execution evidence</summary>
+        <summary>来源与执行证据</summary>
         <button onClick={() => onOpenRun("other-input")}>Open input</button>
       </details>
     </div>
@@ -125,7 +125,7 @@ it("isolates the same run, publication and source references across data spaces 
   );
   const mounted = render(view());
   await screen.findByText("Collection a #7 · Experiment a");
-  fireEvent.click(screen.getByRole("button", { name: "Load older analyses" }));
+  fireEvent.click(screen.getByRole("button", { name: "加载更早 analysis" }));
   await screen.findByText("Sample Chip a");
   expect(screen.getAllByText("a run result")).toHaveLength(1);
   const open = async (title: string) => {
@@ -135,7 +135,7 @@ it("isolates the same run, publication and source references across data spaces 
     await screen.findByText(`Detail ${space}`);
   };
   await open("a run result");
-  screen.getByText("Sources and execution evidence").closest("details")!.open = true;
+  screen.getByText("来源与执行证据").closest("details")!.open = true;
   fireEvent.click(screen.getByRole("button", { name: "Open input" }));
   expect(onOpenRun).toHaveBeenCalledWith("other-input");
   expect(window.history.state.runResults.details).toEqual({ "same-publication": [0] });
@@ -146,12 +146,10 @@ it("isolates the same run, publication and source references across data spaces 
   expect(screen.queryByText("Detail a")).not.toBeInTheDocument();
   expect(screen.queryByText("a sample result")).not.toBeInTheDocument();
   expect(screen.getByText("b run result").closest("details")).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByRole("button", { name: "Load older analyses" }));
+  fireEvent.click(screen.getByRole("button", { name: "加载更早 analysis" }));
   await screen.findByText("Sample Chip b");
   await open("b run result");
-  expect(screen.getByText("Sources and execution evidence").closest("details")).not.toHaveAttribute(
-    "open",
-  );
+  expect(screen.getByText("来源与执行证据").closest("details")).not.toHaveAttribute("open");
   await waitFor(() => expect(getRunAnalysis).toHaveBeenCalledTimes(2));
   space = "a";
   mounted.rerender(view());
@@ -193,9 +191,9 @@ it("keeps an exact off-page publication once when its list page arrives", async 
     </QueryClientProvider>,
   );
   await screen.findByTestId("publication-id");
-  fireEvent.click(await screen.findByRole("button", { name: "Load older analyses" }));
+  fireEvent.click(await screen.findByRole("button", { name: "加载更早 analysis" }));
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Load older analyses" })).not.toBeInTheDocument(),
+    expect(screen.queryByRole("button", { name: "加载更早 analysis" })).not.toBeInTheDocument(),
   );
   expect(screen.getAllByTestId("publication-id")).toHaveLength(1);
   expect(screen.getByTestId("publication-id")).toHaveTextContent("exact");
@@ -248,7 +246,7 @@ it("waits for every expanded cold detail before restoring the saved reading posi
     "/",
   );
   const scroll = vi.fn(() => {
-    for (const summary of screen.getAllByText("Sources and execution evidence")) {
+    for (const summary of screen.getAllByText("来源与执行证据")) {
       expect(summary.closest("details")).toHaveAttribute("open");
     }
   });
@@ -323,7 +321,7 @@ it("saves source open and close before any scroll timer or return navigation", a
   );
   const mounted = render(view());
   await screen.findByText("Exact · revision 1");
-  const sources = screen.getByText("Sources and execution evidence").closest("details")!;
+  const sources = screen.getByText("来源与执行证据").closest("details")!;
   // Click capture runs before the browser toggles the element.
   fireEvent.click(sources.querySelector("summary")!);
   const beforeScroll = window.history.state.runResults.scroll;
@@ -340,9 +338,7 @@ it("saves source open and close before any scroll timer or return navigation", a
   mounted.unmount();
   window.history.replaceState(outgoing, "", "/?run-analysis=exact#runs");
   render(view());
-  const restoredSources = (await screen.findByText("Sources and execution evidence")).closest(
-    "details",
-  )!;
+  const restoredSources = (await screen.findByText("来源与执行证据")).closest("details")!;
   expect(restoredSources).toHaveAttribute("open");
   restoredSources.open = false;
   fireEvent(restoredSources, new Event("toggle"));

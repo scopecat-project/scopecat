@@ -106,7 +106,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await expect(form.getByLabel("signals[2].center", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Select object a", exact: true }).click();
     await expect(field).toHaveValue("1e");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     await page.evaluate(`window.scrollTo(0, 0);
       document.querySelector('[aria-label="Edit parameter version"]').scrollTop = 0;`);
     const screenshot = testInfo.outputPath("object-parameter-panel.png");
@@ -153,9 +153,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await expect(page.getByLabel("Selected registered target")).toContainText(
       "Registered target object-target, revision 1",
     );
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     const previewResponse = page.waitForResponse(
       (item) =>
         item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
@@ -163,16 +161,16 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     const submitting = page.waitForRequest((request) =>
       request.url().endsWith("/experiment-launcher/submit"),
     );
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const preview = await previewResponse;
     expect(preview.status(), await preview.text()).toBe(200);
     const captured = await preview.json();
     expect(captured.reviewed.binding.subject.ref.target_id).toBe("object-target");
     expect(captured.reviewed.config_source.overrides).toHaveLength(1);
     expect((await submitting).postDataJSON().expected_request_hash).toBe(captured.request_hash);
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
     expect((await (await page.request.get(`${url}/api/v1/runs`)).json()).items).toHaveLength(1);
-    const runLink = page.getByRole("link", { name: /^View saved data:/ });
+    const runLink = page.getByRole("link", { name: /^查看已保存结果:/ });
     const runId = new URL((await runLink.getAttribute("href"))!, page.url()).searchParams.get(
       "run",
     )!;
@@ -185,7 +183,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await page.getByRole("button", { name: "Select object a", exact: true }).click();
     await expect(field).toHaveValue("5.2");
     await field.fill("5.3");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     // The next editing round cannot rewrite the completed run's inputs.
     const evidence = uv([
       "python",

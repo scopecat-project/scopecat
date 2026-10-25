@@ -82,7 +82,7 @@ vi.mock("./features/analyses/AnalysesWorkspace", () => ({
     selectedAnalysisId?: string;
   }) => (
     <div>
-      Project analysis workspace
+      项目分析 workspace
       <span>Selected analysis {selectedAnalysisId ?? "none"}</span>
       <button type="button" onClick={() => onOpenRun("run-2")}>
         Open analysis input run
@@ -369,7 +369,7 @@ describe("config provenance navigation", () => {
     window.history.replaceState(null, "", "/#analyses");
     renderApp();
 
-    expect(await screen.findByText("Project analysis workspace")).toBeVisible();
+    expect(await screen.findByText("项目分析 workspace")).toBeVisible();
     expect(screen.getByRole("button", { name: /Analyses$/ })).toHaveAttribute(
       "aria-current",
       "page",
@@ -502,7 +502,7 @@ describe("config provenance navigation", () => {
     renderApp();
     expect(await screen.findByText("0 active in loaded runs")).toBeVisible();
     expect(screen.getByText("No flags in loaded runs")).toBeVisible();
-    fireEvent.click(await screen.findByRole("button", { name: "Load older runs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
 
     expect(await screen.findByTitle("Inspect run run-old")).toBeVisible();
     expect(getOlderRuns).toHaveBeenCalledWith(20);
@@ -510,7 +510,7 @@ describe("config provenance navigation", () => {
     expect(
       screen.getAllByTitle(/^Inspect run /).map((button) => button.getAttribute("title")),
     ).toEqual(["Inspect run run-2", "Inspect run run-1", "Inspect run run-old"]);
-    expect(screen.queryByRole("button", { name: "Load older runs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "加载更早 run" })).not.toBeInTheDocument();
   });
 
   it("discards loaded history when the latest page head moves", async () => {
@@ -529,13 +529,13 @@ describe("config provenance navigation", () => {
     });
 
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: "Load older runs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
     expect(await screen.findByTitle("Inspect run run-old")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh project data" }));
 
     await waitFor(() => expect(screen.queryByTitle("Inspect run run-old")).not.toBeInTheDocument());
-    fireEvent.click(await screen.findByRole("button", { name: "Load older runs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
     await waitFor(() =>
       expect(vi.mocked(getOlderRuns).mock.calls.map(([cursor]) => cursor)).toEqual([20, 30]),
     );
@@ -570,7 +570,7 @@ describe("config provenance navigation", () => {
     const running = {
       ...projectRun("run-1"),
       status: "running" as const,
-      stateLabel: "Running",
+      stateLabel: "执行中",
       plan: {
         coordinateSpecs: [],
         adaptiveCoordinateIds: [],
@@ -625,7 +625,7 @@ describe("config provenance navigation", () => {
     const running = {
       ...projectRun("run-1"),
       status: "running" as const,
-      stateLabel: "Running",
+      stateLabel: "执行中",
       progressCompleted: 2,
       pointPlan: {
         initialPointCount: 1,
@@ -705,7 +705,7 @@ describe("config provenance navigation", () => {
     const running = {
       ...projectRun("run-1"),
       status: "running" as const,
-      stateLabel: "Running",
+      stateLabel: "执行中",
       plan: {
         coordinateSpecs: [],
         adaptiveCoordinateIds: [],
@@ -889,7 +889,7 @@ describe("config provenance navigation", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     renderApp(queryClient);
 
-    fireEvent.click(await screen.findByText("Execution diagnostics and provenance"));
+    fireEvent.click(await screen.findByText("执行诊断与来源"));
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     await waitFor(() => expect(openEventListener).toBeDefined());
     const initialCounts = canonicalQueryCallCounts();
@@ -926,7 +926,7 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    fireEvent.click(await screen.findByText("Execution diagnostics and provenance"));
+    fireEvent.click(await screen.findByText("执行诊断与来源"));
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     expect(
       screen.getByText("Showing the latest 500 events; older events are not loaded."),
@@ -958,7 +958,7 @@ function projectRun(runId: string): ProjectRun {
     experimentId: "ramsey",
     tags: [],
     status: "succeeded",
-    stateLabel: "Succeeded",
+    stateLabel: "已完成",
     updatedAt: "2026-07-24T08:00:00Z",
     pointPlan: {
       initialPointCount: 0,
@@ -1246,17 +1246,17 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   const cache = createQueryClient();
   renderApp(cache);
   await screen.findByRole("option", { name: "Alpha" });
-  fireEvent.change(screen.getByLabelText("Research project"), { target: { value: "alpha" } });
+  fireEvent.change(screen.getByLabelText("研究项目"), { target: { value: "alpha" } });
   await screen.findByRole("option", { name: "space-a collection" });
-  fireEvent.change(screen.getByLabelText("Record collection filter"), {
+  fireEvent.change(screen.getByLabelText("记录集筛选"), {
     target: { value: "same-id" },
   });
-  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "17" } });
-  fireEvent.click(screen.getByText("Research project management"));
-  fireEvent.change(screen.getByLabelText("Project name"), {
+  fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "17" } });
+  fireEvent.click(screen.getByText("研究项目 management"));
+  fireEvent.change(screen.getByLabelText("项目名称"), {
     target: { value: "Unsubmitted Alpha rename" },
   });
-  fireEvent.change(screen.getByLabelText("Working point"), { target: { value: "bias-a" } });
+  fireEvent.change(screen.getByLabelText("工作点"), { target: { value: "bias-a" } });
   await waitFor(() => expect(cache.isFetching({ queryKey: ["research"] })).toBe(0));
   await screen.findByText("Source: space-a");
   fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
@@ -1282,11 +1282,11 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(requests).toHaveLength(before);
   fireEvent.click(screen.getByRole("button", { name: /Data$/ }));
   await waitFor(() => expect(requests.length).toBeGreaterThan(before));
-  expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
-  expect(screen.getByLabelText("Project name")).toHaveValue("Unsubmitted Alpha rename");
-  expect(screen.getByLabelText("Working point")).toHaveValue("bias-a");
-  expect(screen.getByLabelText("Record collection filter")).toHaveValue("same-id");
-  expect(screen.getByLabelText("Collection run number")).toHaveValue("17");
+  expect(screen.getByLabelText("研究项目")).toHaveValue("alpha");
+  expect(screen.getByLabelText("项目名称")).toHaveValue("Unsubmitted Alpha rename");
+  expect(screen.getByLabelText("工作点")).toHaveValue("bias-a");
+  expect(screen.getByLabelText("记录集筛选")).toHaveValue("same-id");
+  expect(screen.getByLabelText("记录集内 run 编号")).toHaveValue("17");
 
   fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
   space = "space-b";
@@ -1297,15 +1297,15 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   fireEvent.click(screen.getByRole("button", { name: /Data$/ }));
   await screen.findByRole("option", { name: "Beta" });
   expect(screen.queryByRole("option", { name: "Alpha" })).toBeNull();
-  expect(screen.getByLabelText("Research project")).toHaveValue("");
-  expect(screen.getByLabelText("Working point")).toHaveValue("");
-  expect(screen.getByLabelText("Record collection filter")).toHaveValue("");
-  expect(screen.queryByLabelText("Collection run number")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("研究项目")).toHaveValue("");
+  expect(screen.getByLabelText("工作点")).toHaveValue("");
+  expect(screen.getByLabelText("记录集筛选")).toHaveValue("");
+  expect(screen.queryByLabelText("记录集内 run 编号")).not.toBeInTheDocument();
   await screen.findByRole("option", { name: "space-b collection" });
   expect(screen.queryByRole("option", { name: "space-a collection" })).toBeNull();
-  expect(screen.getByText("Research project management").parentElement).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByText("Research project management"));
-  expect(screen.getByLabelText("Project name")).toHaveValue("");
+  expect(screen.getByText("研究项目 management").parentElement).not.toHaveAttribute("open");
+  fireEvent.click(screen.getByText("研究项目 management"));
+  expect(screen.getByLabelText("项目名称")).toHaveValue("");
   expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
   await screen.findByText("Source: space-b");
   expect(screen.queryByText("Source: space-a")).toBeNull();

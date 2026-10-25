@@ -118,7 +118,7 @@ describe("Run receipt summary", () => {
   const run = {
     runId: "run-progress",
     status: "running",
-    stateLabel: "Running",
+    stateLabel: "执行中",
     progressCompleted: 9,
     plan: { pointCount: 10 },
     pointPlan: { acceptedPointCount: 10, closed: true },
@@ -138,7 +138,7 @@ describe("Run receipt summary", () => {
     expect(summary).toHaveTextContent("6 received records not saved yet");
     expect(summary).not.toHaveTextContent("Planned data received");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText("Succeeded")).not.toBeInTheDocument();
+    expect(screen.queryByText("已完成")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
     expect(screen.getByText(/9 points have durable execution evidence/)).toBeVisible();
   });

@@ -102,7 +102,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
       "Recovery tester",
     );
-    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
     await saved();
     const other = await context.newPage();
     await other.goto(`${url}/?workspace=${prepared.workspace}#launch`);
@@ -143,8 +143,8 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page.getByLabel("Center", { exact: true }).fill("0");
     await page.getByRole("button", { name: "Confirm reviewed input", exact: true }).click();
     await saved();
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
-    const start = page.getByRole("button", { name: "Start acquisition", exact: true });
+    await page.getByRole("button", { name: "预览", exact: true }).click();
+    const start = page.getByRole("button", { name: "开始采集", exact: true });
     await expect(start).toBeEnabled();
     let submissions = 0;
     let procedure = "";
@@ -159,9 +159,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       await route.abort("connectionfailed");
     });
     await start.click();
-    await expect(
-      page.getByRole("button", { name: "Check original submission", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "核实原始提交", exact: true })).toBeVisible();
     await expect
       .poll(
         async () =>
@@ -171,18 +169,14 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       .toBe("closed");
     url = restart();
     await page.goto(`${url}/?workspace=${prepared.workspace}#launch`);
-    await page.getByRole("button", { name: "Check original submission", exact: true }).click();
-    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+    await page.getByRole("button", { name: "核实原始提交", exact: true }).click();
+    await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`procedure=${procedure}`));
     expect(submissions).toBe(1);
     const runs = await (await page.request.get(`${url}/api/v1/runs`)).json();
     expect(runs.items).toHaveLength(1);
-    await page
-      .getByRole("button", { name: "Prepare a new run (separate acquisition)", exact: true })
-      .click();
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await page.getByRole("button", { name: "准备新的 run（独立采集）", exact: true }).click();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     expect((await (await page.request.get(`${url}/api/v1/runs`)).json()).items).toHaveLength(1);
     await testInfo.attach("recovery-evidence", {
       body: JSON.stringify({

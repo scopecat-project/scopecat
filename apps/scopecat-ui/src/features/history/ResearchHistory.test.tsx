@@ -75,7 +75,7 @@ it("filters retained runs and removes only their project association", async () 
     </QueryClientProvider>,
   );
   await screen.findByRole("option", { name: "Alpha" });
-  fireEvent.change(screen.getByLabelText("Research project"), { target: { value: "alpha" } });
+  fireEvent.change(screen.getByLabelText("研究项目"), { target: { value: "alpha" } });
   fireEvent.change(screen.getByLabelText("Sample", { exact: true }), { target: { value: "chip" } });
   await waitFor(() =>
     expect(
@@ -91,15 +91,15 @@ it("filters retained runs and removes only their project association", async () 
   );
   fireEvent.click(await screen.findByRole("button", { name: "Retained scan" }));
   expect(open).toHaveBeenCalledWith("run-1");
-  expect(screen.getByText("failed")).toBeVisible();
-  expect(screen.getByText("Outcome indeterminate")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Remove run association" })).toBeNull();
+  expect(screen.getByText("失败")).toBeVisible();
+  expect(screen.getByText("结果尚不确定")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "移除 run 关联" })).toBeNull();
   expect(screen.getByRole("link", { name: "Open result in new tab or window" })).toHaveAttribute(
     "href",
     "/?run=run-1&focus=run#runs",
   );
-  fireEvent.click(screen.getByText("Research project management"));
-  fireEvent.click(await screen.findByRole("button", { name: "Remove run association" }));
+  fireEvent.click(screen.getByText("研究项目 management"));
+  fireEvent.click(await screen.findByRole("button", { name: "移除 run 关联" }));
   await waitFor(() =>
     expect(
       requests.some(
@@ -109,13 +109,11 @@ it("filters retained runs and removes only their project association", async () 
       ),
     ).toBe(true),
   );
-  fireEvent.click(screen.getByLabelText("Show runs outside this project to associate"));
-  fireEvent.click(screen.getByText("Research project management"));
-  await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Remove run association" })).toBeNull(),
-  );
+  fireEvent.click(screen.getByLabelText("显示项目外的 run 以供关联"));
+  fireEvent.click(screen.getByText("研究项目 management"));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "移除 run 关联" })).toBeNull());
   expect(screen.getByText("Showing runs across all projects for association.")).toBeVisible();
-  expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
+  expect(screen.getByLabelText("研究项目")).toHaveValue("alpha");
   expect(screen.getByLabelText("Sample", { exact: true })).toHaveValue("chip");
   expect(
     requests.some(
@@ -166,17 +164,17 @@ it("scopes short numbers to a collection and retains that filter after renaming"
       <ResearchHistory projectId="space-a" daemonUnavailable={false} onOpenRun={open} />
     </QueryClientProvider>,
   );
-  expect(screen.queryByLabelText("Collection run number")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("记录集内 run 编号")).not.toBeInTheDocument();
   await screen.findByRole("option", { name: "Cooldown A" });
-  fireEvent.change(screen.getByLabelText("Record collection filter"), { target: { value: "a" } });
+  fireEvent.change(screen.getByLabelText("记录集筛选"), { target: { value: "a" } });
   await waitFor(() =>
     expect(requests.some((r) => new URL(r.url).searchParams.get("record_collection") === "a")).toBe(
       true,
     ),
   );
-  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "1" } });
-  fireEvent.click(screen.getByRole("button", { name: "Find run" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Open collection run #1" }));
+  fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "查找 run" }));
+  fireEvent.click(await screen.findByRole("button", { name: "打开记录集内 run #1" }));
   expect(open).toHaveBeenLastCalledWith("a-1");
   fireEvent.click(screen.getByText("Manage collection"));
   fireEvent.click(screen.getByRole("button", { name: "Rename collection" }));
@@ -189,14 +187,14 @@ it("scopes short numbers to a collection and retains that filter after renaming"
     description: "original",
     expected_revision: 1,
   });
-  expect(screen.getByLabelText("Record collection filter")).toHaveValue("a");
-  expect(screen.getByLabelText("Collection run number")).toHaveValue("1");
-  fireEvent.change(screen.getByLabelText("Record collection filter"), { target: { value: "b" } });
-  expect(screen.queryByRole("button", { name: "Open collection run #1" })).toBeNull();
-  expect(screen.getByLabelText("Collection run number")).toHaveValue("");
-  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "1" } });
-  fireEvent.click(screen.getByRole("button", { name: "Find run" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Open collection run #1" }));
+  expect(screen.getByLabelText("记录集筛选")).toHaveValue("a");
+  expect(screen.getByLabelText("记录集内 run 编号")).toHaveValue("1");
+  fireEvent.change(screen.getByLabelText("记录集筛选"), { target: { value: "b" } });
+  expect(screen.queryByRole("button", { name: "打开记录集内 run #1" })).toBeNull();
+  expect(screen.getByLabelText("记录集内 run 编号")).toHaveValue("");
+  fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "查找 run" }));
+  fireEvent.click(await screen.findByRole("button", { name: "打开记录集内 run #1" }));
   expect(open).toHaveBeenLastCalledWith("b-1");
 });
 
@@ -229,7 +227,7 @@ it("filters this course by recorded ownership and removes the filter explicitly"
         url.pathname === "/api/v1/runs" && url.searchParams.get("practice_scope") === "course-one",
     ),
   ).toBe(true);
-  expect(screen.queryByText("Research project management")).not.toBeInTheDocument();
+  expect(screen.queryByText("研究项目 management")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Show all Data" }));
   await waitFor(() =>
     expect(

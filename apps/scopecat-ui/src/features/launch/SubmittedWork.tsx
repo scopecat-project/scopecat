@@ -15,7 +15,7 @@ export function SubmittedWork({
   const inspectedId = location.searchParams.get("submitted_task") ?? "";
   return (
     <section
-      aria-label="Submitted work inspection"
+      aria-label="已提交任务检查"
       className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)]"
     >
       <ProcedureHistory mode="submitted" selectedId={inspectedId} onSelect={inspect} />
@@ -23,18 +23,17 @@ export function SubmittedWork({
         {inspectedId ? (
           <>
             <header className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="min-w-0 break-all font-semibold">Submitted task {inspectedId}</h3>
+              <h3 className="min-w-0 break-all font-semibold">已提交任务 {inspectedId}</h3>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => onOpenMonitor(inspectedId)}>Open in monitor</Button>
-                <Button onClick={() => inspect("")}>Close inspection</Button>
+                <Button onClick={() => onOpenMonitor(inspectedId)}>在监看中打开</Button>
+                <Button onClick={() => inspect("")}>关闭检查</Button>
               </div>
             </header>
             <ProcedureProgress key={inspectedId} procedureId={inspectedId} projectId={projectId} />
           </>
         ) : (
           <p className="rounded-md border border-line p-4 text-text-dim">
-            Select a task to inspect. Your monitor keeps its selected task; closing inspection
-            leaves work running.
+            选择要检查的任务。监看仍固定在原任务；关闭检查不会停止执行。
           </p>
         )}
       </div>

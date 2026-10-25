@@ -32,7 +32,7 @@ export function ProcedureChildRun({
         )}
         onClick={navigateLink}
       >
-        View {current && !run.result ? "current data" : "saved data"}:{" "}
+        查看{current && !run.result ? "当前结果" : "已保存结果"}:{" "}
         {run.displayName ?? run.experimentId}
       </a>
       <RunAddressLabel
@@ -41,16 +41,13 @@ export function ProcedureChildRun({
         collectionName={collectionName}
       />
       <p>
-        {run.stateLabel} · {run.progressCompleted ?? 0} completed points
+        {run.stateLabel} · {run.progressCompleted ?? 0} 个已完成点
       </p>
       {run.certainty && run.certainty !== "known" && (
-        <p role="alert">
-          The acquisition outcome is uncertain. Inspect the available data and reconcile external
-          state before starting another acquisition.
-        </p>
+        <p role="alert">采集结果尚不确定。再次采集前，请检查已有数据并核实外部状态。</p>
       )}
       <details>
-        <summary>Acquisition diagnostics</summary>
+        <summary>采集诊断</summary>
         <p>
           Result: {run.result ?? "pending"} · Certainty: {run.certainty ?? "pending"}
         </p>
@@ -62,7 +59,7 @@ export function ProcedureChildRun({
         .filter((resource) => resource.blocked_by)
         .map((resource) => (
           <p key={resource.resource.id}>
-            Waiting for {resource.resource.id}: held by{" "}
+            等待资源 {resource.resource.id}，占用者：{" "}
             {resource.blocked_by?.owner_kind === "run" ? (
               <a
                 className="underline"
@@ -71,12 +68,12 @@ export function ProcedureChildRun({
                   `?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(resource.blocked_by.owner_id)}#runs`,
                 )}
               >
-                another run
+                其他 run
               </a>
             ) : (
-              "an instrument session"
+              "设备会话"
             )}
-            {resource.blocked_by?.status === "quarantined" ? " (quarantined)" : ""}.
+            {resource.blocked_by?.status === "quarantined" ? "（已隔离）" : ""}.
           </p>
         ))}
     </div>

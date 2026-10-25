@@ -216,7 +216,7 @@ function sampleRun(): ProjectRun {
     displayName: "Ramsey calibration",
     tags: [],
     status: "succeeded",
-    stateLabel: "Succeeded",
+    stateLabel: "已完成",
     updatedAt: "2026-08-25T10:00:00Z",
     pointPlan: {
       initialPointCount: 1,

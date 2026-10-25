@@ -80,11 +80,11 @@ it("reopens a paused admission and explicitly dispatches the same procedure", as
     }),
   );
   const first = mount();
-  await screen.findByText("Dispatch paused");
+  await screen.findByText("调度已暂停");
   first.unmount();
   mount();
-  fireEvent.click(await screen.findByRole("button", { name: "Continue task" }));
-  await screen.findByText("Queued for a worker");
+  fireEvent.click(await screen.findByRole("button", { name: "继续任务" }));
+  await screen.findByText("等待 Worker");
   expect(requests.filter((request) => request.startsWith("POST"))).toEqual([
     "POST /api/v1/procedures/p1/dispatch",
   ]);
@@ -112,16 +112,16 @@ it("shows retained worker diagnostics separately from execution status", async (
     ),
   );
   mount();
-  await screen.findByText("Worker diagnostic: Author workspace is unavailable");
+  await screen.findByText("Worker 诊断： Author workspace is unavailable");
   expect(screen.getByText("C:\\lab-data\\procedure-workers\\abc\\worker.log")).toBeInTheDocument();
-  expect(screen.getByText("Dispatch paused")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Continue task" })).toBeEnabled();
+  expect(screen.getByText("调度已暂停")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "继续任务" })).toBeEnabled();
 });
 
 it.each([
-  ["waiting_for_input", "Waiting for review"],
-  ["attention_required", "Needs attention"],
-  ["leased", "Running"],
+  ["waiting_for_input", "等待人工判断"],
+  ["attention_required", "需要处理"],
+  ["leased", "执行中"],
 ] as const)("presents %s without an unsupported dispatch action", async (state, label) => {
   const data = view();
   data.procedure.state = state;
@@ -133,13 +133,13 @@ it.each([
   );
   mount();
   await screen.findByText(label);
-  expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
-  expect(screen.queryByText(/Record your decision, then return here to continue/) !== null).toBe(
+  expect(screen.queryByRole("button", { name: "继续任务" })).toBeNull();
+  expect(screen.queryByText(/记录人工判断后，返回此处继续/) !== null).toBe(
     state === "waiting_for_input",
   );
-  expect(screen.queryByRole("link", { name: /Review results/ })?.getAttribute("href") ?? null).toBe(
-    state === "waiting_for_input" ? "?procedure=p1#decisions" : null,
-  );
+  expect(
+    screen.queryByRole("link", { name: /查看结果并作出人工判断/ })?.getAttribute("href") ?? null,
+  ).toBe(state === "waiting_for_input" ? "?procedure=p1#decisions" : null);
 });
 
 it("shows an uncertain current child as attention even when its parent is ready and managed", async () => {
@@ -198,14 +198,11 @@ it("shows an uncertain current child as attention even when its parent is ready 
     ),
   );
   mount();
-  expect(await screen.findByText("Needs attention", { exact: true })).toHaveAttribute(
-    "role",
-    "status",
-  );
-  expect(screen.getByRole("alert")).toHaveTextContent("The acquisition outcome is uncertain");
-  expect(screen.queryByText("Queued for a worker")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
-  expect(screen.getByRole("link", { name: /View saved data/ })).toHaveAttribute(
+  expect(await screen.findByText("需要处理", { exact: true })).toHaveAttribute("role", "status");
+  expect(screen.getByRole("alert")).toHaveTextContent("采集结果尚不确定");
+  expect(screen.queryByText("等待 Worker")).toBeNull();
+  expect(screen.queryByRole("button", { name: "继续任务" })).toBeNull();
+  expect(screen.getByRole("link", { name: /查看已保存结果/ })).toHaveAttribute(
     "href",
     "?procedure=p1&run=retained-child#runs",
   );
@@ -213,7 +210,7 @@ it("shows an uncertain current child as attention even when its parent is ready 
     "href",
     "/?run=retained-child&focus=run#runs",
   );
-  fireEvent.click(screen.getByRole("link", { name: /View saved data/ }));
+  fireEvent.click(screen.getByRole("link", { name: /查看已保存结果/ }));
   expect(window.location.search).toBe("?procedure=p1&run=retained-child");
   expect(window.location.hash).toBe("#runs");
   expect(window.history.state.scopecatPosition).toBe(1);
@@ -229,7 +226,7 @@ it("shows failed closure and its reason without suggesting retry", async () => {
     vi.fn(async () => Response.json(data)),
   );
   mount();
-  await screen.findByText("Failed");
+  await screen.findByText("失败");
   expect(screen.getByText("Source failed")).toBeVisible();
   expect(screen.queryByText(/Waiting for your explicit Continue/)).toBeNull();
   expect(screen.queryByRole("button", { name: /dispatch|retry/i })).toBeNull();
@@ -276,11 +273,11 @@ it("retains current phase while loading earlier step history", async () => {
     ),
   );
   mount();
-  await screen.findByText("Current step: current-acquisition · Running");
-  fireEvent.click(screen.getByRole("button", { name: "Load earlier steps" }));
-  await screen.findByText("earlier: Failed");
-  expect(screen.getByText("Current step: current-acquisition · Running")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Continue task" })).toBeNull();
+  await screen.findByText("当前步骤： current-acquisition · 执行中");
+  fireEvent.click(screen.getByRole("button", { name: "加载更早步骤" }));
+  await screen.findByText("earlier: 失败");
+  expect(screen.getByText("当前步骤： current-acquisition · 执行中")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "继续任务" })).toBeNull();
 });
 
 it("finds durable work from history without copying an ID", async () => {
@@ -301,12 +298,12 @@ it("finds durable work from history without copying an ID", async () => {
       <LaunchWorkspace />
     </LaunchDraftProvider>,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Submitted work" }));
+  fireEvent.click(screen.getByRole("button", { name: "已提交任务" }));
   fireEvent.click(await screen.findByRole("button", { name: /temperature-diagnostic/ }));
-  await screen.findByText("Dispatch paused");
+  await screen.findByText("调度已暂停");
   expect(new URLSearchParams(window.location.search).get("submitted_task")).toBe("p1");
   expect(new URLSearchParams(window.location.search).get("procedure")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Open in monitor" }));
+  fireEvent.click(screen.getByRole("button", { name: "在监看中打开" }));
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
   expect(new URLSearchParams(window.location.search).get("workbench")).toBeNull();
 });
@@ -368,11 +365,11 @@ it("links the immutable failed source and retained acquisition of a recovery", a
     vi.fn(async () => Response.json(data)),
   );
   mount();
-  expect(await screen.findByRole("link", { name: "failed procedure old-failure" })).toHaveAttribute(
+  expect(await screen.findByRole("link", { name: "失败任务 old-failure" })).toHaveAttribute(
     "href",
     "?procedure=old-failure#launch",
   );
-  expect(screen.getByRole("link", { name: "retained run retained-sample" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "保留 run retained-sample" })).toHaveAttribute(
     "href",
     "?run=retained-sample#runs",
   );
@@ -407,14 +404,14 @@ it("opens retained result links in place and preserves modified-click behavior",
     ),
   );
   mount();
-  const result = await screen.findByRole("link", { name: "Open run" });
+  const result = await screen.findByRole("link", { name: "打开 run" });
   // A modified click belongs to the browser; it must not change this window.
   expect(fireEvent.click(result, { ctrlKey: true })).toBe(true);
   expect(window.location.search).toBe("?procedure=p1&run=previous");
   expect(fireEvent.click(result)).toBe(false);
   expect(window.location.search).toBe("?procedure=p1&run=exact-run");
   expect(window.location.hash).toBe("#runs");
-  expect(fireEvent.click(screen.getByRole("link", { name: "Reopen this procedure" }))).toBe(false);
+  expect(fireEvent.click(screen.getByRole("link", { name: "重新打开此任务" }))).toBe(false);
   expect(window.location.search).toBe("?procedure=p1");
   expect(window.location.hash).toBe("#launch");
 });
@@ -435,14 +432,14 @@ it("cancels a retained course procedure with its source workspace", async () => 
     }),
   );
   mount();
-  fireEvent.change(await screen.findByLabelText("Cancellation actor"), {
+  fireEvent.change(await screen.findByLabelText("取消操作人"), {
     target: { value: "Alice" },
   });
-  fireEvent.change(screen.getByLabelText("Cancellation reason"), {
+  fireEvent.change(screen.getByLabelText("取消原因"), {
     target: { value: "Stop course" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Cancel queued task" }));
-  await screen.findByRole("button", { name: "Cancel queued task" });
+  fireEvent.click(screen.getByRole("button", { name: "取消等待任务" }));
+  await screen.findByRole("button", { name: "取消等待任务" });
   expect(headers).toEqual(["course-one"]);
 });
 
@@ -462,7 +459,7 @@ it("preserves operator focus and text selection when live task state refreshes",
       <ProcedureProgress procedureId="p1" />
     </QueryClientProvider>,
   );
-  const reason = await screen.findByLabelText<HTMLInputElement>("Cancellation reason");
+  const reason = await screen.findByLabelText<HTMLInputElement>("取消原因");
   fireEvent.change(reason, { target: { value: "Keep this operator reason" } });
   reason.focus();
   reason.setSelectionRange(5, 9);

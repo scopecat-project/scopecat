@@ -35,7 +35,7 @@ async function preview(page: Page) {
     (item) =>
       item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await page.getByRole("button", { name: "预览", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
   return result.json();
@@ -45,15 +45,15 @@ async function submit(page: Page) {
     (item) =>
       item.url().endsWith("/experiment-launcher/submit") && item.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+  await page.getByRole("button", { name: "开始采集", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
-  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+  await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
   return (await result.json()).procedure_id as string;
 }
 async function retainedRun(page: Page) {
-  await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-  const link = page.getByRole("link", { name: /^View saved data:/ });
+  await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
+  const link = page.getByRole("link", { name: /^查看已保存结果:/ });
   await expect(link).toBeVisible();
   const href = await link.getAttribute("href");
   return new URL(href!, page.url()).searchParams.get("run")!;
@@ -94,7 +94,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const field = b.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
     await b.getByLabel("Source or reason for changes").fill("B unfinished raw input");
-    await expect(b.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(b.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     await c
       .getByLabel("Source or reason for changes")
       .fill("separate window's retained conflicting input");
@@ -139,25 +139,19 @@ test("working B survives restart, invalidates stale previews and submits frozen 
       .click();
     await work.getByLabel("Experiment", { exact: true }).selectOption("signal");
     await work.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
-    await work.getByRole("button", { name: "Editor", exact: true }).click();
+    await work.getByRole("button", { name: "准备", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     const oldB = await preview(work);
     expect(oldB.reviewed.config_source.overrides).toHaveLength(1);
     const editor = await fresh.newPage();
     await openTable(editor, url);
     await editor.getByLabel("signals[1].center", { exact: true }).fill("5.3");
-    await expect(
-      editor.getByText("Draft saved in application data", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      work.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(editor.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(work.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
     await work.getByLabel("Gain", { exact: true }).fill("2");
     await work.getByRole("button", { name: "Use current working inputs", exact: true }).click();
-    await expect(
-      work.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     const previewB = await preview(work);
     expect(previewB.request_hash).not.toBe(oldB.request_hash);
     expect(previewB.reviewed.config_source.parameters).toEqual(
@@ -167,9 +161,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const runB = await retainedRun(work);
     // Later working edits must not replace the submitted capture.
     await editor.getByLabel("signals[1].center", { exact: true }).fill("5.4");
-    await expect(
-      editor.getByText("Draft saved in application data", { exact: true }),
-    ).toBeVisible();
+    await expect(editor.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     const evidence = uv([
       "python",
       "-c",
@@ -190,7 +182,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     ]);
     expect(JSON.parse(evidence).parameters).toEqual(previewB.reviewed.config_source.parameters);
     // Keep the original result selected while another window submits a newer run.
-    await work.getByRole("link", { name: /^View saved data:/ }).click();
+    await work.getByRole("link", { name: /^查看已保存结果:/ }).click();
     await expectRunIdentity(work, runB);
     await editor
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
@@ -199,11 +191,9 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await editor.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
     await reviewRetainedExperiment(editor);
     await expect(editor.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
-    await expect(editor.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await expect(editor.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
     await editor.getByRole("button", { name: "Use current working inputs", exact: true }).click();
-    await expect(
-      editor.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(editor.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await preview(editor);
     const procedureC = await submit(editor);
     const runC = await retainedRun(editor);
@@ -224,7 +214,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       runB,
       runC,
     ]);
-    await editor.getByRole("link", { name: /^View saved data:/ }).click();
+    await editor.getByRole("link", { name: /^查看已保存结果:/ }).click();
     await expectRunIdentity(editor, runC);
     await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     const continuedField = work.getByLabel("signals[1].center", { exact: true });
@@ -233,22 +223,22 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await work.getByRole("button", { name: "Open working table", exact: true }).click();
     await expect(continuedField).toHaveValue("5.4");
     await continuedField.fill("5.5");
-    await expect(work.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(work.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     await work.getByRole("button", { name: /Runs$/, exact: true }).click();
     await expectRunIdentity(work, runB);
     expect(new URL(work.url()).searchParams.get("run")).toBe(runB);
     await expectRunIdentity(editor, runC);
     await work.getByRole("button", { name: /Experiments$/, exact: true }).click();
     expect(new URL(work.url()).searchParams.get("procedure")).toBe(procedureB);
-    await expect(work.getByRole("link", { name: /^View saved data:/ })).toHaveAttribute(
+    await expect(work.getByRole("link", { name: /^查看已保存结果:/ })).toHaveAttribute(
       "href",
       `?procedure=${encodeURIComponent(procedureB)}&run=${encodeURIComponent(runB)}#runs`,
     );
     // Reopening the same procedure must not reload away this window's launch draft.
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await work.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
+    await work.getByRole("link", { name: "重新打开此任务", exact: true }).click();
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await work.getByRole("button", { name: "Editor", exact: true }).click();
+    await work.getByRole("button", { name: "准备", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(continuedField).toHaveValue("5.5");
@@ -298,7 +288,7 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     await page.route("**/parameter-drafts/*/save", (route) => route.abort("connectionfailed"));
     const field = page.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
-    await expect(page.getByRole("button", { name: "Retry draft save", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "重试保存草稿", exact: true })).toBeVisible();
     const prompt = page.waitForEvent("dialog").then(async (dialog) => {
       expect(dialog.type()).toBe("beforeunload");
       await dialog.dismiss();
@@ -308,13 +298,13 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     expect(page.isClosed()).toBe(false);
     await expect(field).toHaveValue("1e");
     await page.unroute("**/parameter-drafts/*/save");
-    await page.getByRole("button", { name: "Retry draft save", exact: true }).click();
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "重试保存草稿", exact: true }).click();
+    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Close editor", exact: true }).click();
     await expect(field).not.toBeVisible();
     await page.getByRole("button", { name: "Open working table", exact: true }).click();
     await expect(field).toHaveValue("1e");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
     await context.close();
   } finally {
     uv(["python", "-m", "scopecat_server.cli", "stop", home]);

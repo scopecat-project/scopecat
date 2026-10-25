@@ -50,7 +50,7 @@ describe("AnalysesWorkspace", () => {
     );
     renderNavigationWorkspace();
     expect(screen.getByText("Comparison workspace")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Project analysis history" }));
+    fireEvent.click(screen.getByRole("button", { name: "项目分析历史" }));
     await waitFor(() =>
       expect(new URLSearchParams(location.search).get("analysis")).toBe(
         "analysis-candidate-verification-r2",
@@ -63,11 +63,11 @@ describe("AnalysesWorkspace", () => {
     expect(new URLSearchParams(location.search).get("comparison-analysis")).toBe("fit-r1");
     act(() => window.history.forward());
     expect(await screen.findByRole("heading", { name: "Candidate verification" })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Compare retained runs" }));
+    fireEvent.click(screen.getByRole("button", { name: "比较已有 run" }));
     expect(new URLSearchParams(location.search).has("analysis")).toBe(false);
     expect(new URLSearchParams(location.search).get("compare")).toBe("run-a");
     expect(window.history.state.scopecatComparison).toEqual(draft);
-    fireEvent.click(screen.getByRole("button", { name: "Project analysis history" }));
+    fireEvent.click(screen.getByRole("button", { name: "项目分析历史" }));
     await waitFor(() =>
       expect(new URLSearchParams(location.search).get("analysis")).toBe(
         "analysis-candidate-verification-r2",
@@ -84,7 +84,7 @@ describe("AnalysesWorkspace", () => {
     renderNavigationWorkspace();
     expect(await screen.findByRole("heading", { name: "Candidate verification" })).toBeVisible();
     expect(screen.queryByText("Comparison workspace")).toBeNull();
-    expect(screen.getByRole("button", { name: "Project analysis history" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "项目分析历史" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -100,7 +100,7 @@ describe("AnalysesWorkspace", () => {
     expect(screen.getByText("sha256:publication")).toHaveAttribute("title", "sha256:publication");
     expect(screen.getByText("verification.v1")).toBeVisible();
 
-    fireEvent.click(screen.getByText("Sources and execution evidence"));
+    fireEvent.click(screen.getByText("来源与执行证据"));
     fireEvent.click(screen.getByRole("button", { name: "run-candidate" }));
 
     expect(openRun).toHaveBeenCalledWith("run-candidate");
@@ -130,8 +130,8 @@ describe("AnalysesWorkspace", () => {
       "title",
       "sha256:response",
     );
-    fireEvent.click(screen.getByText("Sources and execution evidence"));
-    expect(screen.getByText("Procedure decision")).toBeVisible();
+    fireEvent.click(screen.getByText("来源与执行证据"));
+    expect(screen.getByText("任务判断")).toBeVisible();
     expect(screen.queryByRole("button", { name: "procedure-test" })).toBeNull();
   });
 
@@ -155,7 +155,7 @@ describe("AnalysesWorkspace", () => {
 
     renderWorkspace(vi.fn());
 
-    fireEvent.click(await screen.findByRole("button", { name: "Load older analyses" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 analysis" }));
 
     expect(await screen.findByText("Older verification")).toBeVisible();
     expect(getOlderProjectAnalysisSummaries).toHaveBeenCalledWith(17, expect.any(AbortSignal));
