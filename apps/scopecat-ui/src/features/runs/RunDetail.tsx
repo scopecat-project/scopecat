@@ -345,7 +345,9 @@ export function RunDetail({
           onMeasurementSliceOffsetChange={onMeasurementSliceOffsetChange}
           onMeasurementFixedAxisIndexChange={onMeasurementFixedAxisIndexChange}
         />
-        {run.status === "succeeded" && <RunAnalysisActionsCard key={run.runId} runId={run.runId} />}
+        {run.status === "succeeded" && (
+          <RunAnalysisActionsCard key={`analysis:${run.runId}`} runId={run.runId} />
+        )}
         {projectId && (
           <RelatedAnalyses
             key={`${projectId}:${run.runId}`}
@@ -355,7 +357,7 @@ export function RunDetail({
             onOpenRun={onOpenRun}
           />
         )}
-        <RunProposals key={run.runId} runId={run.runId} />
+        <RunProposals key={`proposals:${run.runId}`} runId={run.runId} />
         <RunAnalysisFollows runId={run.runId} />
         <RunSnapshotDetails key={`snapshot:${run.runId}`} runId={run.runId} />
         <details

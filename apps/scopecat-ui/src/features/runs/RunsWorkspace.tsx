@@ -64,6 +64,7 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 ];
 
 export function RunsWorkspace({
+  focused = false,
   selectedRunId,
   onSelectRun,
   health,
@@ -72,6 +73,7 @@ export function RunsWorkspace({
   daemonUnavailable,
   onOpenSample,
 }: {
+  focused?: boolean;
   selectedRunId?: string;
   onSelectRun: (runId: string, options?: NavigationOptions) => void;
   health?: ProjectHealth;
@@ -360,7 +362,7 @@ export function RunsWorkspace({
     enabled: selectedRunId !== undefined && selectedTracePlan !== undefined,
   });
   const [showRunBrowser, setShowRunBrowser] = useState(
-    () => !window.matchMedia?.("(max-width: 880px)").matches,
+    () => !focused && !window.matchMedia?.("(max-width: 880px)").matches,
   );
   const filteredRuns = useMemo(() => filterRuns(runs, filter, search), [runs, filter, search]);
 
@@ -379,7 +381,7 @@ export function RunsWorkspace({
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-3">
+      <div className={focused ? "hidden" : "mb-3 flex items-center gap-3"}>
         <button
           type="button"
           className={secondaryButton}

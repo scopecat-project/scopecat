@@ -78,7 +78,7 @@ test("repeats a retained ordinary analysis with its original source after author
       `${endpoint.base_url}/?run=${encodeURIComponent(seed.run)}&run-analysis=${encodeURIComponent(seed.first)}#runs`,
     );
     // 在同一会话中从 Data 找回旧结果，独立窗口和返回不能丢失浏览条件。
-    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await page.getByRole("button", { name: /Data$/, exact: true }).click();
     const data = page.getByRole("region", { name: "Data", exact: true });
     await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
     await data.getByLabel("From (local time)").fill("2020-01-01T00:00");

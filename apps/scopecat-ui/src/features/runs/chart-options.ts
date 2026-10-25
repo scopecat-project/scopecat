@@ -12,8 +12,8 @@ import type { MeasurementChartPlan } from "./measurement-visualization";
 export type AnalysisFigureContent = Extract<AnalysisOutput, { kind: "figure" }>["content"];
 
 const SERIES_COLORS = [
-  "#80a3cf",
-  "#cfad68",
+  "#286f58",
+  "#a37829",
   "#a497c7",
   "#d77e79",
   "#b8c0c7",
@@ -221,7 +221,7 @@ export function measurementChartOption(chart: MeasurementChartPlan): EChartsCore
             orient: "horizontal",
             precision: 4,
             text: [chart.colorLabel, ""],
-            textStyle: { color: "#98a2ab", fontSize: 12 },
+            textStyle: { color: "#536e60", fontSize: 12 },
           }
         : undefined,
     xAxis:
@@ -311,15 +311,15 @@ function boundedValueAxis(name: string, boundaries: number[], nameGap: number) {
 
 function valueAxis(name: string, formatter: (value: number) => string, nameGap: number) {
   return {
-    axisLabel: { color: "#98a2ab", formatter },
-    axisLine: { lineStyle: { color: "#3b444d" } },
+    axisLabel: { color: "#536e60", formatter },
+    axisLine: { lineStyle: { color: "#a6bcad" } },
     axisPointer: { label: { formatter: ({ value }: { value: number }) => formatter(value) } },
     name,
     nameGap,
     nameLocation: "middle" as const,
-    nameTextStyle: { color: "#98a2ab", fontSize: 12 },
+    nameTextStyle: { color: "#536e60", fontSize: 12 },
     scale: true,
-    splitLine: { lineStyle: { color: "#2b3137" } },
+    splitLine: { lineStyle: { color: "#d6e2d9" } },
     type: "value" as const,
   };
 }
@@ -330,8 +330,8 @@ function scrollLegend(labels: string[]) {
     formatter: compactLegendLabel,
     itemHeight: 8,
     itemWidth: 12,
-    pageTextStyle: { color: "#98a2ab" },
-    textStyle: { color: "#98a2ab", fontSize: 12 },
+    pageTextStyle: { color: "#536e60" },
+    textStyle: { color: "#536e60", fontSize: 12 },
     tooltip: { show: true },
     top: 0,
     type: "scroll" as const,
@@ -387,7 +387,7 @@ function analysisShortNumber(value: number): string {
   return Number(value.toPrecision(4)).toString();
 }
 
-/** Retained comparisons use the same bounded axes and dark-surface styling as run plots. */
+/** Retained comparisons use the same bounded axes and shared desktop styling as run plots. */
 export function comparisonChartOption(
   inspection: { primary: ComparisonCurve; secondary: ComparisonCurve },
   label: (id: string) => string,

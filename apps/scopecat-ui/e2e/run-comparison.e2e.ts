@@ -44,7 +44,17 @@ test("compares retained signals, saves independent results and starts edited sug
       await cp(join(ROOT, "testing/fixtures/retained-signal", name), join(project, name), {
         recursive: true,
       });
-    uv(["scopecat", "start", project, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      project,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8")) as {
       base_url: string;
     };
@@ -65,6 +75,7 @@ test("compares retained signals, saves independent results and starts edited sug
     await expect(page.getByLabel("Primary run")).toHaveValue(primary);
     await page.getByLabel("Secondary run").selectOption(secondary);
     async function action(label: string) {
+      await page.getByLabel("Review actor", { exact: true }).fill("synthetic-reviewer");
       const actions: Record<string, string> = {
         "Inspect compatible data": "inspect",
         "Fit selected data and save analysis": "fit",
@@ -217,6 +228,7 @@ test("compares retained signals, saves independent results and starts edited sug
     const retained = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
     expect((await retained.json()).items).toHaveLength(2);
     await page.getByLabel("Frequency", { exact: true }).fill("4.87");
+    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("synthetic-reviewer");
     let submissions = 0;
     let procedure = "";
     await page.route("**/experiment-launcher/submit", async (route) => {
@@ -234,6 +246,9 @@ test("compares retained signals, saves independent results and starts edited sug
       await route.abort("connectionfailed");
     });
     // No separate Preview and no named plan: Start checks and admits the edited input.
+    await expect(
+      page.getByRole("button", { name: "Start acquisition", exact: true }),
+    ).toBeEnabled();
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     await page.getByRole("button", { name: "Check original submission", exact: true }).click();
     await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
@@ -341,12 +356,22 @@ with ScientificExchange(sys.argv[1]) as capture:
     expect(await fullValue.evaluate((element) => element.scrollHeight)).toBeGreaterThan(192);
     await longProposals.screenshot({ path: testInfo.outputPath("bounded-full-value.png") });
     // Stopped current-format backup restores the same exact source and reverse index.
-    uv(["scopecat", "stop", project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     const snapshot = `${project}-snapshot`;
     restoredProject = `${project}-restored`;
-    uv(["scopecat", "snapshot", "create", project, snapshot]);
-    uv(["scopecat", "snapshot", "restore", snapshot, restoredProject]);
-    uv(["scopecat", "start", restoredProject, "--port", "0", "--static-dir", resolve("dist")]);
+    uv(["python", "-m", "scopecat_server.cli", "snapshot", "create", project, snapshot]);
+    uv(["python", "-m", "scopecat_server.cli", "snapshot", "restore", snapshot, restoredProject]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      restoredProject,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     const restored = JSON.parse(
       await readFile(join(restoredProject, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
@@ -372,7 +397,7 @@ with ScientificExchange(sys.argv[1]) as capture:
     await rm(snapshot, { recursive: true, force: true });
     passed = true;
   } finally {
-    uv(["scopecat", "stop", restoredProject ?? project]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", restoredProject ?? project]);
     if (restoredProject && passed) await rm(restoredProject, { recursive: true, force: true });
     if (passed) await rm(project, { recursive: true, force: true });
     else

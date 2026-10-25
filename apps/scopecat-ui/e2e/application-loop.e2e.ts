@@ -106,12 +106,12 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       .boundingBox())!;
     await page.mouse.click(pendingBounds.x + 5, pendingBounds.y + 5);
     expect(submissions).toBe(1);
-    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     release();
     await expect(scale).toHaveValue("2");
     await scale.fill("3");
     await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Original submission awaiting confirmation" }),
     ).toBeVisible();
@@ -133,12 +133,12 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await page.goForward();
     await expectRunIdentity(page, run);
-    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
     await page.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
     await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(page.getByLabel("Position", { exact: true })).toHaveValue("0.5");
     await expect(page.getByText(/Working inputs · revision/)).toBeVisible();
-    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(scale).toHaveValue("3");
     await scale.fill("4");
     await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();

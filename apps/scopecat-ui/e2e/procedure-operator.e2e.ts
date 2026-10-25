@@ -351,7 +351,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
         .click();
       await page
         .getByRole("navigation", { name: "Project sections" })
-        .getByRole("button", { name: "Experiments", exact: true })
+        .getByRole("button", { name: /Experiments$/, exact: true })
         .click();
       await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
       await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");

@@ -10,7 +10,7 @@ import { ClearData } from "../history/DataCleanup";
 import { ProcedureWorkerLog } from "./ProcedureWorkerLog";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useProcedureOperator } from "./use-procedure-operator";
 import { apiClient, apiData } from "../../api-client";
 import { ProcedureChildRun } from "./ProcedureChildRun";
 import { outputHref, procedurePhase, stateLabel } from "./procedure-operator";
@@ -26,19 +26,7 @@ export function ProcedureProgress({
   const [cancelReason, setCancelReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const progress = useInfiniteQuery({
-    queryKey: ["procedure-operator", procedureId],
-    initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      apiData(
-        apiClient.GET("/api/v1/procedures/{procedure_run_id}/operator", {
-          params: { path: { procedure_run_id: procedureId }, query: { cursor: pageParam } },
-          signal,
-        }),
-      ),
-    getNextPageParam: (page) => page.steps.next_cursor ?? undefined,
-    refetchInterval: 1000,
-  });
+  const progress = useProcedureOperator(procedureId);
   const view = progress.data?.pages[0];
   const run = view?.procedure;
   const workspaceId = view?.workspace_id;

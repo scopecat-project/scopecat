@@ -110,7 +110,7 @@ test("finds the same run, sample and space publications from either direct input
       await header.getByText("Run details", { exact: true }).click();
       const copiedId = await header.locator("code").filter({ hasText: run }).first().textContent();
       expect(copiedId).toBe(run);
-      await page.getByRole("button", { name: "Data", exact: true }).click();
+      await page.getByRole("button", { name: /Data$/, exact: true }).click();
       await page.getByText("Find by full run ID", { exact: true }).click();
       await page.getByLabel("Full run ID", { exact: true }).fill(copiedId!);
       // Deliberately exclude all rows; exact ID lookup must still find this run.
@@ -233,7 +233,7 @@ test("finds the same run, sample and space publications from either direct input
         ),
       )
       .toBeLessThan(120);
-    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await page.getByRole("button", { name: /Data$/, exact: true }).click();
     await expect(page.getByLabel("Full run ID", { exact: true })).toHaveValue(seed.runs[1]);
     await expect(page.getByLabel("From (local time)", { exact: true })).toHaveValue(
       "2099-01-01T00:00",
@@ -293,7 +293,7 @@ test("finds the same run, sample and space publications from either direct input
     const other = await context.newPage();
     await other.goto(`${endpoint.base_url}/?run=${seed.runs[1]}`);
     await expect(other.getByTestId("run-detail-header")).toContainText(seed.runs[1]);
-    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await page.getByRole("button", { name: /Data$/, exact: true }).click();
     await page.goBack();
     await expect(page.getByTestId("publication-id")).toHaveText(seed.ids[3]);
     await expect(

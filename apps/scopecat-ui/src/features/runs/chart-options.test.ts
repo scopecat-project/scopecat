@@ -345,7 +345,7 @@ it("fits narrow comparison coordinates and uses readable shared axes and collect
   expect(option.xAxis).toMatchObject({
     scale: true,
     name: "frequency (GHz)",
-    axisLabel: { color: "#98a2ab" },
+    axisLabel: { color: "#536e60" },
   });
   expect(option.yAxis).toMatchObject({ scale: true, name: "response (V)" });
   expect(option.legend).toMatchObject({ type: "scroll", data: ["Morning · #1", "Morning · #2"] });

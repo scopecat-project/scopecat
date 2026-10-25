@@ -188,7 +188,11 @@ export function LaunchWorkspace({
       : preparing || !procedureId
         ? "editor"
         : "monitor";
+  const lastFocusedRoute = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const route = JSON.stringify([procedureId, preparing, view]);
+    if (lastFocusedRoute.current === route) return;
+    lastFocusedRoute.current = route;
     if (view === "editor" && preparing) {
       preparation.current?.focus({ preventScroll: true });
       preparation.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
@@ -246,7 +250,7 @@ export function LaunchWorkspace({
     };
   }, [handoff, handoffTarget, handoffRetry]);
   return (
-    <section className={classes(pageContent, "max-w-6xl mx-auto")}>
+    <section className={classes(pageContent, "experiment-workspace")}>
       {handoffFailed && (
         <button
           type="button"
@@ -340,7 +344,7 @@ export function LaunchWorkspace({
         ref={preparation}
         tabIndex={-1}
         aria-labelledby="experiment-preparation"
-        className={`${detailCard} space-y-3 scroll-mt-24`}
+        className={`${detailCard} experiment-preparation space-y-3 scroll-mt-24`}
       >
         <div>
           <h3 id="experiment-preparation" className="sr-only">
@@ -356,7 +360,7 @@ export function LaunchWorkspace({
             </details>
           )}
         </div>
-        <div className="grid items-start gap-3 lg:grid-cols-3 border-b border-line pb-2">
+        <div className="experiment-selectors grid items-start gap-3 lg:grid-cols-3 border-b border-line pb-2">
           <SourceSelector
             catalog={sources}
             workspaceId={workspaceId}

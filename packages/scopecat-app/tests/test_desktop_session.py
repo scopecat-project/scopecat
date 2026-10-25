@@ -91,7 +91,7 @@ def test_native_windows_share_backend_and_keep_navigation(
     assert isinstance(second.window, Mock)
     assert (
         created[1][1]["url"]
-        == "http://localhost:1234/?run=B+%26%3F%23%2F%E7%BB%93%E6%9E%9C#runs"
+        == "http://localhost:1234/?run=B+%26%3F%23%2F%E7%BB%93%E6%9E%9C&focus=run#runs"
     )
     first.api.open_run_window("B &?#/结果")
     assert len(created) == 2
