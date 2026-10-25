@@ -1,6 +1,8 @@
 """Bounded native WebView/bridge acceptance, using the headless check's fixtures.
 
-Run only from verify_native_application against its disposable application/home.
+Run from verify_native_application, or use --short after native preparation,
+against a disposable application/home. The short mode checks only healthy
+startup, navigation and normal exit; it does not qualify installation/recovery.
 The probe copies the native host and replaces only its bootstrap. The production
 WebView backend/store is used unchanged, including any production dependency
 repair. Execution requires a disposable GitHub-hosted Mac/Windows runner.
@@ -876,6 +878,84 @@ def probe(home: Path) -> None:
             )
 
 
+def smoke(home: Path) -> None:
+    """Only healthy startup, two navigation destinations and certified exit."""
+    require_hosted_runner(home)
+    import webview
+
+    from scopecat_app.desktop import DesktopWindows
+    from scopecat_app.desktop_session import DesktopSession
+
+    reports = home / "native-windows"
+    runtime = ApplicationRuntime(home / "data")
+    session = DesktopSession(runtime, threading.Event())
+    windows = DesktopWindows(session, lambda: None)
+    evidence: dict[str, object] = {"status": "failed", "scope": "short-smoke"}
+    started = time.monotonic()
+    try:
+        record = runtime.start()
+        session.connected(record.base_url)
+        first = windows.create()
+        diagnostics = WindowDiagnostics(reports / "window-diagnostics.jsonl")
+        logging.getLogger("pywebview").addHandler(diagnostics)
+        diagnostics.observe("attach", lambda: diagnostics.attach(first.window) or {})
+
+        def exercise() -> None:
+            try:
+                wait_for(
+                    lambda: (
+                        evaluate(
+                            first.window,
+                            "Boolean(window.pywebview?.api && "
+                            "document.querySelector("
+                            "'[aria-label=\"Refresh project data\"]') && "
+                            "document.querySelector('.workspace-top [role=status]')"
+                            "?.textContent.trim() === 'Ok')",
+                        )
+                        is True
+                    ),
+                    "Healthy workspace did not mount",
+                )
+                evidence["startup_seconds"] = time.monotonic() - started
+                for label in ("决策 / Decisions", "运行详情 / Runs"):
+                    click_navigation(first.window, label)
+                    selector = f'button[aria-label="{label}"][aria-current="page"]'
+                    wait_for(
+                        lambda selector=selector: (
+                            evaluate(
+                                first.window,
+                                "Boolean(document.querySelector("
+                                + json.dumps(selector)
+                                + "))",
+                            )
+                            is True
+                        ),
+                        f"Navigation did not select {label}",
+                    )
+                evidence["status"] = "passed"
+            except Exception:
+                evidence["error"] = traceback.format_exc()
+            finally:
+                evidence["business_seconds"] = time.monotonic() - started
+                finish_probe(
+                    evidence,
+                    reports / "result.json",
+                    lambda: close_probe_windows(session, windows),
+                )
+
+        webview.start(exercise)
+        assert evidence["status"] == "passed", evidence.get("error", "Incomplete smoke")
+    except Exception:
+        evidence["status"] = "failed"
+        evidence.setdefault("error", traceback.format_exc())
+        raise
+    finally:
+        evidence["seconds"] = time.monotonic() - started
+        (reports / "result.json").write_text(
+            json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+        )
+
+
 def host_bootstrap(script: Path, arguments: list[str], log: Path) -> str:
     """Capture Python/WebView failures even when pythonw inherits no handles."""
     return (
@@ -887,7 +967,7 @@ def host_bootstrap(script: Path, arguments: list[str], log: Path) -> str:
     )
 
 
-def verify(app: Path, home: Path) -> None:
+def verify(app: Path, home: Path, *, short: bool = False) -> None:
     require_hosted_runner(home)
     app, home = app.resolve(), home.resolve()
     if home.is_relative_to(app):
@@ -923,7 +1003,11 @@ def verify(app: Path, home: Path) -> None:
             "Contents/MacOS/Scopecat" if sys.platform == "darwin" else "Scopecat.exe"
         )
         (resources / "bootstrap.py").write_text(
-            host_bootstrap(script, ["--probe", str(home)], reports / "python.log"),
+            host_bootstrap(
+                script,
+                ["--smoke" if short else "--probe", str(home)],
+                reports / "python.log",
+            ),
             encoding="utf-8",
         )
         failure: str | None = None
@@ -1006,7 +1090,9 @@ if __name__ == "__main__":
         require_hosted_runner(Path(sys.argv[2]))
     elif sys.argv[1] == "--probe":
         probe(Path(sys.argv[2]))
+    elif sys.argv[1] == "--smoke":
+        smoke(Path(sys.argv[2]))
     elif sys.argv[1] == "--cleanup":
         cleanup(Path(sys.argv[2]))
     else:
-        verify(Path(sys.argv[1]), Path(sys.argv[2]))
+        verify(Path(sys.argv[1]), Path(sys.argv[2]), short="--short" in sys.argv[3:])

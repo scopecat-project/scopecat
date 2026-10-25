@@ -4,6 +4,24 @@ The #888 Windows cookie repair passed its bounded **Mac and Windows native
 checks** on 2026-10-06. Each result below is bound to its tested candidate;
 Linux checks, browser acceptance and platform-smoke are not native passes.
 
+## 独立短 smoke
+
+`Native smoke` 工作流在 GitHub-hosted Windows/macOS 上运行，也可手动触发。
+PR 仅在工作流列出的 desktop、native host、关键导航、退出协议、探针或
+Python runtime/build 输入变化时运行；不增加定时任务或全慢验收 gate。
+
+短流程仍构建平台 delivery 和 native application，但不构建 installer，不运行
+科学 journey 或 reset。隔离的原生准备完成后，调用
+`verify_native_windows.py APP HOME --short`，检查健康连接、决策/运行导航和
+正常关闭预检。它复用完整探针的原生 host、backend、退出和外层清理，先保存
+业务结果再记录退出结果；`always` artifact 保留 identity、JSON 和诊断日志。
+仅允许 disposable hosted runner，不在个人桌面运行。
+
+此路径会替换测试副本的 bootstrap，不是用户首次打开、OS 菜单/托盘或安装资格。
+完整安装、升级/恢复、reset 和发行候选仍使用 `native-distribution`；短流程通过
+不能替代这些高风险边界。成本以各步骤和 job 时间观察，不能把单次 hosted 样本
+当作固定预算；失败时保留首次结果，先归因再决定是否重试。
+
 ## Accepted Windows repair
 
 [PR #888](https://github.com/scopecat-project/scopecat/pull/888) records the
