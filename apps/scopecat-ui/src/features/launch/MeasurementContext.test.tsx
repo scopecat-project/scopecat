@@ -70,13 +70,13 @@ it("allows an explicit batch for a registered target and keeps operator/collecti
   const value = draft();
   const onChange = vi.fn();
   mount(value, onChange);
-  expect(screen.getByLabelText("Sample ID")).toBeDisabled();
+  expect(screen.getByLabelText("样品 ID")).toBeDisabled();
   expect(screen.getByLabelText("batch")).toBeEnabled();
   fireEvent.change(screen.getByLabelText("batch"), { target: { value: "cooldown-B" } });
   expect(onChange).toHaveBeenLastCalledWith({
     selection: { batch: { kind: "declared", id: "cooldown-B" } },
   });
-  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "Bob" } });
+  fireEvent.change(screen.getByLabelText("操作人"), { target: { value: "Bob" } });
   expect(onChange).toHaveBeenLastCalledWith({ actor: "Bob" });
   fireEvent.change(screen.getByLabelText("collection"), { target: { value: "another-archive" } });
   expect(onChange).toHaveBeenLastCalledWith({ collection: "another-archive" });
@@ -91,10 +91,10 @@ it("only replaces the exact target after an explicit subject edit, retaining con
   };
   const onChange = vi.fn();
   mount(value, onChange);
-  fireEvent.click(screen.getByRole("button", { name: "Choose another subject" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择其他对象" }));
   expect(onChange).not.toHaveBeenCalled();
-  expect(screen.getByLabelText("Sample ID")).toBeEnabled();
-  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-B" } });
+  expect(screen.getByLabelText("样品 ID")).toBeEnabled();
+  fireEvent.change(screen.getByLabelText("样品 ID"), { target: { value: "chip-B" } });
   expect(onChange).toHaveBeenCalledWith({
     selection: { subject: { kind: "sample", sample_id: "chip-B" } },
   });

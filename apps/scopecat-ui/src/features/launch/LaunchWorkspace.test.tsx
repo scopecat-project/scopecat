@@ -165,7 +165,7 @@ it("previews a typed request and clears results after edits", async () => {
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   expect(screen.getAllByRole("region", { name: "Saved experiment plans" })).toHaveLength(1);
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect(await request.json()).toEqual({
@@ -182,7 +182,7 @@ it("previews a typed request and clears results after edits", async () => {
     control_edits: {},
   });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.3" } });
-  await waitFor(() => expect(screen.queryByText("Preview ready")).toBeNull());
+  await waitFor(() => expect(screen.queryByText("预览就绪")).toBeNull());
 });
 it("shows a project without registered experiments", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ entries: [] })));
@@ -253,20 +253,20 @@ it("previews a chosen branch version and invalidates only when another version i
   mount(undefined, unavailableDefault);
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
-  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-a" } });
-  fireEvent.click(screen.getByRole("button", { name: "Choose parameter branch" }));
+  fireEvent.change(screen.getByLabelText("样品 ID"), { target: { value: "chip-a" } });
+  fireEvent.click(screen.getByRole("button", { name: "选择参数分支" }));
   await screen.findByRole("option", { name: /daily.*generation 1/ });
-  fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "daily" } });
-  fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
+  fireEvent.change(screen.getByLabelText("参数分支"), { target: { value: "daily" } });
+  fireEvent.click(screen.getByRole("button", { name: "使用此参数版本" }));
   expect(screen.getByRole("button", { name: "预览" })).toBeDisabled();
   await screen.findByRole("option", { name: "bench" });
-  fireEvent.change(screen.getByLabelText("Experiment setup"), { target: { value: "bench" } });
-  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip-b" } });
+  fireEvent.change(screen.getByLabelText("实验配置"), { target: { value: "bench" } });
+  fireEvent.change(screen.getByLabelText("样品 ID"), { target: { value: "chip-b" } });
   resolveSetup();
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   expect(requests[0]?.selection).toEqual({
     subject: { kind: "sample", sample_id: "chip-b" },
     batch: { kind: "unscoped" },
@@ -278,14 +278,14 @@ it("previews a chosen branch version and invalidates only when another version i
     },
   });
   generation = 2;
-  fireEvent.click(screen.getByRole("button", { name: "Refresh parameter branches" }));
+  fireEvent.click(screen.getByRole("button", { name: "刷新参数分支" }));
   await screen.findByRole("option", { name: /generation 2/ });
-  expect(screen.getByText("Preview ready")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
-  await waitFor(() => expect(screen.queryByText("Preview ready")).not.toBeInTheDocument());
+  expect(screen.getByText("预览就绪")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "使用此参数版本" }));
+  await waitFor(() => expect(screen.queryByText("预览就绪")).not.toBeInTheDocument());
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   expect(requests[1]?.selection.configuration.ref.revision_id).toBe("values-2");
   expect(requests[1]?.selection.subject).toEqual(requests[0]?.selection.subject);
   expect(unavailableDefault).not.toHaveBeenCalled();
@@ -304,7 +304,7 @@ it("shows compilation failure without a successful preview", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("binding unavailable");
-  expect(screen.queryByText("Preview ready")).toBeNull();
+  expect(screen.queryByText("预览就绪")).toBeNull();
 });
 
 it("retains the submission key after a lost response and opens durable progress", async () => {
@@ -333,12 +333,12 @@ it("retains the submission key after a lost response and opens durable progress"
   mount();
   fireEvent.change(await screen.findByLabelText("Qubit"), { target: { value: "Q12" } });
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
-  fireEvent.change(screen.getByLabelText("Sample ID"), { target: { value: "chip" } });
-  fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "reviewer" } });
+  fireEvent.change(screen.getByLabelText("样品 ID"), { target: { value: "chip" } });
+  fireEvent.change(screen.getByLabelText("操作人"), { target: { value: "reviewer" } });
   expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "开始采集" }));
   await screen.findByRole("alert");
@@ -384,13 +384,13 @@ it("submits selected array members and invalidates the preview when membership c
   fireEvent.change(select);
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   expect((await (fetcher.mock.calls[1]![0] as Request).json()).inputs).toEqual({
     qubits: ["Q04", "Q24"],
   });
   select.options[2]!.selected = false;
   fireEvent.change(select);
-  expect(screen.queryByText("Preview ready")).toBeNull();
+  expect(screen.queryByText("预览就绪")).toBeNull();
 });
 
 it("cancels a waiting procedure with the observed revision and recorded actor", async () => {
@@ -484,7 +484,7 @@ it("keeps a running cancellation pending instead of reporting a stopped procedur
   expect(screen.queryByRole("button", { name: "当前步骤结束后停止" })).toBeNull();
 });
 
-it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", async (label) => {
+it.each(["操作人", "样品 ID"])("invalidates preview after changing %s", async (label) => {
   vi.stubGlobal(
     "fetch",
     vi
@@ -499,10 +499,10 @@ it.each(["Operator", "Sample ID"])("invalidates preview after changing %s", asyn
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
   fireEvent.change(screen.getByLabelText(label), { target: { value: "changed" } });
-  expect(screen.queryByText("Preview ready")).toBeNull();
+  expect(screen.queryByText("预览就绪")).toBeNull();
   expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
 });
 
@@ -606,7 +606,7 @@ it("parses numeric and boolean author choices before preview", async () => {
   fireEvent.change(screen.getByLabelText("Enabled"), { target: { value: "false" } });
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   const request = fetcher.mock.calls[1]?.[0] as Request;
   expect((await request.json()).inputs).toEqual({ shots: 8, enabled: false });
 });
@@ -630,7 +630,7 @@ it("shows the preview's frozen scenario and clears it when inputs change", async
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   expect(screen.getByRole("region", { name: "Reviewed execution scenario" })).toBeVisible();
   expect(screen.getByText("Synthetic resonance")).toBeVisible();
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.5" } });
@@ -665,14 +665,14 @@ it("shows typed rejection evidence and clears it after the request changes", asy
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.4" } });
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await screen.findByText("sample_rate_limit");
   expect(screen.getByText("Declared capability limit")).toBeVisible();
   expect(screen.getByText("target_compile_entry.sample_rate")).toBeVisible();
   expect(screen.getByText("Does not model device heating")).toBeVisible();
-  expect(screen.queryByText("Preview ready")).not.toBeInTheDocument();
+  expect(screen.queryByText("预览就绪")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Amplitude"), { target: { value: "0.5" } });
   await waitFor(() =>
     expect(screen.queryByRole("alert", { name: "Preview rejection" })).not.toBeInTheDocument(),

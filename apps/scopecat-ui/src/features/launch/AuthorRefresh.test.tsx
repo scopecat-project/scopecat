@@ -48,9 +48,9 @@ it.each([false, true])(
     );
     mount(compact);
     await screen.findByText(/running: application import/);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel preparation" }));
+    fireEvent.click(screen.getByRole("button", { name: "取消准备" }));
     await screen.findByText(/cancelling: application import/);
-    expect(screen.getByRole("button", { name: "Cancel preparation" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "取消准备" })).toBeDisabled();
     expect(writes).toEqual(["/api/v1/author-preparations/captured-once/cancel"]);
   },
 );
@@ -75,10 +75,10 @@ it.each([false, true])(
       }),
     );
     mount(compact);
-    const refresh = await screen.findByRole("button", { name: "Refresh author code" });
+    const refresh = await screen.findByRole("button", { name: "刷新作者代码" });
     await waitFor(() => expect(refresh).toBeEnabled());
     fireEvent.click(refresh);
-    fireEvent.click(await screen.findByRole("button", { name: "Retry same submission" }));
+    fireEvent.click(await screen.findByRole("button", { name: "重试同一提交" }));
     await screen.findByText(/running: application import/);
     expect(submitted).toHaveLength(2);
     expect(submitted[1]).toEqual(submitted[0]);
@@ -126,14 +126,12 @@ it.each([false, true])(
         />
       </QueryClientProvider>,
     );
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Refresh author code" })).toBeEnabled(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Refresh author code" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "刷新作者代码" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "刷新作者代码" }));
     await screen.findByText(/Updating catalog/);
-    expect(screen.queryByText(/Author code refreshed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/作者代码已刷新/)).not.toBeInTheDocument();
     release();
-    await screen.findByText(/Author code refreshed/);
+    await screen.findByText(/作者代码已刷新/);
   },
 );
 
@@ -155,6 +153,6 @@ it("does not notify the draft for previously completed history", async () => {
       <AuthorRefresh projectId="lab" workspaceId="source-B" onRefreshed={onRefreshed} />
     </QueryClientProvider>,
   );
-  await screen.findByText(/Author code refreshed/);
+  await screen.findByText(/作者代码已刷新/);
   expect(onRefreshed).not.toHaveBeenCalled();
 });

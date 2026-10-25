@@ -136,7 +136,7 @@ function AuthorRefreshPanel({
           refresh.mutate(body);
         }}
       >
-        {busy ? "Preparing author code…" : "Refresh author code"}
+        {busy ? "正在准备作者代码…" : "刷新作者代码"}
       </button>
       {operation.data && !(compact && synchronized === identity) && (
         <p role="status">
@@ -151,10 +151,10 @@ function AuthorRefreshPanel({
       {identity && synchronized === identity && (
         <p role="status">
           {compact
-            ? "Author code refreshed."
+            ? "作者代码已刷新。"
             : context === "analysis"
-              ? "Author code refreshed. Inspect compatible data before fitting with this code."
-              : "Author code refreshed. Preview the updated experiment before starting."}
+              ? "作者代码已刷新。 Inspect compatible data before fitting with this code."
+              : "作者代码已刷新。 开始前请预览更新后的实验。"}
         </p>
       )}
       {busy && (
@@ -164,7 +164,7 @@ function AuthorRefreshPanel({
           disabled={cancel.isPending || operation.data?.status === "cancelling"}
           onClick={() => cancel.mutate()}
         >
-          Cancel preparation
+          取消准备
         </button>
       )}
       {refresh.error && request && (
@@ -174,13 +174,13 @@ function AuthorRefreshPanel({
           disabled={refresh.isPending}
           onClick={() => refresh.mutate(request)}
         >
-          Retry same submission
+          重试同一提交
         </button>
       )}
       {(identity || state.data?.active) && (
         <details className="text-xs text-text-dim">
-          <summary>Source revision details</summary>
-          {compact && <p>Preview the updated experiment before starting.</p>}
+          <summary>源码 revision 详情</summary>
+          {compact && <p>开始前请预览更新后的实验。</p>}
           {identity && <p className="break-all">Preparation: {identity}</p>}
           {state.data?.active && (
             <p className="break-all">Author revision: {state.data.active.content_hash}</p>

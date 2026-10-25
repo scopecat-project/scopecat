@@ -33,7 +33,7 @@ export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
   return (
     <div className="space-y-3">
       <h3 role="status" className="font-semibold">
-        Preview ready
+        预览就绪
       </h3>
       <p>{preview.summary}</p>
       <p>
@@ -48,9 +48,7 @@ export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
         </p>
       ) : (
         <details className="rounded-md border border-line p-3 space-y-3">
-          <summary className="cursor-pointer font-semibold">
-            Estimates and planned measurements
-          </summary>
+          <summary className="cursor-pointer font-semibold">估算与计划测量</summary>
           <p>{preview.preflight.scope_basis}</p>
           {preview.preflight.stages.map((stage) => (
             <section
@@ -61,25 +59,21 @@ export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
               <h4 className="font-semibold">{stage.label}</h4>
               <p>{stage.configuration_meaning}</p>
               <dl className="grid grid-cols-2 gap-2 text-sm">
-                <dt>Selected entities</dt>
+                <dt>选中实体</dt>
                 <dd>
                   {stage.entity_ids === null ? "Unknown" : stage.entity_ids.join(", ") || "None"}
                 </dd>
-                <dt>Planned executions</dt>
+                <dt>计划执行次数</dt>
                 <dd>
                   <QuantityValue quantity={stage.executions} />
                 </dd>
-                <dt>
-                  {stage.point_scope === "static_plan"
-                    ? "Planned points per execution"
-                    : "Possible acquired points"}
-                </dt>
+                <dt>{stage.point_scope === "static_plan" ? "每次执行计划点数" : "可能采集点数"}</dt>
                 <dd>
                   <QuantityValue quantity={stage.points_per_execution} />
                 </dd>
-                <dt>Initial proposed points</dt>
+                <dt>初始建议点数</dt>
                 <dd>{stage.initial_proposed_points}</dd>
-                <dt>Shots per point per entity</dt>
+                <dt>每个实体每点 shots</dt>
                 <dd>
                   <QuantityValue quantity={stage.shots_per_point_per_entity} />
                 </dd>
@@ -89,7 +83,7 @@ export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
                 {stage.selected_points}/{stage.selected_point_limit} selected points inspected.
               </p>
               <table className="w-full text-sm">
-                <caption className="text-left font-medium">Products and retention</caption>
+                <caption className="text-left font-medium">产物与保留策略</caption>
                 <thead>
                   <tr>
                     <th className="text-left">Product</th>
@@ -134,7 +128,7 @@ export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
               </ul>
               <PlannedSettings stage={stage} />
               <details>
-                <summary>Selected-point inspection and configuration fingerprint</summary>
+                <summary>选点检查与配置指纹</summary>
                 <pre className="overflow-auto text-xs p-3">
                   {JSON.stringify(
                     {
@@ -151,7 +145,7 @@ export function PreflightSummary({ preview }: { preview: LaunchPreview }) {
         </details>
       )}
       <details>
-        <summary>Resolved inputs and configuration</summary>
+        <summary>已解析输入与配置</summary>
         <pre className="overflow-auto text-xs p-3">
           {JSON.stringify({ inputs: preview.resolved_inputs, reviewed: preview.reviewed }, null, 2)}
         </pre>

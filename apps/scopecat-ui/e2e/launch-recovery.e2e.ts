@@ -84,14 +84,12 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
-    await page.getByLabel("Experiment setup", { exact: true }).selectOption("loop-bench");
+    await page.getByLabel("实验配置", { exact: true }).selectOption("loop-bench");
     await page.getByLabel("Position source", { exact: true }).selectOption("values");
     await page.getByLabel("Position scan values", { exact: true }).fill("-1, nope, 1");
     await page.getByLabel("Center", { exact: true }).fill("-");
     const saved = (target = page) =>
-      expect(
-        target.getByText("Experiment input saved in application data.", { exact: true }),
-      ).toBeVisible();
+      expect(target.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
     await saved();
     url = restart();
     await page.goto(`${url}/?workspace=${prepared.workspace}#launch`);
@@ -99,7 +97,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       "-1, nope, 1",
     );
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("-");
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+    await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
       "Recovery tester",
     );
     await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
@@ -110,7 +108,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page.getByLabel("Center", { exact: true }).fill("0.25");
     await saved();
     await other.getByLabel("Center", { exact: true }).fill("invalid in second window");
-    await expect(other.getByRole("region", { name: "Conflicting experiment input" })).toBeVisible();
+    await expect(other.getByRole("region", { name: "实验输入冲突" })).toBeVisible();
     await other.reload();
     await expect(other.getByLabel("Center", { exact: true })).toHaveValue("0.25");
     await other
@@ -131,7 +129,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await writeFile(source, original.replace("] = 0.0,", "] = 0.5,"));
     await page.getByRole("button", { name: /Refresh.*code/i }).click();
     await expect(
-      page.getByText("Author code refreshed.", {
+      page.getByText("作者代码已刷新。", {
         exact: true,
       }),
     ).toBeVisible();
@@ -141,7 +139,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await expect(page.getByLabel("Center", { exact: true })).toHaveValue("0.25");
     await page.getByLabel("Position scan values", { exact: true }).fill("-1, 0, 1");
     await page.getByLabel("Center", { exact: true }).fill("0");
-    await page.getByRole("button", { name: "Confirm reviewed input", exact: true }).click();
+    await page.getByRole("button", { name: "确认已核实输入", exact: true }).click();
     await saved();
     await page.getByRole("button", { name: "预览", exact: true }).click();
     const start = page.getByRole("button", { name: "开始采集", exact: true });

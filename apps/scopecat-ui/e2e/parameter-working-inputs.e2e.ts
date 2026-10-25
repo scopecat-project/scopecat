@@ -137,8 +137,8 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     await work
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
-    await work.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await work.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+    await work.getByLabel("实验类型", { exact: true }).selectOption("signal");
+    await work.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
     await work.getByRole("button", { name: "准备", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     const oldB = await preview(work);
@@ -150,7 +150,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(work.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
     await work.getByLabel("Gain", { exact: true }).fill("2");
-    await work.getByRole("button", { name: "Use current working inputs", exact: true }).click();
+    await work.getByRole("button", { name: "使用当前工作输入", exact: true }).click();
     await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     const previewB = await preview(work);
     expect(previewB.request_hash).not.toBe(oldB.request_hash);
@@ -187,12 +187,12 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await editor
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
-    await editor.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await editor.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+    await editor.getByLabel("实验类型", { exact: true }).selectOption("signal");
+    await editor.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
     await reviewRetainedExperiment(editor);
     await expect(editor.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
     await expect(editor.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
-    await editor.getByRole("button", { name: "Use current working inputs", exact: true }).click();
+    await editor.getByRole("button", { name: "使用当前工作输入", exact: true }).click();
     await expect(editor.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await preview(editor);
     const procedureC = await submit(editor);

@@ -37,7 +37,7 @@ test("registered devices share ownership across pages without setup selection", 
     const second = await context.newPage();
     await page.goto(`${endpoint.base_url}/#instruments`);
     await second.goto(`${endpoint.base_url}/#instruments`);
-    await expect(page.getByLabel("Experiment setup", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("实验配置", { exact: true })).toHaveCount(0);
     await page.getByTitle("Inspect instrument drive-lo-a").click();
     await second.getByTitle("Inspect instrument drive-lo-a").click();
     const opening = page.waitForRequest((request) =>
@@ -109,7 +109,7 @@ test("manual changes invalidate a retained preview before a fresh acquisition", 
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("ramsey");
     await chooseReferenceContext(page);
     await page.getByLabel("Delay", { exact: true }).fill("64");
     await page.getByRole("button", { name: "预览", exact: true }).click();

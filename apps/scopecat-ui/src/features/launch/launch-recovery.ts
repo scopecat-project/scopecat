@@ -292,9 +292,7 @@ export function useLaunchRecovery(
         if (explicitInput.current === target) explicitInput.current = undefined;
         current.ready = true;
         setStatus(
-          head?.state === "saved"
-            ? "Experiment input saved in application data."
-            : "Saving experiment input…",
+          head?.state === "saved" ? "实验输入已保存到应用数据。" : "Saving experiment input…",
         );
         setEpoch((value) => value + 1);
       })
@@ -369,7 +367,7 @@ export function useLaunchRecovery(
               setStatus(
                 current.conflict
                   ? "Another window changed this experiment. Your edits are retained as a separate conflict copy."
-                  : "Experiment input saved in application data.",
+                  : "实验输入已保存到应用数据。",
               );
             break;
           } catch (error) {

@@ -50,11 +50,11 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
     const sourceBounds = await page.getByLabel("代码工作区", { exact: true }).boundingBox();
     const refreshBounds = await page
-      .getByRole("button", { name: "Refresh author code", exact: true })
+      .getByRole("button", { name: "刷新作者代码", exact: true })
       .boundingBox();
     expect(sourceBounds!.x + sourceBounds!.width).toBeLessThanOrEqual(refreshBounds!.x);
     await testInfo.attach("Preparation source controls", {
@@ -85,7 +85,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
         expect.objectContaining({ id: "frequency", state: "scanned" }),
       ]),
     });
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.getByRole("region", { name: "预览与开始", exact: true }).scrollIntoViewIfNeeded();
     await testInfo.attach("Preparation and launch actions", {
       body: await page.screenshot(),
@@ -94,11 +94,11 @@ test("discovers an ordinary author experiment and edits controls before submitti
     const sourcePath = join(project, "src/ui_author/signal.py");
     const originalSource = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "SyntaxError" })).toBeVisible();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await writeFile(sourcePath, originalSource.replace("return gain /", "return 2 * gain /"));
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Author code refreshed" }),
     ).toBeVisible();
@@ -200,7 +200,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Frequency source").selectOption("range");
@@ -244,7 +244,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await page.getByLabel("Gain", { exact: true }).fill("3");
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await writeFile(sourcePath, source.replace("return gain /", "return 2 * gain /"));
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Author code refreshed" }),
     ).toBeVisible();

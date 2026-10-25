@@ -125,7 +125,7 @@ retainedProcedureTest(
       await page.goto(`${endpoint.base_url}/#launch`);
       const catalogResponse = await catalogReady;
       expect(catalogResponse.status(), await catalogResponse.text()).toBe(200);
-      await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("实验类型", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "已提交任务", exact: true }).click();
       await page
         .getByRole("button", { name: /author:reference_lab.temperature_diagnostic/ })
@@ -358,11 +358,11 @@ test("retains launch inputs across workspaces and invalidates previews without s
     expect(sample.status(), await sample.text()).toBe(201);
     prepareReferenceContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
-    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("ramsey");
+    await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("ramsey");
     await chooseReferenceContext(page);
-    await page.getByLabel("Sample ID").fill("sample-navigation");
-    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("draft-author");
+    await page.getByLabel("样品 ID").fill("sample-navigation");
+    await page.getByRole("textbox", { name: "操作人", exact: true }).fill("draft-author");
     await page.getByLabel("Delay source").selectOption("range");
     await page.getByLabel("Delay unit").selectOption("ns");
     await page.getByLabel("Delay start").fill("16");
@@ -377,9 +377,9 @@ test("retains launch inputs across workspaces and invalidates previews without s
         .getByRole("navigation", { name: "Project sections" })
         .getByRole("button", { name: /Experiments$/, exact: true })
         .click();
-      await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ramsey");
-      await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
-      await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+      await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("ramsey");
+      await expect(page.getByLabel("样品 ID")).toHaveValue("sample-navigation");
+      await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
         "draft-author",
       );
       await expect(page.getByLabel("Delay source")).toHaveValue("range");
@@ -390,17 +390,17 @@ test("retains launch inputs across workspaces and invalidates previews without s
     }
     expect(submissions).toBe(0);
     await page.getByRole("button", { name: "预览", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.getByLabel("Delay points").fill("2");
-    await expect(page.getByText("Preview ready", { exact: true })).not.toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "开始采集" })).toBeEnabled();
     expect(submissions).toBe(0);
     await page.getByRole("button", { name: "预览", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     uv(["python", "-c", CHANGE_DRAFT_CONFIG, project]);
     await page.getByRole("button", { name: "预览", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: /changed; prepare/ })).toBeVisible();
-    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
     // Start must recheck the changed setup and reject it without submitting.
     const rejected = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/preview"),
@@ -418,10 +418,10 @@ test("retains launch inputs across workspaces and invalidates previews without s
       path: shot,
       contentType: "image/png",
     });
-    await page.getByRole("button", { name: "Reset launch draft" }).click();
+    await page.getByRole("button", { name: "重置实验草稿" }).click();
     await expect(page.getByLabel("Delay", { exact: true })).toHaveValue("48");
-    await expect(page.getByLabel("Sample ID")).toHaveValue("sample-navigation");
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+    await expect(page.getByLabel("样品 ID")).toHaveValue("sample-navigation");
+    await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
       "draft-author",
     );
     expect(submissions).toBe(0);

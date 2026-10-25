@@ -142,9 +142,7 @@ function mount() {
 }
 async function ready() {
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
-  await waitFor(() =>
-    expect(screen.getByLabelText("Experiment setup")).toHaveValue("starter-bench"),
-  );
+  await waitFor(() => expect(screen.getByLabelText("实验配置")).toHaveValue("starter-bench"));
 }
 it.each(["before click", "during preflight"])(
   "previews when the same setup resolution completes %s",
@@ -152,7 +150,7 @@ it.each(["before click", "during preflight"])(
     const test = mount();
     await ready();
     test.hold();
-    fireEvent.change(screen.getByLabelText("Experiment setup"), {
+    fireEvent.change(screen.getByLabelText("实验配置"), {
       target: { value: "starter-bench" },
     });
     await waitFor(() =>
@@ -164,7 +162,7 @@ it.each(["before click", "during preflight"])(
       await act(async () =>
         test.resolution.resolve(Response.json({ id: "bench", content_hash: "sha256:bench" })),
       );
-      await waitFor(() => expect(screen.getByLabelText("Experiment setup")).toBeEnabled());
+      await waitFor(() => expect(screen.getByLabelText("实验配置")).toBeEnabled());
     };
     if (order === "before click") await settleSetup();
     const revision = context.draft!.revision;
@@ -220,7 +218,7 @@ it.each([
   const test = mount();
   await ready();
   test.hold();
-  fireEvent.click(screen.getByRole("button", { name: "Recheck device connections" }));
+  fireEvent.click(screen.getByRole("button", { name: "重新检查设备连接" }));
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
   await act(async () => test.preflightStarted);
   await act(async () => test.resolution.resolve(Response.json(selected)));
@@ -230,9 +228,7 @@ it.each([
   expect(context.draft!.selection.configuration).toMatchObject({
     setup: { revision_id: selected.id, content_hash: selected.content_hash },
   });
-  expect(context.draft!.notice).toBe(
-    "Inputs changed. Start will check the new inputs before acquisition.",
-  );
+  expect(context.draft!.notice).toBe("输入已变化，开始时会在采集前检查新输入。");
 });
 it("still blocks preview when the preflight read reports newer working input", async () => {
   const test = mount();
@@ -249,7 +245,7 @@ it("still blocks preview when the preflight read reports newer working input", a
 it("preserves a new parameter selection and target when an earlier setup resolution finishes unchanged", async () => {
   const test = mount();
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "Recheck device connections" }));
+  fireEvent.click(screen.getByRole("button", { name: "重新检查设备连接" }));
   await waitFor(() =>
     expect(test.fetcher.mock.calls.some(([r]) => r.url.includes("/setup/resolutions/"))).toBe(true),
   );

@@ -28,9 +28,9 @@ export function ExperimentPicker({
     <div className="space-y-3">
       <ActionRow>
         <Field className="min-w-0 flex-1 basis-64">
-          Experiment
+          实验类型
           <Select
-            aria-label="Experiment"
+            aria-label="实验类型"
             disabled={disabled}
             value={selectedId}
             onChange={(event) => {
@@ -54,17 +54,17 @@ export function ExperimentPicker({
           aria-controls={browserId}
           onClick={() => setBrowsing(!browsing)}
         >
-          {browsing ? "Close experiment browser" : "Browse experiments"}
+          {browsing ? "关闭实验浏览" : "浏览实验"}
         </Button>
       </ActionRow>
       {browsing && (
         <section
           id={browserId}
-          aria-label="Browse experiments"
+          aria-label="浏览实验"
           className="rounded border border-line p-3 space-y-3"
         >
           <Field>
-            Search experiments
+            搜索实验
             <Input
               type="search"
               value={query}
@@ -77,7 +77,7 @@ export function ExperimentPicker({
             {matches.length} of {entries.length} experiments. Browsing keeps your current
             preparation.
           </Notice>
-          {matches.length === 0 && <p>No matching experiments. Try another name or description.</p>}
+          {matches.length === 0 && <p>没有匹配的实验，请尝试其他名称或描述。</p>}
           <ul className="grid gap-3 md:grid-cols-2 max-h-96 overflow-y-auto">
             {matches.map((entry) => (
               <li key={entry.id} className="rounded border border-line p-3 space-y-2">
@@ -90,7 +90,7 @@ export function ExperimentPicker({
                   aria-label={`Prepare ${entry.title}`}
                   onClick={() => onSelect(entry)}
                 >
-                  {entry.id === selectedId ? "Selected" : "Prepare this experiment"}
+                  {entry.id === selectedId ? "已选择" : "准备此实验"}
                 </Button>
               </li>
             ))}

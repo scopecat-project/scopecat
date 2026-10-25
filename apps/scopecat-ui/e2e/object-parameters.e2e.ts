@@ -88,7 +88,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await page.setViewportSize({ width: 1680, height: 1100 });
     await page.goto(`${url}/?sample=object-chip#samples`);
     await page.getByRole("button", { name: "Choose working parameter context" }).click();
-    await page.getByLabel("Parameter branch", { exact: true }).fill("browser");
+    await page.getByLabel("参数分支", { exact: true }).fill("browser");
     await page.getByLabel("Setup for capability context").selectOption("browser-bench-a");
     await page
       .getByRole("combobox", { name: "Measurement subject", exact: true })
@@ -146,10 +146,8 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
         exact: true,
       })
       .click();
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await expect(page.getByLabel("Experiment setup", { exact: true })).toHaveValue(
-      "browser-bench-a",
-    );
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
+    await expect(page.getByLabel("实验配置", { exact: true })).toHaveValue("browser-bench-a");
     await expect(page.getByLabel("Selected registered target")).toContainText(
       "Registered target object-target, revision 1",
     );

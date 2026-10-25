@@ -37,10 +37,10 @@ it("searches descriptions without changing selection, then explicitly selects an
   render(
     <ExperimentPicker entries={entries} selectedId="signal" disabled={false} onSelect={onSelect} />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Browse experiments" }));
+  fireEvent.click(screen.getByRole("button", { name: "浏览实验" }));
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "CORRECTION retained" } });
   expect(screen.queryByRole("button", { name: "Prepare Signal" })).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Experiment")).toHaveValue("signal");
+  expect(screen.getByLabelText("实验类型")).toHaveValue("signal");
   expect(onSelect).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Prepare Offset" }));
   expect(onSelect).toHaveBeenCalledExactlyOnceWith(entries[1]);
@@ -56,11 +56,11 @@ it("keeps an unavailable selection and handles an empty search without replacing
       onSelect={onSelect}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Browse experiments" }));
+  fireEvent.click(screen.getByRole("button", { name: "浏览实验" }));
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "no such experiment" } });
-  expect(screen.getByText(/No matching experiments/)).toBeVisible();
-  expect(screen.getByLabelText("Experiment")).toHaveValue("removed");
-  fireEvent.click(screen.getByRole("button", { name: "Close experiment browser" }));
+  expect(screen.getByText(/没有匹配的实验/)).toBeVisible();
+  expect(screen.getByLabelText("实验类型")).toHaveValue("removed");
+  fireEvent.click(screen.getByRole("button", { name: "关闭实验浏览" }));
   expect(onSelect).not.toHaveBeenCalled();
 });
 
@@ -69,10 +69,10 @@ it("prevents choosing another entry when the parent disallows selection", () => 
   const view = render(
     <ExperimentPicker entries={entries} selectedId="signal" disabled={false} onSelect={onSelect} />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Browse experiments" }));
+  fireEvent.click(screen.getByRole("button", { name: "浏览实验" }));
   view.rerender(
     <ExperimentPicker entries={entries} selectedId="signal" disabled onSelect={onSelect} />,
   );
   expect(screen.getByRole("button", { name: "Prepare Offset" })).toBeDisabled();
-  expect(screen.getByLabelText("Experiment")).toBeDisabled();
+  expect(screen.getByLabelText("实验类型")).toBeDisabled();
 });

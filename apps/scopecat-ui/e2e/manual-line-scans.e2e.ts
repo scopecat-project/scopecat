@@ -71,7 +71,7 @@ for (const width of [1280, 390]) {
           })
           .click();
         await expect(page.getByText(`Physical line: ${label}`, { exact: false })).toBeVisible();
-        await page.locator('input[aria-label="Operator"]').fill("measurement-operator");
+        await page.locator('input[aria-label="操作人"]').fill("measurement-operator");
         if (index > 0) await page.getByLabel("Amplitude", { exact: true }).fill("0.08");
         const submitted = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/submit"),

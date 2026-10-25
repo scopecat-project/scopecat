@@ -56,34 +56,30 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
-    await expect(page.locator('input[aria-label="Operator"]')).toHaveValue("Browser operator");
+    await expect(page.locator('input[aria-label="操作人"]')).toHaveValue("Browser operator");
     let previewRequests = 0;
     page.on("request", (request) => {
       if (request.url().endsWith("/experiment-launcher/preview")) previewRequests += 1;
     });
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
-    await page.getByRole("button", { name: "Recheck device connections", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Recheck device connections", exact: true }),
-    ).toBeEnabled();
+    await page.getByRole("button", { name: "重新检查设备连接", exact: true }).click();
+    await expect(page.getByRole("button", { name: "重新检查设备连接", exact: true })).toBeEnabled();
     expect(previewRequests).toBe(0);
-    await page.getByRole("button", { name: "Browse experiments", exact: true }).click();
-    await page.getByRole("searchbox", { name: "Search experiments" }).fill("synthetic resonance");
+    await page.getByRole("button", { name: "浏览实验", exact: true }).click();
+    await page.getByRole("searchbox", { name: "搜索实验" }).fill("synthetic resonance");
     await expect(page.getByRole("button", { name: "Prepare Exploratory signal" })).toBeDisabled();
-    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("signal");
+    await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("signal");
     await page.screenshot({ path: testInfo.outputPath("browse-experiments.png"), fullPage: true });
-    await page
-      .getByRole("searchbox", { name: "Search experiments" })
-      .fill("no matching experiment");
-    await expect(page.getByText(/No matching experiments/)).toBeVisible();
+    await page.getByRole("searchbox", { name: "搜索实验" }).fill("no matching experiment");
+    await expect(page.getByText(/没有匹配的实验/)).toBeVisible();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("1");
-    await page.getByRole("button", { name: "Close experiment browser" }).click();
+    await page.getByRole("button", { name: "关闭实验浏览" }).click();
     await expect(
       page.getByRole("region", { name: "Selected experiment", exact: true }),
     ).not.toContainText("does not publish parameter changes");
-    await expect(page.getByRole("region", { name: "Parameter source", exact: true })).toContainText(
+    await expect(page.getByRole("region", { name: "参数来源", exact: true })).toContainText(
       "no overrides",
     );
     await expect(page.getByRole("region", { name: "本次 run 的输入", exact: true })).toContainText(
@@ -124,7 +120,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
       await expect(page.getByText(/Acquisition has not been submitted/)).toBeVisible();
       if (action === "cancel") {
         await page.screenshot({ path: testInfo.outputPath("preparing-start.png") });
-        await page.getByRole("button", { name: "Cancel preparation" }).click();
+        await page.getByRole("button", { name: "取消准备" }).click();
       } else if (action === "edit") {
         await page.getByLabel("Gain", { exact: true }).fill("2");
       } else {
@@ -136,14 +132,14 @@ test("Start prepares internally while cancelled and edited preparations never ac
       if (action === "navigate")
         await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
       await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
-      await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
       expect(await runs()).toHaveLength(0);
     }
     await page.getByRole("button", { name: "预览", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     expect(await runs()).toHaveLength(0);
     await page.getByLabel("Gain", { exact: true }).fill("3");
-    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
     await page.getByLabel("Frequency source").selectOption("range");
     await page.getByLabel("Frequency start").fill("4.8");
     await page.getByLabel("Frequency stop").fill("4.9");
@@ -204,7 +200,7 @@ test("Start prepares internally while cancelled and edited preparations never ac
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");
     await page.getByLabel("Gain", { exact: true }).fill("4");
     await page.getByRole("button", { name: "预览", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "准备另一次采集", exact: true }).click();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("4");
     await expect(page.getByLabel("Frequency points")).toHaveValue("2");

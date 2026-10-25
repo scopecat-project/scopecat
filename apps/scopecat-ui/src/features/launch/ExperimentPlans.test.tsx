@@ -288,15 +288,15 @@ it("opening another plan resets the save name, keeps current actor and preserves
     expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key"),
   );
   fireEvent.click(screen.getByText("Open first"));
-  await waitFor(() => expect(screen.getByLabelText("Plan name")).toHaveValue("First plan"));
-  fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Unsaved name" } });
+  await waitFor(() => expect(screen.getByLabelText("计划名称")).toHaveValue("First plan"));
+  fireEvent.change(screen.getByLabelText("计划名称"), { target: { value: "Unsaved name" } });
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
-      "Experiment input saved in application data.",
+      "实验输入已保存到应用数据。",
     ),
   );
   fireEvent.click(screen.getByText("Open second"));
-  await waitFor(() => expect(screen.getByLabelText("Plan name")).toHaveValue("Second plan"));
+  await waitFor(() => expect(screen.getByLabelText("计划名称")).toHaveValue("Second plan"));
   expect(screen.getByLabelText("Current operator")).toHaveTextContent("operator");
   expect(screen.getByLabelText("Original attempt")).toHaveTextContent("unknown:original-key");
 });
@@ -316,7 +316,7 @@ it("a slow older open cannot overwrite a later plan or a new edit", async () => 
   setup(true);
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
-      "Experiment input saved in application data.",
+      "实验输入已保存到应用数据。",
     ),
   );
   await screen.findByText("Open First plan r1");
@@ -482,10 +482,10 @@ it("preserves a registered target through reopening, preview, submission and pla
   expect(await screen.findByLabelText("Selected registered target")).toHaveTextContent(
     "revision 3",
   );
-  expect(screen.getByLabelText("Sample ID")).toBeDisabled();
+  expect(screen.getByLabelText("样品 ID")).toBeDisabled();
   await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "预览" }));
-  await screen.findByText("Preview ready");
+  await screen.findByText("预览就绪");
   const start = screen.getByRole("button", { name: "开始采集" });
   await waitFor(() => expect(start).toBeEnabled());
   fireEvent.click(start);
@@ -504,7 +504,7 @@ it("preserves a registered target through reopening, preview, submission and pla
   expect(submit.reviewed).toEqual(reviewed);
   expect(submit).not.toHaveProperty("sample");
   expect(submit).not.toHaveProperty("config_source");
-  fireEvent.click(screen.getByRole("button", { name: "Save new revision" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存新 revision" }));
   await waitFor(() =>
     expect(posted.some((item) => item.path.endsWith("/experiment-plans"))).toBe(true),
   );
@@ -577,7 +577,7 @@ it("explicit next-line preparation resolves only its same-list original receipt 
   );
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
-      "Experiment input saved in application data.",
+      "实验输入已保存到应用数据。",
     ),
   );
   fireEvent.click(screen.getByText("Prepare next line"));
@@ -620,7 +620,7 @@ it("line preparation cannot dismiss an unknown ordinary original submission", as
   );
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
-      "Experiment input saved in application data.",
+      "实验输入已保存到应用数据。",
     ),
   );
   await act(async () => {
@@ -655,7 +655,7 @@ it("a late line receipt lookup cannot discard an original attempt after a draft 
   );
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
-      "Experiment input saved in application data.",
+      "实验输入已保存到应用数据。",
     ),
   );
   fireEvent.click(screen.getByText("Prepare next line"));

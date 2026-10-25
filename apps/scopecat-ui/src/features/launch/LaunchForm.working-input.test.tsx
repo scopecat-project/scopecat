@@ -99,10 +99,10 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
   expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
   await screen.findByText(/The working table has newer saved edits/);
   expect(preview).toBeDisabled();
-  expect(preview).toHaveAccessibleDescription(/newer saved edits.*Use current working inputs/);
+  expect(preview).toHaveAccessibleDescription(/newer saved edits.*使用当前工作输入/);
   expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   expect(fetcher.mock.calls.some(([request]) => request.url.endsWith("/freeze"))).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Use current working inputs" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用当前工作输入" }));
   await screen.findByText(/Working inputs · revision 4/);
   expect(preview).toBeEnabled();
   expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
@@ -176,15 +176,13 @@ it("waits for recovered input hydration before accepting review", async () => {
     finish = resolve;
   });
   mount(async () => Response.json(source), hydration, true);
-  const review = await screen.findByRole("button", { name: "Confirm reviewed input" });
+  const review = await screen.findByRole("button", { name: "确认已核实输入" });
   expect(review).toBeDisabled();
   fireEvent.click(review);
-  expect(screen.getByRole("region", { name: "Review recovered experiment" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "核实恢复的实验" })).toBeVisible();
   await act(async () => finish());
   await waitFor(() => expect(review).toBeEnabled());
   fireEvent.click(review);
-  await waitFor(() =>
-    expect(screen.queryByRole("region", { name: "Review recovered experiment" })).toBeNull(),
-  );
+  await waitFor(() => expect(screen.queryByRole("region", { name: "核实恢复的实验" })).toBeNull());
   await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
 });

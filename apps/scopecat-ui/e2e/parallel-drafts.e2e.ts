@@ -21,9 +21,7 @@ async function nameDraft(page: Page, name: string) {
 }
 
 async function saved(page: Page) {
-  await expect(
-    page.getByText("Experiment input saved in application data.", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "复制为新草稿", exact: true })).toBeEnabled();
 }
 
@@ -135,7 +133,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
     await nameDraft(page, "A");
     await page.getByLabel("Gain", { exact: true }).fill("1");
@@ -145,7 +143,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByLabel("Frequency points").fill("2");
     await saved(page);
     await expect(
-      page.getByText("Author code refreshed.", {
+      page.getByText("作者代码已刷新。", {
         exact: true,
       }),
     ).toBeVisible();
@@ -301,7 +299,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     );
     await expect(reopened.getByLabel("Gain", { exact: true })).toHaveValue("4");
     await expect(
-      reopened.getByRole("button", { name: "Confirm reviewed input", exact: true }),
+      reopened.getByRole("button", { name: "确认已核实输入", exact: true }),
     ).toBeVisible();
     await reopened.screenshot({ path: testInfo.outputPath("saved-draft-c-link.png") });
     await reopened.close();
@@ -380,7 +378,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
       .getByLabel("取消原因", { exact: true })
       .fill("Stop A after its current synthetic point");
     await inspection.getByRole("button", { name: "当前步骤结束后停止", exact: true }).click();
-    await expect(inspection.getByText(/not a completed stop/)).toBeVisible();
+    await expect(inspection.getByText(/停止尚未完成/)).toBeVisible();
     await expect(monitor.getByTestId("run-status")).toHaveText("执行中");
     await page.getByRole("button", { name: "准备", exact: true }).click();
     await expect(gain).toHaveValue("4");

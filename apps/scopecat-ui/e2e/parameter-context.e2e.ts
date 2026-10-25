@@ -68,8 +68,8 @@ async function saveVersion(page: Page, name: string) {
 
 async function launchVersion(page: Page) {
   await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
-  await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-  await page.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+  await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
+  await page.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
 }
 
 async function acquire(page: Page): Promise<string> {
@@ -153,10 +153,10 @@ for (const scoped of [false, true]) {
         await page.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
         await saveVersion(page, name);
         await launchVersion(page);
-        await page.getByLabel("Sample ID", { exact: true }).fill(`context-${sample}`);
+        await page.getByLabel("样品 ID", { exact: true }).fill(`context-${sample}`);
         if (scoped) {
           const choices = page.getByRole("button", {
-            name: /^(Browse samples, batches and collections|Hide context choices)$/,
+            name: /^(浏览样品、批次与记录集|收起上下文选择)$/,
           });
           if ((await choices.getAttribute("aria-expanded")) === "false") await choices.click();
           await expect(choices).toHaveAttribute("aria-expanded", "true");
@@ -172,7 +172,7 @@ for (const scoped of [false, true]) {
           await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
           await page.getByRole("button", { name: "准备新的 run（独立采集）", exact: true }).click();
           await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
-          await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+          await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
         }
         const previewing = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/preview"),
@@ -244,7 +244,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await saveVersion(page, "gui-optional-quality");
     await launchVersion(page);
     await page.getByRole("button", { name: "预览", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     const run = await acquire(page);
     uv([
       "python",

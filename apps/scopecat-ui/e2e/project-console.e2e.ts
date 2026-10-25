@@ -751,8 +751,8 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       await b
         .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
         .click();
-      await b.getByLabel("Experiment", { exact: true }).selectOption("signal");
-      await b.getByLabel("Experiment setup", { exact: true }).selectOption("starter-bench");
+      await b.getByLabel("实验类型", { exact: true }).selectOption("signal");
+      await b.getByLabel("实验配置", { exact: true }).selectOption("starter-bench");
       // Start may prepare internally; merely editing or previewing must not acquire.
       await expect(b.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
       expect(submissions).toEqual([]);

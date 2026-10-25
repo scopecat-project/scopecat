@@ -75,7 +75,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
-    await page.getByLabel("Experiment setup", { exact: true }).selectOption("loop-bench");
+    await page.getByLabel("实验配置", { exact: true }).selectOption("loop-bench");
     await page.getByLabel("Position", { exact: true }).fill("0.5");
     const start = page.getByRole("button", { name: "开始采集", exact: true });
     await expect(start).toBeEnabled();

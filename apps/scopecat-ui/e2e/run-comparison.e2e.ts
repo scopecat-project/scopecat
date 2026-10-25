@@ -144,7 +144,7 @@ test("compares retained signals, saves independent results and starts edited sug
       (value) =>
         value.request().method() === "POST" && value.url().endsWith("/author-preparations"),
     );
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     expect((await refreshed).status()).toBe(200);
     await expect(
       page.getByRole("status").filter({ hasText: "Author code refreshed" }),
@@ -212,7 +212,7 @@ test("compares retained signals, saves independent results and starts edited sug
     await expect(page.getByText("独立判断已记录，不代表任务已获批准。")).toBeVisible();
     await page.locator("aside button").filter({ hasText: candidate.analysis_id }).click();
     await action("将建议输入导入准备");
-    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ui_signal.signal");
+    await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("ui_signal.signal");
     expect(
       Math.abs(Number(await page.getByLabel("Frequency", { exact: true }).inputValue()) - 4.8),
     ).toBeLessThan(0.02);
@@ -222,7 +222,7 @@ test("compares retained signals, saves independent results and starts edited sug
     const retained = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
     expect((await retained.json()).items).toHaveLength(2);
     await page.getByLabel("Frequency", { exact: true }).fill("4.87");
-    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("synthetic-reviewer");
+    await page.getByRole("textbox", { name: "操作人", exact: true }).fill("synthetic-reviewer");
     let submissions = 0;
     let procedure = "";
     await page.route("**/experiment-launcher/submit", async (route) => {

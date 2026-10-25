@@ -95,14 +95,14 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await expect(add).toBeDisabled();
         }
         if (route === "launch") {
-          await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible({
+          await expect(page.getByLabel("实验类型", { exact: true })).toBeVisible({
             timeout: 60_000,
           });
           const channels = page.getByRole("listbox", { name: "Review channels", exact: true });
           await expect(channels).toBeVisible();
           expect((await channels.boundingBox())!.height).toBeGreaterThanOrEqual(128);
           await expect(channels).toHaveAttribute("size", "5");
-          const review = page.getByRole("button", { name: "Confirm reviewed input", exact: true });
+          const review = page.getByRole("button", { name: "确认已核实输入", exact: true });
           if (await review.isVisible()) await review.click();
           await expect(channels).toBeEnabled();
           await channels.selectOption(["alpha", "gamma"]);

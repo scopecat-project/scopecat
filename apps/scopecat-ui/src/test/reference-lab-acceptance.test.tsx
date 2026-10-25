@@ -115,16 +115,16 @@ describe("shared reference-lab acceptance", () => {
       </QueryClientProvider>,
     );
     await screen.findByRole("option", { name: "Temperature diagnostic" });
-    fireEvent.change(screen.getByLabelText("Experiment"), {
+    fireEvent.change(screen.getByLabelText("实验类型"), {
       target: { value: "reference_lab.temperature_diagnostic" },
     });
     await waitFor(() => expect(screen.getByRole("button", { name: "预览" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "预览" }));
-    await screen.findByText("Preview ready");
+    await screen.findByText("预览就绪");
     expect(
       screen.queryByText("This task does not publish parameter changes."),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Estimates and planned measurements"));
+    fireEvent.click(screen.getByText("估算与计划测量"));
     expect(screen.getAllByText("Retained (planned dataset)")).toHaveLength(2);
     expect(screen.getByText("Unknown (s)")).toBeVisible();
     expect(screen.getByText(/1\/64 displayed points; 1\/1 selected points/)).toBeVisible();
@@ -180,7 +180,7 @@ describe("shared reference-lab acceptance", () => {
         </LaunchDraftProvider>
       </QueryClientProvider>,
     );
-    fireEvent.change(await screen.findByLabelText("Experiment"), {
+    fireEvent.change(await screen.findByLabelText("实验类型"), {
       target: { value: "ui_signal.signal" },
     });
     expect(screen.getByText(/Configuration-owned/)).toHaveTextContent("signal[signal]");
