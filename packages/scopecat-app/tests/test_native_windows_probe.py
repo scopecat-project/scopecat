@@ -1,5 +1,6 @@
 """Probe failure handling and real SDK gate contracts; not native UI evidence."""
 
+import ast
 import json
 import os
 import subprocess
@@ -22,6 +23,164 @@ spec = spec_from_file_location("verify_native_windows", SCRIPT)
 assert spec is not None and spec.loader is not None
 probe = module_from_spec(spec)
 spec.loader.exec_module(probe)
+
+
+@pytest.mark.parametrize("business_status", ["passed", "failed"])
+@pytest.mark.parametrize("exit_fails", [False, True])
+def test_probe_persists_business_result_before_normal_exit(
+    tmp_path, business_status, exit_fails
+):
+    output = tmp_path / "result.json"
+    evidence = {"status": business_status, "error": "original business evidence"}
+
+    def close():
+        saved = json.loads(output.read_text())
+        assert saved["business_status"] == business_status
+        assert saved["exit_status"] == "pending"
+        if exit_fails:
+            raise ValueError("save preflight refused")
+
+    if exit_fails:
+        with pytest.raises(ValueError, match="save preflight refused"):
+            probe.finish_probe(evidence, output, close)
+    else:
+        probe.finish_probe(evidence, output, close)
+    saved = json.loads(output.read_text())
+    assert saved["error"] == "original business evidence"
+    assert saved["business_status"] == business_status
+    assert saved["exit_status"] == ("failed" if exit_fails else "passed")
+    assert saved["status"] == ("failed" if exit_fails else business_status)
+
+
+@pytest.mark.parametrize("refuse", [False, True])
+def test_probe_normal_exit_uses_preflight_and_joins_request_before_destroy(
+    tmp_path: Path, refuse: bool
+):
+    import threading
+    from contextlib import contextmanager
+
+    from scopecat_app.desktop_session import DesktopSession
+
+    session = DesktopSession(ApplicationRuntime(tmp_path), threading.Event())
+    events = []
+
+    @contextmanager
+    def preflight():
+        events.append("preflight")
+        if refuse:
+            raise ValueError("input not saved")
+        yield
+        events.append("saved")
+
+    session.close_preflight = preflight
+
+    def destroy():
+        assert session.closing.is_set()
+        assert session._exit_thread is not None
+        assert not session._exit_thread.is_alive()
+        events.append("destroy")
+
+    if refuse:
+        with pytest.raises(ValueError, match="input not saved"):
+            probe.close_probe_windows(session, SimpleNamespace(destroy=destroy))
+        assert events == ["preflight"]
+        assert not session.closing.is_set()
+    else:
+        probe.close_probe_windows(session, SimpleNamespace(destroy=destroy))
+        assert events == ["preflight", "saved", "destroy"]
+
+
+def reset_host_function(name: str) -> ast.FunctionDef:
+    script = SCRIPT.with_name("verify_native_reset.py")
+    source = ast.parse(script.read_text())
+    host = next(
+        ast.literal_eval(node.value)
+        for node in source.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "HOST" for t in node.targets)
+    )
+    return next(
+        node
+        for node in ast.parse(host).body
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    )
+
+
+@pytest.mark.parametrize(
+    ("connection", "loading", "expected"),
+    [
+        (None, False, False),
+        ("Connecting", False, False),
+        ("Disconnected", False, False),
+        ("Ready", True, False),
+        ("Ready", False, True),
+    ],
+)
+def test_reset_readiness_requires_health_completion(connection, loading, expected):
+    function = reset_host_function("workspace_ready")
+    code = compile(ast.Module(body=[function], type_ignores=[]), "reset-ready", "exec")
+    scope = {}
+    exec(code, scope)  # noqa: S102 - repository-owned readiness predicate
+    window = SimpleNamespace(
+        evaluate_js=lambda _: {
+            "mounted": True,
+            "connection": connection,
+            "loading": loading,
+        }
+    )
+    assert bool(scope["workspace_ready"](window)) is expected
+
+
+@pytest.mark.parametrize("exit_fails", [False, True])
+def test_reset_exit_retains_business_result_before_wait_and_preflight(
+    tmp_path, exit_fails
+):
+    # Execute the actual generated observer's finally block without a native GUI.
+    import traceback
+
+    observer = reset_host_function("observe")
+    final = observer.body[-1]
+    assert isinstance(final, ast.Try)
+    body = final.finalbody
+    code = compile(ast.Module(body=body, type_ignores=[]), "reset-exit", "exec")
+    result = {"status": "failed", "error": "original business failure"}
+    output = tmp_path / "reset.json"
+    calls = []
+
+    def wait(check, label):
+        assert json.loads(output.read_text())["business_status"] == "failed"
+        assert check()
+        calls.append("ready")
+
+    def exit_application(background):
+        assert background is False
+        calls.append("exit")
+        if exit_fails:
+            raise ValueError("save rejected")
+
+    scope = {
+        "home": tmp_path,
+        "stage": "reset",
+        "result": result,
+        "json": json,
+        "traceback": traceback,
+        "wait": wait,
+        "workspace_ready": lambda _: True,
+        "window": SimpleNamespace(
+            evaluate_js=lambda _: True,
+            _js_api=SimpleNamespace(exit=exit_application),
+        ),
+    }
+    if exit_fails:
+        with pytest.raises(ValueError, match="save rejected"):
+            exec(code, scope)  # noqa: S102 - repository-owned probe block
+    else:
+        exec(code, scope)  # noqa: S102 - repository-owned probe block
+    saved = json.loads(output.read_text())
+    assert saved["error"] == "original business failure"
+    assert saved["business_status"] == saved["status"] == "failed"
+    assert saved["exit_status"] == ("failed" if exit_fails else "requested")
+    assert calls == ["ready", "exit"]
 
 
 def test_native_bootstrap_captures_failure_without_inherited_output(tmp_path: Path):

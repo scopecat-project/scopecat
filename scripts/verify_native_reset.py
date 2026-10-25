@@ -50,6 +50,22 @@ def wait(check, label):
         time.sleep(0.05)
 
 
+def workspace_ready(window):
+    state = window.evaluate_js(
+        "({mounted: Boolean(window.pywebview?.api && "
+        "document.querySelector('[aria-label=\"Refresh project data\"]')), "
+        "connection: document.querySelector('.workspace-top [role=status]')"
+        "?.textContent.trim(), loading: Boolean("
+        "document.querySelector('[aria-label=\"Refresh project data\"] .animate-spin')"
+        " || document.body.textContent.includes('Loading experiments…'))})"
+    )
+    return (
+        isinstance(state, dict) and state.get("mounted")
+        and state.get("connection") not in (None, "", "Connecting", "Disconnected")
+        and not state.get("loading")
+    )
+
+
 if stage == "reset":
     paths.state.mkdir(parents=True)
     prepare()
@@ -201,13 +217,49 @@ def observe():
         result["status"] = "failed"
         result["error"] = traceback.format_exc()
     finally:
-        (home / (stage + ".json")).write_text(json.dumps(result, indent=2))
-        if window is not None:
+        output = home / (stage + ".json")
+        result["business_status"] = result["status"]
+        result["exit_status"] = "pending"
+        output.write_text(json.dumps(result, indent=2))
+        try:
+            if window is None:
+                raise RuntimeError("No native window available for normal exit")
+            # An HTTP navigation alone does not mean React and its save/close
+            # listener are mounted. Wait for the real workspace to finish loading.
+            wait(
+                lambda: workspace_ready(window),
+                "workspace ready for saved-input exit preflight",
+            )
+            result["exit_page"] = window.evaluate_js(
+                "({readyState: document.readyState, text: document.body.innerText})"
+            )
+            output.write_text(json.dumps(result, indent=2))
             window._js_api.exit(False)
+            result["exit_status"] = "requested"
+        except BaseException:
+            result["status"] = "failed"
+            result["exit_status"] = "failed"
+            result["exit_error"] = traceback.format_exc()
+            try:
+                manager = window._js_api._session.close_preflight.__self__
+                result["close_views"] = [
+                    {"status": view.close_status,
+                     "reply_received": view.close_ready.is_set(),
+                     "url": view.window.get_current_url()}
+                    for view in manager._views
+                ]
+            except BaseException:
+                result["close_diagnostic_error"] = traceback.format_exc()
+            raise
+        finally:
+            output.write_text(json.dumps(result, indent=2))
 
 
 threading.Thread(target=observe, daemon=True).start()
 desktop.run(paths.state, prepare=prepare, prepare_reset=prepare)
+assert result.get("exit_status") == "requested", result
+result["exit_status"] = "passed"
+(home / (stage + ".json")).write_text(json.dumps(result, indent=2))
 assert result.get("status") == "passed", result
 """
 

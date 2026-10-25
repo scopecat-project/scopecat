@@ -55,17 +55,30 @@ def test_missing_supply_is_specific_and_early(repository, monkeypatch):
     assert not (repository / "toolchain").exists()
 
 
-@pytest.mark.parametrize("failure", [None, "download", "relocation", "variant"])
+@pytest.mark.parametrize(
+    "failure", [None, "download", "relocation", "variant", "target"]
+)
 def test_prepare_archives_clean_base_and_retains_supply(
     repository, monkeypatch, failure
 ):
     commands = []
     selected = {
         "key": "cpython-exact-test",
+        "implementation": "cpython",
+        "os": {"darwin": "macos", "win32": "windows"}.get(
+            toolchain.target_identity()["platform"],
+            toolchain.target_identity()["platform"],
+        ),
+        "arch": {"arm64": "aarch64", "amd64": "x86_64"}.get(
+            platform.machine().lower(), platform.machine().lower()
+        ),
+        "libc": "gnu" if os.name != "nt" and platform.system() == "Linux" else "none",
         "version": platform.python_version(),
         "variant": "freethreaded" if failure == "variant" else "default",
         "url": "https://example.invalid/20261013/exact-python.tar.gz",
     }
+    if failure == "target":
+        selected["arch"] = "wrong-architecture"
     relative = "python.exe" if os.name == "nt" else "bin/python3"
 
     def run(command, **_kwargs):
@@ -110,6 +123,7 @@ def test_prepare_archives_clean_base_and_retains_supply(
                     "download": "download failed.*source=",
                     "relocation": "relocation/identity",
                     "variant": "version/variant",
+                    "target": "changed target",
                 }[failure],
             ),
             toolchain.prepare(repository, output),
@@ -144,3 +158,22 @@ def test_prepare_archives_clean_base_and_retains_supply(
     with toolchain.prepare(repository, repository / "repaired") as repaired:
         assert repaired.read_bytes() == b"clean portable python"
     assert sum(command[1:3] == ["python", "install"] for command in commands) == 2
+
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_catalog_check_rejects_nonunique_supply_without_install(
+    repository, monkeypatch, count
+):
+    commands = []
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        assert command[1:3] == ["python", "list"]
+        return SimpleNamespace(stdout=json.dumps([{}] * count))
+
+    monkeypatch.setattr(toolchain.subprocess, "run", run)
+    with pytest.raises(
+        ValueError, match=f"expected one managed distribution, found {count}"
+    ):
+        toolchain.select_runtime(repository)
+    assert len(commands) == 1

@@ -48,9 +48,8 @@ def baseline(repository: Path) -> str:
     return version
 
 
-@contextmanager
-def _download(repository: Path, destination: Path) -> Generator[Path]:
-    """Use a clean managed base for both dependency preparation and the archive."""
+def select_runtime(repository: Path) -> dict[str, str]:
+    """Check the pinned catalog without downloading an interpreter."""
     version = baseline(repository)
     # Custom catalogs/mirrors would invalidate the recorded built-in source URL.
     for name in ("UV_PYTHON_INSTALL_MIRROR", "UV_PYTHON_DOWNLOADS_JSON_URL"):
@@ -99,6 +98,33 @@ def _download(repository: Path, destination: Path) -> Generator[Path]:
         raise ValueError(
             f"Portable Python supply changed version/variant: {selected['key']}"
         )
+    target = target_identity()
+    expected = {
+        "os": {"darwin": "macos", "win32": "windows"}.get(
+            target["platform"], target["platform"]
+        ),
+        "arch": {"arm64": "aarch64", "amd64": "x86_64"}.get(
+            target["machine"], target["machine"]
+        ),
+        "libc": (
+            {"glibc": "gnu", "musl": "musl"}.get(platform.libc_ver()[0], "unknown")
+            if target["platform"] == "linux"
+            else "none"
+        ),
+        "implementation": "cpython",
+    }
+    if any(selected.get(name) != value for name, value in expected.items()):
+        raise ValueError(f"Portable Python supply changed target: {selected['key']}")
+    return selected
+
+
+@contextmanager
+def _download(repository: Path, destination: Path) -> Generator[Path]:
+    """Use a clean managed base for both dependency preparation and the archive."""
+    selected = select_runtime(repository)
+    version = baseline(repository)
+    uv = find_uv_bin()
+    package = distribution("uv")
     destination.mkdir(parents=True, exist_ok=False)
     with tempfile.TemporaryDirectory(
         prefix=".scopecat-runtime-", dir=destination.parent

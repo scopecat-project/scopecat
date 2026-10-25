@@ -22,6 +22,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
@@ -49,6 +50,9 @@ from scopecat_server.validation_process import (  # noqa: TID251 - acceptance ow
 if TYPE_CHECKING:
     import webview
     from webview.event import Event
+
+    from scopecat_app.desktop import DesktopWindows
+    from scopecat_app.desktop_session import DesktopSession
 
 
 # The same first-ingest gate as the real browser journey. Calls delegate to the
@@ -253,6 +257,19 @@ def click_text(window: webview.Window, label: str) -> None:
     )
 
 
+def click_navigation(window: webview.Window, label: str) -> None:
+    assert (
+        evaluate(
+            window,
+            "(() => { const element = document.querySelector("
+            + json.dumps(f'button[aria-label="{label}"]')
+            + "); if (!element || element.disabled) return false; "
+            "element.click(); return true; })()",
+        )
+        is True
+    )
+
+
 class WindowDiagnostics(logging.Handler):
     """Best-effort first-window evidence; never wait for JS or the GUI thread.
 
@@ -431,6 +448,34 @@ def browser_processes() -> dict[str, object]:
     return {"processes": result}
 
 
+def close_probe_windows(session: DesktopSession, windows: DesktopWindows) -> None:
+    # Match the application's request/completion split: finish_exit joins the
+    # requesting thread before it destroys close-certified views.
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        worker.submit(session.exit).result()
+    if not session.finish_exit(windows.destroy):
+        raise RuntimeError("Native close certificate was invalidated")
+
+
+def finish_probe(
+    evidence: dict[str, object], output: Path, close: Callable[[], None]
+) -> None:
+    evidence["business_status"] = evidence["status"]
+    evidence["exit_status"] = "pending"
+    output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    try:
+        close()
+    except Exception:
+        evidence["status"] = "failed"
+        evidence["exit_status"] = "failed"
+        evidence["exit_error"] = traceback.format_exc()
+        raise
+    else:
+        evidence["exit_status"] = "passed"
+    finally:
+        output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+
+
 def probe(home: Path) -> None:
     require_hosted_runner(home)
     import webview
@@ -572,7 +617,7 @@ def probe(home: Path) -> None:
                         + json.dumps(reviewer_selector)
                         + ")?.value"
                     )
-                    click_text(first.window, "Decisions")
+                    click_navigation(first.window, "决策 / Decisions")
                     wait_for(
                         lambda: evaluate(first.window, reviewer_value) == "",
                         "Real waiting decision form did not render",
@@ -604,7 +649,7 @@ def probe(home: Path) -> None:
                         + json.dumps(marker_key)
                         + ", 'before-secondary')",
                     )
-                    click_text(first.window, "Runs")
+                    click_navigation(first.window, "运行详情 / Runs")
                     wait_for(
                         lambda: (
                             run_id in text_content(first.window, "run-detail-header")
@@ -649,12 +694,12 @@ def probe(home: Path) -> None:
                         "application_draft": draft_read(),
                         "marker": evaluate(second.window, marker_read),
                     }
-                    click_text(first.window, "Decisions")
+                    click_navigation(first.window, "决策 / Decisions")
                     wait_for(
                         lambda: evaluate(first.window, reviewer_value) == reviewer,
                         "Real decision draft did not restore after secondary creation",
                     )
-                    click_text(first.window, "Runs")
+                    click_navigation(first.window, "运行详情 / Runs")
                     wait_for(
                         lambda: (
                             run_id in text_content(first.window, "run-detail-header")
@@ -801,8 +846,11 @@ def probe(home: Path) -> None:
                 diagnostics.record(
                     "before_destroy.result", status=evidence["status"], checks=checks
                 )
-                closing.set()
-                windows.destroy()
+                finish_probe(
+                    evidence,
+                    reports / "result.json",
+                    lambda: close_probe_windows(session, windows),
+                )
 
         # Match desktop.main defaults; never patch the backend/store to pass.
         webview.start(exercise)
