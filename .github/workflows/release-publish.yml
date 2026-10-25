@@ -10,7 +10,7 @@ on:
 
 env:
   # renovate: datasource=github-releases depName=knope-dev/knope extractVersion=^knope/v(?<version>.*)$
-  KNOPE_VERSION: "0.23.1"
+  KNOPE_VERSION: "0.23.2"
 
 permissions:
   contents: read
