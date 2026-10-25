@@ -176,7 +176,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
       await monitor.evaluate("window.scrollTo(0, 0)");
       await expect(monitor.getByRole("region", { name: "run 进度" })).toBeInViewport();
       await expect(
-        monitor.getByRole("button", { name: "Focus chart", exact: true }),
+        monitor.getByRole("button", { name: "聚焦曲线", exact: true }),
       ).toBeInViewport();
       const chart = monitor.getByTestId("measurement-charts").locator("svg").first();
       await expect(chart).toBeInViewport();
