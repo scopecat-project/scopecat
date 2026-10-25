@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from scopecat.daemon.client import DaemonClient
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
 
@@ -16,7 +18,9 @@ SEED = ROOT / "apps/scopecat-ui/e2e/fixtures/controlled_experiment.py"
 
 def test_browser_seed_gates_admission_execution_and_first_measurement(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("SCOPECAT_DAEMON_URL", raising=False)
     project = initialize_project(tmp_path / "project")
     endpoint = start_project(project)
     try:
