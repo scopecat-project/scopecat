@@ -10,7 +10,7 @@ import { ClearData } from "../history/DataCleanup";
 import { ProcedureWorkerLog } from "./ProcedureWorkerLog";
 import { ComparisonLink } from "../analyses/ComparisonLink";
 import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useProcedureOperator } from "./use-procedure-operator";
 import { apiClient, apiData } from "../../api-client";
 import { ProcedureChildRun } from "./ProcedureChildRun";
 import { outputHref, procedurePhase, stateLabel } from "./procedure-operator";
@@ -26,19 +26,7 @@ export function ProcedureProgress({
   const [cancelReason, setCancelReason] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const progress = useInfiniteQuery({
-    queryKey: ["procedure-operator", procedureId],
-    initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam, signal }) =>
-      apiData(
-        apiClient.GET("/api/v1/procedures/{procedure_run_id}/operator", {
-          params: { path: { procedure_run_id: procedureId }, query: { cursor: pageParam } },
-          signal,
-        }),
-      ),
-    getNextPageParam: (page) => page.steps.next_cursor ?? undefined,
-    refetchInterval: 1000,
-  });
+  const progress = useProcedureOperator(procedureId);
   const view = progress.data?.pages[0];
   const run = view?.procedure;
   const workspaceId = view?.workspace_id;
@@ -104,22 +92,21 @@ export function ProcedureProgress({
     (run.resource_wait || (run.state === "ready" && !view?.dispatch.worker_running)),
   );
   return (
-    <section className="border border-accent/40 bg-panel-soft rounded-md p-4 space-y-3 break-words">
+    <section className="border border-accent/40 bg-panel-soft rounded-md p-3 space-y-2 break-words">
       <h3 className="font-semibold">Execution progress</h3>
-      <p className="text-xs text-text-dim">
-        Monitoring this submitted task. Editing another draft does not change its inputs. Closing
-        this view leaves background work running.
-      </p>
-      <ReturnToPreparation />
+      <p className="text-xs text-text-dim">Closing this view leaves background work running.</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p>{run?.definition.id ?? procedureId}</p>
+        <ReturnToPreparation />
+        <a
+          onClick={navigateLink}
+          className="underline"
+          href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#launch`)}
+        >
+          Reopen this procedure
+        </a>
+      </div>
       <PlanOrigin reference={run?.plan_ref} />
-      <p>{run?.definition.id ?? procedureId}</p>
-      <a
-        onClick={navigateLink}
-        className="underline"
-        href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#launch`)}
-      >
-        Reopen this procedure
-      </a>
       {progress.isPending && <p role="status">Loading retained procedure state…</p>}
       {progress.error && (
         <p role="alert">

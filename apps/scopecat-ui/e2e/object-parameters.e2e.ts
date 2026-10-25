@@ -123,9 +123,9 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
       path: narrowScreenshot,
       contentType: "image/png",
     });
-    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(page.getByLabel("signals[1].center", { exact: true })).toHaveValue("1e");
-    await page.getByRole("button", { name: "Samples", exact: true }).click();
+    await page.getByRole("button", { name: /Samples$/, exact: true }).click();
     await page
       .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
       .click();
@@ -178,7 +178,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     )!;
     await runLink.click();
     await expect(page).toHaveURL(/#runs$/);
-    await page.getByRole("button", { name: "Samples", exact: true }).click();
+    await page.getByRole("button", { name: /Samples$/, exact: true }).click();
     await page
       .getByRole("button", { name: /Object editor reference chip Available object-chip/ })
       .click();

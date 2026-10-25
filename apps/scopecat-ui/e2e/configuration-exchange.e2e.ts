@@ -59,7 +59,7 @@ with sc.open_project(root).connect() as lab:
     const receiverUrl = await start(receiver);
     started.push(receiver);
     await page.goto(`${senderUrl}/#config`);
-    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await page.getByRole("button", { name: "Export configuration…", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Parameter version", exact: true })
@@ -71,7 +71,7 @@ with sc.open_project(root).connect() as lab:
     const file = await (await downloading).path();
     expect(file).toBeTruthy();
     await page.goto(receiverUrl);
-    await page.getByRole("button", { name: "Configuration", exact: true }).click();
+    await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     const upload = page.getByLabel("Import configuration file");
     await upload.setInputFiles(file);
     await expect(page.getByText("Initial values included", { exact: false })).toBeVisible();

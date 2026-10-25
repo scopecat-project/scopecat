@@ -280,7 +280,7 @@ test("two workbench pages retain independent context and share collection number
       3,
     );
     await other.getByRole("link", { name: "Return to preparation", exact: true }).first().click();
-    await page.getByRole("button", { name: "Data", exact: true }).click();
+    await page.getByRole("button", { name: /Data$/, exact: true }).click();
     await page.getByLabel("Record collection filter", { exact: true }).selectOption(collection);
     await expect(
       page.getByRole("region", { name: "Data", exact: true }).getByTestId("run-address"),

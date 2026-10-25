@@ -26,7 +26,7 @@ from .desktop_session import DesktopSession
 def object_location(page_url: str, target: ApplicationOpenTarget) -> str:
     """Only the host selects an origin; callers provide identities, never URLs."""
     origin = urlsplit(page_url)
-    query = {"run": target.object_id}
+    query = {"run": target.object_id, "focus": "run"}
     section = "runs"
     if target.kind == "procedure":
         query = {"procedure": target.object_id}

@@ -32,6 +32,11 @@ it("compares selected receipt A with named draft B without requests or preparing
     checkSubmission: check,
   });
   render(<OriginalSubmission onOpen={vi.fn()} catalogReady />);
+  expect(screen.getByText(request.request_key)).not.toBeVisible();
+  fireEvent.click(screen.getByText("Submission source and request details"));
+  expect(screen.getByText(request.request_key)).toBeVisible();
+  fireEvent.click(screen.getByText("Submission source and request details"));
+  expect(screen.getByText(request.request_key)).not.toBeVisible();
   fireEvent.click(screen.getByText("Compare submitted request with current draft"));
   expect(screen.getByRole("columnheader", { name: "Current draft · Draft B" })).toBeVisible();
   expect(screen.getByText(/does not identify the draft originally submitted/)).toBeVisible();

@@ -96,7 +96,7 @@ it("filters retained runs and removes only their project association", async () 
   expect(screen.queryByRole("button", { name: "Remove run association" })).toBeNull();
   expect(screen.getByRole("link", { name: "Open result in new tab or window" })).toHaveAttribute(
     "href",
-    "/?run=run-1",
+    "/?run=run-1&focus=run#runs",
   );
   fireEvent.click(screen.getByText("Research project management"));
   fireEvent.click(await screen.findByRole("button", { name: "Remove run association" }));

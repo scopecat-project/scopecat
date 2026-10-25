@@ -14,7 +14,7 @@ export function SubmissionComparison({
   const [showUnchanged, setShowUnchanged] = useState(false);
   if (!draft)
     return (
-      <details className="rounded-md border border-line p-3">
+      <details className="border-t border-line pt-2">
         <summary className="cursor-pointer font-semibold">Submitted inputs</summary>
         <p className="my-2">Select a draft to compare with this submitted request.</p>
         <dl className="space-y-2">
@@ -36,7 +36,7 @@ export function SubmissionComparison({
     .filter((row) => showUnchanged || row.status !== "Same")
     .sort((a, b) => order[a.status] - order[b.status]);
   return (
-    <details className="rounded-md border border-line p-3">
+    <details className="border-t border-line pt-2">
       <summary className="cursor-pointer font-semibold">
         Compare submitted request with current draft
       </summary>

@@ -89,6 +89,11 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
 }, testInfo) => {
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
+  await page.setViewportSize({ width: 1266, height: 893 });
+  const captureWorkbench = async (name: string) => {
+    await page.evaluate("window.scrollTo(0, 0)");
+    await page.screenshot({ path: testInfo.outputPath(`${name}.png`) });
+  };
   const project = await mkdtemp(join(tmpdir(), "scopecat-parallel-drafts-"));
   const releasePath = join(project, "release-synthetic-point");
   let started = false;
@@ -138,16 +143,57 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByLabel("Frequency start").fill("4.8");
     await page.getByLabel("Frequency stop").fill("4.9");
     await page.getByLabel("Frequency points").fill("2");
+    await saved(page);
+    await expect(
+      page.getByText("Author code refreshed.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await captureWorkbench("editor-before-start");
+    await page.screenshot({ path: testInfo.outputPath("editor-ready-full.png"), fullPage: true });
+    await expect(page.getByLabel("Gain", { exact: true })).toBeInViewport();
+    await expect(page.getByLabel("Frequency start", { exact: true })).toBeInViewport();
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const current = page.getByRole("link", { name: /View current data:/ });
     await expect(current).toBeVisible();
+    await expect(page.getByText("Running · 1 completed points", { exact: true })).toBeVisible();
+    await captureWorkbench("monitor-selected-running");
+    await page.screenshot({
+      path: testInfo.outputPath("monitor-selected-running-full.png"),
+      fullPage: true,
+    });
     const monitorUrl = new URL((await current.getAttribute("href"))!, url);
     const runA = monitorUrl.searchParams.get("run")!;
     const procedureA = monitorUrl.searchParams.get("procedure")!;
     const monitor = await context.newPage();
+    monitorUrl.searchParams.set("focus", "run");
     await monitor.goto(monitorUrl.href);
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
     await expectRunIdentity(monitor, runA);
     await expect(monitor.getByTestId("run-status")).toHaveText("Running");
+    await monitor.getByRole("link", { name: "Return to preparation", exact: true }).click();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.setViewportSize({ width: 520, height: 800 });
+    await monitor.getByRole("button", { name: /Open navigation$/ }).click();
+    await expect(monitor.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
+    await monitor.goBack();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+    await expect(monitor.locator("#workspace-body")).toHaveJSProperty("inert", false);
+    await expect(monitor.getByRole("button", { name: /Navigation/ })).toBeFocused();
+    await monitor.screenshot({ path: testInfo.outputPath("focused-back-from-open-drawer.png") });
+    await monitor.goForward();
+    await expect(monitor.getByRole("dialog", { name: "Workspace navigation" })).toHaveCount(0);
+    await expect(monitor.locator("#workspace-body")).toHaveJSProperty("inert", false);
+    await monitor.setViewportSize({ width: 1266, height: 893 });
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.reload();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.goBack();
+    await expectRunIdentity(monitor, runA);
+    await monitor.getByRole("link", { name: "Compare retained runs", exact: true }).click();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.goBack();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(page.getByRole("region", { name: "Selected execution", exact: true })).toHaveCount(
@@ -191,6 +237,20 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     ).toEqual([0, 1]);
     await expectRunIdentity(monitor, runA);
 
+    await page.getByRole("button", { name: /Data$/, exact: true }).click();
+    await expect(page.getByRole("button", { name: /Data$/, exact: true })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
+    await expect(gain).toHaveValue("3");
+    await expect(gain).toBeFocused();
+    await page.getByRole("button", { name: /Collapse navigation$/ }).click();
+    await expect(page.locator("html")).toHaveClass(/navigation-compact/);
+    await expect(page.getByLabel("Decision attention")).toBeVisible();
+    await expect(page.getByLabel("Decision attention")).toHaveText("0 待处理");
+    await page.screenshot({ path: testInfo.outputPath("compact-sidebar-preserved-editor.png") });
+    await page.getByRole("button", { name: /Expand navigation$/ }).click();
     const switchStarted = performance.now();
     await selectDraft(page, draftB);
     await expect(gain).toHaveValue("2");
@@ -209,6 +269,12 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     const requestB = response.request().postDataJSON();
     expect(requestB.control_edits.gain).toEqual({ mode: "fixed", value: 2 });
     const procedureB = (await response.json()).procedure_id;
+    await expect(
+      page.getByRole("heading", { name: "Submission confirmed", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+    await expect(page.getByRole("button").filter({ hasText: procedureB })).toBeVisible();
+    await captureWorkbench("confirmed-submitted-work");
     const retainedBeforeEdit = (
       await (await page.request.get(`${url}/api/v1/launch-attempts`)).json()
     ).items.find(
@@ -262,6 +328,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await comparison.screenshot({ path: testInfo.outputPath("frozen-b-current-c-comparison.png") });
 
     await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+    await captureWorkbench("submitted-work");
     await page.getByRole("button").filter({ hasText: procedureB }).click();
     const inspection = page.getByRole("region", { name: "Submitted work inspection", exact: true });
     await expect(
@@ -328,6 +395,18 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(
       page.getByRole("combobox", { name: "Editable draft", exact: true }),
     ).toBeInViewport();
+    await page.getByRole("button", { name: /Open navigation$/ }).click();
+    await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("narrow-sidebar-drawer.png") });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: /Open navigation$/ })).toBeFocused();
+    await page.getByRole("button", { name: /Open navigation$/ }).click();
+    await page.setViewportSize({ width: 1266, height: 893 });
+    await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toHaveCount(0);
+    await expect(page.locator("#workspace-body")).toHaveJSProperty("inert", false);
+    await gain.focus();
+    await expect(gain).toBeFocused();
+    await page.setViewportSize({ width: 520, height: 800 });
     const narrowWidths = {
       viewport: page.viewportSize()!.width,
       document: await page.locator("html").evaluate((node) => node.scrollWidth),
@@ -339,6 +418,14 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     });
     await page.screenshot({ path: testInfo.outputPath("independent-draft-c.png") });
     await monitor.screenshot({ path: testInfo.outputPath("fixed-monitor-a.png") });
+    await page
+      .getByRole("region", { name: "Inputs for this run", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("narrow-fields.png") });
+    await page
+      .getByRole("region", { name: "Preview and start", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("narrow-actions.png") });
     await gain.focus();
     await gain.evaluate((node) =>
       (
@@ -362,6 +449,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
         (node as unknown as { selectionEnd: number }).selectionEnd,
       ]),
     ).toEqual([0, 1]);
+    await monitor.screenshot({ path: testInfo.outputPath("completed-monitor-a.png") });
     await testInfo.attach("parallel-draft-identities", {
       body: JSON.stringify({
         runA,

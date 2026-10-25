@@ -6,7 +6,6 @@ import {
   pageContent,
   classes,
   detailCard,
-  eyebrow,
   secondaryButton,
   workbenchTabs,
   workbenchTab,
@@ -189,7 +188,11 @@ export function LaunchWorkspace({
       : preparing || !procedureId
         ? "editor"
         : "monitor";
+  const lastFocusedRoute = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const route = JSON.stringify([procedureId, preparing, view]);
+    if (lastFocusedRoute.current === route) return;
+    lastFocusedRoute.current = route;
     if (view === "editor" && preparing) {
       preparation.current?.focus({ preventScroll: true });
       preparation.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
@@ -247,7 +250,7 @@ export function LaunchWorkspace({
     };
   }, [handoff, handoffTarget, handoffRetry]);
   return (
-    <section className={classes(pageContent, "max-w-6xl mx-auto")}>
+    <section className={classes(pageContent, "experiment-workspace")}>
       {handoffFailed && (
         <button
           type="button"
@@ -260,11 +263,7 @@ export function LaunchWorkspace({
         </button>
       )}
       <header>
-        <p className={eyebrow}>Experiment workbench</p>
         <h2 className={pageTitle}>Experiments</h2>
-        <p className="mt-2 text-sm text-text-dim">
-          Prepare an experiment, check its inputs, then start acquisition.
-        </p>
       </header>
       <nav aria-label="Experiment workspaces" className={workbenchTabs}>
         <button
@@ -345,19 +344,23 @@ export function LaunchWorkspace({
         ref={preparation}
         tabIndex={-1}
         aria-labelledby="experiment-preparation"
-        className={`${detailCard} space-y-4 scroll-mt-24`}
+        className={`${detailCard} experiment-preparation space-y-3 scroll-mt-24`}
       >
         <div>
-          <h3 id="experiment-preparation" className={sectionTitle}>
+          <h3 id="experiment-preparation" className="sr-only">
             Prepare an experiment
           </h3>
-          <p className="text-sm text-text-dim">
-            {preparing
-              ? "Showing your current editable inputs. Returning from a run does not load its historical inputs."
-              : "Your editable inputs stay here while submitted work runs."}
-          </p>
+          {preparing && (
+            <details className="text-xs text-text-dim">
+              <summary className="cursor-pointer">Current draft</summary>
+              <p>
+                Showing your current editable inputs. Returning from a run does not load its
+                historical inputs.
+              </p>
+            </details>
+          )}
         </div>
-        <div className="grid gap-4 md:grid-cols-2 border-b border-line pb-4">
+        <div className="experiment-selectors grid items-start gap-3 lg:grid-cols-3 border-b border-line pb-2">
           <SourceSelector
             catalog={sources}
             workspaceId={workspaceId}
@@ -366,13 +369,26 @@ export function LaunchWorkspace({
               selectWorkspace(id);
             }}
           />
-          <AuthorRefresh
-            projectId={projectId}
-            workspaceId={workspaceId}
-            disabled={!sourceAvailable}
-            onRefreshed={() => authorRefreshed(workspaceId)}
-          />
+          {(entry || draft) && (
+            <>
+              <DraftPicker />
+              <ExperimentPicker
+                key={workspaceId}
+                entries={catalog.data?.entries ?? []}
+                selectedId={draft?.experiment ?? entry?.id ?? ""}
+                disabled={!sourceAvailable || Boolean(handoff)}
+                onSelect={(selected) => select(selected, false, workspaceId)}
+              />
+            </>
+          )}
         </div>
+        <AuthorRefresh
+          compact
+          projectId={projectId}
+          workspaceId={workspaceId}
+          disabled={!sourceAvailable}
+          onRefreshed={() => authorRefreshed(workspaceId)}
+        />
         {codeRevision && (
           <div className="space-y-2">
             <p>
@@ -421,14 +437,6 @@ export function LaunchWorkspace({
         )}
         {(entry || draft) && (
           <>
-            <DraftPicker />
-            <ExperimentPicker
-              key={workspaceId}
-              entries={catalog.data?.entries ?? []}
-              selectedId={draft?.experiment ?? entry?.id ?? ""}
-              disabled={!sourceAvailable || Boolean(handoff)}
-              onSelect={(selected) => select(selected, false, workspaceId)}
-            />
             {entry &&
               sourceAvailable &&
               !handoff &&

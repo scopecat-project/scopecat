@@ -260,11 +260,11 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await expect(
       page.getByRole("status").filter({ hasText: "Author code refreshed" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Help", exact: true }).click();
+    await page.getByRole("button", { name: /Help$/, exact: true }).click();
     await page.goBack();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await page.goForward();
-    await expect(page.getByRole("button", { name: "Experiments", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Experiments$/, exact: true })).toBeVisible();
     await page.goBack();
     await reviewRetainedExperiment(page);
     await page
@@ -314,7 +314,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await expect(
       page.getByRole("link", { name: "Reopen this procedure", exact: true }),
     ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
-    await page.getByRole("button", { name: "Help", exact: true }).click();
+    await page.getByRole("button", { name: /Help$/, exact: true }).click();
     await page.goBack();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(

@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { getWaitingProcedures } from "./features/decisions/decision-api";
+vi.mock("./features/decisions/decision-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./features/decisions/decision-api")>()),
+  getWaitingProcedures: vi.fn(),
+}));
 import { getEvents, getHealth } from "./data/project-api";
 import {
   getMeasurementLivePreview,
@@ -129,6 +134,7 @@ let projectEventListener: ((event: Event) => void) | undefined;
 let openEventListener: ((event: Event) => void) | undefined;
 
 beforeEach(() => {
+  vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
   projectEventListener = undefined;
   openEventListener = undefined;
   window.history.replaceState(null, "", "#configuration");
@@ -194,22 +200,22 @@ it("replaces the exact-run opening link without leaving a stale run action", asy
   renderApp();
   expect(
     await screen.findByRole("link", { name: "Open result in new tab or window" }),
-  ).toHaveAttribute("href", "/?run=run-1");
+  ).toHaveAttribute("href", "/?run=run-1&focus=run#runs");
   fireEvent.click(screen.getByTitle("Inspect run run-2"));
   await waitFor(() => {
     const links = screen.getAllByRole("link", { name: "Open result in new tab or window" });
     expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "/?run=run-2");
+    expect(links[0]).toHaveAttribute("href", "/?run=run-2&focus=run#runs");
   });
 });
 
 it("opens Help through navigation and a direct hash without leaving the workbench", async () => {
   renderApp();
-  fireEvent.click(screen.getByRole("button", { name: "Help" }));
+  fireEvent.click(screen.getByRole("button", { name: /Help$/ }));
   expect(await screen.findByRole("heading", { name: "Help" })).toBeVisible();
   expect(window.location.hash).toBe("#help");
-  expect(screen.getByRole("button", { name: "Help" })).toHaveAttribute("aria-current", "page");
-  fireEvent.click(screen.getByRole("button", { name: "Experiments" }));
+  expect(screen.getByRole("button", { name: /Help$/ })).toHaveAttribute("aria-current", "page");
+  fireEvent.click(screen.getByRole("button", { name: /Experiments$/ }));
   expect(await screen.findByText("Calibration launcher")).toBeVisible();
   act(() => {
     window.history.replaceState(null, "", "#help");
@@ -219,13 +225,28 @@ it("opens Help through navigation and a direct hash without leaving the workbenc
 });
 
 describe("config provenance navigation", () => {
+  it("shows unknown decision attention when the actual query fails instead of retaining zero", async () => {
+    const client = createQueryClient();
+    renderApp(client);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Decision attention")).toHaveTextContent("0 待处理"),
+    );
+    vi.mocked(getWaitingProcedures).mockRejectedValue(new Error("Decision query disconnected"));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["procedure-decisions"] });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Decision attention")).toHaveTextContent("状态未知"),
+    );
+    expect(screen.getByLabelText("Decision attention")).not.toHaveTextContent("0 待处理");
+  });
   it("restores page and record selections through back and forward", async () => {
     window.history.replaceState(null, "", "/?sample=chip-a17#samples");
     renderApp();
     await screen.findByText("Selected sample chip-a17");
     fireEvent.click(screen.getByRole("button", { name: "Select next sample" }));
     await screen.findByText("Selected sample chip-b22");
-    fireEvent.click(screen.getByRole("button", { name: "Devices and drivers" }));
+    fireEvent.click(screen.getByRole("button", { name: /Devices and drivers$/ }));
     await screen.findByText("Instrument workspace");
     act(() => window.history.back());
     await screen.findByText("Selected sample chip-b22");
@@ -241,11 +262,11 @@ describe("config provenance navigation", () => {
     window.history.replaceState(null, "", "/?run=run-2");
     renderApp();
     await screen.findByTitle("run-2");
-    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+    fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
     expect(window.location.search).not.toContain("run=");
-    fireEvent.click(screen.getByRole("button", { name: "Experiments" }));
+    fireEvent.click(screen.getByRole("button", { name: /Experiments$/ }));
     await screen.findByText("Calibration launcher");
-    fireEvent.click(screen.getByRole("button", { name: "Runs" }));
+    fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
     await waitFor(() => expect(window.location.search).toBe("?run=run-2"));
     expect(await screen.findByTitle("run-2")).toHaveTextContent("run-2");
     expect(screen.getByTitle("Inspect run run-2")).toHaveAttribute("aria-current", "true");
@@ -263,13 +284,13 @@ describe("config provenance navigation", () => {
     window.history.replaceState(null, "", "/?sample=chip-a17&sample-revision=3#samples");
     renderApp();
     await screen.findByText("Selected sample chip-a17");
-    fireEvent.click(screen.getByRole("button", { name: "Analyses" }));
+    fireEvent.click(screen.getByRole("button", { name: /Analyses$/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Select next analysis" }));
-    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
-    fireEvent.click(screen.getByRole("button", { name: "Samples" }));
+    fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Samples$/ }));
     expect(await screen.findByText("Selected sample chip-a17")).toBeVisible();
     expect(new URLSearchParams(window.location.search).get("sample-revision")).toBe("3");
-    fireEvent.click(screen.getByRole("button", { name: "Analyses" }));
+    fireEvent.click(screen.getByRole("button", { name: /Analyses$/ }));
     expect(await screen.findByText("Selected analysis analysis-next")).toBeVisible();
   });
 
@@ -286,14 +307,14 @@ describe("config provenance navigation", () => {
     });
     expect(back).not.toHaveBeenCalled();
     back.mockRestore();
-    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    fireEvent.click(screen.getByRole("button", { name: /Help$/ }));
     await screen.findByRole("heading", { name: "Help" });
     act(() => {
       window.dispatchEvent(new Event("scopecat:back"));
     });
     await waitFor(() => expect(window.location.href).toBe(selected));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page"),
+      expect(screen.getByRole("button", { name: /Runs$/ })).toHaveAttribute("aria-current", "page"),
     );
     act(() => {
       window.dispatchEvent(new Event("scopecat:forward"));
@@ -306,7 +327,10 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText("Selected sample chip-a17")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Samples" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /Samples$/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Select next sample" }));
     expect(window.location.search).toBe("?sample=chip-b22");
@@ -346,7 +370,7 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText("Project analysis workspace")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Analyses" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Analyses$/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -354,7 +378,7 @@ describe("config provenance navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open analysis input run" }));
 
-    expect(screen.getByRole("button", { name: "Runs" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /Runs$/ })).toHaveAttribute("aria-current", "page");
     expect(window.location.search).toBe("?run=run-2");
     expect(window.location.hash).toBe("");
   });
@@ -376,15 +400,15 @@ describe("config provenance navigation", () => {
     renderApp();
 
     expect(await screen.findByText("Instrument workspace")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Devices and drivers" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Devices and drivers$/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
     expect(getRuns).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+    fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
     expect(window.location.hash).toBe("#configuration");
-    fireEvent.click(screen.getByRole("button", { name: "Devices and drivers" }));
+    fireEvent.click(screen.getByRole("button", { name: /Devices and drivers$/ }));
     expect(window.location.hash).toBe("#instruments");
   });
 
@@ -415,7 +439,7 @@ describe("config provenance navigation", () => {
     expect(getRuns).not.toHaveBeenCalled();
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#configuration");
-    expect(screen.getByRole("button", { name: "Configuration" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Configuration$/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -426,10 +450,10 @@ describe("config provenance navigation", () => {
     // Establish project identity before checking navigation within that project.
     await screen.findByText("Ok", { exact: true });
     const editor = await screen.findByText("Experiment configuration");
-    fireEvent.click(screen.getByRole("button", { name: "Runs" }));
+    fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
     expect(editor).toBeInTheDocument();
     expect(editor).not.toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+    fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
     expect(screen.getByText("Experiment configuration")).toBe(editor);
     expect(editor).toBeVisible();
   });
@@ -451,11 +475,11 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    expect(screen.getByRole("button", { name: "Configuration" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Configuration$/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Runs" }));
+    fireEvent.click(screen.getByRole("button", { name: /Runs$/ }));
     await waitFor(() =>
       expect(screen.getByTitle("Inspect run run-2")).toHaveAttribute("aria-current", "true"),
     );
@@ -1169,7 +1193,7 @@ function canonicalQueryCallCounts(): number[] {
 it("retains the calibration route and procedure when navigating back", async () => {
   window.history.replaceState(null, "", "/?procedure=p1#configuration");
   renderApp();
-  fireEvent.click(await screen.findByRole("button", { name: "Experiments" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Experiments$/ }));
   expect(await screen.findByText("Calibration launcher")).toBeVisible();
   expect(window.location.hash).toBe("#launch");
   expect(new URLSearchParams(window.location.search).get("procedure")).toBe("p1");
@@ -1235,7 +1259,7 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   fireEvent.change(screen.getByLabelText("Working point"), { target: { value: "bias-a" } });
   await waitFor(() => expect(cache.isFetching({ queryKey: ["research"] })).toBe(0));
   await screen.findByText("Source: space-a");
-  fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+  fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
   await waitFor(() => {
     expect(
       cache
@@ -1256,7 +1280,7 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
     await cache.invalidateQueries({ queryKey: ["data", "captures"] });
   });
   expect(requests).toHaveLength(before);
-  fireEvent.click(screen.getByRole("button", { name: "Data" }));
+  fireEvent.click(screen.getByRole("button", { name: /Data$/ }));
   await waitFor(() => expect(requests.length).toBeGreaterThan(before));
   expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
   expect(screen.getByLabelText("Project name")).toHaveValue("Unsubmitted Alpha rename");
@@ -1264,13 +1288,13 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(screen.getByLabelText("Record collection filter")).toHaveValue("same-id");
   expect(screen.getByLabelText("Collection run number")).toHaveValue("17");
 
-  fireEvent.click(screen.getByRole("button", { name: "Configuration" }));
+  fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
   space = "space-b";
   vi.mocked(getHealth).mockResolvedValue(health());
   act(() => {
     cache.setQueryData(["health"], health());
   });
-  fireEvent.click(screen.getByRole("button", { name: "Data" }));
+  fireEvent.click(screen.getByRole("button", { name: /Data$/ }));
   await screen.findByRole("option", { name: "Beta" });
   expect(screen.queryByRole("option", { name: "Alpha" })).toBeNull();
   expect(screen.getByLabelText("Research project")).toHaveValue("");
@@ -1291,8 +1315,10 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
 it("opens preparation when adopting parameters while preserving the fixed monitor procedure", async () => {
   window.history.replaceState(null, "", "/?procedure=run-a&workbench=submitted#configuration");
   renderApp();
-  fireEvent.click(await screen.findByRole("button", { name: "Use for next experiment" }));
-  await screen.findByText("Calibration launcher");
+  // Health replaces the project-keyed provider; click the current window, not its detached loading node.
+  await screen.findByTitle("Test lab");
+  fireEvent.click(screen.getByRole("button", { name: "Use for next experiment" }));
+  await waitFor(() => expect(screen.getByText("Calibration launcher")).toBeVisible());
   const url = new URL(window.location.href);
   expect(url.hash).toBe("#launch");
   expect(url.searchParams.get("preparation")).toBe("1");

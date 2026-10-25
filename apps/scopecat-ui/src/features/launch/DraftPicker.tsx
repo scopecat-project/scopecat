@@ -20,10 +20,7 @@ export function DraftPicker() {
   const records = drafts.data?.pages.flatMap((page) => page.items) ?? [];
   const id = draft.draftId ?? "default";
   return (
-    <section
-      aria-label="Independent experiment drafts"
-      className="space-y-2 border-b border-line pb-3"
-    >
+    <section aria-label="Independent experiment drafts" className="min-w-0 space-y-1">
       <ActionRow>
         <Field>
           Editable draft
@@ -57,15 +54,20 @@ export function DraftPicker() {
           </Select>
         </Field>
         <Button
+          aria-label="Copy to new draft"
           disabled={!recovery.ready || recovery.writing}
           onClick={() => {
             void copyDraft().then(() => drafts.refetch());
           }}
         >
-          Copy to new draft
+          Copy
         </Button>
-        <Button disabled={!recovery.ready} onClick={() => setRenaming(!renaming)}>
-          Rename draft
+        <Button
+          aria-label="Rename draft"
+          disabled={!recovery.ready}
+          onClick={() => setRenaming(!renaming)}
+        >
+          Rename
         </Button>
         {drafts.hasNextPage && (
           <Button
@@ -109,7 +111,7 @@ export function DraftPicker() {
       )}
       {recovery.ready && !recovery.writing && (
         <a
-          className="underline"
+          className="text-xs underline"
           href={(() => {
             const url = draftLocation(draft);
             url.hash = "launch";
@@ -121,9 +123,10 @@ export function DraftPicker() {
           Reopen this saved draft
         </a>
       )}
-      <p className="text-xs text-text-dim">
-        Edits belong to this draft. Submitted inputs stay frozen; copying never starts acquisition.
-      </p>
+      <details className="text-xs text-text-dim">
+        <summary className="cursor-pointer">Draft details</summary>
+        <p>Draft edits stay separate from frozen submissions; copies never start acquisition.</p>
+      </details>
       {drafts.error && (
         <p role="alert">
           Saved drafts unavailable. Your current input remains here.{" "}

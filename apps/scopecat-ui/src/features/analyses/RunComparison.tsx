@@ -269,6 +269,10 @@ function ComparisonPage({
   async function act(action: Request["action"]) {
     if (!model && (action === "fit" || action === "inspect")) return;
     if (pending) return;
+    if (!actor.trim()) {
+      setError("Enter a review actor before continuing.");
+      return;
+    }
     setError("");
     try {
       const modelParameters =
@@ -395,6 +399,15 @@ function ComparisonPage({
           Declare a comparison_provider in the lab application to expose a versioned Python model.
         </p>
       )}
+      <Controls.Field>
+        Review actor
+        <Controls.Input
+          value={actor}
+          required
+          disabled={pending}
+          onChange={(event) => setActor(event.target.value)}
+        />
+      </Controls.Field>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <Controls.Field>
           Primary run{" "}
@@ -470,7 +483,7 @@ function ComparisonPage({
       <button
         className={secondaryButton}
         type="button"
-        disabled={pending || !primary || !secondary || !model}
+        disabled={pending || !actor.trim() || !primary || !secondary || !model}
         onClick={() => void act("inspect")}
       >
         Inspect compatible data
@@ -643,13 +656,7 @@ function ComparisonPage({
                         >
                           Review parameter changes and adoption steps
                         </a>
-                        <Controls.Field>
-                          Review actor
-                          <Controls.Input
-                            value={actor}
-                            onChange={(event) => setActor(event.target.value)}
-                          />
-                        </Controls.Field>
+
                         <Controls.Field>
                           Rejection reason
                           <Controls.Input

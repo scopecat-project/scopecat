@@ -52,7 +52,9 @@ from scopecat_server.services.application_open import ApplicationOpenService
 def test_host_routes_exact_objects_at_its_own_gui_origin(page, target, query, fragment):
     location = urlsplit(object_location(page, target))
     assert location.netloc == urlsplit(page).netloc
-    assert parse_qs(location.query) == query
+    assert parse_qs(location.query) == (
+        {**query, "focus": ["run"]} if target.kind == "run" else query
+    )
     assert location.fragment == fragment
 
 
