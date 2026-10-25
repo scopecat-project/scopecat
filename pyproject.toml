@@ -41,6 +41,7 @@ notebook = [
 
 [tool.basedpyright]
 include = [
+  "apps/scopecat-ui/e2e/fixtures/admit_procedure.py",
   "packages/scopecat/src",
   "packages/scopecat/tests",
   "packages/scopecat-tutorials/src",
@@ -482,6 +483,7 @@ fast_paths = [
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [
+  "testing/reference_lab/tests/test_browser_admission_seed.py",
   "packages/scopecat-app/tests/test_package_versions.py",
   "packages/scopecat-app/tests/test_native_console.py",
   "packages/scopecat-app/tests/test_windows_native_host.py",
