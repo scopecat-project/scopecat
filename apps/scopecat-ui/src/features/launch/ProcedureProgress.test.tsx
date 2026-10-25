@@ -206,7 +206,7 @@ it("shows an uncertain current child as attention even when its parent is ready 
     "href",
     "?procedure=p1&run=retained-child#runs",
   );
-  expect(screen.getByRole("link", { name: "Open result in new tab or window" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "在新标签页或窗口打开结果" })).toHaveAttribute(
     "href",
     "/?run=retained-child&focus=run#runs",
   );

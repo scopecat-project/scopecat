@@ -303,11 +303,11 @@ test("two workbench pages retain independent context and share collection number
     await page.evaluate(() =>
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined }),
     );
-    await header.getByRole("button", { name: "Copy read-only code" }).click();
-    const copiedCode = await header.getByLabel("Read-only code").inputValue();
+    await header.getByRole("button", { name: "复制只读代码" }).click();
+    const copiedCode = await header.getByLabel("只读代码").inputValue();
     expect(copiedCode).toContain(`session.run(1, collection="${collection}")`);
     const opened = context.waitForEvent("page");
-    await page.getByRole("link", { name: "Open result in new tab or window" }).click();
+    await page.getByRole("link", { name: "在新标签页或窗口打开结果" }).click();
     const resultWindow = await opened;
     await expect(resultWindow.getByTestId("run-detail-header")).toContainText(firstAddress.run_id);
     await expect(resultWindow).toHaveTitle(/Renamed measurements #1/);

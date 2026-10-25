@@ -198,12 +198,13 @@ afterEach(() => {
 it("replaces the exact-run opening link without leaving a stale run action", async () => {
   window.history.replaceState(null, "", "/?run=run-1");
   renderApp();
-  expect(
-    await screen.findByRole("link", { name: "Open result in new tab or window" }),
-  ).toHaveAttribute("href", "/?run=run-1&focus=run#runs");
+  expect(await screen.findByRole("link", { name: "在新标签页或窗口打开结果" })).toHaveAttribute(
+    "href",
+    "/?run=run-1&focus=run#runs",
+  );
   fireEvent.click(screen.getByTitle("Inspect run run-2"));
   await waitFor(() => {
-    const links = screen.getAllByRole("link", { name: "Open result in new tab or window" });
+    const links = screen.getAllByRole("link", { name: "在新标签页或窗口打开结果" });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute("href", "/?run=run-2&focus=run#runs");
   });
@@ -614,8 +615,8 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    await screen.findByRole("region", { name: "Run progress" });
-    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
+    await screen.findByRole("region", { name: "run 进度" });
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
     expect(await screen.findByText(/0 points have durable execution evidence/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
@@ -656,9 +657,9 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    const progress = await screen.findByRole("region", { name: "Run progress" });
+    const progress = await screen.findByRole("region", { name: "run 进度" });
     expect(progress).toHaveTextContent("3 accepted points · plan open");
-    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
     expect(await screen.findByText(/2 points have durable execution evidence/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
@@ -694,9 +695,9 @@ describe("config provenance navigation", () => {
     renderApp();
     await waitFor(() => expect(getMeasurementLivePreview).toHaveBeenCalled());
     expect(await screen.findByText(/^1\+ records/)).toBeVisible();
-    const progress = screen.getByRole("region", { name: "Run progress" });
-    expect(progress).toHaveTextContent("Saved preview records 1+");
-    expect(progress).not.toHaveTextContent(/Received records \d/);
+    const progress = screen.getByRole("region", { name: "run 进度" });
+    expect(progress).toHaveTextContent("已保存预览记录 1+");
+    expect(progress).not.toHaveTextContent(/已接收记录 \d/);
     expect(screen.queryByText(/Latest received data:/)).not.toBeInTheDocument();
   });
 
@@ -734,14 +735,10 @@ describe("config provenance navigation", () => {
 
     expect(await screen.findByText(/^1 records/)).toBeVisible();
     expect(screen.getByText(/Latest received data: point index 0; not saved yet/)).toBeVisible();
-    expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
-      "Received records 1",
-    );
-    expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
-      "Saved records 0",
-    );
-    expect(screen.getByRole("region", { name: "Run progress" })).not.toHaveTextContent(
-      "Saved preview records",
+    expect(screen.getByRole("region", { name: "run 进度" })).toHaveTextContent("已接收记录 1");
+    expect(screen.getByRole("region", { name: "run 进度" })).toHaveTextContent("已保存记录 0");
+    expect(screen.getByRole("region", { name: "run 进度" })).not.toHaveTextContent(
+      "已保存预览记录",
     );
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });

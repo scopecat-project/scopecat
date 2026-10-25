@@ -500,12 +500,8 @@ test("open console reconnects SSE and follows a live notebook run", async ({ dae
     await expect(dataCard.getByTestId("measurement-preview")).toBeVisible();
     await expect(dataCard.getByTestId("measurement-preview")).toContainText('"point_index": 0');
     // Daemon receipt makes the completed point visible before durable batching flushes it.
-    await expect(detail.getByRole("region", { name: "Run progress" })).toContainText(
-      "Received records 1",
-    );
-    await expect(detail.getByRole("region", { name: "Run progress" })).toContainText(
-      "Saved records 0",
-    );
+    await expect(detail.getByRole("region", { name: "run 进度" })).toContainText("已接收记录 1");
+    await expect(detail.getByRole("region", { name: "run 进度" })).toContainText("已保存记录 0");
 
     await writeFile(experiment.releaseMeasurement, "", "utf8");
     const completion = await experiment.completion;
@@ -544,7 +540,7 @@ test("exact run opens independently in two browser pages while acquisition conti
     await expect(page.getByTestId("run-detail-header")).toContainText(runId);
     const open = page
       .getByRole("region", { name: "选中 run 详情" })
-      .getByRole("link", { name: "Open result in new tab or window" });
+      .getByRole("link", { name: "在新标签页或窗口打开结果" });
     await open.focus();
     await expect(open).toBeFocused();
     const opened = context.waitForEvent("page");

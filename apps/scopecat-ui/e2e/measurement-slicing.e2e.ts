@@ -161,7 +161,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
     await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
     const focused = page.getByRole("dialog", { name: /measurements$/ });
     await expect(focused).toBeVisible();
-    await expect(focused.getByRole("region", { name: "Run progress" })).toBeVisible();
+    await expect(focused.getByRole("region", { name: "run 进度" })).toBeVisible();
     await expect(chart).toHaveValue(phase);
     await page.getByLabel("Repeat slice", { exact: true }).selectOption("2");
     await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 2");
@@ -278,7 +278,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
     for (const problem of ["attention_required", "failed"] as const) {
       state = "running";
       await refreshState();
-      await expect(focused.getByRole("region", { name: "Run progress" })).toContainText("执行中");
+      await expect(focused.getByRole("region", { name: "run 进度" })).toContainText("执行中");
       state = problem;
       await refreshState();
       await expect(
@@ -293,7 +293,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
         ).toBeVisible();
         await expect(focused.getByText(/Closing this record does not establish/)).toBeVisible();
       } else {
-        await expect(focused.getByRole("region", { name: "Run progress" })).toContainText("失败");
+        await expect(focused.getByRole("region", { name: "run 进度" })).toContainText("失败");
       }
       await page.screenshot({ path: testInfo.outputPath(`chart-focus-${problem}.png`) });
       if (problem === "attention_required") {

@@ -94,7 +94,7 @@ it("filters retained runs and removes only their project association", async () 
   expect(screen.getByText("失败")).toBeVisible();
   expect(screen.getByText("结果尚不确定")).toBeVisible();
   expect(screen.queryByRole("button", { name: "移除 run 关联" })).toBeNull();
-  expect(screen.getByRole("link", { name: "Open result in new tab or window" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "在新标签页或窗口打开结果" })).toHaveAttribute(
     "href",
     "/?run=run-1&focus=run#runs",
   );

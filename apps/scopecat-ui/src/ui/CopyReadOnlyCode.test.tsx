@@ -31,10 +31,10 @@ it("writes only on click and reports success only after the write resolves", asy
   expect(write).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button"));
   expect(write).toHaveBeenCalledWith(readOnlyCode(first));
-  expect(screen.queryByText("Read-only code copied.")).toBeNull();
+  expect(screen.queryByText("只读代码已复制。")).toBeNull();
   expect(screen.getByRole("button")).toBeDisabled();
   await act(async () => complete());
-  expect(screen.getByRole("status")).toHaveTextContent("Read-only code copied.");
+  expect(screen.getByRole("status")).toHaveTextContent("只读代码已复制。");
 });
 
 it.each(["missing", "denied", "error", "sync error"])(
@@ -56,12 +56,12 @@ it.each(["missing", "denied", "error", "sync error"])(
     );
     render(<CopyReadOnlyCode target={first} />);
     fireEvent.click(screen.getByRole("button"));
-    const field = await screen.findByRole("textbox", { name: "Read-only code" });
+    const field = await screen.findByRole("textbox", { name: "只读代码" });
     expect(field).toHaveValue(readOnlyCode(first));
     fireEvent.focus(field);
     expect((field as HTMLTextAreaElement).selectionStart).toBe(0);
     expect((field as HTMLTextAreaElement).selectionEnd).toBe(readOnlyCode(first).length);
-    expect(screen.queryByText("Read-only code copied.")).toBeNull();
+    expect(screen.queryByText("只读代码已复制。")).toBeNull();
   },
 );
 
@@ -118,14 +118,14 @@ it("copies a scoped human reference and offers the same text without clipboard a
       collectionName="Cooldown"
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Copy run reference" }));
+  fireEvent.click(screen.getByRole("button", { name: "复制 run 引用" }));
   expect(write).toHaveBeenCalledWith("Cooldown #1 (collection a; run run-a)");
-  await screen.findByText("Run reference copied.");
+  await screen.findByText("run 引用已复制。");
   clipboard();
   view.rerender(<CopyRunReference runId="run-b" address={{ collection_id: "b", number: 1 }} />);
-  expect(screen.queryByText("Run reference copied.")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Copy run reference" }));
-  expect(await screen.findByLabelText("Run reference")).toHaveValue(
+  expect(screen.queryByText("run 引用已复制。")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "复制 run 引用" }));
+  expect(await screen.findByLabelText("run 引用")).toHaveValue(
     "Collection #1 (collection b; run run-b)",
   );
 });

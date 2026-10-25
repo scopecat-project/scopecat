@@ -8,14 +8,14 @@ export function OpenRunWindow({ runId, label }: { runId: string; label?: string 
   // Only the exact retained run crosses the window boundary, never drafts or selection state.
   const href = `/?${new URLSearchParams({ run: runId, focus: "run" })}#runs`;
   return (
-    <div title="View this exact run independently. Each window keeps its own selection.">
+    <div title="独立查看此精确 run，每个窗口保留自己的选择。">
       {desktop ? (
         <button className={secondaryButton} disabled={open.isPending} onClick={() => open.mutate()}>
-          {label ?? "Open result in new window"}
+          {label ?? "在新窗口打开结果"}
         </button>
       ) : (
         <a className={secondaryButton} href={href} target="_blank" rel="noopener noreferrer">
-          {label ?? "Open result in new tab or window"}
+          {label ?? "在新标签页或窗口打开结果"}
         </a>
       )}
       {open.error && <p role="alert">{open.error.message}</p>}

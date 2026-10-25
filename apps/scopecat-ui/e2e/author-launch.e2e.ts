@@ -229,7 +229,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     const receiptA = await submit();
     const procedureA = new URL(page.url()).searchParams.get("procedure");
     const opened = context.waitForEvent("page");
-    await page.getByRole("link", { name: "Open result in new tab or window" }).first().click();
+    await page.getByRole("link", { name: "在新标签页或窗口打开结果" }).first().click();
     const resultA = await opened;
     await expect(resultA.getByTestId("run-status")).toHaveText("执行中");
     const runA = new URL(resultA.url()).searchParams.get("run");

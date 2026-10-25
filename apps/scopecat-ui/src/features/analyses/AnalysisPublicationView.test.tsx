@@ -35,7 +35,7 @@ const analysis: AnalysisPublication = {
 
 it("requires an explicit owner even when inputs mention a run", () => {
   render(<AnalysisPublicationView analysis={analysis} getArtifactDownload={vi.fn()} />);
-  expect(screen.queryByRole("button", { name: "Copy read-only code" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "复制只读代码" })).toBeNull();
 });
 
 it("copies the supplied owner and exact publication rather than its input or logical key", async () => {
@@ -48,8 +48,8 @@ it("copies the supplied owner and exact publication rather than its input or log
       getArtifactDownload={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Copy read-only code" }));
-  await screen.findByText("Read-only code copied.");
+  fireEvent.click(screen.getByRole("button", { name: "复制只读代码" }));
+  await screen.findByText("只读代码已复制。");
   expect(writeText).toHaveBeenLastCalledWith(
     readOnlyCode({ kind: "run", runId: "owner", publicationId: analysis.id }),
   );
@@ -60,9 +60,9 @@ it("copies the supplied owner and exact publication rather than its input or log
       getArtifactDownload={vi.fn()}
     />,
   );
-  expect(screen.queryByText("Read-only code copied.")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Copy read-only code" }));
-  await screen.findByText("Read-only code copied.");
+  expect(screen.queryByText("只读代码已复制。")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "复制只读代码" }));
+  await screen.findByText("只读代码已复制。");
   expect(writeText).toHaveBeenLastCalledWith(
     readOnlyCode({ kind: "project", publicationId: analysis.id }),
   );

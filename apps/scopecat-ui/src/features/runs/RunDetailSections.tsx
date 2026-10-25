@@ -56,36 +56,35 @@ export function ProgressCard({
   const active = ["accepted", "running"].includes(run.status);
   return (
     <section
-      aria-label="Run progress"
+      aria-label="run 进度"
       className="rounded-md border border-line bg-panel-soft px-4 py-2 text-sm"
     >
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <strong>{run.stateLabel}</strong>
         {received !== undefined && (
           <span>
-            Received records <strong className="font-mono text-text">{received}</strong>
+            已接收记录 <strong className="font-mono text-text">{received}</strong>
           </span>
         )}
         {saved !== undefined && (
           <span>
-            Saved records <strong className="font-mono text-text">{saved}</strong>
+            已保存记录 <strong className="font-mono text-text">{saved}</strong>
           </span>
         )}
         {saved === undefined && savedPreview !== undefined && (
           <span>
-            Saved preview records <strong className="font-mono text-text">{savedPreview}</strong>
+            已保存预览记录 <strong className="font-mono text-text">{savedPreview}</strong>
           </span>
         )}
         <span className="text-text-soft">
           {run.plan.pointCount !== undefined
-            ? `${run.plan.pointCount} planned points`
+            ? `${run.plan.pointCount} 个计划点`
             : `${run.pointPlan.acceptedPointCount} accepted points · plan ${run.pointPlan.closed ? "closed" : "open"}`}
         </span>
       </div>
       {receiptError && (
         <p role="status" className="mt-2 text-sm text-yellow">
-          Live updates unavailable. Displayed counts and plots may be stale:{" "}
-          {errorMessage(receiptError)}
+          实时更新不可用，当前计数与曲线可能已过时： {errorMessage(receiptError)}
         </p>
       )}
       {received !== undefined && saved !== undefined && received > saved && (
@@ -95,15 +94,13 @@ export function ProgressCard({
       )}
       {received === undefined && active && (
         <p className="mt-2 text-sm text-text-soft">
-          {run.status === "accepted"
-            ? "Waiting to start; no measurement data received yet."
-            : "No measurement data received yet."}
+          {run.status === "accepted" ? "等待开始，尚未收到测量数据。" : "尚未收到测量数据。"}
         </p>
       )}
       <details className="mt-1 text-xs text-text-dim">
-        <summary className="cursor-pointer">Execution evidence</summary>
+        <summary className="cursor-pointer">执行证据</summary>
         <p className="mt-2">
-          {completed} points have durable execution evidence. Received records, saved records and
+          {completed} points have durable execution evidence. 已接收记录, saved records and
           completed recovery groups are distinct.
         </p>
         <p className="mt-1">
@@ -444,7 +441,7 @@ export function DataCard({
       </MeasurementWorkspace>
       <details className="mt-4 rounded-md border border-line p-3">
         <summary className="cursor-pointer text-sm font-semibold text-text-soft">
-          Saved files and record metadata
+          已保存文件与记录元数据
         </summary>
         <CardHeading
           icon={<Database size={17} />}

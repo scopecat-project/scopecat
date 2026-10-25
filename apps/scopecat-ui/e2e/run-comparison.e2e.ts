@@ -70,8 +70,8 @@ test("compares retained signals, saves independent results and starts edited sug
     await expect(page.getByTestId("run-detail-header")).toContainText(primary);
 
     await page.getByRole("link", { name: "比较已有 run", exact: true }).click();
-    await expect(page.getByLabel("主 run")).toHaveValue(primary);
-    await page.getByLabel("对照 run").selectOption(secondary);
+    await expect(page.getByLabel("主 run", { exact: true })).toHaveValue(primary);
+    await page.getByLabel("对照 run", { exact: true }).selectOption(secondary);
     async function action(label: string) {
       await page.getByLabel("判断操作人", { exact: true }).fill("synthetic-reviewer");
       const actions: Record<string, string> = {
@@ -116,10 +116,10 @@ test("compares retained signals, saves independent results and starts edited sug
     await page.goBack();
     await expect(page.getByTestId("run-detail-header")).toBeVisible();
     await page.goForward();
-    await expect(page.getByLabel("对照 run")).toHaveValue(secondary);
+    await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(secondary);
     await expect(page.getByLabel("主 run 选点位置")).toHaveValue("4,1,2,3");
     await page.reload();
-    await expect(page.getByLabel("对照 run")).toHaveValue(secondary);
+    await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(secondary);
     await expect(page.getByLabel("主 run 选点位置")).toHaveValue("4,1,2,3");
     await expect(
       page.getByRole("button", { name: "拟合选中数据并保存 analysis", exact: true }),

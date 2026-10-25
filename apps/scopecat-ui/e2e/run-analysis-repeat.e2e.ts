@@ -103,7 +103,7 @@ test("repeats a retained ordinary analysis with its original source after author
     await expect(data.getByText("Showing runs across all projects for association.")).toBeVisible();
     const selectedProject = await data.getByLabel("研究项目", { exact: true }).inputValue();
     const popupPromise = page.waitForEvent("popup");
-    await data.getByRole("link", { name: "Open result in new tab or window" }).click();
+    await data.getByRole("link", { name: "在新标签页或窗口打开结果" }).click();
     const popup = await popupPromise;
     await expect(popup).toHaveURL(new RegExp(encodeURIComponent(seed.run)));
     await popup.close();

@@ -216,7 +216,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         ]),
       ) as { procedure: string; analysis: string };
       await page.goto(`${endpoint.base_url}/?procedure=${analyzed.procedure}#launch`);
-      const analysisLink = page.getByRole("link", { name: "Open analysis", exact: true });
+      const analysisLink = page.getByRole("link", { name: "打开 analysis", exact: true });
       await expect(analysisLink).toHaveAttribute(
         "href",
         `?procedure=${analyzed.procedure}&run-analysis=${analyzed.analysis}&run=${runId}#runs`,
@@ -371,7 +371,7 @@ test("retains launch inputs across workspaces and invalidates previews without s
     for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
-        .getByRole("button", { name: destination, exact: true })
+        .getByRole("button", { name: new RegExp(`${destination}$`) })
         .click();
       await page
         .getByRole("navigation", { name: "Project sections" })
