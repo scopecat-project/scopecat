@@ -13,7 +13,7 @@ Security fixes skip ordinary cooldown/scheduling limits but still require review
 Renovate applies `vulnerabilityAlerts.automerge: false` as a forced override of
 package rules. A faster proposal is not proof of compatibility.
 
-Ordinary Python patch updates wait seven days; uv retains the global three-day
+Ordinary Python patch updates wait fourteen days; uv retains the global three-day
 minimum release age. Python minor upgrades remain separate reviews. Waiting does
 not prove supply compatibility: Linux, macOS and Windows CI query the locked uv
 catalog for the exact ordinary CPython version using the same selector as portable
