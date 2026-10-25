@@ -194,12 +194,12 @@ it("replaces the exact-run opening link without leaving a stale run action", asy
   renderApp();
   expect(
     await screen.findByRole("link", { name: "Open result in new tab or window" }),
-  ).toHaveAttribute("href", "/?run=run-1");
+  ).toHaveAttribute("href", "/?run=run-1&focus=run#runs");
   fireEvent.click(screen.getByTitle("Inspect run run-2"));
   await waitFor(() => {
     const links = screen.getAllByRole("link", { name: "Open result in new tab or window" });
     expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "/?run=run-2");
+    expect(links[0]).toHaveAttribute("href", "/?run=run-2&focus=run#runs");
   });
 });
 
@@ -1291,8 +1291,10 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
 it("opens preparation when adopting parameters while preserving the fixed monitor procedure", async () => {
   window.history.replaceState(null, "", "/?procedure=run-a&workbench=submitted#configuration");
   renderApp();
-  fireEvent.click(await screen.findByRole("button", { name: "Use for next experiment" }));
-  await screen.findByText("Calibration launcher");
+  // Health replaces the project-keyed provider; click the current window, not its detached loading node.
+  await screen.findByTitle("Test lab");
+  fireEvent.click(screen.getByRole("button", { name: "Use for next experiment" }));
+  await waitFor(() => expect(screen.getByText("Calibration launcher")).toBeVisible());
   const url = new URL(window.location.href);
   expect(url.hash).toBe("#launch");
   expect(url.searchParams.get("preparation")).toBe("1");

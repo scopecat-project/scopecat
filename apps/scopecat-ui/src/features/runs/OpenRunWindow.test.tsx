@@ -20,8 +20,11 @@ it("encodes only the exact run in a same-service browser link with no opener", (
   const target = new URL(link.href);
   expect(target.origin).toBe(window.location.origin);
   expect(target.pathname).toBe("/");
-  expect([...target.searchParams]).toEqual([["run", runId]]);
-  expect(target.hash).toBe("");
+  expect([...target.searchParams]).toEqual([
+    ["run", runId],
+    ["focus", "run"],
+  ]);
+  expect(target.hash).toBe("#runs");
   expect(link.target).toBe("_blank");
   expect(link.rel).toBe("noopener noreferrer");
 });

@@ -1,3 +1,7 @@
+import { WorkspaceNavigation, type ProjectView } from "./features/application/WorkspaceNavigation";
+import { useWorkspacePosition } from "./features/application/use-workspace-position";
+import { PinnedTask } from "./features/launch/PinnedTask";
+import "./workspace.css";
 import type {
   ObjectParameterContext,
   ObjectParameterPanel,
@@ -15,20 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Atom,
-  Activity,
-  Boxes,
-  Cable,
-  GitCompareArrows,
-  CircleHelp,
-  LayoutDashboard,
-  LoaderCircle,
-  MessageSquareText,
-  RefreshCw,
-  Settings2,
-  Unplug,
-} from "lucide-react";
+import { LoaderCircle, RefreshCw, Unplug } from "lucide-react";
 import { parameterProposalKeys } from "./data/parameter-proposals/query-keys";
 import { getEvents, getHealth } from "./data/project-api";
 import { LaunchDraftProvider, useLaunchDraft } from "./features/launch/LaunchDraft";
@@ -40,19 +31,6 @@ import { DesktopFind } from "./features/application/DesktopFind";
 import { titleCase } from "./lib/presentation";
 import { navigate, navigateBack, navigateForward, type NavigationOptions } from "./lib/navigation";
 import { classes, iconButton } from "./ui/styles";
-
-type ProjectView =
-  | "launch"
-  | "runs"
-  | "samples"
-  | "history"
-  | "analyses"
-  | "decisions"
-  | "reviews"
-  | "instruments"
-  | "configuration"
-  | "settings"
-  | "help";
 
 const HelpWorkspace = lazy(async () => {
   const module = await import("./features/help/HelpWorkspace");
@@ -119,6 +97,10 @@ export default function App() {
     await parameterWorkspace.current.openObject(context);
   }, []);
   const [view, setView] = useState<ProjectView>(projectViewFromLocation);
+  const [focused, setFocused] = useState(
+    () => new URL(window.location.href).searchParams.get("focus") === "run",
+  );
+  useWorkspacePosition(view);
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>(selectedRunFromUrl);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(
     selectedAnalysisFromUrl,
@@ -265,7 +247,6 @@ export default function App() {
 
   const daemonReachable = healthQuery.isSuccess;
   const daemonUnavailable = healthQuery.isError;
-  const lastUpdated = Math.max(healthQuery.dataUpdatedAt, eventsQuery.dataUpdatedAt);
 
   const refresh = () => {
     void queryClient.invalidateQueries();
@@ -316,329 +297,213 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-line bg-bg-raised px-5 max-[680px]:h-auto max-[680px]:min-h-[60px] max-[680px]:flex-wrap max-[680px]:gap-2 max-[680px]:px-[15px] max-[680px]:py-[9px]">
-        <a
-          className="inline-flex items-center gap-2 text-inherit no-underline"
-          href="/"
-          aria-label="Scopecat project console"
-        >
-          <span
-            className="grid size-7 place-items-center rounded-sm border border-line-strong bg-panel text-accent"
-            aria-hidden="true"
-          >
-            <Atom size={20} strokeWidth={1.8} />
+    <div className="workspace-shell">
+      <WorkspaceNavigation
+        view={view}
+        onSelect={selectView}
+        projectName={healthQuery.data?.projectName}
+        focused={focused}
+        onShowNavigation={() => {
+          setFocused(false);
+          const url = new URL(window.location.href);
+          url.searchParams.delete("focus");
+          navigate(url, { replace: true });
+        }}
+      />
+      <div id="workspace-body">
+        <header className="workspace-top">
+          <span className="workspace-top-title">
+            {healthQuery.data?.projectName ?? "Scopecat"} · {view}
           </span>
-          <span className="grid gap-px">
-            <strong className="text-sm tracking-[0.02em]">Scopecat</strong>
-            <small className="hidden">Project console</small>
-          </span>
-        </a>
-        <nav
-          className="mx-4 flex min-w-0 flex-1 gap-1 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap max-[680px]:order-3 max-[680px]:mx-0 max-[680px]:w-full max-[680px]:flex-auto"
-          aria-label="Project sections"
-        >
-          <button
-            type="button"
-            className={navigationClass(view === "launch")}
-            aria-current={view === "launch" ? "page" : undefined}
-            onClick={() => selectView("launch")}
-          >
-            <Activity size={15} aria-hidden="true" />
-            Experiments
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "history")}
-            aria-current={view === "history" ? "page" : undefined}
-            onClick={() => selectView("history")}
-          >
-            <Boxes size={15} aria-hidden="true" /> Data
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "samples")}
-            aria-current={view === "samples" ? "page" : undefined}
-            onClick={() => selectView("samples")}
-          >
-            <Boxes size={15} aria-hidden="true" />
-            Samples
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "runs")}
-            aria-current={view === "runs" ? "page" : undefined}
-            onClick={() => selectView("runs")}
-          >
-            <LayoutDashboard size={15} aria-hidden="true" />
-            Runs
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "analyses")}
-            aria-current={view === "analyses" ? "page" : undefined}
-            onClick={() => selectView("analyses")}
-          >
-            <GitCompareArrows size={15} aria-hidden="true" />
-            Analyses
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "decisions")}
-            aria-current={view === "decisions" ? "page" : undefined}
-            onClick={() => selectView("decisions")}
-          >
-            <MessageSquareText size={15} aria-hidden="true" />
-            Decisions
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "reviews")}
-            aria-current={view === "reviews" ? "page" : undefined}
-            onClick={() => selectView("reviews")}
-          >
-            <Activity size={15} aria-hidden="true" />
-            Reviews
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "instruments")}
-            aria-current={view === "instruments" ? "page" : undefined}
-            onClick={() => selectView("instruments")}
-          >
-            <Cable size={15} aria-hidden="true" />
-            Devices and drivers
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "configuration")}
-            aria-current={view === "configuration" ? "page" : undefined}
-            onClick={() => selectView("configuration")}
-          >
-            <Settings2 size={15} aria-hidden="true" />
-            Configuration
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "settings")}
-            aria-current={view === "settings" ? "page" : undefined}
-            onClick={() => selectView("settings")}
-          >
-            <Settings2 size={15} aria-hidden="true" /> Settings
-          </button>
-          <button
-            type="button"
-            className={navigationClass(view === "help")}
-            aria-current={view === "help" ? "page" : undefined}
-            onClick={() => selectView("help")}
-          >
-            <CircleHelp size={15} aria-hidden="true" /> Help
-          </button>
-        </nav>
-        <div className="flex items-center gap-2.5">
-          <ConnectionState
-            reachable={daemonReachable}
-            pending={healthQuery.isPending}
-            status={healthQuery.data?.status}
-          />
-          <button
-            className={iconButton}
-            type="button"
-            onClick={refresh}
-            aria-label="Refresh project data"
-            title="Refresh project data"
-          >
-            <RefreshCw
-              size={17}
-              className={activeQueries > 0 ? "animate-spin" : undefined}
-              aria-hidden="true"
+          <div className="flex items-center gap-2.5">
+            <ConnectionState
+              reachable={daemonReachable}
+              pending={healthQuery.isPending}
+              status={healthQuery.data?.status}
             />
-          </button>
-        </div>
-      </header>
-
-      <main className="mx-auto w-[min(1680px,calc(100%-32px))] py-[14px] pb-8 max-[1100px]:w-[min(100%-28px,1200px)] max-[680px]:w-[calc(100%-20px)] max-[680px]:py-3 max-[680px]:pb-8">
-        <section
-          className="mb-2.5 flex min-h-[34px] items-center justify-between gap-5 px-0.5 max-[680px]:items-start"
-          aria-labelledby="workspace-title"
-        >
-          <div className="flex min-w-0 items-baseline gap-3 max-[680px]:grid max-[680px]:gap-[3px]">
-            <h1
-              className="m-0 flex-none text-base font-[650] tracking-[-0.015em]"
-              id="workspace-title"
+            <button
+              className={iconButton}
+              type="button"
+              onClick={refresh}
+              aria-label="Refresh project data"
+              title="Refresh project data"
             >
-              Scopecat
-            </h1>
-          </div>
-          <div
-            className="inline-flex flex-none items-center gap-[7px] text-xs font-semibold text-text-dim"
-            aria-live="polite"
-          >
-            {lastUpdated > 0
-              ? `Updated ${formatClock(new Date(lastUpdated).toISOString())}`
-              : "Connecting to application"}
-          </div>
-        </section>
-
-        {daemonUnavailable && (
-          <div
-            className="mb-[18px] flex items-center gap-[11px] rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-[15px] py-[13px] text-sm leading-6 text-red"
-            role="status"
-          >
-            <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
-            <span>
-              <strong className="text-red">Connection interrupted.</strong>{" "}
-              {window.pywebview
-                ? "If Scopecat is restarting or adding a code folder, wait for it to finish. Otherwise, use Settings → Restart application to reconnect."
-                : "Check that Scopecat is running, then refresh this page."}{" "}
-              Saved records are retained. Live project data is unavailable until reconnected.
-            </span>
-          </div>
-        )}
-
-        <LaunchDraftProvider projectId={healthQuery.data?.projectId}>
-          {view === "launch" && (
-            <Suspense fallback={<p>Loading experiments…</p>}>
-              <LaunchWorkspace
-                handoff={
-                  handoff?.projectId === healthQuery.data?.projectId ? handoff?.value : undefined
-                }
-                onHandoffImported={() => setHandoff(undefined)}
+              <RefreshCw
+                size={17}
+                className={activeQueries > 0 ? "animate-spin" : undefined}
+                aria-hidden="true"
               />
-            </Suspense>
+            </button>
+          </div>
+        </header>
+
+        <main className="workspace-main">
+          {daemonUnavailable && (
+            <div
+              className="mb-[18px] flex items-center gap-[11px] rounded-md border border-[rgb(255_140_136_/_27%)] bg-red-soft px-[15px] py-[13px] text-sm leading-6 text-red"
+              role="status"
+            >
+              <Unplug className="flex-none text-red" size={18} aria-hidden="true" />
+              <span>
+                <strong className="text-red">Connection interrupted.</strong>{" "}
+                {window.pywebview
+                  ? "If Scopecat is restarting or adding a code folder, wait for it to finish. Otherwise, use Settings → Restart application to reconnect."
+                  : "Check that Scopecat is running, then refresh this page."}{" "}
+                Saved records are retained. Live project data is unavailable until reconnected.
+              </span>
+            </div>
           )}
-          <div hidden={view !== "configuration"}>
+
+          <LaunchDraftProvider projectId={healthQuery.data?.projectId}>
+            <PinnedTask />
+            {
+              <RetainedView mode={view === "launch" ? "visible" : "hidden"}>
+                <Suspense fallback={<p>Loading experiments…</p>}>
+                  <LaunchWorkspace
+                    handoff={
+                      handoff?.projectId === healthQuery.data?.projectId
+                        ? handoff?.value
+                        : undefined
+                    }
+                    onHandoffImported={() => setHandoff(undefined)}
+                  />
+                </Suspense>
+              </RetainedView>
+            }
+            <div hidden={view !== "configuration"}>
+              <Suspense
+                fallback={
+                  <DetailEmpty
+                    icon={<LoaderCircle className="animate-spin" />}
+                    title="Loading configuration"
+                    detail="The configuration workspace is being prepared."
+                  />
+                }
+              >
+                <ContextConfigWorkspace
+                  workspaceRef={parameterWorkspace}
+                  objectPanel={objectPanel}
+                  onSelected={() => selectView("launch", true)}
+                  daemonUnavailable={daemonUnavailable}
+                />
+              </Suspense>
+            </div>
+            {view === "runs" && !healthQuery.isPending && (
+              <RunsWorkspace
+                focused={focused}
+                selectedRunId={selectedRunId}
+                onSelectRun={selectRun}
+                health={healthQuery.data}
+                healthPending={healthQuery.isPending}
+                healthReachable={daemonReachable}
+                daemonUnavailable={daemonUnavailable}
+                onOpenSample={openRunSample}
+              />
+            )}
+          </LaunchDraftProvider>
+          {healthQuery.data?.projectId && (
+            <RetainedView
+              key={healthQuery.data.projectId}
+              mode={view === "history" ? "visible" : "hidden"}
+            >
+              <Suspense fallback={<p>Loading research history…</p>}>
+                <ResearchHistory
+                  projectId={healthQuery.data.projectId}
+                  daemonUnavailable={daemonUnavailable}
+                  onOpenRun={openConfigSourceRun}
+                />
+              </Suspense>
+            </RetainedView>
+          )}
+          {view === "help" ? (
+            <Suspense fallback={<p>Loading help…</p>}>
+              <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />
+            </Suspense>
+          ) : view === "settings" ? (
+            <Suspense fallback={<p>Loading settings…</p>}>
+              <ApplicationSettings health={healthQuery.data} />
+            </Suspense>
+          ) : view === "samples" ? (
             <Suspense
               fallback={
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Loading configuration"
-                  detail="The configuration workspace is being prepared."
+                  title="Loading samples"
+                  detail="The physical sample registry is being prepared."
                 />
               }
             >
-              <ContextConfigWorkspace
-                workspaceRef={parameterWorkspace}
-                objectPanel={objectPanel}
-                onSelected={() => selectView("launch", true)}
-                daemonUnavailable={daemonUnavailable}
-              />
-            </Suspense>
-          </div>
-          {view === "runs" && !healthQuery.isPending && (
-            <RunsWorkspace
-              selectedRunId={selectedRunId}
-              onSelectRun={selectRun}
-              health={healthQuery.data}
-              healthPending={healthQuery.isPending}
-              healthReachable={daemonReachable}
-              daemonUnavailable={daemonUnavailable}
-              onOpenSample={openRunSample}
-            />
-          )}
-        </LaunchDraftProvider>
-        {healthQuery.data?.projectId && (
-          <RetainedView
-            key={healthQuery.data.projectId}
-            mode={view === "history" ? "visible" : "hidden"}
-          >
-            <Suspense fallback={<p>Loading research history…</p>}>
-              <ResearchHistory
-                projectId={healthQuery.data.projectId}
+              <SamplesWorkspace
+                onEditParameters={editObjectParameters}
+                onParameterPanel={setObjectPanel}
                 daemonUnavailable={daemonUnavailable}
                 onOpenRun={openConfigSourceRun}
+                onSelectSample={selectSample}
+                selectedSampleId={selectedSampleId}
+                selectedSampleRevision={selectedSampleRevision}
               />
             </Suspense>
-          </RetainedView>
-        )}
-        {view === "help" ? (
-          <Suspense fallback={<p>Loading help…</p>}>
-            <HelpWorkspace health={healthQuery.data} reachable={daemonReachable} />
-          </Suspense>
-        ) : view === "settings" ? (
-          <Suspense fallback={<p>Loading settings…</p>}>
-            <ApplicationSettings health={healthQuery.data} />
-          </Suspense>
-        ) : view === "samples" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading samples"
-                detail="The physical sample registry is being prepared."
+          ) : view === "analyses" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading analyses"
+                  detail="The cross-run analysis workspace is being prepared."
+                />
+              }
+            >
+              <AnalysesWorkspace
+                projectId={healthQuery.data?.projectId}
+                onHandoff={(request) => {
+                  setHandoff({ projectId: healthQuery.data?.projectId, value: request });
+                  selectView("launch");
+                }}
+                daemonUnavailable={daemonUnavailable}
+                onOpenRun={openConfigSourceRun}
+                onSelectAnalysis={selectAnalysis}
+                selectedAnalysisId={selectedAnalysisId}
               />
-            }
-          >
-            <SamplesWorkspace
-              onEditParameters={editObjectParameters}
-              onParameterPanel={setObjectPanel}
-              daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-              onSelectSample={selectSample}
-              selectedSampleId={selectedSampleId}
-              selectedSampleRevision={selectedSampleRevision}
-            />
-          </Suspense>
-        ) : view === "analyses" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading analyses"
-                detail="The cross-run analysis workspace is being prepared."
-              />
-            }
-          >
-            <AnalysesWorkspace
-              projectId={healthQuery.data?.projectId}
-              onHandoff={(request) => {
-                setHandoff({ projectId: healthQuery.data?.projectId, value: request });
-                selectView("launch");
-              }}
-              daemonUnavailable={daemonUnavailable}
-              onOpenRun={openConfigSourceRun}
-              onSelectAnalysis={selectAnalysis}
-              selectedAnalysisId={selectedAnalysisId}
-            />
-          </Suspense>
-        ) : view === "launch" || view === "history" ? null : view === "decisions" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading decisions"
-                detail="The experiment interpretation queue is being prepared."
-              />
-            }
-          >
-            <DecisionWorkspace daemonUnavailable={daemonUnavailable} />
-          </Suspense>
-        ) : view === "reviews" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading reviews"
-                detail="The compiled waveform workspace is being prepared."
-              />
-            }
-          >
-            <ReviewWorkspace daemonUnavailable={daemonUnavailable} />
-          </Suspense>
-        ) : view === "instruments" ? (
-          <Suspense
-            fallback={
-              <DetailEmpty
-                icon={<LoaderCircle className="animate-spin" />}
-                title="Loading instruments"
-                detail="The instrument workspace is being prepared."
-              />
-            }
-          >
-            <InstrumentsWorkspace daemonUnavailable={daemonUnavailable} />
-          </Suspense>
-        ) : null}
-      </main>
+            </Suspense>
+          ) : view === "launch" || view === "history" ? null : view === "decisions" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading decisions"
+                  detail="The experiment interpretation queue is being prepared."
+                />
+              }
+            >
+              <DecisionWorkspace daemonUnavailable={daemonUnavailable} />
+            </Suspense>
+          ) : view === "reviews" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading reviews"
+                  detail="The compiled waveform workspace is being prepared."
+                />
+              }
+            >
+              <ReviewWorkspace daemonUnavailable={daemonUnavailable} />
+            </Suspense>
+          ) : view === "instruments" ? (
+            <Suspense
+              fallback={
+                <DetailEmpty
+                  icon={<LoaderCircle className="animate-spin" />}
+                  title="Loading instruments"
+                  detail="The instrument workspace is being prepared."
+                />
+              }
+            >
+              <InstrumentsWorkspace daemonUnavailable={daemonUnavailable} />
+            </Suspense>
+          ) : null}
+        </main>
+      </div>
       <DesktopSession />
       <DesktopFiles />
       <DesktopZoom />
@@ -680,13 +545,6 @@ function ConnectionState({
       />
       {label}
     </span>
-  );
-}
-
-function navigationClass(active: boolean): string {
-  return classes(
-    "inline-flex min-h-[47px] cursor-pointer items-center gap-[7px] border-0 border-b-2 border-transparent bg-transparent px-px text-xs font-[750] text-text-dim hover:text-text-soft max-[880px]:px-2 max-[680px]:flex-1",
-    active && "border-b-accent text-text",
   );
 }
 
@@ -804,16 +662,6 @@ function measurementEventRunId(event: Event): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function formatClock(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(date);
 }
 
 function ContextConfigWorkspace({
