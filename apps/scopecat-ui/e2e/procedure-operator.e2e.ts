@@ -20,44 +20,6 @@ function uv(args: string[]): string {
   return result.stdout.trim();
 }
 
-const ADMIT = `
-import sys
-import scopecat as sc
-from scopecat.records.launch_request import LaunchRequest
-from scopecat.records.scientific_selection import ScientificSelection, ParameterConfiguration
-from scopecat.author_workspaces import author_workspace_id
-from scopecat.daemon.endpoint import resolve_daemon_endpoint
-from scopecat_server.author_worker import revision_project
-project = sc.open_project(sys.argv[1])
-with project.authoring() as author:
-    catalog = author.catalog()
-assert catalog.code_revision is not None
-# Seed the admission-only boundary with the same immutable composition that the
-# worker restores. The public author submit API also dispatches the procedure.
-application = revision_project(project.root, catalog.code_revision).load_application()
-with application.connect(resolve_daemon_endpoint(project.root), workspace_id=catalog.workspace_id) as lab:
-    provider = application.launch_provider
-    entry = application.authors.get("reference_lab.temperature_diagnostic").entry
-    catalog_entry = next(item for item in catalog.entries if item.id == entry.id)
-    assert entry == catalog_entry
-    parameters = lab.parameters.checkout("browser").head.revision
-    setup = lab.setup.get("browser-bench-a")
-    request = LaunchRequest(workspace_id=author_workspace_id(project.root), action="preview", experiment=entry.id, version=entry.version, selection=ScientificSelection(configuration=ParameterConfiguration(ref=parameters, setup=setup.ref)))
-    preview = provider(lab, request)
-    admitted = provider(lab, LaunchRequest.model_validate({
-        **request.model_dump(), "action": "submit", "request_key": "browser-retained",
-        "expected_request_hash": preview.request_hash, "reviewed": preview.reviewed,
-        "manual_state": preview.manual_state,
-    }))
-    retained = lab.procedures.get(admitted.procedure_id).snapshot
-    assert retained.source is not None
-    assert retained.source.workspace_id == catalog.workspace_id
-    assert retained.source.code_revision == catalog.code_revision
-    assert retained.definition.id == f"scopecat.author:{entry.id}"
-    assert retained.definition.fingerprint == catalog_entry.version
-    print(admitted.procedure_id)
-`;
-
 type RetainedProcedure = {
   project: string;
   baseUrl: string;
@@ -90,7 +52,11 @@ const retainedProcedureTest = test.extend<{ retainedProcedure: RetainedProcedure
         base_url: string;
       };
       prepareReferenceContexts(uv, project);
-      const procedureId = uv(["python", "-c", ADMIT, project]);
+      const procedureId = uv([
+        "python",
+        join(ROOT, "apps/scopecat-ui/e2e/fixtures/admit_procedure.py"),
+        project,
+      ]);
       uv(["python", "-m", "scopecat_server.cli", "stop", project]);
       uv([
         "python",
@@ -162,9 +128,19 @@ retainedProcedureTest(
       await expect(childRun).toBeVisible();
       const childHref = await childRun.getAttribute("href");
       expect(childHref).toContain(`procedure=${procedureId}`);
-      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "Selected execution", exact: true })
+          .getByRole("status")
+          .filter({ hasText: /^Completed$/ }),
+      ).toBeVisible();
       await page.reload();
-      await expect(page.getByRole("status").filter({ hasText: /^Completed$/ })).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "Selected execution", exact: true })
+          .getByRole("status")
+          .filter({ hasText: /^Completed$/ }),
+      ).toBeVisible();
       const retainedRun = page.getByRole("link", { name: /^View saved data:/ });
       await expect(retainedRun).toHaveAttribute("href", childHref!);
       await retainedRun.click();
@@ -257,7 +233,12 @@ retainedProcedureTest(
   async ({ page, retainedProcedure }, testInfo) => {
     const { baseUrl, procedureId } = retainedProcedure;
     await page.goto(`${baseUrl}/?procedure=${procedureId}#launch`);
-    await expect(page.getByText("Admitted — not dispatched", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected execution", exact: true })
+        .getByRole("status")
+        .filter({ hasText: /^Admitted — not dispatched$/ }),
+    ).toBeVisible();
     await page
       .locator("summary")
       .filter({ hasText: /^Cancel queued task$/ })
@@ -268,9 +249,19 @@ retainedProcedureTest(
     await page.getByLabel("Cancellation actor", { exact: true }).fill("browser operator");
     await page.getByLabel("Cancellation reason", { exact: true }).fill("Cancel before acquisition");
     await page.getByRole("button", { name: "Cancel queued task", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected execution", exact: true })
+        .getByRole("status")
+        .filter({ hasText: /^Cancelled$/ }),
+    ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("status").filter({ hasText: /^Cancelled$/ })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected execution", exact: true })
+        .getByRole("status")
+        .filter({ hasText: /^Cancelled$/ }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue task", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^View (current|saved) data:/ })).toHaveCount(0);
     const response = await page.request.get(`${baseUrl}/api/v1/procedures/${procedureId}/operator`);
@@ -344,7 +335,11 @@ test("retains launch inputs across workspaces and invalidates previews without s
     await page.getByLabel("Delay start").fill("16");
     await page.getByLabel("Delay stop").fill("48");
     await page.getByLabel("Delay points").fill("3");
-    for (const destination of ["Configuration", "Devices and drivers", "Runs"]) {
+    for (const destination of [
+      "参数与绑定 / Configuration",
+      "设备与驱动 / Devices and drivers",
+      "运行详情 / Runs",
+    ]) {
       await page
         .getByRole("navigation", { name: "Project sections" })
         .getByRole("button", { name: destination, exact: true })
