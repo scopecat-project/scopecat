@@ -460,6 +460,7 @@ extend-immutable-calls = ["scopecat.Quantity", "scopecat.kernel.quantity.Quantit
 [tool.scopecat-tests]
 roots = ["packages/scopecat-app/tests", "testing/reference_lab/tests", "packages/scopecat/tests", "packages/scopecat-server/tests", "packages/scopecat-instruments/tests", "packages/scopecat-quantum/tests"]
 fast_paths = [
+  "testing/reference_lab/tests/test_browser_admission_seed.py",
   "testing/reference_lab/tests/unit",
   "packages/scopecat/tests",
   "packages/scopecat-instruments/tests",
@@ -483,7 +484,6 @@ fast_paths = [
 ]
 # Lab/application tests require a file-level decision. New files must be classified.
 integration_paths = [
-  "testing/reference_lab/tests/test_browser_admission_seed.py",
   "packages/scopecat-app/tests/test_package_versions.py",
   "packages/scopecat-app/tests/test_native_console.py",
   "packages/scopecat-app/tests/test_windows_native_host.py",
