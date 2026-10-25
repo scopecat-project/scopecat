@@ -296,3 +296,10 @@
     gap: 6px;
   }
 }
+.workspace-nav-item .workspace-attention {
+  color: #ffe5a3;
+  font-weight: 650;
+}
+.workspace-nav-item[aria-current="page"] .workspace-attention {
+  color: #785100;
+}

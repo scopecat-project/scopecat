@@ -134,13 +134,13 @@ test("Start prepares internally while cancelled and edited preparations never ac
       } else if (action === "edit") {
         await page.getByLabel("Gain", { exact: true }).fill("2");
       } else {
-        await page.getByRole("button", { name: "Configuration", exact: true }).click();
+        await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
       }
       release();
       await delivered;
       await page.unroute("**/experiment-launcher/preview");
       if (action === "navigate")
-        await page.getByRole("button", { name: "Experiments", exact: true }).click();
+        await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
       await expect(
         page.getByRole("button", { name: "Start acquisition", exact: true }),
       ).toBeEnabled();

@@ -226,7 +226,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     ]);
     await editor.getByRole("link", { name: /^View saved data:/ }).click();
     await expectRunIdentity(editor, runC);
-    await work.getByRole("button", { name: "Configuration", exact: true }).click();
+    await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     const continuedField = work.getByLabel("signals[1].center", { exact: true });
     // Explicitly reopen the latest shared draft before making a new edit.
     await work.getByRole("button", { name: "Close editor", exact: true }).click();
@@ -234,11 +234,11 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(continuedField).toHaveValue("5.4");
     await continuedField.fill("5.5");
     await expect(work.getByText("Draft saved in application data", { exact: true })).toBeVisible();
-    await work.getByRole("button", { name: "Runs", exact: true }).click();
+    await work.getByRole("button", { name: /Runs$/, exact: true }).click();
     await expectRunIdentity(work, runB);
     expect(new URL(work.url()).searchParams.get("run")).toBe(runB);
     await expectRunIdentity(editor, runC);
-    await work.getByRole("button", { name: "Experiments", exact: true }).click();
+    await work.getByRole("button", { name: /Experiments$/, exact: true }).click();
     expect(new URL(work.url()).searchParams.get("procedure")).toBe(procedureB);
     await expect(work.getByRole("link", { name: /^View saved data:/ })).toHaveAttribute(
       "href",
@@ -250,7 +250,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await work.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
-    await work.getByRole("button", { name: "Configuration", exact: true }).click();
+    await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(continuedField).toHaveValue("5.5");
     await testInfo.attach("working-inputs-evidence", {
       body: JSON.stringify({

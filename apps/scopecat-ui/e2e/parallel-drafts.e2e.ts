@@ -171,6 +171,20 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
     await expectRunIdentity(monitor, runA);
     await expect(monitor.getByTestId("run-status")).toHaveText("Running");
+    await monitor.getByRole("link", { name: "Return to preparation", exact: true }).click();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.goBack();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+    await monitor.goForward();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.reload();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.goBack();
+    await expectRunIdentity(monitor, runA);
+    await monitor.getByRole("link", { name: "Compare retained runs", exact: true }).click();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.goBack();
+    await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Editor", exact: true }).click();
     await expect(page.getByRole("region", { name: "Selected execution", exact: true })).toHaveCount(
@@ -214,18 +228,18 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     ).toEqual([0, 1]);
     await expectRunIdentity(monitor, runA);
 
-    await page.getByRole("button", { name: "Data", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Data", exact: true })).toHaveAttribute(
+    await page.getByRole("button", { name: /Data$/, exact: true }).click();
+    await expect(page.getByRole("button", { name: /Data$/, exact: true })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    await page.getByRole("button", { name: "Experiments", exact: true }).click();
+    await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
     await expect(gain).toHaveValue("3");
     await expect(gain).toBeFocused();
-    await page.getByRole("button", { name: "Collapse navigation" }).click();
+    await page.getByRole("button", { name: /Collapse navigation$/ }).click();
     await expect(page.locator("html")).toHaveClass(/navigation-compact/);
     await page.screenshot({ path: testInfo.outputPath("compact-sidebar-preserved-editor.png") });
-    await page.getByRole("button", { name: "Expand navigation" }).click();
+    await page.getByRole("button", { name: /Expand navigation$/ }).click();
     const switchStarted = performance.now();
     await selectDraft(page, draftB);
     await expect(gain).toHaveValue("2");
@@ -370,11 +384,18 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(
       page.getByRole("combobox", { name: "Editable draft", exact: true }),
     ).toBeInViewport();
-    await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: /Open navigation$/ }).click();
     await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("narrow-sidebar-drawer.png") });
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "Open navigation" })).toBeFocused();
+    await expect(page.getByRole("button", { name: /Open navigation$/ })).toBeFocused();
+    await page.getByRole("button", { name: /Open navigation$/ }).click();
+    await page.setViewportSize({ width: 1266, height: 893 });
+    await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toHaveCount(0);
+    await expect(page.locator("#workspace-body")).toHaveJSProperty("inert", false);
+    await gain.focus();
+    await expect(gain).toBeFocused();
+    await page.setViewportSize({ width: 520, height: 800 });
     const narrowWidths = {
       viewport: page.viewportSize()!.width,
       document: await page.locator("html").evaluate((node) => node.scrollWidth),

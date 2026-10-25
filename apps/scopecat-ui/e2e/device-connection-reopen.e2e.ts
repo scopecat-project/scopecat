@@ -55,7 +55,7 @@ test("connection test feedback follows the saved revision across editing and dae
   try {
     await start();
     await page.goto(`${url}/#instruments`);
-    await page.getByRole("button", { name: "Devices and drivers", exact: true }).click();
+    await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
     await page.getByRole("button", { name: "Add device", exact: true }).click();
     const dialog = page.getByRole("dialog");
     for (const width of [1280, 390]) {
@@ -115,7 +115,7 @@ test("connection test feedback follows the saved revision across editing and dae
     await stop();
     await start();
     await page.goto(url);
-    await page.getByRole("button", { name: "Devices and drivers", exact: true }).click();
+    await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
     await expect(page.getByText(/Connection test passed;/)).toBeVisible();
     expect((await current()).last_connection_test).toEqual(tested.last_connection_test);
     await page.getByRole("button", { name: "Edit device", exact: true }).click();

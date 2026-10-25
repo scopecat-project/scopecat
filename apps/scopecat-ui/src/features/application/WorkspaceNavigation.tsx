@@ -63,17 +63,26 @@ export function WorkspaceNavigation({
   projectName,
   focused,
   onShowNavigation,
+  decisionAttention,
 }: {
   view: ProjectView;
   onSelect: (view: ProjectView) => void;
   projectName?: string;
   focused: boolean;
   onShowNavigation: () => void;
+  decisionAttention?: string;
 }) {
   const [compact, setCompact] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const closeWideDrawer = () => {
+      if (window.innerWidth > 760) setDrawer(false);
+    };
+    window.addEventListener("resize", closeWideDrawer);
+    return () => window.removeEventListener("resize", closeWideDrawer);
+  }, []);
   useEffect(() => {
     document.documentElement.classList.toggle("navigation-compact", compact);
     document.documentElement.classList.toggle("object-focused", focused);
@@ -108,7 +117,8 @@ export function WorkspaceNavigation({
     return () => {
       navigation?.removeEventListener("keydown", handleKey);
       if (main) main.inert = false;
-      returnFocus?.focus();
+      if (window.innerWidth <= 760) returnFocus?.focus();
+      else navigation?.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
     };
   }, [drawer]);
   if (focused)
@@ -122,7 +132,7 @@ export function WorkspaceNavigation({
       <button
         ref={opener}
         className="workspace-menu"
-        aria-label="Open navigation"
+        aria-label="导航 / Open navigation"
         aria-expanded={drawer}
         aria-controls="workspace-navigation"
         onClick={() => setDrawer(true)}
@@ -133,7 +143,7 @@ export function WorkspaceNavigation({
       {drawer && (
         <button
           className="workspace-scrim"
-          aria-label="Close navigation overlay"
+          aria-label="关闭导航遮罩 / Close navigation overlay"
           onClick={() => setDrawer(false)}
         />
       )}
@@ -150,7 +160,7 @@ export function WorkspaceNavigation({
           ◈ <strong>Scopecat</strong>
           <button
             className="workspace-drawer-close"
-            aria-label="Close navigation"
+            aria-label="关闭导航 / Close navigation"
             onClick={() => setDrawer(false)}
           >
             <X size={18} />
@@ -166,7 +176,7 @@ export function WorkspaceNavigation({
                   <button
                     key={id}
                     type="button"
-                    aria-label={english}
+                    aria-label={`${label} / ${english}`}
                     title={`${label} · ${english}`}
                     aria-current={view === id ? "page" : undefined}
                     className={`workspace-nav-item ${itemIndex > 0 ? "is-child" : ""}`}
@@ -183,6 +193,11 @@ export function WorkspaceNavigation({
                     <span>
                       {label}
                       <small>{english}</small>
+                      {id === "decisions" && decisionAttention && (
+                        <small className="workspace-attention" aria-label="Decision attention">
+                          {decisionAttention}
+                        </small>
+                      )}
                     </span>
                   </button>
                 ))}
@@ -195,7 +210,7 @@ export function WorkspaceNavigation({
         </div>
         <button
           className="workspace-collapse"
-          aria-label={compact ? "Expand navigation" : "Collapse navigation"}
+          aria-label={compact ? "展开 / Expand navigation" : "收起导航 / Collapse navigation"}
           aria-expanded={!compact}
           onClick={() => setCompact(!compact)}
         >

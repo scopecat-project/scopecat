@@ -45,7 +45,7 @@ test("a committed save can be retried after response loss without a second revis
       })
       .toBe(true);
     await page.goto(url);
-    await page.getByRole("button", { name: "Devices and drivers", exact: true }).click();
+    await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
     await page.getByRole("button", { name: "Add device", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Device name").fill("Retry software device");

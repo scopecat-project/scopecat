@@ -1,6 +1,7 @@
 import { WorkspaceNavigation, type ProjectView } from "./features/application/WorkspaceNavigation";
 import { useWorkspacePosition } from "./features/application/use-workspace-position";
 import { PinnedTask } from "./features/launch/PinnedTask";
+import { getWaitingProcedures } from "./features/decisions/decision-api";
 import "./workspace.css";
 import type {
   ObjectParameterContext,
@@ -29,7 +30,13 @@ import { DesktopFiles } from "./features/application/DesktopFiles";
 import { DesktopZoom } from "./features/application/DesktopZoom";
 import { DesktopFind } from "./features/application/DesktopFind";
 import { titleCase } from "./lib/presentation";
-import { navigate, navigateBack, navigateForward, type NavigationOptions } from "./lib/navigation";
+import {
+  navigate,
+  navigateBack,
+  navigateForward,
+  useLocationUrl,
+  type NavigationOptions,
+} from "./lib/navigation";
 import { classes, iconButton } from "./ui/styles";
 
 const HelpWorkspace = lazy(async () => {
@@ -97,9 +104,7 @@ export default function App() {
     await parameterWorkspace.current.openObject(context);
   }, []);
   const [view, setView] = useState<ProjectView>(projectViewFromLocation);
-  const [focused, setFocused] = useState(
-    () => new URL(window.location.href).searchParams.get("focus") === "run",
-  );
+  const focused = useLocationUrl().searchParams.get("focus") === "run";
   useWorkspacePosition(view);
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>(selectedRunFromUrl);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | undefined>(
@@ -247,6 +252,12 @@ export default function App() {
 
   const daemonReachable = healthQuery.isSuccess;
   const daemonUnavailable = healthQuery.isError;
+  const waitingDecisions = useQuery({
+    queryKey: ["procedure-decisions"],
+    queryFn: ({ signal }) => getWaitingProcedures(signal),
+    enabled: daemonReachable && !focused,
+    refetchInterval: 1_000,
+  });
 
   const refresh = () => {
     void queryClient.invalidateQueries();
@@ -303,8 +314,14 @@ export default function App() {
         onSelect={selectView}
         projectName={healthQuery.data?.projectName}
         focused={focused}
+        decisionAttention={
+          daemonUnavailable || waitingDecisions.isError
+            ? "状态未知"
+            : waitingDecisions.data
+              ? `${waitingDecisions.data.items.length}${waitingDecisions.data.next_cursor != null ? "+" : ""} 待处理`
+              : undefined
+        }
         onShowNavigation={() => {
-          setFocused(false);
           const url = new URL(window.location.href);
           url.searchParams.delete("focus");
           navigate(url, { replace: true });

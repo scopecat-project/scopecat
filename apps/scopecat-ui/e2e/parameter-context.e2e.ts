@@ -43,7 +43,7 @@ async function start(project: string) {
 async function editVersion(page: Page, name: string) {
   await page
     .getByRole("navigation", { name: "Project sections" })
-    .getByRole("button", { name: "Configuration", exact: true })
+    .getByRole("button", { name: /Configuration$/, exact: true })
     .click();
   await page
     .getByRole("combobox", { name: "Saved parameter version", exact: true })
@@ -308,11 +308,11 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await frequency.press("Tab");
     await page
       .getByRole("navigation", { name: "Project sections" })
-      .getByRole("button", { name: "Runs", exact: true })
+      .getByRole("button", { name: /Runs$/, exact: true })
       .click();
     await page
       .getByRole("navigation", { name: "Project sections" })
-      .getByRole("button", { name: "Configuration", exact: true })
+      .getByRole("button", { name: /Configuration$/, exact: true })
       .click();
     await expect(frequency).toHaveValue("5200");
     await page.screenshot({

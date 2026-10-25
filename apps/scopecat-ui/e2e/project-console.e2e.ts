@@ -363,7 +363,7 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   await page.goto(`${daemon.baseUrl}/?run=${selectedRun}`);
   await expect(page.getByRole("heading", { name: "first_run", exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Configuration" }).click();
+  await page.getByRole("button", { name: /Configuration$/ }).click();
   await expect(
     page.getByRole("heading", { name: "Experiment configuration", exact: true }),
   ).toBeVisible();
@@ -581,7 +581,7 @@ test("exact run opens independently in two browser pages while acquisition conti
     await page.getByTitle(`Inspect run ${runId}`, { exact: true }).click();
     await expect(page.getByTestId("measurement-preview")).not.toBeVisible();
     await expect(resultData.getByTestId("measurement-preview")).toBeVisible();
-    await result.getByRole("button", { name: "Help", exact: true }).click();
+    await result.getByRole("button", { name: /Help$/, exact: true }).click();
     await result.goBack();
     await expect(result.getByTestId("run-detail-header")).toContainText(runId);
     await result.close();
@@ -750,7 +750,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     const previewHashes: string[] = [];
     for (const value of ["7.25", "8.5"]) {
       phase = `edit working input ${value}`;
-      await b.getByRole("button", { name: "Configuration", exact: true }).click();
+      await b.getByRole("button", { name: /Configuration$/, exact: true }).click();
       await scale.fill(value);
       await b
         .getByRole("button", { name: "Use working inputs for next experiment", exact: true })

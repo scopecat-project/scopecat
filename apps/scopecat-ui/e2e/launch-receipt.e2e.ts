@@ -54,7 +54,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     await expect(page.getByRole("region", { name: "Original launch submission" })).toBeInViewport();
     await page
       .getByRole("navigation", { name: "Project sections" })
-      .getByRole("button", { name: "Configuration", exact: true })
+      .getByRole("button", { name: /Configuration$/, exact: true })
       .click();
     await page.route("**/api/v1/experiment-launcher", async (route) => {
       const response = await route.fetch();
@@ -73,7 +73,7 @@ test("reopens a lost launch receipt after context changes without a second submi
     });
     await page
       .getByRole("navigation", { name: "Project sections" })
-      .getByRole("button", { name: "Experiments", exact: true })
+      .getByRole("button", { name: /Experiments$/, exact: true })
       .click();
     await expect(
       page.getByRole("region", { name: "Review recovered experiment", exact: true }),
