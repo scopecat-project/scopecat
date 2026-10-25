@@ -11,6 +11,7 @@ from typing import Protocol
 import pytest
 
 from scopecat.daemon.client import DaemonClient
+from scopecat.kernel.ids import validate_run_id
 from scopecat_server.lifecycle import initialize_project, start_project, stop_project
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -29,8 +30,12 @@ def _wait_for_marker(marker: Path, child: _SeedProcess) -> str:
         assert child.poll() is None, child.communicate()
         assert time.monotonic() < deadline, marker.name
         if marker.exists():
-            value = marker.read_text(encoding="utf-8").strip()
-            if value:
+            value = marker.read_text(encoding="utf-8")
+            try:
+                validate_run_id(value)
+            except ValueError:
+                pass  # Creation or a partial write is not a ready run identity.
+            else:
                 return value
         time.sleep(0.02)
 
@@ -47,11 +52,13 @@ def test_marker_waits_for_content_after_file_creation(
     def read_then_finish_write(path: Path, *, encoding: str) -> str:
         value = original_read(path, encoding=encoding)
         reads.append(value)
-        if len(reads) == 1:
-            # Deterministically expose the create-before-write interval: this
-            # read still returns empty even though the next read sees the ID.
-            path.write_text(expected, encoding=encoding)
-        assert len(reads) <= 2
+        if len(reads) <= 2:
+            # Expose both create-before-write and partial-write intervals.
+            # Return the value already read, not the next writer's content.
+            path.write_text(
+                expected[:8] if len(reads) == 1 else expected, encoding=encoding
+            )
+        assert len(reads) <= 3
         return value
 
     monkeypatch.setattr(Path, "read_text", read_then_finish_write)
@@ -67,8 +74,8 @@ def test_marker_waits_for_content_after_file_creation(
 
     child = RunningSeed()
     assert _wait_for_marker(marker, child) == expected
-    assert reads == ["", expected]
-    assert child.checks == 2
+    assert reads == ["", expected[:8], expected]
+    assert child.checks == 3
 
 
 def test_browser_seed_gates_admission_execution_and_first_measurement(
