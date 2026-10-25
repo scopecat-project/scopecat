@@ -255,6 +255,10 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await expect(
       page.getByRole("button", { name: "实验 / Experiments", exact: true }),
     ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Workspace navigation", exact: true }),
+    ).toHaveCount(0);
     await page.goBack();
     await reviewRetainedExperiment(page);
     await page.getByRole("button", { name: "准备新的 run（独立采集）", exact: true }).click();
