@@ -238,6 +238,8 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(gain).toBeFocused();
     await page.getByRole("button", { name: /Collapse navigation$/ }).click();
     await expect(page.locator("html")).toHaveClass(/navigation-compact/);
+    await expect(page.getByLabel("Decision attention")).toBeVisible();
+    await expect(page.getByLabel("Decision attention")).toHaveText("0 待处理");
     await page.screenshot({ path: testInfo.outputPath("compact-sidebar-preserved-editor.png") });
     await page.getByRole("button", { name: /Expand navigation$/ }).click();
     const switchStarted = performance.now();

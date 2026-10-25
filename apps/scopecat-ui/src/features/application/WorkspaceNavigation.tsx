@@ -194,9 +194,9 @@ export function WorkspaceNavigation({
                       {label}
                       <small>{english}</small>
                       {id === "decisions" && decisionAttention && (
-                        <small className="workspace-attention" aria-label="Decision attention">
+                        <span className="workspace-attention" aria-label="Decision attention">
                           {decisionAttention}
-                        </small>
+                        </span>
                       )}
                     </span>
                   </button>

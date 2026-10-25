@@ -297,6 +297,8 @@
   }
 }
 .workspace-nav-item .workspace-attention {
+  display: block;
+  font-size: 10px;
   color: #ffe5a3;
   font-weight: 650;
 }
