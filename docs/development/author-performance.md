@@ -326,7 +326,8 @@ qualification. No RSS or latency pass/fail threshold is introduced.
 
 Run from the public source checkout on the target machine; this benchmark is not
 an installed-wheel command. It uses a copied virtual reference project and makes
-no physical device calls. One real retained signal run supplies analysis input.
+no physical device calls. With default flags, one real retained signal run supplies
+analysis input.
 Preparing and analyzing the same revision should reuse its worker; three or more
 source revisions exercise LRU eviction in both pools. Returning to the original
 revision must reconstruct its exact source in a new process. Normal shutdown is
