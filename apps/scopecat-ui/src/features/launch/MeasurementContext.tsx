@@ -49,7 +49,7 @@ export function MeasurementContext({
       disabled={draft.pending === "submit"}
       className="border border-line rounded p-3 space-y-3"
     >
-      <legend className="font-semibold">Measurement context · this page</legend>
+      <legend className="font-semibold">本页测量上下文</legend>
       <ParameterBranchPicker
         value={configuration}
         projectId={projectId}
@@ -66,9 +66,9 @@ export function MeasurementContext({
       )}
       <div className="flex flex-wrap gap-3">
         <Field>
-          Sample ID{" "}
+          样品 ID{" "}
           <Input
-            aria-label="Sample ID"
+            aria-label="样品 ID"
             list={listId}
             disabled={subjectLocked}
             value={selectedSample}
@@ -85,9 +85,9 @@ export function MeasurementContext({
             ))}
         </datalist>
         <Field>
-          Operator{" "}
+          操作人{" "}
           <Input
-            aria-label="Operator"
+            aria-label="操作人"
             value={draft.actor}
             onChange={(event) => onChange({ actor: event.target.value })}
           />
@@ -100,8 +100,7 @@ export function MeasurementContext({
         onChange={(collection) => onChange({ collection })}
       />
       <p className="text-sm text-text-dim">
-        New runs keep this collection. Named collections number independently from 1; default
-        collection numbers may have gaps.
+        新 run 保留此记录集。命名记录集各自从 1 编号；默认记录集编号可能不连续。
       </p>
       <TargetPicker
         value={subject.kind === "registered_target" ? subject.ref : undefined}
@@ -123,23 +122,23 @@ export function MeasurementContext({
             setBrowse(true);
           }}
         >
-          Choose another subject
+          选择其他对象
         </Button>
       )}
       <Button type="button" aria-expanded={browse} onClick={() => setBrowse(!browse)}>
-        {browse ? "Hide context choices" : "Browse samples, batches and collections"}
+        {browse ? "收起上下文选择" : "浏览样品、批次与记录集"}
       </Button>
       {browse && (
         <>
           <Field className="flex-col">
-            Registered sample
+            已注册样品
             <Select
-              aria-label="Registered sample"
+              aria-label="已注册样品"
               disabled={subjectLocked}
               value={selectedSample}
               onChange={(event) => changeSample(event.target.value)}
             >
-              <option value="">No sample selected</option>
+              <option value="">未选择样品</option>
               {selectedSample &&
                 !samples.data?.pages.some((page) =>
                   page.items.some((sample) => sample.record.id === selectedSample),
@@ -157,7 +156,7 @@ export function MeasurementContext({
             <Notice role="alert">
               {samples.error.message}{" "}
               <Button type="button" onClick={() => void samples.refetch()}>
-                Retry sample list
+                重试加载样品
               </Button>
             </Notice>
           )}
@@ -167,7 +166,7 @@ export function MeasurementContext({
               disabled={samples.isFetchingNextPage}
               onClick={() => void samples.fetchNextPage()}
             >
-              Load more samples
+              加载更多样品
             </Button>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
@@ -188,13 +187,12 @@ export function MeasurementContext({
       )}
       {!browse && (
         <p>
-          {batch ? `Batch: ${batch}` : "Batch unspecified"} ·{" "}
-          {draft.collection ? `Collection: ${draft.collection}` : "Default record collection"}
+          {batch ? `Batch: ${batch}` : "未指定批次"} ·{" "}
+          {draft.collection ? `Collection: ${draft.collection}` : "默认记录集"}
         </p>
       )}
       <p className="text-sm">
-        Kept when switching experiments in this page. Preview validates the selection; other pages
-        and admitted measurements keep their own context.
+        在本页切换实验时保留上下文。预览会验证选择；其他页面与已接纳测量保留各自上下文。
       </p>
     </fieldset>
   );

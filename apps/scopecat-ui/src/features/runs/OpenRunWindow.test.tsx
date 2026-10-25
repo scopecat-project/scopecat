@@ -42,7 +42,7 @@ it("uses the native bridge after readiness and reports failures without navigati
     window.dispatchEvent(new Event("pywebviewready"));
   });
   expect(screen.queryByRole("link")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Open result in new window" }));
+  fireEvent.click(screen.getByRole("button", { name: "在新窗口打开结果" }));
   expect((await screen.findByRole("alert")).textContent).toBe("Application is restarting");
   expect(open).toHaveBeenCalledExactlyOnceWith("run-a");
   expect(window.location.href).toBe(original);

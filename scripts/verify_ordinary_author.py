@@ -240,10 +240,10 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                     cast("dict[str, object]", first["control"])["admission"],
                 )["run_id"]
             )
-            page.get_by_role("button", name="Runs", exact=True).click()
+            page.get_by_role("button", name="运行详情 / Runs", exact=True).click()
             page.get_by_title(f"Inspect run {run_id}", exact=True).click()
-            expect(page.get_by_test_id("run-status")).to_have_text("Succeeded")
-            page.get_by_text("Run details", exact=True).click()
+            expect(page.get_by_test_id("run-status")).to_have_text("已完成")
+            page.get_by_text("run 详情", exact=True).click()
             expect(page.get_by_title(run_id, exact=True)).to_be_visible()
             expect(
                 page.get_by_role("figure", name="Result Position → Result line")
@@ -255,8 +255,8 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                 "rows => rows.map(row => row.lastElementChild.textContent)"
             ) == ["1", "2", "1"]
             header = page.get_by_test_id("run-detail-header")
-            header.get_by_role("button", name="Copy read-only code", exact=True).click()
-            expect(header.get_by_role("status")).to_have_text("Read-only code copied.")
+            header.get_by_role("button", name="复制只读代码", exact=True).click()
+            expect(header.get_by_role("status")).to_have_text("只读代码已复制。")
             copied = cast("str", page.evaluate("navigator.clipboard.readText()"))
             assert f'run = session.run("{run_id}")' in copied
             (work / "copied-run.py").write_text(copied)
@@ -305,7 +305,10 @@ author.close()
             )
             assert len(runs()) == 3
             page.goto(endpoint + "/?run=" + str(notes["third"]) + "#runs")
-            page.get_by_role("link", name="Open exact source conclusion").click()
+            page.get_by_text("样品与计划来源", exact=True).click()
+            page.get_by_role(
+                "link", name="Open exact source conclusion", exact=True
+            ).click()
             expect(
                 page.get_by_role(
                     "region", name="Experiments started from this conclusion"
@@ -370,9 +373,9 @@ author.close()
             assert code.read_text() == original.replace(
                 "return scale /", "return 2 * scale /"
             )
-            page.get_by_role("button", name="Runs", exact=True).click()
+            page.get_by_role("button", name="运行详情 / Runs", exact=True).click()
             page.get_by_title(f"Inspect run {run_id}", exact=True).click()
-            expect(page.get_by_test_id("run-status")).to_have_text("Succeeded")
+            expect(page.get_by_test_id("run-status")).to_have_text("已完成")
             page.get_by_text("Record table · 3 rows in this view", exact=True).click()
             expect(table.locator("tbody tr")).to_have_count(3)
             assert table.locator("tbody tr").evaluate_all(
@@ -382,8 +385,11 @@ author.close()
             evidence["restart_then_explicit_continue"] = "passed"
             evidence["continued_run"] = (source / "continued-run.txt").read_text()
             page.goto(endpoint + "/?run=" + str(evidence["continued_run"]) + "#runs")
-            expect(page.get_by_test_id("run-status")).to_have_text("Succeeded")
-            page.get_by_role("link", name="Open exact source conclusion").click()
+            expect(page.get_by_test_id("run-status")).to_have_text("已完成")
+            page.get_by_text("样品与计划来源", exact=True).click()
+            page.get_by_role(
+                "link", name="Open exact source conclusion", exact=True
+            ).click()
             followups = page.get_by_role(
                 "region", name="Experiments started from this conclusion"
             )

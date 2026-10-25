@@ -60,18 +60,18 @@ export function AnalysesWorkspace(props: {
   }
   return (
     <div className="space-y-4">
-      <nav className="flex gap-4" aria-label="Analysis workflows">
+      <nav className="flex gap-4" aria-label="分析流程">
         <Controls.Button
           aria-current={comparison ? "page" : undefined}
           onClick={() => selectWorkflow(true)}
         >
-          Compare retained runs
+          比较已有 run
         </Controls.Button>
         <Controls.Button
           aria-current={!comparison ? "page" : undefined}
           onClick={() => selectWorkflow(false)}
         >
-          Project analysis history
+          项目分析历史
         </Controls.Button>
       </nav>
       {comparison && !props.daemonUnavailable ? (
@@ -239,7 +239,7 @@ function ProjectAnalyses({
               ) : (
                 <ChevronDown size={14} aria-hidden="true" />
               )}
-              {analyses.isFetchingNextPage ? "Loading older analyses…" : "Load older analyses"}
+              {analyses.isFetchingNextPage ? "Loading older analyses…" : "加载更早 analysis"}
             </button>
           ) : null}
         </div>

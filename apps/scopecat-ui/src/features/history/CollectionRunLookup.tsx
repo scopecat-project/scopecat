@@ -47,9 +47,9 @@ export function CollectionRunLookup({
         }}
       >
         <Field className="flex-col">
-          Collection run number{" "}
+          记录集内 run 编号{" "}
           <Input
-            aria-label="Collection run number"
+            aria-label="记录集内 run 编号"
             className="w-28"
             value={input}
             type="text"
@@ -64,21 +64,21 @@ export function CollectionRunLookup({
           />
         </Field>
         <Button disabled={!collection || unavailable || !input || result.isFetching}>
-          Find run
+          查找 run
         </Button>
       </form>
-      <p className="text-xs text-text-dim">Collection only · ignores the filters below.</p>
+      <p className="text-xs text-text-dim">仅在此记录集中查找，不受下方筛选影响。</p>
       {number && !unavailable && result.isPending && (
-        <Notice role="status">Finding collection run #{number}…</Notice>
+        <Notice role="status">正在查找记录集内 run #{number}…</Notice>
       )}
       {number && result.error && (
         <Notice role="alert">
-          Could not find collection run #{number}: {result.error.message}
+          无法找到记录集内 run #{number}: {result.error.message}
         </Notice>
       )}
       {!unavailable && !result.error && result.data && (
         <Button onClick={() => onOpenRun(result.data.run_id)}>
-          Open collection run #{result.data.number}
+          打开记录集内 run #{result.data.number}
         </Button>
       )}
     </div>

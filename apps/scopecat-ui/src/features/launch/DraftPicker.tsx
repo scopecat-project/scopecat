@@ -20,10 +20,10 @@ export function DraftPicker() {
   const records = drafts.data?.pages.flatMap((page) => page.items) ?? [];
   const id = draft.draftId ?? "default";
   return (
-    <section aria-label="Independent experiment drafts" className="min-w-0 space-y-1">
+    <section aria-label="独立实验草稿" className="min-w-0 space-y-1">
       <ActionRow>
         <Field>
-          Editable draft
+          可编辑草稿
           <Select
             value={id}
             disabled={!recovery.ready || recovery.writing}
@@ -54,20 +54,20 @@ export function DraftPicker() {
           </Select>
         </Field>
         <Button
-          aria-label="Copy to new draft"
+          aria-label="复制为新草稿"
           disabled={!recovery.ready || recovery.writing}
           onClick={() => {
             void copyDraft().then(() => drafts.refetch());
           }}
         >
-          Copy
+          复制
         </Button>
         <Button
-          aria-label="Rename draft"
+          aria-label="重命名草稿"
           disabled={!recovery.ready}
           onClick={() => setRenaming(!renaming)}
         >
-          Rename
+          重命名
         </Button>
         {drafts.hasNextPage && (
           <Button
@@ -75,7 +75,7 @@ export function DraftPicker() {
               void drafts.fetchNextPage();
             }}
           >
-            More drafts
+            更多草稿
           </Button>
         )}
       </ActionRow>
@@ -94,7 +94,7 @@ export function DraftPicker() {
         >
           <ActionRow>
             <Field>
-              Draft name{" "}
+              草稿名称{" "}
               <Input
                 name="name"
                 disabled={!recovery.ready}
@@ -104,7 +104,7 @@ export function DraftPicker() {
               />
             </Field>
             <Button type="submit" disabled={!recovery.ready}>
-              Save name
+              保存名称
             </Button>
           </ActionRow>
         </form>

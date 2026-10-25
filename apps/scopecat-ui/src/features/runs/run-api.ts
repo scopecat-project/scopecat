@@ -687,17 +687,17 @@ function normalizeStatus(control: RunControlView, snapshot: RunSnapshot): Presen
 function statusLabel(status: PresentationRunStatus): string {
   switch (status) {
     case "accepted":
-      return "Accepted";
+      return "已接纳";
     case "running":
-      return "Running";
+      return "执行中";
     case "attention_required":
-      return "Needs attention";
+      return "需要处理";
     case "succeeded":
-      return "Succeeded";
+      return "已完成";
     case "failed":
-      return "Failed";
+      return "失败";
     case "cancelled":
-      return "Cancelled";
+      return "已取消";
   }
 }
 

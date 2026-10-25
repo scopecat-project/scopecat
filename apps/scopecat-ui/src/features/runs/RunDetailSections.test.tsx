@@ -118,7 +118,7 @@ describe("Run receipt summary", () => {
   const run = {
     runId: "run-progress",
     status: "running",
-    stateLabel: "Running",
+    stateLabel: "执行中",
     progressCompleted: 9,
     plan: { pointCount: 10 },
     pointPlan: { acceptedPointCount: 10, closed: true },
@@ -132,23 +132,21 @@ describe("Run receipt summary", () => {
         measurements={{ items: [], recordCount: 10, durableRecordCount: 4 }}
       />,
     );
-    const summary = screen.getByRole("region", { name: "Run progress" });
-    expect(summary).toHaveTextContent("Received records 10");
-    expect(summary).toHaveTextContent("Saved records 4");
+    const summary = screen.getByRole("region", { name: "run 进度" });
+    expect(summary).toHaveTextContent("已接收记录 10");
+    expect(summary).toHaveTextContent("已保存记录 4");
     expect(summary).toHaveTextContent("6 received records not saved yet");
     expect(summary).not.toHaveTextContent("Planned data received");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText("Succeeded")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
-    expect(screen.getByText(/9 points have durable execution evidence/)).toBeVisible();
+    expect(screen.queryByText("已完成")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
+    expect(screen.getByText(/9 个点已有持久化执行证据/)).toBeVisible();
   });
 
   it("does not invent receipts from coverage, and marks failed live refreshes", () => {
     render(<ProgressCard run={run} events={[]} receiptError={new Error("disconnected")} />);
-    expect(screen.getByText("No measurement data received yet.")).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("Displayed counts and plots may be stale");
-    expect(screen.getByRole("region", { name: "Run progress" })).not.toHaveTextContent(
-      "Received records 9",
-    );
+    expect(screen.getByText("尚未收到测量数据。")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("当前计数与曲线可能已过时");
+    expect(screen.getByRole("region", { name: "run 进度" })).not.toHaveTextContent("已接收记录 9");
   });
 });

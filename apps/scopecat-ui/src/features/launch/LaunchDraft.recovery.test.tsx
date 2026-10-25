@@ -62,9 +62,7 @@ it("keeps unsaved input reachable when switching is attempted after a failed sav
   );
   mount();
   await act(async () => state.select(entry, false, "legacy"));
-  await waitFor(() =>
-    expect(state.recovery.status).toBe("Experiment input saved in application data."),
-  );
+  await waitFor(() => expect(state.recovery.status).toBe("实验输入已保存到应用数据。"));
   offline = true;
   act(() =>
     state.update((draft) =>
@@ -81,14 +79,10 @@ it("keeps unsaved input reachable when switching is attempted after a failed sav
   await act(async () => {
     await state.recovery.retry();
   });
-  await waitFor(() =>
-    expect(state.recovery.status).toBe("Experiment input saved in application data."),
-  );
+  await waitFor(() => expect(state.recovery.status).toBe("实验输入已保存到应用数据。"));
   await act(async () => state.select({ ...entry, id: "other" }, false, "legacy"));
   await waitFor(() => expect(state.draft?.experiment).toBe("other"));
-  await waitFor(() =>
-    expect(state.recovery.status).toBe("Experiment input saved in application data."),
-  );
+  await waitFor(() => expect(state.recovery.status).toBe("实验输入已保存到应用数据。"));
   await act(async () => state.select(entry, false, "legacy"));
   await waitFor(() => expect(state.draft?.values.raw).toBe("invalid but valuable"));
 });
@@ -166,9 +160,7 @@ it("never submits before its immutable original request is acknowledged, includi
   });
   mount();
   await act(async () => state.select(entry, false, "legacy"));
-  await waitFor(() =>
-    expect(state.recovery.status).toBe("Experiment input saved in application data."),
-  );
+  await waitFor(() => expect(state.recovery.status).toBe("实验输入已保存到应用数据。"));
   const request = {
     action: "submit" as const,
     workspace_id: "legacy",
@@ -243,9 +235,7 @@ it.each(["flush", "retain"] as const)(
     });
     mount();
     await act(async () => state.select(entry, false, "legacy"));
-    await waitFor(() =>
-      expect(state.recovery.status).toBe("Experiment input saved in application data."),
-    );
+    await waitFor(() => expect(state.recovery.status).toBe("实验输入已保存到应用数据。"));
     held = true;
     if (phase === "flush")
       act(() => state.update((current) => ({ ...current, values: { raw: "changed" } })));
@@ -290,9 +280,7 @@ it.each(["receipt", "edit", "unmount"] as const)(
     });
     const view = mount();
     await act(async () => state.select(entry, false, "legacy"));
-    await waitFor(() =>
-      expect(state.recovery.status).toBe("Experiment input saved in application data."),
-    );
+    await waitFor(() => expect(state.recovery.status).toBe("实验输入已保存到应用数据。"));
     let sending!: Promise<string | undefined>;
     act(() => {
       sending = state.submit(attemptRequest(attempt(1)), "declaration", procedureDefinition);
@@ -397,7 +385,7 @@ it("keeps named copies independent through switching and restart without submitt
   });
   const first = mount();
   await act(async () => state.select(entry, false, "legacy"));
-  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("实验输入已保存"));
   act(() => state.renameDraft("B"));
   act(() =>
     state.update((draft) => invalidateDraft({ ...draft, values: { raw: "B input" } }, "edited")),
@@ -446,7 +434,7 @@ it("refuses to copy a draft whose latest input has not been confirmed saved", as
   );
   mount();
   await act(async () => state.select(entry, false, "legacy"));
-  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("实验输入已保存"));
   offline = true;
   act(() =>
     state.update((draft) => invalidateDraft({ ...draft, values: { raw: "unsaved B" } }, "edited")),
@@ -469,7 +457,7 @@ it("imports historical inputs into a new identity and preserves the existing sav
     request: { properties: { note: { type: "string", default: "" } }, required: [] },
   };
   await act(async () => state.select(editable, false, "legacy"));
-  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("实验输入已保存"));
   act(() =>
     state.update((draft) => invalidateDraft({ ...draft, values: { note: "B work" } }, "edited")),
   );
@@ -502,7 +490,7 @@ it("imports historical inputs into a new identity and preserves the existing sav
   expect(state.draft?.draftId).not.toBe("default");
   expect(state.draft?.values.note).toBe("historical A");
   expect(new URL(window.location.href).searchParams.get("draft")).toBe(state.draft?.draftId);
-  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("实验输入已保存"));
   const retained = (await readDraft("legacy", "signal")).head!;
   expect(retained.revision).toBe(original.revision);
   expect(retained.input.values.note).toBe("B work");
@@ -530,7 +518,7 @@ async function configurationCopyFixture() {
   installLaunchRecoveryRoutes();
   mount();
   await act(async () => state.select(entry, false, "legacy"));
-  await waitFor(() => expect(state.recovery.status).toContain("input saved"));
+  await waitFor(() => expect(state.recovery.status).toContain("实验输入已保存"));
   act(() =>
     state.update((draft) => invalidateDraft({ ...draft, values: { raw: "B input" } }, "edited")),
   );

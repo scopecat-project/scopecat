@@ -122,8 +122,8 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     }[] = [];
     await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(saved.runId)}#runs`);
     const header = page.getByTestId("run-detail-header");
-    await header.getByRole("button", { name: "Copy read-only code" }).click();
-    await expect(header.getByRole("status")).toHaveText("Read-only code copied.");
+    await header.getByRole("button", { name: "复制只读代码" }).click();
+    await expect(header.getByRole("status")).toHaveText("只读代码已复制。");
     const runCode = await page.locator("html").getAttribute("data-copied");
     const detail = await (
       await page.request.get(`${endpoint.base_url}/api/v1/runs/${saved.runId}`)
@@ -139,8 +139,8 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       .filter({ has: page.locator("summary").getByText("Saved run version 1", { exact: true }) });
     await old.locator("summary").click();
     await expect(old.getByTestId("publication-id")).toHaveText(saved.run[0]);
-    await old.getByRole("button", { name: "Copy read-only code" }).click();
-    await expect(old.getByRole("status")).toHaveText("Read-only code copied.");
+    await old.getByRole("button", { name: "复制只读代码" }).click();
+    await expect(old.getByRole("status")).toHaveText("只读代码已复制。");
     const analysisCode = await page.locator("html").getAttribute("data-copied");
     expect(analysisCode).toBe(
       readOnlyCode({ kind: "run", runId: saved.runId, publicationId: saved.run[0] }),
@@ -173,8 +173,8 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
           }),
         mode,
       );
-      await page.getByRole("button", { name: "Copy read-only code" }).click();
-      const field = page.getByRole("textbox", { name: "Read-only code" });
+      await page.getByRole("button", { name: "复制只读代码" }).click();
+      const field = page.getByRole("textbox", { name: "只读代码" });
       const code = readOnlyCode({ kind: "project", publicationId: saved.project[0] });
       await expect(field).toHaveValue(code);
       await field.focus();

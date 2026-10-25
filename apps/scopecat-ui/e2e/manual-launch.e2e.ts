@@ -37,7 +37,7 @@ test("registered devices share ownership across pages without setup selection", 
     const second = await context.newPage();
     await page.goto(`${endpoint.base_url}/#instruments`);
     await second.goto(`${endpoint.base_url}/#instruments`);
-    await expect(page.getByLabel("Experiment setup", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("实验配置", { exact: true })).toHaveCount(0);
     await page.getByTitle("Inspect instrument drive-lo-a").click();
     await second.getByTitle("Inspect instrument drive-lo-a").click();
     const opening = page.waitForRequest((request) =>
@@ -109,13 +109,11 @@ test("manual changes invalidate a retained preview before a fresh acquisition", 
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("ramsey");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("ramsey");
     await chooseReferenceContext(page);
     await page.getByLabel("Delay", { exact: true }).fill("64");
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     uv([
       "python",
       "-c",
@@ -134,18 +132,16 @@ with LabApplication().connect(sys.argv[1]) as lab:
       endpoint.base_url,
     ]);
     await expect(page.getByText(/Manual instrument changes invalidate this preview/)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     await expect(page.getByLabel("Delay", { exact: true })).toHaveValue("64");
     const submitted = page.waitForResponse((response) =>
       response.url().endsWith("/experiment-launcher/submit"),
     );
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
     expect((await submitted).status()).toBe(200);
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: /^View saved data:/ }).click();
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: /^查看已保存结果:/ }).click();
+    await expect(page.getByTestId("run-status")).toHaveText("已完成");
     completed = true;
   } finally {
     uv(["scopecat", "stop", project]);

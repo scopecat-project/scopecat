@@ -83,13 +83,13 @@ test("populated workspaces, exact result window and focus view remain readable",
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${base}/?run=${seed.run}#runs`);
       await expect(page.getByTestId("run-detail-header")).toBeVisible();
-      await expect(page.getByRole("region", { name: "Run progress" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "run 进度" })).toBeVisible();
       await capture(page, `run-${width}`);
-      await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+      await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await capture(page, `focused-chart-${width}`);
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+      await expect(page.getByRole("button", { name: "聚焦曲线", exact: true })).toBeFocused();
       await page.goto(`${base}/#configuration`);
       await page.getByLabel("Working parameter branch", { exact: true }).fill("visual-inputs");
       await page.getByRole("button", { name: "Open working table", exact: true }).click();
@@ -114,7 +114,7 @@ test("populated workspaces, exact result window and focus view remain readable",
     }
     await page.goto(`${base}/?run=${seed.run}#runs`);
     const popupPromise = context.waitForEvent("page");
-    await page.getByRole("link", { name: "Open result in new tab or window", exact: true }).click();
+    await page.getByRole("link", { name: "在新标签页或窗口打开结果", exact: true }).click();
     const result = await popupPromise;
     await result.setViewportSize({ width: 768, height: 900 });
     await expect(result.getByTestId("run-detail-header")).toBeVisible();

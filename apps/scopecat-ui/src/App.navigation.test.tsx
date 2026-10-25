@@ -82,7 +82,7 @@ vi.mock("./features/analyses/AnalysesWorkspace", () => ({
     selectedAnalysisId?: string;
   }) => (
     <div>
-      Project analysis workspace
+      项目分析工作区
       <span>Selected analysis {selectedAnalysisId ?? "none"}</span>
       <button type="button" onClick={() => onOpenRun("run-2")}>
         Open analysis input run
@@ -198,12 +198,13 @@ afterEach(() => {
 it("replaces the exact-run opening link without leaving a stale run action", async () => {
   window.history.replaceState(null, "", "/?run=run-1");
   renderApp();
-  expect(
-    await screen.findByRole("link", { name: "Open result in new tab or window" }),
-  ).toHaveAttribute("href", "/?run=run-1&focus=run#runs");
+  expect(await screen.findByRole("link", { name: "在新标签页或窗口打开结果" })).toHaveAttribute(
+    "href",
+    "/?run=run-1&focus=run#runs",
+  );
   fireEvent.click(screen.getByTitle("Inspect run run-2"));
   await waitFor(() => {
-    const links = screen.getAllByRole("link", { name: "Open result in new tab or window" });
+    const links = screen.getAllByRole("link", { name: "在新标签页或窗口打开结果" });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute("href", "/?run=run-2&focus=run#runs");
   });
@@ -371,7 +372,7 @@ describe("config provenance navigation", () => {
     window.history.replaceState(null, "", "/#analyses");
     renderApp();
 
-    expect(await screen.findByText("Project analysis workspace")).toBeVisible();
+    expect(await screen.findByText("项目分析工作区")).toBeVisible();
     expect(screen.getByRole("button", { name: /Analyses$/ })).toHaveAttribute(
       "aria-current",
       "page",
@@ -504,7 +505,7 @@ describe("config provenance navigation", () => {
     renderApp();
     expect(await screen.findByText("0 active in loaded runs")).toBeVisible();
     expect(screen.getByText("No flags in loaded runs")).toBeVisible();
-    fireEvent.click(await screen.findByRole("button", { name: "Load older runs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
 
     expect(await screen.findByTitle("Inspect run run-old")).toBeVisible();
     expect(getOlderRuns).toHaveBeenCalledWith(20);
@@ -512,7 +513,7 @@ describe("config provenance navigation", () => {
     expect(
       screen.getAllByTitle(/^Inspect run /).map((button) => button.getAttribute("title")),
     ).toEqual(["Inspect run run-2", "Inspect run run-1", "Inspect run run-old"]);
-    expect(screen.queryByRole("button", { name: "Load older runs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "加载更早 run" })).not.toBeInTheDocument();
   });
 
   it("discards loaded history when the latest page head moves", async () => {
@@ -531,13 +532,13 @@ describe("config provenance navigation", () => {
     });
 
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: "Load older runs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
     expect(await screen.findByTitle("Inspect run run-old")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh project data" }));
 
     await waitFor(() => expect(screen.queryByTitle("Inspect run run-old")).not.toBeInTheDocument());
-    fireEvent.click(await screen.findByRole("button", { name: "Load older runs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "加载更早 run" }));
     await waitFor(() =>
       expect(vi.mocked(getOlderRuns).mock.calls.map(([cursor]) => cursor)).toEqual([20, 30]),
     );
@@ -572,7 +573,7 @@ describe("config provenance navigation", () => {
     const running = {
       ...projectRun("run-1"),
       status: "running" as const,
-      stateLabel: "Running",
+      stateLabel: "执行中",
       plan: {
         coordinateSpecs: [],
         adaptiveCoordinateIds: [],
@@ -616,9 +617,9 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    await screen.findByRole("region", { name: "Run progress" });
-    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
-    expect(await screen.findByText(/0 points have durable execution evidence/)).toBeVisible();
+    await screen.findByRole("region", { name: "run 进度" });
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
+    expect(await screen.findByText(/0 个点已有持久化执行证据/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
@@ -627,7 +628,7 @@ describe("config provenance navigation", () => {
     const running = {
       ...projectRun("run-1"),
       status: "running" as const,
-      stateLabel: "Running",
+      stateLabel: "执行中",
       progressCompleted: 2,
       pointPlan: {
         initialPointCount: 1,
@@ -658,10 +659,10 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    const progress = await screen.findByRole("region", { name: "Run progress" });
+    const progress = await screen.findByRole("region", { name: "run 进度" });
     expect(progress).toHaveTextContent("3 accepted points · plan open");
-    fireEvent.click(screen.getByText("Execution evidence", { exact: true }));
-    expect(await screen.findByText(/2 points have durable execution evidence/)).toBeVisible();
+    fireEvent.click(screen.getByText("执行证据", { exact: true }));
+    expect(await screen.findByText(/2 个点已有持久化执行证据/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
@@ -696,9 +697,9 @@ describe("config provenance navigation", () => {
     renderApp();
     await waitFor(() => expect(getMeasurementLivePreview).toHaveBeenCalled());
     expect(await screen.findByText(/^1\+ records/)).toBeVisible();
-    const progress = screen.getByRole("region", { name: "Run progress" });
-    expect(progress).toHaveTextContent("Saved preview records 1+");
-    expect(progress).not.toHaveTextContent(/Received records \d/);
+    const progress = screen.getByRole("region", { name: "run 进度" });
+    expect(progress).toHaveTextContent("已保存预览记录 1+");
+    expect(progress).not.toHaveTextContent(/已接收记录 \d/);
     expect(screen.queryByText(/Latest received data:/)).not.toBeInTheDocument();
   });
 
@@ -707,7 +708,7 @@ describe("config provenance navigation", () => {
     const running = {
       ...projectRun("run-1"),
       status: "running" as const,
-      stateLabel: "Running",
+      stateLabel: "执行中",
       plan: {
         coordinateSpecs: [],
         adaptiveCoordinateIds: [],
@@ -736,14 +737,10 @@ describe("config provenance navigation", () => {
 
     expect(await screen.findByText(/^1 records/)).toBeVisible();
     expect(screen.getByText(/Latest received data: point index 0; not saved yet/)).toBeVisible();
-    expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
-      "Received records 1",
-    );
-    expect(screen.getByRole("region", { name: "Run progress" })).toHaveTextContent(
-      "Saved records 0",
-    );
-    expect(screen.getByRole("region", { name: "Run progress" })).not.toHaveTextContent(
-      "Saved preview records",
+    expect(screen.getByRole("region", { name: "run 进度" })).toHaveTextContent("已接收记录 1");
+    expect(screen.getByRole("region", { name: "run 进度" })).toHaveTextContent("已保存记录 0");
+    expect(screen.getByRole("region", { name: "run 进度" })).not.toHaveTextContent(
+      "已保存预览记录",
     );
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
@@ -891,7 +888,7 @@ describe("config provenance navigation", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     renderApp(queryClient);
 
-    fireEvent.click(await screen.findByText("Execution diagnostics and provenance"));
+    fireEvent.click(await screen.findByText("执行诊断与来源"));
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     await waitFor(() => expect(openEventListener).toBeDefined());
     const initialCounts = canonicalQueryCallCounts();
@@ -928,7 +925,7 @@ describe("config provenance navigation", () => {
 
     renderApp();
 
-    fireEvent.click(await screen.findByText("Execution diagnostics and provenance"));
+    fireEvent.click(await screen.findByText("执行诊断与来源"));
     expect(await screen.findByRole("heading", { name: "Recent events" })).toBeVisible();
     expect(
       screen.getByText("Showing the latest 500 events; older events are not loaded."),
@@ -960,7 +957,7 @@ function projectRun(runId: string): ProjectRun {
     experimentId: "ramsey",
     tags: [],
     status: "succeeded",
-    stateLabel: "Succeeded",
+    stateLabel: "已完成",
     updatedAt: "2026-07-24T08:00:00Z",
     pointPlan: {
       initialPointCount: 0,
@@ -1248,17 +1245,17 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   const cache = createQueryClient();
   renderApp(cache);
   await screen.findByRole("option", { name: "Alpha" });
-  fireEvent.change(screen.getByLabelText("Research project"), { target: { value: "alpha" } });
+  fireEvent.change(screen.getByLabelText("研究项目"), { target: { value: "alpha" } });
   await screen.findByRole("option", { name: "space-a collection" });
-  fireEvent.change(screen.getByLabelText("Record collection filter"), {
+  fireEvent.change(screen.getByLabelText("记录集筛选"), {
     target: { value: "same-id" },
   });
-  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "17" } });
-  fireEvent.click(screen.getByText("Research project management"));
-  fireEvent.change(screen.getByLabelText("Project name"), {
+  fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "17" } });
+  fireEvent.click(screen.getByText("研究项目管理"));
+  fireEvent.change(screen.getByLabelText("项目名称"), {
     target: { value: "Unsubmitted Alpha rename" },
   });
-  fireEvent.change(screen.getByLabelText("Working point"), { target: { value: "bias-a" } });
+  fireEvent.change(screen.getByLabelText("工作点"), { target: { value: "bias-a" } });
   await waitFor(() => expect(cache.isFetching({ queryKey: ["research"] })).toBe(0));
   await screen.findByText("Source: space-a");
   fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
@@ -1284,11 +1281,11 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(requests).toHaveLength(before);
   fireEvent.click(screen.getByRole("button", { name: /Data$/ }));
   await waitFor(() => expect(requests.length).toBeGreaterThan(before));
-  expect(screen.getByLabelText("Research project")).toHaveValue("alpha");
-  expect(screen.getByLabelText("Project name")).toHaveValue("Unsubmitted Alpha rename");
-  expect(screen.getByLabelText("Working point")).toHaveValue("bias-a");
-  expect(screen.getByLabelText("Record collection filter")).toHaveValue("same-id");
-  expect(screen.getByLabelText("Collection run number")).toHaveValue("17");
+  expect(screen.getByLabelText("研究项目")).toHaveValue("alpha");
+  expect(screen.getByLabelText("项目名称")).toHaveValue("Unsubmitted Alpha rename");
+  expect(screen.getByLabelText("工作点")).toHaveValue("bias-a");
+  expect(screen.getByLabelText("记录集筛选")).toHaveValue("same-id");
+  expect(screen.getByLabelText("记录集内 run 编号")).toHaveValue("17");
 
   fireEvent.click(screen.getByRole("button", { name: /Configuration$/ }));
   space = "space-b";
@@ -1299,15 +1296,15 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   fireEvent.click(screen.getByRole("button", { name: /Data$/ }));
   await screen.findByRole("option", { name: "Beta" });
   expect(screen.queryByRole("option", { name: "Alpha" })).toBeNull();
-  expect(screen.getByLabelText("Research project")).toHaveValue("");
-  expect(screen.getByLabelText("Working point")).toHaveValue("");
-  expect(screen.getByLabelText("Record collection filter")).toHaveValue("");
-  expect(screen.queryByLabelText("Collection run number")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("研究项目")).toHaveValue("");
+  expect(screen.getByLabelText("工作点")).toHaveValue("");
+  expect(screen.getByLabelText("记录集筛选")).toHaveValue("");
+  expect(screen.queryByLabelText("记录集内 run 编号")).not.toBeInTheDocument();
   await screen.findByRole("option", { name: "space-b collection" });
   expect(screen.queryByRole("option", { name: "space-a collection" })).toBeNull();
-  expect(screen.getByText("Research project management").parentElement).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByText("Research project management"));
-  expect(screen.getByLabelText("Project name")).toHaveValue("");
+  expect(screen.getByText("研究项目管理").parentElement).not.toHaveAttribute("open");
+  fireEvent.click(screen.getByText("研究项目管理"));
+  expect(screen.getByLabelText("项目名称")).toHaveValue("");
   expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
   await screen.findByText("Source: space-b");
   expect(screen.queryByText("Source: space-a")).toBeNull();

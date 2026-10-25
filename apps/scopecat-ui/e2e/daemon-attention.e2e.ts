@@ -111,7 +111,7 @@ test("handles naturally expired executors from the GUI", async ({ daemon, page }
 
   const run = await startAbandonedRun(page, daemon, "expired");
 
-  await expect(page.getByTitle(`Inspect run ${run.runId}`)).toContainText("Running");
+  await expect(page.getByTitle(`Inspect run ${run.runId}`)).toContainText("执行中");
   await assertResourceStatus(page, run, "Active");
 
   await expect
@@ -139,7 +139,7 @@ test("handles naturally expired executors from the GUI", async ({ daemon, page }
     state: "closed",
     released_resource_count: 1,
   });
-  await expect(page.getByTestId("run-status")).toHaveText("Failed");
+  await expect(page.getByTestId("run-status")).toHaveText("失败");
   await expect(page.getByRole("alert")).toHaveCount(0);
   await assertSelectedResourceStatus(page, run.resourceId, "Released");
 
@@ -219,7 +219,7 @@ async function selectAttentionRun(page: Page, run: AbandonedRun): Promise<void> 
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByTestId("run-status")).toHaveText("Needs attention");
+  await expect(page.getByTestId("run-status")).toHaveText("需要处理");
   await expect(page.getByRole("alert")).toContainText("Operator attention required");
   await expect(page.getByRole("alert")).toContainText("executor_lease_expired");
 }
@@ -235,10 +235,10 @@ async function assertSelectedResourceStatus(
   status: string,
 ): Promise<void> {
   const diagnostics = page.locator("details").filter({
-    has: page.getByText("Execution diagnostics and provenance", { exact: true }),
+    has: page.getByText("执行诊断与来源", { exact: true }),
   });
   if ((await diagnostics.getAttribute("open")) === null) {
-    await diagnostics.getByText("Execution diagnostics and provenance", { exact: true }).click();
+    await diagnostics.getByText("执行诊断与来源", { exact: true }).click();
   }
   const resource = diagnostics.getByTestId(`resource-${resourceId}`);
   await expect(resource).toBeVisible();

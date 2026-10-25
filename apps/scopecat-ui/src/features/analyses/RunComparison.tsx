@@ -57,13 +57,13 @@ async function call(request: Partial<Request> & Pick<Request, "action" | "worksp
 }
 export function selectedPoints(text: string, count: number): number[] {
   if (!text.trim() || text.split(",").some((token) => !token.trim()))
-    throw new Error("Select at least one point from each run.");
+    throw new Error("请从每个 run 至少选择一个点。");
   const points = text.split(",").map((value) => Number(value.trim()));
   if (
     points.some((value) => !Number.isInteger(value) || value < 0 || value >= count) ||
     new Set(points).size !== points.length
   )
-    throw new Error("Point positions must be distinct integers within the displayed run.");
+    throw new Error("点位置必须是当前 run 范围内的不重复整数。");
   return points;
 }
 export function RunComparison(props: {
@@ -72,7 +72,7 @@ export function RunComparison(props: {
   onHandoff: (handoff: ComparisonHandoff) => void;
 }) {
   useLocationUrl();
-  if (!props.projectId) return <p role="status">Loading data space…</p>;
+  if (!props.projectId) return <p role="status">正在加载数据空间…</p>;
   return (
     <ComparisonPage
       key={`${props.projectId}:${window.history.state?.scopecatPosition ?? 0}`}
@@ -344,13 +344,13 @@ function ComparisonPage({
   return (
     <section
       className="space-y-4 rounded-lg border border-line bg-panel p-5"
-      aria-label="Retained run comparison"
+      aria-label="已有 run 比较"
     >
-      <h2 className="text-lg font-semibold">Compare and reanalyze retained runs</h2>
+      <h2 className="text-lg font-semibold">比较与重新分析已有 run</h2>
       <details className="rounded border border-line p-3">
         <summary className="cursor-pointer text-sm">
-          Analysis code and source details ·{" "}
-          {sources.data?.items.find((item) => item.id === workspaceId)?.name ?? "Choose code"}
+          分析代码与来源详情 ·{" "}
+          {sources.data?.items.find((item) => item.id === workspaceId)?.name ?? "选择代码"}
         </summary>
         <fieldset disabled={pending} className="mt-3 space-y-3">
           <SourceSelector
@@ -376,8 +376,7 @@ function ComparisonPage({
         </fieldset>
       </details>
       <p className="text-sm text-text-soft">
-        No acquisition occurs here. The primary run owns the analysis and candidate base
-        configuration; both runs remain independent evidence.
+        此处不执行采集。analysis 与候选基准配置归属于主 run；两个 run 均保留为独立证据。
       </p>
       {(catalog.error ||
         runs.error ||
@@ -395,12 +394,10 @@ function ComparisonPage({
         </p>
       )}
       {catalog.data?.models.length === 0 && (
-        <p>
-          Declare a comparison_provider in the lab application to expose a versioned Python model.
-        </p>
+        <p>请在实验室应用中声明 comparison_provider，以提供带版本的 Python 模型。</p>
       )}
       <Controls.Field>
-        Review actor
+        判断操作人
         <Controls.Input
           value={actor}
           required
@@ -410,15 +407,15 @@ function ComparisonPage({
       </Controls.Field>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <Controls.Field>
-          Primary run{" "}
+          主 run{" "}
           <Controls.Select
             className="mt-1 block w-full min-w-0"
-            aria-label="Primary run"
+            aria-label="主 run"
             value={primary}
             disabled={pending}
             onChange={(event) => changeRuns(event.target.value, secondary)}
           >
-            <option value="">Choose retained run</option>
+            <option value="">选择已有 run</option>
             {primary && !available.some((run) => run.runId === primary) && (
               <option value={primary}>{runLabel(primary)}</option>
             )}
@@ -430,15 +427,15 @@ function ComparisonPage({
           </Controls.Select>
         </Controls.Field>
         <Controls.Field>
-          Secondary run{" "}
+          对照 run{" "}
           <Controls.Select
             className="mt-1 block w-full min-w-0"
-            aria-label="Secondary run"
+            aria-label="对照 run"
             value={secondary}
             disabled={pending}
             onChange={(event) => changeRuns(primary, event.target.value)}
           >
-            <option value="">Choose retained run</option>
+            <option value="">选择已有 run</option>
             {secondary && !available.some((run) => run.runId === secondary) && (
               <option value={secondary}>{runLabel(secondary)}</option>
             )}
@@ -450,10 +447,10 @@ function ComparisonPage({
           </Controls.Select>
         </Controls.Field>
         <Controls.Field>
-          Python model{" "}
+          Python 模型{" "}
           <Controls.Select
             className="mt-1 block w-full min-w-0"
-            aria-label="Python model"
+            aria-label="Python 模型"
             disabled={pending}
             value={model?.id ?? ""}
             onChange={(event) => {
@@ -476,7 +473,7 @@ function ComparisonPage({
           disabled={runs.isFetchingNextPage}
           onClick={() => void runs.fetchNextPage()}
         >
-          Load older retained runs
+          加载更早 run
         </button>
       )}
       {model && <p>{model.description}</p>}
@@ -486,14 +483,13 @@ function ComparisonPage({
         disabled={pending || !actor.trim() || !primary || !secondary || !model}
         onClick={() => void act("inspect")}
       >
-        Inspect compatible data
+        检查兼容数据
       </button>
       {inspection && (
         <>
           <p>
-            Independent coordinates normalized to {inspection.primary.coordinate_unit ?? "unitless"}
-            ; response in {inspection.primary.observable_unit ?? "unitless"}. Point positions are
-            zero-based; grids are not joined.
+            独立坐标统一为 {inspection.primary.coordinate_unit ?? "无量纲"}， 响应单位为{" "}
+            {inspection.primary.observable_unit ?? "无量纲"}。点位置从 0 开始，网格不会合并。
           </p>
           <EChartRuntime height={340} option={comparisonChartOption(inspection, runLabel)} />
         </>
@@ -502,14 +498,13 @@ function ComparisonPage({
         <>
           {!inspection && (
             <p role="status" className="text-sm text-text-soft">
-              Inspect compatible data to check these inputs before fitting. No analysis runs
-              automatically.
+              拟合前请检查兼容数据并核实输入，不会自动执行分析。
             </p>
           )}
           <Controls.Field className="block">
-            Primary selected positions
+            主 run 选点位置
             <Controls.Input
-              aria-label="Primary selected positions"
+              aria-label="主 run 选点位置"
               className="mt-1 w-full"
               value={leftPoints}
               disabled={pending}
@@ -517,9 +512,9 @@ function ComparisonPage({
             />
           </Controls.Field>
           <Controls.Field className="block">
-            Secondary selected positions
+            对照 run 选点位置
             <Controls.Input
-              aria-label="Secondary selected positions"
+              aria-label="对照 run 选点位置"
               className="mt-1 w-full"
               value={rightPoints}
               disabled={pending}
@@ -549,18 +544,18 @@ function ComparisonPage({
             disabled={pending || !inspection || !model || Boolean(catalog.error)}
             onClick={() => void act("fit")}
           >
-            Fit selected data and save analysis
+            拟合选中数据并保存 analysis
           </button>
         </>
       )}
       {(error || detail.error || history.error) && (
         <p role="alert">{error || errorMessage(detail.error ?? history.error)}</p>
       )}
-      {pending && <p role="status">Running retained-data operation…</p>}
+      {pending && <p role="status">正在处理已有数据…</p>}
       {primary && (
         <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside>
-            <h3 className="text-base font-semibold leading-6">Primary run analysis history</h3>
+            <h3 className="text-base font-semibold leading-6">主 run 的分析历史</h3>
             {history.data?.pages
               .flatMap((page) => page.items)
               .map((item) => (
@@ -582,7 +577,7 @@ function ComparisonPage({
                 disabled={history.isFetchingNextPage}
                 onClick={() => void history.fetchNextPage()}
               >
-                Load older analyses
+                加载更早 analysis
               </button>
             )}
           </aside>
@@ -594,10 +589,10 @@ function ComparisonPage({
                 </h3>
                 <p>
                   {review
-                    ? "Independent review recorded. This is not procedure approval."
+                    ? "独立判断已记录，不代表任务已获批准。"
                     : candidate
-                      ? "Candidate only. No configuration activation or calibration validity is implied."
-                      : "Saved analysis. No candidate has been accepted by this operation."}
+                      ? "仅为候选，不代表配置已启用或校准有效。"
+                      : "analysis 已保存，此操作未接纳任何候选。"}
                 </p>
                 {saved.outputs
                   .filter((output) => output.kind === "figure")
@@ -613,7 +608,7 @@ function ComparisonPage({
                     </section>
                   ))}
                 <details className="my-4">
-                  <summary>Inputs, model parameters and saved evidence</summary>
+                  <summary>输入、模型参数与保留证据</summary>
                   <AnalysisPublicationView
                     analysis={{
                       ...saved,
@@ -638,7 +633,7 @@ function ComparisonPage({
                         disabled={pending}
                         onClick={() => void act("candidate")}
                       >
-                        Create explicit candidate
+                        创建候选
                       </button>
                     )}
                     <button
@@ -646,7 +641,7 @@ function ComparisonPage({
                       disabled={pending}
                       onClick={() => void act("handoff")}
                     >
-                      Import suggested inputs into Launch
+                      将建议输入导入准备
                     </button>
                     {candidate && (
                       <>
@@ -654,11 +649,11 @@ function ComparisonPage({
                           className="text-accent underline"
                           href={`?run=${encodeURIComponent(primary)}&run-analysis=${encodeURIComponent(saved.id)}#runs`}
                         >
-                          Review parameter changes and adoption steps
+                          检查参数变更与接纳步骤
                         </a>
 
                         <Controls.Field>
-                          Rejection reason
+                          拒绝原因
                           <Controls.Input
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}
@@ -669,7 +664,7 @@ function ComparisonPage({
                           disabled={pending || !reason.trim()}
                           onClick={() => void act("reject")}
                         >
-                          Record candidate rejection
+                          记录候选拒绝
                         </button>
                       </>
                     )}

@@ -38,14 +38,14 @@ it("ignores a late lookup from another collection and never falls back to a glob
     </QueryClientProvider>
   );
   const { rerender } = render(view("a"));
-  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "1" } });
-  fireEvent.click(screen.getByRole("button", { name: "Find run" }));
+  fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "查找 run" }));
   rerender(view("b"));
   await act(async () => finish(Response.json({ collection_id: "a", number: 1, run_id: "a-1" })));
-  expect(screen.queryByRole("button", { name: "Open collection run #1" })).toBeNull();
-  fireEvent.change(screen.getByLabelText("Collection run number"), { target: { value: "1" } });
-  fireEvent.click(screen.getByRole("button", { name: "Find run" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not find collection run #1");
+  expect(screen.queryByRole("button", { name: "打开记录集内 run #1" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "查找 run" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("无法找到记录集内 run #1");
   expect(requests).toEqual([
     "/api/v1/record-collections/a/runs/1",
     "/api/v1/record-collections/b/runs/1",

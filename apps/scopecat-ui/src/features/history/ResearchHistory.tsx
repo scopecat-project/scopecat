@@ -1,3 +1,4 @@
+import { stateLabel } from "../launch/procedure-operator";
 import { ActionRow, Notice, Field, Select, Button, Input } from "../../ui/Controls";
 import { pageTitle, sectionTitle, pageContent, detailCard, secondaryButton } from "../../ui/styles";
 import { useRecordCollectionNames } from "../context/scope-catalog";
@@ -151,8 +152,8 @@ export function ResearchHistory({
     projects.error ?? samples.error ?? members.error ?? runs.error ?? save.error ?? associate.error;
   const pending = daemonUnavailable || save.isPending || associate.isPending;
   return (
-    <section className={pageContent} aria-label="Data">
-      <h2 className={pageTitle}>Data</h2>
+    <section className={pageContent} aria-label="数据">
+      <h2 className={pageTitle}>数据</h2>
       {course && <CourseData scopeId={course} unavailable={daemonUnavailable} />}
 
       {error && <Notice role="alert">{error.message}</Notice>}
@@ -166,8 +167,8 @@ export function ResearchHistory({
                 owner={projectId}
                 value={collection}
                 onChange={setCollection}
-                emptyLabel="All collections"
-                selectLabel="Record collection filter"
+                emptyLabel="所有记录集"
+                selectLabel="记录集筛选"
                 disabled={daemonUnavailable}
                 available={!daemonUnavailable}
               />
@@ -183,9 +184,7 @@ export function ResearchHistory({
               />
             )}
             {!collection && (
-              <span className="text-xs text-text-dim">
-                Choose a collection to find a short number.
-              </span>
+              <span className="text-xs text-text-dim">选择记录集后可按短编号查找。</span>
             )}
           </div>
           <RunIdLookup
@@ -197,9 +196,9 @@ export function ResearchHistory({
           />
           <ActionRow className={detailCard}>
             <Field>
-              Research project{" "}
+              研究项目{" "}
               <Select
-                aria-label="Research project"
+                aria-label="研究项目"
                 value={selected?.id ?? ""}
                 onChange={(event) => {
                   const project = projects.data?.pages
@@ -244,7 +243,7 @@ export function ResearchHistory({
               <Button onClick={() => void samples.fetchNextPage()}>More samples</Button>
             )}
             <Field>
-              From (local time){" "}
+              起始时间（本地）{" "}
               <Input
                 type="datetime-local"
                 value={after}
@@ -252,7 +251,7 @@ export function ResearchHistory({
               />
             </Field>
             <Field>
-              Before (local time){" "}
+              截止时间（本地）{" "}
               <Input
                 type="datetime-local"
                 value={before}
@@ -262,7 +261,7 @@ export function ResearchHistory({
           </ActionRow>
           <details className={detailCard}>
             <summary className="cursor-pointer">
-              Advanced source filters{workingPoint || bench ? " · active" : ""}
+              高级来源筛选{workingPoint || bench ? " · active" : ""}
             </summary>
             <p className="text-sm text-text-dim">
               Exact working-point context ID and deployment ID; these do not describe scientific
@@ -270,14 +269,14 @@ export function ResearchHistory({
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
               <Field>
-                Working point{" "}
+                工作点{" "}
                 <Input
                   value={workingPoint}
                   onChange={(event) => setWorkingPoint(event.target.value)}
                 />
               </Field>
               <Field>
-                Bench deployment{" "}
+                实验台部署{" "}
                 <Input value={bench} onChange={(event) => setBench(event.target.value)} />
               </Field>
             </div>
@@ -308,7 +307,7 @@ export function ResearchHistory({
                   >
                     {run.control.admission.display_name ||
                       run.control.admission.plan?.experiment_id ||
-                      "Open run"}
+                      "打开 run"}
                   </button>
                   <RunAddressLabel
                     address={run.address ?? undefined}
@@ -321,12 +320,10 @@ export function ResearchHistory({
                   <span>
                     {run.snapshot.created_at
                       ? new Date(run.snapshot.created_at).toLocaleString()
-                      : "Unknown time"}
+                      : "时间未知"}
                   </span>
-                  <span>{run.snapshot.outcome?.result ?? run.control.state}</span>
-                  {run.snapshot.outcome?.certainty === "indeterminate" && (
-                    <span>Outcome indeterminate</span>
-                  )}
+                  <span>{stateLabel(run.snapshot.outcome?.result ?? run.control.state)}</span>
+                  {run.snapshot.outcome?.certainty === "indeterminate" && <span>结果尚不确定</span>}
                   {run.control.attention_reason && <span>{run.control.attention_reason}</span>}
                   <span>
                     {run.snapshot.samples
@@ -347,17 +344,17 @@ export function ResearchHistory({
                         })
                       }
                     >
-                      {allRuns ? "Associate run" : "Remove run association"}
+                      {allRuns ? "关联 run" : "移除 run 关联"}
                     </Button>
                   )}
                 </li>
               ))}
           </ul>
         )}
-        {runs.data?.pages[0]?.items.length === 0 && <p>No runs match these filters.</p>}
+        {runs.data?.pages[0]?.items.length === 0 && <p>没有符合筛选条件的 run。</p>}
         {runs.hasNextPage && (
           <Button disabled={runs.isFetchingNextPage} onClick={() => void runs.fetchNextPage()}>
-            Older runs
+            更早 run
           </Button>
         )}
       </div>
@@ -372,7 +369,7 @@ export function ResearchHistory({
               setManaging(open);
             }}
           >
-            <summary className="cursor-pointer font-semibold">Research project management</summary>
+            <summary className="cursor-pointer font-semibold">研究项目管理</summary>
             <p className="text-sm text-text-dim">
               Manage {selected?.name ?? "a research project"}.
             </p>
@@ -387,7 +384,7 @@ export function ResearchHistory({
               }}
             >
               <Field>
-                Project name{" "}
+                项目名称{" "}
                 <Input required value={name} onChange={(event) => setName(event.target.value)} />
               </Field>
               <Button variant="primary" disabled={pending || !name.trim()}>
@@ -408,14 +405,12 @@ export function ResearchHistory({
                           associate.mutate({ kind: "samples", identity: id, present: false })
                         }
                       >
-                        Remove sample association
+                        移除样品关联
                       </Button>
                     </div>
                   ))}
                 {members.hasNextPage && (
-                  <Button onClick={() => void members.fetchNextPage()}>
-                    More associated samples
-                  </Button>
+                  <Button onClick={() => void members.fetchNextPage()}>更多关联样品</Button>
                 )}
               </div>
             )}
@@ -426,7 +421,7 @@ export function ResearchHistory({
                   associate.mutate({ kind: "samples", identity: sample, present: true })
                 }
               >
-                Associate sample
+                关联样品
               </Button>
             )}
             {!course && selected && (
@@ -436,7 +431,7 @@ export function ResearchHistory({
                   checked={allRuns}
                   onChange={(event) => setAllRuns(event.target.checked)}
                 />{" "}
-                Show runs outside this project to associate
+                显示项目外的 run 以供关联
               </label>
             )}
           </details>

@@ -31,7 +31,7 @@ export function PlanSave({
       const selection = normalizeSelection(request.selection);
       const sample = subjectSample(preview.reviewed.binding);
       if (source.kind === "analysis_candidate")
-        throw new Error("Save plans from a named parameter context, not an unaccepted candidate.");
+        throw new Error("请从命名参数上下文保存计划，尚未接纳的候选不能作为计划来源。");
       const saved = await apiData<PlanRevision>(
         apiClient.POST("/api/v1/experiment-plans", {
           headers: { "X-Scopecat-Workspace": preview.workspace_id },
@@ -90,11 +90,11 @@ export function PlanSave({
     }
   }
   return (
-    <section aria-label="Save experiment plan" className="border border-line rounded p-3 space-y-2">
+    <section aria-label="保存实验计划" className="border border-line rounded p-3 space-y-2">
       <Field>
-        Plan name{" "}
+        计划名称{" "}
         <Input
-          aria-label="Plan name"
+          aria-label="计划名称"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
@@ -102,14 +102,14 @@ export function PlanSave({
       <p>
         {draft?.plan
           ? `${draft.plan.name}, revision ${draft.plan.ref.revision}${draft.planDirty ? " · unsaved input changes" : ""}`
-          : "Save these inputs and exact configuration for later."}
+          : "保存这些输入与精确配置，供之后复用。"}
       </p>
       <Button
         type="button"
         disabled={!preview?.definition_hash || !name.trim() || saving}
         onClick={() => void save(false)}
       >
-        {draft?.plan ? "Save new revision" : "Save plan"}
+        {draft?.plan ? "保存新 revision" : "保存计划"}
       </Button>
       {draft?.plan && (
         <Button
@@ -117,14 +117,10 @@ export function PlanSave({
           disabled={!preview?.definition_hash || !name.trim() || saving}
           onClick={() => void save(true)}
         >
-          Save as copy
+          另存为副本
         </Button>
       )}
-      {!preview && (
-        <p>
-          Preview the current inputs before saving. No request key or execution permission is saved.
-        </p>
-      )}
+      {!preview && <p>保存前请预览当前输入。不会保存请求 key 或执行权限。</p>}
       {error && <Notice role="alert">{error}</Notice>}
     </section>
   );

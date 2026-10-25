@@ -91,7 +91,7 @@ it("keeps one analysis entry across repeated run changes and analyzes only the c
           runId,
           experimentId: "signal",
           status: "succeeded",
-          stateLabel: "Succeeded",
+          stateLabel: "已完成",
           samples: [],
           resources: [],
           tags: [],

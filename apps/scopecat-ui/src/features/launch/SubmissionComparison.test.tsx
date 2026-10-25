@@ -12,7 +12,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-it("compares selected receipt A with named draft B without requests or preparing another run", () => {
+it("compares selected receipt A with named draft B without requests or preparing 其他 run", () => {
   const { request, draft } = comparisonFixture();
   draft.values.count = "3";
   const fetch = vi.fn();
@@ -33,12 +33,12 @@ it("compares selected receipt A with named draft B without requests or preparing
   });
   render(<OriginalSubmission onOpen={vi.fn()} catalogReady />);
   expect(screen.getByText(request.request_key)).not.toBeVisible();
-  fireEvent.click(screen.getByText("Submission source and request details"));
+  fireEvent.click(screen.getByText("提交来源与请求详情"));
   expect(screen.getByText(request.request_key)).toBeVisible();
-  fireEvent.click(screen.getByText("Submission source and request details"));
+  fireEvent.click(screen.getByText("提交来源与请求详情"));
   expect(screen.getByText(request.request_key)).not.toBeVisible();
   fireEvent.click(screen.getByText("Compare submitted request with current draft"));
-  expect(screen.getByRole("columnheader", { name: "Current draft · Draft B" })).toBeVisible();
+  expect(screen.getByRole("columnheader", { name: "当前草稿 · Draft B" })).toBeVisible();
   expect(screen.getByText(/does not identify the draft originally submitted/)).toBeVisible();
   expect(screen.getByText("Input · count")).toBeVisible();
   expect(screen.queryByText("Input · enabled")).toBeNull();

@@ -35,7 +35,7 @@ async function preview(page: Page) {
     (item) =>
       item.url().endsWith("/experiment-launcher/preview") && item.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await page.getByRole("button", { name: "预览", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
   return result.json();
@@ -45,15 +45,15 @@ async function submit(page: Page) {
     (item) =>
       item.url().endsWith("/experiment-launcher/submit") && item.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+  await page.getByRole("button", { name: "开始采集", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
-  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+  await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
   return (await result.json()).procedure_id as string;
 }
 async function retainedRun(page: Page) {
-  await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-  const link = page.getByRole("link", { name: /^View saved data:/ });
+  await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
+  const link = page.getByRole("link", { name: /^查看已保存结果:/ });
   await expect(link).toBeVisible();
   const href = await link.getAttribute("href");
   return new URL(href!, page.url()).searchParams.get("run")!;
@@ -137,9 +137,9 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     await work
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
-    await work.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await work.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
-    await work.getByRole("button", { name: "Editor", exact: true }).click();
+    await work.getByLabel("实验类型", { exact: true }).selectOption("signal");
+    await work.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
+    await work.getByRole("button", { name: "准备", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     const oldB = await preview(work);
     expect(oldB.reviewed.config_source.overrides).toHaveLength(1);
@@ -149,15 +149,11 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     await expect(
       editor.getByText("Draft saved in application data", { exact: true }),
     ).toBeVisible();
-    await expect(
-      work.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
-    await expect(work.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
+    await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
+    await expect(work.getByText(/工作输入已变化或无法核实/)).toBeVisible();
     await work.getByLabel("Gain", { exact: true }).fill("2");
-    await work.getByRole("button", { name: "Use current working inputs", exact: true }).click();
-    await expect(
-      work.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await work.getByRole("button", { name: "使用当前工作输入", exact: true }).click();
+    await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     const previewB = await preview(work);
     expect(previewB.request_hash).not.toBe(oldB.request_hash);
     expect(previewB.reviewed.config_source.parameters).toEqual(
@@ -190,20 +186,18 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     ]);
     expect(JSON.parse(evidence).parameters).toEqual(previewB.reviewed.config_source.parameters);
     // Keep the original result selected while another window submits a newer run.
-    await work.getByRole("link", { name: /^View saved data:/ }).click();
+    await work.getByRole("link", { name: /^查看已保存结果:/ }).click();
     await expectRunIdentity(work, runB);
     await editor
       .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
       .click();
-    await editor.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await editor.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-a");
+    await editor.getByLabel("实验类型", { exact: true }).selectOption("signal");
+    await editor.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
     await reviewRetainedExperiment(editor);
-    await expect(editor.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
-    await expect(editor.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
-    await editor.getByRole("button", { name: "Use current working inputs", exact: true }).click();
-    await expect(
-      editor.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(editor.getByText(/工作输入已变化或无法核实/)).toBeVisible();
+    await expect(editor.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "使用当前工作输入", exact: true }).click();
+    await expect(editor.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await preview(editor);
     const procedureC = await submit(editor);
     const runC = await retainedRun(editor);
@@ -224,7 +218,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       runB,
       runC,
     ]);
-    await editor.getByRole("link", { name: /^View saved data:/ }).click();
+    await editor.getByRole("link", { name: /^查看已保存结果:/ }).click();
     await expectRunIdentity(editor, runC);
     await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     const continuedField = work.getByLabel("signals[1].center", { exact: true });
@@ -240,15 +234,15 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await expectRunIdentity(editor, runC);
     await work.getByRole("button", { name: /Experiments$/, exact: true }).click();
     expect(new URL(work.url()).searchParams.get("procedure")).toBe(procedureB);
-    await expect(work.getByRole("link", { name: /^View saved data:/ })).toHaveAttribute(
+    await expect(work.getByRole("link", { name: /^查看已保存结果:/ })).toHaveAttribute(
       "href",
       `?procedure=${encodeURIComponent(procedureB)}&run=${encodeURIComponent(runB)}#runs`,
     );
     // Reopening the same procedure must not reload away this window's launch draft.
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await work.getByRole("link", { name: "Reopen this procedure", exact: true }).click();
+    await work.getByRole("link", { name: "重新打开此任务", exact: true }).click();
     await expect(work.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await work.getByRole("button", { name: "Editor", exact: true }).click();
+    await work.getByRole("button", { name: "准备", exact: true }).click();
     await expect(work.getByText(/Working inputs · revision/)).toBeVisible();
     await work.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(continuedField).toHaveValue("5.5");

@@ -2,6 +2,7 @@ import type { ProcedureInputContinueReceipt } from "./decision-api";
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -89,6 +90,24 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it.each(["verify_native_windows.py", "verify_windows_storage.py", "verify_cocoa_storage.py"])(
+    "keeps %s attached to the waiting decision form",
+    async (script) => {
+      const source = readFileSync(`../../scripts/${script}`, "utf8");
+      const selector = source.match(
+        /(?:reviewer_selector|selector) = '(input\[placeholder="[^"]+"\])'/,
+      )?.[1];
+      expect(selector).toBeDefined();
+      renderWorkspace();
+      const reviewer = await screen.findByRole("textbox", { name: "判断操作人" });
+      expect(document.querySelector(selector!)).toBe(reviewer);
+      fireEvent.change(reviewer, { target: { value: "native-window-reviewer" } });
+      expect(reviewer).toHaveValue("native-window-reviewer");
+      await waitFor(() => expect(saveDecisionDraft).toHaveBeenCalled());
+      expect(submitProcedureInput).not.toHaveBeenCalled();
+    },
+  );
+
   it("fills only an active declared field and rejects a stale request without submitting", async () => {
     const step = waitingStep();
     step.inputs = [
@@ -154,8 +173,8 @@ describe("DecisionWorkspace", () => {
     });
     vi.mocked(submitProcedureInput).mockRejectedValue(new Error("Connection lost"));
     renderWorkspace();
-    expect(await screen.findByLabelText("Recorded reviewer")).toHaveValue("Alice");
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    expect(await screen.findByLabelText("判断操作人")).toHaveValue("Alice");
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(1));
     const command = vi.mocked(saveDecisionDraft).mock.calls[0]![0];
     expect(command.input.actor).toBe("Alice");
@@ -178,7 +197,7 @@ describe("DecisionWorkspace", () => {
       },
     });
     renderWorkspace();
-    expect(await screen.findByLabelText("Recorded reviewer")).toHaveValue("Alice");
+    expect(await screen.findByLabelText("判断操作人")).toHaveValue("Alice");
   });
 
   it("offers exact continuation retry when queued dispatch fails later", async () => {
@@ -202,11 +221,11 @@ describe("DecisionWorkspace", () => {
     await screen.findByLabelText("resonator");
     fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
     fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.9" } });
-    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "Alice" } });
+    fireEvent.change(screen.getByLabelText("判断操作人"), { target: { value: "Alice" } });
     vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(await screen.findByText("Queued environment unavailable")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Retry continuation" }));
+    fireEvent.click(screen.getByRole("button", { name: "重试继续执行" }));
     await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(2));
     expect(vi.mocked(submitProcedureInput).mock.calls[1]![0]).toEqual(
       vi.mocked(submitProcedureInput).mock.calls[0]![0],
@@ -227,16 +246,16 @@ describe("DecisionWorkspace", () => {
     await screen.findByLabelText("resonator");
     fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
     fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.9" } });
-    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "Alice" } });
+    fireEvent.change(screen.getByLabelText("判断操作人"), { target: { value: "Alice" } });
     vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(await screen.findByText("Execution environment unavailable")).toBeVisible();
     const original = vi.mocked(submitProcedureInput).mock.calls[0]![0];
-    fireEvent.click(screen.getByRole("button", { name: "Retry continuation" }));
+    fireEvent.click(screen.getByRole("button", { name: "重试继续执行" }));
     await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(2));
     expect(vi.mocked(submitProcedureInput).mock.calls[1]![0]).toEqual(original);
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Retry continuation" })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("button", { name: "重试继续执行" })).not.toBeInTheDocument(),
     );
     expect(screen.getByRole("link", { name: "Open task" })).toHaveAttribute(
       "href",
@@ -253,10 +272,10 @@ describe("DecisionWorkspace", () => {
     await screen.findByLabelText("resonator");
     fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
     fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.9" } });
-    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "Alice" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.change(screen.getByLabelText("判断操作人"), { target: { value: "Alice" } });
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(await screen.findByText("Task was paused; review the task")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Retry continuation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重试继续执行" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /save only/i })).not.toBeInTheDocument();
   });
 
@@ -290,7 +309,7 @@ describe("DecisionWorkspace", () => {
     expect(screen.queryByLabelText("detail")).not.toBeInTheDocument();
     fireEvent.change(mode, { target: { value: "1" } });
     expect(screen.getByLabelText("detail")).toHaveValue("2");
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({ value: { mode: 1, detail: 2 } }),
@@ -318,7 +337,7 @@ describe("DecisionWorkspace", () => {
         expect.any(AbortSignal),
       ),
     );
-    expect(await screen.findByPlaceholderText("Person’s name")).toBeVisible();
+    expect(await screen.findByPlaceholderText("操作人姓名")).toBeVisible();
   });
   it("keeps decisions without analysis evidence full width", async () => {
     renderWorkspace();
@@ -363,10 +382,10 @@ describe("DecisionWorkspace", () => {
       target: { value: JSON.stringify("Peak selected") },
     });
     const frequency = screen.getByLabelText("Peak frequency (MHz)");
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter Peak frequency");
     fireEvent.change(frequency, { target: { value: "6600" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("between 6490 and 6510");
     expect(submitProcedureInput).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("outcome"), {
@@ -380,7 +399,7 @@ describe("DecisionWorkspace", () => {
     fireEvent.change(screen.getByLabelText("outcome"), {
       target: { value: JSON.stringify("No clear peak") },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -426,14 +445,14 @@ describe("DecisionWorkspace", () => {
     expect(screen.queryByText("Edit JSON")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("resonator"), { target: { value: "r2" } });
     fireEvent.change(screen.getByLabelText("confidence"), { target: { value: "0.87" } });
-    fireEvent.change(screen.getByLabelText("Recorded reviewer"), {
+    fireEvent.change(screen.getByLabelText("判断操作人"), {
       target: { value: "analysis-agent" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Decision options" }));
-    fireEvent.change(screen.getByLabelText("Reasoning note (optional)"), {
+    fireEvent.click(screen.getByRole("button", { name: "人工判断选项" }));
+    fireEvent.change(screen.getByLabelText("判断依据备注（可选）"), {
       target: { value: "isolated dip" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
 
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
@@ -452,7 +471,7 @@ describe("DecisionWorkspace", () => {
         expect.anything(),
       ),
     );
-    expect(screen.getByText(/Decision saved/)).toBeVisible();
+    expect(screen.getByText(/判断已保存/)).toBeVisible();
     await waitFor(() => expect(getWaitingProcedures).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(getProcedureSteps).toHaveBeenCalledTimes(2));
   });
@@ -477,8 +496,10 @@ describe("DecisionWorkspace", () => {
     fireEvent.change(screen.getByLabelText("rationale"), {
       target: { value: "Confirmation differs; reject" },
     });
-    fireEvent.change(screen.getByLabelText("Recorded reviewer"), { target: { value: "operator" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.change(screen.getByLabelText("判断操作人"), {
+      target: { value: "operator" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -515,7 +536,7 @@ describe("DecisionWorkspace", () => {
     expect(screen.queryByLabelText("Structured judgment (JSON)")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add Peak frequency (MHz)" }));
     expect(screen.getByLabelText("Peak frequency (MHz) 1")).toHaveValue("");
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(submitProcedureInput).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Peak frequency (MHz) 1"), {
       target: { value: "6500.25" },
@@ -524,11 +545,11 @@ describe("DecisionWorkspace", () => {
     cleanup();
     renderWorkspace();
     expect(await screen.findByLabelText("Peak frequency (MHz) 1")).toHaveValue("6500.25");
-    expect(screen.getByLabelText("Recorded reviewer")).toHaveValue("Alice");
+    expect(screen.getByLabelText("判断操作人")).toHaveValue("Alice");
     vi.mocked(getWaitingProcedures).mockResolvedValue({
       items: [{ ...waitingProcedure(), procedure_run_id: "procedure-2" }],
     });
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -563,7 +584,7 @@ describe("DecisionWorkspace", () => {
     });
     renderWorkspace();
     await screen.findByLabelText("outcome");
-    fireEvent.click(screen.getByRole("button", { name: "Submit and continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     await waitFor(() =>
       expect(submitProcedureInput).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -593,11 +614,11 @@ describe("DecisionWorkspace", () => {
     });
     renderWorkspace();
     expect(await screen.findByRole("alert")).toHaveTextContent("form does not support yet");
-    expect(screen.getByRole("button", { name: "Submit and continue" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "提交判断并继续" })).toBeDisabled();
     expect(screen.queryByText("Expected structure")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Decision options" }));
+    fireEvent.click(screen.getByRole("button", { name: "人工判断选项" }));
     expect(screen.queryByText("Edit JSON")).not.toBeInTheDocument();
-    fireEvent.submit(screen.getByRole("form", { name: "Record judgment" }));
+    fireEvent.submit(screen.getByRole("form", { name: "记录人工判断" }));
     expect(submitProcedureInput).not.toHaveBeenCalled();
   });
 
@@ -612,9 +633,9 @@ describe("DecisionWorkspace", () => {
       return save(command);
     });
     renderWorkspace();
-    const reviewer = await screen.findByLabelText("Recorded reviewer");
+    const reviewer = await screen.findByLabelText("判断操作人");
     fireEvent.change(reviewer, { target: { value: "Alice" } });
-    const form = screen.getByRole("form", { name: "Record judgment" });
+    const form = screen.getByRole("form", { name: "记录人工判断" });
     fireEvent.compositionStart(reviewer);
     const enter = new KeyboardEvent("keydown", {
       key: "Enter",
@@ -630,7 +651,7 @@ describe("DecisionWorkspace", () => {
     fireEvent.submit(form);
     fireEvent.submit(form);
     await waitFor(() => expect(saveDecisionDraft).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("button", { name: "Submit and continue" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "提交判断并继续" })).toBeDisabled();
     expect(submitProcedureInput).not.toHaveBeenCalled();
     release();
     await waitFor(() => expect(submitProcedureInput).toHaveBeenCalledTimes(1));
@@ -648,9 +669,9 @@ describe("DecisionWorkspace", () => {
       new Error("Request revision changed; review the current request."),
     );
     renderWorkspace();
-    const reviewer = await screen.findByLabelText("Recorded reviewer");
+    const reviewer = await screen.findByLabelText("判断操作人");
     fireEvent.change(reviewer, { target: { value: "Alice" } });
-    fireEvent.submit(screen.getByRole("form", { name: "Record judgment" }));
+    fireEvent.submit(screen.getByRole("form", { name: "记录人工判断" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Request revision changed");
     expect(reviewer).toHaveValue("Alice");
     expect(reviewer).toBeEnabled();
@@ -661,7 +682,7 @@ describe("DecisionWorkspace", () => {
     vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
     renderWorkspace();
 
-    expect(await screen.findByText("No experiment is waiting for a decision")).toBeVisible();
+    expect(await screen.findByText("当前没有等待人工判断的实验")).toBeVisible();
   });
 
   it("explains that decisions require the local daemon", () => {

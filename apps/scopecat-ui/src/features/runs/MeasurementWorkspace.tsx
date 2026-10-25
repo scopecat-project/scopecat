@@ -64,7 +64,7 @@ export function MeasurementWorkspace({
               }
             }}
           >
-            {focused ? "Exit focus to view run details" : "Focus chart"}
+            {focused ? "退出聚焦，查看 run 详情" : "聚焦曲线"}
           </button>
         </div>
         <div className="flex-none space-y-2 [&:empty]:hidden" aria-live="polite">

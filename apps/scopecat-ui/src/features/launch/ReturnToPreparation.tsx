@@ -21,7 +21,7 @@ export function ReturnToPreparation() {
         }
       }}
     >
-      Return to preparation
+      返回准备
     </a>
   );
 }

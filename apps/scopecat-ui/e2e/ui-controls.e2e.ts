@@ -49,8 +49,8 @@ test("shared controls remain readable, keyboard accessible and contained across 
     for (const width of [1280, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       for (const [route, heading] of [
-        ["history", "Data"],
-        ["launch", "Experiments"],
+        ["history", "数据"],
+        ["launch", "实验"],
         ["help", "Help"],
         ["settings", "Application settings"],
         ["configuration", "Experiment configuration"],
@@ -59,7 +59,7 @@ test("shared controls remain readable, keyboard accessible and contained across 
         ["analyses", "No project analyses saved"],
         ["runs", "No run selected"],
         ["reviews", "No live experiment reviews"],
-        ["decisions", "No experiment is waiting for a decision"],
+        ["decisions", "当前没有等待人工判断的实验"],
       ]) {
         await page.goto(`${baseUrl}/#${route}`);
         await expect(
@@ -95,14 +95,14 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await expect(add).toBeDisabled();
         }
         if (route === "launch") {
-          await expect(page.getByLabel("Experiment", { exact: true })).toBeVisible({
+          await expect(page.getByLabel("实验类型", { exact: true })).toBeVisible({
             timeout: 60_000,
           });
           const channels = page.getByRole("listbox", { name: "Review channels", exact: true });
           await expect(channels).toBeVisible();
           expect((await channels.boundingBox())!.height).toBeGreaterThanOrEqual(128);
           await expect(channels).toHaveAttribute("size", "5");
-          const review = page.getByRole("button", { name: "Confirm reviewed input", exact: true });
+          const review = page.getByRole("button", { name: "确认已核实输入", exact: true });
           if (await review.isVisible()) await review.click();
           await expect(channels).toBeEnabled();
           await channels.selectOption(["alpha", "gamma"]);
@@ -134,20 +134,20 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await expect(page.getByText("/test/exec-python", { exact: true })).toHaveCount(0);
         }
         if (route === "history") {
-          const select = page.getByLabel("Research project", { exact: true });
+          const select = page.getByLabel("研究项目", { exact: true });
           await select.focus();
           await expect(select).toHaveCSS("outline-width", "2px");
           await page.keyboard.press("Tab");
           await expect(page.getByLabel("Sample", { exact: true })).toBeFocused();
-          const lookup = page.getByLabel("Full run ID", { exact: true });
+          const lookup = page.getByLabel("完整 run ID", { exact: true });
           if (!(await lookup.isVisible()))
-            await page.getByText("Find by full run ID", { exact: true }).click();
+            await page.getByText("按完整 run ID 查找", { exact: true }).click();
           await lookup.fill("invalid/path");
-          await page.getByRole("button", { name: "Find exact run", exact: true }).click();
+          await page.getByRole("button", { name: "查找精确 run", exact: true }).click();
           await expect(lookup).toHaveAttribute("aria-invalid", "true");
-          await expect(lookup).toHaveCSS("border-top-color", "rgb(215, 126, 121)");
+          await expect(lookup).toHaveCSS("border-top-color", "rgb(167, 68, 54)");
           await expect(
-            page.getByRole("alert").filter({ hasText: "Invalid run ID format" }),
+            page.getByRole("alert").filter({ hasText: "run ID 格式无效" }),
           ).toBeVisible();
         }
         expect(
@@ -179,8 +179,8 @@ test("shared controls remain readable, keyboard accessible and contained across 
     await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
-      // The application currently supports a dark theme under both OS preferences.
-      await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+      // The application currently supports a light theme under both OS preferences.
+      await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
     }
   } finally {
     stopProject(project);

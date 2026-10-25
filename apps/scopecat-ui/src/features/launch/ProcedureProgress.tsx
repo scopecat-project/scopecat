@@ -93,8 +93,8 @@ export function ProcedureProgress({
   );
   return (
     <section className="border border-accent/40 bg-panel-soft rounded-md p-3 space-y-2 break-words">
-      <h3 className="font-semibold">Execution progress</h3>
-      <p className="text-xs text-text-dim">Closing this view leaves background work running.</p>
+      <h3 className="font-semibold">执行进度</h3>
+      <p className="text-xs text-text-dim">关闭此视图不会停止后台执行。</p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <p>{run?.definition.id ?? procedureId}</p>
         <ReturnToPreparation />
@@ -103,15 +103,13 @@ export function ProcedureProgress({
           className="underline"
           href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#launch`)}
         >
-          Reopen this procedure
+          重新打开此任务
         </a>
       </div>
       <PlanOrigin reference={run?.plan_ref} />
-      {progress.isPending && <p role="status">Loading retained procedure state…</p>}
+      {progress.isPending && <p role="status">正在读取任务状态…</p>}
       {progress.error && (
-        <p role="alert">
-          Live task state unavailable; displayed state may be stale. {progress.error.message}
-        </p>
+        <p role="alert">无法更新任务状态；当前显示可能已过时。 {progress.error.message}</p>
       )}
       {view && run && (
         <>
@@ -119,16 +117,16 @@ export function ProcedureProgress({
             {procedurePhase(view)}
           </p>
           {!run.closure && run.state === "waiting_for_input" && (
-            <p>Record your decision, then return here to continue.</p>
+            <p>记录人工判断后，返回此处继续。</p>
           )}
           {view.dispatch.failure && (
             <div role="alert" className="space-y-1">
-              <p>Worker diagnostic: {view.dispatch.failure.message}</p>
+              <p>Worker 诊断： {view.dispatch.failure.message}</p>
             </div>
           )}
           {run.recovery && (
             <p>
-              Recovery from{" "}
+              恢复来源：{" "}
               <a
                 onClick={navigateLink}
                 className="underline"
@@ -136,9 +134,9 @@ export function ProcedureProgress({
                   `?procedure=${encodeURIComponent(run.recovery.procedure_run_id)}#launch`,
                 )}
               >
-                failed procedure {run.recovery.procedure_run_id}
+                失败任务 {run.recovery.procedure_run_id}
               </a>{" "}
-              using{" "}
+              ，使用{" "}
               <a
                 onClick={navigateLink}
                 className="underline"
@@ -146,25 +144,21 @@ export function ProcedureProgress({
                   `?run=${encodeURIComponent(run.recovery.retained_run.run_id)}#runs`,
                 )}
               >
-                retained run {run.recovery.retained_run.run_id}
+                保留 run {run.recovery.retained_run.run_id}
               </a>
-              . The original failure history is unchanged.
+              。原始失败历史保持不变。
             </p>
           )}
           {(run.attention_reason || run.closure?.reason) && (
             <p>{run.attention_reason ?? run.closure?.reason}</p>
           )}
           {run.state === "attention_required" && (
-            <p>
-              Inspect retained evidence and reconcile external state with the project workflow.
-              Unknown hardware effects cannot be retried here.
-            </p>
+            <p>请检查保留证据，并按项目流程核实外部状态。此处不能重试硬件影响尚不明确的操作。</p>
           )}
           {run.cancellation && !run.closure && (
             <p>
-              {run.cancellation.actor} requested cancellation: {run.cancellation.reason}. This is
-              not a completed stop. An already-started configuration acceptance step may still
-              complete.
+              {run.cancellation.actor} 已请求取消：{run.cancellation.reason}。
+              停止尚未完成；已开始的配置接纳步骤仍可能完成。
             </p>
           )}
           {run.resource_wait && (
@@ -175,14 +169,11 @@ export function ProcedureProgress({
                 `?procedure=${encodeURIComponent(procedureId)}&run=${encodeURIComponent(run.resource_wait.run_id)}#runs`,
               )}
             >
-              Inspect waiting child run: {run.resource_wait.run_id}
+              查看等待中的子 run： {run.resource_wait.run_id}
             </a>
           )}
           {run.resource_wait && !run.closure && (
-            <p>
-              Cancelling this procedure stops only its waiting child. The resource owner keeps
-              running.
-            </p>
+            <p>取消此任务只会停止其等待中的子 run，资源占用者继续执行。</p>
           )}
           <ComparisonLink />
           {run.state === "waiting_for_input" && (
@@ -191,7 +182,7 @@ export function ProcedureProgress({
               className="underline"
               href={withDraftContext(`?procedure=${encodeURIComponent(procedureId)}#decisions`)}
             >
-              Review results in Decisions
+              查看结果并作出人工判断
             </a>
           )}
           {view.dispatch_blocked_reason === null && !progress.isError && (
@@ -203,7 +194,7 @@ export function ProcedureProgress({
                 void dispatch();
               }}
             >
-              Continue task
+              继续任务
             </button>
           )}
           {view.dispatch_blocked_reason && run.state === "ready" && (
@@ -211,20 +202,19 @@ export function ProcedureProgress({
           )}
           {!run.cancellation && ["ready", "waiting_for_input", "leased"].includes(run.state) && (
             <details>
-              <summary>{queued ? "Cancel queued task" : "Cancel remaining procedure"}</summary>
+              <summary>{queued ? "取消等待任务" : "取消后续步骤"}</summary>
               <p>
-                Retains completed results. An already-started step, including configuration
-                acceptance, settles before cancellation completes. This is not an emergency stop.
+                已完成结果会保留。正在执行的步骤（包括配置接纳）结束后，取消才会完成。这不是紧急停止。
               </p>
               <Controls.Field>
-                Cancellation actor
+                取消操作人
                 <Controls.Input
                   value={cancelActor}
                   onChange={(event) => setCancelActor(event.target.value)}
                 />
               </Controls.Field>
               <Controls.Field>
-                Cancellation reason
+                取消原因
                 <Controls.Input
                   value={cancelReason}
                   onChange={(event) => setCancelReason(event.target.value)}
@@ -241,17 +231,17 @@ export function ProcedureProgress({
                 }}
               >
                 {queued
-                  ? "Cancel queued task"
+                  ? "取消等待任务"
                   : run.state === "leased"
-                    ? "Stop after current step"
-                    : "Cancel procedure"}
+                    ? "当前步骤结束后停止"
+                    : "取消任务"}
               </button>
             </details>
           )}
-          {run.closure?.actor && <p>Closed by {run.closure.actor}</p>}
+          {run.closure?.actor && <p>结束操作人：{run.closure.actor}</p>}
           {view.current_step && (
             <p>
-              Current step: {view.current_step.step_key} · {stateLabel(view.current_step.state)}
+              当前步骤： {view.current_step.step_key} · {stateLabel(view.current_step.state)}
             </p>
           )}
           {view.current_child && (
@@ -286,10 +276,10 @@ export function ProcedureProgress({
                     {step.step_key}:{" "}
                     {run.resource_wait?.step_key === step.step_key
                       ? run.closure?.status === "cancelled"
-                        ? "Cancelled before acquisition"
-                        : "Waiting for resources"
+                        ? "采集前已取消"
+                        : "等待资源"
                       : run.closure?.status === "cancelled" && step.state === "waiting_for_input"
-                        ? "Review cancelled"
+                        ? "人工判断已取消"
                         : stateLabel(step.state)}
                   </p>
                   {(step.failure_reason || step.attention_reason) && (
@@ -308,7 +298,7 @@ export function ProcedureProgress({
                   )}
                   {step.output?.kind === "interpretation" && (
                     <details>
-                      <summary>Recorded review</summary>
+                      <summary>已记录的人工判断</summary>
                       <pre className="overflow-auto text-xs">
                         {JSON.stringify(step.output.response, null, 2)}
                       </pre>
@@ -316,12 +306,12 @@ export function ProcedureProgress({
                   )}
                   {href && (!child || step.output?.kind !== "run") && (
                     <a onClick={navigateLink} className="underline" href={withDraftContext(href)}>
-                      Open{" "}
+                      打开{" "}
                       {step.output?.kind === "analysis"
                         ? "analysis"
                         : step.output?.kind === "run"
                           ? "run"
-                          : "retained result"}
+                          : "保留结果"}
                     </a>
                   )}
                 </li>
@@ -337,22 +327,20 @@ export function ProcedureProgress({
                 void progress.fetchNextPage();
               }}
             >
-              Load earlier steps
+              加载更早步骤
             </button>
           )}
           <details className="border border-line rounded-md p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Execution diagnostics
-            </summary>
+            <summary className="cursor-pointer text-sm font-semibold">执行诊断</summary>
             <p>
               {view.dispatch.worker_running
-                ? "Worker process active"
-                : `Worker management: ${view.dispatch.management}`}
+                ? "Worker 进程运行中"
+                : `Worker 管理状态： ${view.dispatch.management}`}
             </p>
-            {view.dispatch.failure && <p>Observed at {view.dispatch.failure.observed_at}</p>}
+            {view.dispatch.failure && <p>记录时间：{view.dispatch.failure.observed_at}</p>}
             {view.dispatch.log_path && (
               <p className="break-all">
-                Worker log: <code>{view.dispatch.log_path}</code>
+                Worker 日志： <code>{view.dispatch.log_path}</code>
               </p>
             )}
             <ProcedureWorkerLog procedureId={procedureId} />

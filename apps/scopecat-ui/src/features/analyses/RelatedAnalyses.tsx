@@ -249,7 +249,7 @@ function RunResults({
           disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}
         >
-          Load older analyses
+          加载更早 analysis
         </button>
       )}
     </section>

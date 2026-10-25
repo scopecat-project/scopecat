@@ -49,28 +49,28 @@ it("pins the chosen version until explicit adoption of a newer branch head", asy
   const changed = vi.fn();
   mount(changed);
   expect(fetcher).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Choose parameter branch" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择参数分支" }));
   await screen.findByRole("option", { name: /chip\/daily.*generation 1/ });
-  fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: first.name } });
+  fireEvent.change(screen.getByLabelText("参数分支"), { target: { value: first.name } });
   expect(changed).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用此参数版本" }));
   expect(changed).toHaveBeenCalledWith({ kind: "parameters", ref: first.revision, overrides: [] });
   head = {
     ...first,
     generation: 2,
     revision: { revision_id: "second", content_hash: "sha256:second" },
   };
-  fireEvent.click(screen.getByRole("button", { name: "Refresh parameter branches" }));
+  fireEvent.click(screen.getByRole("button", { name: "刷新参数分支" }));
   await screen.findByRole("option", { name: /generation 2/ });
-  expect(screen.getByText("Parameters: first")).toBeInTheDocument();
+  expect(screen.getByText("参数： first")).toBeInTheDocument();
   expect(changed).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Use this parameter version" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用此参数版本" }));
   expect(changed).toHaveBeenLastCalledWith({
     kind: "parameters",
     ref: head.revision,
     overrides: [],
   });
-  fireEvent.click(screen.getByRole("button", { name: "Clear parameter selection" }));
+  fireEvent.click(screen.getByRole("button", { name: "清除参数选择" }));
   expect(changed).toHaveBeenLastCalledWith({ kind: "unselected" });
 });
 it("pages branch choices and blocks adoption after a failed refresh", async () => {
@@ -87,17 +87,17 @@ it("pages branch choices and blocks adoption after a failed refresh", async () =
   vi.stubGlobal("fetch", fetcher);
   const changed = vi.fn();
   mount(changed);
-  fireEvent.click(screen.getByRole("button", { name: "Choose parameter branch" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Load more parameter branches" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择参数分支" }));
+  fireEvent.click(await screen.findByRole("button", { name: "加载更多参数分支" }));
   await screen.findByRole("option", { name: /trial/ });
-  fireEvent.change(screen.getByLabelText("Parameter branch"), { target: { value: "trial" } });
+  fireEvent.change(screen.getByLabelText("参数分支"), { target: { value: "trial" } });
   fail = true;
-  fireEvent.click(screen.getByRole("button", { name: "Refresh parameter branches" }));
+  fireEvent.click(screen.getByRole("button", { name: "刷新参数分支" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Cannot read branches");
-  expect(screen.getByRole("button", { name: "Use this parameter version" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "使用此参数版本" })).toBeDisabled();
   expect(changed).not.toHaveBeenCalled();
   fail = false;
-  fireEvent.click(screen.getByRole("button", { name: "Refresh parameter branches" }));
+  fireEvent.click(screen.getByRole("button", { name: "刷新参数分支" }));
   await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-  expect(screen.getByRole("button", { name: "Use this parameter version" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "使用此参数版本" })).toBeEnabled();
 });

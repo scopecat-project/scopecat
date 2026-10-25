@@ -38,12 +38,12 @@ export function ParameterBranchPicker({
   return (
     <div className="space-y-2">
       <p>
-        Parameters:{" "}
+        参数：{" "}
         {value.kind === "parameters"
           ? value.ref.revision_id
           : value.kind === "unselected"
-            ? "Not selected"
-            : "From selected working point or saved evidence"}
+            ? "未选择"
+            : "来自选中工作点或保留证据"}
       </p>
       <button
         className={`${secondaryButton} mr-2`}
@@ -52,19 +52,19 @@ export function ParameterBranchPicker({
         aria-expanded={browse}
         onClick={() => setBrowse(!browse)}
       >
-        {browse ? "Hide parameter branches" : "Choose parameter branch"}
+        {browse ? "收起参数分支" : "选择参数分支"}
       </button>
       {browse && (
         <>
           <Field className="flex-col">
-            Parameter branch
+            参数分支
             <Select
-              aria-label="Parameter branch"
+              aria-label="参数分支"
               value={name}
               disabled={disabled || heads.isPending}
               onChange={(event) => setName(event.target.value)}
             >
-              <option value="">Choose a branch</option>
+              <option value="">选择分支</option>
               {items.map((item) => (
                 <option key={item.name} value={item.name}>
                   {item.name} · generation {item.generation}
@@ -94,7 +94,7 @@ export function ParameterBranchPicker({
               })
             }
           >
-            Use this parameter version
+            使用此参数版本
           </button>
           <button
             className={`${secondaryButton} mr-2`}
@@ -102,7 +102,7 @@ export function ParameterBranchPicker({
             disabled={disabled || heads.isFetching}
             onClick={() => void heads.refetch()}
           >
-            Refresh parameter branches
+            刷新参数分支
           </button>
           {heads.hasNextPage && (
             <button
@@ -111,13 +111,11 @@ export function ParameterBranchPicker({
               disabled={disabled || heads.isFetching}
               onClick={() => void heads.fetchNextPage()}
             >
-              Load more parameter branches
+              加载更多参数分支
             </button>
           )}
           {heads.error && <Notice role="alert">{heads.error.message}</Notice>}
-          {heads.isSuccess && items.length === 0 && (
-            <p>No parameter branches yet. Create one in your author session.</p>
-          )}
+          {heads.isSuccess && items.length === 0 && <p>暂无参数分支，请在作者会话中创建。</p>}
           {value.kind !== "unselected" && (
             <button
               className={`${secondaryButton} mr-2`}
@@ -125,7 +123,7 @@ export function ParameterBranchPicker({
               disabled={disabled}
               onClick={() => onChange({ kind: "unselected" })}
             >
-              Clear parameter selection
+              清除参数选择
             </button>
           )}
           <p className="text-sm">

@@ -34,10 +34,10 @@ test("reopens a lost launch receipt after context changes without a second submi
     };
     prepareAuthorContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await page.route("**/api/v1/experiment-launcher/submit", async (route) => {
       submissions += 1;
       const response = await route.fetch();
@@ -45,13 +45,11 @@ test("reopens a lost launch receipt after context changes without a second submi
       originalId = ((await response.json()) as { procedure_id: string }).procedure_id;
       await route.abort("failed");
     });
-    await page.getByRole("button", { name: "Start acquisition" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Original submission awaiting confirmation" }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "开始采集" }).click();
+    await expect(page.getByRole("heading", { name: "原始提交待确认" })).toBeVisible();
     await expect(page.getByRole("alert")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Original launch submission" })).toBeFocused();
-    await expect(page.getByRole("region", { name: "Original launch submission" })).toBeInViewport();
+    await expect(page.getByRole("region", { name: "原始提交" })).toBeFocused();
+    await expect(page.getByRole("region", { name: "原始提交" })).toBeInViewport();
     await page
       .getByRole("navigation", { name: "Project sections" })
       .getByRole("button", { name: /Configuration$/, exact: true })
@@ -75,17 +73,13 @@ test("reopens a lost launch receipt after context changes without a second submi
       .getByRole("navigation", { name: "Project sections" })
       .getByRole("button", { name: /Experiments$/, exact: true })
       .click();
-    await expect(
-      page.getByRole("region", { name: "Review recovered experiment", exact: true }),
-    ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
+    await expect(page.getByRole("region", { name: "核实恢复的实验", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
     // Recovery reads the original receipt without reviewing or resubmitting the changed draft.
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Retry original submission" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Check original submission" }).click();
-    await page.getByRole("button", { name: "Open submitted procedure" }).click();
+    await page.getByRole("button", { name: "核实原始提交" }).click();
+    await page.getByRole("button", { name: "查看已提交任务" }).click();
     await expect(page).toHaveURL(new RegExp(`procedure=${originalId}`));
     expect(submissions).toBe(1);
     const shot = testInfo.outputPath("original-launch-submission.png");

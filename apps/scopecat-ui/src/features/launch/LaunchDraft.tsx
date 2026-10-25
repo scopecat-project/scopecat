@@ -829,10 +829,7 @@ function ProjectDraft({
             currentWorkspace.current === owner &&
             current?.workspaceId === owner &&
             !current.codeRevision
-              ? invalidateDraft(
-                  current,
-                  "Author code refreshed. Inputs are retained; review them before starting.",
-                )
+              ? invalidateDraft(current, "作者代码已刷新，输入已保留；开始前请核实。")
               : current,
           ),
         selectConfiguration: (choice, workingInput, subject) => {

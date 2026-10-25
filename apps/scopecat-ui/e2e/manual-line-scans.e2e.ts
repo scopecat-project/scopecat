@@ -71,12 +71,12 @@ for (const width of [1280, 390]) {
           })
           .click();
         await expect(page.getByText(`Physical line: ${label}`, { exact: false })).toBeVisible();
-        await page.locator('input[aria-label="Operator"]').fill("measurement-operator");
+        await page.locator('input[aria-label="操作人"]').fill("measurement-operator");
         if (index > 0) await page.getByLabel("Amplitude", { exact: true }).fill("0.08");
         const submitted = page.waitForResponse((response) =>
           response.url().endsWith("/experiment-launcher/submit"),
         );
-        await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+        await page.getByRole("button", { name: "开始采集", exact: true }).click();
         const receipt = await (await submitted).json();
         expect(receipt.procedure_id).toBeTruthy();
         await expect
@@ -109,9 +109,9 @@ for (const width of [1280, 390]) {
           );
         }
         await page.goto(`${base}/?procedure=${receipt.procedure_id}#decisions`);
-        await page.getByLabel("Recorded reviewer", { exact: true }).fill(`wire-operator-${index}`);
+        await page.getByLabel("判断操作人", { exact: true }).fill(`wire-operator-${index}`);
         await page.getByLabel("confirmed", { exact: true }).selectOption("true");
-        await page.getByRole("button", { name: "Submit and continue", exact: true }).click();
+        await page.getByRole("button", { name: "提交判断并继续", exact: true }).click();
         await expect
           .poll(
             async () =>
@@ -162,18 +162,18 @@ for (const width of [1280, 390]) {
         fullPage: true,
       });
       await region.getByRole("link", { name: "Compare retained curves" }).click();
-      await expect(page.getByLabel("Primary run", { exact: true })).toHaveValue(runIds[0]);
-      await expect(page.getByLabel("Secondary run", { exact: true })).toHaveValue(runIds[2]);
+      await expect(page.getByLabel("主 run", { exact: true })).toHaveValue(runIds[0]);
+      await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(runIds[2]);
       const comparison = page.waitForResponse(
         (response) =>
           response.url().endsWith("/run-comparison") &&
           response.request().method() === "POST" &&
           response.request().postDataJSON().action === "inspect",
       );
-      await page.getByRole("button", { name: "Inspect compatible data", exact: true }).click();
+      await page.getByRole("button", { name: "检查兼容数据", exact: true }).click();
       expect((await comparison).status()).toBe(200);
       await expect(
-        page.getByRole("region", { name: "Retained run comparison" }).locator("svg"),
+        page.getByRole("region", { name: "已有 run 比较" }).locator("svg"),
       ).toBeVisible();
     } finally {
       if (started) stopProject(project);

@@ -613,7 +613,7 @@ def probe(home: Path) -> None:
                     # Generate the draft through the real React form, then unmount
                     # it so its effect cannot rewrite a cleared store during creation.
                     reviewer = "native-window-reviewer"
-                    reviewer_selector = 'input[placeholder="Person\u2019s name"]'
+                    reviewer_selector = 'input[placeholder="操作人姓名"]'
                     reviewer_value = (
                         "document.querySelector("
                         + json.dumps(reviewer_selector)
@@ -659,7 +659,7 @@ def probe(home: Path) -> None:
                         "Main run did not return after saving draft",
                     )
                     checks.append("real decision edit saved before secondary creation")
-                    click_text(first.window, "Open result in new window")
+                    click_text(first.window, "在新窗口打开结果")
                     wait_for(
                         lambda: len(webview.windows) == 2,
                         "Bridge did not create a native window",

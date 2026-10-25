@@ -91,12 +91,12 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await a.getByLabel("rationale", { exact: true }).fill("first line");
     await a.getByLabel("rationale", { exact: true }).press("Enter");
     await expect(a.getByLabel("rationale", { exact: true })).toHaveValue("first line\n");
-    await a.getByLabel("Recorded reviewer").fill("operator A");
+    await a.getByLabel("判断操作人").fill("operator A");
     await a.getByLabel("frequency", { exact: true }).fill("1e");
     await a.getByLabel("rationale", { exact: true }).fill("unfinished useful reasoning");
-    await expect(a.getByText("Draft saved", { exact: true })).toBeVisible();
-    await b.getByRole("button", { name: "Decision options" }).click();
-    await b.getByLabel("Reasoning note (optional)").fill("window B conflicting note");
+    await expect(a.getByText("草稿已保存", { exact: true })).toBeVisible();
+    await b.getByRole("button", { name: "人工判断选项" }).click();
+    await b.getByLabel("判断依据备注（可选）").fill("window B conflicting note");
     await expect(b.getByText(/Your conflicting copy is retained/)).toBeVisible();
     await expect(b.getByRole("button", { name: "Record decision", exact: true })).toBeDisabled();
     await expect(a.getByLabel("frequency", { exact: true })).toHaveValue("1e");
@@ -135,7 +135,7 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
       "unfinished useful reasoning",
     );
     await reopened.getByLabel("frequency", { exact: true }).fill("6.2");
-    await expect(reopened.getByText("Draft saved", { exact: true })).toBeVisible();
+    await expect(reopened.getByText("草稿已保存", { exact: true })).toBeVisible();
     await reopened.route(
       "**/attempts/1/input",
       (route) =>
@@ -151,8 +151,8 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await reopened.reload();
     await expect(reopened.getByLabel("frequency", { exact: true })).toHaveValue("6.2");
     await reopened.getByLabel("frequency", { exact: true }).press("Enter");
-    await expect(reopened.getByText("Decision saved or no longer waiting")).toBeVisible();
-    await reopened.getByRole("button", { name: "Decision options" }).click();
+    await expect(reopened.getByText("判断已保存或任务已不再等待")).toBeVisible();
+    await reopened.getByRole("button", { name: "人工判断选项" }).click();
     await reopened.getByRole("button", { name: "Recover saved Decision drafts" }).click();
     await expect(reopened.getByText(/history cannot submit a decision/)).toBeVisible();
     const runs = await reopened.request.get(`${secondUrl}/api/v1/runs`);
@@ -220,7 +220,7 @@ test("Settings operator is shared across windows and retained after uncertain De
     await expect(settings.getByText("Operator saved", { exact: true })).toBeVisible();
     const decision = await context.newPage();
     await decision.goto(`${url}/?procedure=${procedure}#decisions`);
-    await expect(decision.getByLabel("Recorded reviewer")).toHaveValue("Alice");
+    await expect(decision.getByLabel("判断操作人")).toHaveValue("Alice");
     for (const width of [1280, 390]) {
       await decision.setViewportSize({ width, height: 900 });
       expect(
@@ -235,7 +235,7 @@ test("Settings operator is shared across windows and retained after uncertain De
       });
     }
     await decision.route("**/attempts/1/input/continue", (route) => route.abort("failed"));
-    await decision.getByRole("button", { name: "Submit and continue" }).click();
+    await decision.getByRole("button", { name: "提交判断并继续" }).click();
     await expect(decision.getByRole("alert")).toContainText("local daemon did not respond");
     const draftResponse = await decision.request.post(`${url}/api/v1/decision-drafts/read`, {
       data: { procedure_run_id: procedure, step_key: "select/peak", attempt: 1 },
@@ -261,7 +261,7 @@ test("Settings operator is shared across windows and retained after uncertain De
     const reopened = await context.newPage();
     const reopenedUrl = await endpoint();
     await reopened.goto(`${reopenedUrl}/?procedure=${procedure}#decisions`);
-    await expect(reopened.getByLabel("Recorded reviewer")).toHaveValue("Alice");
+    await expect(reopened.getByLabel("判断操作人")).toHaveValue("Alice");
     const defaults = await reopened.request.get(`${reopenedUrl}/api/v1/operator-settings`);
     expect((await defaults.json()).operator).toBe("Bob");
     const runs = await reopened.request.get(`${reopenedUrl}/api/v1/runs`);

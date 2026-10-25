@@ -48,9 +48,9 @@ export function DeviceContextPicker({
   return (
     <div className="space-y-2">
       <Field className="flex-col">
-        Experiment setup
+        实验配置
         <Select
-          aria-label="Experiment setup"
+          aria-label="实验配置"
           value={selectedDefinition ?? ""}
           disabled={disabled || revisions.isPending || revisions.isError || resolution.isPending}
           onChange={(event) => {
@@ -59,7 +59,7 @@ export function DeviceContextPicker({
           }}
         >
           <option value="" disabled>
-            Choose experiment roles and devices
+            选择实验角色与设备
           </option>
           {items.map((item) => (
             <option key={item.id} value={item.id}>
@@ -74,7 +74,7 @@ export function DeviceContextPicker({
         disabled={disabled || revisions.isFetching}
         onClick={() => void revisions.refetch()}
       >
-        Refresh setups
+        刷新实验配置
       </button>
       {revisions.error && <Notice role="alert">{revisions.error.message}</Notice>}
       {resolution.error && <Notice role="alert">{resolution.error.message}</Notice>}
@@ -86,15 +86,11 @@ export function DeviceContextPicker({
           disabled={disabled || resolution.isPending}
           onClick={() => resolution.mutate(selectedDefinition)}
         >
-          Recheck device connections
+          重新检查设备连接
         </button>
       )}
-      {revisions.isSuccess && items.length === 0 && (
-        <p>No setups saved yet. Create one in Configuration.</p>
-      )}
-      <p className="text-sm">
-        Applies to this page. Selection does not connect devices or change submitted work.
-      </p>
+      {revisions.isSuccess && items.length === 0 && <p>暂无已保存配置，请在参数与绑定中创建。</p>}
+      <p className="text-sm">仅应用于本页。选择不会连接设备，也不会改变已提交任务。</p>
     </div>
   );
 }

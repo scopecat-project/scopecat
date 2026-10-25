@@ -50,13 +50,15 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
-    const sourceBounds = await page.getByLabel("Code workspace", { exact: true }).boundingBox();
+    const sourceBounds = await page.getByLabel("代码工作区", { exact: true }).boundingBox();
     const refreshBounds = await page
-      .getByRole("button", { name: "Refresh author code", exact: true })
+      .getByRole("button", { name: "刷新作者代码", exact: true })
       .boundingBox();
-    expect(sourceBounds!.x + sourceBounds!.width).toBeLessThanOrEqual(refreshBounds!.x);
+    // Author refresh follows the source/draft/experiment row in the current workbench.
+    expect(sourceBounds!.y + sourceBounds!.height).toBeLessThanOrEqual(refreshBounds!.y);
+    await expect(page.getByRole("button", { name: "刷新作者代码", exact: true })).toBeInViewport();
     await testInfo.attach("Preparation source controls", {
       body: await page.screenshot(),
       contentType: "image/png",
@@ -73,7 +75,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
         response.url().endsWith("/experiment-launcher/preview") &&
         response.request().method() === "POST",
     );
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     const preview = await previewResponse;
     expect(preview.status()).toBe(200);
     expect(preview.request().postDataJSON().inputs).toEqual({ polarity: "negative" });
@@ -85,10 +87,8 @@ test("discovers an ordinary author experiment and edits controls before submitti
         expect.objectContaining({ id: "frequency", state: "scanned" }),
       ]),
     });
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
-    await page
-      .getByRole("region", { name: "Preview and start", exact: true })
-      .scrollIntoViewIfNeeded();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
+    await page.getByRole("region", { name: "预览与开始", exact: true }).scrollIntoViewIfNeeded();
     await testInfo.attach("Preparation and launch actions", {
       body: await page.screenshot(),
       contentType: "image/png",
@@ -96,29 +96,23 @@ test("discovers an ordinary author experiment and edits controls before submitti
     const sourcePath = join(project, "src/ui_author/signal.py");
     const originalSource = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, originalSource + "\ndef broken(:\n");
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: "SyntaxError" })).toBeVisible();
-    await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await writeFile(sourcePath, originalSource.replace("return gain /", "return 2 * gain /"));
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await expect(page.getByLabel("Frequency points")).toHaveValue("3");
     await reviewRetainedExperiment(page);
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     const nextPreviewResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/experiment-launcher/preview") &&
         response.request().method() === "POST",
     );
-    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.getByRole("button", { name: "预览", exact: true }).click();
     const revisedPreview = await (await nextPreviewResponse).json();
     expect(revisedPreview.code_revision).not.toEqual(originalPreview.code_revision);
     expect(revisedPreview.point_count).toBe(3);
@@ -127,37 +121,33 @@ test("discovers an ordinary author experiment and edits controls before submitti
         response.url().endsWith("/experiment-launcher/submit") &&
         response.request().method() === "POST",
     );
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
     const admitted = await submitted;
     expect(admitted.status()).toBe(200);
     expect(admitted.request().postDataJSON().inputs).toEqual({ polarity: "negative" });
     expect(await admitted.json()).toMatchObject({ dispatch_error: null });
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
-    const execution = page.getByRole("region", { name: "Selected execution", exact: true });
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
+    const execution = page.getByRole("region", { name: "当前执行", exact: true });
     await expect(execution).toBeFocused();
     await expect(execution).toBeInViewport();
     await expect
       .poll(async () => {
-        const heading = await execution
-          .getByRole("heading", { name: "Execution progress" })
-          .boundingBox();
+        const heading = await execution.getByRole("heading", { name: "执行进度" }).boundingBox();
         const navigation = await page.getByRole("banner").boundingBox();
         return !!heading && !!navigation && heading.y >= navigation.y + navigation.height;
       })
       .toBe(true);
-    await page.getByRole("button", { name: "Editor", exact: true }).click();
+    await page.getByRole("button", { name: "准备", exact: true }).click();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
-    await page.getByRole("button", { name: "Monitor", exact: true }).click();
-    await expect(execution.getByText("Execution diagnostics", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "监看", exact: true }).click();
+    await expect(execution.getByText("执行诊断", { exact: true })).toBeVisible();
     await testInfo.attach("Selected monitor and retained editor input", {
       body: await page.screenshot(),
       contentType: "image/png",
     });
-    await page.getByRole("link", { name: /^View saved data:/ }).click();
-    await expect(page.getByTestId("run-status")).toHaveText("Succeeded");
+    await page.getByRole("link", { name: /^查看已保存结果:/ }).click();
+    await expect(page.getByTestId("run-status")).toHaveText("已完成");
     await expect(page.getByText("Measurement data", { exact: true })).toBeVisible();
     completed = true;
   } finally {
@@ -210,7 +200,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
     await page.getByLabel("Gain", { exact: true }).fill("2");
     await page.getByLabel("Frequency source").selectOption("range");
@@ -221,7 +211,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
       const response = page.waitForResponse(
         (r) => r.url().endsWith("/experiment-launcher/preview") && r.request().method() === "POST",
       );
-      await page.getByRole("button", { name: "Preview", exact: true }).click();
+      await page.getByRole("button", { name: "预览", exact: true }).click();
       const result = await response;
       expect(result.status()).toBe(200);
       return result.json();
@@ -230,7 +220,7 @@ test("prepares B while A stays pinned in a separate result page", async ({
       const response = page.waitForResponse(
         (r) => r.url().endsWith("/experiment-launcher/submit") && r.request().method() === "POST",
       );
-      await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+      await page.getByRole("button", { name: "开始采集", exact: true }).click();
       const result = await response;
       expect(result.status()).toBe(200);
       return result.json();
@@ -239,9 +229,9 @@ test("prepares B while A stays pinned in a separate result page", async ({
     const receiptA = await submit();
     const procedureA = new URL(page.url()).searchParams.get("procedure");
     const opened = context.waitForEvent("page");
-    await page.getByRole("link", { name: "Open result in new tab or window" }).first().click();
+    await page.getByRole("link", { name: "在新标签页或窗口打开结果" }).first().click();
     const resultA = await opened;
-    await expect(resultA.getByTestId("run-status")).toHaveText("Running");
+    await expect(resultA.getByTestId("run-status")).toHaveText("执行中");
     const runA = new URL(resultA.url()).searchParams.get("run");
     const readA = async () => {
       const response = await context.request.get(`${endpoint.base_url}/api/v1/runs/${runA}`);
@@ -250,50 +240,50 @@ test("prepares B while A stays pinned in a separate result page", async ({
     };
     const acceptedA = await readA();
     await page.setViewportSize({ width: 520, height: 800 });
-    await page.getByRole("button", { name: "Editor", exact: true }).click();
+    await page.getByRole("button", { name: "准备", exact: true }).click();
     await page.getByLabel("Gain", { exact: true }).fill("3");
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await writeFile(sourcePath, source.replace("return gain /", "return 2 * gain /"));
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: /Help$/, exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
+    await page.getByRole("button", { name: "导航 / Open navigation", exact: true }).click();
+    await page.getByRole("button", { name: "帮助 / Help", exact: true }).click();
     await page.goBack();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await page.goForward();
-    await expect(page.getByRole("button", { name: /Experiments$/, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "导航 / Open navigation", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "实验 / Experiments", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Workspace navigation", exact: true }),
+    ).toHaveCount(0);
     await page.goBack();
     await reviewRetainedExperiment(page);
-    await page
-      .getByRole("button", { name: "Prepare a new run (separate acquisition)", exact: true })
-      .click();
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
+    await page.getByRole("button", { name: "准备新的 run（独立采集）", exact: true }).click();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     expect(submissions).toHaveLength(1);
     const previewB = await preview();
     expect(previewB.code_revision).not.toEqual(previewA.code_revision);
-    await expect(resultA.getByTestId("run-status")).toHaveText("Running");
+    await expect(resultA.getByTestId("run-status")).toHaveText("执行中");
     const receiptB = await submit();
     expect(receiptB).not.toEqual(receiptA);
     const procedureB = receiptB.procedure_id as string;
     expect(procedureB).not.toBe(procedureA);
     // Submission B must not silently rebind the already selected monitor A.
     expect(new URL(page.url()).searchParams.get("procedure")).toBe(procedureA);
-    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+    await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
     await expect(page).toHaveURL((url) => url.searchParams.get("procedure") === procedureB);
     await writeFile(release, "");
-    await expect(resultA.getByTestId("run-status")).toHaveText("Succeeded");
+    await expect(resultA.getByTestId("run-status")).toHaveText("已完成");
     await expect(resultA.getByTestId("data-card").getByText(/^3 records/)).toBeVisible();
     expect(new URL(resultA.url()).searchParams.get("run")).toBe(runA);
     const finishedA = await readA();
     expect(finishedA.control.admission).toEqual(acceptedA.control.admission);
     expect(finishedA.snapshot.config_source).toEqual(acceptedA.snapshot.config_source);
     expect(finishedA.snapshot.scientific_binding).toEqual(acceptedA.snapshot.scientific_binding);
-    await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+    await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
     await testInfo.attach("A-B identities", {
       body: JSON.stringify(
         { previewA, previewB, receiptA, receiptB, runA, procedureA, procedureB },
@@ -303,41 +293,46 @@ test("prepares B while A stays pinned in a separate result page", async ({
       contentType: "application/json",
     });
     // A historical selection must survive an ordinary page round trip even after B was admitted.
-    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+    await page.getByRole("button", { name: "已提交任务", exact: true }).click();
     const historicalA = page
       .locator("details")
-      .filter({ has: page.locator("summary").getByText("Submitted work", { exact: true }) })
+      .filter({ has: page.locator("summary").getByText("已提交任务", { exact: true }) })
       .getByRole("button")
       .last();
     await historicalA.focus();
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
-    ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
-    await page.getByRole("button", { name: /Help$/, exact: true }).click();
+    await expect(page.getByRole("link", { name: "重新打开此任务", exact: true })).toHaveAttribute(
+      "href",
+      `?procedure=${procedureA}#launch`,
+    );
+    await page.getByRole("button", { name: "导航 / Open navigation", exact: true }).click();
+    await page.getByRole("button", { name: "帮助 / Help", exact: true }).click();
     await page.goBack();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
-    await expect(
-      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
-    ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
+    await expect(page.getByRole("link", { name: "重新打开此任务", exact: true })).toHaveAttribute(
+      "href",
+      `?procedure=${procedureA}#launch`,
+    );
     await page.goBack();
-    await expect(page.getByRole("button", { name: "Submitted work", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("button", { name: "已提交任务", exact: true })).toHaveAttribute(
       "aria-current",
       "page",
     );
     await page.goBack();
-    await expect(
-      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
-    ).toHaveAttribute("href", `?procedure=${procedureB}#launch`);
+    await expect(page.getByRole("link", { name: "重新打开此任务", exact: true })).toHaveAttribute(
+      "href",
+      `?procedure=${procedureB}#launch`,
+    );
     await page.goForward();
-    await expect(page.getByRole("button", { name: "Submitted work", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("button", { name: "已提交任务", exact: true })).toHaveAttribute(
       "aria-current",
       "page",
     );
     await page.goForward();
-    await expect(
-      page.getByRole("link", { name: "Reopen this procedure", exact: true }),
-    ).toHaveAttribute("href", `?procedure=${procedureA}#launch`);
+    await expect(page.getByRole("link", { name: "重新打开此任务", exact: true })).toHaveAttribute(
+      "href",
+      `?procedure=${procedureA}#launch`,
+    );
     expect(submissions).toHaveLength(2);
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(resultA.getByTestId("run-detail-header")).toContainText(runA!);

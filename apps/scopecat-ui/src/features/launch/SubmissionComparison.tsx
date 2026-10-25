@@ -75,7 +75,7 @@ export function SubmissionComparison({
                 Selected submitted request
               </th>
               <th scope="col" className="p-2">
-                Current draft · {draft.draftName ?? "Draft"}
+                当前草稿 · {draft.draftName ?? "Draft"}
               </th>
             </tr>
           </thead>

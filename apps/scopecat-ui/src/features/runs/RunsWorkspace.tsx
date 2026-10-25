@@ -452,7 +452,7 @@ export function RunsWorkspace({
           >
             <div className="flex items-start justify-between px-1 pb-[11px]">
               <div>
-                <p className={eyebrow}>Run browser</p>
+                <p className={eyebrow}>run 浏览</p>
                 <h2 className="m-0 text-[1.08rem] font-[650] tracking-[-0.02em]" id="runs-heading">
                   Experiments
                 </h2>
@@ -461,18 +461,18 @@ export function RunsWorkspace({
                 <LoaderCircle
                   className="mt-[7px] animate-spin text-text-dim"
                   size={17}
-                  aria-label="Refreshing runs"
+                  aria-label="正在刷新 run"
                 />
               )}
             </div>
 
             <Controls.Field className="flex min-h-10 items-center gap-[9px] rounded-[9px] border border-line bg-bg px-[11px] text-text-dim transition-[border-color,box-shadow] duration-150 focus-within:border-[rgb(128_163_207_/_55%)] focus-within:shadow-[0_0_0_3px_rgb(128_163_207_/_7%)]">
               <Search size={16} aria-hidden="true" />
-              <span className="sr-only">Search by run, experiment, or resource</span>
+              <span className="sr-only">按 run、实验或资源搜索</span>
               <Controls.Input
                 className="w-full min-w-0 border-0 bg-transparent placeholder:text-text-dim"
                 type="search"
-                placeholder="Search runs"
+                placeholder="搜索 run"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -480,7 +480,7 @@ export function RunsWorkspace({
 
             <div
               className="my-2.5 mb-[11px] flex items-center gap-1 text-text-dim max-[460px]:overflow-x-auto"
-              aria-label="Filter runs"
+              aria-label="筛选 run"
             >
               <ListFilter className="mx-[5px] ml-0.5 flex-none" size={15} aria-hidden="true" />
               {FILTERS.map((item) => (
@@ -504,29 +504,29 @@ export function RunsWorkspace({
               {runsQuery.isPending && (
                 <PanelMessage
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Reading project"
-                  detail="Waiting for the daemon to return its run index."
+                  title="正在读取项目"
+                  detail="正在等待 daemon 返回 run 索引。"
                 />
               )}
               {runsQuery.isError && (
                 <PanelMessage
                   icon={<Unplug />}
-                  title="Run list unavailable"
+                  title="无法读取 run 列表"
                   detail={errorMessage(runsQuery.error)}
                 />
               )}
               {runsQuery.isSuccess && runs.length === 0 && (
                 <PanelMessage
                   icon={<FlaskConical />}
-                  title="No runs yet"
-                  detail="Submitted experiments will appear here."
+                  title="暂无 run"
+                  detail="已提交实验将在此显示。"
                 />
               )}
               {runsQuery.isSuccess && runs.length > 0 && filteredRuns.length === 0 && (
                 <PanelMessage
                   icon={<Search />}
-                  title="No matching runs"
-                  detail="Try another status or search term."
+                  title="没有匹配的 run"
+                  detail="请尝试其他状态或搜索词。"
                 />
               )}
               {filteredRuns.map((run) => (
@@ -565,7 +565,7 @@ export function RunsWorkspace({
                       ) : (
                         <ChevronRight size={14} aria-hidden="true" />
                       )}
-                      {olderRunsMutation.isPending ? "Loading older runs…" : "Load older runs"}
+                      {olderRunsMutation.isPending ? "正在加载更早 run…" : "加载更早 run"}
                     </button>
                   </div>
                 )}
@@ -575,7 +575,7 @@ export function RunsWorkspace({
 
         <section
           className="min-h-[620px] min-w-0 bg-panel p-3 max-[880px]:min-h-[580px] max-[880px]:rounded-lg max-[880px]:border max-[880px]:border-line max-[680px]:px-3.5 max-[680px]:py-3"
-          aria-label="Selected run details"
+          aria-label="选中 run 详情"
         >
           {daemonUnavailable ? (
             <DetailEmpty

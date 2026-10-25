@@ -79,9 +79,9 @@ test("repeats a retained ordinary analysis with its original source after author
     );
     // 在同一会话中从 Data 找回旧结果，独立窗口和返回不能丢失浏览条件。
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
-    const data = page.getByRole("region", { name: "Data", exact: true });
+    const data = page.getByRole("region", { name: "数据", exact: true });
     await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
-    await data.getByLabel("From (local time)").fill("2020-01-01T00:00");
+    await data.getByLabel("起始时间（本地）").fill("2020-01-01T00:00");
     const importedResults = data.getByRole("region", { name: "Imported results" });
     await expect(importedResults.getByText(`Runs: ${seed.run}`, { exact: true })).toBeVisible();
     await expect(
@@ -91,19 +91,19 @@ test("repeats a retained ordinary analysis with its original source after author
     await expect(data.getByRole("region", { name: "Captured run" })).toBeVisible();
     await page.goBack();
     await expect(data.getByRole("region", { name: "Captured run" })).toBeHidden();
-    await expect(data.getByLabel("From (local time)")).toHaveValue("2020-01-01T00:00");
-    await data.getByText("Research project management", { exact: true }).click();
-    await data.getByLabel("Project name", { exact: true }).fill("Retained comparison");
+    await expect(data.getByLabel("起始时间（本地）")).toHaveValue("2020-01-01T00:00");
+    await data.getByText("研究项目管理", { exact: true }).click();
+    await data.getByLabel("项目名称", { exact: true }).fill("Retained comparison");
     await data.getByRole("button", { name: "Create project", exact: true }).click();
-    await expect(data.getByLabel("Research project", { exact: true })).not.toHaveValue("");
-    await data.getByLabel("Show runs outside this project to associate").check();
-    await data.getByRole("button", { name: "Associate run", exact: true }).click();
-    await data.getByText("Research project management", { exact: true }).click();
-    await expect(data.getByRole("button", { name: "Associate run", exact: true })).toBeHidden();
+    await expect(data.getByLabel("研究项目", { exact: true })).not.toHaveValue("");
+    await data.getByLabel("显示项目外的 run 以供关联").check();
+    await data.getByRole("button", { name: "关联 run", exact: true }).click();
+    await data.getByText("研究项目管理", { exact: true }).click();
+    await expect(data.getByRole("button", { name: "关联 run", exact: true })).toBeHidden();
     await expect(data.getByText("Showing runs across all projects for association.")).toBeVisible();
-    const selectedProject = await data.getByLabel("Research project", { exact: true }).inputValue();
+    const selectedProject = await data.getByLabel("研究项目", { exact: true }).inputValue();
     const popupPromise = page.waitForEvent("popup");
-    await data.getByRole("link", { name: "Open result in new tab or window" }).click();
+    await data.getByRole("link", { name: "在新标签页或窗口打开结果" }).click();
     const popup = await popupPromise;
     await expect(popup).toHaveURL(new RegExp(encodeURIComponent(seed.run)));
     await popup.close();
@@ -114,8 +114,8 @@ test("repeats a retained ordinary analysis with its original source after author
     await row.getByRole("button").first().click();
     await expect(page).toHaveURL(new RegExp(`\\?run=${encodeURIComponent(seed.run)}$`));
     await page.goBack();
-    await expect(data.getByLabel("Research project", { exact: true })).toHaveValue(selectedProject);
-    await expect(data.getByLabel("From (local time)")).toHaveValue("2020-01-01T00:00");
+    await expect(data.getByLabel("研究项目", { exact: true })).toHaveValue(selectedProject);
+    await expect(data.getByLabel("起始时间（本地）")).toHaveValue("2020-01-01T00:00");
     await page.evaluate("window.scrollTo(0, 0)");
     await page.screenshot({ path: testInfo.outputPath("data-results.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -129,7 +129,7 @@ test("repeats a retained ordinary analysis with its original source after author
       `${endpoint.base_url}/?run=${encodeURIComponent(seed.run)}&run-analysis=${encodeURIComponent(seed.first)}#runs`,
     );
     await expect(page.getByTestId("publication-id").first()).toHaveText(seed.first);
-    const sources = page.getByText("Sources and execution evidence", { exact: true }).first();
+    const sources = page.getByText("来源与执行证据", { exact: true }).first();
     await expect(sources.locator("..")).not.toHaveAttribute("open");
     await sources.click();
     await expect(page.getByRole("heading", { name: "Inputs", exact: true }).first()).toBeVisible();

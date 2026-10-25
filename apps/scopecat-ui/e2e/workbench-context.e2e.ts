@@ -34,21 +34,21 @@ async function preview(page: Page) {
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/experiment-launcher/preview") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await page.getByRole("button", { name: "预览", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
-  await expect(page.getByText("Preview ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
   return result.json();
 }
 async function acquire(page: Page) {
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/experiment-launcher/submit") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
+  await page.getByRole("button", { name: "开始采集", exact: true }).click();
   const result = await response;
   expect(result.status(), await result.text()).toBe(200);
-  await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
-  await expect(page.getByText("experiment: Completed", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
+  await expect(page.getByText("experiment: 已完成", { exact: true })).toBeVisible();
   return (await result.json()).procedure_id as string;
 }
 
@@ -93,44 +93,38 @@ test("two workbench pages retain independent context and share collection number
     await page.getByRole("button", { name: "Save operator", exact: true }).click();
     await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
     await page.goto(`${url}/#launch`);
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
-    await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("");
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
+    await expect(page.getByLabel("样品 ID", { exact: true })).toHaveValue("");
+    await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue(
       "operator",
     );
-    await page.getByRole("button", { name: "Browse samples, batches and collections" }).click();
-    await page.getByLabel("Registered sample", { exact: true }).selectOption("chip-a");
-    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("Alice");
+    await page.getByRole("button", { name: "浏览样品、批次与记录集" }).click();
+    await page.getByLabel("已注册样品", { exact: true }).selectOption("chip-a");
+    await page.getByRole("textbox", { name: "操作人", exact: true }).fill("Alice");
     const batchA = await createScope(page, "batch", "Cooldown A");
     const collection = await createScope(page, "collection", "Shared measurements");
     // Finish A's explicit experiment round trip before another page edits the shared draft.
-    await page.getByLabel("Experiment", { exact: true }).selectOption("constant");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("signal");
-    await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("constant");
+    await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
+    await expect(page.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-a");
+    await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Alice");
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
     await expect(page.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
     await reviewRetainedExperiment(page);
-    await expect(
-      page.getByText("Experiment input saved in application data.", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
     const other = await context.newPage();
     await other.goto(`${url}/#launch`);
-    await other.getByLabel("Experiment", { exact: true }).selectOption("signal");
+    await other.getByLabel("实验类型", { exact: true }).selectOption("signal");
     // New windows recover the saved experiment; no acquisition is authorized by recovery.
-    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
-    await expect(other.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue(
-      "Alice",
-    );
-    await expect(
-      other.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeDisabled();
+    await expect(other.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-a");
+    await expect(other.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Alice");
+    await expect(other.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await reviewRetainedExperiment(other);
     await chooseAuthorContext(other, "browser-bench-b");
-    await other.getByRole("button", { name: "Browse samples, batches and collections" }).click();
-    await other.getByLabel("Registered sample", { exact: true }).selectOption("chip-b");
-    await other.getByRole("textbox", { name: "Operator", exact: true }).fill("Bob");
+    await other.getByRole("button", { name: "浏览样品、批次与记录集" }).click();
+    await other.getByLabel("已注册样品", { exact: true }).selectOption("chip-b");
+    await other.getByRole("textbox", { name: "操作人", exact: true }).fill("Bob");
     const batchB = await createScope(other, "batch", "Cooldown B");
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
     // A lesson uses the same application while both ordinary drafts stay open.
@@ -153,9 +147,9 @@ test("two workbench pages retain independent context and share collection number
     );
     await practice.getByRole("button", { name: "Clear this practice" }).click();
     await expect(practice.getByText("Practice cleared", { exact: true })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
-    await expect(other.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Bob");
-    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-b");
+    await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Alice");
+    await expect(other.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Bob");
+    await expect(other.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-b");
     await practice.close();
     const preparedA = await preview(page);
     const resolvedA = await (
@@ -168,13 +162,13 @@ test("two workbench pages retain independent context and share collection number
       kind: "inline_samples",
       samples: [{ sample_id: "chip-a", revision: 1, batch_id: batchA }],
     });
-    await page.getByLabel("Plan name", { exact: true }).fill("First batch recipe");
-    await page.getByRole("button", { name: "Save plan", exact: true }).click();
+    await page.getByLabel("计划名称", { exact: true }).fill("First batch recipe");
+    await page.getByRole("button", { name: "保存计划", exact: true }).click();
     await expect(page.getByText(/Saved First batch recipe, revision 1/)).toBeVisible();
-    const conflictA = page.getByRole("region", { name: "Conflicting experiment input" });
+    const conflictA = page.getByRole("region", { name: "实验输入冲突" });
     await expect(conflictA).toContainText("Bob");
-    await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
-    await conflictA.getByRole("button", { name: "Keep my copy after review" }).click();
+    await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
+    await conflictA.getByRole("button", { name: "核实后保留我的副本" }).click();
     await expect(conflictA).toBeHidden();
     await page.getByLabel("Record collection", { exact: true }).selectOption("");
     const reopened = page.waitForRequest(
@@ -183,61 +177,51 @@ test("two workbench pages retain independent context and share collection number
     await preview(page);
     expect((await reopened).postDataJSON().plan_ref).toMatchObject({ revision: 1 });
     await page.getByLabel("Record collection", { exact: true }).selectOption(collection);
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
-    await expect(page.getByText("Preview ready", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
+    await expect(page.getByText("预览就绪", { exact: true })).toHaveCount(0);
     await preview(page);
     // Reload the other page's catalog without replacing its page-local selection.
     await other.getByRole("button", { name: "Refresh project data", exact: true }).click();
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchB);
-    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-b");
-    await expect(other.getByLabel("Experiment setup", { exact: true })).toHaveValue(
-      "browser-bench-b",
-    );
+    await expect(other.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-b");
+    await expect(other.getByLabel("实验配置", { exact: true })).toHaveValue("browser-bench-b");
     // Both pages still edit the same saved identity. Exercise the stale-copy
     // conflict before opening a plan, which intentionally creates a new identity.
     const sharedDraft = await page
-      .getByRole("combobox", { name: "Editable draft", exact: true })
+      .getByRole("combobox", { name: "可编辑草稿", exact: true })
       .inputValue();
-    await expect(other.getByRole("combobox", { name: "Editable draft", exact: true })).toHaveValue(
+    await expect(other.getByRole("combobox", { name: "可编辑草稿", exact: true })).toHaveValue(
       sharedDraft,
     );
     await other.getByLabel("Record collection", { exact: true }).selectOption("");
-    const conflictB = other.getByRole("region", { name: "Conflicting experiment input" });
+    const conflictB = other.getByRole("region", { name: "实验输入冲突" });
     await expect(conflictB).toContainText("Alice");
-    await expect(other.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
-    await conflictB.getByRole("button", { name: "Keep my copy after review" }).click();
+    await expect(other.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
+    await conflictB.getByRole("button", { name: "核实后保留我的副本" }).click();
     await expect(conflictB).toBeHidden();
     await other.getByLabel("Record collection", { exact: true }).selectOption(collection);
-    await expect(
-      other.getByText("Experiment input saved in application data.", { exact: true }),
-    ).toBeVisible();
+    await expect(other.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
     await other.getByRole("button", { name: "Open First batch recipe r1", exact: true }).click();
-    await expect(
-      other.getByRole("combobox", { name: "Editable draft", exact: true }),
-    ).not.toHaveValue(sharedDraft);
+    await expect(other.getByRole("combobox", { name: "可编辑草稿", exact: true })).not.toHaveValue(
+      sharedDraft,
+    );
     // Explicitly opening a plan imports its scientific selection into this page.
     await expect(other.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
-    await expect(other.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
-    await expect(other.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Bob");
+    await expect(other.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-a");
+    await expect(other.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Bob");
     await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
-    await expect(
-      other.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
-    await expect(other.getByText("Preview ready", { exact: true })).toHaveCount(0);
-    await other.getByLabel("Registered sample", { exact: true }).selectOption("chip-b");
+    await expect(other.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
+    await expect(other.getByText("预览就绪", { exact: true })).toHaveCount(0);
+    await other.getByLabel("已注册样品", { exact: true }).selectOption("chip-b");
     await other.getByLabel("Experimental batch", { exact: true }).selectOption(batchB);
-    await other.getByLabel("Experiment setup", { exact: true }).selectOption("browser-bench-b");
+    await other.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-b");
     await expect(page.getByLabel("Experimental batch", { exact: true })).toHaveValue(batchA);
-    await expect(page.getByLabel("Sample ID", { exact: true })).toHaveValue("chip-a");
-    await expect(page.getByRole("textbox", { name: "Operator", exact: true })).toHaveValue("Alice");
+    await expect(page.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-a");
+    await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Alice");
     // Plan-derived edits are independent; Alice's selected draft stays intact.
-    await expect(
-      other.getByText("Experiment input saved in application data.", { exact: true }),
-    ).toBeVisible();
+    await expect(other.getByText("实验输入已保存到应用数据。", { exact: true })).toBeVisible();
     await expect(conflictB).toBeHidden();
-    await expect(page.getByRole("combobox", { name: "Editable draft", exact: true })).toHaveValue(
+    await expect(page.getByRole("combobox", { name: "可编辑草稿", exact: true })).toHaveValue(
       sharedDraft,
     );
     const preparedB = await preview(other);
@@ -259,9 +243,9 @@ test("two workbench pages retain independent context and share collection number
     const first = await acquire(page);
     const second = await acquire(other);
     // A subsequent acquisition keeps its page's collection until explicitly changed.
-    await other.getByRole("link", { name: "Return to preparation", exact: true }).first().click();
+    await other.getByRole("link", { name: "返回准备", exact: true }).first().click();
     await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
-    await other.getByRole("button", { name: "Prepare another acquisition", exact: true }).click();
+    await other.getByRole("button", { name: "准备另一次采集", exact: true }).click();
     await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(collection);
     const separate = await createScope(other, "collection", "Separate measurements");
     await preview(other);
@@ -279,11 +263,11 @@ test("two workbench pages retain independent context and share collection number
     expect(new Set([firstAddress.run_id, secondAddress.run_id, separateAddress.run_id]).size).toBe(
       3,
     );
-    await other.getByRole("link", { name: "Return to preparation", exact: true }).first().click();
+    await other.getByRole("link", { name: "返回准备", exact: true }).first().click();
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
-    await page.getByLabel("Record collection filter", { exact: true }).selectOption(collection);
+    await page.getByLabel("记录集筛选", { exact: true }).selectOption(collection);
     await expect(
-      page.getByRole("region", { name: "Data", exact: true }).getByTestId("run-address"),
+      page.getByRole("region", { name: "数据", exact: true }).getByTestId("run-address"),
     ).toHaveCount(2);
     await page.getByText("Manage collection", { exact: true }).click();
     await page.getByRole("button", { name: "Rename collection", exact: true }).click();
@@ -292,10 +276,10 @@ test("two workbench pages retain independent context and share collection number
     await expect(
       page.getByRole("option", { name: "Renamed measurements", exact: true }),
     ).toBeAttached();
-    await page.getByLabel("Collection run number", { exact: true }).fill("1");
-    await page.getByRole("button", { name: "Find run", exact: true }).click();
+    await page.getByLabel("记录集内 run 编号", { exact: true }).fill("1");
+    await page.getByRole("button", { name: "查找 run", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("collection-browser.png"), fullPage: true });
-    await page.getByRole("button", { name: "Open collection run #1", exact: true }).click();
+    await page.getByRole("button", { name: "打开记录集内 run #1", exact: true }).click();
     const header = page.getByTestId("run-detail-header");
     await expect(header).toContainText(firstAddress.run_id);
     await expect(header).toContainText("Renamed measurements");
@@ -309,24 +293,22 @@ test("two workbench pages retain independent context and share collection number
     await page.evaluate(() =>
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined }),
     );
-    await header.getByRole("button", { name: "Copy read-only code" }).click();
-    const copiedCode = await header.getByLabel("Read-only code").inputValue();
+    await header.getByRole("button", { name: "复制只读代码" }).click();
+    const copiedCode = await header.getByLabel("只读代码").inputValue();
     expect(copiedCode).toContain(`session.run(1, collection="${collection}")`);
     const opened = context.waitForEvent("page");
-    await page.getByRole("link", { name: "Open result in new tab or window" }).click();
+    await page.getByRole("link", { name: "在新标签页或窗口打开结果" }).click();
     const resultWindow = await opened;
     await expect(resultWindow.getByTestId("run-detail-header")).toContainText(firstAddress.run_id);
     await expect(resultWindow).toHaveTitle(/Renamed measurements #1/);
     await resultWindow.close();
     await page.goBack();
-    await expect(page.getByLabel("Record collection filter", { exact: true })).toHaveValue(
-      collection,
-    );
-    await expect(page.getByLabel("Collection run number")).toHaveValue("1");
-    await page.getByLabel("Record collection filter", { exact: true }).selectOption(separate);
-    await page.getByLabel("Collection run number").fill("1");
-    await page.getByRole("button", { name: "Find run", exact: true }).click();
-    await page.getByRole("button", { name: "Open collection run #1", exact: true }).click();
+    await expect(page.getByLabel("记录集筛选", { exact: true })).toHaveValue(collection);
+    await expect(page.getByLabel("记录集内 run 编号")).toHaveValue("1");
+    await page.getByLabel("记录集筛选", { exact: true }).selectOption(separate);
+    await page.getByLabel("记录集内 run 编号").fill("1");
+    await page.getByRole("button", { name: "查找 run", exact: true }).click();
+    await page.getByRole("button", { name: "打开记录集内 run #1", exact: true }).click();
     await expect(header).toContainText(separateAddress.run_id);
     await expect(other.getByLabel("Record collection", { exact: true })).toHaveValue(separate);
     await expect(page.getByTestId("measurement-charts")).toBeVisible();

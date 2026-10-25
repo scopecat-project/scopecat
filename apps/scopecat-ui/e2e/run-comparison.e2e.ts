@@ -61,27 +61,25 @@ test("compares retained signals, saves independent results and starts edited sug
     const [primary, secondary] = JSON.parse(uv(["python", "-c", SEED, project])) as string[];
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.goto(`${endpoint.base_url}/#history`);
-    await expect(page.getByLabel("Collection run number", { exact: true })).toHaveCount(0);
-    await page
-      .getByLabel("Record collection filter", { exact: true })
-      .selectOption({ label: "Default records" });
-    await page.getByLabel("Collection run number", { exact: true }).fill("1");
-    await page.getByRole("button", { name: "Find run", exact: true }).click();
+    await expect(page.getByLabel("记录集内 run 编号", { exact: true })).toHaveCount(0);
+    await page.getByLabel("记录集筛选", { exact: true }).selectOption({ label: "Default records" });
+    await page.getByLabel("记录集内 run 编号", { exact: true }).fill("1");
+    await page.getByRole("button", { name: "查找 run", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("compact-data.png"), fullPage: true });
-    await page.getByRole("button", { name: "Open collection run #1", exact: true }).click();
+    await page.getByRole("button", { name: "打开记录集内 run #1", exact: true }).click();
     await expect(page.getByTestId("run-detail-header")).toContainText(primary);
 
-    await page.getByRole("link", { name: "Compare retained runs", exact: true }).click();
-    await expect(page.getByLabel("Primary run")).toHaveValue(primary);
-    await page.getByLabel("Secondary run").selectOption(secondary);
+    await page.getByRole("link", { name: "比较已有 run", exact: true }).click();
+    await expect(page.getByLabel("主 run", { exact: true })).toHaveValue(primary);
+    await page.getByLabel("对照 run", { exact: true }).selectOption(secondary);
     async function action(label: string) {
-      await page.getByLabel("Review actor", { exact: true }).fill("synthetic-reviewer");
+      await page.getByLabel("判断操作人", { exact: true }).fill("synthetic-reviewer");
       const actions: Record<string, string> = {
-        "Inspect compatible data": "inspect",
-        "Fit selected data and save analysis": "fit",
-        "Create explicit candidate": "candidate",
-        "Import suggested inputs into Launch": "handoff",
-        "Record candidate rejection": "reject",
+        检查兼容数据: "inspect",
+        "拟合选中数据并保存 analysis": "fit",
+        创建候选: "candidate",
+        将建议输入导入准备: "handoff",
+        记录候选拒绝: "reject",
       };
       const response = page.waitForResponse(
         (value) =>
@@ -94,13 +92,13 @@ test("compares retained signals, saves independent results and starts edited sug
       expect(result.status(), await result.text()).toBe(200);
       return (await result.json()) as { analysis_id?: string; publication_hash?: string };
     }
-    await action("Inspect compatible data");
+    await action("检查兼容数据");
     await expect(
       page.getByRole("option", { name: "Default records · #1", exact: true }),
     ).toHaveCount(2);
     await expect(
       page
-        .getByRole("region", { name: "Retained run comparison" })
+        .getByRole("region", { name: "已有 run 比较" })
         .locator("svg text")
         .filter({ hasText: "Default records · #1" }),
     ).toHaveCount(1);
@@ -114,24 +112,22 @@ test("compares retained signals, saves independent results and starts edited sug
       path: testInfo.outputPath("comparison-light-preference.png"),
       fullPage: true,
     });
-    await page.getByLabel("Primary selected positions").fill("4,1,2,3");
+    await page.getByLabel("主 run 选点位置").fill("4,1,2,3");
     await page.goBack();
     await expect(page.getByTestId("run-detail-header")).toBeVisible();
     await page.goForward();
-    await expect(page.getByLabel("Secondary run")).toHaveValue(secondary);
-    await expect(page.getByLabel("Primary selected positions")).toHaveValue("4,1,2,3");
+    await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(secondary);
+    await expect(page.getByLabel("主 run 选点位置")).toHaveValue("4,1,2,3");
     await page.reload();
-    await expect(page.getByLabel("Secondary run")).toHaveValue(secondary);
-    await expect(page.getByLabel("Primary selected positions")).toHaveValue("4,1,2,3");
+    await expect(page.getByLabel("对照 run", { exact: true })).toHaveValue(secondary);
+    await expect(page.getByLabel("主 run 选点位置")).toHaveValue("4,1,2,3");
     await expect(
-      page.getByRole("button", { name: "Fit selected data and save analysis", exact: true }),
+      page.getByRole("button", { name: "拟合选中数据并保存 analysis", exact: true }),
     ).toBeDisabled();
-    await action("Inspect compatible data");
-    await expect(page.getByLabel("Primary selected positions")).toHaveValue("4,1,2,3");
-    const first = await action("Fit selected data and save analysis");
-    await expect(
-      page.getByRole("button", { name: "Create explicit candidate", exact: true }),
-    ).toBeVisible();
+    await action("检查兼容数据");
+    await expect(page.getByLabel("主 run 选点位置")).toHaveValue("4,1,2,3");
+    const first = await action("拟合选中数据并保存 analysis");
+    await expect(page.getByRole("button", { name: "创建候选", exact: true })).toBeVisible();
     const modelPath = join(project, "src/ui_signal/model.py");
     const source = await readFile(modelPath, "utf8");
     await writeFile(
@@ -143,20 +139,18 @@ test("compares retained signals, saves independent results and starts edited sug
           "center = -coefficients[1] / (2 * coefficients[2]) + offset_ghz + 0.02",
         ),
     );
-    await page.getByText(/Analysis code and source details/).click();
+    await page.getByText(/分析代码与来源详情/).click();
     const refreshed = page.waitForResponse(
       (value) =>
         value.request().method() === "POST" && value.url().endsWith("/author-preparations"),
     );
-    await page.getByRole("button", { name: "Refresh author code", exact: true }).click();
+    await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
     expect((await refreshed).status()).toBe(200);
-    await expect(
-      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
-    ).toBeVisible();
-    await action("Inspect compatible data");
-    await page.getByLabel("Primary selected positions").fill("4,1,2,3");
+    await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
+    await action("检查兼容数据");
+    await page.getByLabel("主 run 选点位置").fill("4,1,2,3");
     await page.getByLabel("Carrier offset (GHz)").fill("0.01");
-    const second = await action("Fit selected data and save analysis");
+    const second = await action("拟合选中数据并保存 analysis");
     expect(second.analysis_id).not.toBe(first.analysis_id);
     const facts = async (id: string) => {
       const response = await page.request.get(
@@ -174,9 +168,9 @@ test("compares retained signals, saves independent results and starts edited sug
       factValue(firstFacts, "comparison-request"),
     );
     await page.locator("aside button").filter({ hasText: first.analysis_id }).click();
-    const candidate = await action("Create explicit candidate");
+    const candidate = await action("创建候选");
     const adoptionLink = page.getByRole("link", {
-      name: "Review parameter changes and adoption steps",
+      name: "检查参数变更与接纳步骤",
     });
     await expect(adoptionLink).toHaveAttribute(
       "href",
@@ -211,14 +205,12 @@ test("compares retained signals, saves independent results and starts edited sug
     expect(new URL(page.url()).searchParams.get("run-analysis")).toBe(candidate.analysis_id);
     await page.screenshot({ path: testInfo.outputPath("candidate-source-analysis.png") });
     await page.goto(comparisonUrl);
-    await page.getByLabel("Rejection reason").fill("Need independent physical verification");
-    await action("Record candidate rejection");
-    await expect(
-      page.getByText("Independent review recorded. This is not procedure approval."),
-    ).toBeVisible();
+    await page.getByLabel("拒绝原因").fill("Need independent physical verification");
+    await action("记录候选拒绝");
+    await expect(page.getByText("独立判断已记录，不代表任务已获批准。")).toBeVisible();
     await page.locator("aside button").filter({ hasText: candidate.analysis_id }).click();
-    await action("Import suggested inputs into Launch");
-    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue("ui_signal.signal");
+    await action("将建议输入导入准备");
+    await expect(page.getByLabel("实验类型", { exact: true })).toHaveValue("ui_signal.signal");
     expect(
       Math.abs(Number(await page.getByLabel("Frequency", { exact: true }).inputValue()) - 4.8),
     ).toBeLessThan(0.02);
@@ -228,7 +220,7 @@ test("compares retained signals, saves independent results and starts edited sug
     const retained = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
     expect((await retained.json()).items).toHaveLength(2);
     await page.getByLabel("Frequency", { exact: true }).fill("4.87");
-    await page.getByRole("textbox", { name: "Operator", exact: true }).fill("synthetic-reviewer");
+    await page.getByRole("textbox", { name: "操作人", exact: true }).fill("synthetic-reviewer");
     let submissions = 0;
     let procedure = "";
     await page.route("**/experiment-launcher/submit", async (route) => {
@@ -246,12 +238,10 @@ test("compares retained signals, saves independent results and starts edited sug
       await route.abort("connectionfailed");
     });
     // No separate Preview and no named plan: Start checks and admits the edited input.
-    await expect(
-      page.getByRole("button", { name: "Start acquisition", exact: true }),
-    ).toBeEnabled();
-    await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
-    await page.getByRole("button", { name: "Check original submission", exact: true }).click();
-    await page.getByRole("button", { name: "Open submitted procedure", exact: true }).click();
+    await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "开始采集", exact: true }).click();
+    await page.getByRole("button", { name: "核实原始提交", exact: true }).click();
+    await page.getByRole("button", { name: "查看已提交任务", exact: true }).click();
     await expect
       .poll(
         async () =>
@@ -279,12 +269,16 @@ test("compares retained signals, saves independent results and starts edited sug
     expect(JSON.stringify(accepted.request)).toContain("4.87");
     await page.goto(`${endpoint.base_url}/?run=${nextRun}#runs`);
     const documentIdentity = await page.evaluate(() => performance.timeOrigin);
-    await page.getByRole("link", { name: "Open exact source conclusion" }).click();
+    await page.getByText("样品与计划来源", { exact: true }).click();
+    await page.getByRole("link", { name: "Open exact source conclusion", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`run=${nextRun}#runs`));
-    await expect(page.getByRole("region", { name: "Decision source" })).toBeVisible();
+    await expect(page.getByText("样品与计划来源", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+    );
+    await expect(page.getByRole("region", { name: "Decision source", exact: true })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
@@ -376,7 +370,8 @@ with ScientificExchange(sys.argv[1]) as capture:
       await readFile(join(restoredProject, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
     await page.goto(`${restored.base_url}/?run=${nextRun}#runs`);
-    await page.getByRole("link", { name: "Open exact source conclusion" }).click();
+    await page.getByText("样品与计划来源", { exact: true }).click();
+    await page.getByRole("link", { name: "Open exact source conclusion", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     await page
       .getByRole("region", { name: "Experiments started from this conclusion" })

@@ -28,17 +28,17 @@ with sc.open_project(root).connect() as lab:
 }
 
 export async function chooseReferenceContext(page: Page, setup = "browser-bench-a") {
-  await page.getByRole("button", { name: "Choose parameter branch", exact: true }).click();
+  await page.getByRole("button", { name: "选择参数分支", exact: true }).click();
   await expect(page.getByRole("option", { name: /browser.*generation 1/ })).toBeAttached();
-  await page.getByLabel("Parameter branch", { exact: true }).selectOption("browser");
-  await page.getByRole("button", { name: "Use this parameter version", exact: true }).click();
-  await page.getByLabel("Experiment setup", { exact: true }).selectOption(setup);
+  await page.getByLabel("参数分支", { exact: true }).selectOption("browser");
+  await page.getByRole("button", { name: "使用此参数版本", exact: true }).click();
+  await page.getByLabel("实验配置", { exact: true }).selectOption(setup);
 }
 
 export async function reviewRetainedExperiment(page: Page) {
-  const review = page.getByRole("region", { name: "Review recovered experiment", exact: true });
+  const review = page.getByRole("region", { name: "核实恢复的实验", exact: true });
   await expect(review).toBeVisible();
-  await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeDisabled();
-  await review.getByRole("button", { name: "Confirm reviewed input", exact: true }).click();
+  await expect(page.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
+  await review.getByRole("button", { name: "确认已核实输入", exact: true }).click();
   await expect(review).toBeHidden();
 }

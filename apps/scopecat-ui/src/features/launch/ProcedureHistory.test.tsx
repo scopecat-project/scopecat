@@ -42,10 +42,10 @@ it("shows submitted wait and uncertainty without implying queue order or changin
       <ProcedureHistory mode="submitted" selectedId="a" onSelect={select} />
     </QueryClientProvider>,
   );
-  const waiting = await screen.findByRole("button", { name: /draft-b · Waiting for resources/ });
+  const waiting = await screen.findByRole("button", { name: /draft-b · 等待资源/ });
   expect(screen.getByText(/Waiting child: child-b/)).toBeVisible();
   expect(screen.getByText("Acquisition outcome unknown")).toBeVisible();
-  expect(screen.getByRole("button", { name: /draft-a · Needs attention/ })).toHaveAttribute(
+  expect(screen.getByRole("button", { name: /draft-a · 需要处理/ })).toHaveAttribute(
     "aria-current",
     "true",
   );
@@ -79,13 +79,13 @@ it("keeps earlier pages and the inspected selection while loading more submitted
       <ProcedureHistory mode="submitted" selectedId="selected" onSelect={select} />
     </QueryClientProvider>,
   );
-  fireEvent.click(await screen.findByRole("button", { name: "Load earlier procedures" }));
+  fireEvent.click(await screen.findByRole("button", { name: "加载更早任务" }));
   await screen.findByRole("button", { name: /older-task/ });
   expect(screen.getByRole("button", { name: /current-task/ })).toHaveAttribute(
     "aria-current",
     "true",
   );
-  expect(screen.queryByRole("button", { name: "Load earlier procedures" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "加载更早任务" })).not.toBeInTheDocument();
   expect(cursors).toEqual([null, "10"]);
   expect(select).not.toHaveBeenCalled();
 });

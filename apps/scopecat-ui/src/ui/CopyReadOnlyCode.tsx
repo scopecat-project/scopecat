@@ -64,18 +64,14 @@ function CopyCode({
         className={secondaryButton}
         title={
           reference
-            ? "Copy the collection ID, local number and stable run ID in this data space"
-            : "Copy a read-only Notebook snippet for this exact saved record"
+            ? "复制此数据空间中的记录集 ID、本地编号与稳定 run ID"
+            : "复制此精确记录的只读 Notebook 代码"
         }
         type="button"
         disabled={status === "copying"}
         onClick={copy}
       >
-        {status === "copying"
-          ? "Copying…"
-          : reference
-            ? "Copy run reference"
-            : "Copy read-only code"}
+        {status === "copying" ? "正在复制…" : reference ? "复制 run 引用" : "复制只读代码"}
       </button>
       {!reference && (!compact || status !== "idle") && (
         <p className="m-0 text-text-dim">
@@ -85,7 +81,7 @@ function CopyCode({
       )}
       {status === "copied" && (
         <p className="m-0 text-text-soft" role="status">
-          {reference ? "Run reference copied." : "Read-only code copied."}
+          {reference ? "run 引用已复制。" : "只读代码已复制。"}
         </p>
       )}
       {status === "manual" && (
@@ -94,7 +90,7 @@ function CopyCode({
             Clipboard unavailable. Select and copy the {reference ? "reference" : "code"} below.
           </p>
           <Controls.Textarea
-            aria-label={reference ? "Run reference" : "Read-only code"}
+            aria-label={reference ? "run 引用" : "只读代码"}
             className="w-full min-w-0 font-mono"
             readOnly
             rows={code.split("\n").length + 1}

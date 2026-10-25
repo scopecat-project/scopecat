@@ -35,7 +35,7 @@ const analysis: AnalysisPublication = {
 
 it("requires an explicit owner even when inputs mention a run", () => {
   render(<AnalysisPublicationView analysis={analysis} getArtifactDownload={vi.fn()} />);
-  expect(screen.queryByRole("button", { name: "Copy read-only code" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "复制只读代码" })).toBeNull();
 });
 
 it("copies the supplied owner and exact publication rather than its input or logical key", async () => {
@@ -48,8 +48,8 @@ it("copies the supplied owner and exact publication rather than its input or log
       getArtifactDownload={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Copy read-only code" }));
-  await screen.findByText("Read-only code copied.");
+  fireEvent.click(screen.getByRole("button", { name: "复制只读代码" }));
+  await screen.findByText("只读代码已复制。");
   expect(writeText).toHaveBeenLastCalledWith(
     readOnlyCode({ kind: "run", runId: "owner", publicationId: analysis.id }),
   );
@@ -60,9 +60,9 @@ it("copies the supplied owner and exact publication rather than its input or log
       getArtifactDownload={vi.fn()}
     />,
   );
-  expect(screen.queryByText("Read-only code copied.")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Copy read-only code" }));
-  await screen.findByText("Read-only code copied.");
+  expect(screen.queryByText("只读代码已复制。")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "复制只读代码" }));
+  await screen.findByText("只读代码已复制。");
   expect(writeText).toHaveBeenLastCalledWith(
     readOnlyCode({ kind: "project", publicationId: analysis.id }),
   );
@@ -101,10 +101,10 @@ it("keeps saved output and units visible while exact input evidence is collapsed
   expect(screen.getByRole("columnheader", { name: "Frequency (GHz)" })).toBeVisible();
   expect(screen.getByText("Showing 1 of 2 rows")).toBeVisible();
   expect(screen.getByText("Inputs")).not.toBeVisible();
-  fireEvent.click(screen.getByText("Sources and execution evidence"));
+  fireEvent.click(screen.getByText("来源与执行证据"));
   expect(screen.getByText("Inputs")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "input-not-owner" }));
   expect(openRun).toHaveBeenCalledWith("input-not-owner");
-  fireEvent.click(screen.getByText("Sources and execution evidence"));
+  fireEvent.click(screen.getByText("来源与执行证据"));
   expect(screen.getByRole("table", { name: "Saved fit" })).toBeVisible();
 });

@@ -37,9 +37,9 @@ export function RunIdLookup({
   );
   const error = result.error;
   return (
-    <section aria-label="Find by full run ID" className="min-w-0 rounded border border-line p-3">
+    <section aria-label="按完整 run ID 查找" className="min-w-0 rounded border border-line p-3">
       <details>
-        <summary className="cursor-pointer text-sm">Find by full run ID</summary>
+        <summary className="cursor-pointer text-sm">按完整 run ID 查找</summary>
         <form
           className="flex flex-wrap items-end gap-2"
           onSubmit={(event) => {
@@ -55,9 +55,9 @@ export function RunIdLookup({
           }}
         >
           <Field className="min-w-0 flex-1 basis-72">
-            Full run ID
+            完整 run ID
             <Input
-              aria-label="Full run ID"
+              aria-label="完整 run ID"
               aria-invalid={invalid}
               className="mt-1 w-full min-w-0"
               value={input}
@@ -66,34 +66,32 @@ export function RunIdLookup({
                 setSubmitted("");
                 setInvalid(false);
               }}
-              placeholder="Paste the complete ID"
+              placeholder="粘贴完整 ID"
             />
           </Field>
-          <Button disabled={unavailable || result.isFetching}>Find exact run</Button>
+          <Button disabled={unavailable || result.isFetching}>查找精确 run</Button>
         </form>
         <p className="mt-1 text-xs text-text-dim">
-          Current data space only · ignores collection and list filters.
+          仅在当前数据空间查找，不受记录集和列表筛选影响。
         </p>
         {invalid && (
-          <Notice role="alert">
-            Invalid run ID format. Paste a complete ID, not a URL or path.
-          </Notice>
+          <Notice role="alert">run ID 格式无效。请粘贴完整 ID，不要输入 URL 或路径。</Notice>
         )}
         {unavailable ? (
-          <Notice role="status">Run lookup unavailable: reconnect to this data space.</Notice>
+          <Notice role="status">run 查找不可用，请重新连接此数据空间。</Notice>
         ) : (
           submitted && (
             <>
               {(result.isPending || result.isFetching) && (
-                <Notice role="status">Finding run…</Notice>
+                <Notice role="status">正在查找 run…</Notice>
               )}
               {error && !result.isFetching && (
                 <Notice role="alert">
                   {error instanceof ApiError && error.status === 404
-                    ? "Run not found in this data space. Check the complete ID and data space."
+                    ? "当前数据空间未找到此 run，请核实完整 ID 与数据空间。"
                     : error instanceof ApiError && (error.status === 400 || error.status === 422)
-                      ? `Invalid run reference: ${error.message}`
-                      : `Run lookup unavailable: ${error.message}`}
+                      ? `run 引用无效： ${error.message}`
+                      : `run 查找不可用： ${error.message}`}
                 </Notice>
               )}
               {result.data && !error && !result.isFetching && (
@@ -103,7 +101,7 @@ export function RunIdLookup({
                     sequence={result.data.sequence}
                     collectionName={collection.name}
                   />
-                  <Button onClick={() => onOpenRun(result.data.runId)}>Open found run</Button>
+                  <Button onClick={() => onOpenRun(result.data.runId)}>打开找到的 run</Button>
                 </div>
               )}
             </>

@@ -158,10 +158,10 @@ test("browses independent dimensions and keeps a compatible signal across slices
     await page.getByLabel("Horizontal axis").selectOption(frequency);
     await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("1");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+    await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
     const focused = page.getByRole("dialog", { name: /measurements$/ });
     await expect(focused).toBeVisible();
-    await expect(focused.getByRole("region", { name: "Run progress" })).toBeVisible();
+    await expect(focused.getByRole("region", { name: "run 进度" })).toBeVisible();
     await expect(chart).toHaveValue(phase);
     await page.getByLabel("Repeat slice", { exact: true }).selectOption("2");
     await expect(page.getByTestId("measurement-slice-summary")).toContainText("Repeat = 2");
@@ -278,7 +278,7 @@ test("browses independent dimensions and keeps a compatible signal across slices
     for (const problem of ["attention_required", "failed"] as const) {
       state = "running";
       await refreshState();
-      await expect(focused.getByRole("region", { name: "Run progress" })).toContainText("Running");
+      await expect(focused.getByRole("region", { name: "run 进度" })).toContainText("执行中");
       state = problem;
       await refreshState();
       await expect(
@@ -293,20 +293,20 @@ test("browses independent dimensions and keeps a compatible signal across slices
         ).toBeVisible();
         await expect(focused.getByText(/Closing this record does not establish/)).toBeVisible();
       } else {
-        await expect(focused.getByRole("region", { name: "Run progress" })).toContainText("Failed");
+        await expect(focused.getByRole("region", { name: "run 进度" })).toContainText("失败");
       }
       await page.screenshot({ path: testInfo.outputPath(`chart-focus-${problem}.png`) });
       if (problem === "attention_required") {
-        await focused.getByRole("button", { name: "Exit focus to view run details" }).click();
-        await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+        await focused.getByRole("button", { name: "退出聚焦，查看 run 详情" }).click();
+        await expect(page.getByRole("button", { name: "聚焦曲线", exact: true })).toBeFocused();
         await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("2");
         await expect(page.getByRole("button", { name: "Close without resuming" })).toBeVisible();
-        await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+        await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
       }
     }
     await page.keyboard.press("Escape");
     await expect(focused).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "Focus chart", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "聚焦曲线", exact: true })).toBeFocused();
     await expect(page.getByLabel("Repeat slice", { exact: true })).toHaveValue("2");
     await expect(chart).toHaveValue(phase);
     await expect(page.getByTestId("measurement-table")).not.toBeVisible();
@@ -383,7 +383,7 @@ test("contains large-axis controls and multi-series plots in normal and focused 
     ).toBeDisabled();
     await page.getByRole("button", { name: "Previous Repeat value", exact: true }).click();
     await expect(index).toHaveValue("256");
-    await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+    await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
     await expect(index).toBeInViewport({ ratio: 1 });
     await index.fill("1");
     await index.press("Tab");
@@ -400,7 +400,7 @@ test("contains large-axis controls and multi-series plots in normal and focused 
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 844 });
       for (const focused of [false, true]) {
-        if (focused) await page.getByRole("button", { name: "Focus chart", exact: true }).click();
+        if (focused) await page.getByRole("button", { name: "聚焦曲线", exact: true }).click();
         await expectContainedPlots(page, 1);
         await expect(page.locator("figure").getByRole("img")).toHaveAccessibleDescription(
           /2 data series/,

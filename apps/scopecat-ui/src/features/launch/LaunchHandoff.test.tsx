@@ -179,7 +179,7 @@ it("clears an unrelated sample and resolved context when importing inputs withou
   expect(screen.getByLabelText("Sample")).toHaveTextContent("old-sample");
   await waitFor(() =>
     expect(screen.getByLabelText("Recovery status")).toHaveTextContent(
-      "Experiment input saved in application data.",
+      "实验输入已保存到应用数据。",
     ),
   );
   fireEvent.click(screen.getByText("Import"));

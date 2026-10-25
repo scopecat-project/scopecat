@@ -86,8 +86,8 @@ function mount(read: () => Promise<Response>, recoveryRead?: Promise<void>, reco
 it("keeps the adopted copy after edits and requires adoption before preview", async () => {
   let latest = source;
   const { client, fetcher } = mount(async () => Response.json(latest));
-  await screen.findByText(/Inputs up to date/);
-  const preview = screen.getByRole("button", { name: "Preview" });
+  await screen.findByText(/输入已更新/);
+  const preview = screen.getByRole("button", { name: "预览" });
   await waitFor(() => expect(preview).toBeEnabled());
   expect(
     screen.getByText(/Parameter baseline: revision baseline-a with no overrides/),
@@ -97,15 +97,15 @@ it("keeps the adopted copy after edits and requires adoption before preview", as
     await client.invalidateQueries({ queryKey: ["launch-working-input"] });
   });
   expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
-  await screen.findByText(/The working table has newer saved edits/);
+  await screen.findByText(/工作表有更新的已保存编辑/);
   expect(preview).toBeDisabled();
-  expect(preview).toHaveAccessibleDescription(/newer saved edits.*Use current working inputs/);
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(preview).toHaveAccessibleDescription(/工作表有更新的已保存编辑.*使用当前工作输入/);
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
   expect(fetcher.mock.calls.some(([request]) => request.url.endsWith("/freeze"))).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Use current working inputs" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用当前工作输入" }));
   await screen.findByText(/Working inputs · revision 4/);
   expect(preview).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled();
 });
 it("waits for experiment input recovery even when the working table already matches", async () => {
   let releaseRecovery!: () => void;
@@ -113,8 +113,8 @@ it("waits for experiment input recovery even when the working table already matc
     releaseRecovery = resolve;
   });
   mount(async () => Response.json(source), recoveryRead);
-  await screen.findByText(/Inputs up to date/);
-  const preview = screen.getByRole("button", { name: "Preview" });
+  await screen.findByText(/输入已更新/);
+  const preview = screen.getByRole("button", { name: "预览" });
   expect(preview).toBeDisabled();
   await act(async () => releaseRecovery());
   await waitFor(() => expect(preview).toBeEnabled());
@@ -127,7 +127,7 @@ it("distinguishes a pending check from an unavailable source without replacing i
         resolve = done;
       }),
   );
-  const preview = await screen.findByRole("button", { name: "Preview" });
+  const preview = await screen.findByRole("button", { name: "预览" });
   // The form can render before React Query starts reading the working table.
   await waitFor(() => expect(resolve).toBeTypeOf("function"));
   expect(preview).toBeDisabled();
@@ -149,7 +149,7 @@ it.each([
 ])("explains the %s source recovery action", async (_name, view, message) => {
   mount(async () => Response.json(view));
   await screen.findByText(message);
-  expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "预览" })).toBeDisabled();
 });
 it("does not trust a cached matching source when its next check fails", async () => {
   let unavailable = false;
@@ -158,7 +158,7 @@ it("does not trust a cached matching source when its next check fails", async ()
       ? Response.json({ detail: "Service unavailable" }, { status: 503 })
       : Response.json(source),
   );
-  await screen.findByText(/Inputs up to date/);
+  await screen.findByText(/输入已更新/);
   unavailable = true;
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["launch-working-input"] });
@@ -166,8 +166,8 @@ it("does not trust a cached matching source when its next check fails", async ()
   await screen.findByText(/Cannot check the source working table/);
   expect(client.getQueryData(["launch-working-input", "test", "table-a"])).toEqual(source);
   expect(screen.getByText(/Working inputs · revision 3/)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Start acquisition" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "预览" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
 });
 
 it("waits for recovered input hydration before accepting review", async () => {
@@ -176,17 +176,13 @@ it("waits for recovered input hydration before accepting review", async () => {
     finish = resolve;
   });
   mount(async () => Response.json(source), hydration, true);
-  const review = await screen.findByRole("button", { name: "Confirm reviewed input" });
+  const review = await screen.findByRole("button", { name: "确认已核实输入" });
   expect(review).toBeDisabled();
   fireEvent.click(review);
-  expect(screen.getByRole("region", { name: "Review recovered experiment" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "核实恢复的实验" })).toBeVisible();
   await act(async () => finish());
   await waitFor(() => expect(review).toBeEnabled());
   fireEvent.click(review);
-  await waitFor(() =>
-    expect(screen.queryByRole("region", { name: "Review recovered experiment" })).toBeNull(),
-  );
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Start acquisition" })).toBeEnabled(),
-  );
+  await waitFor(() => expect(screen.queryByRole("region", { name: "核实恢复的实验" })).toBeNull());
+  await waitFor(() => expect(screen.getByRole("button", { name: "开始采集" })).toBeEnabled());
 });

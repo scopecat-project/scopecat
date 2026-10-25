@@ -89,7 +89,7 @@ const saved = async (view: ReturnType<typeof mount>) => {
     await Promise.resolve();
   });
   await waitFor(() => {
-    expect(view.result.current.recovery.status).toBe("Experiment input saved in application data.");
+    expect(view.result.current.recovery.status).toBe("实验输入已保存到应用数据。");
     expect(view.result.current.recovery.writing).toBe(false);
     expect(view.result.current.recovery.ready).toBe(true);
   });

@@ -40,8 +40,8 @@ export function DecisionWorkspace({ daemonUnavailable }: { daemonUnavailable: bo
         <button
           type="button"
           className={iconButton}
-          aria-label="Decision options"
-          title="Optional notes and draft recovery"
+          aria-label="人工判断选项"
+          title="可选备注与草稿恢复"
           aria-expanded={options}
           onClick={() => setOptions(!options)}
         >
@@ -73,19 +73,15 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
     return (
       <WorkspaceMessage
         title="Connect to the local daemon"
-        detail="Experiment decision requests are read directly from the daemon-owned project store."
+        detail="人工判断请求直接从 daemon 管理的项目存储读取。"
         icon={<CircleOff />}
       />
     );
   }
-  if (procedures.isPending)
-    return <WorkspaceMessage title="Loading experiment decisions" pending />;
+  if (procedures.isPending) return <WorkspaceMessage title="正在加载人工判断请求" pending />;
   if (procedures.isError) {
     return (
-      <WorkspaceMessage
-        title="Experiment decisions unavailable"
-        detail={errorMessage(procedures.error)}
-      />
+      <WorkspaceMessage title="无法读取人工判断请求" detail={errorMessage(procedures.error)} />
     );
   }
   if (
@@ -110,8 +106,8 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   if (selectedId && !procedures.data.items.some((item) => item.procedure_run_id === selectedId)) {
     return (
       <section className="rounded-lg border border-line bg-panel p-5">
-        <h2 className="text-lg font-semibold leading-7">Decision saved or no longer waiting</h2>
-        <p>Open the task to check its answer and execution status.</p>
+        <h2 className="text-lg font-semibold leading-7">判断已保存或任务已不再等待</h2>
+        <p>打开任务可核实已记录的判断与执行状态。</p>
         <a
           className="text-accent underline"
           href={`?procedure=${encodeURIComponent(selectedId)}#launch`}
@@ -131,8 +127,8 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   if (procedures.data.items.length === 0) {
     return (
       <WorkspaceMessage
-        title="No experiment is waiting for a decision"
-        detail="Procedures continue to appear here only when a human, AI, or service judgment is part of the declared experiment flow."
+        title="当前没有等待人工判断的实验"
+        detail="只有声明的实验流程包含人工、AI 或服务判断时，任务才会在此等待。"
       />
     );
   }
@@ -178,7 +174,7 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
                 <span className="text-xs text-text-dim">
                   {procedure.created_at
                     ? `Submitted ${formatDateTime(procedure.created_at)}`
-                    : "Submission time unavailable"}
+                    : "提交时间不可用"}
                 </span>
                 {procedure.resolved_samples.length > 0 && (
                   <span className="truncate text-xs text-text-soft">
@@ -237,21 +233,15 @@ function DecisionCard({
     refetchInterval: 1_000,
   });
 
-  if (steps.isPending) return <WorkspaceMessage title="Loading decision request" pending compact />;
+  if (steps.isPending) return <WorkspaceMessage title="正在加载判断请求" pending compact />;
   if (steps.isError) {
-    return (
-      <WorkspaceMessage
-        title="Decision request unavailable"
-        detail={errorMessage(steps.error)}
-        compact
-      />
-    );
+    return <WorkspaceMessage title="无法读取判断请求" detail={errorMessage(steps.error)} compact />;
   }
   const step = steps.data.items.find((item) => item.state === "waiting_for_input");
   if (!step?.interpretation_request) {
     return (
       <WorkspaceMessage
-        title="Waiting procedure has no visible decision request"
+        title="等待中的任务没有可见判断请求"
         detail={procedure.procedure_run_id}
         compact
       />
@@ -290,15 +280,9 @@ function DecisionForm(props: {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
-  if (saved.isPending) return <WorkspaceMessage title="Loading saved draft" pending compact />;
+  if (saved.isPending) return <WorkspaceMessage title="正在加载已保存草稿" pending compact />;
   if (saved.isError)
-    return (
-      <WorkspaceMessage
-        title="Draft recovery unavailable"
-        detail={errorMessage(saved.error)}
-        compact
-      />
-    );
+    return <WorkspaceMessage title="无法恢复草稿" detail={errorMessage(saved.error)} compact />;
   return <DecisionEditor {...props} initial={saved.data} />;
 }
 
@@ -399,7 +383,7 @@ function DecisionEditor({
     )
       return;
     if (!actor.trim()) {
-      setParseError("Enter the name of the person making this judgment.");
+      setParseError("请输入作出判断的操作人姓名。");
       return;
     }
     let value: unknown;
@@ -474,7 +458,7 @@ function DecisionEditor({
         <div className="mb-3 space-y-2" role="alert">
           <p>
             {draft.status === "conflict"
-              ? "The current draft revision changed. Your conflicting copy is retained in draft history."
+              ? "当前草稿 revision 已变化，冲突副本已保留在草稿历史中。"
               : draft.discardFailed
                 ? `Discard was not confirmed. Your text is still here; retry discard. ${draft.error ?? ""}`
                 : `Draft save failed. Keep this window open and retry. ${draft.error ?? ""}`}
@@ -491,15 +475,15 @@ function DecisionEditor({
             }}
           >
             {draft.status === "conflict"
-              ? "Use my copy as current draft"
+              ? "将我的副本设为当前草稿"
               : draft.discardFailed
-                ? "Retry draft discard"
-                : "Retry draft save"}
+                ? "重试丢弃草稿"
+                : "重试保存草稿"}
           </Controls.Button>
         </div>
       )}
       {step.inputs.some((input) => input.kind !== "analysis") && (
-        <div className="mb-4 flex flex-wrap gap-2" aria-label="Decision data">
+        <div className="mb-4 flex flex-wrap gap-2" aria-label="判断依据">
           {step.inputs
             .filter((input) => input.kind !== "analysis")
             .map((input) => (
@@ -584,7 +568,7 @@ function DecisionEditor({
         )}
         {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Delegate IME Enter protection from the native form controls without adding a keyboard role to the form. */}
         <form
-          aria-label="Record judgment"
+          aria-label="记录人工判断"
           className="min-w-0"
           onSubmit={(event) => {
             event.preventDefault();
@@ -626,9 +610,9 @@ function DecisionEditor({
               </Controls.Notice>
             )}
             <Controls.Field>
-              Recorded reviewer
+              判断操作人
               <Controls.Input
-                placeholder="Person’s name"
+                placeholder="操作人姓名"
                 value={actor}
                 onChange={(event) => setActor(event.target.value)}
               />
@@ -639,9 +623,7 @@ function DecisionEditor({
               </Controls.Notice>
             )}
             {submit.isSuccess && (
-              <p role="status">
-                Decision saved. {submit.data.dispatch_error ?? "Continuation requested."}
-              </p>
+              <p role="status">判断已保存。 {submit.data.dispatch_error ?? "已请求继续执行。"}</p>
             )}
             <button
               className={primaryButton}
@@ -658,28 +640,28 @@ function DecisionEditor({
               {(committing || submit.isPending) && (
                 <LoaderCircle className="animate-spin" size={14} />
               )}
-              Submit and continue
+              提交判断并继续
             </button>
             <p role="status" className="text-xs text-text-dim">
               {draft.status === "saved"
                 ? draft.started
-                  ? "Draft saved"
-                  : "No unsaved edits"
+                  ? "草稿已保存"
+                  : "没有未保存的修改"
                 : draft.status === "saving"
-                  ? "Saving draft…"
+                  ? "正在保存草稿…"
                   : draft.status === "unsaved"
-                    ? "Draft not yet saved"
+                    ? "草稿尚未保存"
                     : ""}
             </p>
             {options && (
-              <section aria-label="Response options" className="border-t border-line pt-3 text-sm">
+              <section aria-label="判断选项" className="border-t border-line pt-3 text-sm">
                 <div className="mt-3 grid gap-3">
                   <Controls.Field>
-                    Reasoning note (optional)
+                    判断依据备注（可选）
                     <Controls.Textarea
                       value={note}
                       onChange={(event) => setNote(event.target.value)}
-                      placeholder="Why this selection is experimentally credible"
+                      placeholder="说明此选择的实验依据"
                     />
                   </Controls.Field>
                 </div>
@@ -823,14 +805,12 @@ function DecisionContinuation({
 
   return (
     <section className="rounded-lg border border-line bg-panel p-5 space-y-3">
-      <h2 className="text-lg font-semibold">
-        {receipt ? "Decision saved" : "Check decision submission"}
-      </h2>
+      <h2 className="text-lg font-semibold">{receipt ? "判断已保存" : "核实判断提交"}</h2>
       <p role="status">
         {dispatch?.failure?.message ??
           receipt?.dispatch_error ??
           (receipt
-            ? "Continuation requested. Open the task to follow its progress."
+            ? "已请求继续执行。打开任务可查看进度。"
             : "The task is no longer waiting. Retry the same submission to check its recorded answer and continuation.")}
       </p>
       {retry.isError && <p role="alert">{errorMessage(retry.error)}</p>}
@@ -840,7 +820,7 @@ function DecisionContinuation({
           disabled={retry.isPending}
           onClick={() => retry.mutate(submitted.command)}
         >
-          {retry.isPending ? "Retrying…" : "Retry continuation"}
+          {retry.isPending ? "Retrying…" : "重试继续执行"}
         </button>
       )}
       <a

@@ -87,7 +87,7 @@ export function LaunchForm({
           ? "The source working table is closed or conflicted. Open Configuration to review it and explicitly choose inputs again."
           : working.data.branch_changed
             ? "The working table’s branch changed. Review the latest branch head in Configuration, keep your table after review, then use current working inputs and preview again."
-            : "The working table has newer saved edits. Use current working inputs, then review the changes before starting. Saved edits do not replace the adopted copy automatically.";
+            : "工作表有更新的已保存编辑。使用当前工作输入后，请检查变化再开始。已保存的编辑不会自动替换已采用的副本。";
   useEffect(() => {
     if (!draft.workingInput || !working.data || workingCurrent || draft.pending || !draft.preview)
       return;
@@ -162,7 +162,7 @@ export function LaunchForm({
             (Boolean(current.plan) &&
               Object.keys(changes).some((key) => key !== "actor" && key !== "collection")),
         },
-        "Inputs changed. Start will check the new inputs before acquisition.",
+        "输入已变化，开始时会在采集前检查新输入。",
       ),
     );
   }
@@ -269,7 +269,7 @@ export function LaunchForm({
           JSON.stringify(current.preview.manual_state) === JSON.stringify(checked.manual_state)
             ? current.requestKey
             : undefined,
-        notice: "Preview matches these inputs and the checked project configuration.",
+        notice: "预览与当前输入及已检查的项目配置一致。",
       }));
       if (!startAfter) return;
       if (!checked.manual_state || !checked.procedure_definition)
@@ -357,9 +357,9 @@ export function LaunchForm({
         {entry.review && <p>{entry.review.instructions}</p>}
       </section>
       <div className="experiment-input-stage">
-        <section aria-label="Inputs for this run" className="space-y-2 border-t border-line pt-2">
+        <section aria-label="本次 run 的输入" className="space-y-2 border-t border-line pt-2">
           <div>
-            <h4 className="font-semibold">Inputs for this run</h4>
+            <h4 className="font-semibold">本次 run 的输入</h4>
           </div>
           <fieldset disabled={pending === "submit" || !recovery.ready}>
             <ControlFields
@@ -407,7 +407,7 @@ export function LaunchForm({
                     value={values[name]}
                     onChange={(event) => change(name, event.target.value)}
                   >
-                    <option value="">Select…</option>
+                    <option value="">请选择…</option>
                     {(field.enum ?? ["true", "false"]).map((value) => (
                       <option key={String(value)} value={String(value)}>
                         {String(value)}
@@ -437,11 +437,9 @@ export function LaunchForm({
           <MeasurementContext draft={draft} projectId={projectId} onChange={changeInput} />
         </fieldset>
       </div>
-      <section aria-label="Preview and start" className="space-y-2 border-b border-line pb-3">
-        <h4 className="sr-only">Start or inspect</h4>
-        <p className="text-sm text-text-dim">
-          Start checks your inputs. Preview inspects them without acquisition.
-        </p>
+      <section aria-label="预览与开始" className="space-y-2 border-b border-line pb-3">
+        <h4 className="sr-only">开始或检查</h4>
+        <p className="text-sm text-text-dim">开始前会检查输入。预览只检查输入，不执行采集。</p>
         <div className="flex flex-wrap items-center gap-3">
           {entry.actions.includes("submit") && (
             <Button
@@ -452,10 +450,10 @@ export function LaunchForm({
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
               {pending === "prepare"
-                ? "Preparing acquisition…"
+                ? "正在准备采集…"
                 : pending === "submit"
-                  ? "Submitting acquisition…"
-                  : "Start acquisition"}
+                  ? "正在提交采集…"
+                  : "开始采集"}
             </Button>
           )}
           {entry.actions.includes("preview") && (
@@ -465,12 +463,12 @@ export function LaunchForm({
               disabled={!canPrepare || Boolean(pending)}
               aria-describedby={draft.workingInput ? workingStatusId : undefined}
             >
-              {pending === "preview" ? "Preparing preview…" : "Preview"}
+              {pending === "preview" ? "正在准备预览…" : "预览"}
             </Button>
           )}
           {attempt?.status === "confirmed" && (
             <Button type="button" disabled={Boolean(pending)} onClick={rerun}>
-              Prepare another acquisition
+              准备另一次采集
             </Button>
           )}
           {(pending === "prepare" || pending === "preview") && (
@@ -483,27 +481,27 @@ export function LaunchForm({
                 );
               }}
             >
-              Cancel preparation
+              取消准备
             </Button>
           )}
         </div>
         {pending && (
           <Notice role="status" className="font-medium text-text-soft">
             {pending === "submit"
-              ? "Waiting for submission confirmation. Acquisition may already have started."
-              : "Checking the experiment inputs. Acquisition has not been submitted."}
+              ? "正在等待提交确认，采集可能已经开始。"
+              : "正在检查实验输入，尚未提交采集。"}
           </Notice>
         )}
         <p className="text-sm text-text-dim">
           {attempt
-            ? "A submission is already retained. Check its status above, or explicitly prepare a new run."
-            : "Start preserves the exact checked inputs and an original submission receipt for recovery."}
+            ? "已有保留提交，请在上方核实状态，或明确准备新的 run。"
+            : "开始时保留已检查的精确输入与原始提交回执，供恢复使用。"}
         </p>
         {fence && !manualReady && (
           <p role={manual.isError ? "alert" : "status"}>
             {manual.isError
-              ? "Cannot check recent instrument changes. Preview again or wait for the connection to recover."
-              : "Checking relevant instrument changes…"}
+              ? "无法检查近期设备变更，请重新预览或等待连接恢复。"
+              : "正在检查相关设备变更…"}
           </p>
         )}
         {error &&
@@ -531,24 +529,21 @@ export function LaunchForm({
             void recovery.retry();
           }}
         >
-          Retry saving input
+          重试保存输入
         </Button>
       )}
       {recovery.conflict && (
-        <section aria-label="Conflicting experiment input">
-          <p>Both copies are retained. Review the other window’s saved input before choosing.</p>
+        <section aria-label="实验输入冲突">
+          <p>两个副本均已保留，请先核实另一窗口保存的输入再作选择。</p>
           <pre>{JSON.stringify(recovery.head?.input, null, 2)}</pre>
           <Button type="button" disabled={recovery.writing} onClick={() => recovery.adoptLocal()}>
-            Keep my copy after review
+            核实后保留我的副本
           </Button>
         </section>
       )}
       {draft.needsReview && (
-        <section aria-label="Review recovered experiment">
-          <p>
-            Review retained inputs against the current code, declarations and parameter baseline.
-            New defaults have not replaced your edits.
-          </p>
+        <section aria-label="核实恢复的实验">
+          <p>请对照当前代码、声明与参数基准核实保留输入。新的默认值未覆盖你的编辑。</p>
           {Boolean(draft.unresolvedFields?.length) && (
             <Notice role="alert">
               Unavailable fields need explicit removal: {draft.unresolvedFields?.join(", ")}. Their
@@ -579,26 +574,24 @@ export function LaunchForm({
               }))
             }
           >
-            Confirm reviewed input
+            确认已核实输入
             {draft.unresolvedFields?.length ? " and remove unavailable fields" : ""}
           </Button>
         </section>
       )}
 
       {draft.workingInput && (
-        <section aria-label="Working parameter input" className="border border-line rounded p-3">
+        <section aria-label="工作参数输入" className="border border-line rounded p-3">
           <p>Working inputs · revision {draft.workingInput.revision}</p>
           <details>
-            <summary>Source working table</summary>
+            <summary>来源工作表</summary>
             <p className="break-all">{draft.workingInput.draft_id}</p>
           </details>
           <Notice id={workingStatusId} role="status">
-            {workingBlockReason ?? (result ? "Preview up to date" : "Inputs up to date")}
+            {workingBlockReason ?? (result ? "预览已更新" : "输入已更新")}
           </Notice>
           {!workingCurrent && working.data && !working.isError && (
-            <p>
-              Working inputs changed or could not be checked. Preview and acquisition are blocked.
-            </p>
+            <p>工作输入已变化或无法核实，预览与采集已阻止。</p>
           )}
           {workingError && <Notice role="alert">{workingError}</Notice>}
           <Button
@@ -625,16 +618,16 @@ export function LaunchForm({
               }
             }}
           >
-            Use current working inputs
+            使用当前工作输入
           </Button>
         </section>
       )}
       {draft.selection.configuration.kind === "parameters" && (
         <section
-          aria-label="Parameter source"
+          aria-label="参数来源"
           className="rounded border border-line bg-panel p-3 space-y-2"
         >
-          <h4 className="font-semibold">Parameter source</h4>
+          <h4 className="font-semibold">参数来源</h4>
           <p className="text-sm break-words">
             Parameter baseline: revision {draft.selection.configuration.ref.revision_id}
             {draft.selection.configuration.overrides.length > 0
@@ -649,10 +642,7 @@ export function LaunchForm({
         </section>
       )}
       {draft.selection.configuration.kind === "unselected" ? (
-        <p>
-          Select a parameter branch or use a saved version from Configuration, then choose an
-          experiment setup before starting or previewing.
-        </p>
+        <p>开始或预览前，请选择参数分支或参数与绑定中的已保存版本，再选择实验配置。</p>
       ) : null}
       <p className="text-sm">
         {draft.preview && !result && !pending
@@ -664,7 +654,7 @@ export function LaunchForm({
         disabled={Boolean(pending) || !recovery.ready}
         onClick={() => select(entry, true)}
       >
-        Reset launch draft
+        重置实验草稿
       </Button>
       {!supported && (
         <Notice role="alert">
@@ -681,7 +671,7 @@ export function LaunchForm({
           <ControlSummary fields={entry.controls} values={result.controls} />
         </>
       )}
-      <section aria-label="Save this preparation" className="border-t border-line pt-4">
+      <section aria-label="保存此次准备" className="border-t border-line pt-4">
         <PlanSave
           key={`${draft.plan?.ref.plan_id ?? "new"}:${draft.plan?.ref.revision ?? 0}`}
           preview={result}

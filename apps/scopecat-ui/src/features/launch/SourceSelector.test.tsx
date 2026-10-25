@@ -44,10 +44,10 @@ it("shows unavailable retained sources and never chooses a different owner impli
     </QueryClientProvider>,
   );
   expect(await screen.findByRole("alert")).toHaveTextContent("Local source is not bound");
-  expect(screen.getByLabelText("Code workspace")).toHaveValue("restored");
+  expect(screen.getByLabelText("代码工作区")).toHaveValue("restored");
   expect(screen.getByRole("option", { name: /Saved source/ })).toBeDisabled();
   expect(onSelect).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("Code workspace"), { target: { value: "legacy" } });
+  fireEvent.change(screen.getByLabelText("代码工作区"), { target: { value: "legacy" } });
   expect(onSelect).toHaveBeenCalledWith("legacy");
   expect(requests).toEqual(["/api/v1/author-workspaces"]);
 });
