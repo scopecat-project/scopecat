@@ -89,6 +89,11 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
 }, testInfo) => {
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
+  await page.setViewportSize({ width: 1266, height: 893 });
+  const captureWorkbench = async (name: string) => {
+    await page.evaluate("window.scrollTo(0, 0)");
+    await page.screenshot({ path: testInfo.outputPath(`${name}.png`) });
+  };
   const project = await mkdtemp(join(tmpdir(), "scopecat-parallel-drafts-"));
   const releasePath = join(project, "release-synthetic-point");
   let started = false;
@@ -138,9 +143,25 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await page.getByLabel("Frequency start").fill("4.8");
     await page.getByLabel("Frequency stop").fill("4.9");
     await page.getByLabel("Frequency points").fill("2");
+    await saved(page);
+    await expect(
+      page.getByText("Author code refreshed.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await captureWorkbench("editor-before-start");
+    await page.screenshot({ path: testInfo.outputPath("editor-ready-full.png"), fullPage: true });
+    await expect(page.getByLabel("Gain", { exact: true })).toBeInViewport();
+    await expect(page.getByLabel("Frequency start", { exact: true })).toBeInViewport();
     await page.getByRole("button", { name: "Start acquisition", exact: true }).click();
     const current = page.getByRole("link", { name: /View current data:/ });
     await expect(current).toBeVisible();
+    await expect(page.getByText("Running · 1 completed points", { exact: true })).toBeVisible();
+    await captureWorkbench("monitor-selected-running");
+    await page.screenshot({
+      path: testInfo.outputPath("monitor-selected-running-full.png"),
+      fullPage: true,
+    });
     const monitorUrl = new URL((await current.getAttribute("href"))!, url);
     const runA = monitorUrl.searchParams.get("run")!;
     const procedureA = monitorUrl.searchParams.get("procedure")!;
@@ -209,6 +230,12 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     const requestB = response.request().postDataJSON();
     expect(requestB.control_edits.gain).toEqual({ mode: "fixed", value: 2 });
     const procedureB = (await response.json()).procedure_id;
+    await expect(
+      page.getByRole("heading", { name: "Submission confirmed", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+    await expect(page.getByRole("button").filter({ hasText: procedureB })).toBeVisible();
+    await captureWorkbench("confirmed-submitted-work");
     const retainedBeforeEdit = (
       await (await page.request.get(`${url}/api/v1/launch-attempts`)).json()
     ).items.find(
@@ -262,6 +289,7 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await comparison.screenshot({ path: testInfo.outputPath("frozen-b-current-c-comparison.png") });
 
     await page.getByRole("button", { name: "Submitted work", exact: true }).click();
+    await captureWorkbench("submitted-work");
     await page.getByRole("button").filter({ hasText: procedureB }).click();
     const inspection = page.getByRole("region", { name: "Submitted work inspection", exact: true });
     await expect(
@@ -339,6 +367,14 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     });
     await page.screenshot({ path: testInfo.outputPath("independent-draft-c.png") });
     await monitor.screenshot({ path: testInfo.outputPath("fixed-monitor-a.png") });
+    await page
+      .getByRole("region", { name: "Inputs for this run", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("narrow-fields.png") });
+    await page
+      .getByRole("region", { name: "Preview and start", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("narrow-actions.png") });
     await gain.focus();
     await gain.evaluate((node) =>
       (

@@ -335,7 +335,7 @@ export default function App() {
           </span>
         </a>
         <nav
-          className="mx-4 flex min-w-0 flex-1 gap-4 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap max-[680px]:order-3 max-[680px]:mx-0 max-[680px]:w-full max-[680px]:flex-auto"
+          className="mx-4 flex min-w-0 flex-1 gap-1 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap max-[680px]:order-3 max-[680px]:mx-0 max-[680px]:w-full max-[680px]:flex-auto"
           aria-label="Project sections"
         >
           <button

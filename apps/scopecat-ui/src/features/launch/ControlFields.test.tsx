@@ -195,7 +195,7 @@ it("discards errors when an external plan replaces a draft with the same control
 it("documents compact suffixes for whitespace-separated scan lists", () => {
   render(<DraftForm />);
   fireEvent.change(screen.getByLabelText("Frequency source"), { target: { value: "values" } });
-  expect(screen.getByText(/单位后缀紧接数字，不加空格/)).toBeVisible();
+  expect(screen.getByText(/Attach unit suffixes without spaces/)).toBeVisible();
   expect(() =>
     controlEdits({ frequency: { mode: "values", values: "1 GHz, 500 MHz", unit: "MHz" } }),
   ).toThrow("finite numbers");
