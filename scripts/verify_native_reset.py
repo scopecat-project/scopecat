@@ -201,13 +201,40 @@ def observe():
         result["status"] = "failed"
         result["error"] = traceback.format_exc()
     finally:
-        (home / (stage + ".json")).write_text(json.dumps(result, indent=2))
-        if window is not None:
+        output = home / (stage + ".json")
+        result["business_status"] = result["status"]
+        result["exit_status"] = "pending"
+        output.write_text(json.dumps(result, indent=2))
+        try:
+            if window is None:
+                raise RuntimeError("No native window available for normal exit")
+            # An HTTP navigation alone does not mean React and its save/close
+            # listener are mounted. Wait for the real workspace to finish loading.
+            wait(
+                lambda: window.evaluate_js(
+                    "Boolean(window.pywebview?.api && "
+                    "document.querySelector('[aria-label=\"Refresh project data\"] "
+                    "svg:not(.animate-spin)') && "
+                    "!document.body.textContent.includes('Loading experiments…'))"
+                ),
+                "workspace ready for saved-input exit preflight",
+            )
             window._js_api.exit(False)
+            result["exit_status"] = "requested"
+        except BaseException:
+            result["status"] = "failed"
+            result["exit_status"] = "failed"
+            result["exit_error"] = traceback.format_exc()
+            raise
+        finally:
+            output.write_text(json.dumps(result, indent=2))
 
 
 threading.Thread(target=observe, daemon=True).start()
 desktop.run(paths.state, prepare=prepare, prepare_reset=prepare)
+assert result.get("exit_status") == "requested", result
+result["exit_status"] = "passed"
+(home / (stage + ".json")).write_text(json.dumps(result, indent=2))
 assert result.get("status") == "passed", result
 """
 
