@@ -219,12 +219,26 @@ def observe():
                 ),
                 "workspace ready for saved-input exit preflight",
             )
+            result["exit_page"] = window.evaluate_js(
+                "({readyState: document.readyState, text: document.body.innerText})"
+            )
+            output.write_text(json.dumps(result, indent=2))
             window._js_api.exit(False)
             result["exit_status"] = "requested"
         except BaseException:
             result["status"] = "failed"
             result["exit_status"] = "failed"
             result["exit_error"] = traceback.format_exc()
+            try:
+                manager = window._js_api._session.close_preflight.__self__
+                result["close_views"] = [
+                    {"status": view.close_status,
+                     "reply_received": view.close_ready.is_set(),
+                     "url": view.window.get_current_url()}
+                    for view in manager._views
+                ]
+            except BaseException:
+                result["close_diagnostic_error"] = traceback.format_exc()
             raise
         finally:
             output.write_text(json.dumps(result, indent=2))

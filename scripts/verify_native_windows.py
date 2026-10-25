@@ -257,6 +257,19 @@ def click_text(window: webview.Window, label: str) -> None:
     )
 
 
+def click_navigation(window: webview.Window, label: str) -> None:
+    assert (
+        evaluate(
+            window,
+            "(() => { const element = document.querySelector("
+            + json.dumps(f'button[aria-label="{label}"]')
+            + "); if (!element || element.disabled) return false; "
+            "element.click(); return true; })()",
+        )
+        is True
+    )
+
+
 class WindowDiagnostics(logging.Handler):
     """Best-effort first-window evidence; never wait for JS or the GUI thread.
 
@@ -604,7 +617,7 @@ def probe(home: Path) -> None:
                         + json.dumps(reviewer_selector)
                         + ")?.value"
                     )
-                    click_text(first.window, "Decisions")
+                    click_navigation(first.window, "决策 / Decisions")
                     wait_for(
                         lambda: evaluate(first.window, reviewer_value) == "",
                         "Real waiting decision form did not render",
@@ -636,7 +649,7 @@ def probe(home: Path) -> None:
                         + json.dumps(marker_key)
                         + ", 'before-secondary')",
                     )
-                    click_text(first.window, "Runs")
+                    click_navigation(first.window, "运行详情 / Runs")
                     wait_for(
                         lambda: (
                             run_id in text_content(first.window, "run-detail-header")
@@ -681,12 +694,12 @@ def probe(home: Path) -> None:
                         "application_draft": draft_read(),
                         "marker": evaluate(second.window, marker_read),
                     }
-                    click_text(first.window, "Decisions")
+                    click_navigation(first.window, "决策 / Decisions")
                     wait_for(
                         lambda: evaluate(first.window, reviewer_value) == reviewer,
                         "Real decision draft did not restore after secondary creation",
                     )
-                    click_text(first.window, "Runs")
+                    click_navigation(first.window, "运行详情 / Runs")
                     wait_for(
                         lambda: (
                             run_id in text_content(first.window, "run-detail-header")
