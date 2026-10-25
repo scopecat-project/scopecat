@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { getWaitingProcedures } from "./features/decisions/decision-api";
+vi.mock("./features/decisions/decision-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./features/decisions/decision-api")>()),
+  getWaitingProcedures: vi.fn(),
+}));
 import { getEvents, getHealth } from "./data/project-api";
 import {
   getMeasurementLivePreview,
@@ -129,6 +134,7 @@ let projectEventListener: ((event: Event) => void) | undefined;
 let openEventListener: ((event: Event) => void) | undefined;
 
 beforeEach(() => {
+  vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [] });
   projectEventListener = undefined;
   openEventListener = undefined;
   window.history.replaceState(null, "", "#configuration");
@@ -219,6 +225,21 @@ it("opens Help through navigation and a direct hash without leaving the workbenc
 });
 
 describe("config provenance navigation", () => {
+  it("shows unknown decision attention when the actual query fails instead of retaining zero", async () => {
+    const client = createQueryClient();
+    renderApp(client);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Decision attention")).toHaveTextContent("0 待处理"),
+    );
+    vi.mocked(getWaitingProcedures).mockRejectedValue(new Error("Decision query disconnected"));
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["procedure-decisions"] });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Decision attention")).toHaveTextContent("状态未知"),
+    );
+    expect(screen.getByLabelText("Decision attention")).not.toHaveTextContent("0 待处理");
+  });
   it("restores page and record selections through back and forward", async () => {
     window.history.replaceState(null, "", "/?sample=chip-a17#samples");
     renderApp();

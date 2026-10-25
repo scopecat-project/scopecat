@@ -74,8 +74,13 @@ export function WorkspaceNavigation({
 }) {
   const [compact, setCompact] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  // A focused object has no drawer. Retire the previous mode's request before
+  // committing that presentation, so forward navigation cannot reopen it.
+  if (focused && drawer) setDrawer(false);
+  const drawerActive = drawer && !focused;
   const panel = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
+  const focusFrame = useRef<number | undefined>(undefined);
   useEffect(() => {
     const closeWideDrawer = () => {
       if (window.innerWidth > 760) setDrawer(false);
@@ -91,14 +96,15 @@ export function WorkspaceNavigation({
     };
   }, [compact, focused]);
   useEffect(() => {
-    if (!drawer) return;
+    if (!drawerActive) return;
+    if (focusFrame.current !== undefined) cancelAnimationFrame(focusFrame.current);
     const main = document.getElementById("workspace-body");
     const returnFocus = opener.current;
     if (main) main.inert = true;
     panel.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setDrawer(false);
-      if (!drawer || event.key !== "Tab") return;
+      if (event.key !== "Tab") return;
       const buttons = Array.from(
         panel.current?.querySelectorAll<HTMLButtonElement>("button") ?? [],
       ).filter((button) => button.getClientRects().length > 0);
@@ -117,13 +123,27 @@ export function WorkspaceNavigation({
     return () => {
       navigation?.removeEventListener("keydown", handleKey);
       if (main) main.inert = false;
-      if (window.innerWidth <= 760) returnFocus?.focus();
-      else navigation?.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
+      const destination =
+        window.innerWidth <= 760 && returnFocus?.isConnected
+          ? returnFocus
+          : navigation?.isConnected
+            ? navigation.querySelector<HTMLButtonElement>('[aria-current="page"]')
+            : (document.getElementById("workspace-show-navigation") ??
+              main?.querySelector<HTMLElement>("button, a[href], input, select, textarea"));
+      // History traversal can reset document focus after React's cleanup.
+      // Restore once the new presentation has committed and is focusable.
+      focusFrame.current = requestAnimationFrame(() => {
+        if (destination?.isConnected && !destination.closest("[inert]")) destination.focus();
+      });
     };
-  }, [drawer]);
+  }, [drawerActive]);
   if (focused)
     return (
-      <button className="workspace-show-navigation" onClick={onShowNavigation}>
+      <button
+        id="workspace-show-navigation"
+        className="workspace-show-navigation"
+        onClick={onShowNavigation}
+      >
         显示主导航 / Navigation
       </button>
     );
@@ -133,14 +153,14 @@ export function WorkspaceNavigation({
         ref={opener}
         className="workspace-menu"
         aria-label="导航 / Open navigation"
-        aria-expanded={drawer}
+        aria-expanded={drawerActive}
         aria-controls="workspace-navigation"
         onClick={() => setDrawer(true)}
       >
         <Menu size={17} aria-hidden="true" />
         导航
       </button>
-      {drawer && (
+      {drawerActive && (
         <button
           className="workspace-scrim"
           aria-label="关闭导航遮罩 / Close navigation overlay"
@@ -150,10 +170,10 @@ export function WorkspaceNavigation({
       <div
         id="workspace-navigation"
         ref={panel}
-        className={`workspace-sidebar ${drawer ? "is-open" : ""}`}
-        role={drawer ? "dialog" : "group"}
+        className={`workspace-sidebar ${drawerActive ? "is-open" : ""}`}
+        role={drawerActive ? "dialog" : "group"}
         tabIndex={-1}
-        aria-modal={drawer ? true : undefined}
+        aria-modal={drawerActive ? true : undefined}
         aria-label="Workspace navigation"
       >
         <div className="workspace-brand">

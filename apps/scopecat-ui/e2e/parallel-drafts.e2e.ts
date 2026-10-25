@@ -173,9 +173,18 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     await expect(monitor.getByTestId("run-status")).toHaveText("Running");
     await monitor.getByRole("link", { name: "Return to preparation", exact: true }).click();
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
+    await monitor.setViewportSize({ width: 520, height: 800 });
+    await monitor.getByRole("button", { name: /Open navigation$/ }).click();
+    await expect(monitor.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
     await monitor.goBack();
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+    await expect(monitor.locator("#workspace-body")).toHaveJSProperty("inert", false);
+    await expect(monitor.getByRole("button", { name: /Navigation/ })).toBeFocused();
+    await monitor.screenshot({ path: testInfo.outputPath("focused-back-from-open-drawer.png") });
     await monitor.goForward();
+    await expect(monitor.getByRole("dialog", { name: "Workspace navigation" })).toHaveCount(0);
+    await expect(monitor.locator("#workspace-body")).toHaveJSProperty("inert", false);
+    await monitor.setViewportSize({ width: 1266, height: 893 });
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
     await monitor.reload();
     await expect(monitor.getByRole("navigation", { name: "Project sections" })).toBeVisible();
