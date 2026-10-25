@@ -274,11 +274,39 @@ refreshes and one virtual run. In general each API gets
 R must be at least three; N and K must be positive integers. Invalid workloads
 are rejected before copying a project or starting processes.
 
+### 有限运行与重叠请求
+
+```console
+uv run --locked python -m benchmarks run author-residency --revisions 3 \
+  --rounds 3 --operations-per-revision 10 --run-per-visit --concurrent-analysis
+```
+
+case version 5 保留默认串行负载，增加两个可选开关：
+
+- `--run-per-visit` 在每次 revision 访问的第一个循环中运行一次虚拟实验，
+  后续分析读取最新运行；每次均使用 frequency=4.7/4.8/4.9 三点扫描。
+  初始 first/repeat 后若 K > 2，也会运行一次；
+  总运行数为 `1 + N * R + (K > 2)`。分析记录携带对应 `run_id`。
+- `--concurrent-analysis` 用独立客户端向同一个 daemon 提交分析，同时主客户端
+  prepare 同一 revision；两个调用均结束后才采样。prepare 记录保留自身耗时，
+  `overlap_batch_seconds` 包含提交、独立客户端构造和两个请求结束前的完整等待，
+  并附 `overlapping_analysis_id`、`overlapping_run_id`。额外分析数为
+  `max(0, K - 2) + N * R * K`。这是重叠提交，不保证 worker 实际同时执行，
+  也不是同池跨 revision 争用或调度公平性验证。
+
+上述命令有 100 次 prepare、198 次 analysis、6 次源码编辑/refresh、11 次运行；
+全部调用结束后关闭项目并观察已采样进程，随后停止。各 checkpoint 仍检查两个池
+各不超过两个 worker，并用 PID 与创建时间检查复用和原 revision 淘汰后重建。
+它不打开浏览器，不覆盖视图开关、瞬时峰值、空闲超时淘汰、活跃调用中关机或
+长期泄漏资格化。不要把增加的有限操作数称为“无泄漏”；先比较相同进程身份的
+RSS 序列，再决定是否需要更长且针对性明确的负载。失败运行的原始输出也须保留。
+
 Case version 3 adds the requested workload, ordered unique revision hashes and
 operation round/revision index/iteration/phase. `visit_phase` distinguishes
 initial, churn and restoration visits even for their subsequent reuse calls. Each operation carries its exact
 source revision; analysis operations also carry the published `analysis_id`.
-The top-level `run_id` identifies their common retained input. Publication may
+With default flags, the top-level `run_id` identifies their common retained input;
+with `--run-per-visit` it identifies the last run. Publication may
 reuse a receipt, so receipt counts need not equal operation counts. Samples link
 to the zero-based operation index and retain per-process identity and RSS after
 each completed call. Initial, reuse, churn and restore phases distinguish warm
