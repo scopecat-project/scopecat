@@ -56,7 +56,9 @@ test("discovers an ordinary author experiment and edits controls before submitti
     const refreshBounds = await page
       .getByRole("button", { name: "刷新作者代码", exact: true })
       .boundingBox();
-    expect(sourceBounds!.x + sourceBounds!.width).toBeLessThanOrEqual(refreshBounds!.x);
+    // Author refresh follows the source/draft/experiment row in the current workbench.
+    expect(sourceBounds!.y + sourceBounds!.height).toBeLessThanOrEqual(refreshBounds!.y);
+    await expect(page.getByRole("button", { name: "刷新作者代码", exact: true })).toBeInViewport();
     await testInfo.attach("Preparation source controls", {
       body: await page.screenshot(),
       contentType: "image/png",
@@ -99,9 +101,7 @@ test("discovers an ordinary author experiment and edits controls before submitti
     await expect(page.getByText("预览就绪", { exact: true })).toBeVisible();
     await writeFile(sourcePath, originalSource.replace("return gain /", "return 2 * gain /"));
     await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
-    ).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("2");
     await expect(page.getByLabel("Frequency points")).toHaveValue("3");
@@ -245,14 +245,16 @@ test("prepares B while A stays pinned in a separate result page", async ({
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
     await writeFile(sourcePath, source.replace("return gain /", "return 2 * gain /"));
     await page.getByRole("button", { name: "刷新作者代码", exact: true }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Author code refreshed" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: /Help$/, exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "作者代码已刷新。" })).toBeVisible();
+    await page.getByRole("button", { name: "导航 / Open navigation", exact: true }).click();
+    await page.getByRole("button", { name: "帮助 / Help", exact: true }).click();
     await page.goBack();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await page.goForward();
-    await expect(page.getByRole("button", { name: /Experiments$/, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "导航 / Open navigation", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "实验 / Experiments", exact: true }),
+    ).toBeVisible();
     await page.goBack();
     await reviewRetainedExperiment(page);
     await page.getByRole("button", { name: "准备新的 run（独立采集）", exact: true }).click();
@@ -299,7 +301,8 @@ test("prepares B while A stays pinned in a separate result page", async ({
       "href",
       `?procedure=${procedureA}#launch`,
     );
-    await page.getByRole("button", { name: /Help$/, exact: true }).click();
+    await page.getByRole("button", { name: "导航 / Open navigation", exact: true }).click();
+    await page.getByRole("button", { name: "帮助 / Help", exact: true }).click();
     await page.goBack();
     await expect(page.getByLabel("Gain", { exact: true })).toHaveValue("3");
     await expect(page.getByRole("link", { name: "重新打开此任务", exact: true })).toHaveAttribute(

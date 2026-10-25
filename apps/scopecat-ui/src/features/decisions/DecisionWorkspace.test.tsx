@@ -2,6 +2,7 @@ import type { ProcedureInputContinueReceipt } from "./decision-api";
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -89,6 +90,24 @@ afterEach(() => {
 });
 
 describe("DecisionWorkspace", () => {
+  it.each(["verify_native_windows.py", "verify_windows_storage.py", "verify_cocoa_storage.py"])(
+    "keeps %s attached to the waiting decision form",
+    async (script) => {
+      const source = readFileSync(`../../scripts/${script}`, "utf8");
+      const selector = source.match(
+        /(?:reviewer_selector|selector) = '(input\[placeholder="[^"]+"\])'/,
+      )?.[1];
+      expect(selector).toBeDefined();
+      renderWorkspace();
+      const reviewer = await screen.findByRole("textbox", { name: "判断操作人" });
+      expect(document.querySelector(selector!)).toBe(reviewer);
+      fireEvent.change(reviewer, { target: { value: "native-window-reviewer" } });
+      expect(reviewer).toHaveValue("native-window-reviewer");
+      await waitFor(() => expect(saveDecisionDraft).toHaveBeenCalled());
+      expect(submitProcedureInput).not.toHaveBeenCalled();
+    },
+  );
+
   it("fills only an active declared field and rejects a stale request without submitting", async () => {
     const step = waitingStep();
     step.inputs = [

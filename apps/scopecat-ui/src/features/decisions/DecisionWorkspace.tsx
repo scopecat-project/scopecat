@@ -810,7 +810,7 @@ function DecisionContinuation({
         {dispatch?.failure?.message ??
           receipt?.dispatch_error ??
           (receipt
-            ? "已请求继续执行。 Open the task to follow its progress."
+            ? "已请求继续执行。打开任务可查看进度。"
             : "The task is no longer waiting. Retry the same submission to check its recorded answer and continuation.")}
       </p>
       {retry.isError && <p role="alert">{errorMessage(retry.error)}</p>}

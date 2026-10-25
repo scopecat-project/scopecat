@@ -153,7 +153,7 @@ function AuthorRefreshPanel({
           {compact
             ? "作者代码已刷新。"
             : context === "analysis"
-              ? "作者代码已刷新。 Inspect compatible data before fitting with this code."
+              ? "作者代码已刷新。使用此代码拟合前，请检查兼容数据。"
               : "作者代码已刷新。 开始前请预览更新后的实验。"}
         </p>
       )}

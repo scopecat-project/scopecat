@@ -98,7 +98,7 @@ it("filters retained runs and removes only their project association", async () 
     "href",
     "/?run=run-1&focus=run#runs",
   );
-  fireEvent.click(screen.getByText("研究项目 management"));
+  fireEvent.click(screen.getByText("研究项目管理"));
   fireEvent.click(await screen.findByRole("button", { name: "移除 run 关联" }));
   await waitFor(() =>
     expect(
@@ -110,7 +110,7 @@ it("filters retained runs and removes only their project association", async () 
     ).toBe(true),
   );
   fireEvent.click(screen.getByLabelText("显示项目外的 run 以供关联"));
-  fireEvent.click(screen.getByText("研究项目 management"));
+  fireEvent.click(screen.getByText("研究项目管理"));
   await waitFor(() => expect(screen.queryByRole("button", { name: "移除 run 关联" })).toBeNull());
   expect(screen.getByText("Showing runs across all projects for association.")).toBeVisible();
   expect(screen.getByLabelText("研究项目")).toHaveValue("alpha");
@@ -227,7 +227,7 @@ it("filters this course by recorded ownership and removes the filter explicitly"
         url.pathname === "/api/v1/runs" && url.searchParams.get("practice_scope") === "course-one",
     ),
   ).toBe(true);
-  expect(screen.queryByText("研究项目 management")).not.toBeInTheDocument();
+  expect(screen.queryByText("研究项目管理")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Show all Data" }));
   await waitFor(() =>
     expect(

@@ -82,7 +82,7 @@ vi.mock("./features/analyses/AnalysesWorkspace", () => ({
     selectedAnalysisId?: string;
   }) => (
     <div>
-      项目分析 workspace
+      项目分析工作区
       <span>Selected analysis {selectedAnalysisId ?? "none"}</span>
       <button type="button" onClick={() => onOpenRun("run-2")}>
         Open analysis input run
@@ -372,7 +372,7 @@ describe("config provenance navigation", () => {
     window.history.replaceState(null, "", "/#analyses");
     renderApp();
 
-    expect(await screen.findByText("项目分析 workspace")).toBeVisible();
+    expect(await screen.findByText("项目分析工作区")).toBeVisible();
     expect(screen.getByRole("button", { name: /Analyses$/ })).toHaveAttribute(
       "aria-current",
       "page",
@@ -619,7 +619,7 @@ describe("config provenance navigation", () => {
 
     await screen.findByRole("region", { name: "run 进度" });
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
-    expect(await screen.findByText(/0 points have durable execution evidence/)).toBeVisible();
+    expect(await screen.findByText(/0 个点已有持久化执行证据/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
@@ -662,7 +662,7 @@ describe("config provenance navigation", () => {
     const progress = await screen.findByRole("region", { name: "run 进度" });
     expect(progress).toHaveTextContent("3 accepted points · plan open");
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
-    expect(await screen.findByText(/2 points have durable execution evidence/)).toBeVisible();
+    expect(await screen.findByText(/2 个点已有持久化执行证据/)).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
@@ -1251,7 +1251,7 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
     target: { value: "same-id" },
   });
   fireEvent.change(screen.getByLabelText("记录集内 run 编号"), { target: { value: "17" } });
-  fireEvent.click(screen.getByText("研究项目 management"));
+  fireEvent.click(screen.getByText("研究项目管理"));
   fireEvent.change(screen.getByLabelText("项目名称"), {
     target: { value: "Unsubmitted Alpha rename" },
   });
@@ -1302,8 +1302,8 @@ it("suspends hidden Data queries, resumes same-space drafts, and resets them acr
   expect(screen.queryByLabelText("记录集内 run 编号")).not.toBeInTheDocument();
   await screen.findByRole("option", { name: "space-b collection" });
   expect(screen.queryByRole("option", { name: "space-a collection" })).toBeNull();
-  expect(screen.getByText("研究项目 management").parentElement).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByText("研究项目 management"));
+  expect(screen.getByText("研究项目管理").parentElement).not.toHaveAttribute("open");
+  fireEvent.click(screen.getByText("研究项目管理"));
   expect(screen.getByLabelText("项目名称")).toHaveValue("");
   expect(screen.getByRole("button", { name: "Create project" })).toBeDisabled();
   await screen.findByText("Source: space-b");

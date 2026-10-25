@@ -267,7 +267,7 @@ test("two workbench pages retain independent context and share collection number
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
     await page.getByLabel("记录集筛选", { exact: true }).selectOption(collection);
     await expect(
-      page.getByRole("region", { name: "Data", exact: true }).getByTestId("run-address"),
+      page.getByRole("region", { name: "数据", exact: true }).getByTestId("run-address"),
     ).toHaveCount(2);
     await page.getByText("Manage collection", { exact: true }).click();
     await page.getByRole("button", { name: "Rename collection", exact: true }).click();

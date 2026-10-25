@@ -94,7 +94,7 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const field = b.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
     await b.getByLabel("Source or reason for changes").fill("B unfinished raw input");
-    await expect(b.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(b.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await c
       .getByLabel("Source or reason for changes")
       .fill("separate window's retained conflicting input");
@@ -146,9 +146,11 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const editor = await fresh.newPage();
     await openTable(editor, url);
     await editor.getByLabel("signals[1].center", { exact: true }).fill("5.3");
-    await expect(editor.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(
+      editor.getByText("Draft saved in application data", { exact: true }),
+    ).toBeVisible();
     await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
-    await expect(work.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
+    await expect(work.getByText(/工作输入已变化或无法核实/)).toBeVisible();
     await work.getByLabel("Gain", { exact: true }).fill("2");
     await work.getByRole("button", { name: "使用当前工作输入", exact: true }).click();
     await expect(work.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
@@ -161,7 +163,9 @@ test("working B survives restart, invalidates stale previews and submits frozen 
     const runB = await retainedRun(work);
     // Later working edits must not replace the submitted capture.
     await editor.getByLabel("signals[1].center", { exact: true }).fill("5.4");
-    await expect(editor.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(
+      editor.getByText("Draft saved in application data", { exact: true }),
+    ).toBeVisible();
     const evidence = uv([
       "python",
       "-c",
@@ -190,7 +194,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await editor.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await editor.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
     await reviewRetainedExperiment(editor);
-    await expect(editor.getByText(/Working inputs changed or could not be checked/)).toBeVisible();
+    await expect(editor.getByText(/工作输入已变化或无法核实/)).toBeVisible();
     await expect(editor.getByRole("button", { name: "预览", exact: true })).toBeDisabled();
     await editor.getByRole("button", { name: "使用当前工作输入", exact: true }).click();
     await expect(editor.getByRole("button", { name: "开始采集", exact: true })).toBeDisabled();
@@ -223,7 +227,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await work.getByRole("button", { name: "Open working table", exact: true }).click();
     await expect(continuedField).toHaveValue("5.4");
     await continuedField.fill("5.5");
-    await expect(work.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(work.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await work.getByRole("button", { name: /Runs$/, exact: true }).click();
     await expectRunIdentity(work, runB);
     expect(new URL(work.url()).searchParams.get("run")).toBe(runB);
@@ -288,7 +292,7 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     await page.route("**/parameter-drafts/*/save", (route) => route.abort("connectionfailed"));
     const field = page.getByLabel("signals[1].center", { exact: true });
     await field.fill("1e");
-    await expect(page.getByRole("button", { name: "重试保存草稿", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Retry draft save", exact: true })).toBeVisible();
     const prompt = page.waitForEvent("dialog").then(async (dialog) => {
       expect(dialog.type()).toBe("beforeunload");
       await dialog.dismiss();
@@ -298,13 +302,13 @@ test("failed draft save cancels browser exit and recovers after retry", async ({
     expect(page.isClosed()).toBe(false);
     await expect(field).toHaveValue("1e");
     await page.unroute("**/parameter-drafts/*/save");
-    await page.getByRole("button", { name: "重试保存草稿", exact: true }).click();
-    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Retry draft save", exact: true }).click();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Close editor", exact: true }).click();
     await expect(field).not.toBeVisible();
     await page.getByRole("button", { name: "Open working table", exact: true }).click();
     await expect(field).toHaveValue("1e");
-    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await context.close();
   } finally {
     uv(["python", "-m", "scopecat_server.cli", "stop", home]);

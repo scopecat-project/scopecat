@@ -369,7 +369,7 @@ export function ResearchHistory({
               setManaging(open);
             }}
           >
-            <summary className="cursor-pointer font-semibold">研究项目 management</summary>
+            <summary className="cursor-pointer font-semibold">研究项目管理</summary>
             <p className="text-sm text-text-dim">
               Manage {selected?.name ?? "a research project"}.
             </p>

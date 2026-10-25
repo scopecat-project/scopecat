@@ -110,7 +110,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     release();
     await expect(scale).toHaveValue("2");
     await scale.fill("3");
-    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
     await expect(page.getByRole("heading", { name: "原始提交待确认" })).toBeVisible();
     await expect(start).toBeDisabled();
@@ -139,7 +139,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(scale).toHaveValue("3");
     await scale.fill("4");
-    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     expect(submissions).toBe(1);
     const runs = (await (
       await page.request.get(`${prepared.url}/api/v1/runs`)

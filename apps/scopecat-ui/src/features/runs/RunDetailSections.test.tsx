@@ -140,7 +140,7 @@ describe("Run receipt summary", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("已完成")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("执行证据", { exact: true }));
-    expect(screen.getByText(/9 points have durable execution evidence/)).toBeVisible();
+    expect(screen.getByText(/9 个点已有持久化执行证据/)).toBeVisible();
   });
 
   it("does not invent receipts from coverage, and marks failed live refreshes", () => {

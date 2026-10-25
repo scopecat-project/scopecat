@@ -27,7 +27,17 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
   const home = await mkdtemp(join(tmpdir(), "scopecat-object-parameters-"));
   try {
     await copyAuthorWorkspace(home);
-    uv(["scopecat", "start", home, "--port", "0", "--static-dir", resolve("dist")]);
+    uv([
+      "python",
+      "-m",
+      "scopecat_server.cli",
+      "start",
+      home,
+      "--port",
+      "0",
+      "--static-dir",
+      resolve("dist"),
+    ]);
     prepareAuthorContexts(uv, home);
     const { base_url: url } = JSON.parse(
       await readFile(join(home, ".scopecat/daemon.json"), "utf8"),
@@ -88,7 +98,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await page.setViewportSize({ width: 1680, height: 1100 });
     await page.goto(`${url}/?sample=object-chip#samples`);
     await page.getByRole("button", { name: "Choose working parameter context" }).click();
-    await page.getByLabel("参数分支", { exact: true }).fill("browser");
+    await page.getByLabel("Parameter branch", { exact: true }).fill("browser");
     await page.getByLabel("Setup for capability context").selectOption("browser-bench-a");
     await page
       .getByRole("combobox", { name: "Measurement subject", exact: true })
@@ -106,7 +116,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await expect(form.getByLabel("signals[2].center", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Select object a", exact: true }).click();
     await expect(field).toHaveValue("1e");
-    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     await page.evaluate(`window.scrollTo(0, 0);
       document.querySelector('[aria-label="Edit parameter version"]').scrollTop = 0;`);
     const screenshot = testInfo.outputPath("object-parameter-panel.png");
@@ -151,6 +161,9 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await expect(page.getByLabel("Selected registered target")).toContainText(
       "Registered target object-target, revision 1",
     );
+    await page
+      .getByRole("textbox", { name: "操作人", exact: true })
+      .fill("Object parameter tester");
     await expect(page.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
     const previewResponse = page.waitForResponse(
       (item) =>
@@ -181,7 +194,7 @@ test("sample map keeps raw edits and explicitly carries its context through a ru
     await page.getByRole("button", { name: "Select object a", exact: true }).click();
     await expect(field).toHaveValue("5.2");
     await field.fill("5.3");
-    await expect(page.getByText("草稿已保存 in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
     // The next editing round cannot rewrite the completed run's inputs.
     const evidence = uv([
       "python",
@@ -204,7 +217,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       contentType: "application/json",
     });
   } finally {
-    uv(["scopecat", "stop", home]);
+    uv(["python", "-m", "scopecat_server.cli", "stop", home]);
     await rm(home, { recursive: true, force: true });
   }
 });

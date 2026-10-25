@@ -190,7 +190,7 @@ def exercise():
             # Its service may have a new port; recovery must come from application data.
             query = urlencode({"procedure": fixture["target"]["procedure_run_id"]})
             first.load_url(base_url + "/?" + query + "#decisions")
-            selector = 'input[placeholder="Person\u2019s name"]'
+            selector = 'input[placeholder="操作人姓名"]'
             wait(
                 lambda: (
                     js(

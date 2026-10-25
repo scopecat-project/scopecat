@@ -79,7 +79,7 @@ test("repeats a retained ordinary analysis with its original source after author
     );
     // 在同一会话中从 Data 找回旧结果，独立窗口和返回不能丢失浏览条件。
     await page.getByRole("button", { name: /Data$/, exact: true }).click();
-    const data = page.getByRole("region", { name: "Data", exact: true });
+    const data = page.getByRole("region", { name: "数据", exact: true });
     await expect(data.getByRole("heading", { name: "Retained runs" })).toBeVisible();
     await data.getByLabel("起始时间（本地）").fill("2020-01-01T00:00");
     const importedResults = data.getByRole("region", { name: "Imported results" });
@@ -92,13 +92,13 @@ test("repeats a retained ordinary analysis with its original source after author
     await page.goBack();
     await expect(data.getByRole("region", { name: "Captured run" })).toBeHidden();
     await expect(data.getByLabel("起始时间（本地）")).toHaveValue("2020-01-01T00:00");
-    await data.getByText("研究项目 management", { exact: true }).click();
+    await data.getByText("研究项目管理", { exact: true }).click();
     await data.getByLabel("项目名称", { exact: true }).fill("Retained comparison");
     await data.getByRole("button", { name: "Create project", exact: true }).click();
     await expect(data.getByLabel("研究项目", { exact: true })).not.toHaveValue("");
     await data.getByLabel("显示项目外的 run 以供关联").check();
     await data.getByRole("button", { name: "关联 run", exact: true }).click();
-    await data.getByText("研究项目 management", { exact: true }).click();
+    await data.getByText("研究项目管理", { exact: true }).click();
     await expect(data.getByRole("button", { name: "关联 run", exact: true })).toBeHidden();
     await expect(data.getByText("Showing runs across all projects for association.")).toBeVisible();
     const selectedProject = await data.getByLabel("研究项目", { exact: true }).inputValue();

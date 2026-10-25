@@ -31,7 +31,7 @@ export function PlanSave({
       const selection = normalizeSelection(request.selection);
       const sample = subjectSample(preview.reviewed.binding);
       if (source.kind === "analysis_candidate")
-        throw new Error("保存计划s from a named parameter context, not an unaccepted candidate.");
+        throw new Error("请从命名参数上下文保存计划，尚未接纳的候选不能作为计划来源。");
       const saved = await apiData<PlanRevision>(
         apiClient.POST("/api/v1/experiment-plans", {
           headers: { "X-Scopecat-Workspace": preview.workspace_id },

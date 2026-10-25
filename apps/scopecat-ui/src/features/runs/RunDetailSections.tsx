@@ -100,8 +100,7 @@ export function ProgressCard({
       <details className="mt-1 text-xs text-text-dim">
         <summary className="cursor-pointer">执行证据</summary>
         <p className="mt-2">
-          {completed} points have durable execution evidence. 已接收记录, saved records and
-          completed recovery groups are distinct.
+          {completed} 个点已有持久化执行证据。已接收记录、已保存记录与已完成恢复组分别计数。
         </p>
         <p className="mt-1">
           Result: {titleCase(run.result ?? "Pending")} · Certainty:{" "}

@@ -269,12 +269,16 @@ test("compares retained signals, saves independent results and starts edited sug
     expect(JSON.stringify(accepted.request)).toContain("4.87");
     await page.goto(`${endpoint.base_url}/?run=${nextRun}#runs`);
     const documentIdentity = await page.evaluate(() => performance.timeOrigin);
-    await page.getByRole("link", { name: "Open exact source conclusion" }).click();
+    await page.getByText("样品与计划来源", { exact: true }).click();
+    await page.getByRole("link", { name: "Open exact source conclusion", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`run=${nextRun}#runs`));
-    await expect(page.getByRole("region", { name: "Decision source" })).toBeVisible();
+    await expect(page.getByText("样品与计划来源", { exact: true }).locator("..")).toHaveAttribute(
+      "open",
+    );
+    await expect(page.getByRole("region", { name: "Decision source", exact: true })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
@@ -366,7 +370,8 @@ with ScientificExchange(sys.argv[1]) as capture:
       await readFile(join(restoredProject, ".scopecat/daemon.json"), "utf8"),
     ) as { base_url: string };
     await page.goto(`${restored.base_url}/?run=${nextRun}#runs`);
-    await page.getByRole("link", { name: "Open exact source conclusion" }).click();
+    await page.getByText("样品与计划来源", { exact: true }).click();
+    await page.getByRole("link", { name: "Open exact source conclusion", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`run-analysis=${candidate.analysis_id}`));
     await page
       .getByRole("region", { name: "Experiments started from this conclusion" })
