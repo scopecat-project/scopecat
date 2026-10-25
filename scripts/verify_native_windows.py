@@ -908,7 +908,7 @@ def smoke(home: Path) -> None:
                             "document.querySelector("
                             "'[aria-label=\"Refresh project data\"]') && "
                             "document.querySelector('.workspace-top [role=status]')"
-                            "?.textContent.trim() === 'Ready')",
+                            "?.textContent.trim() === 'Ok')",
                         )
                         is True
                     ),
