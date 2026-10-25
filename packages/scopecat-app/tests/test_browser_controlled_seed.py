@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Protocol
 
 import pytest
 
@@ -14,6 +15,60 @@ from scopecat_server.lifecycle import initialize_project, start_project, stop_pr
 
 ROOT = Path(__file__).resolve().parents[3]
 SEED = ROOT / "apps/scopecat-ui/e2e/fixtures/controlled_experiment.py"
+
+
+class _SeedProcess(Protocol):
+    def poll(self) -> int | None: ...
+
+    def communicate(self) -> tuple[str, str]: ...
+
+
+def _wait_for_marker(marker: Path, child: _SeedProcess) -> str:
+    deadline = time.monotonic() + 45
+    while True:
+        assert child.poll() is None, child.communicate()
+        assert time.monotonic() < deadline, marker.name
+        if marker.exists():
+            value = marker.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+        time.sleep(0.02)
+
+
+def test_marker_waits_for_content_after_file_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marker = tmp_path / "ready"
+    marker.touch()
+    expected = "01a17570-c701-7162-9b6e-7a4445407274"
+    original_read = Path.read_text
+    reads: list[str] = []
+
+    def read_then_finish_write(path: Path, *, encoding: str) -> str:
+        value = original_read(path, encoding=encoding)
+        reads.append(value)
+        if len(reads) == 1:
+            # Deterministically expose the create-before-write interval: this
+            # read still returns empty even though the next read sees the ID.
+            path.write_text(expected, encoding=encoding)
+        assert len(reads) <= 2
+        return value
+
+    monkeypatch.setattr(Path, "read_text", read_then_finish_write)
+
+    class RunningSeed:
+        checks = 0
+
+        def poll(self) -> None:
+            self.checks += 1
+
+        def communicate(self) -> tuple[str, str]:
+            raise AssertionError("The seed is still running")
+
+    child = RunningSeed()
+    assert _wait_for_marker(marker, child) == expected
+    assert reads == ["", expected]
+    assert child.checks == 2
 
 
 def test_browser_seed_gates_admission_execution_and_first_measurement(
@@ -52,12 +107,7 @@ def test_browser_seed_gates_admission_execution_and_first_measurement(
                         ("measurement", "leased"),
                     ):
                         marker = project.root / f".scopecat/e2e-{stage}-ready"
-                        deadline = time.monotonic() + 45
-                        while not marker.exists():
-                            assert child.poll() is None, child.communicate()
-                            assert time.monotonic() < deadline, stage
-                            time.sleep(0.02)
-                        observed = marker.read_text(encoding="utf-8")
+                        observed = _wait_for_marker(marker, child)
                         if run_id is None:
                             run_id = observed
                         assert observed == run_id
