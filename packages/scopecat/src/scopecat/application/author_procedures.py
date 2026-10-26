@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 import httpx2
 from pydantic import BaseModel
@@ -14,14 +15,19 @@ from pydantic import BaseModel
 from scopecat.analysis.facts import AnalysisFactSchema
 from scopecat.api.application_open import open_in_application
 from scopecat.api.procedure_inputs import PendingProcedureInput
+from scopecat.api.published_analysis import PublishedAnalysis
+from scopecat.api.run import RunHandle
 from scopecat.application.launch import LaunchSubmission
 from scopecat.automation.definition import ProcedureDefinition
 from scopecat.automation.exit_scope import ExitScope
 from scopecat.automation.models import (
+    AnalysisPublicationOutputRef,
     ProcedureRun,
+    ProcedureRunState,
     ProcedureSource,
     ProcedureStepAttempt,
     ProcedureStepOutputRef,
+    RunOutputRef,
 )
 from scopecat.automation.wire import (
     ProcedureCancelCommand,
@@ -34,6 +40,7 @@ from scopecat.automation.wire import (
 from scopecat.daemon.client import DaemonClient
 from scopecat.daemon.procedure_views import ProcedureOperatorView
 from scopecat.kernel.errors import SessionClosedError
+from scopecat.records.analysis import RunAnalysisSubject
 from scopecat.records.application_open import (
     ApplicationOpenReceipt,
     ApplicationOpenTarget,
@@ -50,7 +57,7 @@ class AuthorProcedureOperations:
         definition: ProcedureDefinition[IntentT],
         intent: IntentT,
         *,
-        request_key: str,
+        request_key: str | None = None,
         exit_scope: ExitScope = "current",
     ) -> PreparedAuthorProcedure:
         """Freeze one source-bound command. No imports or execution are refreshed.
@@ -59,6 +66,8 @@ class AuthorProcedureOperations:
         the definition and intent afterwards. Saved source changes require a new
         explicit refresh/reimport before preparing another command. Intent owns
         scientific choices; session experiment defaults are not applied here.
+        An omitted key is generated once for this prepared command; another
+        prepare call creates a separate request, not a retry or history lookup.
         """
         from scopecat.application.author_imports import require_procedure_source
 
@@ -74,7 +83,7 @@ class AuthorProcedureOperations:
             self.session,
             ProcedureSubmitCommand(
                 exit_scope=exit_scope,
-                request_key=request_key,
+                request_key=uuid4().hex if request_key is None else request_key,
                 definition=definition.ref,
                 intent=definition.encode_intent(intent),
                 source=ProcedureSource(
@@ -85,10 +94,19 @@ class AuthorProcedureOperations:
             health.deployment_id,
         )
 
-    def list(self, *, limit: int = 50, cursor: int | None = None) -> ProcedureRunPage:
-        """Read a bounded history page without loading source or starting work."""
+    def list(
+        self,
+        *,
+        limit: int = 50,
+        cursor: int | None = None,
+        request_key: str | None = None,
+        state: ProcedureRunState | None = None,
+    ) -> ProcedureRunPage:
+        """Read one page with exact filters; retain filters when passing its cursor."""
         return self.session.list_procedures(
-            ProcedureRunListQuery(limit=limit, cursor=cursor)
+            ProcedureRunListQuery(
+                limit=limit, cursor=cursor, request_key=request_key, state=state
+            )
         )
 
     def get(self, procedure_id: str) -> AuthorProcedure:
@@ -267,6 +285,42 @@ class AuthorProcedure:
             if page.next_cursor is None:
                 raise KeyError(f"Procedure has no step {step_key!r}")
             cursor = page.next_cursor
+
+    def measurement(self, step_key: str) -> RunHandle:
+        """Read a measurement only when the step's newest attempt succeeded."""
+        from scopecat.api.lab import LabClient
+
+        ref = self.output(step_key)
+        if not isinstance(ref, RunOutputRef):
+            raise TypeError(f"Step {step_key!r} does not have a measurement output")
+        return LabClient(self.session).get_run(ref.run_id)
+
+    def analysis(self, step_key: str) -> PublishedAnalysis:
+        """Read an exact publication; never analyze, publish or continue work."""
+        from scopecat.api.lab import LabClient
+        from scopecat.api.project_analysis import RemoteProjectAnalysisOperations
+
+        ref = self.output(step_key)
+        if not isinstance(ref, AnalysisPublicationOutputRef):
+            raise TypeError(f"Step {step_key!r} does not have an analysis output")
+        if isinstance(ref.subject, RunAnalysisSubject):
+            published = (
+                LabClient(self.session)
+                .get_run(ref.subject.run_id)
+                .published_analysis(ref.analysis_record_id)
+            )
+        else:
+            published = RemoteProjectAnalysisOperations(
+                self.session, subject=ref.subject
+            ).published_analysis(ref.analysis_record_id)
+        if (
+            published.id != ref.analysis_record_id
+            or published.view.analysis.subject != ref.subject
+        ):
+            raise ValueError(
+                "published analysis does not match its exact procedure reference"
+            )
+        return published
 
     def cancel(self, *, actor: str, reason: str) -> ProcedureRun:
         return self.session.cancel_procedure(

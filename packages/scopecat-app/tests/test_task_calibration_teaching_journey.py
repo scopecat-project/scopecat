@@ -240,7 +240,7 @@ for case, view in views.items():
     verification = final.output("verify-joint")
     assert isinstance(verification, AnalysisPublicationOutputRef)
     decision = (
-        session.published_analysis(verification.analysis_record_id)
+        final.analysis("verify-joint")
         .fact("decision")
         .value
     )
@@ -313,7 +313,7 @@ for case, saved in evidence["tasks"].items():
     final = session.procedures.get(saved["final"])
     assert final.snapshot.source.model_dump(mode="json") == saved["task"]["source"]
     decision = (
-        session.published_analysis(final.output("verify-joint").analysis_record_id)
+        final.analysis("verify-joint")
         .fact("decision")
         .value
     )

@@ -68,7 +68,10 @@ def _wait(handle: AuthorProcedure, state: str) -> None:
     pytest.fail(str(handle.progress()))
 
 
-def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
+@pytest.mark.parametrize("request_key", [None, "ordinary-retry"])
+def test_managed_source_retry_disconnect_and_continue(
+    tmp_path: Path, request_key: str | None
+) -> None:
     project = initialize_project(tmp_path / "ordinary")
     manifest = project.root / "scopecat.toml"
     manifest.write_text(
@@ -107,8 +110,17 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                 ),
             ):
                 prepared = author.procedures.prepare(
-                    old_definition, old_intent, request_key="ordinary-retry"
+                    old_definition, old_intent, request_key=request_key
                 )
+                another = author.procedures.prepare(old_definition, old_intent)
+                assert another.command.request_key != prepared.command.request_key
+                assert another.command.source == prepared.command.source
+                if request_key is not None:
+                    assert prepared.command.request_key == request_key
+                else:
+                    from uuid import UUID
+
+                    assert UUID(prepared.command.request_key).version == 4
                 # The command owns detached, recursively frozen JSON containers.
                 old_intent.tags.append("caller mutation")
                 assert prepared.command.intent["tags"] == ("source-bound",)
@@ -171,8 +183,8 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                 assert prepared.reconnect(reconnected).submit().id == handle.id
                 assert (
                     len(
-                        reconnected.list_procedures(
-                            ProcedureRunListQuery(request_key="ordinary-retry")
+                        reconnected.procedures.list(
+                            request_key=prepared.command.request_key, state="closed"
                         ).items
                     )
                     == 1
@@ -239,6 +251,20 @@ def test_managed_source_retry_disconnect_and_continue(tmp_path: Path) -> None:
                 cancelled.cancel(actor="test-author", reason="Done testing")
                 closure = cancelled.snapshot.closure
                 assert closure is not None and closure.status == "cancelled"
+                first = reconnected.procedures.list(state="closed", limit=1)
+                assert [item.procedure_run_id for item in first.items] == [cancelled.id]
+                assert first.next_cursor is not None
+                second = reconnected.procedures.list(
+                    state="closed", limit=1, cursor=first.next_cursor
+                )
+                assert [item.procedure_run_id for item in second.items] == [handle.id]
+                assert not reconnected.procedures.list(
+                    request_key=prepared.command.request_key[:-1]
+                ).items
+                assert not reconnected.procedures.list(
+                    request_key=prepared.command.request_key, state="waiting_for_input"
+                ).items
+
     finally:
         release_notebook_imports(project.root)
         stop_project(project)

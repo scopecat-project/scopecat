@@ -546,8 +546,8 @@ if trial.startswith("zero-"):
         health = session.procedures.get(saved.procedure_run_id)
         assert health.snapshot.closure.status == "succeeded"
         assert len(health.steps().items) == 2
-        measured = session.run(health.output("check").run_id)
-        report = measured.published_analysis(health.output("assess").analysis_record_id)
+        measured = health.measurement("check")
+        report = health.analysis("assess")
         result = report.fact_as("check", CHECK_RESULT)
         assert result.passed is expected
         assert not report.parameter_proposals
@@ -607,7 +607,7 @@ from pathlib import Path
 
 runs = session.list_runs(limit=100).items
 baseline_key = "baseline" if trial.startswith("zero-") else "baseline-q0"
-run = session.run(request.output(baseline_key).run_id)
+run = request.measurement(baseline_key)
 raw = {key: list(run.measurements()[key].require_values())
        for key in ("setting", "residual")}
 evidence = {
@@ -642,14 +642,14 @@ assert request.snapshot.source.model_dump(mode="json") == evidence["source"]
 assert request.snapshot.model_dump(mode="json")["intent"] == evidence["intent"]
 head = session.parameters.checkout(evidence["trial"]).head
 assert head.model_dump(mode="json") == evidence["accepted"]
-run = session.run(request.output(evidence["baseline_key"]).run_id)
+run = request.measurement(evidence["baseline_key"])
 for key, values in evidence["raw"].items():
     assert list(run.measurements()[key].require_values()) == values
 runs = session.list_runs(limit=100).items
 assert {r.run_id for r in runs} == set(evidence["run_ids"])
 rejected = session.procedures.get(evidence["rejected"])
 key = "verify" if evidence["trial"].startswith("zero-") else "verify-joint"
-verification = session.published_analysis(rejected.output(key).analysis_record_id)
+verification = rejected.analysis(key)
 assert not verification.fact("decision").value["accepted"]
 session.close()
 """
