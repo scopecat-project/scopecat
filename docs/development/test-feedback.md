@@ -95,8 +95,9 @@ is manual. Its profile gate checks every selected job and expected skip:
 
 | Profile | Use and coverage |
 | --- | --- |
-| `full` | Integrated qualification: Linux/Windows Python, both browser shards, benchmark, isolated installed wheels, offline delivery and shipped teaching Notebooks, plus static/UI/docs checks |
-| `local-application` | Bounded installation trial: UI build, both browser shards and Linux/Windows installed/offline teaching checks; pair with successful PR CI |
+| `full` | Integrated qualification: Linux/Windows Python, both browser shards, benchmark, isolated installed wheels, relocated runtime teaching and separate legacy offline-installer regression, plus static/UI/docs checks |
+| `local-application` | Bounded installation trial: UI build, both browser shards and Linux/Windows installed-artifacts checks; pair with successful PR CI |
+| `teaching` | UI artifact producer and Linux/Windows installed-artifacts only: independent framework validation, separate legacy installer regression, and relocated Windows application/Linux runtime fixture with format-2 Help/kernel and recovery checks; pair with successful PR CI |
 | `browser` | UI artifact producer and both real-daemon browser shards |
 | `service-lifecycle` | Windows/Linux service lifecycle and reset-backup qualification |
 | `native-distribution` | Mac/Windows native packaging and installer qualification; see [desktop packaging](architecture/desktop-packaging.md) |
