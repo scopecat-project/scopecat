@@ -273,6 +273,50 @@ def test_verify_rejects_damaged_or_unsafe_snapshot(tmp_path: Path, damage: str) 
     assert not (tmp_path / "restored").exists()
 
 
+@pytest.mark.parametrize(
+    ("code", "phase", "skipped"),
+    [
+        (errno.EACCES, "link", True),
+        (errno.EPERM, "link", True),
+        (errno.ENOSYS, "link", True),
+        (errno.ENOTSUP, "link", True),
+        (1314, "link", True),
+        (errno.ENOENT, "link", False),
+        (errno.EEXIST, "link", False),
+        (errno.EIO, "link", False),
+        (errno.EACCES, "product", False),
+    ],
+)
+def test_snapshot_symlink_skip_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: int,
+    phase: str,
+    skipped: bool,
+) -> None:
+    error = OSError(code, "injected symlink boundary failure")
+    if code == 1314:
+        monkeypatch.setattr(error, "winerror", 1314, raising=False)
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise error
+
+    if phase == "link":
+        monkeypatch.setattr(Path, "symlink_to", fail)
+    else:
+        # No link capability is needed to verify the product exception boundary.
+        def no_link(*_args: object, **_kwargs: object) -> None:
+            pass
+
+        monkeypatch.setattr(Path, "symlink_to", no_link)
+        monkeypatch.setattr(CliRunner, "invoke", fail)
+
+    with pytest.raises(pytest.skip.Exception if skipped else OSError) as caught:
+        test_verify_rejects_damaged_or_unsafe_snapshot(tmp_path, "symlink")
+    if not skipped:
+        assert caught.value is error
+
+
 def test_snapshot_and_restore_refuse_existing_destinations(tmp_path: Path) -> None:
     project = _project(tmp_path / "source")
     snapshot = tmp_path / "snapshot"
