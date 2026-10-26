@@ -500,7 +500,7 @@ integration_paths = [
   "packages/scopecat-app/tests/test_desktop_files.py",
   "packages/scopecat-app/tests/test_author_notebook.py",
   "packages/scopecat-app/tests/test_notebook_managed_procedure.py",
-  "packages/scopecat-app/tests/test_calibration_smoke.py",
+  "packages/scopecat-app/tests/calibration/test_calibration_smoke.py",
   "packages/scopecat-app/tests/test_delivery_recipe.py",
   "packages/scopecat-app/tests/test_entry.py",
   "packages/scopecat-app/tests/test_first_run_journey.py",
@@ -519,7 +519,7 @@ journey_paths = [
   "packages/scopecat-app/tests/test_editing_teaching_journey.py",
   "packages/scopecat-app/tests/test_data_reset.py",
   "packages/scopecat-app/tests/test_platform_environment.py",
-  "packages/scopecat-app/tests/test_array_maintenance.py",
+  "packages/scopecat-app/tests/calibration/test_array_maintenance.py",
   "packages/scopecat-app/tests/test_installed_adapter_journey.py",
   "packages/scopecat-app/tests/test_calibration_teaching_journey.py",
   "packages/scopecat-app/tests/test_task_calibration_teaching_journey.py",
@@ -539,7 +539,7 @@ journey_paths = [
 # Windows run 34757173348: summed setup/call/teardown seconds per file.
 [tool.scopecat-tests.weights]
 # Ubuntu run 35891413427: newly classified qualification journeys.
-"packages/scopecat-app/tests/test_array_maintenance.py" = 231.2
+"packages/scopecat-app/tests/calibration/test_array_maintenance.py" = 231.2
 "packages/scopecat-app/tests/test_installed_adapter_journey.py" = 45.2
 "testing/reference_lab/tests/test_acceptance.py" = 37.3
 "testing/reference_lab/tests/test_analysis_recovery.py" = 6.1
@@ -574,7 +574,7 @@ journey_paths = [
 "packages/scopecat-server/tests/test_snapshot_integration.py" = 44.7
 
 # Ubuntu core run 37631300685: files costing >=5s, summed setup/call/teardown.
-"packages/scopecat-app/tests/test_calibration_smoke.py" = 24.8
+"packages/scopecat-app/tests/calibration/test_calibration_smoke.py" = 24.8
 "packages/scopecat-app/tests/test_first_run_journey.py" = 12.7
 "packages/scopecat-app/tests/test_native_windows_probe.py" = 17.2
 "packages/scopecat-app/tests/test_notebook_managed_procedure.py" = 9.0
