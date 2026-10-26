@@ -1,58 +1,42 @@
-# Measurement data workflows
+# 测量数据工作流 {#measurement-data-workflows}
 
-For desktop file opening, comparison and export, see
-[Open and share recorded data](open-and-share-data.md).
+桌面中的文件打开、比较与导出见[打开并共享记录数据](open-and-share-data.md)。
+计算结果的类型化读取入口见[计算与类型化读取](compute-and-read.md)。
 
-Scopecat exposes recorded measurements as one labeled `Dataset`. Its schema
-comes from the experiment result: variable identities, roles, data types,
-units, point-domain layout, local dimensions, and recording groups are retained
-without asking notebook code or the GUI to infer them from values.
+Scopecat 将记录的测量数据呈现为一个带标签的 `Dataset`。其 schema 来自实验结果：
+变量身份、角色、数据类型、单位、点域布局、局部维度和记录组都会保留，
+无需 Notebook 代码或 GUI 根据值反推这些信息。
 
-The [experiment dataflow model](../concepts/experiment-dataflow.md) explains what becomes
-durable and how to declare grids, point clouds, repeat, and traversal. This guide
-starts after records exist and explains how to inspect, select, and convert
-them.
+[实验数据流模型](../concepts/experiment-dataflow.md)说明哪些内容会持久化，以及如何声明网格、
+点云、重复和遍历。本指南从已有记录开始，介绍检查、选择和转换数据的方法。
 
-## Understand the recorded shape
+## 理解记录的形状 {#understand-the-recorded-shape}
 
-Every dataset has a `point` dimension. Scalar variables have one value per
-logical point. An acquisition trace or waveform adds its declared local
-dimensions after `point`; coordinates and observables in the same recording
-group stay aligned on those dimensions.
+每个数据集都有 `point` 维度。标量变量在每个逻辑点有一个值；采集轨迹或波形则在 `point`
+之后增加声明的局部维度。同一记录组的坐标和观测量在这些维度上保持对齐。
 
-The schema also records whether points came from a `product_grid` or a
-`point_cloud`. Consumers use that declaration rather than guessing a grid from
-coincidentally regular coordinate values. Repeat is an ordinary typed point
-coordinate when present. Physical traversal never changes logical point
-identity or durable row order.
+schema 还会记录点来自 `product_grid` 还是 `point_cloud`。消费方使用该声明，
+不会因为坐标值恰好规则就猜测它是网格。存在重复维度时，repeat 是普通的类型化点坐标。
+物理遍历顺序不会改变逻辑点身份或持久化行顺序。
 
-Unavailable data retains its declared dtype, unit, and shape together with a
-typed reason such as `missing`, `invalid`, or `overload`. It is not replaced by
-an arbitrary sentinel. Point-local experiment compute propagates unavailable
-measured inputs without invoking the user kernel; filtering those rows remains
-an explicit analysis decision.
+不可用数据会保留声明的 dtype、单位和形状，以及 `missing`、`invalid` 或 `overload` 等类型化原因，
+不会被任意哨兵值替换。实验点内的计算遇到不可用测量输入时，会传播不可用状态而不调用用户计算函数；
+是否过滤这些行仍由分析显式决定。
 
-### Entity-indexed results
+### 按实体索引的结果 {#entity-indexed-results}
 
-Homogeneous results returned for several entities are recorded as one variable
-with an entity dimension, rather than as one variable per entity. For example,
-a returned `PerEntity[NetworkSweepProducts]` produces one `frequency` variable
-and one `s_parameter` variable. Their shape begins with
-`(point, logical_device, ...)`, and the durable dimension index stores the
-ordered `(kind, id)` identities and the product source corresponding to each
-position.
+多个实体返回的同质结果记录为带实体维度的一个变量，而不是每个实体一个变量。
+例如返回 `PerEntity[NetworkSweepProducts]` 会产生一个 `frequency` 变量和一个 `s_parameter` 变量。
+它们的形状以 `(point, logical_device, ...)` 开头；持久化维度索引保存有序的 `(kind, id)` 身份，
+以及各位置对应的产物来源。
 
-`invocation.output` preserves the experiment function's authored return type,
-including `PerEntity` identity mappings. `invocation.result_ref(path)` exposes
-the durable handle for a returned path; use `entity_result_ref(path)` for a
-statically typed array `RecordRef`. This keeps static authoring types honest
-while the recording boundary turns homogeneous product mappings into data axes.
-Heterogeneous mappings continue to expand as structured result paths.
-When a grouped value is not part of the return tree, select the same layout
-explicitly with
-`experiment.stack_entities(products, record_id="readout", axis="qubit")`.
+`invocation.output` 保留实验函数声明的返回类型，包括 `PerEntity` 身份映射。
+`invocation.result_ref(path)` 提供返回路径的持久化句柄；需要静态类型为数组的 `RecordRef` 时，
+使用 `entity_result_ref(path)`。这样既保留真实的静态作者类型，又允许记录边界将同质产物映射变为数据轴。
+异质映射仍展开为结构化结果路径。分组值不属于返回树时，可显式选择同一布局：
+`experiment.stack_entities(products, record_id="readout", axis="qubit")`。
 
-Select entities by identity rather than position:
+按身份而不是位置选择实体：
 
 ```python
 q1 = data.sel(logical_device="q1")
@@ -60,45 +44,35 @@ xds = data.to_xarray()
 assert xds.coords["logical_device"].values.tolist() == ["q0", "q1"]
 ```
 
-Entity identity is always the complete `(kind, id)` pair. A homogeneous axis
-uses readable ids as its Xarray coordinate labels; a mixed-kind axis uses a
-collision-free canonical identity key and keeps the readable ids separately in
-`scopecat_entity_labels_json`. The ordered axis also has a stable fingerprint.
-Authored entity `RecordRef` handles bind that fingerprint, so a handle cannot be
-silently reused after an entity axis has changed.
+实体身份始终是完整的 `(kind, id)` 对。同种类实体轴使用可读 ID 作为 Xarray 坐标标签；
+混合种类轴使用无冲突的规范身份键，并在 `scopecat_entity_labels_json` 中另存可读 ID。
+有序轴还带有稳定指纹。作者声明的实体 `RecordRef` 句柄绑定该指纹，因此实体轴改变后，
+旧句柄不会被静默复用。
 
-Align datasets before comparing entity-indexed variables:
+比较按实体索引的变量前，先对齐数据集：
 
 ```python
 left, right = left.align_entities(right, "logical_device", join="inner")
 # join="outer" keeps the union in left-first order and masks absent leaves.
 ```
 
-The default `join="exact"` requires the same identities in the same order.
-`inner` keeps shared identities in the left dataset's order. `outer` appends
-right-only identities, records `missing` availability for absent fixed-shape
-array leaves, and stores null product-source and acquisition-evidence entries
-for those positions. Use `reindex_entities(dimension, entities)` when one
-explicit target order is already known. For an absent entity-local ragged
-value, outer alignment inserts a `MeasurementUnavailable` segment with an
-unknown local extent. It contributes no observations while preserving the
-requested entity position and its missing-data reason.
+默认的 `join="exact"` 要求身份及其顺序完全一致。`inner` 按左侧数据集的顺序保留共有身份。
+`outer` 在末尾追加右侧独有身份，对缺失的固定形状数组叶记录 `missing` 可用状态，
+并将这些位置的产物来源和采集证据条目存为空值。已知显式目标顺序时，使用
+`reindex_entities(dimension, entities)`。实体局部的不等长值缺失时，外连接插入局部长度未知的
+`MeasurementUnavailable` 分段。它不贡献观测值，但保留请求的实体位置和缺失原因。
 
-For unit-bearing scalar or array variables, `magnitudes("mV")` performs the
-same linear conversion while preserving array shape and partial-value masks;
-`require_magnitudes("mV")` additionally rejects whole unavailable rows.
+对于带单位的标量或数组变量，`magnitudes("mV")` 执行相同的线性换算，并保留数组形状和部分值掩码；
+`require_magnitudes("mV")` 还会拒绝整行不可用的数据。
 
-When only some entity, shot, or sample leaves fail, the value remains a
-`MeasurementArray` with a read-only boolean availability mask. Native Dataset
-access returns a NumPy masked array, Xarray emits `<variable>__valid` and
-`<variable>__unavailable_reason` arrays on the same dimensions, and Arrow uses
-null leaves inside the nested array. A whole-value failure still uses
-`MeasurementUnavailable`; all-success values carry no mask or diagnostic
-sidecar.
+只有部分实体、shot 或 sample 叶失败时，值仍为 `MeasurementArray`，并携带只读布尔可用性掩码。
+原生 Dataset 访问返回 NumPy 掩码数组，Xarray 在相同维度上输出 `<variable>__valid` 和
+`<variable>__unavailable_reason` 数组，Arrow 则在嵌套数组中使用空值叶。
+整个值失败时仍使用 `MeasurementUnavailable`；全部成功的值不携带掩码或附加诊断数据。
 
-### Variable-length results
+### 变长结果 {#variable-length-results}
 
-An acquisition axis with no fixed extent is ragged:
+未固定长度的采集轴是不等长（ragged）轴：
 
 ```python
 from scopecat.sdk.instruments.declarations import (
@@ -118,39 +92,29 @@ class CaptureResults:
 def capture_until_trigger(self) -> None: ...
 ```
 
-Each point may return a different number of samples. Scopecat still validates
-rank, dtype, and unit; only the ragged dimension's extent may vary. Use
-`axis(size=1024)` for a fixed extent or `axis(size="points")` when instrument
-state determines one fixed extent.
+各点可以返回不同数量的样本。Scopecat 仍验证维数、dtype 和单位；只有不等长维度的长度可以变化。
+固定长度使用 `axis(size=1024)`；若由仪器状态确定一个固定长度，使用 `axis(size="points")`。
 
-Ragged arrays preserve each point-local shape and are never padded. The native
-Xarray view carries parent-point and local-index coordinates, pandas point
-layout keeps each array in one cell, and an observation projection emits one
-row per local sample.
+不等长数组保留每个点内的形状，绝不填充补齐。原生 Xarray 视图携带父点和局部索引坐标，
+pandas 的点布局将每个数组放在一个单元格中，观测布局投影则为每个局部样本输出一行。
 
-An entity-indexed ragged variable is represented by
-`MeasurementSegmentedArray`. Its `segments` stay aligned to the entity axis;
-each segment is either one rectangular `MeasurementArray` or a
-`MeasurementUnavailable` value with its own local shape. The aggregate `shape`
-keeps the entity count and reports `None` where segment extents differ or are
-unknown. Flattened `values` and `availability` remain available for native
-observation processing, while `segments` preserve the boundaries needed for
-per-entity inspection and Arrow round trips.
+按实体索引的不等长变量用 `MeasurementSegmentedArray` 表示。其 `segments` 与实体轴保持对齐；
+每段是一个矩形 `MeasurementArray`，或带有自身局部形状的 `MeasurementUnavailable` 值。
+聚合的 `shape` 保留实体数量，在分段长度不同或未知的位置报告 `None`。
+扁平化的 `values` 和 `availability` 仍可用于原生观测处理；`segments` 则保留逐实体检查和
+Arrow 往返所需的分段边界。
 
-Available `MeasurementArray.values` are read-only, C-contiguous NumPy arrays
-with the declared dtype. Available scalar values are normalized to the declared
-Python type. Complex values are native `complex` in Python and `{real, imag}`
-objects in JSON and Arrow structures.
+可用的 `MeasurementArray.values` 是采用声明 dtype 的只读、C 连续 NumPy 数组。
+可用标量会归一化为声明的 Python 类型。复数在 Python 中为原生 `complex`，
+在 JSON 和 Arrow 结构中为 `{real, imag}` 对象。
 
-If unavailable data hides a ragged extent, an aligned coordinate or observable
-in the same recording group may supply it. When no sibling knows the extent,
-the point contributes zero observations and retains an unknown local extent.
-Variable-length axes currently belong to typed instrument acquisitions;
-domain-program result axes remain fixed-size.
+若不可用数据使某个不等长长度未知，同一记录组中对齐的坐标或观测量可以提供该长度。
+若同组其他变量也不知道长度，该点贡献零个观测值，并保留未知的局部长度。
+变长轴目前属于类型化仪器采集；领域程序的结果轴仍为固定长度。
 
-## Read and select measurements
+## 读取与选择测量数据 {#read-and-select-measurements}
 
-`run.measurements()` returns a schema-backed, lazy facade:
+`run.measurements()` 返回由 schema 支撑的惰性访问接口：
 
 ```python
 data = run.measurements()
@@ -173,29 +137,21 @@ valid = data.where(data["temperature"].is_available())
 groups = data.groupby("amplification")
 ```
 
-The facade binds the manifest schema immediately and loads exact records only
-when an operation needs them. Schema inspection and projected Arrow reading do
-not materialize the complete run. Once row access materializes a snapshot, the
-facade detaches it from the session and reuses it. Until then, row access and
-Arrow iteration require the project connection that created the run handle to
-remain open.
+该接口立即绑定 manifest 中的 schema，只有操作确实需要时才加载精确记录。
+检查 schema 和按投影读取 Arrow 不会将整个运行物化。行访问一旦物化出快照，接口就将其与会话分离并复用它。
+在此之前，行访问和 Arrow 迭代要求创建运行句柄的项目连接保持打开。
 
-Materializing records does not construct an Xarray view. That view is built once
-on demand by `to_xarray()`, variable `.xarray`, or selections that use Xarray;
-Arrow exports and ordinary record access avoid that allocation. Public Xarray
-exports still return detached copies. Checks specific to Xarray alignment, such
-as matching point-local extents within a ragged recording group, occur when the
-view is requested.
+物化记录不会构建 Xarray 视图。只有 `to_xarray()`、变量的 `.xarray` 或使用 Xarray 的选择操作
+才会按需构建一次该视图；Arrow 导出和普通记录访问不会产生这份分配。
+公开的 Xarray 导出仍返回独立副本。Xarray 对齐特有的检查（例如同一不等长记录组内的点内长度匹配）
+发生在请求视图时。
 
-Exact coordinate selection retains every match, including duplicate
-point-cloud coordinates. Numeric selection accepts unit-aware quantities and
-an optional nearest tolerance. `isel(...)` accepts `point` and fixed local
-dimensions without dropping dimensions. `isel_ragged(...)` applies an indexer
-inside each point and requires either an aligned recording group or one
-ungrouped variable. Boolean masks compose with `&`, `|`, and `~`.
+精确坐标选择保留所有匹配，包括重复的点云坐标。数值选择支持带单位的 Quantity 和可选的最近邻容差。
+`isel(...)` 接受 `point` 和固定局部维度，不会移除维度。
+`isel_ragged(...)` 在每个点内应用索引器，要求指定一个对齐的记录组或一个未分组变量。
+布尔掩码可用 `&`、`|` 和 `~` 组合。
 
-When code starts from the experiment's returned value, use the corresponding
-typed view:
+从实验返回值开始操作时，使用对应的类型化视图：
 
 ```python
 result = run.result(spectrum.build().output)
@@ -203,27 +159,21 @@ complete = result.where_available(result.output.temperature)
 rows = complete.rows(build_fit_row)
 ```
 
-`run.result(authored_output)` binds original typed handles when recording keeps
-the same tree shape. If automatic entity stacking transformed the return tree,
-use `invocation.entity_result_ref(path)` for direct dataset access or
-`run.result()` and its persisted result paths. The latter does not rebuild the
-experiment. All variants expose the same dataset as `.dataset`; use
-`run.measurements()` directly when work starts from
-dataset variables instead of the experiment's return tree.
-For native dataclass rows, `run.result().rows_as(MyResult)` validates the persisted
-field paths and types without reconstructing author code. See
-[compute and typed reads](compute-and-read.md#keep-the-type-when-reading) for
-nested/generic dataclasses, units, arrays and availability boundaries.
+当记录保持原返回树形状时，`run.result(authored_output)` 绑定原始类型化句柄。
+如果自动实体堆叠改变了返回树，使用 `invocation.entity_result_ref(path)` 直接访问数据集，
+或使用 `run.result()` 及其持久化结果路径。后一种方式不会重建实验。
+这些方式都通过 `.dataset` 提供同一数据集；若从数据集变量而不是实验返回树开始，直接使用 `run.measurements()`。
+读取原生数据类行时，`run.result().rows_as(MyResult)` 验证持久化字段路径和类型，不重建作者代码。
+嵌套/泛型数据类、单位、数组和可用性边界见[计算与类型化读取](compute-and-read.md#keep-the-type-when-reading)。
+读取历史运行应以已保存的 schema 为准，不要用修改后的实验声明代替原始句柄。
 
-Analysis receives this same facade through `context.measurements()`. Accessing
-it records the exact measurement snapshot dependency. Run artifacts and JSON
-entries are separate published content, not an alternative measurement API.
+分析通过 `context.measurements()` 获得同一个访问接口；访问它会记录精确的测量快照依赖。
+运行产物和 JSON 条目是单独发布的内容，不是另一套测量 API。
 
-## Project into ecosystem libraries
+## 投影到生态库 {#project-into-ecosystem-libraries}
 
-Before handing data to another library, bind external names and target units
-once with `project(...)`. Selectors may be durable variable IDs, typed result
-handles, or persisted result paths:
+将数据交给其他库前，用 `project(...)` 一次性绑定外部名称和目标单位。
+选择器可以是持久化变量 ID、类型化结果句柄或持久化结果路径：
 
 ```python
 projected = result.project(
@@ -247,44 +197,34 @@ polars_frame = projected.to_polars()
 xarray_dataset = projected.to_xarray()
 ```
 
-This projection is an adapter boundary, not an analysis framework. Fit, filter,
-group, and plot with pandas, Polars, Xarray, NumPy, SciPy, or domain libraries
-after conversion. `ProjectionSchema` retains every external name's durable
-variable ID, typed-result path, dtype, dimensions, role, unit, label, and
-recording group. Arrow carries those semantics in schema and field metadata.
+投影是适配边界，不是分析框架。转换后，使用 pandas、Polars、Xarray、NumPy、SciPy 或领域库
+拟合、过滤、分组和绘图。`ProjectionSchema` 为每个外部名称保留持久化变量 ID、类型化结果路径、
+dtype、维度、角色、单位、标签和记录组。Arrow 在 schema 和字段元数据中携带这些语义。
 
-The conversion rules are fixed:
+转换规则固定如下：
 
-| Scopecat value | Arrow / Polars | pandas `numpy` backend | Xarray |
+| Scopecat 值 | Arrow / Polars | pandas `numpy` 后端 | Xarray |
 | --- | --- | --- | --- |
-| point scalar | declared scalar type | native scalar column | `point` variable |
-| point-local array | fixed or variable list | NumPy array per row | named local dimensions |
-| partially available array | nested values with null leaves | NumPy masked array | fill values plus element validity/reasons |
-| `complex128` | `{real, imag}` struct | native complex scalar or array | native complex array |
-| unavailable | null plus optional diagnostics | missing value plus optional diagnostics | fill value plus diagnostics |
+| 点标量 | 声明的标量类型 | 原生标量列 | `point` 变量 |
+| 点内数组 | 固定或变长列表 | 每行一个 NumPy 数组 | 具名局部维度 |
+| 部分可用数组 | 含空值叶的嵌套值 | NumPy 掩码数组 | 填充值及逐元素有效性/原因 |
+| `complex128` | `{real, imag}` 结构 | 原生复数标量或数组 | 原生复数数组 |
+| 不可用值 | 空值及可选诊断 | 缺失值及可选诊断 | 填充值及诊断 |
 
-`to_pandas()` defaults to familiar NumPy/native magnitudes. Pandas does not
-give those values a reliable unit dtype, so choose the output unit of every
-unit-bearing field explicitly at the projection boundary. Selecting the same
-unit as the source is meaningful: it records that the magnitude unit was an
-intentional public analysis choice. If a unit is inherited instead,
-`to_pandas()` warns and lists the affected columns with their actual units.
-`projected.implicit_units` exposes the same check without materializing a
-frame. Use `dtype_backend="pyarrow"` when pandas should retain Arrow extension
-dtypes.
+`to_pandas()` 默认输出熟悉的 NumPy/原生数值大小。pandas 不为这些值提供可靠的单位 dtype，
+因此应在投影边界显式选择每个带单位字段的输出单位。选择与来源相同的单位也有意义：
+它记录该数值单位是公开分析时有意做出的选择。若继承单位，`to_pandas()` 会警告，
+列出受影响列及其实际单位。`projected.implicit_units` 可在不物化 DataFrame 的情况下执行同一检查。
+若需要 pandas 保留 Arrow 扩展 dtype，使用 `dtype_backend="pyarrow"`。
 
-The declared coordinate unit is the experiment-facing scientific unit, not a
-hardware transport preference. For example, a T1 axis may remain in `us` while
-a target converts each value to integer `ns` samples during binding. Do not
-normalize an authored axis to a backend unit merely to simplify lowering;
-doing so also changes the default measurement and projection unit.
+声明的坐标单位是实验面向的科学单位，不是硬件传输偏好。例如，T1 轴可保持 `us`，
+同时目标在绑定时将每个值转换为整数 `ns` 样本。不要只为简化底层编译就把作者声明的轴归一化为后端单位；
+这也会改变默认的测量单位和投影单位。
 
-`diagnostics="reason"` emits a stable `<name>__unavailable_reason` column for
-every selected field; `"full"` also emits JSON metadata. Identity columns are
-included by default and may be omitted with `identity=False`.
+`diagnostics="reason"` 为每个所选字段输出稳定的 `<name>__unavailable_reason` 列；
+`"full"` 还输出 JSON 元数据。默认包含身份列，可用 `identity=False` 省略。
 
-Projection options are supplied together so names are checked against final
-identity, diagnostic, and layout columns:
+投影选项一起提供，以便对照最终的身份列、诊断列和布局列检查名称：
 
 ```python
 observations = result.project(
@@ -300,24 +240,18 @@ observations = result.project(
 )
 ```
 
-`layout="points"` keeps one row per experiment point and represents local
-arrays as nested Arrow columns or NumPy arrays in pandas. The explicit
-`"observations"` layout expands one aligned local-array group into scalar rows:
-point scalars are broadcast, local dimensions receive `<dimension>_index`
-columns, and array coordinates and observables remain aligned. Selected arrays
-must have identical local dimensions and one recording group; incompatible
-selections are rejected instead of independently exploded.
+`layout="points"` 为每个实验点保留一行，局部数组表示为嵌套 Arrow 列，或 pandas 中的 NumPy 数组。
+显式的 `"observations"` 布局将一个对齐的局部数组组展开为标量行：点标量被广播，
+局部维度获得 `<dimension>_index` 列，数组坐标和观测量仍保持对齐。
+所选数组必须具有相同的局部维度，并属于同一记录组；不兼容的选择会被拒绝，不会各自独立展开。
 
-For the pandas NumPy backend, scalar integers, booleans, and strings use pandas
-nullable extension dtypes even when one batch contains no nulls. Floating
-values use `float64`; diagnostics distinguish an unavailable NaN from an
-available scientific NaN. Complex values stay native Python or NumPy complex
-values, with `None` for unavailable scalar observations.
+pandas NumPy 后端的标量整数、布尔值和字符串使用 pandas 可空扩展 dtype，即使某一批没有空值也是如此。
+浮点值使用 `float64`；诊断可区分表示不可用的 NaN 和有效的科学 NaN。
+复数仍是原生 Python 或 NumPy 复数；不可用的标量观测使用 `None`。
 
-### Read large projections incrementally
+### 增量读取大型投影 {#read-large-projections-incrementally}
 
-Use the same projection to create a finite Arrow reader without materializing
-the complete run:
+使用同一投影创建有限的 Arrow 读取器，无需物化整个运行：
 
 ```python
 reader = (
@@ -333,26 +267,20 @@ for record_batch in reader:
     analyze_arrow(record_batch)
 ```
 
-For a run-backed, unsliced dataset, the reader requests projected Arrow pages
-from the daemon. For a materialized or sliced dataset, it splits the local
-projected table. An empty dataset retains its schema and yields no record
-batches.
+对于基于运行且未经切片的数据集，读取器向 daemon 请求投影后的 Arrow 分页。
+对于已物化或已切片的数据集，它拆分本地投影表。空数据集保留 schema，但不产出记录批次。
 
-`batch_size` bounds stored experiment points. Observation layout may expand one
-point into many rows; returned Arrow batches remain bounded. The first page pins
-the currently durable point count, so later appends belong to a later reader.
-This is a finite snapshot, not a live subscription. Live cursors, checkpoints,
-retries, and finalization belong to a future workflow streaming contract.
+`batch_size` 限制存储的实验点数量。观测布局可能将一个点展开成多行；返回的 Arrow 批次仍有大小上限。
+第一页固定当前已持久化的点数，后续追加数据属于之后创建的读取器。
+这是有限快照，不是实时订阅。实时游标、检查点、重试和完成通知属于未来的工作流流式契约。
 
-Small pages can revisit the same stored Arrow chunk. The daemon's run repository
-reuses verified chunk bytes with a 16 MiB payload limit and at most 32 entries;
-least-recently-used entries are evicted and oversized chunks are not retained.
-This bounds retained cache payload, not total process memory or a caller's decoded
-arrays. A cold read still loads a whole immutable blob and its native Arrow chunk.
-Row, variable, and entity projection happen before copying selected values into
-NumPy; this is not storage-level entity pushdown.
+小分页可能重复访问同一个存储 Arrow 块。daemon 的运行仓库复用已验证的块字节，
+缓存载荷上限为 16 MiB，最多 32 个条目；淘汰最近最少使用的条目，不保留超大块。
+这限制的是保留的缓存载荷，不是总进程内存或调用方解码后的数组。
+冷读取仍会加载完整的不可变 blob 和其原生 Arrow 块。
+行、变量和实体投影发生在将选中值复制到 NumPy 之前；这不是存储层的实体过滤下推。
 
-Select one declared entity dimension before opening a reader:
+打开读取器前，选择一个已声明的实体维度：
 
 ```python
 from scopecat.kernel.entity import EntityRef
@@ -369,39 +297,29 @@ for run in runs:
         analyze_arrow(batch)
 ```
 
-Each run is read independently. Selection preserves requested `(kind, id)` order
-regardless of the stored order. Existing entities retain their stored descriptions and source products. Native
-selected records and the trace response also retain acquisition evidence; the Arrow
-table uses its existing availability diagnostics and schema provenance, rather than
-adding acquisition receipt columns. Missing entities retain the requested
-description, produce unavailable values with `entity_alignment="absent"`, and have
-no fabricated acquisition evidence. This uses the same alignment as
-`Dataset.reindex_entities`; it is a single-dimension selection, not a multi-run join.
-The HTTP Arrow and trace interfaces accept at most 32 selected entities per query,
-including missing identities. Point page size is a separate bound.
+每个运行独立读取。选择保留请求的 `(kind, id)` 顺序，不受存储顺序影响。
+已有实体保留存储的描述和来源产物。原生选中记录和 trace 响应也保留采集证据；
+Arrow 表使用已有的可用性诊断和 schema 来源信息，不额外增加采集回执列。
+缺失实体保留请求中的描述，生成带 `entity_alignment="absent"` 的不可用值，不伪造采集证据。
+这与 `Dataset.reindex_entities` 使用同一对齐方式，是单维度选择，不是多个运行的连接操作。
+HTTP Arrow 和 trace 接口每次查询最多接受 32 个选中实体，包括缺失身份；点分页大小有独立上限。
 
-Arrow schema metadata carries the selected measurement schema, `scopecat.run_id`,
-`scopecat.config_content_hash`, and the first page's `scopecat.snapshot_size`.
-A reader pins that count for subsequent pages. Refreshing the operator trace panel
-issues another finite query; it does not subscribe to live updates.
+Arrow schema 元数据携带所选测量 schema、`scopecat.run_id`、`scopecat.config_content_hash`
+和第一页的 `scopecat.snapshot_size`。读取器为后续分页固定该点数。
+刷新操作台 trace 面板会发起另一次有限查询，不会订阅实时更新。
 
-Selection bounds copied value arrays and serialized response width. Whole blob
-bytes, native Arrow buffers, and wide metadata/evidence sidecars can still be read.
-The `entity-reads` component benchmark reports those costs separately from selected
-value bytes, serialized IPC payload bytes, and sampled process RSS. Buffer sizes
-are not peak RAM measurements.
+选择限制复制的值数组和序列化响应的宽度，但仍可能读取完整 blob 字节、原生 Arrow 缓冲区，
+以及宽的元数据/证据附加数据。`entity-reads` 组件基准将这些成本与选中值字节数、
+序列化 IPC 载荷字节数、采样进程 RSS 分别报告。缓冲区大小不是内存峰值测量。
 
-Reuse is keyed by the currently resolved content digest, not a run-local path.
-Cache hits check file identity, size and change timestamps; misses use the normal
-SHA-256 verification. Cached bytes are immutable. This relies on the object store's
-immutable-file contract, not on timestamps as a cryptographic substitute for the
-digest. Reference lookup and the reader's pinned point-count semantics are
-unchanged. There is no process-global cache shared between projects.
+复用以当前解析出的内容摘要为键，不以运行局部路径为键。缓存命中时检查文件身份、大小和变更时间戳；
+未命中时使用正常的 SHA-256 验证。缓存字节不可变。这依赖对象存储的不可变文件契约，
+不把时间戳当成内容摘要的密码学替代。引用查找和读取器固定点数的语义保持不变。
+不存在跨项目共享的进程全局缓存。
 
-### Use native labeled arrays
+### 使用原生带标签数组 {#use-native-labeled-arrays}
 
-Each variable exposes values, labels, validity, failure reasons, and units
-through one Scopecat-owned facade:
+每个变量通过 Scopecat 自己的同一接口提供值、标签、有效性、失败原因和单位：
 
 ```python
 temperature = data["temperature"].dense
@@ -415,16 +333,14 @@ assert waveform.declared_dims == ("point", "sample")
 parent_points = waveform.coords["readout__sample__parent_point_index"]
 ```
 
-`Variable.labeled` works for either layout. `Variable.dense` rejects ragged
-data, while `Variable.observations` rejects dense data, so code cannot silently
-confuse a rectangular tensor with a flattened indexed-observation stream.
-`LabeledMeasurementArray.isel(...)` and `.sel(...)` keep labels and diagnostics
-aligned. Its NumPy values, validity mask, reasons, and coordinates are read-only.
+`Variable.labeled` 适用于两种布局。`Variable.dense` 拒绝不等长数据，
+`Variable.observations` 拒绝密集数据，因此代码不会静默混淆矩形张量和扁平化的带索引观测流。
+`LabeledMeasurementArray.isel(...)` 和 `.sel(...)` 保持标签与诊断对齐。
+其 NumPy 值、有效性掩码、原因和坐标均为只读。
 
-### Use the Xarray view
+### 使用 Xarray 视图 {#use-the-xarray-view}
 
-`Dataset.to_xarray()` preserves Scopecat's labeled point-domain and ragged
-layout without crossing the tabular projection boundary:
+`Dataset.to_xarray()` 保留 Scopecat 带标签的点域和不等长布局，不经过表格投影边界：
 
 ```python
 xds = data.to_xarray()
@@ -434,69 +350,50 @@ assert xds is not another
 grid = data.to_xarray(layout="grid")
 ```
 
-The default layout keeps the durable `point` dimension and works for point
-clouds, partial selections, and ragged results. For a complete product grid,
-`layout="grid"` restores authored axes as dimensions in product order. It
-rejects partial grids, duplicate or missing ordinals, and coordinates that do
-not match their declared grid axes.
+默认布局保留持久化的 `point` 维度，适用于点云、部分选择和不等长结果。
+对于完整的乘积网格，`layout="grid"` 按乘积顺序将作者声明的轴恢复为维度。
+它会拒绝不完整网格、重复或缺失序号，以及不匹配声明网格轴的坐标。
 
-Ragged variables in one recording group share an observation dimension with
-parent-point and local-index coordinates. Observation-validity masks and
-unavailable-reason coordinates keep integer, boolean, and string fill values
-unambiguous. Select points through the facade before exporting: direct
-`data.to_xarray().isel(point=...)` does not cascade to a separate ragged
-observation dimension.
+同一记录组中的不等长变量共享一个观测维度，带有父点和局部索引坐标。
+观测有效性掩码和不可用原因坐标使整数、布尔值和字符串的填充值不产生歧义。
+导出前应通过 Scopecat 接口选择点；直接调用 `data.to_xarray().isel(point=...)`
+不会级联选择独立的不等长观测维度。
 
-Measurement values and metadata are deeply immutable. Every `to_xarray()` call
-returns an independent snapshot, so caller edits cannot affect later selections
-or exports. Complete Arrow, dataframe, and Xarray conversions materialize their
-selected snapshot; use the projected record-batch reader when it does not fit
-in notebook memory.
+测量值和元数据是深度不可变的。每次 `to_xarray()` 都返回独立快照，调用方的编辑不会影响后续选择或导出。
+完整的 Arrow、DataFrame 和 Xarray 转换会物化所选快照；Notebook 内存放不下时，使用投影后的记录批次读取器。
 
-## Select traces by entity identity
+## 按实体身份选择轨迹 {#select-traces-by-entity-identity}
 
-For entity-indexed acquisitions, analysis code can select traces by durable
-identity without finding array offsets:
+对于按实体索引的采集，分析代码可以按持久化身份选择轨迹，无需查找数组偏移：
 
 ```python
 traces = dataset.traces("iq", entities=(sc.EntityRef(id="q1", kind="qubit"),))
 ```
 
-The selection matches `(kind, id)`, preserves stored entity metadata and
-acquisition evidence, and raises for missing identities. Trace point indices
-remain the original dataset indices, including after filtering or reordering.
-This extracts selected traces from a materialized dataset; it does not imply
-server-side filtering or bounded-memory streaming.
+选择匹配 `(kind, id)`，保留存储的实体元数据和采集证据，遇到缺失身份会报错。
+轨迹点索引始终是原数据集的索引，过滤或重排后也是如此。
+这是从已物化的数据集中提取选定轨迹，不表示服务端过滤或有界内存流式读取。
 
-## Let the GUI use the same schema
+## 让 GUI 使用同一 schema {#let-the-gui-use-the-same-schema}
 
-The canonical schema is registered before the first append, so the GUI can
-render live and empty datasets without guessing from JSON values. Roles,
-dimensions, recording groups, labels, units, dtype, and point-domain layout
-determine safe table, scalar, trace, scatter, and product-grid views. Complex
-values expose magnitude, phase, real, and imaginary modes. During execution,
-the newest received point reaches the browser as Arrow IPC; large traces do not
-take a JSON-array detour before rendering.
+规范 schema 在首次追加数据之前就已注册，因此 GUI 能展示实时数据集和空数据集，无需从 JSON 值猜测结构。
+角色、维度、记录组、标签、单位、dtype 和点域布局共同确定安全的表格、标量、轨迹、散点和乘积网格视图。
+复数支持幅值、相位、实部和虚部模式。执行时，最新接收点以 Arrow IPC 到达浏览器；
+大型轨迹无需先转成 JSON 数组再渲染。
 
-Automatic plots request bounded projections and label incomplete live surfaces.
-When no safe automatic visual exists, the typed table remains available. Exact
-candidate selection and browser limits are presentation implementation details
-owned by the UI and its tests rather than part of the scientific data contract.
+自动绘图请求有界投影，并标注不完整的实时曲面。无法安全自动绘图时，类型化表格仍可使用。
+具体绘图候选的选择和浏览器限制属于 UI 及其测试维护的展示实现细节，不是科学数据契约的一部分。
 
-## Publish analysis outputs separately
+## 单独发布分析输出 {#publish-analysis-outputs-separately}
 
-Measurement datasets are immutable run inputs. Fitted datasets, facts, figures,
-reports, and parameter proposals become durable only through an explicit
-analysis publication attached to that run. See
-[Analysis publication](../concepts/analysis-publication.md) for its output ontology,
-lossless native-library boundary, revisions, and optional execution evidence.
+测量数据集是不可变的运行输入。拟合数据集、事实、图形、报告和参数提议，
+只有通过附属于该运行的显式分析发布才会持久化。
+输出分类、无损原生库边界、修订和可选执行证据见[分析发布](../concepts/analysis-publication.md)。
 
+## 为分析命名采集维度 {#name-acquisition-dimensions-for-analysis}
 
-## Name acquisition dimensions for analysis
-
-A quantum program may retain a shot axis such as `shared/rabi-program/shot`.
-Name its exported dimension through the selected field instead of depending on
-that internal path:
+量子程序可能保留 `shared/rabi-program/shot` 这样的 shot 轴。
+通过所选字段为导出维度命名，不要依赖该内部路径：
 
 ```python
 view = run.measurements().project({"amplitude": "amplitude", "iq": "iq"})
@@ -504,16 +401,11 @@ data = view.to_xarray(dims={"iq": ("shot",)})
 mean_iq = data["iq"].mean(dim="shot").values
 ```
 
-Names describe the field's dense non-point axes in order. The `point` dimension
-is retained even for one fixed point. Other selected fields sharing the same
-source axis receive the same name. Conflicting names for a shared axis, names
-that merge independent axes, and collisions with existing variables are errors.
-Two independent acquisitions can use `shot_a` and `shot_b` explicitly.
+名称按顺序描述字段中密集的非 point 轴。即使只有一个固定点，也会保留 `point` 维度。
+共享同一来源轴的其他所选字段获得相同名称。共享轴名称冲突、将独立轴合并的名称，以及与已有变量重名都会报错。
+两个独立采集可以显式使用 `shot_a` 和 `shot_b`。
 
-This is an Xarray export option. Raw dimensions, Arrow/frame exports and the
-projection schema remain unchanged. The exported Dataset retains the source
-projection in `scopecat_projection_json` and the source-to-export dimension map
-in `scopecat_dimension_aliases_json`, both JSON strings suitable for NetCDF.
-Ragged observation layouts retain their existing identities and currently reject
-this dense-axis naming option. No namespace stripping or implicit alignment is
-performed.
+这是 Xarray 导出选项。原始维度、Arrow/DataFrame 导出和投影 schema 保持不变。
+导出的 Dataset 在 `scopecat_projection_json` 中保留来源投影，在 `scopecat_dimension_aliases_json`
+中保留来源到导出维度的映射；二者都是适合 NetCDF 的 JSON 字符串。
+不等长观测布局保留已有身份，目前拒绝这种密集轴命名选项。不会移除命名空间或隐式对齐。
