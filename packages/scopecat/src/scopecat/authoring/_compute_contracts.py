@@ -249,6 +249,16 @@ def _parameter_contracts(
                 validate_compute_annotation(
                     annotation, declared, position=f"input {name!r}"
                 )
+        elif annotation is int:
+            declared = ScalarType(Int())
+        elif annotation is bool:
+            declared = ScalarType(Bool())
+        elif annotation is str:
+            declared = ScalarType(String())
+        elif annotation is float:
+            declared = ScalarType(Float())
+        elif annotation is complex:
+            declared = ScalarType(Complex())
         contracts[name] = annotation, declared
     return contracts
 
@@ -296,13 +306,18 @@ def bind_compute_inputs(
                     path=("compute", compute_id, name),
                 )
                 inputs[name] = value
-            if (
-                isinstance(value, ValueRef)
-                and not isinstance(value.value_type, ScalarType | ArrayType)
-                and target is None
+            if isinstance(value, ValueRef) and not isinstance(
+                value.value_type, ScalarType | ArrayType
             ):
-                # Table inputs keep their structured cell values, including quantities.
-                continue
+                if target is None:
+                    # Unannotated tables keep structured cells, including quantities.
+                    continue
+                raise TypeError(
+                    f"expects {describe_value_type(target)}, "
+                    f"got {describe_value_type(value.value_type)}"
+                )
+            if value is None and target is not None:
+                raise TypeError(f"expects {describe_value_type(target)}, got NoneType")
             source = compute_input_data_type(value)
             source_unit = _unit(source)
             if native is Quantity and target is None:
@@ -321,14 +336,15 @@ def bind_compute_inputs(
                     "declare Quantity or Annotated[..., Unit(...)]/"
                     "ArrayType(unit=...), "
                     "or explicitly convert and extract magnitudes before this call"
+                    + (
+                        f"; expects {describe_value_type(target)}, "
+                        f"got {describe_value_type(source)}"
+                        if target is not None
+                        else ""
+                    )
                 )
             if target is None:
-                if native is float:
-                    target = ScalarType(Float())
-                elif native is complex:
-                    target = ScalarType(Complex())
-                else:
-                    continue
+                continue
             numeric_magnitude = (
                 native is float
                 and _quantity(target)

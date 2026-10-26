@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         assert_type(offset("wrong"), sc.DataRef[complex])
 
 
-def test_plain_native_annotation_is_not_a_symbolic_argument_type_check() -> None:
+def test_plain_int_annotation_checks_symbolic_input_during_build() -> None:
     @sc.compute
     def increment(value: int) -> int:
         return value + 1
@@ -52,9 +52,14 @@ def test_plain_native_annotation_is_not_a_symbolic_argument_type_check() -> None
     def experiment(ctx: sc.ExperimentContext) -> sc.DataRef[int]:
         return increment("wrong")
 
-    # Document the current boundary without promising that arbitrary Python
-    # annotations are checked by the graph builder or changing that boundary.
-    assert isinstance(experiment.build().output, sc.ValueRef)
+    with pytest.raises(
+        TypeError,
+        match=(
+            r"compute 'increment' input 'value' expects Scalar\[Int"
+            r".*got Scalar\[String"
+        ),
+    ):
+        experiment.build()
     with pytest.raises(TypeError):
         increment.eager("wrong")  # pyright: ignore[reportArgumentType]
 
