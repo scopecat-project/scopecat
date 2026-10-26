@@ -500,7 +500,7 @@ export default function App() {
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
                   title="正在加载检查会话"
-                  detail="The compiled waveform workspace is being prepared."
+                  detail="正在准备编译波形检查工作区。"
                 />
               }
             >
