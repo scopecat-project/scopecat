@@ -72,7 +72,7 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
   if (daemonUnavailable) {
     return (
       <WorkspaceMessage
-        title="Connect to the local daemon"
+        title="连接本地 daemon"
         detail="人工判断请求直接从 daemon 管理的项目存储读取。"
         icon={<CircleOff />}
       />
@@ -112,14 +112,14 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
           className="text-accent underline"
           href={`?procedure=${encodeURIComponent(selectedId)}#launch`}
         >
-          Open task
+          打开任务
         </a>
         <button
           type="button"
           className="ml-4 text-accent underline"
           onClick={() => setSelectedId(undefined)}
         >
-          View waiting decisions
+          查看待处理判断
         </button>
       </section>
     );
@@ -150,11 +150,10 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
           <div className="px-2 py-2">
             <div className="mb-1 flex items-center gap-2 text-xs font-extrabold tracking-[0.1em] text-accent uppercase">
               <FlaskConical size={14} aria-hidden="true" />
-              Decisions
+              人工判断
             </div>
             <p className="m-0 text-xs leading-4 text-text-dim">
-              {procedures.data.items.length} experiment request
-              {procedures.data.items.length === 1 ? "" : "s"}
+              {procedures.data.items.length} 个实验请求
             </p>
           </div>
           <div className="grid gap-1.5 max-[900px]:grid-cols-[repeat(auto-fit,minmax(210px,1fr))]">
@@ -173,7 +172,7 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
                 <span className="truncate text-xs font-bold">{procedure.definition.id}</span>
                 <span className="text-xs text-text-dim">
                   {procedure.created_at
-                    ? `Submitted ${formatDateTime(procedure.created_at)}`
+                    ? `提交于 ${formatDateTime(procedure.created_at)}`
                     : "提交时间不可用"}
                 </span>
                 {procedure.resolved_samples.length > 0 && (
@@ -189,7 +188,7 @@ function DecisionWorkspaceBody({ daemonUnavailable }: { daemonUnavailable: boole
                       (procedure.created_at ? formatDateTime(procedure.created_at) : ""),
                 ) && (
                   <span className="text-xs text-text-dim">
-                    Reference · {procedure.procedure_run_id.slice(-8)}
+                    标识 · {procedure.procedure_run_id.slice(-8)}
                   </span>
                 )}
               </button>
@@ -450,18 +449,17 @@ function DecisionEditor({
       </header>
       {draft.invalid && (
         <Controls.Notice role="alert">
-          The request changed or is no longer waiting. Your input is retained, but cannot be
-          recorded against this baseline. Review the task; discard to start a fresh draft.
+          请求已变化或不再等待判断。输入已保留，但无法基于原请求提交。请查看任务；丢弃当前草稿后可重新填写。
         </Controls.Notice>
       )}
       {(draft.status === "failed" || draft.status === "conflict") && (
         <div className="mb-3 space-y-2" role="alert">
           <p>
             {draft.status === "conflict"
-              ? "当前草稿 revision 已变化，冲突副本已保留在草稿历史中。"
+              ? "当前草稿版本已变化，冲突副本已保留在草稿历史中。"
               : draft.discardFailed
-                ? `Discard was not confirmed. Your text is still here; retry discard. ${draft.error ?? ""}`
-                : `Draft save failed. Keep this window open and retry. ${draft.error ?? ""}`}
+                ? `尚未确认丢弃草稿。输入仍保留在此，请重试丢弃。 ${draft.error ?? ""}`
+                : `草稿保存失败。请保持窗口打开并重试。 ${draft.error ?? ""}`}
           </p>
           <Controls.Button
             type="button"
@@ -495,8 +493,7 @@ function DecisionEditor({
         "point_binding" in request.metadata &&
         (!binding || step.inputs[binding.input]?.kind !== "analysis") && (
           <Controls.Notice role="alert">
-            Chart selection declaration is unsupported. Complete the form manually or ask the
-            workflow author to correct the binding.
+            不支持当前图表选点声明。请手动填写表单，或请流程作者修正选点绑定。
           </Controls.Notice>
         )}
       <div
@@ -605,8 +602,8 @@ function DecisionEditor({
             ) : (
               <Controls.Notice role="alert">
                 {!fields
-                  ? "This request contains a response type the form does not support yet. Ask the workflow author to use supported fields or add a matching form control. Your draft is retained; this request cannot be submitted here."
-                  : "The saved response cannot be displayed as a form. Your draft is retained in recovery history. Review the request before discarding it and starting again."}
+                  ? "此请求包含表单尚不支持的回答类型。请流程作者使用支持的字段或补充相应控件。草稿已保留，此处无法提交该请求。"
+                  : "已保存的回答无法显示为表单。草稿已保留在恢复历史中。请核对请求后再丢弃草稿并重新填写。"}
               </Controls.Notice>
             )}
             <Controls.Field>
@@ -619,7 +616,7 @@ function DecisionEditor({
             </Controls.Field>
             {(parseError || submit.isError) && (
               <Controls.Notice role="alert">
-                {parseError ?? errorMessage(submit.error)}
+                {parseError ?? `提交判断失败：${errorMessage(submit.error)}`}
               </Controls.Notice>
             )}
             {submit.isSuccess && (
@@ -677,7 +674,7 @@ function DecisionEditor({
           disabled={draft.discarding || draft.status === "saving" || committing || submit.isPending}
           onClick={() => void draft.discard()}
         >
-          Discard draft (keep recovery history)
+          丢弃草稿（保留恢复历史）
         </Controls.Button>
       )}
     </article>
@@ -691,12 +688,12 @@ function EvidenceLink({ input }: { input: ProcedureStepAttempt["inputs"][number]
     return (
       <a
         className={`${common} no-underline hover:border-line-strong hover:text-text`}
-        title={`Run ${input.run_id}`}
+        title={`测量记录 ${input.run_id}`}
         href={`/?run=${encodeURIComponent(input.run_id)}#runs`}
         rel="noreferrer"
         target="_blank"
       >
-        Open measurement data
+        打开测量数据
       </a>
     );
   }
@@ -714,24 +711,24 @@ function EvidenceLink({ input }: { input: ProcedureStepAttempt["inputs"][number]
         rel="noreferrer"
         target="_blank"
       >
-        analysis · {input.analysis_record_id}
+        分析 · {input.analysis_record_id}
       </a>
     );
   }
   if (input.kind === "interpretation") {
-    return <span className={common}>decision · {input.step_key}</span>;
+    return <span className={common}>判断 · {input.step_key}</span>;
   }
   if (input.kind === "parameter_publish") {
     return (
       <span
         className={common}
-        title={`Generation ${input.branch.generation} · ${input.branch.revision.revision_id}`}
+        title={`代次 ${input.branch.generation} · ${input.branch.revision.revision_id}`}
       >
-        Parameters · {input.branch.name}
+        参数 · {input.branch.name}
       </span>
     );
   }
-  return <span className={common}>configuration · {input.entry_id}</span>;
+  return <span className={common}>配置 · {input.entry_id}</span>;
 }
 
 function initialValue(structure: unknown): unknown {
@@ -811,26 +808,26 @@ function DecisionContinuation({
           receipt?.dispatch_error ??
           (receipt
             ? "已请求继续执行。打开任务可查看进度。"
-            : "The task is no longer waiting. Retry the same submission to check its recorded answer and continuation.")}
+            : "任务已不再等待。请重试同一次提交，以核实已记录的回答与继续执行状态。")}
       </p>
-      {retry.isError && <p role="alert">{errorMessage(retry.error)}</p>}
+      {retry.isError && <p role="alert">重试继续执行失败：{errorMessage(retry.error)}</p>}
       {(!receipt || retryable) && (
         <button
           className={primaryButton}
           disabled={retry.isPending}
           onClick={() => retry.mutate(submitted.command)}
         >
-          {retry.isPending ? "Retrying…" : "重试继续执行"}
+          {retry.isPending ? "正在重试…" : "重试继续执行"}
         </button>
       )}
       <a
         className="text-accent underline"
         href={`?procedure=${encodeURIComponent(submitted.command.procedure_run_id)}#launch`}
       >
-        Open task
+        打开任务
       </a>
       <button className="ml-4 text-accent underline" onClick={onDismiss}>
-        View waiting decisions
+        查看待处理判断
       </button>
     </section>
   );

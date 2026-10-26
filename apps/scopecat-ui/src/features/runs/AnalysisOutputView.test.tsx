@@ -40,7 +40,7 @@ describe("AnalysisOutputView", () => {
     const table = screen.getByRole("table", { name: "Fit parameters" });
     expect(within(table).getByRole("columnheader", { name: "Frequency (GHz)" })).toBeVisible();
     expect(within(table).getByText("5.1")).toBeVisible();
-    expect(within(table).getByText("True")).toBeVisible();
+    expect(within(table).getByText("是")).toBeVisible();
     expect(within(table).getByText("—")).toBeVisible();
     expect(screen.getByText("Metadata")).toBeVisible();
     expect(screen.getByText(/"source": "notebook"/)).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("AnalysisOutputView", () => {
 
     expect(screen.getByText("5000000001")).toHaveAttribute("title", "5000000001");
     expect(screen.getByText("5000000002")).toHaveAttribute("title", "5000000002");
-    expect(screen.getByText("Showing 2 of 3 rows")).toBeVisible();
+    expect(screen.getByText("显示 2 / 3 行")).toBeVisible();
   });
 
   it("renders a content-addressed analysis dataset reference", () => {
@@ -130,46 +130,72 @@ describe("AnalysisOutputView", () => {
     expect(screen.getByRole("button", { name: "Download file" })).toBeVisible();
   });
 
-  it("renders embedded multi-series figure data as an accessible ECharts figure", () => {
-    const output = {
-      kind: "figure",
-      id: "resonance-fit",
-      title: "Resonance fit",
-      metadata: {},
-      content: {
-        total_points: 7,
-        truncated: true,
-        layers: [
-          {
-            id: "data",
-            source: { kind: "dataset", output_id: "fits" },
-            projection: { kind: "line", x: "bias", y: "frequency" },
-            total_points: 7,
-            truncated: true,
-            preview: {
-              kind: "line",
-              x_axis: { label: "Bias", unit: "V" },
-              y_axis: { label: "Frequency", unit: "GHz" },
-              series: [
-                { id: "fit", label: "Fit", x: [-0.1, 0, 0.1], y: [5.0, 5.1, 5.0] },
-                { id: "reference", label: "Reference", x: [-0.1, 0.1], y: [5.05, 5.05] },
-              ],
+  it.each([true, false])(
+    "renders accessible Chinese figure feedback with metadata=%s",
+    (showMetadata) => {
+      const output = {
+        kind: "figure",
+        id: "resonance-fit",
+        title: "Resonance fit",
+        metadata: {},
+        content: {
+          total_points: 7,
+          truncated: true,
+          layers: [
+            {
+              id: "data",
+              source: { kind: "dataset", output_id: "fits" },
+              projection: {
+                kind: "line",
+                x: "bias",
+                y: "frequency",
+                uncertainty: {
+                  style: showMetadata ? "band" : "bars",
+                  lower: "lower",
+                  upper: "upper",
+                  meaning: "Authored interval",
+                },
+              },
+              total_points: 7,
+              truncated: true,
+              preview: {
+                kind: "line",
+                x_axis: { label: "Bias", unit: "V" },
+                y_axis: { label: "Frequency", unit: "GHz" },
+                series: [
+                  { id: "fit", label: "Fit", x: [-0.1, 0, 0.1], y: [5.0, 5.1, 5.0] },
+                  { id: "reference", label: "Reference", x: [-0.1, 0.1], y: [5.05, 5.05] },
+                ],
+              },
             },
-          },
-        ],
-      },
-    } satisfies Extract<AnalysisOutput, { kind: "figure" }>;
+          ],
+        },
+      } satisfies Extract<AnalysisOutput, { kind: "figure" }>;
 
-    render(<AnalysisOutputView output={output} getArtifactDownload={getArtifactDownload} />);
+      render(
+        <AnalysisOutputView
+          output={output}
+          getArtifactDownload={getArtifactDownload}
+          showMetadata={showMetadata}
+        />,
+      );
 
-    expect(
-      screen.getByRole("img", {
-        name: "Resonance fit: Frequency (GHz) by Bias (V)",
-      }),
-    ).toBeVisible();
-    expect(screen.getByText(/Series: Fit, Reference/)).toBeInTheDocument();
-    expect(screen.getByText("Showing 5 of 7 points across 1 layers")).toBeVisible();
-  });
+      expect(
+        screen.getByRole("img", {
+          name: "Resonance fit：Frequency (GHz) 随 Bias (V) 的变化",
+        }),
+      ).toBeVisible();
+      expect(screen.getByRole("img")).toHaveAccessibleDescription(
+        "2 个数据系列，共绘制 5 个点。 系列：Fit、Reference。",
+      );
+      expect(screen.getByText(/预览总计最多 4,096 个点/)).toBeVisible();
+      expect(screen.getByText(/折线/)).toHaveTextContent("5/7 个点");
+      expect(screen.getByText(/Authored interval/, { selector: "p" })).toHaveTextContent(
+        `${showMetadata ? "不确定性带" : "误差棒"}: Authored interval （绝对下界/上界）`,
+      );
+      expect(screen.getByText("显示 5 / 7 个点，共 1 个图层")).toBeVisible();
+    },
+  );
 
   it("preserves opposite finite float extremes in the ECharts option", () => {
     const output = {

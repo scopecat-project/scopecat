@@ -97,13 +97,13 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await expect(a.getByText("草稿已保存", { exact: true })).toBeVisible();
     await b.getByRole("button", { name: "人工判断选项" }).click();
     await b.getByLabel("判断依据备注（可选）").fill("window B conflicting note");
-    await expect(b.getByText(/Your conflicting copy is retained/)).toBeVisible();
-    await expect(b.getByRole("button", { name: "Record decision", exact: true })).toBeDisabled();
+    await expect(b.getByText(/冲突副本已保留/)).toBeVisible();
+    await expect(b.getByRole("button", { name: "提交判断并继续", exact: true })).toBeDisabled();
     await expect(a.getByLabel("frequency", { exact: true })).toHaveValue("1e");
-    await b.getByRole("button", { name: "Recover saved Decision drafts" }).click();
-    await expect(b.getByText(/conflict · revision/)).toBeVisible();
-    await a.getByRole("button", { name: "Record decision", exact: true }).click();
-    await expect(a.getByRole("alert")).toContainText("Complete frequency");
+    await b.getByRole("button", { name: "恢复已保存的判断草稿" }).click();
+    await expect(b.getByText(/冲突 · 版本/)).toBeVisible();
+    await a.getByRole("button", { name: "提交判断并继续", exact: true }).click();
+    await expect(a.getByRole("alert")).toContainText("请填写 frequency");
     await a.goto(`${firstUrl}/#runs`);
     await a.goto(decisionUrl);
     await expect(a.getByLabel("frequency", { exact: true })).toHaveValue("1e");
@@ -137,7 +137,7 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await reopened.getByLabel("frequency", { exact: true }).fill("6.2");
     await expect(reopened.getByText("草稿已保存", { exact: true })).toBeVisible();
     await reopened.route(
-      "**/attempts/1/input",
+      "**/attempts/1/input/continue",
       (route) =>
         route.fulfill({
           status: 503,
@@ -151,10 +151,10 @@ test("Decision drafts survive two pages, navigation, changed port and failed sub
     await reopened.reload();
     await expect(reopened.getByLabel("frequency", { exact: true })).toHaveValue("6.2");
     await reopened.getByLabel("frequency", { exact: true }).press("Enter");
-    await expect(reopened.getByText("判断已保存或任务已不再等待")).toBeVisible();
+    await expect(reopened.getByRole("heading", { name: "判断已保存", exact: true })).toBeVisible();
     await reopened.getByRole("button", { name: "人工判断选项" }).click();
-    await reopened.getByRole("button", { name: "Recover saved Decision drafts" }).click();
-    await expect(reopened.getByText(/history cannot submit a decision/)).toBeVisible();
+    await reopened.getByRole("button", { name: "恢复已保存的判断草稿" }).click();
+    await expect(reopened.getByText(/恢复历史不能提交判断/)).toBeVisible();
     const runs = await reopened.request.get(`${secondUrl}/api/v1/runs`);
     expect((await runs.json()).items).toHaveLength(0);
     const state = await reopened.request.get(`${secondUrl}/api/v1/procedures/${procedure}`);

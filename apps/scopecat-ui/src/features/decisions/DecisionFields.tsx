@@ -133,14 +133,14 @@ export function decisionValueError(
   fields: Record<string, DecisionField>,
   value: unknown,
 ): string | undefined {
-  if (!isRecord(value)) return "Complete the decision fields before recording.";
+  if (!isRecord(value)) return "请填写完整后再提交判断。";
   for (const [name, field] of Object.entries(fields)) {
     const item = value[name];
     const valid =
       field.type === "array"
         ? Array.isArray(item) && item.every((entry) => validScalar(field.items, entry))
         : validScalar(field, item);
-    if (!valid) return `Complete ${name.replaceAll("_", " ")} before recording.`;
+    if (!valid) return `请填写 ${name.replaceAll("_", " ")} 后再提交判断。`;
   }
   return undefined;
 }
@@ -156,16 +156,16 @@ export function decisionConstraintError(value: unknown, metadata: unknown): stri
     if (isRecord(rule.required_when) && typeof rule.required_when.field === "string") {
       const choice = rule.required_when;
       const selected = value[choice.field as string] === choice.value;
-      if (selected && item == null) return `Enter ${label} when choosing ${String(choice.value)}.`;
+      if (selected && item == null) return `选择 ${String(choice.value)} 时，请填写 ${label}。`;
       if (!selected && rule.empty_otherwise === true && item != null)
-        return `Leave ${label} empty unless choosing ${String(choice.value)}.`;
+        return `仅在选择 ${String(choice.value)} 时填写 ${label}，其他情况请留空。`;
     }
     if (typeof item !== "number") continue;
     if (
       (typeof rule.minimum === "number" && item < rule.minimum) ||
       (typeof rule.maximum === "number" && item > rule.maximum)
     )
-      return `${label} must be between ${typeof rule.minimum === "number" ? rule.minimum : "−∞"} and ${typeof rule.maximum === "number" ? rule.maximum : "∞"}.`;
+      return `${label} 必须在 ${typeof rule.minimum === "number" ? rule.minimum : "−∞"} 至 ${typeof rule.maximum === "number" ? rule.maximum : "∞"} 之间。`;
   }
   return undefined;
 }
@@ -191,10 +191,10 @@ function ScalarInput({
           onChange(event.target.value === "" ? null : JSON.parse(event.target.value))
         }
       >
-        <option value="">Choose…</option>
+        <option value="">请选择…</option>
         {choices.map((choice, index) => (
           <option key={index} value={JSON.stringify(choice)}>
-            {field.type === "bool" ? (choice ? "Yes" : "No") : String(choice)}
+            {field.type === "bool" ? (choice ? "是" : "否") : String(choice)}
           </option>
         ))}
       </Controls.Select>
@@ -274,12 +274,12 @@ export function DecisionFields({
                   />
                   <Controls.Button
                     type="button"
-                    aria-label={`Remove ${label} ${index + 1}`}
+                    aria-label={`移除 ${label} 第 ${index + 1} 项`}
                     onClick={() =>
                       onChange({ ...value, [name]: items.filter((_, i) => i !== index) })
                     }
                   >
-                    Remove
+                    移除
                   </Controls.Button>
                 </div>
               </div>
@@ -289,7 +289,7 @@ export function DecisionFields({
               className="text-left text-accent"
               onClick={() => onChange({ ...value, [name]: [...items, null] })}
             >
-              Add {label}
+              添加 {label}
             </button>
           </fieldset>
         );

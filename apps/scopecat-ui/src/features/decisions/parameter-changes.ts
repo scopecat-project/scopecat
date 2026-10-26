@@ -56,8 +56,8 @@ export function proposalChanges(delta: ParameterProposalDelta): ValueChange[] {
     return [
       {
         path: `${delta.parameterId}.row_order`,
-        before: "Original row order",
-        after: "Reordered rows · cell values unchanged",
+        before: "原行顺序",
+        after: "行顺序已调整，单元格值未变",
         changeKind: "representation",
       },
     ];

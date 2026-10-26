@@ -199,10 +199,10 @@ function AnalysisTableView({ content, title }: { content: TableContent; title: s
           ))}
         </tbody>
       </table>
-      {rows.length === 0 ? <p className="m-0 p-3 text-xs text-text-dim">No rows</p> : null}
+      {rows.length === 0 ? <p className="m-0 p-3 text-xs text-text-dim">暂无数据行</p> : null}
       {content.truncated ? (
         <p className="m-0 p-3 text-xs text-text-dim">
-          Showing {rows.length} of {content.total_rows} rows
+          显示 {rows.length} / {content.total_rows} 行
         </p>
       ) : null}
     </div>
@@ -239,7 +239,8 @@ function AnalysisFigureView({
         {xLabel} → {yLabel}
       </figcaption>
       <EChart
-        ariaLabel={`${title}: ${yLabel} by ${xLabel}`}
+        ariaLabel={`${title}：${yLabel} 随 ${xLabel} 的变化`}
+        description={`${series.length.toLocaleString()} 个数据系列，共绘制 ${pointCount.toLocaleString()} 个点。${series.length ? ` 系列：${series.map((item) => item.label ?? item.id).join("、")}。` : ""}`}
         height={270}
         onPoint={onPoint}
         option={option}
@@ -248,23 +249,23 @@ function AnalysisFigureView({
         seriesCount={series.length}
       />
       <p className="text-xs text-text-dim">
-        Showing {pointCount} of {content.total_points} points across {content.layers.length} layers
+        显示 {pointCount} / {content.total_points} 个点，共 {content.layers.length} 个图层
       </p>
       {content.truncated && (
         <p className="text-xs text-text-dim">
-          Preview shows the first rows of each source within its share of the 4,096-point budget.
+          预览总计最多 4,096 个点，按各数据源分配的额度显示其起始行。
         </p>
       )}
       <ul className="text-xs text-text-dim">
         {content.layers.map((layer) => (
           <li key={layer.id}>
-            <strong>{layer.id}</strong> · {layer.preview.kind} ·{" "}
+            <strong>{layer.id}</strong> · {layer.preview.kind === "line" ? "折线" : "散点"} ·{" "}
             {layer.preview.series.reduce((n, item) => n + item.x.length, 0)}/{layer.total_points}{" "}
-            points
+            个点
             {layer.projection.uncertainty && (
               <p>
-                {layer.projection.uncertainty.style === "band" ? "Band" : "Error bars"}:{" "}
-                {layer.projection.uncertainty.meaning} (absolute lower/upper bounds)
+                {layer.projection.uncertainty.style === "band" ? "不确定性带" : "误差棒"}:{" "}
+                {layer.projection.uncertainty.meaning} （绝对下界/上界）
               </p>
             )}
             {showMetadata && (
@@ -297,7 +298,7 @@ function AnalysisFigureView({
 
 function formatCell(value: boolean | number | string | null): string {
   if (value === null) return "—";
-  if (typeof value === "boolean") return value ? "True" : "False";
+  if (typeof value === "boolean") return value ? "是" : "否";
   return typeof value === "number" ? exactNumber(value) : value;
 }
 

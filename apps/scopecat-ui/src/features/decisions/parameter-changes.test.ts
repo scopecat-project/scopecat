@@ -63,8 +63,8 @@ it("does not invent scientific edits for an authoritative empty keyed-cell diff"
   expect(changes).toEqual([
     {
       path: "channels.row_order",
-      before: "Original row order",
-      after: "Reordered rows · cell values unchanged",
+      before: "原行顺序",
+      after: "行顺序已调整，单元格值未变",
       changeKind: "representation",
     },
   ]);
