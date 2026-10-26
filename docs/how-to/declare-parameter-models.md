@@ -1,11 +1,12 @@
-# Declare parameters once for editing and experiments
+# 一次声明参数，用于编辑与实验 {#declare-parameters-once-for-editing-and-experiments}
 
-For exploration without a class, start with [dynamic tables](declare-dynamic-parameters.md).
+作者流程从本页的参数声明开始：需要外部手工编辑时，继续阅读
+[JSON 或 pandas 表格交换](exchange-parameter-tables.md)；需要将拟合结果形成候选并收集验证证据时，
+继续阅读[候选验证](verify-parameter-candidates.md)。保存版本只保留参数内容，不代表科学验证通过。
+不需要类的探索可以从[动态表格](declare-dynamic-parameters.md)开始。
 
-Use a `ParameterModel` when the same fields appear in parameter editing,
-experiment inputs and analysis candidate targets. A class attribute identifies a
-field; an instance reads and writes concrete values. No separate field constants,
-row constants or manually assembled lookup types are needed.
+当参数编辑、实验输入和分析候选的目标使用相同字段时，使用 `ParameterModel`。
+类属性标识字段，实例读写具体值；不必另建字段常量、行常量或手工组合查询类型。
 
 ```python
 import scopecat as sc
@@ -17,20 +18,17 @@ class Drive(sc.ParameterModel, table="drive"):
     pi_amplitude: sc.Param[float | None] = sc.param(default=None)
 ```
 
-`Param[T]` reads/writes `T`. `Magnitude[float]` reads/writes numbers in its declared
-unit; its experiment reference carries a `Quantity`. Optional fields describe
-unknown editing values, not nullable numeric experiment inputs. The type system
-does not prove physical unit dimensions or numeric bounds; save/preview uses the
-existing schema checks.
+`Param[T]` 读写 `T`。`Magnitude[float]` 按声明单位读写数值，其实验引用携带 `Quantity`。
+可选字段表示编辑中的未知值，不表示实验数值输入可以为空。类型系统不证明物理量纲或数值边界；
+保存和预览使用已有的 schema 检查。
 
-## Declare choices and initial project values
+## 声明选项与项目初始值 {#declare-choices-and-initial-project-values}
 
-Use `Param[Literal["constant", "cosine_flat_top"]]` for a closed set of strings.
-The same annotation supplies editor completion and the persisted choice constraint.
-`sc.param(default="constant")` only initializes new rows. A model's docstring is
-its table description.
+用 `Param[Literal["constant", "cosine_flat_top"]]` 声明封闭的字符串选项。
+同一注解同时提供编辑器补全和持久化的选项约束。`sc.param(default="constant")` 只初始化新行。
+模型的文档字符串用作表格说明。
 
-A laboratory maintainer can build the initial catalog and snapshot directly:
+实验室维护者可以直接构建初始目录和快照：
 
 ```python
 catalog = sc.parameter_catalog("lab-parameters", Drive)
@@ -40,14 +38,12 @@ initial = sc.parameter_snapshot(
 )
 ```
 
-These return the existing durable records, ready for the laboratory configuration
-builder. An empty list creates an empty table; optional unknown cells remain
-absent. Unit conversion, key validation and choice/bound checks reuse the existing
-configuration validation. This does not install a default or alter a project.
+这些调用返回已有的持久化记录，可交给实验室配置构建器。空列表创建空表；可选字段的未知单元格仍然缺省。
+单位转换、主键验证以及选项和边界检查复用已有的配置验证。这不会安装默认配置，也不会改变项目。
 
-## Create or edit a table
+## 创建或编辑表格 {#create-or-edit-a-table}
 
-Given an existing author session and named parameter branch:
+从已有作者会话和具名参数分支打开工作区：
 
 ```python
 params = author.parameters.workspace("my-parameter-branch")
@@ -62,24 +58,21 @@ row.pi_amplitude = None
 print(params.diff())
 ```
 
-Creation is explicit. On subsequent opens use `params[Drive]`; do not add the
-same row again. Bound rows share edits with `params["drive"]["q0"]`. Reads convert
-units for display without rewriting stored values. Defaults only initialize new
-objects; selecting an existing row never fills unknown cells.
+创建操作必须显式执行。后续打开时使用 `params[Drive]`，不要重复添加同一行。
+绑定的行与 `params["drive"]["q0"]` 共享编辑。读取时按显示单位转换，不改写存储值。
+默认值只初始化新对象；选择已有行不会填充未知值。`save()` 创建保存版本；后续手工编辑仍需再次保存。
 
-Both dataclass and model table views support assignment and deletion:
+数据类和模型的表格视图都支持赋值与删除：
 
 ```python
 params[Drive]["q1"] = Drive(qubit="q1", duration=96)
 del params[Drive]["q1"]
 ```
 
-The supplied key must match the object's key. Editing an existing key directly is
-rejected. Deleting a row invalidates previously selected row views. Renames, key
-changes and unit conversions still use the explicit workspace structure APIs;
-changing a Python class alone never migrates saved data.
+提供的主键必须与对象主键一致，直接编辑已有主键会被拒绝。删除行会使先前选中的行视图失效。
+重命名、主键更改和单位转换仍使用显式的工作区结构 API；只修改 Python 类不会迁移已保存的数据。
 
-## Inspect and copy rows
+## 查看与复制行 {#inspect-and-copy-rows}
 
 ```python
 row = params[Drive]["q0"]
@@ -90,19 +83,17 @@ detached.duration = 96
 params[Drive]["q0"] = detached
 ```
 
-`row.copy()`, `copy.copy(row)` and `copy.deepcopy(row)` produce independent model
-values. Unknown required fields display as `<unknown>` and remain unknown in a
-copy; reading one still raises a useful error. Constructor defaults never fill
-copied unknown cells. A bound view rejects a changed primary key rather than
-silently using a different lookup from the model's experiment references.
+`row.copy()`、`copy.copy(row)` 和 `copy.deepcopy(row)` 生成独立的模型值。
+必需字段的未知值显示为 `<unknown>`，复制后仍为未知值；读取它仍会报出明确错误。
+构造函数默认值不会填充复制的未知单元格。绑定视图会拒绝主键更改，避免与模型的实验引用产生不同查询。
 
-Edit existing scalar values with `params.scalars["repetitions"] = 128`; these use
-the same diff, freeze and save path as table edits. Schema additions are explicit.
+用 `params.scalars["repetitions"] = 128` 编辑已有标量值；它与表格编辑使用相同的差异查看、冻结和保存流程。
+新增 schema 内容必须显式执行。
 
-For external editing, use [JSON or pandas exchange](exchange-parameter-tables.md).
-Imports preview explicit changes and preserve untouched cell origins.
+需要外部手工编辑时，使用 [JSON 或 pandas 表格交换](exchange-parameter-tables.md)。
+导入先预览明确的变更，保留未修改单元格的来源；导入本身不产生验证证据。
 
-## Use fields in an experiment
+## 在实验中使用字段 {#use-fields-in-an-experiment}
 
 ```python
 @sc.experiment(id="lab.duration")
@@ -110,21 +101,17 @@ def duration_probe(context: sc.ExperimentContext) -> sc.ValueRef[sc.Quantity]:
     return sc.parameter_ref(Drive.duration, "q0")
 ```
 
-`parameter_ref` builds the existing symbolic lookup. It does not read the active
-default or capture a Notebook variable. The existing preview/submission path
-binds it to the selected frozen configuration. Later edits cannot alter a prepared
-run. A field is required only when consumed; an unknown pi amplitude does not
-block this duration-only experiment.
+`parameter_ref` 构建已有的符号查询，不读取当前默认配置，也不捕获 Notebook 变量。
+预览和提交流程将它绑定到所选的冻结配置；后续编辑不会改变已准备的运行。
+字段只有在被消费时才是必需的；未知的 pi 振幅不会阻止这个只读取 duration 的实验。
 
-For a composite key, pass values in declaration key order, for example
-`sc.parameter_ref(Pair.duration, ("q0", "q1"))`. Each key component can also be an
-existing supported symbolic scalar input. Inherited fields resolve against the
-selected subclass's table; defining another class does not modify the old class
-or its retained references.
+复合主键按声明顺序传值，例如 `sc.parameter_ref(Pair.duration, ("q0", "q1"))`。
+各主键分量也可以使用已有支持的符号标量输入。继承字段按所选子类的表解析；
+定义另一个类不会修改原类或其已保留的引用。
 
-## Target a retained analysis candidate
+## 指定已保留分析结果的候选目标 {#target-a-retained-analysis-candidate}
 
-With a managed analysis result whose `amplitude` field is accepted as a value:
+已有托管分析结果，且其 `amplitude` 字段可作为值接受时：
 
 ```python
 candidate = author.config.stage(
@@ -136,49 +123,35 @@ candidate = author.config.stage(
 )
 ```
 
-The target field supplies its identity, not evidence. The saved analysis receipt
-remains authoritative, `None` cannot be staged, and independent verification is
-still required before publishing a default. A field from another table is
-rejected. See [candidate verification](verify-parameter-candidates.md).
+目标字段只提供身份，不提供验证证据。已保存的分析回执仍是权威来源，`None` 不能暂存为候选，
+发布前仍需独立验证。来自其他表的字段会被拒绝。后续步骤见[候选验证](verify-parameter-candidates.md)。
 
-Numeric results mapped to a `Magnitude` field use that field's declared unit;
-`Quantity` results retain their explicit physical unit. Editing and candidate
-mapping check declarations against the stored schema using the same compatibility
-rule. Managed receipts remain the source of the actual result values.
+映射到 `Magnitude` 字段的数值结果使用该字段声明的单位；`Quantity` 结果保留其显式物理单位。
+编辑和候选映射使用同一兼容性规则，将声明与存储的 schema 核对。实际结果值仍来自托管回执。
 
-## Maintainer integrations
+## 维护者集成 {#maintainer-integrations}
 
-Use `sc.parameter_table_ref(Drive)` for a compiler/policy input that needs the
-complete frozen table, and `sc.parameter_definition(Drive.duration)` when an
-explicit schema edit needs that column's definition. Specialist analysis code can
-build a proposed cell edit with `sc.parameter_update(Drive.duration, "q0", 96)`;
-it enters the existing proposal/review path and does not activate a default.
+编译器或策略输入需要完整冻结表时，使用 `sc.parameter_table_ref(Drive)`；
+显式 schema 编辑需要列定义时，使用 `sc.parameter_definition(Drive.duration)`。
+专用分析代码可以用 `sc.parameter_update(Drive.duration, "q0", 96)` 构造单元格编辑提议；
+它进入已有的提议与审查流程，不会激活默认配置。
 
-Standard dataclass views remain available for data interoperation. Shared
-laboratory declarations use `ParameterModel`. The former `parameter_field`,
-`parameter_schema`, field/key/assignment/row/cell handles have been removed after
-migrating their readers and writers. Existing snapshots and retained runs keep
-their durable representation; removing Python handles does not migrate storage.
+标准数据类视图仍可用于数据互操作。共享的实验室声明使用 `ParameterModel`。
+原有的 `parameter_field`、`parameter_schema` 和 field/key/assignment/row/cell 句柄已在读写方迁移后移除。
+已有快照和保留的运行维持原有持久化表示；移除 Python 句柄不意味着迁移存储。
 
+## 在适配器中读取有效快照 {#read-effective-snapshots-in-adapters}
 
-## Read effective snapshots in adapters
+配方绑定只需要按主键投影时，使用
+`sc.parameter_table(Drive).lookup(qubit="q0").select("amplitude")`（提供模型的完整主键）。
+创建查询不会读取快照。其 `resolve(snapshot, {})` 返回按声明单位表示的必需值，以及来源主键和字段。
+没有匹配行、匹配多行或所选单元格为未知值时都会报错。列别名使用 `.select(output_name="column_name")`。
+按操作确定主键的方式见[声明式配方输入](../development/architecture/quantum-adapters.md#declarative-calibration-inputs)。
 
-For recipe bindings that only need a keyed projection, use
-`sc.parameter_table(Drive).lookup(qubit="q0").select("amplitude")` (with your model's
-complete key). Creating the query reads no snapshot. Its `resolve(snapshot, {})`
-returns required values with declared units and their source key/fields. Zero or
-multiple matching rows and unknown selected cells are errors. Column aliases use
-`.select(output_name="column_name")`. See [declarative recipe inputs](../development/architecture/quantum-adapters.md#declarative-calibration-inputs)
-for operation-dependent keys.
+`sc.parameter_rows(effective_snapshot, Drive)` 返回使用声明单位的独立 `Drive` 行。
+它通过正常 schema 验证读取所选表，不调用构造函数，也不用字段默认值填充未知单元格。
+必需单元格缺值时在读取时报错；可选字段的未知值为 `None`。表不存在时报错，显式空表返回 `()`。
 
-`sc.parameter_rows(effective_snapshot, Drive)` returns detached `Drive` rows using
-that declaration's units. It reads the selected table through the normal schema
-validation path, without invoking constructors or filling unknown cells from
-field defaults. Missing required cells fail when read; optional unknowns are
-`None`. A missing table is an error, while an explicitly empty table returns `()`.
-
-Use the effective snapshot supplied for the current request/point, including its
-parameter-cell overrides. Editing these detached rows cannot change that snapshot
-or the saved parameter revision. Before retaining values in a compiler cache, freeze
-the fields the recipe consumes into immutable compiler parameters; these rows are
-editable values, not live workspace bindings or immutable cache keys.
+使用当前请求或扫描点提供的有效快照，其中包含参数单元格覆盖值。编辑这些独立行不会改变该快照或保存的参数修订。
+把值保留在编译器缓存前，应将配方消费的字段冻结为不可变的编译器参数；
+这些行是可编辑值，不是实时工作区绑定，也不是不可变缓存键。
