@@ -1,13 +1,13 @@
-# Compute a value and read its typed result
+# 计算数值并读取类型化结果 {#compute-a-value-and-read-its-typed-result}
 
-Start with a working experiment. A function decorated with `@sc.compute` records
-a calculation when called in an experiment or module definition; it does
-not execute the function while defining the experiment. At execution, the function
-receives native Python or NumPy values. Ordinary Python control flow belongs inside
-that function; a measurement reference is not a value you can inspect during
-experiment definition.
+从一个可运行的实验开始。在实验或模块定义中调用 `@sc.compute` 装饰的函数时，
+记录的是一项计算，不会在定义实验时执行函数。执行阶段，函数接收原生 Python 或 NumPy 值。
+普通 Python 控制流应写在该函数内部；测量引用不是定义实验时可以直接检查的值。
 
-## Infer a scalar result
+本页介绍计算和类型化读取；完整的数据选择与导出见[测量数据工作流](use-measurement-data.md)，
+修改计算代码后的步骤见[刷新作者代码](refresh-author-code.md)。
+
+## 推断标量结果 {#infer-a-scalar-result}
 
 ```python
 from dataclasses import dataclass
@@ -37,55 +37,46 @@ class MeanResult[T]:
     iq: T
 ```
 
-Declare the experiment's return type as `MeanResult[sc.DataRef[complex]]`.
-Inside its body, after obtaining `shots`:
+将实验返回类型声明为 `MeanResult[sc.DataRef[complex]]`。
+在实验体内取得 `shots` 后：
 
 ```python
 mean = mean_iq(shots)
 return MeanResult(mean)
 ```
 
-To test the numerical function with real arrays, call its explicit native entry:
+使用真实数组测试数值函数时，调用显式的原生入口：
 
 ```python
 assert mean_iq.eager(np.array([1 + 2j, 3 + 4j])) == 2 + 3j
 ```
 
-Calling `mean_iq(...)` outside a definition raises an error directing you to
-`.eager(...)`. Inside a definition, even an all-literal call records a node; it
-does not silently switch to immediate execution. A native function body receives
-real values and can use ordinary NumPy/SciPy code. Calls to other decorated
-helpers inside that body should use their `.eager(...)` entry too.
+在定义之外调用 `mean_iq(...)` 会报错，并提示使用 `.eager(...)`。
+在定义内部，即使实参全为字面值，调用也会记录节点，不会悄悄切换成立即执行。
+原生函数体接收真实值，可以使用普通 NumPy/SciPy 代码；在其内部调用其他装饰后的辅助函数时，
+也应使用这些函数的 `.eager(...)` 入口。
 
-`sc.Unit("ratio")` supplements the native `complex` type; scalar shape and dtype
-are inferred. A shared alias such as `type IQ = Annotated[complex, sc.Unit("ratio")]`
-can be used both for the compute return and a native dataclass reader's field.
-Return annotations declare the stored unit; retained readers check that unit exactly.
-Compute input contracts normalize compatible units at the consumer boundary;
-they do not rewrite stored measurements.
-For real scalar computations with units, use `Annotated[sc.Quantity, sc.Unit("V")]`
-and return a `sc.Quantity`. A plain `float` still denotes a unitless computation.
-Array computations still need explicit `ArrayType` dimensions; a unit alone cannot
-specify their local axes. Native array readers may use `Annotated[NDArray[...],
-sc.Unit("V")]` when only dtype and unit, rather than exact axes/extents, are required.
+`sc.Unit("ratio")` 补充原生 `complex` 类型；标量形状和 dtype 由系统推断。
+共享别名（例如 `type IQ = Annotated[complex, sc.Unit("ratio")]`）既可用于计算返回值，
+也可用于原生数据类读取器的字段。返回注解声明存储单位，历史结果读取器精确检查该单位。
+计算输入契约在消费边界对兼容单位做归一化，不会改写已存储的测量值。
+带单位的实数标量计算应使用 `Annotated[sc.Quantity, sc.Unit("V")]` 并返回 `sc.Quantity`；
+普通 `float` 返回类型仍表示无单位计算。数组计算还需用 `ArrayType` 显式声明维度，
+单独一个单位无法指定局部轴。原生数组读取器只需检查 dtype 和单位、不要求精确轴和长度时，
+可使用 `Annotated[NDArray[...], sc.Unit("V")]`。
 
-There is no separate `output_type` or author-side `cast`. Without a unit, the
-return annotation can simply be `-> complex`. The same inference supports `bool`,
-`int`, `float` and `str`. Arrays need an `Annotated` `ArrayType` with their dtype,
-unit and local dimensions. Native and declared types must agree; a real array
-annotation paired with a complex array schema is rejected during construction.
+这里不需要单独的 `output_type` 或作者侧 `cast`。无单位时，返回注解可以直接写成 `-> complex`；
+`bool`、`int`、`float` 和 `str` 也支持同样的推断。数组需要带有 dtype、单位和局部维度的
+`Annotated` `ArrayType`。原生类型必须与声明类型一致；实数数组注解搭配复数数组 schema
+会在构建时报错。
 
-`DataRef[T]` describes a value of type `T` that will exist during execution.
-The framework chooses the appropriate computation placement from the inputs;
-ordinary result declarations do not need to choose `ValueRef` or `ProductRef`.
-Direct calls support positional-or-keyword and keyword-only parameters, including
-defaults. Positional-only parameters, `*args` and `**kwargs` are rejected when
-decorating. The result type is statically preserved, and `.eager` retains full
-native argument checking. Symbolic argument names and required arguments are
-checked during graph construction; symbolic calls do not yet statically transform
-each native argument type into its corresponding reference type.
+`DataRef[T]` 表示执行时才会存在的 `T` 类型值。框架根据输入选择适当的计算位置；
+普通结果声明不必选择 `ValueRef` 或 `ProductRef`。直接调用支持可按位置或关键字传入的参数，
+以及仅限关键字的参数，也支持默认值。仅限位置的参数、`*args` 和 `**kwargs` 会在装饰时报错。
+返回类型会静态保留，`.eager` 保留完整的原生参数检查。符号调用在构图时检查参数名和必填实参；
+目前还不会在静态类型层面把每个原生参数类型转换为对应的引用类型。
 
-compute 的单位由消费函数声明，不隐式继承调用它的实验。所有普通值、
+计算的单位由消费函数声明，不隐式继承调用它的实验。所有普通值、
 Input/ValueRef 和测量 ProductRef 在进入原生函数前遵循同一规则：
 
 - `x: Quantity` 保留输入单位；函数可显式调用 `x.to("MHz").value`。
@@ -124,7 +115,7 @@ convert 改变引用单位，不移除它。
 `.eager` 是普通 Python 原生入口，不经过符号构图的消费边界；直接调用时应提供
 函数声明单位下的原生值。其他普通 Python 参数注解尚未普遍支持构图时检查。
 
-### 检查发生在哪一层
+### 检查发生在哪一层 {#_1}
 
 | 作者写法 | 可检查的内容 | 仍需作者声明或验证 |
 | --- | --- | --- |
@@ -143,91 +134,72 @@ convert 改变引用单位，不移除它。
 静态负例使用精确诊断 ignore 并开启 unnecessary-ignore 检查；诊断消失同样会失败。
 它们补充作者契约，不替代 installed verifier 或真人使用验证。
 
-`experiment.compute(fn=ordinary_function, ...)` remains available for explicit
-node IDs, output schemas, structured bundles and axis inheritance. When its
-`output_type` is omitted it also preserves the native return type. If reusing a
-decorated function there, pass `fn=mean_iq.eager`.
+`experiment.compute(fn=ordinary_function, ...)` 仍可用于显式节点 ID、输出 schema、
+结构化结果束和轴继承。省略 `output_type` 时，它也会保留原生返回类型。
+在这里复用装饰后的函数，应传入 `fn=mean_iq.eager`。
 
-Calculations should return data without changing inputs or controlling devices.
-This decorator does not trace individual Python operations, compile NumPy for an
-instrument, or provide data-dependent device control flow.
+计算应返回数据，不应修改输入或控制设备。该装饰器不会追踪每个 Python 操作，
+不会把 NumPy 编译到仪器上，也不提供依赖数据的设备控制流。
 
-This mean reduces all axes of the array supplied at **one experiment point**. It
-does not average the experiment's scan points together. If the array contains
-multiple local axes, select the intended NumPy axis in the function explicitly.
-Saving only the mean discards the shot distribution: retain raw shots or sufficient
-statistics when later analysis needs uncertainty or significance estimates.
+这个均值计算归约的是 **单个实验点** 提供的数组的所有轴，不会对实验扫描点求平均。
+数组含有多个局部轴时，应在函数内显式选择目标 NumPy 轴。只保存均值会丢失 shot 分布；
+如果后续分析需要不确定度或显著性估计，应保留原始 shots 或充分统计量。
 
-## Keep the type when reading
+## 读取时保留类型 {#keep-the-type-when-reading}
 
-Given the symbolic result returned by the matching experiment invocation:
+使用匹配的实验调用返回的符号结果：
 
 ```python
 view = run.result(output)
 means = view.rows(lambda point: point.value(view.output.iq))
 ```
 
-Here `output` is the invocation's `.output`, a `MeanResult[sc.DataRef[complex]]`, and `means` has type
-`tuple[complex, ...]`. Binding checks the references against the saved dataset.
-Unavailable values raise a diagnostic; use `where_available` when deliberately
-selecting usable points. A complex value cannot be assigned to a `float` without a
-type-checking error.
+这里的 `output` 是该次调用的 `.output`，类型为 `MeanResult[sc.DataRef[complex]]`；
+`means` 的类型为 `tuple[complex, ...]`。绑定时会对照已保存的数据集检查引用。
+值不可用时会报出诊断；若有意选择可用点，使用 `where_available`。
+将复数值赋给 `float` 会产生类型检查错误。
 
-A dataclass containing references describes values that will be produced. For
-native rows, including after a restart, select the reading type explicitly:
+包含引用的数据类描述的是将来会产生的值。读取原生行时（包括重启后），应显式选择读取类型：
 
 ```python
 rows = session.run(run_id).result().rows_as(MeanResult[complex])
 print(rows[0].iq.real, rows[0].iq.imag)
 ```
 
-`rows` has type `tuple[MeanResult[complex], ...]`. The same generic dataclass gives
-the symbolic and native versions their field names without pretending a reference
-is already a complex number. An independent native dataclass also works; there is
-no requirement to import the experiment's original Python module. The reader
-validates the complete persisted field paths and dtype, including nested dataclasses,
-before constructing rows. A renamed field, missing field or scalar/array mismatch
-raises instead of filling defaults or silently discarding data.
+`rows` 的类型为 `tuple[MeanResult[complex], ...]`。同一个泛型数据类为符号版本和原生版本
+提供相同的字段名，而不把引用当成已经存在的复数。独立的原生数据类也可使用，不必导入实验原来的
+Python 模块。读取器在构造行之前验证完整的持久化字段路径和 dtype，包括嵌套数据类。
+字段改名、字段缺失或标量/数组不匹配都会报错，不会填充默认值或静默丢弃数据。
 
-Plain `complex` reads the recorded magnitude in its stored unit. To assert the
-unit as well, reuse an annotated type:
+普通 `complex` 读取存储单位下记录的数值大小。若还需断言单位，可复用带注解的类型：
 
 ```python
 type MeanIQ = Annotated[complex, sc.Unit("ratio")]
 rows = session.run(run_id).result().rows_as(MeanResult[MeanIQ])
 ```
 
-For arrays, use `NDArray[np.complex128]` (or another supported concrete dtype).
-`Annotated[..., sc.ArrayType(...)]` additionally checks the exact stored unit,
-local axis names, rank and requested extents. Array axis names may be full persisted
-dimension IDs or their local names. An omitted dimension kind or extent is
-unconstrained. `Quantity` reads a real numeric scalar together with its stored unit.
-This API does not convert units or narrow numeric types; request a compatible
-reader or explicitly transform values afterwards.
+数组使用 `NDArray[np.complex128]`（或其他支持的具体 dtype）。
+`Annotated[..., sc.ArrayType(...)]` 还会检查精确的存储单位、局部轴名、维数和要求的长度。
+数组轴名可以使用完整的持久化维度 ID，也可以使用局部名称。省略维度种类或长度表示不约束该项。
+`Quantity` 将实数标量连同存储单位一起读出。此 API 不转换单位，也不缩窄数值类型；
+应选择兼容的读取器，或在读取后显式变换数值。
 
-`rows_as` materializes the selected rows. Arrays remain read-only; missing values,
-partial array masks and segmented arrays cannot become apparently complete native
-rows. Use `result.where_available().rows_as(...)` when deliberately selecting
-complete points, or the labeled dataset interface when you need masks and ragged
-segment diagnostics. Supported readers use ordinary init fields, nested/parameterized
-dataclasses and supported native leaf types; arbitrary unions, object fields and
-recursive dataclasses are not inferred.
+`rows_as` 会将选中的行物化。数组仍为只读；缺失值、部分数组掩码和分段数组不能变成看似完整的原生行。
+若有意选择完整点，使用 `result.where_available().rows_as(...)`；
+需要掩码和不等长分段诊断时，使用带标签的数据集接口。支持的读取器使用普通初始化字段、
+嵌套或参数化数据类，以及支持的原生叶类型；不会推断任意联合类型、object 字段或递归数据类。
 
-Do not rebuild a changed experiment and assume its output describes an older run.
-See [measurement data](use-measurement-data.md) for historical reading and projections.
+不要重建已经改变的实验，并假定它的输出能够描述旧运行。
+历史读取和投影见[测量数据工作流](use-measurement-data.md)。
 
-## Edit and diagnose
+## 编辑与诊断 {#edit-and-diagnose}
 
-Follow [author refresh](refresh-author-code.md) after editing calculation code.
-Refreshing server source does not replace declarations already imported into a
-Notebook. Use `experiment = authors.refresh(experiment)` to explicitly rebind a
-typed declaration and its local helpers to the newly admitted revision.
+修改计算代码后，按[刷新作者代码](refresh-author-code.md)操作。刷新服务端源码不会替换
+Notebook 中已经导入的声明。使用 `experiment = authors.refresh(experiment)`，
+将类型化声明及其本地辅助函数显式重新绑定到新接受的修订。
 
-## Fixing a failed computation
+## 修复失败的计算 {#fixing-a-failed-computation}
 
-Exceptions from an author computation identify the compute operation, exception
-type and message in the run failure shown by the Notebook. The full traceback
-remains in the worker log. Fix the function, call
-`experiment = session.refresh(experiment)`, and prepare a new request. The failed
-job and earlier successful results retain their original identities; refreshing
-does not resubmit a failed acquisition or rewrite its data.
+作者计算抛出异常时，Notebook 展示的运行失败会标明计算操作、异常类型和消息；完整 traceback
+保留在 worker 日志中。修复函数，调用 `experiment = session.refresh(experiment)`，再准备新请求。
+失败任务和先前成功的结果保留各自原来的身份；刷新不会重新提交失败的采集，也不会改写数据。
