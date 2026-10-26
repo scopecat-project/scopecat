@@ -59,6 +59,10 @@ test("synthetic sweep point fills a draft, allows adjustment and explicitly cont
         .getByTestId("analysis-figure")
         .locator('svg path[stroke="#286f58"][fill="#fff"], svg path[fill="#facc15"]');
       await expect(points).toHaveCount(81);
+      await expect(page.getByText("显示 81 / 81 个点，共 1 个图层")).toBeVisible();
+      await expect(
+        page.getByTestId("analysis-figure").getByRole("img"),
+      ).toHaveAccessibleDescription(/个数据系列，共绘制 81 个点。 系列：/);
       const selected = page.getByTestId("analysis-figure").locator('svg path[fill="#facc15"]');
       if (await selected.count()) await selected.click();
       else await points.nth(40).click();
