@@ -29,7 +29,11 @@ from ui_signal.signal import signal, FREQUENCY, AMPLITUDE
 from ui_signal.application import save_inputs
 with project.connect() as lab:
     run = lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(4.8, "GHz")])).with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(.1, "V")])), config=save_inputs(lab))
+    # A second run with the same experiment/display identity must not replace
+    # the explicitly selected first run when reopening from Data.
+    other = lab.run(signal.build().with_axis(sc.axis(FREQUENCY.ref, [sc.Quantity(4.8, "GHz")])).with_axis(sc.axis(AMPLITUDE.ref, [sc.Quantity(.2, "V")])), config=save_inputs(lab))
     publications = {}
+    run_hashes = {}
     for kind, owner in (("run", run), ("project", lab)):
         publications[kind] = []
         for version in (1, 2):
@@ -37,7 +41,9 @@ with project.connect() as lab:
             context.measurements(run, id="source")
             publication = context.result().fact("version", version).save()
             publications[kind].append(publication.id)
-    print(json.dumps({"runId": run.id, **publications}))
+            if kind == "run":
+                run_hashes[publication.id] = publication.publication_hash
+    print(json.dumps({"runId": run.id, "otherRunId": other.id, "runHashes": run_hashes, **publications}))
 `;
 
 const KERNEL = `
@@ -59,6 +65,12 @@ for item in snippets:
         assertion += "\\nassert publication.id == " + repr(item["publicationId"])
         assertion += "\\nassert publication.fact('version').value == 1"
         assertion += "\\nassert len(publication.outputs) == 1"
+    if item["kind"] == "run" and "publicationId" in item:
+        assertion += "\\nfrom scopecat.records.plan_ref import PlanAnalysisSource"
+        assertion += "\\nsource_ref = PlanAnalysisSource(run_id=run.id, analysis_id=publication.id, publication_hash=publication.publication_hash)"
+        assertion += "\\nassert source_ref.publication_hash == " + repr(item["publicationHash"])
+        assertion += "\\nassert source_ref.run_id == " + repr(item["runId"])
+        assertion += "\\nassert source_ref.analysis_id == " + repr(item["publicationId"])
     cells.append(v4.new_code_cell(assertion))
 cells.append(v4.new_code_cell("assert session.list_runs(limit=100).model_dump(mode='json') == before\\nassert not any(name.startswith('ui_signal') for name in __import__('sys').modules)\\nsession.close()"))
 document = v4.new_notebook(cells=cells)
@@ -86,6 +98,8 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
     };
     const saved = JSON.parse(uv(["python", "-c", SEED, project])) as {
       runId: string;
+      otherRunId: string;
+      runHashes: Record<string, string>;
       run: string[];
       project: string[];
     };
@@ -119,8 +133,18 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       code: string;
       runId?: string;
       publicationId?: string;
+      publicationHash?: string;
     }[] = [];
-    await page.goto(`${endpoint.base_url}/?run=${encodeURIComponent(saved.runId)}#runs`);
+    await page.goto(`${endpoint.base_url}/#history`);
+    const record = page.getByRole("listitem").filter({
+      has: page
+        .getByTestId("run-address")
+        .and(page.getByTitle(new RegExp(`Run ID: ${saved.runId}$`))),
+    });
+    await expect(record).toHaveCount(1);
+    await record.getByRole("button").first().click();
+    await expect(page).toHaveURL((url) => url.searchParams.get("run") === saved.runId);
+    expect(saved.otherRunId).not.toBe(saved.runId);
     const header = page.getByTestId("run-detail-header");
     await header.getByRole("button", { name: "复制只读代码" }).click();
     await expect(header.getByRole("status")).toHaveText("只读代码已复制。");
@@ -149,6 +173,7 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       kind: "run",
       runId: saved.runId,
       publicationId: saved.run[0],
+      publicationHash: saved.runHashes[saved.run[0]],
       code: analysisCode!,
     });
 
@@ -200,7 +225,7 @@ test("copies exact read-only code for both owners and executes it in a fresh ker
       contentType: "application/x-ipynb+json",
     });
     const history = await page.request.get(`${endpoint.base_url}/api/v1/runs?limit=100`);
-    expect((await history.json()).items).toHaveLength(1);
+    expect((await history.json()).items).toHaveLength(2);
     expect(await publicationHistory()).toEqual(publicationsBefore);
     passed = true;
   } catch (error) {
