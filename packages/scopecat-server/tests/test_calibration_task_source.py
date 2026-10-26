@@ -107,8 +107,8 @@ def test_task_retained_worker_and_reconnect(tmp_path: Path) -> None:
         stop_project,
     )
 
+    from .signal_scenario import signal_config as _config
     from .test_author_procedures import _SOURCE, _wait
-    from .test_project_analysis_runtime import _config
 
     project = initialize_project(tmp_path / "task")
     manifest = project.root / "scopecat.toml"

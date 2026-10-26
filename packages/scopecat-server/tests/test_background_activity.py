@@ -8,7 +8,8 @@ from scopecat_testkit.server.instruments import signal_endpoint
 
 from scopecat_server import LocalDaemonRuntime
 
-from .test_project_analysis_runtime import _complete_signal_run, _config
+from .signal_scenario import complete_signal_run as _complete_signal_run
+from .signal_scenario import signal_config as _config
 
 
 def test_unresolved_background_publication_blocks_idle_exit_after_reopening(

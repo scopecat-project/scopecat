@@ -41,10 +41,10 @@ from scopecat_server.services.project_workers import (
 )
 from scopecat_server.storage.sqlite.connection import SQLiteDatabase
 
+from .signal_scenario import signal_config as _config
 from .test_automation import _definition, _service
 from .test_automation_runtime import _daemon_client
 from .test_procedure_schedules import _command
-from .test_project_analysis_runtime import _config
 
 
 class _ExitAnswer(BaseModel, frozen=True):

@@ -44,8 +44,8 @@ from scopecat.sdk.compute import PYTHON_JSON_CODEC
 from scopecat_server import LocalDaemonRuntime
 from scopecat_server.services import calibration_tasks as tasks_module
 
+from .signal_scenario import complete_signal_run as _complete_signal_run
 from .test_calibration_check_admission import _check_case, _command
-from .test_project_analysis_runtime import _complete_signal_run
 
 
 def specification(

@@ -39,8 +39,8 @@ from scopecat_server.services.calibration_task_runner import CalibrationTaskRunn
 from scopecat_server.services.project_workers import ProjectProcedureWorkers
 from scopecat_server.snapshots import create_snapshot, restore_snapshot
 
+from .signal_scenario import complete_signal_run as _complete_signal_run
 from .test_calibration_check_admission import _check_case, _command
-from .test_project_analysis_runtime import _complete_signal_run
 
 
 @pytest.mark.parametrize(
