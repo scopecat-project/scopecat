@@ -2,6 +2,7 @@
 
 Usage: uv run --locked python scripts/verify_notebook_journey.py
        <fresh-work-directory> <toolchain-delivery> [current-gui-dist]
+       [--parameters-only]
 Uses development dependencies and Playwright Chromium (or SCOPECAT_TEST_CHROMIUM).
 Browser-native bridge calls use
 DesktopAPI; only external editor activation/window plumbing is substituted.
@@ -9,6 +10,7 @@ DesktopAPI; only external editor activation/window plumbing is substituted.
 
 from __future__ import annotations
 
+import argparse
 import ctypes
 import hashlib
 import json
@@ -34,6 +36,7 @@ from scopecat_tutorials.lessons import LessonTopic
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from testing.app_support.notebook_course import course_control, verify_course_control
 from testing.app_support.notebook_io import notebook_io
 from testing.app_support.verify_groups import GROUP_CHECKS, GROUP_REOPEN_CELLS
 
@@ -44,7 +47,9 @@ if TYPE_CHECKING:
     import webview
 
 
-def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
+def verify(
+    work: Path, payload: Path, gui: Path | None = None, *, parameters_only: bool = False
+) -> None:
     # Daemons are detached grandchildren; cloud containers may have no reaping init.
     if sys.platform == "linux":
         if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
@@ -93,6 +98,7 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
                 status: () => window.applicationStatus(),
             }};""")
             page.goto(endpoint + "/#help")
+            verify_course_control(page)
             page.get_by_role(
                 "button", name="开始参数与扫描 Notebook", exact=True
             ).click()
@@ -102,16 +108,16 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
             journey = current(runtime)
             assert journey is not None and journey.ready
             assert editor_files == [str(journey.notebook)]
-            expect(page.get_by_text(str(journey.notebook), exact=True)).to_be_visible()
+            expect(
+                page.get_by_text(str(journey.view()["python"]), exact=True)
+            ).to_be_visible()
             page.evaluate("window.continuationDocument = true")
             page.get_by_role("link", name="在设置中管理此代码目录", exact=True).click()
             expect(page.get_by_label("代码目录")).to_have_value(str(journey.directory))
             expect(page.get_by_label("作者目录")).to_have_value(str(journey.directory))
             assert page.evaluate("window.continuationDocument") is True
-            page.get_by_role("button", name="Help", exact=True).click()
-            expect(
-                page.get_by_role("radio", name="Parameters and scans")
-            ).to_be_checked()
+            page.get_by_role("button", name="帮助 / Help", exact=True).click()
+            expect(course_control(page)).to_have_value("parameters")
             assert editor_files == [str(journey.notebook)]
             source = journey.directory
             notebook_bytes = journey.notebook.read_bytes()
@@ -189,6 +195,7 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
                 execute("parameters-result")
                 assert runs() == first_runs
                 page.goto(endpoint + "/?run=" + first_id)
+                page.get_by_text("run 详情", exact=True).click()
                 expect(page.get_by_text(first_id, exact=True)).to_be_visible()
                 code = source / "src/my_experiment/teaching.py"
                 code.write_text(
@@ -243,11 +250,12 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
                 execute("parameters-result")
                 check("assert shots.shape == (7, 64)\nsession.close()")
             assert runs() == before
-            page.get_by_role("link", name="Runs", exact=True).click()
+            page.get_by_role("button", name="运行详情 / Runs", exact=True).click()
             expect(
-                page.get_by_role("button", name="Runs", exact=True)
+                page.get_by_role("button", name="运行详情 / Runs", exact=True)
             ).to_have_attribute("aria-current", "page")
             page.get_by_title(f"Inspect run {first_id}", exact=True).click()
+            page.get_by_text("run 详情", exact=True).click()
             expect(page.get_by_text(first_id, exact=True)).to_be_visible()
             assert runs() == before
             page.screenshot(path=str(work / "same-run.png"), full_page=True)
@@ -266,13 +274,16 @@ def verify(work: Path, payload: Path, gui: Path | None = None) -> None:
                         "browser_help_and_same_run": "passed",
                         "restart_and_continue_without_acquisition": "passed",
                         "repeat_result_cell_without_acquisition": "passed",
-                        "help_runs_link_reopens_retained_run": "passed",
+                        "help_runs_navigation_reopens_retained_run": "passed",
                         "settings_same_source_without_reload": "passed",
                     },
                     indent=2,
                 )
                 + "\n"
             )
+            if parameters_only:
+                browser.close()
+                return
             verify_groups(page, runtime, session, work, endpoint)
             groups = current(runtime, "groups")
             assert groups is not None
@@ -308,7 +319,7 @@ def verify_groups(
     """Verify a second course with independent inputs in the same application."""
     nbformat = notebook_io()
     page.goto(endpoint + "/#help")
-    page.get_by_role("radio", name="Grouped analysis and history").press("Space")
+    course_control(page).select_option("groups")
     page.get_by_role("button", name="开始分组分析与历史 Notebook", exact=True).click()
     expect(
         page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True)
@@ -370,21 +381,17 @@ def verify_groups(
     endpoint = runtime.start().base_url
     desktop.connected(endpoint)
     page.goto(endpoint + "/#help")
-    page.get_by_role("radio", name="Grouped analysis and history").press("Space")
+    course_control(page).select_option("groups")
     page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True).click()
     expect(
         page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True)
     ).to_be_enabled()
     assert current(runtime, "groups") == journey
-    page.get_by_role("link", name="Runs", exact=True).click()
-    page.get_by_role("button", name="Help", exact=True).click()
-    expect(
-        page.get_by_role("radio", name="Grouped analysis and history")
-    ).to_be_checked()
+    page.get_by_role("button", name="运行详情 / Runs", exact=True).click()
+    page.get_by_role("button", name="帮助 / Help", exact=True).click()
+    expect(course_control(page)).to_have_value("groups")
     page.reload()
-    expect(
-        page.get_by_role("radio", name="Grouped analysis and history")
-    ).to_be_checked()
+    expect(course_control(page)).to_have_value("groups")
     expect(
         page.get_by_role("button", name="继续分组分析与历史 Notebook", exact=True)
     ).to_be_enabled()
@@ -402,7 +409,7 @@ def verify_groups(
     bookmark = cast(
         "dict[str, str]", json.loads((source / "grouped-run.json").read_text())
     )
-    page.get_by_role("link", name="Runs", exact=True).click()
+    page.get_by_role("button", name="运行详情 / Runs", exact=True).click()
     page.get_by_title(f"Inspect run {bookmark['run_id']}", exact=True).click()
     run_label = page.get_by_text(bookmark["run_id"], exact=True)
     expect(run_label).to_be_visible()
@@ -470,9 +477,23 @@ def verify_groups(
     )
 
 
+class Arguments(argparse.Namespace):
+    work: Path = Path()
+    payload: Path = Path()
+    gui: Path | None = None
+    parameters_only: bool = False
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("work", type=Path)
+    parser.add_argument("payload", type=Path)
+    parser.add_argument("gui", type=Path, nargs="?")
+    parser.add_argument("--parameters-only", action="store_true")
+    args = parser.parse_args(namespace=Arguments())
     verify(
-        Path(sys.argv[1]).resolve(),
-        Path(sys.argv[2]).resolve(),
-        Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else None,
+        args.work.resolve(),
+        args.payload.resolve(),
+        args.gui.resolve() if args.gui else None,
+        parameters_only=args.parameters_only,
     )
