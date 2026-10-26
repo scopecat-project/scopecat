@@ -114,30 +114,30 @@ it("selects a saved policy explicitly and shows all capability verdicts without 
     }),
   );
   mount();
-  fireEvent.click(screen.getByText("Inspect a saved capability profile"));
-  fireEvent.click(screen.getByText("Load saved profiles"));
-  const select = await screen.findByLabelText("Capability profile");
+  fireEvent.click(screen.getByText("检查已保存的能力 profile"));
+  fireEvent.click(screen.getByText("加载已保存的 profile"));
+  const select = await screen.findByLabelText("能力 profile");
   fireEvent.change(select, { target: { value: "daily-v1" } });
   expect(screen.getByText("Lab daily policy")).toBeInTheDocument();
   expect(bodies).toEqual([]);
-  fireEvent.click(screen.getByText("Check saved profile"));
-  await screen.findByRole("region", { name: "Saved capability report" });
-  expect(screen.getByText("Own check: usable · Availability: blocked")).toBeInTheDocument();
-  expect(screen.getByText("Blocked by: readout")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("检查已保存的 profile"));
+  await screen.findByRole("region", { name: "已保存的能力报告" });
+  expect(screen.getByText("自身检查： usable · 可用性： blocked")).toBeInTheDocument();
+  expect(screen.getByText("阻塞项： readout")).toBeInTheDocument();
   expect(bodies).toEqual([{ context: stage.check.context, history_limit: 50 }]);
-  fireEvent.click(screen.getByLabelText("Include gate"));
-  expect(screen.queryByRole("region", { name: "Saved capability report" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText("Check saved profile"));
-  await screen.findByRole("region", { name: "Saved capability report" });
+  fireEvent.click(screen.getByLabelText("包含 gate"));
+  expect(screen.queryByRole("region", { name: "已保存的能力报告" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("检查已保存的 profile"));
+  await screen.findByRole("region", { name: "已保存的能力报告" });
   expect(bodies[1]).toEqual({
     context: stage.check.context,
     history_limit: 50,
     requirement_ids: ["gate"],
   });
   fail = true;
-  fireEvent.click(screen.getByText("Check saved profile"));
+  fireEvent.click(screen.getByText("检查已保存的 profile"));
   await screen.findByRole("alert");
-  expect(screen.queryByRole("region", { name: "Saved capability report" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "已保存的能力报告" })).not.toBeInTheDocument();
 });
 
 it("requires an explicit age and submits exactly the stage's frozen scope and context", async () => {

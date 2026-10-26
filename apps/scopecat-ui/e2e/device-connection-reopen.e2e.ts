@@ -54,13 +54,17 @@ test("connection test feedback follows the saved revision across editing and dae
   }
   try {
     await start();
+    await page.goto(`${url}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Device regression tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${url}/#instruments`);
     await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
-    await page.getByRole("button", { name: "Add device", exact: true }).click();
+    await page.getByRole("button", { name: "添加设备", exact: true }).click();
     const dialog = page.getByRole("dialog");
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      const name = dialog.getByLabel("Device name");
+      const name = dialog.getByLabel("设备名称");
       await name.focus();
       await expect(name).toHaveCSS("outline-width", "2px");
       await expect(name).toHaveCSS("font-size", "14px");
@@ -79,34 +83,34 @@ test("connection test feedback follows the saved revision across editing and dae
     }
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole("button", { name: "Add device", exact: true })).toBeFocused();
-    await page.getByRole("button", { name: "Add device", exact: true }).click();
-    await dialog.getByLabel("Device name").fill("Reopen virtual device");
+    await expect(page.getByRole("button", { name: "添加设备", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "添加设备", exact: true }).click();
+    await dialog.getByLabel("设备名称").fill("Reopen virtual device");
     await dialog.getByLabel("Gain", { exact: true }).fill("-1");
-    await dialog.getByRole("button", { name: "Save device", exact: true }).click();
+    await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByText(/Last connection test failed:/)).toBeVisible();
+    await page.getByRole("button", { name: "测试连接", exact: true }).click();
+    await expect(page.getByText(/上次连接测试失败：/)).toBeVisible();
     await expect(page.getByRole("alert")).toContainText(
       "instrument connection could not be established",
     );
     const failed = await current();
     expect(failed.last_connection_test?.revision).toEqual(failed.device.head);
 
-    await page.getByRole("button", { name: "Edit device", exact: true }).click();
+    await page.getByRole("button", { name: "编辑设备", exact: true }).click();
     await dialog.getByLabel("Gain", { exact: true }).fill("2");
-    await dialog.getByRole("button", { name: "Save device", exact: true }).click();
+    await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText("This connection version has not been tested.")).toBeVisible();
+    await expect(page.getByText("此连接版本尚未测试。")).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
     const edited = await current();
     expect(edited.device.head).not.toEqual(failed.device.head);
     expect(edited.last_connection_test).toBeNull();
 
     await page.reload();
-    await expect(page.getByText("This connection version has not been tested.")).toBeVisible();
-    await page.getByRole("button", { name: "Test connection", exact: true }).click();
-    await expect(page.getByText(/Connection test passed;/)).toBeVisible();
+    await expect(page.getByText("此连接版本尚未测试。")).toBeVisible();
+    await page.getByRole("button", { name: "测试连接", exact: true }).click();
+    await expect(page.getByText(/连接测试通过，/)).toBeVisible();
     const tested = await current();
     expect(tested.last_connection_test?.revision).toEqual(edited.device.head);
     expect(tested.last_connection_test?.error).toBeNull();
@@ -114,11 +118,10 @@ test("connection test feedback follows the saved revision across editing and dae
     await page.goto("about:blank");
     await stop();
     await start();
-    await page.goto(url);
-    await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
-    await expect(page.getByText(/Connection test passed;/)).toBeVisible();
+    await page.goto(`${url}/#instruments`);
+    await expect(page.getByText(/连接测试通过，/)).toBeVisible();
     expect((await current()).last_connection_test).toEqual(tested.last_connection_test);
-    await page.getByRole("button", { name: "Edit device", exact: true }).click();
+    await page.getByRole("button", { name: "编辑设备", exact: true }).click();
     await expect(dialog.getByLabel("Gain", { exact: true })).toHaveValue("2");
   } finally {
     if (daemon! && daemon.exitCode === null) await stop();

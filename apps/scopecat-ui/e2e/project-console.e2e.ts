@@ -288,24 +288,20 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   await expect(page.getByRole("heading", { name: "first_run", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Configuration$/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Experiment configuration", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "实验配置", exact: true })).toBeVisible();
   await page
-    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .getByRole("combobox", { name: "已保存的参数版本", exact: true })
     .selectOption("starter-initial");
-  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await page.getByRole("button", { name: "编辑副本", exact: true }).click();
   await page.getByRole("textbox", { name: "response[1].scale", exact: true }).fill("2");
-  await page.getByText("Save a parameter checkpoint", { exact: true }).click();
-  await page.getByLabel("New version name", { exact: true }).fill("browser-adjusted");
-  await page.getByLabel("Draft operator", { exact: true }).fill("browser-operator");
-  await page.getByLabel("Named branch (optional)", { exact: true }).fill("starter");
-  await page.getByRole("button", { name: "Review latest branch head", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Keep my table after branch review", exact: true })
-    .click();
+  await page.getByText("保存参数检查点", { exact: true }).click();
+  await page.getByLabel("新版本名称", { exact: true }).fill("browser-adjusted");
+  await page.getByLabel("草稿操作者", { exact: true }).fill("browser-operator");
+  await page.getByLabel("命名分支（可选）", { exact: true }).fill("starter");
+  await page.getByRole("button", { name: "核对分支最新版本", exact: true }).click();
+  await page.getByRole("button", { name: "核对分支后保留我的表格", exact: true }).click();
   const committed = page.waitForResponse((response) => response.url().endsWith("/commit"));
-  await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
+  await page.getByRole("button", { name: "保存参数版本", exact: true }).click();
   await expectResponseOk(await committed, "POST");
   const branch = await (
     await page.request.get(`${daemon.baseUrl}/api/v1/parameters/branches/starter`)
@@ -318,9 +314,9 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   expect(original.parameters.values[0].rows[0].scale).toBe(1);
   await page.reload();
   await page
-    .getByRole("combobox", { name: "Saved parameter version", exact: true })
+    .getByRole("combobox", { name: "已保存的参数版本", exact: true })
     .selectOption("browser-adjusted");
-  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await page.getByRole("button", { name: "编辑副本", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "response[1].scale", exact: true })).toHaveValue(
     "2.0",
   );
@@ -666,17 +662,15 @@ with sc.open_project(sys.argv[1]).connect() as lab:
     await assertObservers();
     phase = "open working table";
     await b.goto(`${daemon.baseUrl}/#configuration`);
-    await b.getByLabel("Working parameter branch", { exact: true }).fill("starter");
-    await b.getByRole("button", { name: "Open working table", exact: true }).click();
+    await b.getByLabel("工作参数分支", { exact: true }).fill("starter");
+    await b.getByRole("button", { name: "打开工作参数表", exact: true }).click();
     await expect(scale).toBeVisible();
     const previewHashes: string[] = [];
     for (const value of ["7.25", "8.5"]) {
       phase = `edit working input ${value}`;
       await b.getByRole("button", { name: /Configuration$/, exact: true }).click();
       await scale.fill(value);
-      await b
-        .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-        .click();
+      await b.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
       await b.getByLabel("实验类型", { exact: true }).selectOption("signal");
       await b.getByLabel("实验配置", { exact: true }).selectOption("starter-bench");
       await b.getByLabel("操作人", { exact: true }).fill("browser-operator");

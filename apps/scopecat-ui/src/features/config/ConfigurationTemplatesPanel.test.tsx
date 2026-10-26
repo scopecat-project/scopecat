@@ -88,11 +88,11 @@ it("imports exact template evidence, retries the same entry, and selects exact i
   );
   render(view());
   await screen.findByRole("option", { name: "Resonance template" });
-  fireEvent.change(screen.getByLabelText("Available template"), {
+  fireEvent.change(screen.getByLabelText("可用模板"), {
     target: { value: "resonance" },
   });
   await screen.findByText("Resonance frequency sweep");
-  fireEvent.click(screen.getByRole("button", { name: "Import configuration template" }));
+  fireEvent.click(screen.getByRole("button", { name: "导入配置模板" }));
   await screen.findByRole("alert");
   const command = vi.mocked(importConfigurationTemplate).mock.calls[0]![0];
   expect(command).toMatchObject({
@@ -101,12 +101,12 @@ it("imports exact template evidence, retries the same entry, and selects exact i
     actor: "operator",
   });
   expect(command.revision_id).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Retry template import" }));
+  fireEvent.click(screen.getByRole("button", { name: "重试导入模板" }));
   await screen.findByText("imported-config");
   expect(vi.mocked(importConfigurationTemplate).mock.calls[1]![0]).toEqual(command);
   expect(onImported).toHaveBeenCalledWith(result);
   const use = screen.getByRole("button", {
-    name: "Use imported configuration for next experiment",
+    name: "将导入配置用于下次实验",
   });
   expect(use).toBeEnabled();
   expect(onSelectConfiguration).not.toHaveBeenCalled();

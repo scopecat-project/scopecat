@@ -56,14 +56,14 @@ function show(blockers: { owner: string; reason: string }[] = []) {
       />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByText("Clear this course"));
+  fireEvent.click(screen.getByText("清理此课程"));
   return { inspect, clear };
 }
 it("requires a preview and preserves code by default", async () => {
   const { clear } = show();
-  expect(screen.queryByRole("button", { name: "Confirm course cleanup" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Preview course cleanup" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm course cleanup" }));
+  expect(screen.queryByRole("button", { name: "确认课程清理" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "预览课程清理" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认课程清理" }));
   await waitFor(() =>
     expect(clear).toHaveBeenCalledWith(
       "parameters",
@@ -73,16 +73,16 @@ it("requires a preview and preserves code by default", async () => {
 });
 it("blocks an unfinished task and never requests implicit cancellation", async () => {
   const { clear } = show([{ owner: "procedure:task", reason: "Finish or cancel this task" }]);
-  fireEvent.click(screen.getByRole("button", { name: "Preview course cleanup" }));
-  expect(await screen.findByRole("button", { name: "Confirm course cleanup" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "预览课程清理" }));
+  expect(await screen.findByRole("button", { name: "确认课程清理" })).toBeDisabled();
   expect(screen.getByRole("alert")).toHaveTextContent("Finish or cancel");
   expect(clear).not.toHaveBeenCalled();
 });
 it("sends discard only after explicitly selecting deletion of the named folder", async () => {
   const { clear } = show();
-  fireEvent.click(screen.getByRole("button", { name: "Preview course cleanup" }));
+  fireEvent.click(screen.getByRole("button", { name: "预览课程清理" }));
   fireEvent.click(await screen.findByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm course cleanup" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认课程清理" }));
   await waitFor(() =>
     expect(clear).toHaveBeenCalledWith("parameters", JSON.stringify({ preview, files: "discard" })),
   );

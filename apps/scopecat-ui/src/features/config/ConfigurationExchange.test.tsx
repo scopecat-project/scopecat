@@ -84,25 +84,25 @@ async function upload() {
     type: "application/json",
   });
   Object.defineProperty(file, "text", { value: async () => JSON.stringify(document) });
-  fireEvent.change(screen.getByLabelText("Import configuration file"), {
+  fireEvent.change(screen.getByLabelText("导入配置文件"), {
     target: { files: [file] },
   });
-  await screen.findByRole("button", { name: "Create my copy" });
+  await screen.findByRole("button", { name: "创建我的副本" });
 }
 it("reports native save cancellation, actual path and failure", async () => {
   mount();
-  fireEvent.click(screen.getByRole("button", { name: "Export configuration…" }));
+  fireEvent.click(screen.getByRole("button", { name: "导出配置…" }));
   await screen.findByRole("option", { name: "saved" });
-  fireEvent.change(screen.getByLabelText("Parameter version"), { target: { value: "saved" } });
-  fireEvent.change(screen.getByLabelText("File label"), { target: { value: "Shared inputs" } });
-  fireEvent.click(screen.getByRole("button", { name: "Review export" }));
-  const button = await screen.findByRole("button", { name: "Save configuration file" });
+  fireEvent.change(screen.getByLabelText("参数版本"), { target: { value: "saved" } });
+  fireEvent.change(screen.getByLabelText("文件标签"), { target: { value: "Shared inputs" } });
+  fireEvent.click(screen.getByRole("button", { name: "核对导出内容" }));
+  const button = await screen.findByRole("button", { name: "保存配置文件" });
   fireEvent.click(button);
-  await screen.findByText("Configuration save cancelled.");
+  await screen.findByText("已取消保存配置。");
   expect(JSON.parse(save.mock.calls[0]![0])).toEqual(document);
   save.mockResolvedValue("/chosen/configuration.json");
   fireEvent.click(button);
-  await screen.findByText("Configuration saved to /chosen/configuration.json.");
+  await screen.findByText("配置已保存到 /chosen/configuration.json。");
   save.mockRejectedValue(new Error("Disk full"));
   fireEvent.click(button);
   expect(await screen.findByRole("alert")).toHaveTextContent("Disk full");
@@ -110,29 +110,26 @@ it("reports native save cancellation, actual path and failure", async () => {
 it("reviews source without execution and uses the native archive save bridge", async () => {
   mount();
   await upload();
-  fireEvent.click(screen.getByText("Attached source files and dependencies"));
+  fireEvent.click(screen.getByText("附带源码文件与依赖"));
   fireEvent.click(screen.getByText("example.py"));
   expect(screen.getByText("raise RuntimeError('not executed')")).toBeVisible();
   expect(saveSource).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Accept source and download…" }));
-  await screen.findByText(/Source save cancelled/);
+  fireEvent.click(screen.getByRole("button", { name: "接受源码并下载…" }));
+  await screen.findByText(/已取消保存源码/);
   expect(saveSource).toHaveBeenCalledWith(inspection.content_hash);
   saveSource.mockResolvedValue("/chosen/author-source.zip");
-  fireEvent.click(screen.getByRole("button", { name: "Accept source and download…" }));
-  await screen.findByText(/Source saved to \/chosen\/author-source.zip/);
-  expect(screen.getByRole("link", { name: "Application settings" })).toHaveAttribute(
-    "href",
-    "#settings",
-  );
+  fireEvent.click(screen.getByRole("button", { name: "接受源码并下载…" }));
+  await screen.findByText(/源码已保存到 \/chosen\/author-source.zip/);
+  expect(screen.getByRole("link", { name: "应用设置" })).toHaveAttribute("href", "#settings");
 });
 it("retries an unknown network outcome with the same operation identity", async () => {
   mount();
   await upload();
-  fireEvent.click(screen.getByRole("button", { name: "Create my copy" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("outcome is not confirmed");
+  fireEvent.click(screen.getByRole("button", { name: "创建我的副本" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("结果尚未确认");
   failDerive = false;
-  fireEvent.click(screen.getByRole("button", { name: "Create my copy" }));
-  await screen.findByText(/Created parameter branch/);
+  fireEvent.click(screen.getByRole("button", { name: "创建我的副本" }));
+  await screen.findByText(/已创建参数分支/);
   expect(attempts).toHaveLength(2);
   expect(attempts[1]).toBe(attempts[0]);
 });
@@ -141,14 +138,14 @@ it("retains the derive actor when another operation refreshes the shared automat
   const resolve = vi.fn(async () => "Alice");
   const changeDisplayedDefault = mount("Alice", resolve);
   await upload();
-  fireEvent.click(screen.getByRole("button", { name: "Create my copy" }));
+  fireEvent.click(screen.getByRole("button", { name: "创建我的副本" }));
   await screen.findByRole("alert");
   expect(JSON.parse(attempts[0]!).actor).toBe("Alice");
   resolve.mockResolvedValue("Bob");
   changeDisplayedDefault("Bob");
   failDerive = false;
-  fireEvent.click(screen.getByRole("button", { name: "Create my copy" }));
-  await screen.findByText(/Created parameter branch/);
+  fireEvent.click(screen.getByRole("button", { name: "创建我的副本" }));
+  await screen.findByText(/已创建参数分支/);
   expect(attempts[1]).toBe(attempts[0]);
   expect(resolve).toHaveBeenCalledTimes(1);
 });

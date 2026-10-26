@@ -62,9 +62,9 @@ export function InstrumentSessionPanel({
             <Cable size={16} />
           </span>
           <div className="grid gap-1">
-            <strong className="text-xs text-text-soft">Interactive session connected</strong>
+            <strong className="text-xs text-text-soft">交互会话已连接</strong>
             <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
-              Opened {formatRelative(session.opened_at)}
+              打开时间 {formatRelative(session.opened_at)}
             </small>
           </div>
         </div>
@@ -82,7 +82,7 @@ export function InstrumentSessionPanel({
               ) : (
                 <RotateCcw size={14} />
               )}
-              Apply configured defaults
+              应用已配置默认值
             </button>
           )}
           <button
@@ -90,32 +90,24 @@ export function InstrumentSessionPanel({
             className={secondaryButton}
             onClick={onRefresh}
             disabled={interactionPending || closePending}
-            title={
-              interactionPending
-                ? "Wait for the current instrument interaction to finish"
-                : undefined
-            }
+            title={interactionPending ? "请等待当前仪器交互完成" : undefined}
           >
             <RefreshCw className={refreshPending ? "animate-spin" : undefined} size={14} />
-            Refresh state
+            刷新状态
           </button>
           <button
             type="button"
             className={secondaryButton}
             onClick={onClose}
             disabled={closePending || interactionPending}
-            title={
-              interactionPending
-                ? "Wait for the current instrument interaction to finish"
-                : undefined
-            }
+            title={interactionPending ? "请等待当前仪器交互完成" : undefined}
           >
             {closePending ? (
               <LoaderCircle className="animate-spin" size={14} />
             ) : (
               <Unplug size={14} />
             )}
-            Disconnect
+            断开连接
           </button>
         </div>
       </div>
@@ -129,10 +121,8 @@ export function InstrumentSessionPanel({
       <div className={attentionPanel}>
         <ShieldAlert className="mt-0.5 flex-none" size={19} aria-hidden="true" />
         <div className="flex-1 max-[680px]:w-full max-[680px]:basis-full">
-          <strong className="text-xs text-text-soft">Operator resolution required</strong>
-          <p className={attentionCopy}>
-            The previous operation left hardware state uncertain. Automatic reuse is blocked.
-          </p>
+          <strong className="text-xs text-text-soft">需要操作者处理</strong>
+          <p className={attentionCopy}>上次操作后硬件状态不确定，已阻止自动复用。</p>
           <OwnerDescription instrument={instrument} />
         </div>
         <button
@@ -140,18 +130,14 @@ export function InstrumentSessionPanel({
           className={secondaryButton}
           onClick={onResolve}
           disabled={!canResolve || resolvePending}
-          title={
-            canResolve
-              ? "Acknowledge the quarantined interactive session and release it"
-              : "Resolve this owner from its run workflow"
-          }
+          title={canResolve ? "确认已隔离的交互会话并释放" : "请从所属运行流程处理此占用方"}
         >
           {resolvePending ? (
             <LoaderCircle className="animate-spin" size={14} />
           ) : (
             <ShieldAlert size={14} />
           )}
-          Resolve quarantine
+          处理隔离
         </button>
       </div>
     );
@@ -164,11 +150,11 @@ export function InstrumentSessionPanel({
       <div className={attentionPanel}>
         <Database className="mt-0.5 flex-none" size={18} aria-hidden="true" />
         <div className="flex-1 max-[680px]:w-full max-[680px]:basis-full">
-          <strong className="text-xs text-text-soft">Manual controls unavailable</strong>
+          <strong className="text-xs text-text-soft">手动控制不可用</strong>
           <p className={attentionCopy}>
             {instrument.owner_kind === "run"
-              ? "This instrument is in use. Wait for the run to finish, or request a stop from its run page and wait for cleanup before reconnecting."
-              : "Another manual session is connected. Finish or disconnect that session before reconnecting here."}
+              ? "此仪器正在使用。请等待运行完成，或在运行页请求停止并等待清理完成后再连接。"
+              : "另一个手动会话已连接。请先完成或断开该会话，再从此处连接。"}
           </p>
           <OwnerDescription instrument={instrument} />
         </div>
@@ -178,14 +164,14 @@ export function InstrumentSessionPanel({
             className={secondaryButton}
             onClick={onDisconnectOwner}
             disabled={closePending}
-            title="Disconnect this daemon-owned interactive session"
+            title="断开此后台服务持有的交互会话"
           >
             {closePending ? (
               <LoaderCircle className="animate-spin" size={14} />
             ) : (
               <Unplug size={14} />
             )}
-            Disconnect session
+            断开会话
           </button>
         )}
       </div>
@@ -199,10 +185,8 @@ export function InstrumentSessionPanel({
       >
         <CircleOff className="mt-0.5 flex-none" size={18} aria-hidden="true" />
         <div className="flex-1">
-          <strong className="text-xs text-text-soft">Connection unavailable</strong>
-          <p className={attentionCopy}>
-            Fix the provider or connection configuration before opening a session.
-          </p>
+          <strong className="text-xs text-text-soft">连接不可用</strong>
+          <p className={attentionCopy}>打开会话前请修正 provider 或连接配置。</p>
         </div>
       </div>
     );
@@ -211,24 +195,21 @@ export function InstrumentSessionPanel({
   return (
     <div className={sessionPanel}>
       <div className="grid min-w-0 flex-1 gap-1 max-[680px]:w-full max-[680px]:basis-full">
-        <strong className="text-xs text-text-soft">
-          Connect only when you are ready to interact
-        </strong>
+        <strong className="text-xs text-text-soft">准备交互时再连接</strong>
         <small className="overflow-hidden text-xs leading-[1.4] text-ellipsis text-text-dim">
-          Connect to read or adjust this instrument. Disconnect when finished so an experiment can
-          use it. Selecting it does not connect.
+          连接后可读取或调整仪器。完成后请断开，让实验可以使用它。选中设备不会连接。
         </small>
       </div>
       <button type="button" className={primaryButton} onClick={onConnect} disabled={connectPending}>
         {connectPending ? <LoaderCircle className="animate-spin" size={14} /> : <Cable size={14} />}
-        Connect
+        连接
       </button>
     </div>
   );
 }
 
 function OwnerDescription({ instrument }: { instrument: InstrumentView }) {
-  const ownerKind = instrument.owner_kind === "run" ? "Run" : "Interactive session";
+  const ownerKind = instrument.owner_kind === "run" ? "运行" : "交互会话";
   return <small className="mt-[7px] block text-xs text-text-dim">{ownerKind}</small>;
 }
 

@@ -129,7 +129,7 @@ export function ConfigurationExchange({
     const request = loading.current;
     setBusy(true);
     try {
-      if (file.size > maxBytes) throw new Error("Configuration file exceeds 16 MiB.");
+      if (file.size > maxBytes) throw new Error("配置文件超过 16 MiB。");
       const next = await inspect(await file.text());
       if (request === loading.current) openReview(next);
     } catch (problem) {
@@ -156,7 +156,7 @@ export function ConfigurationExchange({
   });
   const saveCopy = useMutation({
     mutationFn: async () => {
-      if (!review) throw new Error("Inspect a configuration first.");
+      if (!review) throw new Error("请先检查配置。");
       const mapped: NonNullable<Derive["bindings"]> = {};
       if (includeSetup)
         for (const role of review.document.setup?.definition.instruments ?? []) {
@@ -205,7 +205,7 @@ export function ConfigurationExchange({
     try {
       await inspect(JSON.stringify(review.document), true);
       await cache.invalidateQueries({ queryKey: ["configuration-imports"] });
-      setNotice("Original saved for review. No parameters, setup or source were activated.");
+      setNotice("原件已保存以供核对，未启用任何参数、setup 或源码。");
     } catch (problem) {
       setError(errorMessage(problem));
     } finally {
@@ -221,12 +221,10 @@ export function ConfigurationExchange({
       const content = JSON.stringify(exported);
       if (window.pywebview) {
         const path = await window.pywebview.api.save_configuration(content);
-        setNotice(path ? `Configuration saved to ${path}.` : "Configuration save cancelled.");
+        setNotice(path ? `配置已保存到 ${path}。` : "已取消保存配置。");
       } else {
         download(new Blob([content], { type: "application/json" }), "configuration.json");
-        setNotice(
-          "Configuration download requested. Check your browser downloads for configuration.json.",
-        );
+        setNotice("已请求下载配置。请在浏览器下载中查找 configuration.json。");
       }
     } catch (problem) {
       setError(errorMessage(problem));
@@ -245,8 +243,8 @@ export function ConfigurationExchange({
         const path = await window.pywebview.api.save_configuration_source(review.content_hash);
         setNotice(
           path
-            ? `Source saved to ${path}. Extract into a new folder, then continue in Application settings. It is not registered or runnable yet.`
-            : "Source save cancelled. The original remains available; no source was registered.",
+            ? `源码已保存到 ${path}。请解压到新目录后在应用设置中继续。尚未登记，也不能运行。`
+            : "已取消保存源码。原件仍可用，未登记源码。",
         );
       } else {
         const response = await checked(
@@ -257,7 +255,7 @@ export function ConfigurationExchange({
         );
         download(await response.blob(), "author-source.zip");
         setNotice(
-          "Source download requested. Check your browser downloads, extract to a new folder, then continue in Application settings. It is not registered or runnable yet.",
+          "已请求下载源码。请检查浏览器下载，解压到新目录后在应用设置中继续。源码尚未登记，也不能运行。",
         );
       }
       await cache.invalidateQueries({ queryKey: ["configuration-imports"] });
@@ -270,12 +268,12 @@ export function ConfigurationExchange({
   return (
     <section
       className="grid gap-3 rounded-lg border border-line bg-panel p-4"
-      aria-label="Share and import configuration"
+      aria-label="分享与导入配置"
     >
-      <h3 className="text-base font-semibold leading-6">Share and import configuration</h3>
+      <h3 className="text-base font-semibold leading-6">分享与导入配置</h3>
       <p>
-        Share saved parameter definitions and optional initial values, setup and retained source. No
-        acquired run is required. Copies use normal parameter and setup editors below.
+        分享已保存的参数定义，以及可选的初始值、setup
+        和保留源码。无需已有采集记录。副本可在下方常规参数与 setup 编辑器中编辑。
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <Controls.Button
@@ -284,10 +282,10 @@ export function ConfigurationExchange({
             setExported(undefined);
           }}
         >
-          Export configuration…
+          导出配置…
         </Controls.Button>
         <Controls.Field>
-          Import configuration file{" "}
+          导入配置文件{" "}
           <Controls.Input
             type="file"
             accept=".json,application/json"
@@ -305,13 +303,10 @@ export function ConfigurationExchange({
           disabled={exportingMutation.isPending}
           className="grid gap-3 border border-line p-3"
         >
-          <legend>Choose saved content to share</legend>
-          <p>
-            Unsaved edits are not included. Save them in the normal editor first, or choose an
-            existing saved version.
-          </p>
+          <legend>选择要分享的已保存内容</legend>
+          <p>不包含未保存修改。请先在常规编辑器中保存，或选择已有的保存版本。</p>
           <Controls.Field>
-            Parameter version{" "}
+            参数版本{" "}
             <Controls.Select
               value={version}
               onChange={(event) => {
@@ -319,14 +314,14 @@ export function ConfigurationExchange({
                 setExported(undefined);
               }}
             >
-              <option value="">Choose a version</option>
+              <option value="">选择版本</option>
               {versions.data?.items.map((item) => (
                 <option key={item.id}>{item.id}</option>
               ))}
             </Controls.Select>
           </Controls.Field>
           <Controls.Field>
-            File label{" "}
+            文件标签{" "}
             <Controls.Input
               value={label}
               onChange={(event) => {
@@ -344,10 +339,10 @@ export function ConfigurationExchange({
                 setExported(undefined);
               }}
             />
-            Include current values as initial inputs (not transferred calibration)
+            包含当前数值作为初始输入（不转移校准资格）
           </Controls.Field>
           <Controls.Field>
-            Setup (optional){" "}
+            setup（可选）{" "}
             <Controls.Select
               value={setup}
               onChange={(event) => {
@@ -355,14 +350,14 @@ export function ConfigurationExchange({
                 setExported(undefined);
               }}
             >
-              <option value="">Parameters only</option>
+              <option value="">仅参数</option>
               {setups.data?.items.map((item) => (
                 <option key={item.id}>{item.id}</option>
               ))}
             </Controls.Select>
           </Controls.Field>
           <Controls.Field>
-            Retained source (optional){" "}
+            保留源码（可选）{" "}
             <Controls.Select
               value={workspace}
               onChange={(event) => {
@@ -370,7 +365,7 @@ export function ConfigurationExchange({
                 setExported(undefined);
               }}
             >
-              <option value="">Use recipient’s existing source</option>
+              <option value="">使用接收方已有源码</option>
               {sources.data?.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -381,20 +376,20 @@ export function ConfigurationExchange({
           {workspace && (
             <p>
               {sourceState.data?.active
-                ? "Includes the retained source revision, not unsaved file edits."
-                : "No retained revision available. Prepare trusted author code in Experiments first; acquiring data is not required."}
+                ? "包含保留的源码版本，不包含未保存的文件修改。"
+                : "没有可用的保留版本。请先在实验页准备可信作者代码，无需采集数据。"}
             </p>
           )}
           <p>
-            Device connection addresses and SDK installation are not exported as device bindings.
-            Review source files and custom setup content for embedded machine information.
+            设备连接地址和 SDK 安装不会作为设备绑定导出。请检查源码文件和自定义 setup
+            中是否包含机器信息。
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <Controls.Button
               disabled={exportingMutation.isPending}
               onClick={() => setExporting(false)}
             >
-              Cancel export
+              取消导出
             </Controls.Button>
             <Controls.Button
               disabled={
@@ -405,7 +400,7 @@ export function ConfigurationExchange({
               }
               onClick={() => exportingMutation.mutate()}
             >
-              Review export
+              核对导出内容
             </Controls.Button>
           </div>
           {exportingMutation.error && <p role="alert">{errorMessage(exportingMutation.error)}</p>}
@@ -413,7 +408,7 @@ export function ConfigurationExchange({
             <>
               <Content document={exported} />
               <Controls.Button disabled={busy} onClick={() => void saveExport()}>
-                Save configuration file
+                保存配置文件
               </Controls.Button>
             </>
           )}
@@ -421,7 +416,7 @@ export function ConfigurationExchange({
       )}
       {imports.data && imports.data.length > 0 && (
         <details>
-          <summary>Previously imported originals (latest 100)</summary>
+          <summary>已导入的原件（最近 100 条）</summary>
           {imports.data.map((item) => (
             <div key={item.content_hash}>
               <Controls.Button
@@ -449,7 +444,7 @@ export function ConfigurationExchange({
               <span>
                 {" "}
                 {item.derivations.map((entry) => entry.branch.name).join(", ") ||
-                  "Kept for review; no copy created"}
+                  "已保留以供核对；未创建副本"}
               </span>
             </div>
           ))}
@@ -457,13 +452,13 @@ export function ConfigurationExchange({
       )}
       {review && (
         <fieldset className="grid gap-3 border border-line p-3">
-          <legend>Inspect received configuration</legend>
+          <legend>检查收到的配置</legend>
           <Content document={review.document} />
           {review.notices.map((message) => (
             <p key={message}>{message}</p>
           ))}
           <details>
-            <summary>Original identity and content</summary>
+            <summary>原件标识与内容</summary>
             <p>
               {review.document.origin_store} · {review.content_hash}
             </p>
@@ -472,7 +467,7 @@ export function ConfigurationExchange({
           {!receipt && (
             <>
               <Controls.Field>
-                Name for my new parameter branch{" "}
+                新参数分支名称{" "}
                 <Controls.Input
                   value={name}
                   disabled={saveCopy.isPending}
@@ -482,10 +477,7 @@ export function ConfigurationExchange({
                   }}
                 />
               </Controls.Field>
-              <p>
-                Creates a new branch and version. An existing name is rejected; nothing is
-                overwritten. The original stays unchanged.
-              </p>
+              <p>创建新分支和版本。已有名称会被拒绝，不会覆盖任何内容，原件保持不变。</p>
               {review.document.setup && (
                 <>
                   <Controls.Field>
@@ -498,19 +490,18 @@ export function ConfigurationExchange({
                         saveCopy.reset();
                       }}
                     />
-                    Also create my setup
+                    同时创建我的 setup
                   </Controls.Field>
                   {!includeSetup && (
                     <p>
-                      Only parameters will be created. The original setup remains available for
-                      later review. Adding it later requires another named copy with explicit local
-                      bindings.
+                      仅创建参数。原 setup
+                      保留供后续核对。以后添加时需另建命名副本，并明确指定本地绑定。
                     </p>
                   )}
                   {includeSetup &&
                     review.document.setup.definition.instruments.map((role) => (
                       <Controls.Field key={role.id}>
-                        Local device for {role.id}
+                        本地设备对应角色 {role.id}
                         <Controls.Select
                           value={bindings[role.id] ?? ""}
                           disabled={saveCopy.isPending}
@@ -519,7 +510,7 @@ export function ConfigurationExchange({
                             saveCopy.reset();
                           }}
                         >
-                          <option value="">Choose explicitly</option>
+                          <option value="">请明确选择</option>
                           {devices.data?.items
                             .filter((item) => item.device.state !== "retired")
                             .map((item) => (
@@ -532,12 +523,11 @@ export function ConfigurationExchange({
                     ))}
                   {includeSetup && (
                     <p>
-                      Missing a device? Keep the original for later, then register it in{" "}
-                      <a href="#instruments">Devices and drivers</a>.
+                      缺少设备？可先保留原件，再前往登记： <a href="#instruments">设备与驱动</a>.
                       <Controls.Button onClick={() => void devices.refetch()}>
-                        Refresh local devices
+                        刷新本地设备
                       </Controls.Button>
-                      Import never connects a device.
+                      导入不会连接设备。
                     </p>
                   )}
                 </>
@@ -550,10 +540,10 @@ export function ConfigurationExchange({
                     saveCopy.reset();
                   }}
                 >
-                  Cancel inspection
+                  取消检查
                 </Controls.Button>
                 <Controls.Button disabled={busy || saveCopy.isPending} onClick={() => void keep()}>
-                  Keep original for later
+                  保留原件供以后使用
                 </Controls.Button>
                 <Controls.Button
                   disabled={
@@ -568,7 +558,7 @@ export function ConfigurationExchange({
                   }
                   onClick={() => saveCopy.mutate()}
                 >
-                  Create my copy
+                  创建我的副本
                 </Controls.Button>
               </div>
             </>
@@ -577,77 +567,67 @@ export function ConfigurationExchange({
             <p role="alert">
               {errorMessage(saveCopy.error)}{" "}
               {saveCopy.error instanceof ApiError && saveCopy.error.status
-                ? "The request was rejected. Review the name and local bindings before retrying."
-                : "The outcome is not confirmed. Retry the unchanged request or reopen the original to check saved copies."}
+                ? "请求已被拒绝。重试前请核对名称和本地绑定。"
+                : "结果尚未确认。请重试未修改的请求，或重新打开原件检查已保存副本。"}
             </p>
           )}
           {receipt && (
             <div role="status">
               <p>
-                Created parameter branch “{receipt.branch.name}”. Its saved version is selected in
-                Parameter versions below. Finish any existing unsaved draft first, then choose Edit
-                a copy to change and save the imported version.
+                已创建参数分支“{receipt.branch.name}
+                ”。其保存版本已在下方参数版本中选中。请先完成已有未保存草稿，再选择“编辑副本”修改并保存导入版本。
               </p>
               {receipt.setup && (
                 <p>
-                  Created setup “{receipt.setup.resolution.definition_id}”. Select it in Experiment
-                  setups below to edit its mappings.
+                  已创建 setup“{receipt.setup.resolution.definition_id}”。在下方实验 setup
+                  中选中即可编辑映射。
                 </p>
               )}
               {receipt.setup_pending && (
                 <p>
-                  Setup not imported. To import it later, reopen this original, choose local devices
-                  and create another named copy including the setup.
+                  未导入 setup。以后导入时请重新打开此原件，选择本地设备，另建包含 setup
+                  的命名副本。
                 </p>
               )}
-              <p>
-                No calibration qualification was transferred. Use a fresh normal experiment preview
-                before running.
-              </p>
+              <p>未转移校准资格。运行前请使用常规实验流程重新预览。</p>
               <Controls.Button
                 onClick={() => {
                   clearReview();
                   saveCopy.reset();
                 }}
               >
-                Done
+                完成
               </Controls.Button>
             </div>
           )}
           {review.document.source && (
-            <section aria-label="Source next steps">
-              <h4>Source is not ready to run</h4>
+            <section aria-label="源码后续步骤">
+              <h4>源码尚未准备好运行</h4>
               <p>
-                Review the files and dependencies above. Accepting downloads an inert archive; it
-                does not register code, prepare dependencies, load experiments or create a runnable
-                plan.
+                请核对上方文件和依赖。接受仅下载不执行的归档，不会登记代码、准备依赖、加载实验或创建可运行计划。
               </p>
               <Controls.Button
                 disabled={busy || saveCopy.isPending}
                 onClick={() => void acceptSource()}
               >
-                Accept source and download…
+                接受源码并下载…
               </Controls.Button>
               <ol>
-                <li>Extract the downloaded archive into a new folder.</li>
+                <li>将下载的归档解压到新目录。</li>
                 <li>
-                  Open <a href="#settings">Application settings</a>, add that folder and choose
-                  Execution Python, or explicitly prepare its pyproject.toml environment.
+                  打开 <a href="#settings">应用设置</a>，添加该目录并选择执行 Python，或明确准备其
+                  pyproject.toml 环境。
                 </li>
                 <li>
-                  In Experiments, select that source and your local parameters/setup. Review trusted
-                  loading and obtain a fresh preview before saving a plan or running.
+                  在实验页选择该源码及本地参数/setup。保存计划或运行前，核对可信加载并重新预览。
                 </li>
               </ol>
-              <p>
-                Until those steps succeed, this import supplies editable inputs only, not a reusable
-                runnable method.
-              </p>
+              <p>完成这些步骤前，此次导入仅提供可编辑输入，尚不是可复用的运行方法。</p>
             </section>
           )}
         </fieldset>
       )}
-      {busy && <p role="status">Checking or saving…</p>}
+      {busy && <p role="status">正在检查或保存…</p>}
       {notice && <p role="status">{notice}</p>}
       {(error ||
         imports.error ||
@@ -674,11 +654,11 @@ export function ConfigurationExchange({
 
 function Content({ document }: { document: Document }) {
   return (
-    <section aria-label="Selected configuration content">
+    <section aria-label="选中的配置内容">
       <h4>{document.label}</h4>
       <p>
-        {document.catalog.definitions?.length ?? 0} parameter definitions ·{" "}
-        {document.values_included ? "Initial values included" : "Definitions only; values unknown"}
+        {document.catalog.definitions?.length ?? 0} 项参数定义 ·{" "}
+        {document.values_included ? "包含初始值" : "仅定义；数值未知"}
       </p>
       <ul>
         {(document.catalog.definitions ?? []).map((definition) => (
@@ -689,14 +669,14 @@ function Content({ document }: { document: Document }) {
         ))}
       </ul>
       <details>
-        <summary>Parameter schema and values</summary>
+        <summary>参数 schema 与数值</summary>
         <pre className="max-h-64 overflow-auto">
           {JSON.stringify({ catalog: document.catalog, parameters: document.parameters }, null, 2)}
         </pre>
       </details>
       {document.setup && (
         <details>
-          <summary>Setup {document.setup.id} — requires local review</summary>
+          <summary>Setup {document.setup.id} — 需要本地核对</summary>
           <pre className="max-h-64 overflow-auto">
             {JSON.stringify(document.setup.definition, null, 2)}
           </pre>
@@ -704,7 +684,7 @@ function Content({ document }: { document: Document }) {
       )}
       {document.source && (
         <details>
-          <summary>Attached source files and dependencies</summary>
+          <summary>附带源码文件与依赖</summary>
           <ul>
             {Object.entries(document.source.files).map(([name, encoded]) => (
               <li key={name}>
@@ -716,14 +696,10 @@ function Content({ document }: { document: Document }) {
             ))}
           </ul>
           <p>
-            Python {document.source.manifest.python}; requirements:{" "}
-            {(document.source.manifest.import_requirements ?? []).join(", ") ||
-              "No explicit requirements recorded"}
+            Python {document.source.manifest.python}；依赖：{" "}
+            {(document.source.manifest.import_requirements ?? []).join(", ") || "未记录明确依赖"}
           </p>
-          <p>
-            File contents are retained without execution. No static reconstruction of arbitrary
-            methods is promised.
-          </p>
+          <p>保留文件内容但不执行，不承诺静态重建任意方法。</p>
         </details>
       )}
     </section>
@@ -731,15 +707,14 @@ function Content({ document }: { document: Document }) {
 }
 
 function SourceText({ encoded }: { encoded: string }) {
-  if (encoded.length > 512 * 1024)
-    return <p>Large file; inspect the downloaded archive before trusted loading.</p>;
+  if (encoded.length > 512 * 1024) return <p>文件较大；可信加载前请检查下载的归档。</p>;
   let content: string;
   try {
     const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
     content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     if (content.includes("\0")) throw new Error("Binary content");
   } catch {
-    return <p>Binary file; inspect the downloaded archive before trusted loading.</p>;
+    return <p>二进制文件；可信加载前请检查下载的归档。</p>;
   }
   return <pre className="max-h-64 overflow-auto whitespace-pre-wrap">{content}</pre>;
 }

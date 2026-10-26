@@ -46,9 +46,9 @@ test("discovers an ordinary author experiment and edits controls before submitti
       base_url: string;
     };
     await page.goto(`${endpoint.base_url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Author launch tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Author launch tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -196,9 +196,9 @@ test("prepares B while A stays pinned in a separate result page", async ({
     prepareAuthorContexts(uv, project);
     const endpoint = JSON.parse(await readFile(join(project, ".scopecat/daemon.json"), "utf8"));
     await page.goto(`${endpoint.base_url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Author launch tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Author launch tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);

@@ -87,26 +87,26 @@ export function InstrumentDefaultsEditor({
       <header className="flex items-end justify-between gap-3.5 max-[460px]:flex-col max-[460px]:items-stretch">
         <div className="grid gap-[3px]">
           <strong className="text-xs text-text-soft">
-            {mode === "safety" ? "Safe state" : "Experiment start"}
+            {mode === "safety" ? "安全状态" : "实验启动"}
           </strong>
           <small className="text-xs leading-normal text-text-dim">
             {mode === "safety"
-              ? "These device constraints apply to every experiment that uses this device."
-              : "Synchronize first, then optionally apply this sparse member state."}
+              ? "这些设备约束适用于所有使用此设备的实验。"
+              : "先同步，再按需应用此稀疏成员状态。"}
           </small>
         </div>
         {mode === "startup" && (
           <Controls.Field className="grid min-w-[210px] gap-[5px] max-[460px]:min-w-0">
             <span className="text-xs font-extrabold tracking-[0.07em] text-text-dim uppercase">
-              Start policy
+              启动策略
             </span>
             <Controls.Select
               className="w-full min-w-0"
               value={runStart}
               onChange={(event) => onRunStartChange(event.target.value as RunStartPolicy)}
             >
-              <option value="preserve">Preserve observed state</option>
-              <option value="apply_default_state">Apply configured defaults</option>
+              <option value="preserve">保留观测状态</option>
+              <option value="apply_default_state">应用已配置默认值</option>
             </Controls.Select>
           </Controls.Field>
         )}
@@ -138,7 +138,7 @@ export function InstrumentDefaultsEditor({
                           className="min-h-[15px]! w-[15px] flex-none p-0! accent-accent"
                           type="checkbox"
                           checked={enabled}
-                          aria-label={`Configure default for ${memberLabel(member)}`}
+                          aria-label={`配置 ${memberLabel(member)} 默认值`}
                           onChange={(event) => toggle(member, event.target.checked)}
                         />
                         <span className="grid min-w-0 gap-0.5">
@@ -152,7 +152,7 @@ export function InstrumentDefaultsEditor({
                         currentValue={assignment?.value}
                         draft={drafts[key]}
                         editable={enabled}
-                        ariaLabel={`${memberLabel(member)} default value`}
+                        ariaLabel={`${memberLabel(member)} 默认值`}
                         onChange={(draft) => edit(member, draft)}
                       />
                     </div>
@@ -161,23 +161,18 @@ export function InstrumentDefaultsEditor({
               </div>
             </section>
           ))}
-          {groups.length === 0 && (
-            <p className={defaultsUnavailable}>This driver declares no writable state members.</p>
-          )}
+          {groups.length === 0 && <p className={defaultsUnavailable}>此驱动未声明可写状态成员。</p>}
         </div>
       ) : (
         <p className={defaultsUnavailable}>
-          Test the connection to load driver-declared default settings.
-          {defaultState.length > 0 &&
-            ` ${defaultState.length} existing ${
-              defaultState.length === 1 ? "value is" : "values are"
-            } preserved.`}
+          测试连接以加载驱动声明的默认设置。
+          {defaultState.length > 0 && `已保留 ${defaultState.length} 个已有数值。`}
         </p>
       )}
 
       {runStart === "apply_default_state" && defaultState.length === 0 && (
         <p className={configNote} role="status">
-          Select at least one default value before enabling automatic apply.
+          启用自动应用前，请至少选择一个默认值。
         </p>
       )}
     </section>

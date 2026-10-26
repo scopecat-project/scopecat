@@ -52,9 +52,9 @@ test("Start prepares internally while cancelled and edited preparations never ac
     };
     prepareAuthorContexts(uv, project);
     await page.goto(`${endpoint.base_url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Browser operator");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Browser operator");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${endpoint.base_url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);

@@ -158,7 +158,7 @@ export async function applyInstrumentState(
   commandId = createInstrumentCommandId("apply"),
 ): Promise<InstrumentApplyReceipt> {
   const [first, ...remaining] = members;
-  if (!first) throw new Error("Apply requires at least one staged member.");
+  if (!first) throw new Error("应用操作至少需要一个暂存成员。");
   const assignment = (member: StagedInstrumentMember) => ({
     resource_id: instrumentId,
     target: member.target,
@@ -233,7 +233,7 @@ export async function collectInstrumentAcquisition(
       }),
     });
   } catch {
-    throw new ApiError("The local daemon did not respond.");
+    throw new ApiError("本地后台服务未响应。");
   }
   if (!response.ok) {
     const detail = await responseDetail(response);
@@ -245,7 +245,7 @@ export async function collectInstrumentAcquisition(
   try {
     return decodeCollectReceipt(await response.arrayBuffer());
   } catch {
-    throw new ApiError("The daemon returned an invalid hardware receipt.");
+    throw new ApiError("后台服务返回了无效硬件回执。");
   }
 }
 
@@ -319,13 +319,13 @@ export async function resolveInstrumentAttention(sessionId: string): Promise<voi
 export function connectionSummary(connection: InstrumentView["connection"]): string {
   switch (connection.kind) {
     case "virtual":
-      return "Virtual · local simulator";
+      return "虚拟 · 本地模拟器";
     case "tcpip_socket":
       return `TCP/IP · ${connection.host}:${connection.port}`;
     case "serial":
       return `Serial · ${connection.port} @ ${connection.baud_rate}`;
     case "driver_managed":
-      return "Driver managed";
+      return "由驱动管理";
   }
 }
 

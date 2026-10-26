@@ -61,15 +61,15 @@ it("opens only delivered or explicit external attachments and explains repair", 
       <SampleArtifacts sampleId="sample-a" revision={2} />
     </QueryClientProvider>,
   );
-  expect(await screen.findByRole("link", { name: "Open attachment" })).toHaveAttribute(
+  expect(await screen.findByRole("link", { name: "打开附件" })).toHaveAttribute(
     "href",
     "/api/v1/samples/sample-a/revisions/2/artifacts/content?artifact_id=diagram",
   );
-  expect(screen.getByRole("link", { name: "Open external website" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "打开外部网站" })).toHaveAttribute(
     "rel",
     "noopener noreferrer",
   );
-  expect(screen.getByText("Attachment unavailable")).toBeVisible();
+  expect(screen.getByText("附件不可用")).toBeVisible();
   expect(screen.getByText(/Maintainer: import/)).toBeVisible();
   expect(screen.getAllByRole("link")).toHaveLength(2);
   expect(requests).toEqual(["/api/v1/samples/sample-a/revisions/2/artifacts"]);
@@ -89,7 +89,7 @@ it("shows a connection repair message rather than turning unchecked URIs into li
       <SampleArtifacts sampleId="sample-a" revision={1} />
     </QueryClientProvider>,
   );
-  expect(await screen.findByRole("alert")).toHaveTextContent("Attachments could not be checked");
+  expect(await screen.findByRole("alert")).toHaveTextContent("无法检查附件");
   expect(screen.queryByRole("link")).toBeNull();
   view.unmount();
   client.clear();

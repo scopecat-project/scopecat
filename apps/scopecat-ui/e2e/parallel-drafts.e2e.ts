@@ -129,9 +129,9 @@ test("monitor A remains fixed while independent B and C preserve edits and froze
     started = true;
     prepareAuthorContexts(uv, project);
     await page.goto(`${url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Parallel draft tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Parallel draft tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);

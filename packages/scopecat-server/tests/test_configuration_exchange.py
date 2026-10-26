@@ -326,7 +326,7 @@ def test_source_is_verified_inert_and_explicitly_downloaded(tmp_path: Path) -> N
         )
         assert inspected.status_code == 200
         assert "src/never_execute.py" in inspected.json()["source_files"]
-        assert "not been accepted" in " ".join(inspected.json()["notices"])
+        assert "尚未接受" in " ".join(inspected.json()["notices"])
         kept = client.post(ROOT + "/imports", json=original.model_dump(mode="json"))
         assert kept.status_code == 200
         path = ROOT + f"/imports/{original.content_hash}/source"

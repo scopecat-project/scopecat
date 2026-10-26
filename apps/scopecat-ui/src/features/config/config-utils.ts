@@ -25,20 +25,20 @@ export function filterConfigEntries(
 export function configSourceLabel(entry: ConfigRegistryEntry): string {
   switch (entry.source.kind) {
     case "direct_config_profile":
-      return "Direct profile";
+      return "直接 profile";
     case "parameter_revision":
-      return "Parameter revision";
+      return "参数版本";
     case "bound_parameters":
-      return "Prepared parameter inputs";
+      return "已准备参数输入";
     case "manual_parameter_updates":
-      return "Typed parameter edit";
+      return "类型化参数编辑";
     case "setup_rebind":
-      return "Explicit setup rebind";
+      return "明确的 setup 重新绑定";
     case "parameter_context":
-      if (entry.source.rebind) return "Working point setup rebind";
-      return entry.source.publication ? "Verified working point" : "Parameter context";
+      if (entry.source.rebind) return "工作点 setup 重新绑定";
+      return entry.source.publication ? "已验证工作点" : "参数上下文";
     case "candidate_config":
-      return "Candidate config";
+      return "候选配置";
     default:
       return assertNever(entry.source);
   }

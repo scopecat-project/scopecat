@@ -140,7 +140,7 @@ afterEach(() => {
 describe("instrument workspace", () => {
   it("opens registered devices without choosing an experiment setup", async () => {
     renderWorkspace();
-    await screen.findByRole("button", { name: "Connect" });
+    await screen.findByRole("button", { name: "连接" });
     expect(screen.queryByRole("combobox", { name: "Device context" })).not.toBeInTheDocument();
     expect(openInstrumentSession).not.toHaveBeenCalled();
     await connectInstrument();
@@ -168,7 +168,7 @@ describe("instrument workspace", () => {
 
     renderWorkspace();
 
-    expect(await screen.findByText("Instrument provider issues")).toBeVisible();
+    expect(await screen.findByText("仪器 provider 问题")).toBeVisible();
     expect(screen.getByText("The optional vendor provider could not be loaded.")).toBeVisible();
   });
 
@@ -204,19 +204,19 @@ describe("instrument workspace", () => {
     renderWorkspace();
 
     expect((await screen.findAllByText("Drive source"))[0]).toBeVisible();
-    expect(screen.getAllByText("Virtual · local simulator")[0]).toBeVisible();
+    expect(screen.getAllByText("虚拟 · 本地模拟器")[0]).toBeVisible();
     expect(screen.getByText("Readout VNA")).toBeVisible();
     expect(screen.getByText("TCP/IP · 192.0.2.12:5025")).toBeVisible();
-    expect(screen.getByText("Run in progress")).toBeVisible();
+    expect(screen.getByText("运行中")).toBeVisible();
     expect(screen.queryByText("run-42")).not.toBeInTheDocument();
     expect(screen.queryByText("keysight.pna")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Device context" })).not.toBeInTheDocument();
     expect(openInstrumentSession).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle("Inspect instrument vna-1"));
-    expect(await screen.findByText("Manual controls unavailable")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Edit device" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("查看仪器 vna-1"));
+    expect(await screen.findByText("手动控制不可用")).toBeVisible();
+    expect(screen.getByRole("button", { name: "编辑设备" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument();
   });
 
   it("keeps driver ABI details out of the ordinary interface view", async () => {
@@ -257,7 +257,7 @@ describe("instrument workspace", () => {
     expect(readInstrumentState).not.toHaveBeenCalled();
     expect(await screen.findByDisplayValue("5000000000")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh state" }));
+    fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
     await waitFor(() =>
       expect(readInstrumentState).toHaveBeenCalledWith(
         expect.objectContaining({ session_id: "session-1" }),
@@ -290,10 +290,10 @@ describe("instrument workspace", () => {
       .mockRejectedValueOnce(new Error("daemon unavailable"));
     renderWorkspace();
 
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: "Connect" })).toBeVisible());
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: "连接" })).toBeVisible());
     vi.setSystemTime(new Date("2026-07-27T09:00:05Z"));
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    await vi.waitFor(() => expect(screen.getByText("Interactive session connected")).toBeVisible());
+    fireEvent.click(screen.getByRole("button", { name: "连接" }));
+    await vi.waitFor(() => expect(screen.getByText("交互会话已连接")).toBeVisible());
 
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
     expect(renewInstrumentSession).not.toHaveBeenCalled();
@@ -306,8 +306,8 @@ describe("instrument workspace", () => {
     await act(async () => vi.advanceTimersByTimeAsync(1_000));
 
     expect(renewInstrumentSession).toHaveBeenCalledTimes(2);
-    expect(screen.getByText(/device session was interrupted/i)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Connect" })).toBeVisible();
+    expect(screen.getByText(/设备会话已中断/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "连接" })).toBeVisible();
   });
 
   it("shows and applies only session-authoritative configured defaults", async () => {
@@ -318,12 +318,10 @@ describe("instrument workspace", () => {
     renderWorkspace();
 
     await screen.findAllByText("Drive source");
-    expect(
-      screen.queryByRole("button", { name: "Apply configured defaults" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "应用已配置默认值" })).not.toBeInTheDocument();
     await connectInstrument();
     const applyDefaults = await screen.findByRole("button", {
-      name: "Apply configured defaults",
+      name: "应用已配置默认值",
     });
     fireEvent.click(applyDefaults);
 
@@ -334,7 +332,7 @@ describe("instrument workspace", () => {
         expect.stringMatching(/^ui-configured-defaults-/),
       ),
     );
-    expect(await screen.findByText("Configured defaults applied.")).toBeVisible();
+    expect(await screen.findByText("已应用配置的默认值。")).toBeVisible();
     expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toHaveValue(6_000_000_000);
   });
 
@@ -355,12 +353,12 @@ describe("instrument workspace", () => {
 
     await screen.findByText("Reset fault");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Invoke Reset fault" }));
-    expect(await screen.findByText("Invoke receipt: Invoked")).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "调用 Reset fault" }));
+    expect(await screen.findByText("Invoke 回执： 已调用")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply configured defaults" }));
-    expect(await screen.findByText("Configured defaults applied.")).toBeVisible();
-    expect(screen.queryByText("Invoke receipt: Invoked")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "应用已配置默认值" }));
+    expect(await screen.findByText("已应用配置的默认值。")).toBeVisible();
+    expect(screen.queryByText("Invoke 回执： 已调用")).not.toBeInTheDocument();
   });
 
   it("hides configured defaults when the pinned session has none", async () => {
@@ -368,9 +366,7 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
 
-    expect(
-      screen.queryByRole("button", { name: "Apply configured defaults" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "应用已配置默认值" })).not.toBeInTheDocument();
   });
 
   it("disables configured defaults for staged values and pending interactions", async () => {
@@ -394,22 +390,22 @@ describe("instrument workspace", () => {
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
     const applyDefaults = screen.getByRole("button", {
-      name: "Apply configured defaults",
+      name: "应用已配置默认值",
     });
 
     fireEvent.change(frequency, { target: { value: "6000000000" } });
     expect(applyDefaults).toBeDisabled();
-    expect(applyDefaults).toHaveAttribute("title", "Apply or reset staged properties first");
+    expect(applyDefaults).toHaveAttribute("title", "请先应用或重置暂存属性");
 
-    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledOnce());
-    expect(screen.getByRole("button", { name: "Apply staged" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Refresh state" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "应用暂存修改" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
     expect(applyDefaults).toBeDisabled();
-    expect(applyDefaults).toHaveAttribute("title", "Apply or reset staged properties first");
+    expect(applyDefaults).toHaveAttribute("title", "请先应用或重置暂存属性");
     finishCollect?.();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Apply staged" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "应用暂存修改" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "重置" }));
     expect(applyDefaults).toBeEnabled();
   });
 
@@ -439,27 +435,22 @@ describe("instrument workspace", () => {
     await screen.findByText("Reset fault");
     await connectInstrument();
     const applyDefaults = await screen.findByRole("button", {
-      name: "Apply configured defaults",
+      name: "应用已配置默认值",
     });
     await waitFor(() => expect(applyDefaults).toBeEnabled());
 
     fireEvent.click(applyDefaults);
     await waitFor(() => expect(applyInstrumentConfiguredDefaults).toHaveBeenCalledOnce());
 
-    expect(screen.getByRole("button", { name: "Refresh state" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Disconnect" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Collect" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Invoke Reset fault" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "刷新状态" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "断开连接" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "调用 Reset fault" })).toBeDisabled();
     expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toBeDisabled();
-    expect(applyDefaults).toHaveAttribute(
-      "title",
-      "Wait for the current instrument interaction to finish",
-    );
+    expect(applyDefaults).toHaveAttribute("title", "请等待当前仪器交互完成");
 
     finishDefaults?.(configuredDefaultsReceipt("unchanged", instrumentState()));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Refresh state" })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "刷新状态" })).toBeEnabled());
   });
 
   it("shows configured-default rejection problems without losing the session", async () => {
@@ -484,13 +475,13 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Apply configured defaults" }));
+    fireEvent.click(await screen.findByRole("button", { name: "应用已配置默认值" }));
 
     expect(
-      await screen.findByText("Configured defaults rejected: Driver refused the configured state."),
+      await screen.findByText("已拒绝配置的默认值： Driver refused the configured state."),
     ).toBeVisible();
-    expect(screen.getByText("Interactive session connected")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+    expect(screen.getByText("交互会话已连接")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "连接" })).not.toBeInTheDocument();
   });
 
   it("reuses the configured-default operation id while retrying a network failure", async () => {
@@ -505,7 +496,7 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
     const applyDefaults = await screen.findByRole("button", {
-      name: "Apply configured defaults",
+      name: "应用已配置默认值",
     });
 
     fireEvent.click(applyDefaults);
@@ -514,7 +505,7 @@ describe("instrument workspace", () => {
     expect(vi.mocked(applyInstrumentConfiguredDefaults).mock.calls[0]?.[2]).toBe(
       vi.mocked(applyInstrumentConfiguredDefaults).mock.calls[1]?.[2],
     );
-    expect(await screen.findByText("State already matched the configured defaults.")).toBeVisible();
+    expect(await screen.findByText("状态已与配置的默认值一致。")).toBeVisible();
   });
 
   it("refreshes ownership after a configured-default conflict", async () => {
@@ -528,12 +519,10 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Apply configured defaults" }));
+    fireEvent.click(await screen.findByRole("button", { name: "应用已配置默认值" }));
 
-    expect(
-      await screen.findByText("The interactive session ended while applying configured defaults."),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Connect" })).toBeVisible();
+    expect(await screen.findByText("应用已配置默认值时，交互会话已结束。")).toBeVisible();
+    expect(screen.getByRole("button", { name: "连接" })).toBeVisible();
   });
 
   it("allows an operator to disconnect a daemon-owned interactive session", async () => {
@@ -551,9 +540,9 @@ describe("instrument workspace", () => {
     });
     renderWorkspace();
 
-    expect(await screen.findByText("Manual controls unavailable")).toBeVisible();
+    expect(await screen.findByText("手动控制不可用")).toBeVisible();
     expect(screen.queryByText("session-stale")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect session" }));
+    fireEvent.click(screen.getByRole("button", { name: "断开会话" }));
 
     await waitFor(() => expect(abortInstrumentSession).toHaveBeenCalledWith("session-stale"));
   });
@@ -573,8 +562,8 @@ describe("instrument workspace", () => {
     fireEvent.change(frequency, { target: { value: "6000000000" } });
 
     expect(applyInstrumentState).not.toHaveBeenCalled();
-    expect(screen.getByText("1 staged property")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Apply staged" }));
+    expect(screen.getByText("已暂存 1 项属性")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
 
     await waitFor(() =>
       expect(applyInstrumentState).toHaveBeenCalledWith(
@@ -594,7 +583,7 @@ describe("instrument workspace", () => {
         expect.stringMatching(/^ui-apply-/),
       ),
     );
-    expect(await screen.findByText("Apply receipt: Applied")).toBeVisible();
+    expect(await screen.findByText("应用回执： 已应用")).toBeVisible();
   });
 
   it("renders every flat interface property in declaration order", async () => {
@@ -666,7 +655,7 @@ describe("instrument workspace", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: /Internal LO offset/ }), {
       target: { value: "2000000" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Apply staged" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
 
     await waitFor(() =>
       expect(applyInstrumentState).toHaveBeenCalledWith(
@@ -723,7 +712,7 @@ describe("instrument workspace", () => {
       target: { value: "0.2" },
     });
 
-    const apply = screen.getByRole("button", { name: "Apply staged" });
+    const apply = screen.getByRole("button", { name: "应用暂存修改" });
     expect(apply).toBeEnabled();
     fireEvent.click(apply);
     await waitFor(() =>
@@ -784,13 +773,13 @@ describe("instrument workspace", () => {
     expect(voltageEditor).not.toBeNull();
     fireEvent.click(
       within(voltageEditor as HTMLElement).getByRole("button", {
-        name: "Reset staged value",
+        name: "重置暂存值",
       }),
     );
 
     expect(screen.getByRole("spinbutton", { name: /Voltage range/ })).toHaveValue(5);
     expect(screen.getByRole("spinbutton", { name: /Current range/ })).toHaveValue(0.2);
-    expect(screen.getByText("1 staged property")).toBeVisible();
+    expect(screen.getByText("已暂存 1 项属性")).toBeVisible();
     expect(applyInstrumentState).not.toHaveBeenCalled();
   });
 
@@ -823,7 +812,7 @@ describe("instrument workspace", () => {
         "href",
         "https://scopecat-project.github.io/scopecat/how-to/control-instruments/#use-a-configured-device-now",
       );
-      expect(screen.queryByRole("button", { name: /Invoke/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /调用 Invoke/ })).not.toBeInTheDocument();
       expect(openInstrumentSession).not.toHaveBeenCalled();
       expect(readInstrumentState).not.toHaveBeenCalled();
       expect(invokeInstrumentOperation).not.toHaveBeenCalled();
@@ -882,7 +871,7 @@ describe("instrument workspace", () => {
           description ? `采集契约：${description}` : /此 acquisition 未说明是否发起新采集/,
         ),
       ).toBeVisible();
-      expect(screen.getByRole("button", { name: "Collect" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "收集 Collect" })).toBeDisabled();
       expect(collectInstrumentAcquisition).not.toHaveBeenCalled();
       expect(invokeInstrumentOperation).not.toHaveBeenCalled();
       expect(openInstrumentSession).not.toHaveBeenCalled();
@@ -903,19 +892,15 @@ describe("instrument workspace", () => {
     renderWorkspace();
 
     await screen.findByText("Configure trigger");
-    expect(screen.getByRole("button", { name: "Invoke Configure trigger" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "调用 Configure trigger" })).toBeDisabled();
     expect(screen.getByText("Upload waveform")).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Invoke Upload waveform" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "调用 Upload waveform" })).not.toBeInTheDocument();
     expect(screen.queryByText("payload_id")).not.toBeInTheDocument();
     expect(screen.queryByText("waveform/v1")).not.toBeInTheDocument();
 
     await connectInstrument();
     expect(screen.getByText("Upload waveform")).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Invoke Upload waveform" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "调用 Upload waveform" })).not.toBeInTheDocument();
     fireEvent.change(await screen.findByRole("combobox", { name: /Enable correction/ }), {
       target: { value: "true" },
     });
@@ -932,9 +917,9 @@ describe("instrument workspace", () => {
       target: { value: "0.25" },
     });
 
-    expect(screen.queryByText(/staged propert/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/已暂存/)).not.toBeInTheDocument();
     expect(applyInstrumentState).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Invoke Configure trigger" }));
+    fireEvent.click(screen.getByRole("button", { name: "调用 Configure trigger" }));
 
     await waitFor(() => expect(invokeInstrumentOperation).toHaveBeenCalledOnce());
     expect(invokeInstrumentOperation).toHaveBeenCalledWith(
@@ -954,7 +939,7 @@ describe("instrument workspace", () => {
       ],
       expect.stringMatching(/^ui-invoke-/),
     );
-    expect(await screen.findByText("Invoke receipt: Invoked")).toBeVisible();
+    expect(await screen.findByText("Invoke 回执： 已调用")).toBeVisible();
     expect(screen.getByRole("spinbutton", { name: /CW frequency/ })).toHaveValue(7_000_000_000);
     const commandId = vi.mocked(invokeInstrumentOperation).mock.calls[0]?.[4];
     expect(commandId).toBeDefined();
@@ -988,15 +973,13 @@ describe("instrument workspace", () => {
 
     await screen.findByText("Reset fault");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Invoke Reset fault" }));
+    fireEvent.click(await screen.findByRole("button", { name: "调用 Reset fault" }));
 
     expect(
-      await screen.findByText(
-        "The operation result is unknown. The daemon quarantined this session for operator review.",
-      ),
+      await screen.findByText("操作结果未知。后台服务已隔离此会话，需操作者核对。"),
     ).toBeVisible();
     expect(screen.queryByText("session-1")).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Connect" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "连接" })).toBeVisible();
   });
 
   it("displays a current Python HTTP receipt through the real collection API", async () => {
@@ -1007,21 +990,18 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Collect" }));
-    expect(await screen.findByText("Collect receipt: Collected")).toBeVisible();
-    expect(screen.getByText("15 results returned")).toBeVisible();
-    expect(screen.getByText("2 results unavailable")).toBeVisible();
-    expect(screen.getByText("Reasons: Invalid, Missing")).toBeVisible();
-    expect(screen.getByRole("img", { name: /trace preview/i })).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
+    expect(await screen.findByText("Collect 回执： 已采集")).toBeVisible();
+    expect(screen.getByText("15 项返回结果")).toBeVisible();
+    expect(screen.getByText("2 项结果不可用")).toBeVisible();
+    expect(screen.getByText("原因： 无效、缺失")).toBeVisible();
+    expect(screen.getByRole("img", { name: /轨迹预览/i })).toBeVisible();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([
-    [
-      1,
-      "The collection result is unknown. The daemon quarantined this session for operator review.",
-    ],
-    [2, "Collect receipt: Not Collected"],
+    [1, "收集结果未知。后台服务已隔离此会话，需操作者核对。"],
+    [2, "Collect 回执： 未采集"],
   ] as const)("handles current Python receipt status %i", async (index, message) => {
     const actual = await vi.importActual<typeof import("./instrument-api")>("./instrument-api");
     vi.mocked(collectInstrumentAcquisition).mockImplementation(actual.collectInstrumentAcquisition);
@@ -1032,7 +1012,7 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
     expect(await screen.findByText(message)).toBeVisible();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -1065,14 +1045,14 @@ describe("instrument workspace", () => {
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
-    fireEvent.click(await screen.findByRole("button", { name: "Collect" }));
+    fireEvent.click(await screen.findByRole("button", { name: "收集 Collect" }));
 
     const summary = await screen.findByRole("status");
-    expect(within(summary).getByText("2 results unavailable")).toBeVisible();
-    expect(within(summary).getByText("Reasons: Missing, Overload")).toBeVisible();
+    expect(within(summary).getByText("2 项结果不可用")).toBeVisible();
+    expect(within(summary).getByText("原因： 缺失、过载")).toBeVisible();
     expect(summary).not.toHaveTextContent("private-overload-result");
     expect(summary).not.toHaveTextContent("private-missing-result");
-    expect(screen.queryByRole("img", { name: /trace preview/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /轨迹预览/i })).not.toBeInTheDocument();
     expect(screen.queryByText("JSON preview")).not.toBeInTheDocument();
   });
 
@@ -1081,32 +1061,30 @@ describe("instrument workspace", () => {
     vi.mocked(collectInstrumentAcquisition).mockRejectedValueOnce(
       new Error("Collect network failed."),
     );
-    vi.mocked(closeInstrumentSession).mockRejectedValueOnce(
-      new ApiError("The local daemon did not respond."),
-    );
+    vi.mocked(closeInstrumentSession).mockRejectedValueOnce(new ApiError("本地后台服务未响应。"));
     renderWorkspace();
     await screen.findAllByText("Drive source");
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
     fireEvent.change(frequency, { target: { value: "6000000000" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply staged" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
     expect(await screen.findByText("Apply network failed.")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Apply staged" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
     await waitFor(() => expect(applyInstrumentState).toHaveBeenCalledTimes(2));
     expect(vi.mocked(applyInstrumentState).mock.calls[0]?.[3]).toBe(
       vi.mocked(applyInstrumentState).mock.calls[1]?.[3],
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
     expect(await screen.findByText("Collect network failed.")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2));
     expect(vi.mocked(collectInstrumentAcquisition).mock.calls[0]?.[3]).toBe(
       vi.mocked(collectInstrumentAcquisition).mock.calls[1]?.[3],
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "断开连接" }));
     await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(2), {
       timeout: 2_000,
     });
@@ -1122,14 +1100,14 @@ describe("instrument workspace", () => {
     await connectInstrument();
     const frequency = await screen.findByRole("spinbutton", { name: /CW frequency/ });
 
-    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
     expect(await screen.findByText("Collect request lost.")).toBeVisible();
     const staleCollectCommandId = vi.mocked(collectInstrumentAcquisition).mock.calls[0]?.[3];
 
     fireEvent.change(frequency, { target: { value: "6000000000" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply staged" }));
-    expect(await screen.findByText("Apply receipt: Applied")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用暂存修改" }));
+    expect(await screen.findByText("应用回执： 已应用")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "收集 Collect" }));
 
     await waitFor(() => expect(collectInstrumentAcquisition).toHaveBeenCalledTimes(2));
     expect(vi.mocked(collectInstrumentAcquisition).mock.calls[1]?.[3]).not.toBe(
@@ -1210,7 +1188,7 @@ describe("instrument workspace", () => {
     expect(await screen.findByText("Current sample")).toBeVisible();
     expect(screen.getByText("Voltage sample")).toBeVisible();
     expect(screen.queryByText("Enable RF output before collecting.")).not.toBeInTheDocument();
-    const collect = screen.getByRole("button", { name: "Collect" });
+    const collect = screen.getByRole("button", { name: "收集 Collect" });
     expect(collect).toBeEnabled();
     fireEvent.click(collect);
 
@@ -1232,20 +1210,20 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "断开连接" }));
 
     expect(await screen.findByText("Close request lost again.")).toBeVisible();
-    expect(screen.getByText("Interactive session connected")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Disconnect" })).toBeEnabled();
+    expect(screen.getByText("交互会话已连接")).toBeVisible();
+    expect(screen.getByRole("button", { name: "断开连接" })).toBeEnabled();
     expect(closeInstrumentSession).toHaveBeenCalledTimes(2);
     expect(vi.mocked(closeInstrumentSession).mock.calls[0]).toEqual(["session-1"]);
     expect(vi.mocked(closeInstrumentSession).mock.calls[1]).toEqual(["session-1"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "断开连接" }));
 
     await waitFor(() => expect(closeInstrumentSession).toHaveBeenCalledTimes(3));
     expect(vi.mocked(closeInstrumentSession).mock.calls[2]).toEqual(["session-1"]);
-    expect(await screen.findByRole("button", { name: "Connect" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "连接" })).toBeVisible();
   });
 
   it("stays on the connected instrument when closing before selection fails", async () => {
@@ -1271,13 +1249,13 @@ describe("instrument workspace", () => {
     await screen.findAllByText("Drive source");
     await connectInstrument();
 
-    fireEvent.click(screen.getByTitle("Inspect instrument monitor"));
+    fireEvent.click(screen.getByTitle("查看仪器 monitor"));
 
     expect(await screen.findByText(/Switch close failed/)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Drive source", level: 2 })).toBeVisible();
     expect(vi.mocked(closeInstrumentSession).mock.calls[0]).toEqual(["session-1"]);
 
-    fireEvent.click(screen.getByTitle("Inspect instrument monitor"));
+    fireEvent.click(screen.getByTitle("查看仪器 monitor"));
 
     expect(await screen.findByRole("heading", { name: "Fridge monitor", level: 2 })).toBeVisible();
     expect(vi.mocked(closeInstrumentSession).mock.calls[1]).toEqual(["session-1"]);
@@ -1296,10 +1274,10 @@ describe("instrument workspace", () => {
     };
     vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
     renderWorkspace();
-    fireEvent.click(await screen.findByRole("button", { name: "Edit device" }));
+    fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Host"), { target: { value: "192.0.2.24" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save device" }));
+    fireEvent.change(within(dialog).getByLabelText("主机"), { target: { value: "192.0.2.24" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
     await waitFor(() =>
       expect(saveDevice).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1314,6 +1292,30 @@ describe("instrument workspace", () => {
         }),
       ),
     );
+    expect(openInstrumentSession).not.toHaveBeenCalled();
+  });
+
+  it("explains missing operator attribution before submitting a device connection", async () => {
+    vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 0, operator: "" });
+    vi.mocked(getDevices).mockResolvedValue({
+      items: [
+        registeredDevice(
+          instrument({
+            driver_id: "keysight.pna",
+            connection: { kind: "tcpip_socket", host: "192.0.2.20", port: 5025 },
+          }),
+        ),
+      ],
+    });
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("主机"), { target: { value: "192.0.2.24" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "请先在应用设置中保存操作者名称，再保存设备。",
+    );
+    expect(saveDevice).not.toHaveBeenCalled();
     expect(openInstrumentSession).not.toHaveBeenCalled();
   });
 
@@ -1334,10 +1336,10 @@ describe("instrument workspace", () => {
         }),
     );
     renderWorkspace();
-    fireEvent.click(await screen.findByRole("button", { name: "Edit device" }));
+    fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Host"), { target: { value: "192.0.2.24" } });
-    const save = within(dialog).getByRole("button", { name: "Save device" });
+    fireEvent.change(within(dialog).getByLabelText("主机"), { target: { value: "192.0.2.24" } });
+    const save = within(dialog).getByRole("button", { name: "保存设备" });
     fireEvent.click(save);
     fireEvent.click(save);
     await waitFor(() => expect(saveDevice).toHaveBeenCalledTimes(1));
@@ -1350,7 +1352,7 @@ describe("instrument workspace", () => {
       }
       return registered;
     });
-    await act(async () => rejectFirst(new ApiError("The local daemon did not respond.")));
+    await act(async () => rejectFirst(new ApiError("本地后台服务未响应。")));
     await within(dialog).findByRole("alert");
     fireEvent.click(save);
     await waitFor(() => expect(saveDevice).toHaveBeenCalledTimes(2));
@@ -1369,20 +1371,20 @@ describe("instrument workspace", () => {
       );
       vi.mocked(getDevices).mockResolvedValue({ items: [registered] });
       vi.mocked(saveDevice)
-        .mockRejectedValueOnce(new ApiError("The local daemon did not respond."))
+        .mockRejectedValueOnce(new ApiError("本地后台服务未响应。"))
         .mockRejectedValueOnce(
           new ApiError("device connection changed; reload and review before saving", 409),
         );
       renderWorkspace();
-      fireEvent.click(await screen.findByRole("button", { name: "Edit device" }));
+      fireEvent.click(await screen.findByRole("button", { name: "编辑设备" }));
       const dialog = await screen.findByRole("dialog");
-      const host = within(dialog).getByLabelText("Host");
+      const host = within(dialog).getByLabelText("主机");
       fireEvent.change(host, { target: { value: "192.0.2.24" } });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Save device" }));
-      expect(await within(dialog).findByRole("alert")).toHaveTextContent(/not confirmed/i);
+      fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(/尚未确认/);
       fireEvent.change(host, { target: { value: editedHost } });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Save device" }));
-      await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent(/conflict/i));
+      fireEvent.click(within(dialog).getByRole("button", { name: "保存设备" }));
+      await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent(/冲突/));
       const [first, second] = vi.mocked(saveDevice).mock.calls.map(([command]) => command);
       expect(second!.revision_id).not.toBe(first!.revision_id);
       expect(second!.expected_head).toEqual(registered.device.head);
@@ -1410,8 +1412,8 @@ describe("instrument workspace", () => {
       return { status: "connected", description: instrument().description, problems: [] };
     });
     renderWorkspace();
-    fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Connection test passed");
+    fireEvent.click(await screen.findByRole("button", { name: "测试连接" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("连接测试通过");
     expect(testDeviceConnection).toHaveBeenCalledWith(
       registeredDevice(instrument()),
       expect.any(String),
@@ -1426,14 +1428,14 @@ describe("instrument workspace", () => {
       new ApiError("Virtual endpoint unavailable", 409),
     );
     renderWorkspace();
-    fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+    fireEvent.click(await screen.findByRole("button", { name: "测试连接" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
 
     // A refresh or name-only edit must not clear an error for the same connection.
     vi.mocked(getDevices).mockResolvedValue({
       items: [{ ...device, device: { ...device.device, label: "Renamed source" } }],
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^刷新$/ }));
     await screen.findByRole("heading", { name: "Renamed source" });
     expect(screen.getByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
 
@@ -1441,13 +1443,13 @@ describe("instrument workspace", () => {
     updated.device.head.revision_id = updated.revision.id = "connection-v2";
     updated.revision.content.connection.options = { gain: 2 };
     vi.mocked(getDevices).mockResolvedValue({ items: [updated] });
-    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^刷新$/ }));
     await screen.findByRole("heading", { name: "Drive source" });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByText("This connection version has not been tested.")).toBeVisible();
+    expect(screen.getByText("此连接版本尚未测试。")).toBeVisible();
 
     // Failures belonging to the new version must still be shown.
-    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Virtual endpoint unavailable");
     expect(testDeviceConnection).toHaveBeenLastCalledWith(
       updated,
@@ -1471,10 +1473,10 @@ describe("instrument workspace", () => {
     });
     renderWorkspace();
 
-    expect(await screen.findByText("Operator resolution required")).toBeVisible();
+    expect(await screen.findByText("需要操作者处理")).toBeVisible();
     expect(screen.queryByText("Grace")).not.toBeInTheDocument();
     expect(screen.queryByText("session-stale")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Resolve quarantine" }));
+    fireEvent.click(screen.getByRole("button", { name: "处理隔离" }));
     await waitFor(() => expect(resolveInstrumentAttention).toHaveBeenCalledWith("session-stale"));
   });
 });
@@ -1494,8 +1496,8 @@ function renderWorkspace() {
 }
 
 async function connectInstrument() {
-  fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
-  await screen.findByText("Interactive session connected");
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }));
+  await screen.findByText("交互会话已连接");
 }
 
 function mockInstrumentSessionOwnership({ releasedAfterRefresh = false } = {}) {
@@ -2166,7 +2168,7 @@ it("keeps the original session-open actor when retrying after Settings changes",
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 1, operator: "Alice" });
   vi.mocked(openInstrumentSession).mockRejectedValueOnce(new Error("Open response lost"));
   renderWorkspace();
-  fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
+  fireEvent.click(await screen.findByRole("button", { name: "连接" }));
   await screen.findByText("Open response lost");
   expect(vi.mocked(openInstrumentSession).mock.calls[0]![1]).toBe("Alice");
   vi.mocked(readOperatorSettings).mockResolvedValue({ revision: 2, operator: "Bob" });

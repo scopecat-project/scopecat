@@ -1,122 +1,98 @@
-# Maintain the application
+# 维护应用 {#maintain-the-application}
 
-The native Scopecat entry opens the workbench directly. There is no laboratory
-selector or separate management page. **Application settings** contains software,
-source folders and data locations. **Devices and drivers** maintains shared devices.
+Scopecat 原生入口直接打开工作台，没有实验室选择器或单独的管理页。
+**设置**管理软件、作者目录和数据位置；
+**设备与驱动**管理共享设备。
 
-## Daily use
+## 日常使用 {#daily-use}
 
-If you only want to inspect or share saved results, start with
-[Open and share recorded data](open-and-share-data.md); no code folder is needed.
+若只需查看或分享已保存的结果，请从[打开与分享已有数据](open-and-share-data.md)开始，无需作者目录。
 
-1. Open Scopecat, then open your experiment code folder in VS Code.
-2. Select your prepared or self-managed Python for scripts and Notebook kernels.
-   Choose your code, setup and parameters in the current task.
-3. Save edits and refresh author code. This captures source without rebuilding
-   the application or installing dependencies.
-4. Closing the last window keeps Scopecat in the background on both Mac and Windows,
-   with a menu-bar/system-tray entry for **Open** and **Quit**. Closing an additional
-   window only closes that view. Choose **Quit** to exit the application: if idle,
-   it exits directly; with unfinished work, choose to wait, stop the work and quit,
-   or continue in the background.
-   An idle Python session alone does not prevent quitting.
+1. 打开 Scopecat，再在 VS Code 中打开实验代码目录。
+2. 为脚本和 Notebook 内核选择已准备好或自行管理的 Python，在当前任务中选择代码、实验配置和参数。
+3. 保存编辑并刷新作者代码。这会捕获源码，不会重建应用或安装依赖。
+4. Mac 和 Windows 上，菜单栏或系统托盘可用时，关闭最后一个窗口会让 Scopecat 继续在后台运行，
+   托盘菜单提供**打开 Scopecat**和**退出 Scopecat**；关闭额外窗口只关闭该视图。
+   托盘不可用或尚未确认时，最后一个窗口保持打开，可最小化，或使用**文件 → 退出 Scopecat**。
+   选择**退出 Scopecat**时，空闲应用直接退出；有未完成工作时，可等待、停止工作并退出，或继续后台运行。
+   仅有空闲 Python 会话不会阻止退出。
 
-Reopening restores access to retained records; it never repeats a measurement.
-Closing a browser tab or a Python client does not stop the application.
+重新打开应用只恢复对已保存记录的访问，不会重复测量。
+关闭浏览器标签页或 Python 客户端不会停止应用。
 
-## Back up application data
+## 备份应用数据 {#back-up-application-data}
 
-In the native app, choose **Settings → Software and data → Back up application data…**.
-Choose an existing folder outside the application home, save and stop editing practice
-files, then confirm. Cancelling either dialog changes nothing. Scopecat stops the
-service only when idle; active work or file transfers must finish first.
+在原生应用中选择**设置 → 软件与数据 → 备份应用数据…**。
+选择应用主目录之外的现有文件夹，保存并停止编辑练习文件，然后确认。
+取消任一对话框都不会改变数据。应用仅在空闲时停止服务；活动工作和文件传输必须先结束。
 
-The result page shows the uniquely named snapshot directory and whether verification
-succeeded. Keep the whole directory. The service stays stopped; choose **重新打开应用**
-to continue, or **退出** to leave it stopped. On failure, original data and environments
-remain in place; reopen and retry after correcting the reported cause. Do not treat a
-failed or unverified destination as a usable backup.
+结果页显示唯一命名的快照目录及校验结果。请保留整个目录。
+服务会保持停止；选择**重新打开应用**继续，或选择**退出**保持停止。
+失败时原数据和环境保留，修正原因后可重新打开并重试。
+未完成或未通过校验的目录不能作为可用备份。
 
-This reuses the current-format snapshot: scientific records, immutable source bundles,
-practice files and author registrations are retained. External editable author folders,
-Python environments, SDKs and the application installer are **not** included; preserve
-those separately. Backup does not migrate data or archive the complete environment.
-Restore eligibility follows the supported snapshot and data-format compatibility
-contract, not the application version number alone. Restoring remains an explicit
-maintainer operation into a **new** application home, described in
-[backup/restore](backup-and-restore.md); there is no in-place restore
-button. The native installation does not require or install a global `scopecat` command
-for this backup workflow.
+此入口使用当前格式快照，保留科学记录、不可变源码包、练习文件和作者目录登记。
+**不包含**外部可编辑作者目录、Python 环境、SDK 或应用安装包，请另行保留。
+备份不会迁移数据，也不是完整环境归档。能否恢复取决于快照与数据格式兼容契约，
+不能只看应用版本号。恢复仍由维护者显式执行到**新的应用主目录**，见
+[备份与恢复](backup-and-restore.md)；没有原地恢复按钮。
+这个原生备份入口不要求、也不会安装全局 `scopecat` 命令。
 
-## Install a newer application
+## 安装新版应用 {#install-a-newer-application}
 
-Quit Scopecat, install the newer native package for your platform, then reopen it.
-The package already contains Python and application dependencies. Startup runs that
-version directly; it does not install another execution environment. You do not
-need system Python or uv, or an environment selection in Settings.
+退出 Scopecat，安装对应平台的新版原生安装包，再重新打开。
+安装包已包含 Python 和应用依赖，启动直接运行随包版本，不会另外安装执行环境。
+使用应用无需系统 Python、uv 或在设置中选择应用环境。
 
-The window appears while the application starts. A failed startup stays in that window
-with retry and quit controls. If an existing service is still running, finish its
-work before retrying, or explicitly stop it to complete the update. Startup never
-silently substitutes an older desktop version.
-Application updates preserve user Python environments and retained task environments.
-Updating client packages is a separate operation; close kernels before rebuilding them.
+启动期间窗口会先出现；失败时在同一窗口提供重试和退出入口。
+如果旧服务仍在运行，请先完成其工作再重试，或显式停止旧服务以完成更新。
+启动不会悄悄替换成旧桌面版本。应用更新保留用户 Python 环境及已保存任务使用的环境。
+客户端包更新是独立操作，重建前应先关闭内核。
 
-## Author folders
+## 作者目录 {#author-folders}
 
-For your first Notebook experiment, follow [the Help lesson](../getting-started/quickstart.md).
-Its folder is already registered and can become your own working source.
-To create a separate author directory, open **Settings → Author code → New code folder**.
-Choose a save location and folder name, then **Create folder and prepare Python**.
-Scopecat creates a device-free example and an independent Python environment.
-It does not connect devices or start a measurement. Existing folders are never overwritten.
+首次 Notebook 实验请按[帮助页课程](../getting-started/quickstart.md)开始。
+课程目录已登记，可直接成为日常编写实验的目录。
+若需独立目录，在**设置 → 作者代码 → 新建代码目录** 中选择保存位置和名称，
+然后点击 **创建目录并准备 Python**。应用创建无需设备的示例和独立 Python 环境，
+不会连接设备或开始测量，也不会覆盖现有目录。
 
-After preparation, Settings shows your folder and Python path. Open that folder
-in VS Code, select its `.venv` interpreter, and run `notebooks/02_edit_scan.py`
-cell by cell. The example submits a synthetic scan, analyzes it and reopens the
-saved result. Running the submission again creates another measurement.
+准备完成后，设置页显示目录和 Python 路径。在 VS Code 中打开该目录，
+选择 `.venv` 解释器，逐单元格运行 `notebooks/02_edit_scan.py`。
+示例会提交合成扫描、分析并重新打开已保存结果；再次运行提交部分会产生一次新测量。
 
-For existing Scopecat source, choose **Use existing folder → Browse for code folder…**,
-enter its **Execution Python**, then **Add code folder**. Select registered folders
-under **Your code folders**. Adding a folder keeps the application running. Multiple
-folders share one service, device registry and data authority.
+接入已有 Scopecat 源码时，选择 **使用已有目录 → 浏览代码目录…**，
+填写 **执行 Python**，再点击 **添加代码目录**。
+可在 **代码目录** 中选择已登记目录。添加目录不会停止应用；
+多个目录共享同一服务、设备登记和数据管理。
 
-For a registered folder, `sc.notebook()` accepts a compatible user-selected kernel
-while an older `.venv` remains in place. It still checks the selected source's
-Scopecat API versions and installed author-package contents before importing it;
-registration does not waive those checks. The Notebook kernel and execution worker
-need not have the same executable path. Keep old environments for retained-source
-execution and recovery.
+对已登记目录，`sc.notebook()` 可使用用户选择的兼容内核，同时保留旧 `.venv`。
+导入前仍会检查所选源码的 Scopecat API 版本与已安装作者包内容，登记不能跳过这些检查。
+Notebook 内核与执行 worker 不必使用同一个解释器路径。
+请保留旧环境，以便执行已保存源码及恢复工作。
 
-If an existing folder has no local Python, choose **Create local Python environment**.
-Select `.venv/bin/python` on macOS or `.venv/Scripts/python.exe` on Windows.
-This is your environment: installing
-plotting or analysis packages there does not modify the application. Do not use an
-interpreter inside the installed application as a Notebook kernel. The generated
-environment uses an independent uv-managed Python. Keep that Python installed while
-its environments are in use. Replacing or removing the application does not remove it.
+如果现有目录没有本地 Python，选择 **创建本地 Python 环境**，
+随后选择 macOS 的 `.venv/bin/python` 或 Windows 的 `.venv/Scripts/python.exe`。
+这是用户环境，在其中安装绘图或分析包不会修改应用。
+不要把应用安装目录内的解释器作为 Notebook 内核。
+生成的环境使用由 uv 管理的独立 Python；环境使用期间请保留它。
+更换或卸载应用不会删除这个 Python。
 
-First preparation needs network access for Python and third-party dependencies.
-The application itself still starts offline. The author resources carry only the
-required unpublished Scopecat wheels and the matching dependency recipe.
-A folder's `.python-version` overrides the recipe's fixed Python version;
-`requires-python` and declared dependencies are checked. An existing `uv.lock`
-is exported with `--locked`: a stale lock fails without being rewritten.
-The application does not choose `latest`, change PATH or install global packages.
+所需 Python 和第三方依赖未缓存时，准备过程需要联网下载；应用本身仍可离线启动。
+作者资源只携带所需的未发布 Scopecat wheels 和匹配的依赖配方，不是完整离线依赖包。
+目录内的 `.python-version` 优先于配方固定的 Python 版本，并会检查 `requires-python`
+和声明的依赖。已有 `uv.lock` 用 `--locked` 导出；过期锁文件会导致失败，不会被重写。
+应用不会选择 `latest`、修改 PATH 或安装全局包。
 
-The application CLI preparation actions accept `--python /path/to/python` for
-an existing independent interpreter. `UV_PYTHON` is also checked when set.
-For an already prepared background environment, **Execution Python** validates
-the environment before selection. Failed preparation preserves the previous one.
+应用 CLI 的准备操作可通过 `--python /path/to/python` 使用已有独立解释器；
+设置了 `UV_PYTHON` 时也会检查它。选择已准备好的后台环境时，
+**执行 Python** 会先验证环境。准备失败保留原环境。
 
-The generated environment contains the Scopecat Python API, a notebook kernel and
-their dependencies. Desktop, service and teaching packages are not copied into it.
-VS Code can use it directly. For optional JupyterLab editing, install `jupyterlab`
-with this environment's pip; the `scopecat notebook` maintainer command also uses
-this folder's `.venv`, never application Python.
+生成的环境包含 Scopecat Python API、Notebook 内核及其依赖，不复制桌面、服务和教学包。
+VS Code 可直接使用。如需 JupyterLab 编辑器，用该环境的 pip 安装 `jupyterlab`；
+维护者的 `scopecat notebook` 命令也使用该目录的 `.venv`，不会使用应用 Python。
 
-If a package is also needed by background experiments, declare it in the folder's
-`pyproject.toml`, for example:
+如果后台实验也需要某个包，请在作者目录的 `pyproject.toml` 中声明，例如：
 
 ```toml
 [project]
@@ -125,45 +101,38 @@ version = "0.1.0"
 dependencies = ["humanize==4.13.0"]
 ```
 
-Choose **Prepare execution environment from pyproject.toml**,
-then refresh and preview your experiment.
-Preparation resolves the source requirements with compatible Scopecat packages in a separate managed
-environment. Packages supplied by the delivery stay constrained to its complete
-dependency lock, the same baseline used to create the local Notebook environment.
-Online resolution can add declared packages but cannot silently upgrade that baseline.
-Conflicting requirements fail without changing the running application
-or the selected source environment. Existing prepared work and plans retain their
-recorded dependency versions; the application remains running. Local pip installs
-alone do not change background execution.
+选择 **按 pyproject.toml 准备执行环境**，然后刷新并预览实验。
+准备操作在独立受管环境中解析源码需求与兼容的 Scopecat 包。
+交付包提供的依赖仍受完整依赖锁约束，与本地 Notebook 环境使用相同基线；
+联网解析可以添加声明的包，但不能静默升级该基线。
+依赖冲突会失败，不会修改运行中的应用或所选源码环境。
+已准备的工作和计划保留其记录的依赖版本，应用保持运行。
+仅在本地 pip 安装不会改变后台执行环境。
 
-Client imports check the source's declared dependency ranges and the matching
-Scopecat API version. They do not require every analysis-library version or Python
-patch release to match the execution environment. Retained execution and recovery
-still check the exact recorded environment; changing a user environment in place
-can invalidate work prepared with that environment.
+客户端导入会检查源码声明的依赖范围和匹配的 Scopecat API 版本，
+不要求每个分析库版本或 Python 补丁版本都与执行环境相同。
+已保存工作的执行和恢复仍检查精确记录的环境；原地修改用户环境可能使先前准备的工作失效。
 
-For a broken local environment, close its terminals and kernels, then choose
-**Rebuild local Python environment**. The old directory is retained as
-`.venv-retained-…`; a failed rebuild restores it. The replacement starts from the
-selected delivery, so reinstall your local additions afterwards. This operation
-does not alter source files, measurements or managed execution environments.
+本地环境损坏时，先关闭其终端和内核，再展开 **查看或修改 Python 环境**，
+选择 **重建本地 Python 环境**。
+旧目录保留为 `.venv-retained-…`，重建失败会恢复旧目录。
+新环境基于所选交付包创建，之后需重新安装自行添加的包。
+此操作不会修改源码、测量记录或受管执行环境。
 
-For a Help course with failing imports, use **Repair Notebook environments** in
-that course after closing its notebooks and Python terminals. Repair keeps the
-same folder, source edits, Notebook notes and saved results. It retains the old
-local environment and prepares the background environment against the delivery
-lock; previously prepared work keeps its recorded environment. Restart the
-Notebook with the displayed `.venv` kernel. Reinstall local additions if needed.
-Help windows observe the same preparation operation: wait while it is running;
-after a failure or interruption, retry continues in the same folder.
+帮助页课程导入失败时，关闭该课程的 Notebook 和 Python 终端，再展开
+**修复 Notebook 环境**，点击 **修复环境并打开 Notebook**。
+修复保留同一目录、源码编辑、Notebook 笔记和已保存结果，保留旧本地环境，
+并按交付依赖锁准备后台环境；之前准备的工作仍使用其记录的环境。
+重新启动 Notebook 时选择页面显示的 `.venv` 内核，并按需重装自行添加的包。
+多个帮助窗口观察的是同一次准备操作：运行中请等待，失败或中断后重试仍使用同一目录。
 
-Managed execution environments live under `HOME/environments`; retained environments
-are not disposable caches. To use an existing environment instead, enter its Python
-and choose **Use this execution Python**; no packages are installed. Driver updates
-use the registered source environment unless explicitly overridden in the driver
-panel. Changing source execution Python does not replace connected drivers.
+受管执行环境位于 `HOME/environments`，已保留的环境不是可丢弃缓存。
+也可以展开 **查看或修改 Python 环境**，填写现有 Python 并选择
+**使用此执行 Python**，不会安装包。
+驱动更新默认使用登记源码的执行环境，除非在驱动面板显式覆盖。
+修改源码执行 Python 不会替换已连接的驱动。
 
-Maintainers can use the same operations without opening a browser:
+维护者可通过命令执行同类操作，无需打开浏览器：
 
 ```sh
 scopecat app --home /path/to/Scopecat --action register-source --workspace /path/to/code
@@ -172,51 +141,42 @@ scopecat app --home /path/to/Scopecat --action status
 scopecat app --home /path/to/Scopecat --action stop
 ```
 
-Only `--action open` opens a browser; `--action desktop` opens the native window.
-A source checkout can initially configure an isolated development home with
-`--action configure --source /path/to/scopecat`, after building its GUI.
-Installed capability packages belong to the source's selected execution environment.
-Declare their manifest in that source's `scopecat.toml`, as described in
-[installed laboratory adapters](../development/architecture/public-application.md#installed-laboratory-adapters).
-Do not install them into or configure them on the application itself.
+仅 `--action open` 打开浏览器；`--action desktop` 打开原生窗口。
+源码检出目录在构建 GUI 后，可先用 `--action configure --source /path/to/scopecat`
+配置独立开发应用目录。已安装的能力包属于源码所选的执行环境，
+其 manifest 应声明在该源码的 `scopecat.toml`，见
+[已安装的实验室适配器](../development/architecture/public-application.md#installed-laboratory-adapters)。
+不要将其安装到应用环境或配置在应用本身。
 
-## Develop a capability in VS Code
+## 在 VS Code 中开发能力 {#develop-a-capability-in-vs-code}
 
-Use an isolated foreground development application and edit ordinary source in
-VS Code:
+使用独立的前台开发应用，在 VS Code 中编辑普通源码：
 
 ```sh
 uv run --locked python -m scripts.dev --home /path/to/development
 ```
 
-Run this from a public checkout with Python 3.14+, uv, Node.js and pnpm. It opens
-the native desktop with Vite and an isolated backend; Ctrl-C requests exit after
-work becomes idle. Register the capability source folder through Settings.
-See [daily source development](../development/public-preview.md#daily-source-desktop).
-Registering the source folder does not enable its drivers. Experiment and
-analysis edits use ordinary author refresh. Initial driver selection and edits use
-**Update from source** in **Devices and drivers**, after finishing active work and
-releasing manual sessions. Saving a file alone does not replace a live driver.
-Dependency changes require explicit preparation of the development environment.
-Application updates use a newly built native package, not a candidate interpreter
-or a capability-wheel switch inside the running application.
+在公库检出目录运行，需 Python 3.14+、uv、Node.js 和 pnpm。
+命令打开带 Vite 和独立后端的原生桌面；Ctrl-C 请求在工作空闲后退出。
+通过设置登记能力源码目录，详见[日常源码开发](../development/public-preview.md#daily-source-desktop)。
+登记源码不会启用驱动。实验和分析修改使用普通作者代码刷新；
+首次选择或修改驱动使用**设备与驱动**中的 **从源码更新**，
+此前应结束活动工作并释放手动会话。仅保存文件不会替换正在使用的驱动。
+依赖变更需要显式准备开发环境。应用更新使用新构建的原生包，
+不在运行中的应用内切换候选解释器或能力 wheel。
 
-## Recovery
+## 恢复运行 {#recovery}
 
-If startup detects another interpreter, use the desktop's **Stop background and
-restart** recovery action, or run the explicit stop command above. Stopping uses
-the recorded process identity, even when its old interpreter or optional adapter
-is unavailable. It never kills unrelated processes by name.
+启动发现其他解释器时，使用桌面的停止后台并重启操作，或执行上面的显式停止命令。
+停止依据已记录的进程身份，即使旧解释器或可选适配器已不可用，也不会按名称杀死无关进程。
 
-After a force-kill, valid stale ownership is reconciled under the runtime locks.
-A lock file's existence alone does not mean a process is alive. Ambiguous ownership
-remains an error rather than deleting records or guessing a PID.
+强制终止后，系统会在运行锁保护下核对有效但过期的占用记录。
+锁文件存在本身不代表进程存活；无法确定归属时仍报错，不会删除记录或猜测 PID。
 
-After changing local settings, choose **Stop work and restart** in Application
-settings. Restart checks the current application and settings before reopening.
-If it fails, the window retains the error and retry controls. Install a corrected
-application package to repair application dependencies; do not use pip inside it.
-**Technical diagnostics** contains interpreter and capability details for maintainers.
+修改本地设置后，在设置页选择 **停止任务并重启**。
+重启会先检查当前应用和设置；失败时窗口保留错误及重试入口。
+应用依赖损坏应安装修正后的应用包，不要在应用内使用 pip。
+**技术诊断** 提供维护者需要的解释器和能力详情。
 
 原生日志位于 `HOME/desktop/desktop.log`。新建应用的科学数据位于 `HOME/data/`，
 daemon 日志位于 `HOME/state/daemon.log`；`state/` 还保存安装登记、作者目录登记、
@@ -225,27 +185,22 @@ daemon 日志位于 `HOME/state/daemon.log`；`state/` 还保存安装登记、�
 记录准确错误和应用路径；历史目录不会自动删除。完整边界见
 [安装布局](../development/installation-layout.md#installed-application-directories)。
 
-## Ownership and limits
+## 占用规则与限制 {#ownership-and-limits}
 
-A development home is independent of a daily home. Use temporary homes for tests;
-never borrow the daily service. Different application homes do not coordinate
-access to the same physical hardware.
+开发应用目录独立于日常应用目录。测试使用临时目录，不要借用日常服务。
+不同应用主目录之间不会协调对同一真实设备的访问。
 
-The application retains existing daemon/worker isolation and shutdown checks.
-Updates are explicit interruptions, not permission to resume an acquisition.
-Supported persistent-data compatibility begins only at a designated baseline;
-none is designated yet. See [data compatibility](../development/data-compatibility.md)
-and [backup/restore](backup-and-restore.md).
+应用保留 daemon/worker 隔离及关闭检查。更新是显式中断，不授予恢复采集的权限。
+持久数据兼容性只从明确指定的基线开始承诺，目前尚未指定该基线。
+见[数据兼容策略](../development/data-compatibility.md)和[备份与恢复](backup-and-restore.md)。
+帮助页练习使用同一个应用，数据清理也使用普通数据清理入口。
 
-Help practice uses the same application and its ordinary data-cleanup controls.
+## 不支持的数据格式导致启动失败时重置数据 {#reset-data-when-an-unsupported-format-prevents-startup}
 
-## Reset data when an unsupported format prevents startup
-
-The native error page offers **删除应用数据并重新初始化…**. By default, choose
-an external backup folder, then confirm the exact data range. The host remembers
-only this folder. Each recovery starts with backup enabled; **本次跳过备份** skips
-it only for this confirmation. Cancelling either dialog deletes nothing. A failed
-backup never falls back to deletion.
+原生错误页提供**删除应用数据并重新初始化…**。
+默认先选择外部备份文件夹，再确认精确的数据范围；应用只记住这个文件夹。
+每次恢复都默认启用备份，**本次跳过备份**只对本次确认生效。
+取消任一对话框都不会删除数据，备份失败绝不会转为直接删除。
 
 原件备份逐字节保留数据库、WAL 和对象文件，不读取或归档可重建的
 `control.sqlite3-shm` 索引；清单会注明这一项。该索引不含数据库内容，
@@ -260,16 +215,13 @@ legacy 布局仍为 `HOME/runtime/.scopecat/`。不会删除整个数据目录�
 不会自动运行任务或连接设备，也不会清理环境、物化源码或未知辅助文件。
 此操作不创建新数据空间或空间管理入口。
 
-The backup is a uniquely named directory in the chosen folder, containing raw
-store files and a SHA-256 manifest. It preserves the original format; it is **not**
-a current-version snapshot/restore promise and does not include source or Python
-environments. Supported-format daily backup uses the Settings entry above; explicit
-restore remains a separate maintainer command.
-All archive files are copied and verified before deletion. Interrupted deletion
-can be partial and cannot be rolled back automatically. Retry requires explicit
-confirmation; an existing verified archive is reused and its location displayed.
-If an earlier attempt skipped backup, a new backup can contain only what remains.
+备份在所选文件夹中使用唯一目录名，包含原始存储文件和 SHA-256 清单。
+它保留原格式，**不承诺能按当前版本的快照流程恢复**，也不包含源码或 Python 环境。
+支持格式的日常备份使用上面的设置入口；显式恢复仍是维护者的独立命令。
+所有归档文件均在删除前复制并校验。删除中断可能留下部分删除状态，无法自动回滚。
+重试仍需显式确认；已有已验证归档会被复用并显示位置。
+若上次跳过备份，新备份只能包含剩余数据。
 
-Recovery refuses custom runtime bindings/composition, uncertain or active owners,
-redirected paths, unknown files inside the object store, and unresolved rollback
-journals. These are explanations to preserve the data, not permission to guess.
+恢复会拒绝自定义运行绑定或组合、不确定或活动中的所有者、重定向路径、
+对象存储中的未知文件及未解决的 rollback journal。
+出现这些错误应保留数据并核查，不能猜测处理。

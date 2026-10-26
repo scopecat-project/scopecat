@@ -12,14 +12,14 @@ export function ActionNote({
   return (
     <label className="mt-3.5 grid gap-1.5">
       <span className="text-[0.55rem] font-extrabold tracking-[0.07em] text-text-dim uppercase">
-        Audit note
+        审计备注
       </span>
       <textarea
         className="min-h-[58px] w-full resize-y rounded-[8px] border border-line bg-bg px-2.5 py-[9px] text-[0.68rem] text-text outline-0 focus:border-[rgb(128_163_207_/_45%)]"
         rows={2}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Why is this configuration changing?"
+        placeholder="为什么修改此配置？"
       />
     </label>
   );

@@ -1,40 +1,36 @@
-# Set up devices for an experiment
+# 为实验配置设备 {#set-up-devices-for-an-experiment}
 
-Open **Devices and drivers** to add, name, test or retire a device. You do not
-need an experiment setup to use this page. Selecting a device reads its details;
-**Connect** opens a manual session and **Test connection** runs a separate test.
-Experiments and manual sessions share the same device ownership.
+打开**设备与驱动**可添加、命名、测试或停用设备，
+无需先创建实验配置。选中设备只读取详情；**连接** 打开手动会话，
+**测试连接** 则执行单独的连接测试。实验与手动会话遵守同一套设备占用规则。
 
-Keep three kinds of changes in their own places:
+三类修改各有入口：
 
-- **Devices and drivers:** address, transport options, installed driver and device safety.
-- **Configuration → Experiment setups:** experiment aliases and their registered devices.
-- **Parameter versions:** scientific inputs, estimates and saved parameter branches.
+- **设备与驱动**：地址、传输选项、已安装驱动和设备安全要求。
+- **参数与绑定 → 实验 setup**：实验使用的设备别名及其绑定的已登记设备。
+- **工作参数与已保存版本**：科学输入、估计值和已保存的参数分支。
 
-A setup is a named definition of devices, roles, channels and execution policies.
-It references registered devices rather than owning another editable copy of their
-connections. Each experiment page or Python session can choose its own setup.
+实验配置（setup）是带名称的设备、角色、通道和执行策略定义。
+它引用已登记设备，不另存一份可独立修改的连接信息。
+每个实验页或 Python 会话都可以选择自己的实验配置。
 
-## Start from a template
+## 从模板开始 {#start-from-a-template}
 
-In **Configuration**, select an available template and import it. The application
-saves its setup and independent parameter version. Choose **Use imported
-configuration for next experiment**, then select the sample and enter experiment
-inputs. No global activation is needed.
+在**参数与绑定 → 实验 setup → 配置模板**中选择可用模板，点击 **导入配置模板**。
+应用保存实验配置和独立的参数版本。
+选择 **将导入配置用于下次实验**，再选择样品并填写实验输入，
+无需全局激活。
 
-A template can reuse registered devices, but cannot overwrite their connection
-settings. If an import reports a different connection, review the registered
-device first. Repeated imports are not a way to change its address.
+模板可以复用已登记设备，但不能覆盖其连接设置。若导入提示连接不同，
+请先检查已登记设备；重复导入不会修改设备地址。
 
-## Reuse or revise a setup
+## 复用或修改实验配置 {#reuse-or-revise-a-setup}
 
-Choose a saved setup in **Configuration → Experiment setups**, adjust its device
-bindings and save it under a new name. The original definition remains available.
-Device safety requirements apply to every setup and cannot be relaxed by an
-experiment's success or failure policy.
+在**参数与绑定 → 实验 setup** 中选择已保存的实验配置，
+调整设备绑定，在 **另存为** 中填写新名称，再点击 **保存 setup**，原定义仍可使用。
+设备安全要求适用于所有实验配置，不能通过实验的成功或失败策略放宽。
 
-For topology, routing and other authored setup changes, edit the definition in
-Python:
+拓扑、路由等由作者编写的配置需要在 Python 中修改：
 
 ```python
 definition = lab.setup.definition("bench-a").definition
@@ -42,11 +38,9 @@ revised = definition.model_copy(update={"routing": reviewed_routing})
 setup = lab.setup.save(revised, name="bench-a-rewired", note="Reviewed wiring")
 ```
 
-`reviewed_routing` is the routing supplied by the experiment or adapter author.
-Saving a setup does not open hardware or change another page.
+`reviewed_routing` 是实验或适配器作者提供的路由。保存实验配置不会打开设备，也不会改变其他页面。
 
-Before preparing an experiment, resolve its named setup and select the exact
-result with the parameters:
+准备实验前，解析具名配置，并将解析得到的精确配置与参数一起选入会话：
 
 ```python
 setup = session.setup.get("bench-a-rewired")
@@ -54,24 +48,18 @@ session.use(parameter_branch="daily", setup=setup)
 prepared = session.prepare(experiment, parameters=session.params)
 ```
 
-`setup.get(name)` resolves the definition against the current registered device
-connections. The result retains their exact revisions and driver identities.
-If a relevant device changes before submission, recheck the setup and preview
-again. Submitted work retains its captured inputs; it never follows a later
-connection head.
+`setup.get(name)` 根据当前已登记的设备连接解析定义，结果保留精确的连接修订和驱动身份。
+如果提交前相关设备发生变化，请重新检查配置并预览。
+已提交的工作保留提交时捕获的输入，不会自动追随后来的连接版本。
 
-## Change or retire a device
+## 修改或停用设备 {#change-or-retire-a-device}
 
-Finish or cancel affected queued experiments and close manual sessions before
-changing a connection. The application checks ownership and releases an idle
-connection before committing the change. An unsuccessful release keeps the old
-connection revision and reports the session that needs recovery.
+修改连接前，先完成或取消受影响的排队实验，并关闭手动会话。
+应用检查设备占用，在提交修改前释放空闲连接；释放失败时保留旧连接修订，
+并报告需要恢复的会话。
 
-Renaming a device changes its display name only. Retiring it retains its records
-and prevents new work from resolving it. After successful retirement, its address
-can be assigned to a replacement device; old experiment snapshots still refer to
-the retired device.
+重命名只改变显示名称。停用设备会保留记录，并阻止新工作解析到该设备。
+停用成功后，其地址可以分配给替换设备；旧实验快照仍引用原来已停用的设备。
 
-For direct Python control without an experiment setup, see
-[Control instruments](control-instruments.md). For parameter editing, see
-[Parameter branches](parameter-branches.md).
+不使用实验配置、直接通过 Python 控制设备时，参见[控制仪器](control-instruments.md)。
+编辑参数请参见[参数分支](parameter-branches.md)。

@@ -52,7 +52,7 @@ export function parseConfigProfileJson(textValue: string): ConfigProfileSnapshot
   try {
     parsed = JSON.parse(textValue);
   } catch {
-    throw new Error("The selected file is not valid JSON.");
+    throw new Error("所选文件不是有效 JSON。");
   }
   const profile = object(parsed, "selected config snapshot");
   const formatVersion = optionalText(profile.format_version);
@@ -62,13 +62,13 @@ export function parseConfigProfileJson(textValue: string): ConfigProfileSnapshot
     );
   }
   if (!optionalText(profile.id)) {
-    throw new Error("The config snapshot is missing its id.");
+    throw new Error("配置快照缺少 id。");
   }
   if (!isObject(profile.system)) {
-    throw new Error("The config snapshot is missing its system definition.");
+    throw new Error("配置快照缺少系统定义。");
   }
   if (!isObject(profile.parameter_snapshot)) {
-    throw new Error("The config snapshot is missing its parameter values.");
+    throw new Error("配置快照缺少参数值。");
   }
   const snapshot = { ...profile };
   delete snapshot.format_version;

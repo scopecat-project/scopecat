@@ -50,28 +50,23 @@ export function SampleCapabilities({
       : undefined;
   return (
     <details className="border rounded p-3 space-y-3">
-      <summary>Capability evidence for this sample revision</summary>
+      <summary>此样品版本的能力证据</summary>
       <p>
-        Select a measurement to reuse its exact saved parameters, setup, subject and scenario. This
-        inspects a historical context, not the current parameter branch or overall sample readiness.
-        Joint measurements retain their complete subject, including other samples.
+        选择测量以复用其精确保存的参数、setup、测量对象和场景。此处检查历史上下文，不代表当前参数分支或样品整体就绪情况。联合测量保留完整测量对象，包括其他样品。
       </p>
       <Controls.Field>
-        Measurement context
+        测量上下文
         <Controls.Select value={runId} onChange={(event) => setRunId(event.target.value)}>
-          <option value="">Choose a measurement</option>
+          <option value="">选择测量</option>
           {choices.map((run) => (
             <option key={run.runId} value={run.runId}>
-              {run.displayName || run.experimentId} · {run.createdAt ?? "time unavailable"} ·{" "}
-              {run.runId}
+              {run.displayName || run.experimentId} · {run.createdAt ?? "时间不可用"} · {run.runId}
             </option>
           ))}
         </Controls.Select>
       </Controls.Field>
-      {!choices.length && (
-        <p>No loaded measurements for this sample revision. Load older runs below if available.</p>
-      )}
-      {runId && query.isPending && <p role="status">Reading measurement context…</p>}
+      {!choices.length && <p>尚未加载此样品版本的测量。如有更早运行，可在下方加载。</p>}
+      {runId && query.isPending && <p role="status">正在读取测量上下文…</p>}
       {query.error && (
         <>
           <p role="alert">{query.error.message}</p>
@@ -82,36 +77,34 @@ export function SampleCapabilities({
               void query.refetch();
             }}
           >
-            Retry reading context
+            重试读取上下文
           </Controls.Button>
         </>
       )}
       {snapshot && !context && (
         <p role="alert">
-          This measurement does not provide an exact saved parameter context for this sample
-          revision. Measurements with parameter overrides or unsaved configurations cannot be used
-          here.
+          此测量未提供当前样品版本的精确保存参数上下文。含参数覆盖或未保存配置的测量不能用于此处。
         </p>
       )}
       {context && (
-        <section key={runId} aria-label="Selected capability context">
+        <section key={runId} aria-label="选中的能力上下文">
           <p>
-            Parameters: {contextParameterLabel(context.parameters)} · Setup:{" "}
+            参数： {contextParameterLabel(context.parameters)} · setup：{" "}
             {context.setup_content_hash}
           </p>
           <p>
-            Scenario:{" "}
+            场景：{" "}
             {context.scenario
               ? `${context.scenario.id} (${context.scenario.model_id}, ${context.scenario.model_version})`
               : "physical"}
           </p>
           <details>
-            <summary>Complete measurement subject</summary>
+            <summary>完整测量对象</summary>
             <pre>{JSON.stringify(context.subject, null, 2)}</pre>
           </details>
           <CalibrationProfiles
             context={context}
-            contextDescription={`Uses the frozen context of measurement ${runId}.`}
+            contextDescription={`使用测量 ${runId} 的固定上下文。`}
           />
         </section>
       )}

@@ -57,7 +57,7 @@ describe("instrument connection summary", () => {
     expect(connectionSummary({ kind: "serial", port: "/dev/ttyUSB0", baud_rate: 115_200 })).toBe(
       "Serial · /dev/ttyUSB0 @ 115200",
     );
-    expect(connectionSummary({ kind: "driver_managed" })).toBe("Driver managed");
+    expect(connectionSummary({ kind: "driver_managed" })).toBe("由驱动管理");
   });
 });
 

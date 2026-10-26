@@ -11,7 +11,6 @@ import type {
   InstrumentView,
 } from "../../api-contract";
 import { ApiError } from "../../api-client";
-import { titleCase } from "../../lib/presentation";
 import { classes, eyebrow, primaryButton, secondaryButton } from "../../ui/styles";
 import type { InstrumentPropertyDraft } from "./InstrumentPropertyInput";
 import {
@@ -32,6 +31,7 @@ import {
   AvailabilityBadge,
   AuthorWorkflowLinks,
   configuredDefaultsReceiptMessage,
+  instrumentReceiptLabel,
   DeviceStateCard,
   filterDrafts,
   inlineError,
@@ -163,9 +163,7 @@ function InstrumentInspectorContent({
         setDrafts({});
         readMutation.mutate();
       } else if (receipt.status === "unknown") {
-        onSessionLost(
-          "The apply result is unknown. The daemon quarantined this session for operator review.",
-        );
+        onSessionLost("应用结果未知。后台服务已隔离此会话，需操作者核对。");
       }
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     },
@@ -213,8 +211,8 @@ function InstrumentInspectorContent({
       if (canonical && !stillOwned) {
         onSessionLost(
           canonical?.availability === "quarantined"
-            ? "The daemon quarantined this instrument while applying configured defaults."
-            : "The interactive session ended while applying configured defaults.",
+            ? "应用已配置默认值时，后台服务隔离了此仪器。"
+            : "应用已配置默认值时，交互会话已结束。",
         );
       }
     },
@@ -234,9 +232,7 @@ function InstrumentInspectorContent({
       delete collectCommandIdsRef.current[key];
       setCollectResults((current) => ({ ...current, [key]: receipt }));
       if (receipt.status === "unknown") {
-        onSessionLost(
-          "The collection result is unknown. The daemon quarantined this session for operator review.",
-        );
+        onSessionLost("收集结果未知。后台服务已隔离此会话，需操作者核对。");
       }
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     },
@@ -272,9 +268,7 @@ function InstrumentInspectorContent({
         setCollectResults({});
         readMutation.mutate();
       } else if (receipt.status === "unknown") {
-        onSessionLost(
-          "The operation result is unknown. The daemon quarantined this session for operator review.",
-        );
+        onSessionLost("操作结果未知。后台服务已隔离此会话，需操作者核对。");
       }
       void queryClient.invalidateQueries({ queryKey: ["instruments"] });
     },
@@ -285,7 +279,7 @@ function InstrumentInspectorContent({
   const resolveMutation = useMutation({
     mutationFn: () => {
       if (instrument.owner_kind !== "instrument_session" || !instrument.owner_id) {
-        throw new Error("This attention state is not owned by an interactive session.");
+        throw new Error("此待处理状态不属于交互会话。");
       }
       return resolveInstrumentAttention(instrument.owner_id);
     },
@@ -384,9 +378,9 @@ function InstrumentInspectorContent({
     interactionDisabled || stagedCount > 0 || resolveMutation.isPending;
   const configuredDefaultsDisabledReason =
     stagedCount > 0
-      ? "Apply or reset staged properties first"
+      ? "请先应用或重置暂存属性"
       : configuredDefaultsDisabled
-        ? "Wait for the current instrument interaction to finish"
+        ? "请等待当前仪器交互完成"
         : undefined;
 
   return (
@@ -450,7 +444,7 @@ function InstrumentInspectorContent({
 
       {(instrument.problems ?? []).length > 0 && (
         <div className={problems} role="status">
-          <strong className="mb-1 block">Driver is unavailable</strong>
+          <strong className="mb-1 block">驱动不可用</strong>
           {instrument.problems.map((problem, index) => (
             <p className="my-0.5" key={`${problem.code}-${index}`}>
               {problem.message}
@@ -466,8 +460,8 @@ function InstrumentInspectorContent({
             data-testid="interface-heading"
           >
             <div>
-              <span className={eyebrow}>Device controls</span>
-              <h3 className="m-0 text-[0.9rem] font-[650]">Interfaces</h3>
+              <span className={eyebrow}>设备控制</span>
+              <h3 className="m-0 text-[0.9rem] font-[650]">接口</h3>
             </div>
           </div>
 
@@ -481,14 +475,14 @@ function InstrumentInspectorContent({
               {connected
                 ? interactionDisabled
                   ? "当前交互尚未结束，请等待完成后继续。"
-                  : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先 Disconnect。"
+                  : "本页已持有设备会话。操作会访问设备；切换到 Python 或实验前请先断开连接。"
                 : instrument.availability === "active"
-                  ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再 Connect。"
+                  ? "设备正被占用。请等待运行完成清理，或结束已有手动会话后再连接。"
                   : instrument.availability === "quarantined"
                     ? "设备状态不确定。请先核查设备，并通过上方所属会话或运行处理隔离状态。"
                     : instrument.availability === "unavailable"
                       ? "设备不可用。请先处理上方驱动或连接配置问题。"
-                      : "本页尚未连接。确认设备与调用前提后，点击 Connect 获取手动会话。"}
+                      : "本页尚未连接。确认设备与调用前提后，点击“连接” 获取手动会话。"}
             </p>
             <AuthorWorkflowLinks />
           </div>
@@ -539,7 +533,7 @@ function InstrumentInspectorContent({
           ) : (
             <InspectorEmpty
               icon={<CircleOff />}
-              title="No interactive interfaces"
+              title="无交互接口"
               detail="此设备未声明交互能力。请查看驱动文档或检查驱动版本；连接不会补充未声明的 operation。"
             />
           )}
@@ -547,11 +541,9 @@ function InstrumentInspectorContent({
           {connected && stagedCount > 0 && (
             <div className="sticky bottom-2.5 z-[5] grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-[rgb(128_163_207_/_35%)] bg-[color-mix(in_srgb,var(--color-panel-strong)_94%,transparent)] px-[11px] py-2.5 shadow-[0_10px_30px_rgb(0_0_0_/_28%)] backdrop-blur-[12px] max-[460px]:grid-cols-2">
               <div className="grid gap-0.5 max-[460px]:col-span-full">
-                <strong className="text-xs">
-                  {stagedCount} staged {stagedCount === 1 ? "property" : "properties"}
-                </strong>
+                <strong className="text-xs">已暂存 {stagedCount} 项属性</strong>
                 <small className="text-xs text-text-dim">
-                  Values remain local until you apply the complete staged change once.
+                  数值仅保留在本地，直到一次性应用全部暂存修改。
                 </small>
               </div>
               <button
@@ -561,7 +553,7 @@ function InstrumentInspectorContent({
                 disabled={applyMutation.isPending}
               >
                 <RotateCcw size={14} />
-                Reset
+                重置
               </button>
               <button
                 type="button"
@@ -570,9 +562,9 @@ function InstrumentInspectorContent({
                 disabled={interactionDisabled || invalidDraft || stagedMembers.length === 0}
                 title={
                   interactionDisabled
-                    ? "Wait for the current instrument interaction to finish"
+                    ? "请等待当前仪器交互完成"
                     : invalidDraft
-                      ? "Correct invalid staged values before applying"
+                      ? "应用前请修正无效的暂存值"
                       : undefined
                 }
               >
@@ -581,21 +573,21 @@ function InstrumentInspectorContent({
                 ) : (
                   <Check size={14} />
                 )}
-                Apply staged
+                应用暂存修改
               </button>
             </div>
           )}
           {applyResult && (
             <p className={classes(receiptStyle, receiptTone(applyResult))}>
-              Apply receipt: {titleCase(applyResult)}
+              应用回执： {instrumentReceiptLabel(applyResult)}
             </p>
           )}
         </>
       ) : (
         <InspectorEmpty
           icon={<CircleOff />}
-          title="Device controls unavailable"
-          detail="Review the listed problem or edit this instrument’s connection configuration."
+          title="设备控制不可用"
+          detail="请核对列出的问题，或编辑此仪器的连接配置。"
         />
       )}
     </section>

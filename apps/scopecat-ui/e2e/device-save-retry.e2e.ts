@@ -44,11 +44,15 @@ test("a committed save can be retried after response loss without a second revis
         }
       })
       .toBe(true);
+    await page.goto(`${url}/#settings`);
+    await page.getByLabel("操作者名称", { exact: true }).fill("Device regression tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(url);
     await page.getByRole("button", { name: /Devices and drivers$/, exact: true }).click();
-    await page.getByRole("button", { name: "Add device", exact: true }).click();
+    await page.getByRole("button", { name: "添加设备", exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("Device name").fill("Retry software device");
+    await dialog.getByLabel("设备名称").fill("Retry software device");
     const commands: DeviceSaveCommand[] = [];
     let committed: DeviceView | undefined;
     await page.route("**/api/v1/devices", async (route) => {
@@ -61,12 +65,12 @@ test("a committed save can be retried after response loss without a second revis
         await route.abort("connectionfailed");
       } else await route.fulfill({ response });
     });
-    await dialog.getByRole("button", { name: "Save device", exact: true }).click();
-    await expect(dialog.getByRole("alert")).toContainText("Save not confirmed");
+    await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toContainText("保存尚未确认");
     const saved = await (await page.request.get(`${url}/api/v1/devices`)).json();
     expect(saved.items).toHaveLength(1);
     expect(saved.items[0].device.head).toEqual(committed!.device.head);
-    await dialog.getByRole("button", { name: "Save device", exact: true }).click();
+    await dialog.getByRole("button", { name: "保存设备", exact: true }).click();
     await expect(dialog).toBeHidden();
     expect(commands).toHaveLength(2);
     expect(commands[1]).toEqual(commands[0]);
