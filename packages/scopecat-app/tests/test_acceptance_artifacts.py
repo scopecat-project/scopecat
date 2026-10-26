@@ -109,6 +109,7 @@ SELECTED = {
     "native-distribution": {"NATIVE_DISTRIBUTION"},
     "service-lifecycle": {"SERVICE_LIFECYCLE"},
     "browser": {"UI", "BROWSER_TESTS"},
+    "teaching": {"UI", "INSTALLED_ARTIFACTS"},
     "local-application": {"UI", "BROWSER_TESTS", "INSTALLED_ARTIFACTS"},
     "full": set(JOBS) - {"PUBLIC_PREVIEW", "NATIVE_DISTRIBUTION", "SERVICE_LIFECYCLE"},
 }

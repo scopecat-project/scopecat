@@ -11,6 +11,7 @@ on:
           - full
           - local-application
           - browser
+          - teaching
           - service-lifecycle
           - native-distribution
           - public-preview
@@ -328,7 +329,7 @@ jobs:
         run: uv run --locked ruff format --check .
 
   ui:
-    if: inputs.profile == 'full' || inputs.profile == 'local-application' || inputs.profile == 'browser'
+    if: inputs.profile == 'full' || inputs.profile == 'local-application' || inputs.profile == 'browser' || inputs.profile == 'teaching'
     name: UI
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -405,6 +406,7 @@ jobs:
           retention-days: 7
 
   browser-tests:
+    if: inputs.profile == 'full' || inputs.profile == 'local-application' || inputs.profile == 'browser'
     name: Browser journey ${{ matrix.shard }}/2
     needs: ui
     strategy:
@@ -469,7 +471,7 @@ jobs:
           retention-days: 7
 
   installed-artifacts:
-    if: inputs.profile == 'full' || inputs.profile == 'local-application'
+    if: inputs.profile == 'full' || inputs.profile == 'local-application' || inputs.profile == 'teaching'
     name: Installed artifacts (${{ matrix.os }})
     needs: ui
     strategy:
@@ -511,14 +513,26 @@ jobs:
           uv run --locked --group delivery python -m scripts.app_build.toolchain
           dist/tutorial dist/tutorial-complete
 
-      - name: Archive the complete offline delivery
-        working-directory: dist
-        run: python -m tarfile -c tutorial.tar.gz tutorial-complete
+      - name: Retain legacy installer regression
+        run: uv run --locked python dist/tutorial-complete/install.py dist/legacy-install-check
 
-      - name: Verify the archived delivery, notebooks and installed application
+      - name: Set up Windows native compiler
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Prepare Windows application or Linux runtime fixture
+        run: >-
+          uv run --locked python -m scripts.prepare_teaching_runtime
+          dist/tutorial-complete dist/teaching-runtime
+
+      - name: Archive the installed teaching runtime and format 2 resources
+        working-directory: dist
+        run: python -m tarfile -c tutorial.tar.gz teaching-runtime
+
+      - name: Verify relocated runtime, Help, notebooks and recovery
         run: |
           python -m tarfile -e dist/tutorial.tar.gz dist/delivery-check
-          uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/tutorial-complete dist/tutorial-evidence
+          uv run --locked --group delivery python scripts/verify_teaching_delivery.py dist/delivery-check/teaching-runtime dist/tutorial-evidence --application-layout
 
       - name: Retain tutorial delivery and executed notebooks
         if: always()
@@ -621,6 +635,15 @@ jobs:
             exit 0
           fi
           test "$SERVICE_LIFECYCLE_RESULT" = skipped
+          if [ "$PROFILE" = teaching ]; then
+            test "$UI_RESULT" = success
+            test "$INSTALLED_ARTIFACTS_RESULT" = success
+            for result in "$BROWSER_TESTS_RESULT" "$PYTHON_TESTS_RESULT" \
+              "$BENCHMARK_SMOKE_RESULT" "$PYTHON_QUALITY_RESULT" "$DOCS_RESULT"; do
+              test "$result" = skipped
+            done
+            exit 0
+          fi
           if [ "$PROFILE" = browser ]; then
             test "$UI_RESULT" = success
             test "$BROWSER_TESTS_RESULT" = success

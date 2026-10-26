@@ -1,7 +1,13 @@
-"""在无仓库导入路径、空缓存的独立环境中验收教学交付。"""
+"""验收目标 runtime 的教学交付与在线作者准备。
+
+Use --application-layout for a Windows app or Linux runtime fixture, or pass
+format 2 resources with --runtime-python. Bare format 1 input retains the legacy
+installer adapter. Product imports are checked inside the target runtime.
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -11,7 +17,9 @@ from time import perf_counter
 from typing import cast
 
 
-def verify(bundle: Path, destination: Path) -> None:
+def verify(
+    bundle: Path, destination: Path, *, runtime_python: Path | None = None
+) -> None:
     from scopecat_app.bundle import configure_console
 
     configure_console()
@@ -27,13 +35,17 @@ def verify(bundle: Path, destination: Path) -> None:
     phase = perf_counter()
     help_evidence = destination / "help"
     # One installed application owns practice, author preparation and recovery.
-    bootstrap = help_evidence / "application-python"
     subprocess.run(  # noqa: S603 - explicit local tool and argument list
         [
             sys.executable,
             str(Path(__file__).with_name("verify_installed_help_kernels.py")),
             str(bundle),
             str(help_evidence),
+            *(
+                ["--runtime-python", str(runtime_python.absolute())]
+                if runtime_python
+                else []
+            ),
         ],
         cwd=destination,
         env=env,
@@ -57,8 +69,8 @@ def verify(bundle: Path, destination: Path) -> None:
     env["UV_PYTHON_DOWNLOADS"] = "automatic"
     phases = {"installed_help_and_group_recovery": perf_counter() - phase}
     phase = perf_counter()
-    python = bootstrap / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    console = python.with_name("scopecat.exe" if os.name == "nt" else "scopecat")
+    python = Path(cast("str", help_receipt["installed_python"]))
+    console = [str(python), "-I", "-m", "scopecat_app.public_cli"]
     for command_args in (
         ("--help",),
         ("app", "--help"),
@@ -66,7 +78,7 @@ def verify(bundle: Path, destination: Path) -> None:
         ("teach", "--help"),
     ):
         subprocess.run(  # noqa: S603 - installed public entry, no side effects
-            [str(console), *command_args],
+            [*console, *command_args],
             cwd=destination,
             env=env,
             check=True,
@@ -77,7 +89,7 @@ def verify(bundle: Path, destination: Path) -> None:
     # author operations. No lesson service or generated editor task is involved.
     project = destination / "编辑器 源码"
     subprocess.run(  # noqa: S603 - installed public entry
-        [str(console), "init", str(project), "--topic", "compute"],
+        [*console, "init", str(project), "--topic", "compute"],
         cwd=destination,
         env=env,
         check=True,
@@ -113,7 +125,7 @@ def verify(bundle: Path, destination: Path) -> None:
     ):
         subprocess.run(  # noqa: S603 - existing application author commands
             [
-                str(console),
+                *console,
                 "app",
                 "--home",
                 str(help_evidence / "recovered-application"),
@@ -133,9 +145,13 @@ def verify(bundle: Path, destination: Path) -> None:
     (destination / "acceptance.json").write_text(
         json.dumps(
             {
-                "build_id": json.loads(
-                    (bundle / "bundle.json").read_text(encoding="utf-8")
-                )["build_id"],
+                "build_id": help_receipt.get("build_id"),
+                "carrier": help_receipt["carrier"],
+                "installed_python": str(python),
+                "payload_format": help_receipt["payload_format"],
+                "bundle_sha256": help_receipt["bundle_sha256"],
+                "runtime": help_receipt["runtime"],
+                "sources": help_receipt["sources"],
                 "software": "passed",
                 "phase_seconds": phases,
                 "cli_author_preparation": "passed",
@@ -156,10 +172,32 @@ def verify(bundle: Path, destination: Path) -> None:
         encoding="utf-8",
     )
     print(
-        "离线作者准备、Help 教材重开与恢复、错误内核、应用启停与练习清理验收通过",
+        "目标 runtime、在线作者准备、Help 教材重开与恢复、"
+        "错误内核、应用启停与练习清理验收通过",
         flush=True,
     )
 
 
+class Arguments(argparse.Namespace):
+    bundle: Path = Path()
+    destination: Path = Path()
+    runtime_python: Path | None = None
+    application_layout: bool = False
+
+
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]), Path(sys.argv[2]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bundle", type=Path)
+    parser.add_argument("destination", type=Path)
+    parser.add_argument("--runtime-python", type=Path)
+    parser.add_argument("--application-layout", action="store_true")
+    args = parser.parse_args(namespace=Arguments())
+    if args.application_layout:
+        if args.runtime_python:
+            parser.error("Choose --application-layout or --runtime-python")
+        resources = args.bundle.resolve() / "resources"
+        args.bundle = resources / "payload"
+        args.runtime_python = (
+            resources / "python" / ("python.exe" if os.name == "nt" else "bin/python3")
+        )
+    verify(args.bundle, args.destination, runtime_python=args.runtime_python)

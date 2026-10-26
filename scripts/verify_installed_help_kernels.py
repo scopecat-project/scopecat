@@ -1,7 +1,8 @@
 """Qualify offline application installation and online author Help preparation.
 
 Usage: python scripts/verify_installed_help_kernels.py <toolchain-payload> <fresh-dir>
-Uses existing delivery/toolchain artifacts without changing their manifests.
+Add --runtime-python PYTHON for an installed runtime and verified format 2 resources.
+Without that option, the legacy delivery/toolchain installer remains supported.
 Includes explicit snapshot recovery with a separately backed-up author fixture.
 Pass --all-topics for the slower qualification of all seven shipped Help topics.
 Does not restore Help continuation or exercise a browser/native editor.
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from nbformat import NotebookNode
 
     from scopecat_app.application_runtime import ApplicationRuntime
+    from scopecat_app.bundle import Bundle
 
 
 def python_in(root: Path) -> Path:
@@ -49,26 +51,7 @@ def install_and_verify(payload: Path, work: Path, *, all_topics: bool = False) -
     with tarfile.open(archive) as stream:
         stream.extractall(base, filter="data")
     python = base / ("python.exe" if os.name == "nt" else "bin/python3")
-    cache = work / "empty-cache"
-    cache.mkdir()
-    temporary = work / "temporary"
-    temporary.mkdir()
-    env = dict(os.environ)
-    for name in ("PYTHONPATH", "PYTHONHOME", "SCOPECAT_DAEMON_URL", "JUPYTER_PATH"):
-        env.pop(name, None)
-    env.update(
-        UV_OFFLINE="1",
-        UV_CACHE_DIR=str(cache),
-        UV_PYTHON_DOWNLOADS="never",
-        PYTHONNOUSERSITE="1",
-        PYTHONUTF8="1",
-        IPYTHONDIR=str(work / "ipython"),
-        JUPYTER_CONFIG_DIR=str(work / "jupyter-config"),
-        JUPYTER_DATA_DIR=str(work / "jupyter-data"),
-        TMPDIR=str(temporary),
-        TMP=str(temporary),
-        TEMP=str(temporary),
-    )
+    env = journey_environment(work)
     application = work / "application-python"
     for name, command in (
         (
@@ -99,6 +82,73 @@ def install_and_verify(payload: Path, work: Path, *, all_topics: bool = False) -
     receipt.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
+def journey_environment(work: Path) -> dict[str, str]:
+    """Isolate a single invocation without borrowing user or repository imports."""
+    cache = work / "empty-cache"
+    cache.mkdir()
+    temporary = work / "temporary"
+    temporary.mkdir()
+    env = dict(os.environ)
+    for name in ("PYTHONPATH", "PYTHONHOME", "SCOPECAT_DAEMON_URL", "JUPYTER_PATH"):
+        env.pop(name, None)
+    env.update(
+        UV_OFFLINE="1",
+        UV_CACHE_DIR=str(cache),
+        UV_PYTHON_DOWNLOADS="never",
+        PYTHONNOUSERSITE="1",
+        PYTHONUTF8="1",
+        IPYTHONDIR=str(work / "ipython"),
+        JUPYTER_CONFIG_DIR=str(work / "jupyter-config"),
+        JUPYTER_DATA_DIR=str(work / "jupyter-data"),
+        TMPDIR=str(temporary),
+        TMP=str(temporary),
+        TEMP=str(temporary),
+    )
+    return env
+
+
+def verify_runtime(
+    payload: Path, work: Path, python: Path, *, all_topics: bool = False
+) -> None:
+    """Run and verify resources with an existing application interpreter."""
+    if json.loads((payload / "bundle.json").read_text(encoding="utf-8"))["format"] != 2:
+        raise ValueError("An installed runtime requires format 2 author resources")
+    work.mkdir(parents=True, exist_ok=False)
+    env = journey_environment(work)
+    # A format 2 app carries author requirements, not an offline dependency cache.
+    env["UV_OFFLINE"] = "0"
+    subprocess.run(  # noqa: S603 - explicitly selected installed runtime
+        [
+            str(python),
+            "-I",
+            str(Path(__file__).resolve()),
+            str(payload),
+            str(work),
+            "--installed",
+            *(["--all-topics"] if all_topics else []),
+        ],
+        cwd=work,
+        env=env,
+        check=True,
+    )
+
+
+def verified_author_payload(payload: Path, work: Path) -> tuple[Path, Bundle]:
+    from scopecat_app.author_resources import verify_resources
+
+    document = verify_resources(payload)
+    author_payload = payload
+    if document["format"] == 1:
+        # Compatibility for jobs still providing a full legacy installer payload.
+        from scripts.app_build.author_resources import build as build_author_resources
+
+        author_payload = build_author_resources(
+            payload, work / "author-resources", python=Path(sys.executable)
+        )
+        verify_resources(author_payload)
+    return author_payload, document
+
+
 def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> None:
     import ctypes
     from copy import deepcopy
@@ -108,9 +158,6 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     import httpx2
     from nbclient import NotebookClient
     from nbclient.exceptions import CellExecutionError
-    from scripts.app_build.author_resources import (
-        build as build_author_resources,
-    )
     from testing.app_support.notebook_io import notebook_io
     from testing.app_support.verify_groups import (
         ADD_ANALYSIS,
@@ -128,10 +175,7 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
         create_client_environment,
         prepare_execution_environment,
     )
-    from scopecat_app.author_resources import (
-        verify_resources,
-    )
-    from scopecat_app.bundle import file_hash, verify_bundle
+    from scopecat_app.bundle import file_hash
     from scopecat_app.notebook import kernel_command
     from scopecat_app.notebook_journey import current, prepare
     from scopecat_server.author_registration import (  # noqa: TID251 - installed recovery integration
@@ -150,7 +194,6 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     if sys.platform == "linux":
         if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
             raise OSError(ctypes.get_errno(), "PR_SET_CHILD_SUBREAPER")
-    assert os.environ["UV_OFFLINE"] == "1"
     assert Path(os.environ["UV_CACHE_DIR"]) == work / "empty-cache"
     origins = {}
     for name in ("scopecat", "scopecat_server", "scopecat_app", "scopecat_tutorials"):
@@ -160,11 +203,8 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
     # Installation must not seed a cache that conceals missing author dependencies.
     author_cache = work / "author-empty-cache"
     author_cache.mkdir()
-    document = cast("dict[str, object]", cast("object", verify_bundle(payload)))
-    author_payload = build_author_resources(
-        payload, work / "author-resources", python=Path(sys.executable)
-    )
-    verify_resources(author_payload)
+    author_payload, document = verified_author_payload(payload, work)
+    assert os.environ["UV_OFFLINE"] == ("1" if document["format"] == 1 else "0")
     nbformat = notebook_io()
     runtime = ApplicationRuntime(work / "application")
     material = files("scopecat_tutorials.course_material").joinpath("lessons")
@@ -181,9 +221,16 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
         "author_wheels": sorted(
             path.name for path in (author_payload / "wheels").glob("*.whl")
         ),
-        "build_id": document["build_id"],
+        "build_id": document.get("build_id"),
+        "payload_format": document["format"],
+        "runtime": document["runtime"],
+        "sources": document["sources"],
+        "installed_python": sys.executable,
+        "carrier": "legacy-installer"
+        if document["format"] == 1
+        else "installed-runtime",
         "installed_origins": origins,
-        "application_installation_offline": True,
+        "application_installation_offline": True if document["format"] == 1 else None,
         "cache_started_empty": True,
         "author_cache_started_empty": True,
         "native_editor": "not evaluated",
@@ -250,8 +297,8 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
 
     try:
         phase = perf_counter()
-        # Practice uses the already-proved installation cache, never the cold
-        # author cache that must still qualify the first Help preparation.
+        # Practice uses this invocation's cache (seeded by the legacy installer
+        # or populated online), never the independent cold Help author cache.
         application_checks["phase"] = "empty-application"
         registered_source = work / "registered-source" / "实验代码"
         write_author_scaffold(registered_source)
@@ -267,7 +314,7 @@ def verify_installed(payload: Path, work: Path, *, all_topics: bool = False) -> 
             source_id=identity,
             source_files=retained_source,
             environment=selected.environment,
-            practice_cache="installation",
+            practice_cache="invocation cache (online for format 2)",
         )
         empty_endpoint = empty_workbench()
         application_checks["practice_pid"] = empty_endpoint.pid
@@ -684,16 +731,30 @@ class Arguments(Protocol):
     work: Path
     installed: bool
     all_topics: bool
+    runtime_python: Path | None
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("payload", type=Path)
     parser.add_argument("work", type=Path)
+    parser.add_argument(
+        "--runtime-python", type=Path, help="Existing application Python (format 2)"
+    )
     parser.add_argument("--installed", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--all-topics", action="store_true", help="Execute all seven Help topics"
     )
     args = cast("Arguments", cast("object", parser.parse_args()))
-    action = verify_installed if args.installed else install_and_verify
-    action(args.payload.resolve(), args.work.resolve(), all_topics=args.all_topics)
+    if args.runtime_python:
+        if args.installed:
+            parser.error("--installed cannot be combined with --runtime-python")
+        verify_runtime(
+            args.payload.resolve(),
+            args.work.resolve(),
+            args.runtime_python.absolute(),
+            all_topics=args.all_topics,
+        )
+    else:
+        action = verify_installed if args.installed else install_and_verify
+        action(args.payload.resolve(), args.work.resolve(), all_topics=args.all_topics)

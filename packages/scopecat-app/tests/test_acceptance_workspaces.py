@@ -446,3 +446,48 @@ def test_incomplete_help_receipt_is_retained_by_installed_upload():
     ]
     assert len(uploads) == 1
     assert uploads[0]["if"] in ("always()", "${{ always() }}")
+
+
+def test_installed_help_launches_selected_runtime_with_isolated_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import json
+
+    help_script = load_script("verify_installed_help_kernels")
+    payload = tmp_path / "resources"
+    payload.mkdir()
+    (payload / "bundle.json").write_text(json.dumps({"format": 2}))
+    python = tmp_path / "installed-python"
+    work = tmp_path / "evidence"
+    monkeypatch.setenv("PYTHONPATH", "repository-source")
+    monkeypatch.setenv("SCOPECAT_DAEMON_URL", "http://unrelated")
+    calls = []
+    monkeypatch.setattr(
+        help_script.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append((command, kwargs)),
+    )
+    help_script.verify_runtime(payload, work, python)
+    assert len(calls) == 1
+    command, options = calls[0]
+    assert command[:2] == [str(python), "-I"]
+    assert command[3:] == [str(payload), str(work), "--installed"]
+    assert options["cwd"] == work and options["check"] is True
+    assert "PYTHONPATH" not in options["env"]
+    assert "SCOPECAT_DAEMON_URL" not in options["env"]
+    assert options["env"]["UV_OFFLINE"] == "0"
+    assert options["env"]["UV_CACHE_DIR"] == str(work / "empty-cache")
+    assert list((work / "empty-cache").iterdir()) == []
+
+
+def test_runtime_entry_does_not_silently_install_legacy_payload(tmp_path: Path):
+    import json
+
+    help_script = load_script("verify_installed_help_kernels")
+    payload = tmp_path / "legacy"
+    payload.mkdir()
+    (payload / "bundle.json").write_text(json.dumps({"format": 1}))
+    work = tmp_path / "evidence"
+    with pytest.raises(ValueError, match="format 2"):
+        help_script.verify_runtime(payload, work, tmp_path / "python")
+    assert not work.exists()
