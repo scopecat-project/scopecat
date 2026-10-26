@@ -109,6 +109,28 @@ interaction, unfamiliar-user and physical-device evidence remain distinct; the
 explains those boundaries. Existing observations and remaining human/physical work
 are tracked in [#616](https://github.com/scopecat-project/scopecat/issues/616).
 
+### Notebook course locator preflight
+
+After building the current GUI, serve `apps/scopecat-ui/dist` on loopback (or use
+an existing current GUI endpoint) and run:
+
+```sh
+uv run --locked python -m http.server 5173 --bind 127.0.0.1 --directory apps/scopecat-ui/dist
+# In another shell; SCOPECAT_TEST_CHROMIUM can select an installed Chromium.
+uv run --locked python -m testing.app_support.notebook_course http://127.0.0.1:5173
+```
+
+This short browser check uses the same Python locator as
+`verify_notebook_journey.py` against the real Help component: the `课程` combobox,
+selection by lesson value, URL update and selection after reload. It requires no
+payload, native bridge or Notebook environment. The installed verifier also runs
+this preflight before preparing a course. To exercise only the representative
+parameters path, use `verify_notebook_journey.py WORK PAYLOAD GUI --parameters-only`;
+the default still includes the existing groups continuation. Neither command
+qualifies native windows or editor activation. `verify_ordinary_author.py` starts
+in Settings and currently has no Help course selector; it is a separate author
+workflow, not another course-control contract.
+
 ### Browser artifact reuse
 
 ```sh
