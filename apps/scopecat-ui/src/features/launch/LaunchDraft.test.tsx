@@ -534,17 +534,42 @@ it("retains a scan across helper and default revisions for explicit review", asy
     {
       ...prepared,
       version: "controls-revision-3",
+      title: "Prepared experiment with revised defaults",
       controls: [{ ...prepared.controls[0]!, default: { value: 5, unit: "GHz" } }],
     },
   ];
-  await act(async () => {
-    await client.invalidateQueries({ queryKey: ["experiment-launcher"] });
+  deferCatalog = true;
+  let refreshed!: Promise<void>;
+  act(() => {
+    refreshed = client.invalidateQueries({ queryKey: ["experiment-launcher"] });
   });
-  await screen.findByText(
-    "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
-  );
+  await waitFor(() => expect(catalogResponse).toBeDefined());
+  // The previous revision already has this notice: it cannot acknowledge the next one.
+  expect(
+    await screen.findByText(
+      "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
+    ),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: "Prepared experiment with revised defaults" }),
+  ).toBeNull();
+  await act(async () => {
+    deferCatalog = false;
+    catalogResponse!(Response.json({ entries: catalog }));
+    await refreshed;
+  });
+  // This heading is inside LaunchForm, which only mounts after draft.definition
+  // matches the new catalog entry. Wait for that revision, not a reused notice.
+  await screen.findByRole("heading", { name: "Prepared experiment with revised defaults" });
+  expect(
+    screen.getByText(
+      "Experiment declaration changed. Your edits and old defaults are retained. Review changed fields before preview.",
+    ),
+  ).toBeVisible();
   expect(screen.getByLabelText("Frequency start")).toHaveValue("4.7");
   expect(screen.getByLabelText("Frequency points")).toHaveValue("3");
+  expect(screen.getByRole("button", { name: "开始采集" })).toBeDisabled();
+  expect(submissions).toHaveLength(0);
 });
 
 it("uses a new key after a fresh manual-state preview while preserving the original attempt", async () => {
