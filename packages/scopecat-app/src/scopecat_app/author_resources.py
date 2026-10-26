@@ -20,7 +20,10 @@ PACKAGES = ("scopecat", "scopecat_server")
 
 
 def read_resources(root: Path) -> Bundle:
-    document = cast("Bundle", json.loads((root / MANIFEST).read_text(encoding="utf-8")))
+    raw = cast("object", json.loads((root / MANIFEST).read_text(encoding="utf-8")))
+    if not isinstance(raw, dict):
+        raise ValueError("无法识别作者资源清单")
+    document = cast("Bundle", cast("object", raw))
     if document.get("format") == 1:
         return read_bundle(root)
     if document.get("format") != 2 or any(
