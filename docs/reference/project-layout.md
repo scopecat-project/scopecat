@@ -292,7 +292,7 @@ if page.next_cursor is not None:
 ```python
 measurement = task.measurement("baseline")  # existing Run facade
 snapshot = measurement.snapshot
-verification = task.analysis("verify")     # existing PublishedAnalysis
+verification = task.analysis("verify")  # existing PublishedAnalysis
 print(verification.id, verification.fact("decision").value)
 ```
 
