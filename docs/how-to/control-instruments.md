@@ -1,21 +1,17 @@
-# Instrument control and authoring
+# 仪器控制与实验编写 {#instrument-control-and-authoring}
 
-Scopecat presents one typed capability vocabulary in two time models: a live
-client performs work now, while a symbolic client records the same device verbs
-inside an experiment. Drivers implement that capability without receiving run,
-entity, point, product, or dataset concepts.
+Scopecat 在两种时间模型中使用同一套类型化能力词汇：即时（live）客户端现在执行操作，
+符号（symbolic）客户端在实验中记录相同的设备动作。驱动实现这些能力，不接收运行、实体、
+实验点、产物或数据集等上层概念。
 
-Daemon ownership and failure handling live in the
-[lab daemon architecture](../development/architecture/daemon.md).
-Execution ordering and physical authority live in the
-[execution semantics](../development/architecture/execution.md). Provider registration,
-generation, configuration, and driver tests live in the
-[instrument provider README](https://github.com/scopecat-project/scopecat/blob/main/packages/scopecat-instruments/README.md).
+后台服务的占用管理与故障处理见[实验室后台服务架构](../development/architecture/daemon.md)。
+执行顺序与物理控制权见[执行语义](../development/architecture/execution.md)。
+提供方注册、生成、配置和驱动测试见[仪器提供方 README](https://github.com/scopecat-project/scopecat/blob/main/packages/scopecat-instruments/README.md)。
 
-## Use a configured device now
+## 立即使用已配置设备 {#use-a-configured-device-now}
 
-Choose a saved device context, create a typed reference from its instrument id,
-then connect explicitly. Listing or choosing a context does not connect devices.
+在 Python 中选择已保存的设备配置上下文，按仪器 ID 创建类型化引用，再显式连接。
+列出或选择上下文不会连接设备。
 
 ```python
 import scopecat as sc
@@ -37,28 +33,25 @@ with sc.open_project(".").connect(operator="alice") as lab:
         trace = vna.sweep()
 ```
 
-`apply(...)` performs a sparse state transition during the call. `sweep()`
-triggers hardware and returns typed readback with receipt evidence. The session
-owns synchronization and the same exclusive claim used by experiment runs; it
-does not create a one-point experiment.
+`apply(...)` 在调用期间执行稀疏状态变更，只指定需要修改的字段。此处的 `sweep()`
+触发硬件扫描，并返回带回执证据的类型化读回结果。会话负责同步，并使用与实验运行相同的排他占用；
+它不会创建一个单点实验。
 
-Use `lab.setup.list()` to discover saved contexts and
-`lab.instruments.list(setup=setup)` to inspect their devices. The exact setup
-stays with the session; another notebook or browser page cannot change it.
-In the workbench's Instruments page, choose **Device context**, inspect a device,
-and click **Connect**. With one saved context, its devices appear directly.
-Disconnect before choosing another context. Editing a device saves a new context
-and selects it only on that page; it does not activate a global configuration.
+使用 `lab.setup.list()` 查找已保存的上下文，用 `lab.instruments.list(setup=setup)` 查看其中的设备。
+会话固定使用精确的 setup 引用，其他 Notebook 或浏览器页面不能替它切换配置。
 
-**Test connection** in the device editor uses the same ownership checks as a
-manual session. If another session or experiment owns the device, finish that work
-before retrying. A successful test releases its ownership. Known configured
-connections remain available for subsequent work; unsaved candidate connections
-are disconnected. Testing does not save the edited settings.
+当前 GUI 使用 **设备与驱动** 页面：选择登记设备、查看能力，再点击 **连接**。
+无需在该页选择旧版 **Device context**。仅选中设备不会连接；切换设备前先结束当前交互会话。
+**添加设备** 或编辑设备用于保存登记连接的版本，不是激活一套全局实验配置；实验仍使用自己的精确配置引用。
 
-Closing a session ends ownership and applies its configured finish policy, while
-keeping the connection available for subsequent work. To hand a configured device
-to another program after all runs and sessions have ended, disconnect it explicitly:
+设备页和编辑器的 **测试连接** 遵守与手动会话相同的占用检查。
+若其他会话或实验正占用设备，应先结束相应工作再试。测试成功会释放占用；
+已知配置连接可保留供后续工作复用，未保存的候选连接会断开。测试不会保存编辑中的设置。
+
+会话通过租约（lease）维持占用，Python 句柄和页面会续租。
+关闭会话会结束占用、执行配置的收尾策略，并可保留连接供后续工作。
+若续租失败或页面失联，不要把本地“已断开”当作硬件已停止的证据；重新连接前先检查设备与服务端占用状态。
+若要在所有运行和会话结束后把已配置设备交给另一个程序，显式释放物理连接：
 
 ```python
 with sc.open_project(".").connect(operator="alice") as lab:
@@ -66,16 +59,13 @@ with sc.open_project(".").connect(operator="alice") as lab:
     lab.instruments.release(READOUT_VNA, setup=setup)
 ```
 
-Release rejects devices reserved by unfinished runs or sessions. It leaves the
-daemon running, discards the connection and its cached state, and reconnects on
-the next session or experiment. Release applies to the whole physical instrument,
-including when given a component reference. It does not reserve the device for
-another program: pause new submissions until that program has finished. Release
-itself does not apply new hardware settings; the preceding run or session's finish
-policy determines the final state.
+`release` 拒绝仍被未结束运行或会话保留的设备。它不停止后台服务，会丢弃连接及其缓存状态；
+下一次会话或实验会重新连接。即使传入组件引用，释放也作用于其所属的整台物理仪器。
+这不会替另一个程序预留设备；该程序工作期间应暂停新的提交。
+释放本身不应用新的硬件设置，最终状态取决于先前运行或会话的收尾策略。
+页面的 **断开连接** 结束手动会话，与上述释放空闲物理连接不是同一个操作；两者都不承诺输出归零或物理停止。
 
-When one inventory entry owns several implementations of the same interface,
-select the physical mount on the live reference:
+当一个清单条目拥有同一接口的多个实现时，在即时引用上选择物理挂载位置：
 
 ```python
 from scopecat_instruments import rf_output
@@ -90,16 +80,12 @@ with sc.open_project(".").connect(operator="alice") as lab:
         source.apply(frequency=sc.Quantity(6, "GHz"), output_enabled=True)
 ```
 
-Generated members stay relative to the selected mount; the live channel maps
-state, operations, and acquisitions onto the physical component path and checks
-that the interface is mounted there. `describe()`, `observed_state()`, and
-`refresh()` still describe or return the owning physical instrument for
-diagnostics. Configured defaults also belong to that owner and therefore cannot
-be applied through a component-scoped client.
+生成的成员相对于所选挂载位置。即时通道把状态、操作和采集映射到物理组件路径，并检查接口确实挂载在该处。
+`describe()`、`observed_state()` 和 `refresh()` 仍描述或返回所属整台物理仪器，供诊断使用。
+配置默认值也属于该物理拥有者，因此不能通过限定到组件的客户端应用。
 
-For a diagnostic device, register its connection once in **Devices and drivers**.
-No experiment setup or entity routing is required. A notebook can open the same
-registered device directly:
+若只做设备诊断，在 **设备与驱动** 中登记一次连接即可，不需要实验 setup 或实体路由。
+Notebook 可直接打开同一个已登记设备：
 
 ```python
 import scopecat as sc
@@ -112,73 +98,67 @@ with sc.open_project(".").connect(operator="alice") as lab:
         trace = devices[BENCH_VNA].sweep()
 ```
 
-The device remains registered after the manual session closes. Experiments and
-manual sessions share its ownership, even when experiments give it different
-logical names. Retire a device from the device page when it is no longer used;
-its execution records remain available.
+手动会话关闭后，设备仍保留登记。实验和手动会话共享同一物理占用，即使实验给它使用不同逻辑名称。
+不再使用时可在设备页点击 **退役设备**；其执行记录仍可读取。
 
 ## 在设备页发现与调用能力
 
-设备页按驱动已有契约展示属性、operation 和 acquisition。查看页面或展开帮助不会连接
-设备或发送设备命令。没有声明能力时，先查驱动文档或版本；不要靠 Connect 探索未声明的功能。
+设备页按驱动已有契约展示属性、操作（operation）和采集（acquisition）。查看页面或展开帮助不会连接
+设备或发送设备命令。没有声明能力时，先查驱动文档或版本，不要靠 **连接** 探索未声明的功能。
 
-- **Invoke** 调用指定 operation。普通类型参数仍需填完整，且本页必须持有可用会话。
-- 需要 **payload** 的 operation 仍显示名称与说明，但不提供 Invoke 或 payload 编辑器。
-  展开“如何准备与调用”，按契约在作者 Python 程序中准备 payload，使用已有类型化客户端
+- **调用 Invoke** 调用指定操作。普通类型参数须填完整，且本页必须持有可用会话。
+- 需要 **payload** 的操作仍显示名称与说明，但不提供调用按钮或 payload 编辑器。
+  展开 **如何准备与调用**，按契约在作者 Python 程序中准备 payload，使用已有类型化客户端
   或实验准备流程。页面提供上方 `lab.devices.open(...)` 工作流和下方作者准备流程的链接。
-- **Collect** 调用指定 acquisition。它可能发起新采集，也可能只收集既有执行结果，
+- **收集 Collect** 调用指定采集能力。它可能发起新采集，也可能只收集既有执行结果，
   以该项契约说明为准。没有说明时先查驱动文档；按钮名和方法名不能证明采集时序。
-  Collect 不会自动准备 payload 或替你调用另一个 operation。
+  Collect 不会自动准备 payload 或替你调用另一个操作。
 
-切换到 Python 或实验前，先结束页面手动会话，等待其他运行完成清理。设备占用、隔离、
-连接不可用和正在交互时的保护仍然适用；查看能力不会获得设备控制权。
-此页没有新增持续输出调试动作，也不承诺 Disconnect 或退出后归零。
+回执中的 **结果未知** 不等于“未执行”，也不保证可以安全重复发送命令。
+硬件状态不确定时，设备可能进入隔离，阻止自动复用；应先核对实际状态和占用方。
+页面的 **处理隔离** 仅能处理其支持的交互会话占用，运行占用须回所属运行流程处理。
+确认并释放隔离不是重新测量硬件状态或证明物理安全。
 
-## Update driver source while the application is running
+切换到 Python 或实验前，先结束页面手动会话，等待其他运行完成清理。
+设备占用、隔离、连接不可用和正在交互时的保护仍然适用；查看能力不会获得设备控制权。
+此页不是原始 SCPI 命令控制台，也没有持续输出的启动、保持、停机生命周期界面；
+不要据此假定断开连接、关闭页面或退出后输出会归零。
 
-Save your driver changes, finish device sessions and wait for affected experiments
-to finish. From your existing notebook connection:
+## 应用运行期间更新驱动源码 {#update-driver-source-while-the-application-is-running}
+
+保存驱动修改，结束设备会话，并等待受影响的实验结束。通过已有 Notebook 连接操作：
 
 ```python
 selected = lab.devices.update_driver_source("/path/to/driver-project")
 lab.devices.driver_source()  # inspect the active snapshot without connecting
 ```
 
-The directory must contain `scopecat.toml` with `lab.instrument_backend` and author
-source roots. Its factory must retain the current provider identity and support
-the registered connection options. Dependencies must already be available in the selected driver execution Python.
-No wheel build or application restart is required.
+目录须包含 `scopecat.toml`、其中的 `lab.instrument_backend` 及作者源码根配置。
+工厂必须保持当前提供方身份，并支持已登记的连接选项。依赖须已安装在选定的驱动执行 Python 中。
+无需构建 wheel 或重启应用。
 
-The update replaces the whole driver worker, so all devices it serves must be
-idle. It releases old connections; the next explicit operation reconnects. Prepare
-experiments again against the updated device revisions. Syntax or publication
-errors preserve the previous selection; failed disconnection requires resolving
-device attention before retrying. Application restart and backup/restore retain
-the selected source even if the development directory has moved.
+更新会替换整个驱动 worker，因此它服务的全部设备都必须空闲。
+更新会释放旧连接，下次显式操作才重新连接；实验应针对更新后的设备修订重新准备。
+语法或发布错误会保留先前选择；若断开失败，应先处理设备报告的问题再重试。
+应用重启与备份恢复会保留所选源码，即使原开发目录已移动。
 
-The Instruments workspace also provides **Update from source**, with a source
-directory and optional driver execution Python override. Finish manual sessions
-and affected work before submitting; reconnect devices and prepare experiments
-again afterwards. This updates drivers, not experiment/compiler source or dependencies.
+GUI 入口为 **设备与驱动 → 已安装驱动 → 从源码更新**，填写应用所在计算机上的源码目录绝对路径，
+可选填驱动执行 Python。提交前先结束手动会话及受影响工作，更新后重新连接设备、重新准备实验。
+这只更新驱动，不更新实验或编译器源码，也不安装依赖。
 
-## Return from manual work to an experiment
+## 从手动操作返回实验 {#return-from-manual-work-to-an-experiment}
 
-In the console, connect a device, query the scientific values you need, apply
-changes, then disconnect the manual session before starting an experiment.
-Queries retain their observation source and time; an observed value is not a
-promise about the device's later state. Configured defaults produce a receipt
-and can be rejected when the maintained inventory has no default state. In that
-case, choose explicit scientific settings instead of assuming a reset occurred.
+在设备页连接设备，查询需要的科学量、应用修改，然后在启动实验前断开手动会话。
+查询结果保留观察来源和时间，不承诺设备之后仍处于同一状态。
+**应用已配置默认值** 会产生回执；若维护的清单没有默认状态，该操作可能被拒绝。
+此时应明确选择所需科学设置，不要假定设备已复位。
 
-Preview records the complete compiled instrument footprint and the manual-event
-cursor captured before compilation. A later apply, invocation, acquisition or
-explicit abort or connection release on a relevant physical instrument invalidates that
-preview. The console explains the affected instrument and offers Preview again,
-while retaining your scientific inputs. Pure queries and changes to unrelated
-physical instruments leave the preview usable. Operations that fail or stop
-partway through also invalidate it because they may already have changed state.
+预览会记录完整编译后的仪器使用范围，以及编译前捕获的手动事件游标。
+之后对相关物理仪器执行状态变更、操作调用、采集、显式中止或连接释放，会使该预览失效。
+界面会说明受影响的仪器并提示重新预览，同时保留科学输入。
+纯查询及对无关物理仪器的修改不影响预览可用性。失败或中途停止的操作也会使预览失效，因为它们可能已改变状态。
 
-The revision-aware notebook entry uses the same check:
+能感知修订的 Notebook 入口使用相同检查：
 
 ```python
 with sc.open_project(".").authoring() as authors:
@@ -187,27 +167,22 @@ with sc.open_project(".").authoring() as authors:
     submission = prepared.submit(request_key="ramsey-after-manual-adjustment")
 ```
 
-Admission checks the server-recorded preview against the exact configuration and
-code revision. Retrying an already admitted request key returns the original
-procedure even if manual work occurred afterward. A fresh preview has a fresh
-check and uses a new submission key; an unresolved original submission retains
-its original payload for recovery. A preview is not a permanent permission to
-execute a saved plan.
+接纳提交时，服务端对照精确配置与代码修订检查已记录的预览。
+重试已接纳的请求键会返回原 procedure，即使之后发生过手动操作。
+新预览进行新的检查，并使用新的提交键；结果未确定的原始提交仍保留原 payload 供恢复。
+预览不是执行已保存方案的永久许可。
 
-Runtime ownership still governs acquisition after admission. A manual session and
-a run cannot own the same physical instrument concurrently. A stop request is
-pending until the run finishes its cleanup; wait for the stopped result before
-connecting manually. This ordering does not freeze hardware or detect changes
-made outside the daemon.
+接纳后，采集仍受运行时占用约束：手动会话和运行不能同时占用同一物理仪器。
+停止请求在运行完成清理前仍处于等待状态；应等到停止结果明确后再手动连接。
+这种顺序约束不会冻结硬件，也不能检测后台服务以外的修改。
 
-Maintained launch adapters pass the preview's `manual_state` into their durable
-intent and as `expected_manual_preview` to `lab.procedures.submit(...)`. The
-standard author adapter already does this. Resource aliases are compared through
-the inventory's physical exclusivity keys; maintainers own those mappings.
+维护的启动适配器把预览的 `manual_state` 写入持久提交意图，并作为 `expected_manual_preview`
+传给 `lab.procedures.submit(...)`；标准作者适配器已完成这一步。
+资源别名通过清单的物理排他键比较，这些映射由维护者负责。
 
-## Declare the same work for an experiment
+## 在实验中声明相同工作 {#declare-the-same-work-for-an-experiment}
 
-Passing an experiment context to the same factory creates its symbolic client:
+把实验上下文传给同一工厂，即可创建符号客户端：
 
 ```python
 import scopecat as sc
@@ -226,27 +201,20 @@ def capture(experiment: sc.ExperimentContext):
     return vna.sweep()
 ```
 
-`ensure(...)` records coherent desired state. Fixed values, inputs, parameters,
-and other permitted symbolic values may supply its fields; omitted fields remain
-unspecified. Consecutive ensures retain effect order. The symbolic acquisition
-returns a typed product bundle, and defining the experiment touches no hardware.
+`ensure(...)` 记录一致的期望状态。字段可使用固定值、输入、参数及其他允许的符号值；
+省略的字段保持未指定。连续的 ensure 保留效果顺序。
+符号采集返回类型化产物包，定义实验不会触碰硬件。
 
-An experiment can coordinate several instrument clients, reusable modules, and
-domain calls. `@module` is an extraction boundary for work that is genuinely
-reused or composed, rather than a prerequisite for device use.
+实验可以协调多个仪器客户端、可复用模块及领域调用。
+`@module` 用于提取确实要复用或组合的工作，不是使用设备的前提。
 
-Product namespaces derive from the capability and effect occurrence. Supply an
-explicit acquisition `id=` when an occurrence is part of a durable data
-contract. Returning a complete result bundle preserves its declared coordinate,
-observable, axis, and acquisition-group relationships. The
-[experiment dataflow model](../concepts/experiment-dataflow.md#return-the-result-you-mean-to-keep)
-is the canonical durable-result reference.
+产物命名空间来自能力及其效果发生位置。若一次采集属于持久数据契约，应显式提供 `id=`。
+返回完整结果包会保留声明的坐标、观测量、轴和采集组关系。
+持久结果的权威说明见[实验数据流模型](../concepts/experiment-dataflow.md#return-the-result-you-mean-to-keep)。
 
-### Select equivalent resources by role
+### 按角色选择等价资源 {#select-equivalent-resources-by-role}
 
-Logical resource identities are allocated automatically. A stable lab role
-expresses purpose when one entity has several resources implementing the same
-interface:
+逻辑资源身份自动分配。当一个实体有多个实现同一接口的资源时，用稳定的实验室角色表达用途：
 
 ```python
 from scopecat_instruments import rf_output
@@ -264,8 +232,7 @@ readout = rf_output(
 )
 ```
 
-The accepted configuration attaches each role to a selectable route. A route
-groups all endpoints chosen together:
+接受的配置将每个角色连接到可选路由。一条路由把需要一起选择的所有端点组成一组：
 
 ```json
 {
@@ -291,53 +258,38 @@ groups all endpoints chosen together:
 }
 ```
 
-A string selects that exact cataloged role. Omitting `role` selects an unlabelled
-route. Code that intentionally accepts the unique compatible route regardless
-of role may pass `sc.ANY_RESOURCE_ROLE`.
+字符串选择目录中精确的角色。省略 `role` 会选择无角色标签的路由。
+若代码有意接受唯一兼容路由而不限制角色，可传入 `sc.ANY_RESOURCE_ROLE`。
 
-`entity_ids` lists the logical entities served by the complete route. An
-endpoint `entity_id` narrows one channel or command binding to an entity. A
-shared LO, sequencer, or waveform endpoint omits the endpoint entity while the
-route still lists every entity it serves. Entityless routes support bench work
-selected by role or an unscoped experiment.
+`entity_ids` 列出整条路由服务的逻辑实体；端点的 `entity_id` 将单个通道或命令绑定限定到一个实体。
+共享 LO、序列器或波形端点省略端点实体，但路由仍列出它服务的全部实体。
+无实体路由支持按角色选择的台架工作或未限定实体的实验。
 
-### Mount shared state on its physical owner
+### 将共享状态挂载到物理拥有者 {#mount-shared-state-on-its-physical-owner}
 
-Mutable state belongs to its physical owner: device-wide properties at the
-interface root, bank-wide properties on a bank component, LO frequency on an LO
-component, and channel properties on channel components. Endpoint
-`component_path` mounts a logical interface member at that owner.
+可变状态属于其物理拥有者：整机属性放在接口根，bank 级属性放在 bank 组件，
+LO 频率放在 LO 组件，通道属性放在通道组件。
+端点的 `component_path` 将逻辑接口成员挂载到这个拥有者。
 
-When several routes resolve a property to the same physical address, they form
-one effective shared-state group for that property. Equal requirements coalesce
-into one command; unequal requirements produce
-`experiment_conflicting_desired_state` before execution. Group membership is
-capability-specific, so channels may share an LO while belonging to different
-clock or trigger domains. Components such as `lo_groups/0`, `clock_domains/1`,
-and `trigger_domains/0` express those distinct owners.
+当多条路由把某属性解析到同一物理地址时，它们为该属性构成同一个有效共享状态组。
+相同要求合并成一条命令；不同要求在执行前报 `experiment_conflicting_desired_state`。
+分组取决于具体能力，因此通道可以共享 LO，同时属于不同的时钟或触发域。
+`lo_groups/0`、`clock_domains/1` 和 `trigger_domains/0` 等组件表达这些不同的拥有者。
 
-Roles select hardware by purpose. Component paths express shared mutable state.
-Logical entity ids remain provenance and do not create copies of a physical
-state slot.
+角色按用途选择硬件，组件路径表达共享可变状态。逻辑实体 ID 保留来源信息，不会复制物理状态槽。
 
-An interface contains behavior that callers can rely on across compatible
-devices. A repeated physical implementation uses `interface_mounts`; one
-model's narrower access, capture, restore, or value domain stays in its
-interface-property implementation. Model-specific facts and settings that are
-useful for diagnosis, recording, or restoration but are not portable behavior
-belong to a versioned `device_schema`. They are independently readable and
-cacheable state members and do not require inventing a one-device interface.
+接口包含调用方可在兼容设备之间依赖的行为。重复的物理实现使用 `interface_mounts`；
+某个型号更窄的访问、捕获、恢复或取值范围留在其接口属性实现中。
+有助于诊断、记录或恢复、但不属于可移植行为的型号特有事实和设置，放在带版本的 `device_schema` 中。
+这些状态成员可独立读取和缓存，无须为单个设备虚构一个接口。
 
-### Use signed IF for specialized LO scans
+### 用带符号的 IF 进行专用 LO 扫描 {#use-signed-if-for-specialized-lo-scans}
 
-Common experiments express physical carrier intent and use reviewed lab
-frequency composition. A specialized fixed-IF LO scan can stay lab-local with
-the single convention `RF = LO + signed IF`; positive and negative IF values
-select the IQ sideband directly.
+通用实验表达物理载频意图，并采用经过审查的实验室频率组合规则。
+专用的固定 IF、扫描 LO 工作流可留在实验室本地，统一采用 `RF = LO + signed IF`；
+IF 的正负号直接选择 IQ 边带。
 
-The scanned LO is already a durable point coordinate. Record the derived carrier
-as another coordinate so plots and exports retain both the requested control and
-its physical meaning:
+扫描的 LO 已是持久实验点坐标。把推导出的载频另存为坐标，使绘图和导出同时保留请求的控制量及其物理意义：
 
 ```python
 @dataclass(frozen=True)
@@ -359,18 +311,15 @@ rf = lo + sc.Quantity(-100, "MHz")
 return SpectrumResult(rf_frequency=rf)
 ```
 
-An LO change is a host effect: it bounds real-time target batches so that each
-batch executes with the requested LO setting. The target can retain the same
-signed IF while the resulting RF carrier changes with the LO.
+LO 变化是主机侧效果，会划分实时目标批次，使每批在所请求的 LO 设置下执行。
+目标可保持相同的带符号 IF，而最终 RF 载频随 LO 改变。
 
-Routing determines which source is changed. Equal requests to one resolved LO
-owner coalesce; distinct LO owners remain independently schedulable. Only a lab
-that deliberately coordinates a scan per physical owner needs additional local
-grouping logic.
+路由决定修改哪个源。解析到同一 LO 拥有者的相同请求会合并；不同 LO 拥有者仍可独立调度。
+只有实验室刻意按物理拥有者协调扫描时，才需要额外的本地分组逻辑。
 
-### Address one or many entities
+### 面向一个或多个实体 {#address-one-or-many-entities}
 
-Entity cardinality is selected at the factory boundary:
+实体数量在工厂边界选择：
 
 ```python
 single = network_sweep(
@@ -382,10 +331,9 @@ targets = sc.each("q0", "q1", kind="logical_device")
 many = network_sweep(experiment, for_=targets)
 ```
 
-`one(...)` creates one scalar symbolic client. Its entity may be concrete or
-point-resolved. `each(...)` holds concrete authoring-time identities and returns
-a group client with the same verbs. Scalar arguments broadcast; `PerEntity[T]`
-supplies values by exact `(kind, id)` identity:
+`one(...)` 创建一个标量符号客户端，实体可以是具体身份，也可以在实验点解析。
+`each(...)` 保存编写时已知的具体身份，并返回具有相同动作的组客户端。
+标量参数广播到各实体；`PerEntity[T]` 按精确的 `(kind, id)` 身份提供值：
 
 ```python
 points = sc.PerEntity((entity, 501 if entity.id == "q0" else 801) for entity in targets)
@@ -400,29 +348,20 @@ traces = many.sweep()
 return traces
 ```
 
-The group still expands to independently routed scalar resources and
-acquisitions, but the homogeneous returned products are recorded field-by-field
-with a `logical_device` entity axis. Dataset schema width therefore follows the
-number of result fields, not the number of selected devices. Per-entity product
-sources and acquisition evidence remain aligned to the durable entity index.
+组仍展开为独立路由的标量资源和采集，但同类返回产物按字段保存，并带有 `logical_device` 实体轴。
+因此数据集 schema 的宽度取决于结果字段数，而非所选设备数。
+各实体的产物来源和采集证据与持久实体索引保持对齐。
 
-Alignment is an identity join, so mapping order is irrelevant and missing,
-extra, or duplicate identities fail before effects are recorded. Group authoring
-does not ask a driver to perform an implicit vector operation.
+对齐是按身份连接，与映射顺序无关；身份缺失、多余或重复会在记录效果前报错。
+组式编写不会要求驱动隐式执行向量操作。
 
-## Compact rule set
+## 简明规则 {#compact-rule-set}
 
-1. Declare device meaning once with concrete Python state, operations, and
-   results.
-2. Use `apply` for an immediate sparse transition and `ensure` for symbolic
-   desired state; use the same operation and acquisition verbs in both modes.
-3. Let generated clients add time and cardinality: live or symbolic, one entity
-   or `PerEntity`.
-4. Mount mutable state at its physical owner and select equivalent resources by
-   stable lab purpose.
-5. Return typed values or product bundles and let dependencies determine order.
-6. Record values and bundles directly; declared roles, axes, groups, and entity
-   identity carry the dataset mapping.
+1. 用具体的 Python 状态、操作与结果声明一次设备语义。
+2. 即时稀疏状态变更用 `apply`，符号期望状态用 `ensure`；两种模式使用相同的操作与采集动作。
+3. 由生成客户端处理时间模型和实体数量：即时或符号、单实体或 `PerEntity`。
+4. 把可变状态挂载到物理拥有者，按稳定的实验室用途选择等价资源。
+5. 返回类型化值或产物包，让依赖关系决定顺序。
+6. 直接记录值和包；声明的角色、轴、组和实体身份携带数据集映射。
 
-To add a capability or driver, continue with the
-[instrument extension guide](../extensions/instruments.md).
+添加能力或驱动，继续阅读[仪器扩展指南](../extensions/instruments.md)。
