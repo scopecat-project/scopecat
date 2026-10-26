@@ -298,6 +298,7 @@ test("starter project closes the notebook, run, and config loop", async ({ daemo
   await page.getByRole("textbox", { name: "response[1].scale", exact: true }).fill("2");
   await page.getByText("Save a parameter checkpoint", { exact: true }).click();
   await page.getByLabel("New version name", { exact: true }).fill("browser-adjusted");
+  await page.getByLabel("Draft operator", { exact: true }).fill("browser-operator");
   await page.getByLabel("Named branch (optional)", { exact: true }).fill("starter");
   await page.getByRole("button", { name: "Review latest branch head", exact: true }).click();
   await page
@@ -501,6 +502,7 @@ test("exact run opens independently in two browser pages while acquisition conti
     await page.getByTitle(`Inspect run ${runId}`, { exact: true }).click();
     await expect(page.getByTestId("measurement-preview")).not.toBeVisible();
     await expect(resultData.getByTestId("measurement-preview")).toBeVisible();
+    await result.getByRole("button", { name: "显示主导航 / Navigation", exact: true }).click();
     await result.getByRole("button", { name: /Help$/, exact: true }).click();
     await result.goBack();
     await expect(result.getByTestId("run-detail-header")).toContainText(runId);
@@ -677,6 +679,7 @@ with sc.open_project(sys.argv[1]).connect() as lab:
         .click();
       await b.getByLabel("实验类型", { exact: true }).selectOption("signal");
       await b.getByLabel("实验配置", { exact: true }).selectOption("starter-bench");
+      await b.getByLabel("操作人", { exact: true }).fill("browser-operator");
       // Start may prepare internally; merely editing or previewing must not acquire.
       await expect(b.getByRole("button", { name: "开始采集", exact: true })).toBeEnabled();
       expect(submissions).toEqual([]);
