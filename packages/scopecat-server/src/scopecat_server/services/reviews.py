@@ -43,6 +43,7 @@ class _ReviewSession:
     pending: deque[ReviewWorkItem] = field(default_factory=deque)
     claimed_request_ids: set[str] = field(default_factory=set)
     superseded_request_ids: set[str] = field(default_factory=set)
+    latest_request: ReviewWorkItem | None = None
     latest_result: ReviewCompilationResult | None = None
 
 
@@ -124,6 +125,7 @@ class ReviewService:
                     inspection_query=command.inspection_query,
                 )
             )
+            session.latest_request = session.pending[-1]
             session.updated_at = now
             return ReviewCompileReceipt(
                 session_id=session_id,
@@ -263,6 +265,7 @@ def _view(session: _ReviewSession) -> ReviewSessionView:
             len(session.pending)
             + len(session.claimed_request_ids - session.superseded_request_ids)
         ),
+        latest_request=session.latest_request,
         latest_result=latest_result,
     )
 

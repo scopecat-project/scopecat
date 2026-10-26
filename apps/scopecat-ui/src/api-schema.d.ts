@@ -11107,6 +11107,7 @@ export interface components {
             experiment_kind: string;
             /** Heartbeat Interval Seconds */
             heartbeat_interval_seconds: number;
+            latest_request?: components["schemas"]["ReviewWorkItem"] | null;
             latest_result?: components["schemas"]["ReviewCompilationResult-Output"] | null;
             /**
              * Pending Request Count
@@ -11132,6 +11133,21 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** ReviewWorkItem */
+        ReviewWorkItem: {
+            coordinate_mode: components["schemas"]["ReviewCoordinateMode"];
+            /** Coordinates */
+            coordinates?: {
+                [key: string]: components["schemas"]["ReviewCoordinateValue"];
+            } | null;
+            inspection_query?: components["schemas"]["CompiledProgramInspectionQuery"] | null;
+            /** Point Index */
+            point_index?: number | null;
+            /** Request Id */
+            request_id: string;
+            /** Session Id */
+            session_id: string;
         };
         /**
          * RoutingEndpoint

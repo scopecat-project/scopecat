@@ -58,7 +58,7 @@ test("shared controls remain readable, keyboard accessible and contained across 
         ["samples", "芯片与样品"],
         ["analyses", "No project analyses saved"],
         ["runs", "No run selected"],
-        ["reviews", "No live experiment reviews"],
+        ["reviews", "暂无实验检查会话"],
         ["decisions", "当前没有等待人工判断的实验"],
       ]) {
         await page.goto(`${baseUrl}/#${route}`);

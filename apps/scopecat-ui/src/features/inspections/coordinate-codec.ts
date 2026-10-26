@@ -4,24 +4,24 @@ export type PointCoordinateValue = NonNullable<ReviewCompileCommand["coordinates
 
 export function parseCoordinate(spec: PointCoordinateSpec, encoded: string): PointCoordinateValue {
   const input = encoded.trim();
-  if (!input) throw new Error(`${spec.id} requires a value`);
+  if (!input) throw new Error(`${spec.id} 需要填写值`);
   if (spec.kind === "bool") {
     if (input !== "true" && input !== "false") {
-      throw new Error(`${spec.id} must be boolean`);
+      throw new Error(`${spec.id} 必须为布尔值`);
     }
     return input === "true";
   }
   if (spec.kind === "int" || spec.kind === "float") {
     const value = Number(input);
-    if (!Number.isFinite(value)) throw new Error(`${spec.id} must be numeric`);
+    if (!Number.isFinite(value)) throw new Error(`${spec.id} 必须为数值`);
     if (spec.kind === "int" && !Number.isInteger(value)) {
-      throw new Error(`${spec.id} must be an integer`);
+      throw new Error(`${spec.id} 必须为整数`);
     }
     return value;
   }
   if (spec.kind === "quantity") {
     const value = Number(input);
-    if (!Number.isFinite(value)) throw new Error(`${spec.id} must be numeric`);
+    if (!Number.isFinite(value)) throw new Error(`${spec.id} 必须为数值`);
     return { value, unit: spec.unit ?? "" };
   }
   if (spec.kind === "entity") return { id: input, metadata: {} };

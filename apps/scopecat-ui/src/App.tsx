@@ -499,8 +499,8 @@ export default function App() {
               fallback={
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Loading reviews"
-                  detail="The compiled waveform workspace is being prepared."
+                  title="正在加载检查会话"
+                  detail="正在准备编译波形检查工作区。"
                 />
               }
             >
