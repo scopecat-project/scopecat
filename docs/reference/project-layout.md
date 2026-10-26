@@ -232,53 +232,78 @@ when the application and author environments are separate.
 
 ## Submit an ordinary procedure from an author session
 
-This author-session API can also be used from a registered application author folder.
-
-Register the procedure in the source manifest's `[lab.capabilities].procedures`,
-using its `module:attribute` name. In a script, explicitly select source before
-importing its definition and intent model:
+普通作者入口是 `session.procedures`，注册的应用作者目录也使用同一入口。
+先在源码清单 `[lab.capabilities].procedures` 中登记 `module:attribute`。
+脚本中先选择源码，再导入 definition 和 intent：
 
 ```python
 with project.authoring() as session:
     session.refresh()
     from my_lab.workflow import ReviewIntent, review
 
-    prepared = session.procedures.prepare(
-        review, ReviewIntent(label="Review scan"), request_key="review-scan-1"
-    )
+    prepared = session.procedures.prepare(review, ReviewIntent(label="Review scan"))
     task = prepared.submit()
     print(task.id, task.dispatch_error)
 ```
 
-`sc.notebook()` exposes the same `session.procedures` API and selects source at
-cell boundaries. Preparing a procedure never refreshes imports or executes its
-body. Changed source or an old definition/model alias requires an explicit
-refresh and reimport. Intent supplies the procedure's scientific choices; session
-experiment defaults are not implicitly applied.
+省略 `request_key` 时，每次 `prepare` 生成一个完整随机 key 并保存在
+`prepared.command.request_key` 中。同一个 prepared 的提交、重试与 reconnect
+保持同一命令、key 和固定源码；另一次 `prepare` 是另一请求，不是重试。
+需要业务幂等键时显式传入 `request_key="review-scan-1"`，原有显式键语义不变。
+默认 key 不表示归属，也不会自动恢复历史；需要跨 kernel 精确查找时，保留任务 ID、
+显式业务键或原命令。课程的 prefix 键用于既有历史展示，仍然保留。
 
-Retain `prepared` (or its serialized `command`) before submission. After an
-uncertain response, retry that exact command with the same request key; a changed
-command must not reuse the key. `prepared.reconnect(session).submit()` preserves
-its original source and identity, and rejects a different data-store or deployment
-identity even if its workspace ID matches. The application validates the exact registered
-definition and canonical intent in the retained revision, then owns dispatch.
-Closing the client or kernel leaves the managed task with the application.
+`sc.notebook()` 提供相同 API，并在 cell 边界选择源码。准备请求不刷新导入、
+不执行 procedure。源码修改或旧 definition/model 别名需要显式 refresh/reimport；
+科学选择由 intent 提供，不隐式套用 session 的 experiment 默认值。
 
-Reconnect with `session.procedures.get(task_id)`, inspect `task.progress()`, or
-request `task.cancel(actor="author", reason="Stop")`. Answer a waiting step using
-`session.submit_procedure_step_input(...)`, then call `task.resume()` to dispatch
-ready work. Existing revision fences and unknown-outcome gates still apply.
-A dispatch error retains the admitted task ID for inspection and explicit resume.
+提交前保留 `prepared`（或序列化的 `command`）。响应不确定时，重试这个精确命令：
+`prepared.reconnect(session).submit()`。它保留原源码和身份，拒绝连接不同数据存储或
+部署，即使 workspace ID 相同。修改命令不能复用旧 key。应用先校验固定源码中的
+注册定义与规范 intent，再负责 dispatch；关闭客户端或 kernel 不会取消应用持有的任务。
 
-`task.wait(timeout=60)` observes until the request closes, waits for input or
-requires attention. It returns the retained state, including failed scientific
-outcomes; timeout stops the wait without cancelling or retrying work. Use
-`task.steps()` and `task.output("verify")` to read retained evidence, and
-`session.published_analysis(...)` for a project-level publication. These reads do
-not import author code. `session.procedures.list()` returns a bounded page of
-snapshots; pass `next_cursor` as `cursor` for another page and reopen by
-`procedure_run_id`. Calibration history and capability reports are available
-through `session.calibration_checks`.
+已有任务按 ID 重开：`task = session.procedures.get(procedure_id)`。
+高层历史查询支持服务端精确过滤；每页都带回相同过滤条件：
+
+```python
+page = session.procedures.list(request_key="review-scan-1", state="closed", limit=20)
+for item in page.items:
+    print(item.procedure_run_id, item.request_key, item.state)
+if page.next_cursor is not None:
+    page = session.procedures.list(
+        request_key="review-scan-1", state="closed", limit=20, cursor=page.next_cursor
+    )
+```
+
+`request_key` 是精确匹配，不是 prefix；`state` 是读取时的状态过滤。
+空页可能表示没有这个请求，或其状态不符合过滤条件，不应改取“最新”任务。
+并发状态可以变化；列表不是自动恢复或继续执行的授权。
+不传过滤条件仍返回有界历史页，通过 `next_cursor` 翻页，再按明确 ID 重开。
+
+`task.progress()` 读取进度。`task.wait(timeout=60)` 等到关闭、等待输入或需要处理，
+返回保留状态，包含科学失败；超时只停止等待，不取消或重试。
+等待问题可先捕获 `task.pending_input(..., schema=...)` 再答复，保存答复与继续执行
+仍是不同动作，见[人工答复指南](../how-to/record-experiment-decisions.md)。
+`task.resume()` 显式派发可继续工作；`task.cancel(actor="author", reason="Stop")`
+显式请求取消。dispatch 错误仍保留已接纳的任务 ID，供检查与显式继续。
+
+只读结果入口按 step key 选择最新 attempt，要求它已成功且有正确类型的输出：
+
+```python
+measurement = task.measurement("baseline")  # existing Run facade
+snapshot = measurement.snapshot
+verification = task.analysis("verify")     # existing PublishedAnalysis
+print(verification.id, verification.fact("decision").value)
+```
+
+`measurement` 返回既有 Run facade；`analysis` 根据保留引用的 run／sample／project
+来源读取精确 analysis record ID，并校验 ID 与来源，不选择同逻辑 key 的新版本。
+两者复用 `output` 的跨页查找，不会从最新未完成 attempt 回退到旧成功结果。
+step 不存在、尚未成功或输出类型不符会报错；读取不会采集、分析、发布或继续执行，
+也不导入作者源码。新 session 重开任务后可再次读取；lazy facade 的后续读取仍需要
+其连接存活。`task.steps()` 与 `task.output(...)` 保留底层证据访问，publication
+凭据等其他结果仍通过 `output` 查看。校准历史与能力报告仍使用
+`session.calibration_checks`。
 
 The calibration and joint-calibration lessons use this managed path, including
 closing the Notebook connection while application workers continue. Reconnecting
