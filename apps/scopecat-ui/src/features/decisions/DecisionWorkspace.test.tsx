@@ -159,6 +159,7 @@ describe("DecisionWorkspace", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Pick evidence point" })).toBeDisabled(),
     );
+    expect(screen.getByRole("alert")).toHaveTextContent("请求已变化或不再等待判断。输入已保留");
     fireEvent.click(screen.getByRole("button", { name: "Pick evidence point" }));
     expect(screen.getByLabelText("frequency")).toHaveValue("6500.25");
     expect(submitProcedureInput).not.toHaveBeenCalled();
@@ -257,7 +258,7 @@ describe("DecisionWorkspace", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "重试继续执行" })).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("link", { name: "Open task" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "打开任务" })).toHaveAttribute(
       "href",
       "?procedure=procedure-1#launch",
     );
@@ -327,9 +328,9 @@ describe("DecisionWorkspace", () => {
     vi.mocked(getWaitingProcedures).mockResolvedValue({ items: [first, second] });
     renderWorkspace();
     const choice = await screen.findByRole("button", {
-      name: /lab.readout-survey.*Submitted.*bbbbbbbb/,
+      name: /lab.readout-survey.*提交于.*bbbbbbbb/,
     });
-    expect(screen.getByRole("button", { name: /Reference.*aaaaaaaa/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /标识.*aaaaaaaa/ })).toBeVisible();
     fireEvent.click(choice);
     await waitFor(() =>
       expect(getProcedureSteps).toHaveBeenCalledWith(
@@ -345,7 +346,7 @@ describe("DecisionWorkspace", () => {
     const layout = field.closest("fieldset")!.parentElement!;
     expect(layout).not.toHaveClass("xl:grid-cols-2");
     expect(layout.children).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Open measurement data" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "打开测量数据" })).toBeInTheDocument();
   });
 
   it("renders the shipped nullable peak schema and blocks invalid combinations before recording", async () => {
@@ -383,10 +384,10 @@ describe("DecisionWorkspace", () => {
     });
     const frequency = screen.getByLabelText("Peak frequency (MHz)");
     fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Enter Peak frequency");
+    expect(await screen.findByRole("alert")).toHaveTextContent("请填写 Peak frequency");
     fireEvent.change(frequency, { target: { value: "6600" } });
     fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("between 6490 and 6510");
+    expect(await screen.findByRole("alert")).toHaveTextContent("6490 至 6510 之间");
     expect(submitProcedureInput).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("outcome"), {
       target: { value: JSON.stringify("No clear peak") },
@@ -429,15 +430,15 @@ describe("DecisionWorkspace", () => {
       items: [step],
     });
     renderWorkspace();
-    await screen.findByText("Parameters · daily");
-    expect(screen.getByText("Parameters · daily")).toBeVisible();
+    await screen.findByText("参数 · daily");
+    expect(screen.getByText("参数 · daily")).toBeVisible();
   });
 
   it("shows exact evidence and submits an identified structured judgment", async () => {
     renderWorkspace();
 
     expect(await screen.findByText("Select a physical readout resonator")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Open measurement data" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "打开测量数据" })).toHaveAttribute(
       "href",
       "/?run=readout-s21#runs",
     );
@@ -534,7 +535,7 @@ describe("DecisionWorkspace", () => {
     renderWorkspace();
     await screen.findByLabelText("outcome");
     expect(screen.queryByLabelText("Structured judgment (JSON)")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add Peak frequency (MHz)" }));
+    fireEvent.click(screen.getByRole("button", { name: "添加 Peak frequency (MHz)" }));
     expect(screen.getByLabelText("Peak frequency (MHz) 1")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "提交判断并继续" }));
     expect(submitProcedureInput).not.toHaveBeenCalled();
@@ -559,11 +560,11 @@ describe("DecisionWorkspace", () => {
         expect.anything(),
       ),
     );
-    expect(await screen.findByRole("link", { name: "Open task" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "打开任务" })).toHaveAttribute(
       "href",
       "?procedure=procedure-1#launch",
     );
-    expect(screen.getByRole("button", { name: "View waiting decisions" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "查看待处理判断" })).toBeVisible();
     expect(localStorage.length).toBe(0);
   });
 
@@ -613,7 +614,7 @@ describe("DecisionWorkspace", () => {
       items: [step],
     });
     renderWorkspace();
-    expect(await screen.findByRole("alert")).toHaveTextContent("form does not support yet");
+    expect(await screen.findByRole("alert")).toHaveTextContent("表单尚不支持");
     expect(screen.getByRole("button", { name: "提交判断并继续" })).toBeDisabled();
     expect(screen.queryByText("Expected structure")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "人工判断选项" }));
@@ -672,10 +673,33 @@ describe("DecisionWorkspace", () => {
     const reviewer = await screen.findByLabelText("判断操作人");
     fireEvent.change(reviewer, { target: { value: "Alice" } });
     fireEvent.submit(screen.getByRole("form", { name: "记录人工判断" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Request revision changed");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "提交判断失败：Request revision changed",
+    );
     expect(reviewer).toHaveValue("Alice");
     expect(reviewer).toBeEnabled();
     expect(screen.getByLabelText("confidence")).toHaveValue("0");
+  });
+
+  it("explains a retained draft conflict and exposes recovery history in Chinese", async () => {
+    const save = vi.mocked(saveDecisionDraft).getMockImplementation()!;
+    vi.mocked(saveDecisionDraft).mockImplementation(async (command) => {
+      const view = await save(command);
+      view.draft!.state = "conflict";
+      vi.mocked(getDecisionDraftHistory).mockResolvedValue({ items: [view.draft!] });
+      return view;
+    });
+    renderWorkspace();
+    fireEvent.change(await screen.findByLabelText("判断操作人"), { target: { value: "Alice" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "当前草稿版本已变化，冲突副本已保留在草稿历史中。",
+    );
+    expect(screen.getByRole("button", { name: "提交判断并继续" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "人工判断选项" }));
+    fireEvent.click(screen.getByRole("button", { name: "恢复已保存的判断草稿" }));
+    expect(await screen.findByText(/冲突 · 版本 1/)).toBeVisible();
+    expect(screen.getByText(/恢复历史不能提交判断或继续执行/)).toBeVisible();
+    expect(submitProcedureInput).not.toHaveBeenCalled();
   });
 
   it("explains when no experiment is waiting", async () => {
@@ -688,7 +712,7 @@ describe("DecisionWorkspace", () => {
   it("explains that decisions require the local daemon", () => {
     renderWorkspace({ daemonUnavailable: true });
 
-    expect(screen.getByText("Connect to the local daemon")).toBeVisible();
+    expect(screen.getByText("连接本地 daemon")).toBeVisible();
     expect(getWaitingProcedures).not.toHaveBeenCalled();
   });
 });

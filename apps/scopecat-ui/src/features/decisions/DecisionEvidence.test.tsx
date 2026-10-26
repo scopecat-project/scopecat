@@ -73,7 +73,7 @@ it("shows changes from the exact retained analysis, including older proposal pag
     analysis_record_id: "fit-r1",
     subject: { kind: "run", run_id: "run-1" },
   });
-  expect(await screen.findByRole("table", { name: "Proposed parameter changes" })).toBeVisible();
+  expect(await screen.findByRole("table", { name: "候选参数变更" })).toBeVisible();
   expect(screen.getByText("0.1596")).toBeVisible();
   expect(screen.getByText("0.1605")).toBeVisible();
   expect(getRunAnalysis).toHaveBeenCalledWith("run-1", "fit-r1", expect.any(AbortSignal));
@@ -108,6 +108,6 @@ it("rejects a response with a different immutable evidence identity", async () =
     analysis_record_id: "fit-r1",
     subject: { kind: "run", run_id: "run-1" },
   });
-  expect(await screen.findByRole("alert")).toHaveTextContent("evidence identity changed");
-  expect(screen.queryByRole("table", { name: "Proposed parameter changes" })).toBeNull();
+  expect(await screen.findByRole("alert")).toHaveTextContent("判断依据标识已变化");
+  expect(screen.queryByRole("table", { name: "候选参数变更" })).toBeNull();
 });

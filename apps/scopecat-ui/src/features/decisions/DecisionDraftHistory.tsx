@@ -16,28 +16,27 @@ export function DecisionDraftHistory() {
   return (
     <section className="mb-3 rounded-md border border-line bg-panel p-3">
       <Controls.Button type="button" onClick={() => setOpen(!open)}>
-        Recover saved Decision drafts
+        恢复已保存的判断草稿
       </Controls.Button>
       {open && (
         <div className="grid gap-2 text-sm">
           <p>
-            Retained editing history, including conflicts and discarded copies. These are not
-            recorded scientific decisions. Completed or changed requests must be reviewed in the
-            task; this history cannot submit a decision or continue a run. Copy text you want to
-            reuse explicitly.
+            此处保留编辑历史，包括冲突副本和已丢弃的草稿，不代表已记录的科学判断。对于已完成或已变化的请求，请在任务中核实；恢复历史不能提交判断或继续执行。如需复用内容，请手动复制。
           </p>
-          {history.isError && <p role="alert">{errorMessage(history.error)}</p>}
+          {history.isError && <p role="alert">无法读取草稿历史：{errorMessage(history.error)}</p>}
           {history.data?.items.map((draft) => (
             <details key={draft.revision}>
               <summary>
-                {draft.target.procedure_run_id} · {draft.target.step_key} · attempt{" "}
-                {draft.target.attempt} ·{draft.state} · revision {draft.revision}
+                {draft.target.procedure_run_id} · {draft.target.step_key} · 尝试{" "}
+                {draft.target.attempt} ·
+                {{ saved: "已保存", conflict: "冲突", discarded: "已丢弃" }[draft.state]} · 版本{" "}
+                {draft.revision}
               </summary>
               <p>
-                Saved {draft.created_at}; original request {draft.baseline.request_hash}
+                保存于 {draft.created_at}；原请求 {draft.baseline.request_hash}
               </p>
               <Controls.Textarea
-                aria-label={`Retained draft ${draft.revision}`}
+                aria-label={`保留的草稿 ${draft.revision}`}
                 readOnly
                 rows={8}
                 className="w-full font-mono"
@@ -47,12 +46,12 @@ export function DecisionDraftHistory() {
           ))}
           {history.data?.next_cursor && (
             <Controls.Button type="button" onClick={() => setBefore(history.data.next_cursor!)}>
-              Older drafts
+              更早的草稿
             </Controls.Button>
           )}
           {before && (
             <Controls.Button type="button" onClick={() => setBefore(undefined)}>
-              Newest drafts
+              最新草稿
             </Controls.Button>
           )}
         </div>

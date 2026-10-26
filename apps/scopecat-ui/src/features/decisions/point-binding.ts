@@ -46,19 +46,18 @@ export function pointBinding(metadata: unknown, structure: unknown): PointBindin
 }
 
 export function bindingProblem(binding: PointBinding, output: AnalysisOutput): string | undefined {
-  if (output.id !== binding.output || output.kind !== "figure")
-    return "The declared figure is unavailable.";
+  if (output.id !== binding.output || output.kind !== "figure") return "声明的图表不可用。";
   const layer = output.content.layers.find((item) => item.id === binding.layer);
-  if (!layer) return "The declared figure layer is unavailable.";
+  if (!layer) return "声明的图层不可用。";
   const axis =
     layer.projection.x === binding.column
       ? "x"
       : layer.projection.y === binding.column
         ? "y"
         : undefined;
-  if (!axis) return "The declared data column is not plotted in this layer.";
+  if (!axis) return "声明的数据列未绘制在此图层中。";
   if ((layer.preview[`${axis}_axis`].unit ?? null) !== binding.unit)
-    return "The declared field unit does not match the plotted column.";
+    return "声明的字段单位与图中数据列不一致。";
   return undefined;
 }
 

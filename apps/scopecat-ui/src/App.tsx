@@ -487,8 +487,8 @@ export default function App() {
               fallback={
                 <DetailEmpty
                   icon={<LoaderCircle className="animate-spin" />}
-                  title="Loading decisions"
-                  detail="The experiment interpretation queue is being prepared."
+                  title="正在加载人工判断"
+                  detail="正在准备实验人工判断队列。"
                 />
               }
             >

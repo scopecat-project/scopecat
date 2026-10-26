@@ -51,16 +51,16 @@ describe("nullable numeric decisions", () => {
   it.each(["Unsure", "No clear peak"])("accepts %s only without a frequency", (outcome) => {
     expect(decisionConstraintError({ outcome, frequency_mhz: null }, metadata)).toBeUndefined();
     expect(decisionConstraintError({ outcome, frequency_mhz: 6500 }, metadata)).toMatch(
-      /Leave.*empty/,
+      /其他情况请留空/,
     );
   });
   it("reports the missing or out-of-range field before submission", () => {
     expect(
       decisionConstraintError({ outcome: "Peak selected", frequency_mhz: null }, metadata),
-    ).toMatch(/Enter Peak frequency/);
+    ).toMatch(/请填写 Peak frequency/);
     expect(
       decisionConstraintError({ outcome: "Peak selected", frequency_mhz: 6600 }, metadata),
-    ).toContain("between 6490 and 6510");
+    ).toContain("6490 至 6510 之间");
   });
   it("rejects unsupported unions rather than treating them as a number", () => {
     expect(

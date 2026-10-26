@@ -53,18 +53,16 @@ export function DecisionEvidence({
   return (
     <section className="min-w-0 rounded-md border border-line p-3">
       <h3 className="text-sm">{analysis.data?.title ?? id}</h3>
-      {analysis.isPending && <p>Loading evidence…</p>}
-      {analysis.isError && <p role="alert">Evidence unavailable: {errorMessage(analysis.error)}</p>}
+      {analysis.isPending && <p>正在加载判断依据…</p>}
+      {analysis.isError && <p role="alert">无法读取判断依据： {errorMessage(analysis.error)}</p>}
       {analysis.data && analysis.data.id !== id && (
-        <p role="alert">
-          The evidence identity changed. Reload the exact request before selecting.
-        </p>
+        <p role="alert">判断依据标识已变化。请重新加载此请求后再选点。</p>
       )}
       {binding &&
         analysis.data &&
         !analysis.data.outputs.some(
           (output) => output.id === binding.output && output.kind === "figure",
-        ) && <p role="alert">The declared figure is unavailable.</p>}
+        ) && <p role="alert">声明的图表不可用。</p>}
       {analysis.data && analysis.data.id === id && (
         <>
           {analysis.data.outputs
@@ -83,10 +81,10 @@ export function DecisionEvidence({
                       <dd className="m-0">
                         {typeof value === "boolean"
                           ? value
-                            ? "Yes"
-                            : "No"
+                            ? "是"
+                            : "否"
                           : value == null
-                            ? "Not available"
+                            ? "不可用"
                             : typeof value === "object"
                               ? JSON.stringify(value)
                               : typeof value === "string"
@@ -109,8 +107,8 @@ export function DecisionEvidence({
                 {binding?.output === output.id && !bindingProblem(binding, output) && (
                   <p className="text-xs text-text-dim">
                     {disabled
-                      ? "Select the applicable judgment before picking a point."
-                      : `Click one plotted point to fill ${binding.field}${binding.unit ? ` (${binding.unit})` : ""}; then adjust and submit.`}
+                      ? "请先选择适用的判断，再从图中选点。"
+                      : `点击图中的一个点填写 ${binding.field}${binding.unit ? ` (${binding.unit})` : ""}，核对调整后提交。`}
                   </p>
                 )}
                 <AnalysisOutputView
@@ -153,8 +151,8 @@ function DecisionProposals({ runId, analysisId }: { runId: string; analysisId: s
     },
   });
   if (proposals.isError)
-    return <p role="alert">Parameter changes unavailable: {errorMessage(proposals.error)}</p>;
-  if (proposals.isPending) return <p>Loading parameter changes…</p>;
+    return <p role="alert">无法读取参数变更： {errorMessage(proposals.error)}</p>;
+  if (proposals.isPending) return <p>正在加载参数变更…</p>;
   return (
     <>
       {proposals.data.map((proposal) => (
@@ -162,13 +160,13 @@ function DecisionProposals({ runId, analysisId }: { runId: string; analysisId: s
           <p className="text-sm">{proposal.reason}</p>
           <table
             className="w-full text-left text-xs [overflow-wrap:anywhere]"
-            aria-label="Proposed parameter changes"
+            aria-label="候选参数变更"
           >
             <thead>
               <tr>
-                <th>Parameter</th>
-                <th>Before</th>
-                <th>Candidate</th>
+                <th>参数</th>
+                <th>变更前</th>
+                <th>候选值</th>
               </tr>
             </thead>
             <tbody>
@@ -178,7 +176,9 @@ function DecisionProposals({ runId, analysisId }: { runId: string; analysisId: s
                     {delta.path}
                     <small className="block">
                       {delta.changeKind === "added" || delta.changeKind === "removed"
-                        ? delta.changeKind
+                        ? delta.changeKind === "added"
+                          ? "新增"
+                          : "移除"
                         : scientificChangeLabel(delta.changeKind ?? "physical")}
                     </small>
                   </td>

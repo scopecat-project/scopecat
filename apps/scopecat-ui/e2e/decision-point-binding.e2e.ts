@@ -57,7 +57,7 @@ test("synthetic sweep point fills a draft, allows adjustment and explicitly cont
       await judgment.selectOption(JSON.stringify("Peak selected"));
       const points = page
         .getByTestId("analysis-figure")
-        .locator('svg path[stroke="#80a3cf"][fill="#fff"], svg path[fill="#facc15"]');
+        .locator('svg path[stroke="#286f58"][fill="#fff"], svg path[fill="#facc15"]');
       await expect(points).toHaveCount(81);
       const selected = page.getByTestId("analysis-figure").locator('svg path[fill="#facc15"]');
       if (await selected.count()) await selected.click();
@@ -86,8 +86,22 @@ test("synthetic sweep point fills a draft, allows adjustment and explicitly cont
         contentType: "image/png",
       });
     }
+    await expect(page.getByText("草稿已保存", { exact: true })).toBeVisible();
+    await page.route("**/api/v1/decision-drafts/save", (route) =>
+      route.request().method() === "POST"
+        ? route.fulfill({ status: 503, json: { detail: "synthetic save failure" } })
+        : route.continue(),
+    );
+    await frequency.fill("6500.5");
+    await expect(page.getByRole("alert")).toContainText("草稿保存失败。请保持窗口打开并重试。");
+    await expect(frequency).toHaveValue("6500.5");
+    const waiting = await page.request.get(`${base}/api/v1/procedures/${procedure}`);
+    expect((await waiting.json()).state).toBe("waiting_for_input");
+    await page.unroute("**/api/v1/decision-drafts/save");
+    await page.getByRole("button", { name: "重试保存草稿" }).click();
+    await expect(page.getByText("草稿已保存", { exact: true })).toBeVisible();
     await frequency.press("Enter");
-    await expect(page.getByRole("link", { name: "Open task" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "打开任务" })).toBeVisible();
     await expect
       .poll(
         async () =>
@@ -103,7 +117,7 @@ test("synthetic sweep point fills a draft, allows adjustment and explicitly cont
     const choice = steps.find((step: { step_key: string }) => step.step_key === "choose-1");
     expect(choice.output.response.value).toEqual({
       outcome: "Peak selected",
-      frequency_mhz: 6500.25,
+      frequency_mhz: 6500.5,
     });
     expect(choice.output.response.actor).toBe("Browser operator");
     expect(choice.output.response.actor_kind).toBe("human");
