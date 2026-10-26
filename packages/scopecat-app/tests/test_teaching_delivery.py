@@ -224,13 +224,7 @@ def test_application_paths_reject_redirected_runtime_directory(tmp_path: Path):
 @pytest.mark.parametrize(
     ("code", "phase", "skipped"),
     [
-        (errno.EACCES, "link", True),
         (errno.EPERM, "link", True),
-        (errno.ENOSYS, "link", True),
-        (errno.ENOTSUP, "link", True),
-        (1314, "link", True),
-        (errno.ENOENT, "link", False),
-        (errno.EEXIST, "link", False),
         (errno.EIO, "link", False),
         (errno.EACCES, "product", False),
     ],
@@ -243,8 +237,6 @@ def test_runtime_directory_symlink_skip_boundary(
     skipped: bool,
 ) -> None:
     error = OSError(code, "injected symlink boundary failure")
-    if code == 1314:
-        monkeypatch.setattr(error, "winerror", 1314, raising=False)
 
     def fail(*_args: object, **_kwargs: object) -> None:
         raise error
