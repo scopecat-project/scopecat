@@ -123,16 +123,31 @@ source_ref = PlanAnalysisSource(
 重开同一应用数据空间及作者目录后，重新连接，再走 Data 的只读路径。
 不要为了找回历史运行而执行 Submit，也不要把重新连接理解为自动恢复上次执行。
 
-熟悉 Python 的作者也可手动使用两个稳定 run ID，或保存普通笔记：
+熟悉 Python 的作者也可手动使用两个稳定 run ID，或保存普通笔记。
+Settings starter 的 Connect 只创建 `author`，没有 `project` 变量。
+`author.project_root` 是当前连接的作者目录（Connect 摘要中的“作者目录”），
+不是应用数据目录；以下只在这个用户拥有的目录中保存普通文件，不访问内部存储布局：
 
 ```python
 import json
 
-(project.root / "continuation.json").write_text(
+assert author.project_root is not None
+bookmark_path = author.project_root / "continuation.json"
+bookmark_path.write_text(
     json.dumps({"decision_source": source_ref.model_dump(mode="json")})
 )
-# 下次连接原数据空间后，仅精确读取，不创建新分析或运行。
-notes = json.loads((project.root / "continuation.json").read_text())
+```
+
+下次连接原数据空间与作者目录后，单独执行下面的读取单元格。
+它自行导入所需类型，只读已有书签，不执行上面的保存单元格：
+
+```python
+import json
+from scopecat.records.plan_ref import PlanAnalysisSource
+
+assert author.project_root is not None
+bookmark_path = author.project_root / "continuation.json"
+notes = json.loads(bookmark_path.read_text())
 source_ref = PlanAnalysisSource.model_validate(notes["decision_source"])
 conclusion = author.run(source_ref.run_id).published_analysis(source_ref.analysis_id)
 assert conclusion.publication_hash == source_ref.publication_hash
