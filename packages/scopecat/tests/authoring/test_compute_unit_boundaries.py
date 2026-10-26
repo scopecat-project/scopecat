@@ -18,7 +18,11 @@ from scopecat.execution.effects.compute import (
     EffectEvaluationFrame,
 )
 from scopecat.kernel.problems import Problem
-from scopecat.measurements.results import MeasurementArray, MeasurementScalar
+from scopecat.measurements.results import (
+    MeasurementArray,
+    MeasurementDType,
+    MeasurementScalar,
+)
 from scopecat.planning.local_compute import bind_compute_operations
 from scopecat.program.logical import LogicalProgram
 from scopecat.program.products import ProductAxis
@@ -520,3 +524,165 @@ def test_direct_array_literals_still_validate_shape_and_dtype(values: object) ->
 
     with pytest.raises(TypeError, match=r"compute.*consume.*input.*x"):
         compose_module(sc.module(module, id="units.invalid-literal-array").definition)
+
+
+def _native_scalar_program(
+    fn: Callable[..., float], source: bool | float | str, path: str
+) -> LogicalProgram:
+    from scopecat.kernel.value_type_compatibility import literal_scalar_type
+
+    schema = literal_scalar_type(source)
+    if path == "input":
+
+        def input_module(
+            ctx: sc.ModuleContext,
+            x: Annotated[sc.Input[object], schema],
+        ) -> sc.DataRef[float]:
+            return ctx.compute(fn=fn, x=cast("sc.ValueRef", x))
+
+        return compose_module(
+            sc.module(input_module, id="scalar.input").definition, x=source
+        )
+
+    @sc.module(id="scalar.native")
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        if path == "literal":
+            return ctx.compute(fn=fn, x=source)
+        if path == "value":
+            return ctx.compute(
+                fn=fn, x=ctx.compute(fn=lambda: source, output_type=schema)
+            )
+        dtype = cast(
+            "dict[type, MeasurementDType]",
+            {bool: "bool", int: "int64", float: "float64", str: "string"},
+        )[type(source)]
+        return ctx.compute(fn=fn, x=ctx._product("source", dtype=dtype, unit=None))
+
+    return compose_module(module.definition)
+
+
+@pytest.mark.parametrize("path", ["literal", "input", "value", "measured"])
+@pytest.mark.parametrize(
+    "annotation,source",
+    [(int, 2), (bool, True), (str, "on"), (float, 2), (complex, 2), (complex, 2.5)],
+)
+def test_native_scalar_contracts_execute_without_narrowing(
+    path: str, annotation: type, source: bool | float | str
+) -> None:
+    calls: list[object] = []
+
+    def consume(x: object) -> float:
+        calls.append(x)
+        assert type(x) is annotation
+        assert x == source
+        return 1.0
+
+    consume.__annotations__["x"] = annotation
+    logical = _native_scalar_program(consume, source, path)
+    assert calls == []
+    if path == "measured":
+        [compute] = logical.measurement_computes
+        dtype = cast(
+            "dict[type, MeasurementDType]",
+            {bool: "bool", int: "int64", float: "float64", str: "string"},
+        )[type(source)]
+        compute.kernel({"x": MeasurementScalar.create(value=source, dtype=dtype)})
+    else:
+        assert _execute(logical) == 1.0
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("path", ["literal", "input", "value", "measured"])
+@pytest.mark.parametrize(
+    "annotation,source,expected,actual",
+    [
+        (int, True, "Int", "Bool"),
+        (int, 2.5, "Int", "Float"),
+        (int, "2", "Int", "String"),
+        (bool, 1, "Bool", "Int"),
+        (bool, "yes", "Bool", "String"),
+        (str, 1, "String", "Int"),
+    ],
+)
+def test_native_scalar_mismatch_fails_before_execution(
+    path: str,
+    annotation: type,
+    source: bool | float | str,
+    expected: str,
+    actual: str,
+) -> None:
+    def consume(x: object) -> float:
+        pytest.fail("invalid scalar must not execute")
+
+    consume.__annotations__["x"] = annotation
+    with pytest.raises(
+        TypeError,
+        match=(
+            rf"compute 'consume' input 'x' expects Scalar\[{expected}"
+            rf".*got Scalar\[{actual}"
+        ),
+    ):
+        _native_scalar_program(consume, source, path)
+
+
+@pytest.mark.parametrize(
+    "annotation,default", [(int, True), (int, 2.5), (str, 1), (bool, 1), (int, None)]
+)
+def test_native_scalar_defaults_fail_before_execution(
+    annotation: type, default: object
+) -> None:
+    def consume(x: object = default) -> float:
+        pytest.fail("invalid default must not execute")
+
+    consume.__annotations__["x"] = annotation
+
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        return ctx.compute(fn=consume)
+
+    with pytest.raises(TypeError, match=r"compute 'consume' input 'x' expects .*got"):
+        compose_module(sc.module(module, id="scalar.default").definition)
+
+
+def test_native_scalar_defaults_and_direct_keyword_calls() -> None:
+    @sc.compute
+    def consume(count: int = 2, *, enabled: bool = True, label: str = "on") -> float:
+        assert type(count) is int and type(enabled) is bool and type(label) is str
+        return float(count) if enabled and label else 0.0
+
+    @sc.module(id="scalar.defaults")
+    def module(ctx: sc.ModuleContext) -> sc.DataRef[float]:
+        consume()
+        return consume(3, enabled=True, label="ready")
+
+    assert _execute(compose_module(module.definition)) == 3.0
+
+
+@pytest.mark.parametrize("annotation", [int, bool, str, float, complex, None])
+def test_table_does_not_bypass_explicit_scalar_contract(
+    annotation: type | None,
+) -> None:
+    from scopecat.program.value_refs import internal_literal_value_ref
+
+    table = sc.TableType(
+        columns=(sc.TableColumn("count", sc.ScalarType(sc.IntType())),)
+    )
+
+    def consume(x: object) -> float:
+        assert x == ({"count": 2},)
+        return 2.0
+
+    if annotation is None:
+        del consume.__annotations__["x"]
+    else:
+        consume.__annotations__["x"] = annotation
+
+    from scopecat.authoring._compute_contracts import bind_compute_inputs
+
+    rows = internal_literal_value_ref(({"count": 2},), table, path=("test",))
+    if annotation is None:
+        assert bind_compute_inputs("consume", consume, {"x": rows}) == {}
+    else:
+        with pytest.raises(
+            TypeError, match=r"compute 'consume' input 'x' expects Scalar.*got Table"
+        ):
+            bind_compute_inputs("consume", consume, {"x": rows})
