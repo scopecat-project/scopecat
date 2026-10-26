@@ -908,9 +908,9 @@ def smoke(home: Path) -> None:
                             first.window,
                             "Boolean(window.pywebview?.api && "
                             "document.querySelector("
-                            "'[aria-label=\"Refresh project data\"]') && "
+                            "'[aria-label=\"刷新项目数据\"]') && "
                             "document.querySelector('.workspace-top [role=status]')"
-                            "?.textContent.trim() === 'Ok')",
+                            "?.textContent.trim() === '已连接')",
                         )
                         is True
                     ),
