@@ -64,7 +64,7 @@ export function ParameterValueField({
             onChange(event.target.value === "" ? undefined : { text: event.target.value, unit: "" })
           }
         >
-          <option value="">Unknown</option>
+          <option value="">未知</option>
           <option value="true">true</option>
           <option value="false">false</option>
         </Controls.Select>
@@ -86,12 +86,10 @@ export function ParameterValueField({
             )
           }
         >
-          <option value="">Unknown</option>
+          <option value="">未知</option>
           {value && !choices.some((item) => identity(item) === selected) && (
             <option value={selected}>
-              {retained
-                ? `Retained ${retained.kind}: ${retained.id}`
-                : "Incomplete retained entity"}
+              {retained ? `保留的 ${retained.kind}：${retained.id}` : "保留的实体不完整"}
             </option>
           )}
           {choices.map((item) => (
@@ -103,7 +101,7 @@ export function ParameterValueField({
       ) : (
         <Controls.Input
           aria-label={label}
-          placeholder="Unknown"
+          placeholder="未知"
           type="text"
           inputMode={type.type === "string" ? undefined : "decimal"}
           disabled={disabled}
@@ -119,7 +117,7 @@ export function ParameterValueField({
       )}
       {type.type === "quantity" && (
         <Controls.Input
-          aria-label={`${label} unit`}
+          aria-label={`${label} 单位`}
           value={value?.unit ?? type.unit ?? ""}
           disabled={disabled || value === undefined}
           onChange={(event) => {
@@ -128,12 +126,12 @@ export function ParameterValueField({
         />
       )}
       <small>
-        {origin ?? (value === undefined ? "Unknown" : "Value set")}
+        {origin ?? (value === undefined ? "未知" : "已设定数值")}
         {type.type === "quantity" ? ` · ${value?.unit ?? type.unit ?? ""}` : ""}
       </small>
       {!disabled && (
         <button type="button" className={secondaryButton} onClick={() => onChange(undefined)}>
-          Mark unknown
+          标记为未知
         </button>
       )}
     </Controls.Field>

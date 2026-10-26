@@ -67,14 +67,14 @@ test("opens a delivered sample diagram and explains undelivered references", asy
     });
     expect(created.status()).toBe(201);
     await page.goto(`${endpoint.base_url}/?sample=synthetic-chip#samples`);
-    const attachments = page.getByLabel("Sample attachments");
+    const attachments = page.getByLabel("样品附件");
     await expect(attachments.getByText("Synthetic connection diagram")).toBeVisible();
-    await expect(attachments.getByText("Attachment unavailable")).toHaveCount(2);
+    await expect(attachments.getByText("附件不可用")).toHaveCount(2);
     await expect(attachments.getByText(/Stored attachment bytes are missing/)).toBeVisible();
     await expect(attachments.getByText(/Relative paths and file\/project URIs/)).toBeVisible();
     await expect(attachments.getByRole("link")).toHaveCount(1);
     const popupPromise = page.waitForEvent("popup");
-    await attachments.getByRole("link", { name: "Open attachment" }).click();
+    await attachments.getByRole("link", { name: "打开附件" }).click();
     const popup = await popupPromise;
     await popup.waitForLoadState("load");
     await expect(popup.locator("img")).toBeVisible();

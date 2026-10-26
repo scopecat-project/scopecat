@@ -17,8 +17,8 @@ it("renders zero as a known value and keeps unknown distinct", () => {
     />,
   );
   expect(screen.getByLabelText("drive[q0].amplitude")).toHaveValue("0");
-  expect(screen.getByText("Value set")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Mark unknown" }));
+  expect(screen.getByText("已设定数值")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "标记为未知" }));
   expect(change).toHaveBeenCalledWith(undefined);
   view.rerender(
     <ParameterValueField
@@ -29,7 +29,7 @@ it("renders zero as a known value and keeps unknown distinct", () => {
     />,
   );
   expect(screen.getByLabelText("drive[q0].amplitude")).toHaveValue("");
-  expect(screen.getByText("Unknown")).toBeInTheDocument();
+  expect(screen.getByText("未知")).toBeInTheDocument();
 });
 
 it("retains incomplete numeric text without marking it unknown", () => {
@@ -92,6 +92,6 @@ it("uses entity identity despite metadata differences and displays retained unav
       onChange={change}
     />,
   );
-  expect(screen.getByRole("option", { name: "Retained qubit: q0" })).toBeVisible();
+  expect(screen.getByRole("option", { name: "保留的 qubit：q0" })).toBeVisible();
   view.unmount();
 });

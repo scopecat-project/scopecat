@@ -16,11 +16,8 @@ export function PracticePanel({ reachable }: { reachable: boolean }) {
   if (!catalog.error && !practices?.length) return null;
   return (
     <section className="grid gap-3 rounded-lg border border-line bg-panel p-4">
-      <h3 className="font-semibold">Earlier peak practices</h3>
-      <p>
-        Continue or clean up an existing practice. Start new learning from the Notebook courses
-        above.
-      </p>
+      <h3 className="font-semibold">早期峰值练习</h3>
+      <p>继续或清理已有练习。新学习请从上方 Notebook 课程开始。</p>
       {catalog.error && <Notice role="alert">{catalog.error.message}</Notice>}
       {practices?.map((scope) => (
         <PracticeCard key={scope.id} scope={scope} refresh={() => catalog.refetch()} />
@@ -57,10 +54,10 @@ function PracticeCard({ scope, refresh }: { scope: Scope; refresh: () => Promise
       <h4 className="font-semibold">{scope.title}</h4>
       <p>
         {scope.state === "cleared"
-          ? "Practice cleared"
+          ? "练习已清理"
           : scope.state === "cleaning"
-            ? "Cleanup unfinished — new work is blocked"
-            : "Ready to continue"}
+            ? "清理未完成 — 已阻止新任务"
+            : "可以继续"}
       </p>
       {scope.state === "active" && scope.procedure_id && (
         <>
@@ -68,27 +65,25 @@ function PracticeCard({ scope, refresh }: { scope: Scope; refresh: () => Promise
             className="underline"
             href={`?procedure=${encodeURIComponent(scope.procedure_id)}#launch`}
           >
-            Open practice task
+            打开练习任务
           </a>
           <a
             className="underline"
             href={`?procedure=${encodeURIComponent(scope.procedure_id)}#decisions`}
           >
-            Review curve and enter frequency
+            核对曲线并输入频率
           </a>
-          <p>
-            You can close this page and continue later. Reopening the task does not repeat the scan.
-          </p>
+          <p>可关闭此页以后继续。重新打开任务不会重复扫描。</p>
         </>
       )}
       {scope.file_disposition !== "discard" && (
         <>
           <p>
-            {scope.state === "cleared" ? "Files kept: " : "Optional notes in VS Code: "}
+            {scope.state === "cleared" ? "已保留文件：" : "可选的 VS Code 笔记："}
             <code>{scope.directory}</code>
           </p>
           <a className="underline" href={`/api/v1/practice/${encodeURIComponent(scope.id)}/files`}>
-            Export practice files
+            导出练习文件
           </a>
         </>
       )}
@@ -97,37 +92,34 @@ function PracticeCard({ scope, refresh }: { scope: Scope; refresh: () => Promise
       )}
       {scope.state === "cleaning" ? (
         <Button type="button" disabled={pending} onClick={() => void clear()}>
-          {pending ? "Clearing…" : "Retry cleanup"}
+          {pending ? "正在清理…" : "重试清理"}
         </Button>
       ) : (
         scope.state === "active" &&
         (confirming ? (
           <>
-            <p>
-              Stop this practice and remove its scans, analysis and decisions. Your other work stays
-              available.
-            </p>
+            <p>停止此练习并移除其扫描、分析和决策。其他工作仍保留。</p>
             <Field>
-              Practice files{" "}
+              练习文件{" "}
               <Select
                 value={choice}
                 onChange={(event) => setChoice(event.target.value as "preserve" | "discard")}
                 disabled={pending}
               >
-                <option value="preserve">Keep notes and edited files</option>
-                <option value="discard">Delete all files in this practice folder</option>
+                <option value="preserve">保留笔记与已编辑文件</option>
+                <option value="discard">删除此练习目录中的全部文件</option>
               </Select>
             </Field>
             <Button type="button" disabled={pending} onClick={() => void clear()}>
-              {pending ? "Clearing…" : "Clear this practice"}
+              {pending ? "正在清理…" : "清理此练习"}
             </Button>
             <Button type="button" disabled={pending} onClick={() => setConfirming(false)}>
-              Cancel
+              取消
             </Button>
           </>
         ) : (
           <Button type="button" onClick={() => setConfirming(true)}>
-            Clear practice…
+            清理练习…
           </Button>
         ))
       )}

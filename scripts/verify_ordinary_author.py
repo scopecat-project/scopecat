@@ -130,24 +130,24 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                 set_window_title: async () => {},
             }};""")
             page.goto(endpoint + "/#settings")
-            page.get_by_role("button", name="New code folder", exact=True).click()
-            page.get_by_role("button", name="Choose save location…", exact=True).click()
+            page.get_by_role("button", name="新建代码目录", exact=True).click()
+            page.get_by_role("button", name="选择保存位置…", exact=True).click()
             # Error/retry preserves existing files and does not preseed author source.
             existing = work / "existing"
             existing.mkdir()
             (existing / "notes.txt").write_text("keep")
-            page.get_by_label("New folder name", exact=True).fill("existing")
+            page.get_by_label("新目录名称", exact=True).fill("existing")
             create_button = page.get_by_role(
-                "button", name="Create folder and prepare Python", exact=True
+                "button", name="创建目录并准备 Python", exact=True
             )
             create_button.click()
             expect(page.get_by_role("alert")).to_contain_text("existing")
             assert (existing / "notes.txt").read_text() == "keep"
             assert runs() == []
-            page.get_by_label("New folder name", exact=True).fill("my-experiments")
+            page.get_by_label("新目录名称", exact=True).fill("my-experiments")
             create_button.click()
             source = work / "my-experiments"
-            expect(page.get_by_label("Author directory", exact=True)).to_have_value(
+            expect(page.get_by_label("作者目录", exact=True)).to_have_value(
                 str(source), timeout=180_000
             )
             expect(page.get_by_text("Folder ready.", exact=False)).to_be_visible()
@@ -159,20 +159,16 @@ def verify(work: Path, payload: Path, gui: Path) -> None:
                 != binding["execution_python"]
                 != str(runtime.installation().python)
             )
-            page.get_by_label("Execution Python", exact=True).fill(
+            page.get_by_label("执行 Python", exact=True).fill(
                 str(work / "missing-python")
             )
-            page.get_by_role(
-                "button", name="Use this execution Python", exact=True
-            ).click()
+            page.get_by_role("button", name="使用此执行 Python", exact=True).click()
             expect(page.get_by_role("alert")).to_be_visible()
             assert api.status()["sources"] == bindings
-            page.get_by_label("Execution Python", exact=True).fill(
+            page.get_by_label("执行 Python", exact=True).fill(
                 binding["execution_python"]
             )
-            page.get_by_role(
-                "button", name="Use this execution Python", exact=True
-            ).click()
+            page.get_by_role("button", name="使用此执行 Python", exact=True).click()
             expect(page.get_by_role("alert")).to_have_count(0)
             assert runs() == []
             evidence["settings_preparation"] = {"passed": True, **binding}
@@ -325,8 +321,8 @@ author.close()
                 session, lambda: cast("webview.Window", cast("object", window))
             )
             page.goto(endpoint + "/#settings")
-            page.get_by_label("Your code folders").select_option(str(source))
-            expect(page.get_by_label("Author directory")).to_have_value(str(source))
+            page.get_by_label("代码目录").select_option(str(source))
+            expect(page.get_by_label("作者目录")).to_have_value(str(source))
             receipt = (work / "receipt.txt").read_text()
             with client.setup_kernel():
                 execute(f"__file__ = {str(notebook)!r}")

@@ -63,18 +63,16 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
       ),
     ) as { url: string; workspace: string };
     await page.goto(`${prepared.url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Application loop tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Application loop tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${prepared.url}/?workspace=${prepared.workspace}#configuration`);
-    await page.getByLabel("Working parameter branch", { exact: true }).fill("starter");
-    await page.getByRole("button", { name: "Open working table", exact: true }).click();
+    await page.getByLabel("工作参数分支", { exact: true }).fill("starter");
+    await page.getByRole("button", { name: "打开工作参数表", exact: true }).click();
     const scale = page.getByLabel("response[1].scale", { exact: true });
     await expect(scale).toBeVisible();
     await scale.fill("2");
-    await page
-      .getByRole("button", { name: "Use working inputs for next experiment", exact: true })
-      .click();
+    await page.getByRole("button", { name: "将工作输入用于下次实验", exact: true }).click();
     await page.getByLabel("实验配置", { exact: true }).selectOption("loop-bench");
     await page.getByLabel("Position", { exact: true }).fill("0.5");
     const start = page.getByRole("button", { name: "开始采集", exact: true });
@@ -110,7 +108,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     release();
     await expect(scale).toHaveValue("2");
     await scale.fill("3");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Experiments$/, exact: true }).click();
     await expect(page.getByRole("heading", { name: "原始提交待确认" })).toBeVisible();
     await expect(start).toBeDisabled();
@@ -139,7 +137,7 @@ print(json.dumps({"url": record.base_url, "workspace": workspace}))
     await page.getByRole("button", { name: /Configuration$/, exact: true }).click();
     await expect(scale).toHaveValue("3");
     await scale.fill("4");
-    await expect(page.getByText("Draft saved in application data", { exact: true })).toBeVisible();
+    await expect(page.getByText("草稿已保存到应用数据", { exact: true })).toBeVisible();
     expect(submissions).toBe(1);
     const runs = (await (
       await page.request.get(`${prepared.url}/api/v1/runs`)

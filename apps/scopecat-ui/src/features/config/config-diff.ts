@@ -197,7 +197,7 @@ export function parameterAtomIdentity(value: ParameterAtom): unknown {
 }
 
 export function parameterAtomLabel(value: ParameterAtom | undefined): string {
-  if (value === undefined) return "Unknown";
+  if (value === undefined) return "未知";
   if (value === null) return "null";
   if (isQuantity(value)) return `${formatNumber(value.value)} ${value.unit}`;
   if (isEntity(value)) {
@@ -208,7 +208,7 @@ export function parameterAtomLabel(value: ParameterAtom | undefined): string {
 }
 
 export function parameterTypeLabel(definition: ParameterDefinition | undefined): string {
-  if (!definition) return "Not defined";
+  if (!definition) return "未定义";
   const valueType = definition.value_type;
   if (valueType.shape === "table") {
     return `Table · ${valueType.columns.length} columns`;

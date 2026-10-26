@@ -22,7 +22,7 @@ test("explains changed scientific dependencies and links retained evidence", () 
       ]}
     />,
   );
-  expect(screen.getByText("Changed parameters: bias")).toBeInTheDocument();
+  expect(screen.getByText("已改变参数： bias")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "run-a", hidden: true })).toHaveAttribute(
     "href",
     "?run=run-a#runs",

@@ -73,13 +73,13 @@ describe("SamplesWorkspace", () => {
     renderWorkspace({ selectedSampleId: "chip-a17", onOpenRun: openRun });
 
     expect(await screen.findByRole("heading", { name: "Chip A17" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Sample topology map" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "样品拓扑地图" })).toBeVisible();
     expect(screen.getByText("mask:g4-r3")).toBeVisible();
-    expect(screen.getByText("Revision 2")).toBeVisible();
+    expect(screen.getByText("版本 2")).toBeVisible();
 
     fireEvent.click(screen.getByText("q0", { selector: "text" }));
 
-    expect(screen.getByRole("heading", { name: "Selected entity" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "选中实体" })).toBeVisible();
     expect(screen.getByText("1", { selector: "dd" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: /Ramsey calibration/ }));
@@ -90,11 +90,11 @@ describe("SamplesWorkspace", () => {
     renderWorkspace();
 
     expect(await screen.findByText("Chip A17")).toBeVisible();
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search samples" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "搜索样品" }), {
       target: { value: "unrelated" },
     });
 
-    expect(screen.getByText("No matching samples")).toBeVisible();
+    expect(screen.getByText("没有匹配样品")).toBeVisible();
   });
 
   it("opens an exact historical revision and returns to active state", async () => {
@@ -117,8 +117,8 @@ describe("SamplesWorkspace", () => {
     });
 
     expect(await screen.findByRole("heading", { name: "Chip A17 at registration" })).toBeVisible();
-    expect(screen.getByText(/Viewing historical revision 1/)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "View active revision" }));
+    expect(screen.getByText(/正在查看历史版本 1/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "查看当前版本" }));
     expect(onSelectSample).toHaveBeenCalledWith("chip-a17");
   });
 });

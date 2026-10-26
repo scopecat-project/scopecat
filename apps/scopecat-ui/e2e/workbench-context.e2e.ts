@@ -89,9 +89,9 @@ test("two workbench pages retain independent context and share collection number
       expect(response.status()).toBe(201);
     }
     await page.goto(`${url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("operator");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("operator");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${url}/#launch`);
     await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
     await chooseAuthorContext(page);
@@ -136,17 +136,15 @@ test("two workbench pages retain independent context and share collection number
     });
     expect(retainedPractice.ok(), await retainedPractice.text()).toBeTruthy();
     await practice.goto(`${url}/#help`);
-    const retainedTask = practice.getByRole("link", { name: "Open practice task" });
+    const retainedTask = practice.getByRole("link", { name: "打开练习任务" });
     await expect(retainedTask).toBeVisible();
     const taskLink = await retainedTask.getAttribute("href");
     await practice.reload();
     await expect(retainedTask).toHaveAttribute("href", taskLink!);
-    await practice.getByRole("button", { name: "Clear practice…" }).click();
-    await expect(practice.getByRole("combobox", { name: "Practice files" })).toHaveValue(
-      "preserve",
-    );
-    await practice.getByRole("button", { name: "Clear this practice" }).click();
-    await expect(practice.getByText("Practice cleared", { exact: true })).toBeVisible();
+    await practice.getByRole("button", { name: "清理练习…" }).click();
+    await expect(practice.getByRole("combobox", { name: "练习文件" })).toHaveValue("preserve");
+    await practice.getByRole("button", { name: "清理此练习" }).click();
+    await expect(practice.getByText("练习已清理", { exact: true })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Alice");
     await expect(other.getByRole("textbox", { name: "操作人", exact: true })).toHaveValue("Bob");
     await expect(other.getByLabel("样品 ID", { exact: true })).toHaveValue("chip-b");

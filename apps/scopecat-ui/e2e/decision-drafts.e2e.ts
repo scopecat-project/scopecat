@@ -215,9 +215,9 @@ test("Settings operator is shared across windows and retained after uncertain De
     context = await browser.newContext();
     const settings = await context.newPage();
     await settings.goto(`${url}/#settings`);
-    await settings.getByLabel("Operator name").fill("Alice");
-    await settings.getByRole("button", { name: "Save operator" }).click();
-    await expect(settings.getByText("Operator saved", { exact: true })).toBeVisible();
+    await settings.getByLabel("操作者名称").fill("Alice");
+    await settings.getByRole("button", { name: "保存操作者" }).click();
+    await expect(settings.getByText("操作者已保存", { exact: true })).toBeVisible();
     const decision = await context.newPage();
     await decision.goto(`${url}/?procedure=${procedure}#decisions`);
     await expect(decision.getByLabel("判断操作人")).toHaveValue("Alice");
@@ -241,9 +241,9 @@ test("Settings operator is shared across windows and retained after uncertain De
       data: { procedure_run_id: procedure, step_key: "select/peak", attempt: 1 },
     });
     expect((await draftResponse.json()).draft.input.actor).toBe("Alice");
-    await settings.getByLabel("Operator name").fill("Bob");
-    await settings.getByRole("button", { name: "Save operator" }).click();
-    await expect(settings.getByText("Operator saved", { exact: true })).toBeVisible();
+    await settings.getByLabel("操作者名称").fill("Bob");
+    await settings.getByRole("button", { name: "保存操作者" }).click();
+    await expect(settings.getByText("操作者已保存", { exact: true })).toBeVisible();
     await context.close();
     uv(["python", "-m", "scopecat_server.cli", "stop", project]);
     uv([

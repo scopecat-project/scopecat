@@ -42,9 +42,9 @@ for (const width of [1280, 390]) {
       };
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${base}/#settings`);
-      await page.getByLabel("Operator name", { exact: true }).fill("measurement-operator");
-      await page.getByRole("button", { name: "Save operator", exact: true }).click();
-      await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+      await page.getByLabel("操作者名称", { exact: true }).fill("measurement-operator");
+      await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+      await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
       await page.goto(`${base}/?workspace=${encodeURIComponent(seed.workspace)}#launch`);
       await page.getByText("Physical line scans", { exact: true }).click();
       const region = page.getByRole("region", { name: "Physical line scans", exact: true });

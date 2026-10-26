@@ -45,29 +45,27 @@ async function editVersion(page: Page, name: string) {
     .getByRole("navigation", { name: "Project sections" })
     .getByRole("button", { name: /Configuration$/, exact: true })
     .click();
-  await page
-    .getByRole("combobox", { name: "Saved parameter version", exact: true })
-    .selectOption(name);
-  await page.getByRole("button", { name: "Edit a copy", exact: true }).click();
+  await page.getByRole("combobox", { name: "已保存的参数版本", exact: true }).selectOption(name);
+  await page.getByRole("button", { name: "编辑副本", exact: true }).click();
 }
 
 async function saveVersion(page: Page, name: string) {
-  await page.getByText("Save a parameter checkpoint", { exact: true }).click();
-  await page.getByLabel("New version name", { exact: true }).fill(name);
+  await page.getByText("保存参数检查点", { exact: true }).click();
+  await page.getByLabel("新版本名称", { exact: true }).fill(name);
   const response = page.waitForResponse(
     (item) =>
       new URL(item.url()).pathname.endsWith("/commit") && item.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Save parameter version", exact: true }).click();
+  await page.getByRole("button", { name: "保存参数版本", exact: true }).click();
   const saved = await response;
   expect(saved.status(), await saved.text()).toBe(200);
-  await expect(
-    page.getByRole("combobox", { name: "Saved parameter version", exact: true }),
-  ).toHaveValue(name);
+  await expect(page.getByRole("combobox", { name: "已保存的参数版本", exact: true })).toHaveValue(
+    name,
+  );
 }
 
 async function launchVersion(page: Page) {
-  await page.getByRole("button", { name: "Use for next experiment", exact: true }).click();
+  await page.getByRole("button", { name: "用于下次实验", exact: true }).click();
   await page.getByLabel("实验类型", { exact: true }).selectOption("signal");
   await page.getByLabel("实验配置", { exact: true }).selectOption("browser-bench-a");
 }
@@ -140,9 +138,9 @@ for (const scoped of [false, true]) {
         }
       }
       await page.goto(`${url}/#settings`);
-      await page.getByLabel("Operator name", { exact: true }).fill("Parameter context tester");
-      await page.getByRole("button", { name: "Save operator", exact: true }).click();
-      await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+      await page.getByLabel("操作者名称", { exact: true }).fill("Parameter context tester");
+      await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+      await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
       await page.goto(`${url}/#configuration`);
       for (let index = 0; index < 4; index++) {
         const sample = index < 2 ? "a" : "b";
@@ -150,7 +148,7 @@ for (const scoped of [false, true]) {
         const name = `values-${index}`;
         await editVersion(page, "browser-values");
         await page.getByLabel("signals[1].center", { exact: true }).fill(String(frequency));
-        await page.getByLabel("signals[1].center unit", { exact: true }).fill("GHz");
+        await page.getByLabel("signals[1].center 单位", { exact: true }).fill("GHz");
         await saveVersion(page, name);
         await launchVersion(page);
         await page.getByLabel("样品 ID", { exact: true }).fill(`context-${sample}`);
@@ -235,9 +233,9 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       project,
     ]);
     await page.goto(`${url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Parameter context tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Parameter context tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${url}/#configuration`);
     await editVersion(page, optionalVersion);
     await expect(page.getByLabel("signals[1].quality", { exact: true })).toHaveValue("");
@@ -288,14 +286,14 @@ with sc.open_project(sys.argv[1]).connect() as lab:
       project,
     ]);
     await page.goto(`${url}/#settings`);
-    await page.getByLabel("Operator name", { exact: true }).fill("Parameter context tester");
-    await page.getByRole("button", { name: "Save operator", exact: true }).click();
-    await expect(page.getByText("Operator saved", { exact: true })).toBeVisible();
+    await page.getByLabel("操作者名称", { exact: true }).fill("Parameter context tester");
+    await page.getByRole("button", { name: "保存操作者", exact: true }).click();
+    await expect(page.getByText("操作者已保存", { exact: true })).toBeVisible();
     await page.goto(`${url}/#configuration`);
     await editVersion(page, pythonVersion);
     const frequency = page.getByLabel("signals[1].center", { exact: true });
     await expect(frequency).toHaveValue("5100.0");
-    await expect(page.getByLabel("signals[1].center unit", { exact: true })).toHaveValue("MHz");
+    await expect(page.getByLabel("signals[1].center 单位", { exact: true })).toHaveValue("MHz");
     await frequency.focus();
     await frequency.press("ControlOrMeta+A");
     await frequency.pressSequentially("5200");

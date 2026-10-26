@@ -45,19 +45,13 @@ export function ConfigurationTemplatesPanel({
   const result = imported.data;
   const error = templates.error ?? imported.error;
   return (
-    <section
-      aria-label="Configuration templates"
-      className="grid gap-2 rounded border border-line p-3"
-    >
-      <h4>Configuration templates</h4>
-      <p>
-        Import a setup and independent parameters from an installed template. Registered device
-        connections are reused and never overwritten by a template.
-      </p>
+    <section aria-label="配置模板" className="grid gap-2 rounded border border-line p-3">
+      <h4>配置模板</h4>
+      <p>从已安装模板导入 setup 和独立参数。复用已登记设备连接，模板不会覆盖它们。</p>
       <Controls.Field>
-        Available template{" "}
+        可用模板{" "}
         <Controls.Select
-          aria-label="Available template"
+          aria-label="可用模板"
           value={selected}
           disabled={imported.isPending}
           onChange={(event) => {
@@ -66,7 +60,7 @@ export function ConfigurationTemplatesPanel({
             imported.reset();
           }}
         >
-          <option value="">Choose a template</option>
+          <option value="">选择模板</option>
           {templates.data?.items.map((item) => (
             <option key={item.id} value={item.id}>
               {item.label}
@@ -74,14 +68,12 @@ export function ConfigurationTemplatesPanel({
           ))}
         </Controls.Select>
       </Controls.Field>
-      {templates.isPending && <p>Loading templates…</p>}
-      {templates.data?.items.length === 0 && (
-        <p>This adapter declares no configuration templates.</p>
-      )}
+      {templates.isPending && <p>正在加载模板…</p>}
+      {templates.data?.items.length === 0 && <p>此 adapter 未声明配置模板。</p>}
       {candidate && (
         <>
           <p>{candidate.description}</p>
-          <ExecutionScenario scenario={candidate.setup.scenario} label="Template scenario" />
+          <ExecutionScenario scenario={candidate.setup.scenario} label="模板场景" />
           <button
             className={secondaryButton}
             disabled={!actor.trim() || imported.isPending || Boolean(result)}
@@ -97,23 +89,20 @@ export function ConfigurationTemplatesPanel({
             }}
           >
             {imported.isPending
-              ? "Importing template…"
+              ? "正在导入模板…"
               : command && imported.isError
-                ? "Retry template import"
-                : "Import configuration template"}
+                ? "重试导入模板"
+                : "导入配置模板"}
           </button>
         </>
       )}
       {result && (
         <div role="status">
           <p>
-            Imported setup <code>{result.setup.resolution.definition_id}</code> and parameters{" "}
+            已导入 setup <code>{result.setup.resolution.definition_id}</code> 及参数{" "}
             <code>{result.parameters.id}</code>.
           </p>
-          <p>
-            Use these inputs for your next experiment, or edit them first. Other pages and submitted
-            work keep their selected inputs.
-          </p>
+          <p>可直接用于下次实验，也可先编辑。其他页面和已提交任务保留原先选择的输入。</p>
           {onSelectConfiguration && (
             <button
               className={secondaryButton}
@@ -129,7 +118,7 @@ export function ConfigurationTemplatesPanel({
                 })
               }
             >
-              Use imported configuration for next experiment
+              将导入配置用于下次实验
             </button>
           )}
         </div>

@@ -32,7 +32,5 @@ export function scientificChange(before: unknown, after: unknown): ScientificCha
     : "physical";
 }
 export function scientificChangeLabel(kind: ScientificChange): string {
-  return kind === "representation"
-    ? "Equivalent representation · same physical value"
-    : "Physical value change";
+  return kind === "representation" ? "等价表示 · 相同物理量" : "物理量变化";
 }

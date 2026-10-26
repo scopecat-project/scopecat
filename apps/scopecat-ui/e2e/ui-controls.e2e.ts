@@ -51,11 +51,11 @@ test("shared controls remain readable, keyboard accessible and contained across 
       for (const [route, heading] of [
         ["history", "数据"],
         ["launch", "实验"],
-        ["help", "Help"],
-        ["settings", "Application settings"],
-        ["configuration", "Experiment configuration"],
-        ["instruments", "Devices and drivers"],
-        ["samples", "Chips & samples"],
+        ["help", "帮助"],
+        ["settings", "应用设置"],
+        ["configuration", "实验配置"],
+        ["instruments", "设备与驱动"],
+        ["samples", "芯片与样品"],
         ["analyses", "No project analyses saved"],
         ["runs", "No run selected"],
         ["reviews", "No live experiment reviews"],
@@ -66,30 +66,30 @@ test("shared controls remain readable, keyboard accessible and contained across 
           page.getByRole("heading", { name: heading, exact: true }).first(),
         ).toBeVisible();
         if (route === "help") {
-          const course = page.getByRole("combobox", { name: "Course", exact: true });
+          const course = page.getByRole("combobox", { name: "课程", exact: true });
           await course.focus();
           await expect(course).toHaveCSS("outline-width", "2px");
           const start = page.getByRole("button", {
-            name: "Start parameters Notebook",
+            name: "开始参数与扫描 Notebook",
             exact: true,
           });
           await expect(start).toBeEnabled();
           expect((await start.boundingBox())!.y).toBeLessThan(800);
           await course.selectOption("groups");
           await expect(
-            page.getByRole("button", { name: "Start groups Notebook", exact: true }),
+            page.getByRole("button", { name: "开始分组分析与历史 Notebook", exact: true }),
           ).toBeEnabled();
           await course.selectOption("parameters");
         }
         if (route === "configuration") {
-          const operator = page.getByLabel("Operator", { exact: true });
+          const operator = page.getByLabel("操作者", { exact: true });
           await operator.focus();
           await expect(operator).toHaveCSS("font-size", "14px");
           await expect(operator).toHaveCSS("outline-width", "2px");
           expect((await operator.boundingBox())!.height).toBeGreaterThanOrEqual(36);
         }
         if (route === "instruments") {
-          const add = page.getByRole("button", { name: "Add device", exact: true });
+          const add = page.getByRole("button", { name: "添加设备", exact: true });
           // This source has no driver package; the dedicated virtual-device journey
           // checks the enabled dialog and its focus return.
           await expect(add).toBeDisabled();
@@ -111,26 +111,26 @@ test("shared controls remain readable, keyboard accessible and contained across 
           await expect(channels).toHaveCSS("outline-width", "2px");
         }
         if (route === "settings") {
-          const input = page.getByLabel("Author directory", { exact: true });
+          const input = page.getByLabel("作者目录", { exact: true });
           await expect(input).toBeVisible();
           await input.focus();
           await page.keyboard.press("Tab");
-          const next = page.getByLabel("Execution Python", { exact: true });
+          const next = page.getByLabel("执行 Python", { exact: true });
           await expect(next).toBeFocused();
           await expect(next).toHaveCSS("outline-width", "2px");
           await expect(
-            page.getByRole("button", { name: "Add code folder", exact: true }),
+            page.getByRole("button", { name: "添加代码目录", exact: true }),
           ).toBeDisabled();
           expect((await input.boundingBox())!.height).toBeGreaterThanOrEqual(36);
           await page
-            .getByRole("combobox", { name: "Your code folders", exact: true })
+            .getByRole("combobox", { name: "代码目录", exact: true })
             .selectOption("/test/author");
           await expect(page.getByText("/test/exec-python", { exact: true })).not.toBeVisible();
-          await page.getByText("Inspect or change Python environments", { exact: true }).click();
+          await page.getByText("查看或修改 Python 环境", { exact: true }).click();
           await expect(page.getByText("/test/exec-python", { exact: true })).toBeVisible();
-          await page.getByRole("button", { name: "New code folder", exact: true }).click();
-          await expect(page.getByLabel("New folder name", { exact: true })).toBeVisible();
-          await expect(page.getByLabel("Execution Python", { exact: true })).toHaveCount(0);
+          await page.getByRole("button", { name: "新建代码目录", exact: true }).click();
+          await expect(page.getByLabel("新目录名称", { exact: true })).toBeVisible();
+          await expect(page.getByLabel("执行 Python", { exact: true })).toHaveCount(0);
           await expect(page.getByText("/test/exec-python", { exact: true })).toHaveCount(0);
         }
         if (route === "history") {

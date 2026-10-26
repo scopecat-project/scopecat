@@ -153,11 +153,13 @@ export function InstrumentConfigDialog({
       };
       const key = JSON.stringify(input);
       if (attempt.current?.key !== key) {
+        const actor = (await readOperatorSettings()).operator;
+        if (!actor.trim()) throw new Error("请先在应用设置中保存操作者名称，再保存设备。");
         attempt.current = {
           key,
           command: {
             ...input,
-            actor: (await readOperatorSettings()).operator,
+            actor,
             revision_id: createInstrumentCommandId("connection"),
           },
         };
@@ -168,14 +170,12 @@ export function InstrumentConfigDialog({
       await onPublished(saved);
     } catch (cause) {
       if (saved) {
-        setError(`Device saved, but the view could not refresh. Try again. ${errorMessage(cause)}`);
+        setError(`设备已保存，但视图无法刷新。请重试。 ${errorMessage(cause)}`);
       } else if (cause instanceof ApiError && cause.status === 409) {
-        setError(
-          `Save conflict. Close and reopen the device to review its current configuration. ${errorMessage(cause)}`,
-        );
+        setError(`保存冲突。请关闭并重新打开设备，核对当前配置。 ${errorMessage(cause)}`);
       } else if (cause instanceof ApiError && (cause.status === undefined || cause.status >= 500)) {
         setError(
-          `Save not confirmed. Retry without editing to check the same submission. Editing starts a new submission and may require reviewing the current configuration. ${errorMessage(cause)}`,
+          `保存尚未确认。不作修改直接重试可检查同一次提交。编辑会开始新提交，可能需要核对当前配置。 ${errorMessage(cause)}`,
         );
       } else {
         setError(errorMessage(cause));
@@ -193,10 +193,10 @@ export function InstrumentConfigDialog({
           <Dialog.Popup className={`${dialogPopup} w-[min(680px,100%)]`}>
             <header className="border-b border-line p-4">
               <Dialog.Title className={dialogTitle}>
-                {device ? "Edit device" : "Add device"}
+                {device ? "编辑设备" : "添加设备"}
               </Dialog.Title>
               <Dialog.Description className={dialogDescription}>
-                Save connection settings, then use Test connection to check the device.
+                保存连接设置后，使用“测试连接”检查设备。
               </Dialog.Description>
             </header>
             <fieldset
@@ -207,11 +207,11 @@ export function InstrumentConfigDialog({
               className="grid gap-4 p-4"
             >
               <Controls.Field>
-                Device name
+                设备名称
                 <Controls.Input value={label} onChange={(event) => setLabel(event.target.value)} />
               </Controls.Field>
               <Controls.Field>
-                Driver
+                驱动
                 <Controls.Select
                   value={driverId}
                   onChange={(event) => {
@@ -234,7 +234,7 @@ export function InstrumentConfigDialog({
               </Controls.Field>
               {driver && (
                 <Controls.Field>
-                  Connection
+                  连接
                   <Controls.Select
                     value={connection.kind}
                     onChange={(event) => {
@@ -264,7 +264,7 @@ export function InstrumentConfigDialog({
               )}
               {fields.length > 0 && (
                 <fieldset>
-                  <legend>Driver options</legend>
+                  <legend>驱动选项</legend>
                   {fields.map((field) => (
                     <OptionInput
                       key={`${driverId}:${connection.kind}:${field.id}`}
@@ -289,13 +289,12 @@ export function InstrumentConfigDialog({
                 </fieldset>
               )}
               <details open={connection.kind === "driver_managed"}>
-                <summary>Physical identity and other addresses</summary>
+                <summary>物理标识与其他地址</summary>
                 <p>
-                  Declare other access paths that name this same device, one per line. An address
-                  already registered to another device must be resolved before access.
+                  声明指向同一设备的其他访问路径，每行一项。如地址已登记到其他设备，访问前必须先解决冲突。
                 </p>
                 <Controls.Field>
-                  Access aliases
+                  访问别名
                   <Controls.Textarea
                     value={aliases}
                     onChange={(event) => setAliases(event.target.value)}
@@ -303,7 +302,7 @@ export function InstrumentConfigDialog({
                 </Controls.Field>
               </details>
               <details>
-                <summary>Device safety</summary>
+                <summary>设备安全</summary>
                 <InstrumentDefaultsEditor
                   mode="safety"
                   description={existing?.driver.driver_id === driverId ? description : undefined}
@@ -321,7 +320,7 @@ export function InstrumentConfigDialog({
                       setSafety({ ...safety, require_safe_success: event.target.checked })
                     }
                   />
-                  Require safe state after successful work
+                  任务成功后要求安全状态
                 </Controls.Field>
                 <Controls.Field>
                   <input
@@ -331,7 +330,7 @@ export function InstrumentConfigDialog({
                       setSafety({ ...safety, require_safe_failure: event.target.checked })
                     }
                   />
-                  Require safe state after failure
+                  失败后要求安全状态
                 </Controls.Field>
                 <Controls.Field>
                   <input
@@ -344,12 +343,12 @@ export function InstrumentConfigDialog({
                       })
                     }
                   />
-                  Keep device blocked if safe state cannot be confirmed
+                  无法确认安全状态时保持设备阻止状态
                 </Controls.Field>
               </details>
               {device && (
                 <Controls.Field>
-                  Reason for change
+                  修改原因
                   <Controls.Input value={note} onChange={(event) => setNote(event.target.value)} />
                 </Controls.Field>
               )}
@@ -357,20 +356,19 @@ export function InstrumentConfigDialog({
                 <p role="alert">{error ?? errorMessage(drivers.error)}</p>
               )}
               <p className="text-sm text-text-dim">
-                After saving, use Test connection in the device detail. Stop affected work before
-                changing a connection.
+                保存后请在设备详情中使用“测试连接”。修改连接前请停止受影响任务。
               </p>
             </fieldset>
             <footer className="flex justify-end gap-2 border-t border-line p-4">
               <Dialog.Close className={secondaryButton} disabled={busy}>
-                Cancel
+                取消
               </Dialog.Close>
               <button
                 className={primaryButton}
                 disabled={!valid || busy}
                 onClick={() => void save()}
               >
-                {busy ? "Saving…" : "Save device"}
+                {busy ? "正在保存…" : "保存设备"}
               </button>
             </footer>
           </Dialog.Popup>
